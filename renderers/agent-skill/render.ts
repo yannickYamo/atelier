@@ -17,6 +17,7 @@ import { isReplyWork } from '../../core/observers/formats.js';
 import { renderContrastFile, type ContrastPair } from '../../core/compiler/contrast-examples.js';
 import { EXCERPT_GAP, isExcerpt, pieceLabel, type Voice } from '../../core/compiler/voice.js';
 import { describePersona } from '../../core/compiler/persona.js';
+import { TRAIT_LABEL } from '../../core/composite/traits.js';
 import { observerFor } from '../../core/observers/registry.js';
 import { createHash } from 'node:crypto';
 import type { StandardVersion, Provenance } from '../../core/state/canonical-state.js';
@@ -439,16 +440,22 @@ export function renderAgentSkill(
   // rounds found rules alone never produced it. The persona says how the author sounds and HOW OFTEN;
   // whole pieces show their modes; the length is theirs. Never their topics, facts or sentences.
   const pieceFiles = (voice?.pieces ?? []).map((_, i) => `examples/voice-${i + 1}.md`);
+  // A COMPOSITE VOICE (core/composite): several writers, and the owner's choice from each. Said as what it is, so no one
+  // piece is read as the voice and no writer's words are reused: the traits chosen carry it, and the rules above hold them.
+  const composite = voice?.composite;
+  const authorOf = (i: number): string | undefined => composite?.pieceAuthors[i];
   // Which served pieces were cut: under `excerpts`, the ones that carry the mark. A short piece is served whole.
   const cutPieces = (voice?.pieces ?? []).map((t) => voice?.pieceForm === 'excerpts' && isExcerpt(t));
   const traits = voice?.persona ? { ...voice.persona, points: voice.persona.points.filter((x) => x.frequency === 'ALWAYS' || x.frequency === 'OFTEN') } : undefined;
   const voiceParts = [
+    composite ? `My voice is a composite: the owner of this skill read pieces by ${composite.authors.length === 1 ? 'one writer' : `${composite.authors.length} writers`} and chose what to take from each. It is that combination, not any one of them and not their average:\n\n${composite.authors.map((a) => `- From ${a.name}: ${a.classes.map((c) => TRAIT_LABEL[c]).join('; ')}.${a.traits.length ? ` In the rules above: ${a.traits.map((t) => `"${t.trim().replace(/\.$/, '')}"`).join('; ')}.` : ''}`).join('\n')}\n\nNothing else about these writers is to be imitated, and none of their words is to be reused: a phrase of theirs in my work is copying, and is checked for.` : '',
     // A TRAIT IS WHAT HOLDS ACROSS PIECES. A point marked "sometimes" or "rarely" is a conditional habit, and served
     // under "How I sound" it reads as how I always am: the moves carry such habits, each with its condition.
     traits?.points.length ? `How I sound (each point is quoted from my own pieces and holds in most or all of them):\n\n${describePersona(traits)}` : '',
     // Whole pieces, or each piece shown by its opening and a passage from its middle (core/compiler/voice.ts,
     // `selectWithinBudget`). Said as what it is: a model told it holds a whole piece takes the cut for the ending.
-    pieceFiles.length ? (cutPieces.some(Boolean)
+    pieceFiles.length && composite ? `${pieceFiles.map((f, i) => `\`${f}\` (${authorOf(i) ?? 'one of the writers'})`).join(', ')}: ${cutPieces.some(Boolean) ? `passages from one piece by each writer named, the opening and a part from the middle, with ${EXCERPT_GAP} where text is left out` : 'one whole piece by each writer named'}. Read each for the trait taken from that writer and for nothing else; take no content, no sentence and no phrase from any of them.`
+      : pieceFiles.length ? (cutPieces.some(Boolean)
       ? `${pieceFiles.map((f) => `\`${f}\``).join(', ')} ${pieceFiles.length === 1 ? 'holds passages from one piece' : cutPieces.every(Boolean) ? 'each hold passages from one piece' : 'each hold one piece, or passages from one,'} of mine: the opening and a part from the middle, with ${EXCERPT_GAP} where text is left out. They were chosen to show the different ways I write. Read them before drafting and take the voice from them, not the content, and never the place where a passage stops.`
       : `${pieceFiles.map((f) => `\`${f}\``).join(', ')} ${pieceFiles.length === 1 ? 'is a whole piece' : 'are whole pieces'} of mine, chosen to show the different ways I write. Read them before drafting and take the voice from them, not the content.`) : '',
     voice?.passages.length ? `${voice.passages.length} passage(s) of my own, from different pieces:\n\n${voice.passages.map((x) => `> ${x.trim().replace(/\n/g, '\n> ')}`).join('\n\n* * *\n\n')}` : '',
@@ -664,7 +671,7 @@ mintedAt:        ${v.mintedAt}
   const runtime: Record<string, string> = { 'SKILL.md': skillMd, ...exampleFiles, ...contractFiles, ...contextMap,
     ...(exemplar ? { 'examples/exemplar.md': exemplar.text } : {}),
     ...Object.fromEntries((voice?.pieces ?? []).map((t, i) => [`examples/voice-${i + 1}.md`,
-      `${pieceLabel(i + 1, cutPieces[i])}\n\n${t}`])),
+      `${pieceLabel(i + 1, cutPieces[i], authorOf(i))}\n\n${t}`])),
     ...(contrast.length ? { 'examples/contrast.md': renderContrastFile(contrast, v) } : {}) };
 
   // ── MANIFEST + ASSURANCE ────────────────────────────────────────────────────────────────────
@@ -711,8 +718,8 @@ mintedAt:        ${v.mintedAt}
   // actually cut: asked of pieces too short to cut, `excerpts` serves the very files `whole` does. Every other field is written as it always was, in the order it came.
   const travelling = voice ? (() => {
     // Which moves a reading covered is the build's own bookkeeping, like the budget: it shaped no file.
-    const { pieceBudget: _budget, holdsBackOf: _covered, standardWording: _standard, lengthSpan: _span, lengthPieces: _pieces, sharedAmong: _shared, pieceForm, ...rest } = voice;
-    void _budget; void _covered; void _standard; void _span; void _pieces;
+    const { pieceBudget: _budget, holdsBackOf: _covered, standardWording: _standard, lengthSpan: _span, lengthPieces: _pieces, sharedAmong: _shared, guardPieces: _guard, pieceForm, ...rest } = voice;
+    void _budget; void _covered; void _standard; void _span; void _pieces; void _guard;
     return { ...rest, ...(pieceForm === 'excerpts' && cutPieces.some(Boolean) ? { pieceForm } : {}) };
   })() : null;
   const withPairs = { ...(contrast.length ? { ...assurance, 'contrast-pairs.json': `${JSON.stringify(contrast, null, 1)}\n` } : assurance),
