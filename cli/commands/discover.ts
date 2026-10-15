@@ -23,6 +23,7 @@ import { isGeneralScope } from '../../core/state/canonical-state.js';
 import { extract } from '../../core/intake/extract.js';
 
 import { deriveMeasuredRules, piecesBreaking } from '../../core/observers/derive.js';
+import { ensureGrammar, grammarMeasurement, termsOf, GRAMMAR_STATEMENT } from '../../core/observers/grammar.js';
 import type { Measurement } from '../../core/state/canonical-state.js';
 import { deriveContrastRules, contrastTopics } from '../../core/observers/contrast.js';
 import { buildProfile } from '../../core/fidelity/profile.js';
@@ -357,6 +358,16 @@ export async function discover(): Promise<void> {
     proposalMeta = { ...proposalMeta, ...Object.fromEntries(measured.map((m) => [m.requirement.requirementId, {
       framings: [], alsoPhrasedAs: [], heldOut: null, needs: null, inSample: m.conformance, corpus: corpusOf(m.requirement) } satisfies ProposalMeta])) };
   }
+  // NO MECHANICAL ERRORS (core/observers/grammar.ts): the one editorial rule every author holds, proposed on every
+  // build with the dialect the pieces spell in and every word of their own the checker would otherwise flag. It takes
+  // the same ruling as everything else on the screen (suggested REQUIRED; demoted like any rule), and the same corpus
+  // check: the author's own pieces are held against it with their vocabulary known.
+  await ensureGrammar();
+  const grammar: Requirement = { requirementId: 'g1', statement: GRAMMAR_STATEMENT, appliesWhen: 'GENERAL', kind: 'BOUNDARY', authority: 'DERIVED_UNRATIFIED', provenance: sourceProvenance(),
+    evidence: null, evidenceItemId: null, wouldBeAbsentIf: null, materiality: null, realizationTolerance: null, outputShape: null, wordedFromCheck: true,
+    measurement: grammarMeasurement(ownPieces, termsOf(proposals)) };
+  proposals = [...proposals, grammar];
+  proposalMeta = { ...proposalMeta, [grammar.requirementId]: { framings: [], alsoPhrasedAs: [], heldOut: null, needs: null, inSample: null, corpus: corpusOf(grammar) } satisfies ProposalMeta };
   // ── WHAT THE MODEL DOES THAT THE AUTHOR DOESN'T ───────────────────────────────────────────────
   //
   // The model that will run the skill writes a few plain drafts on the author's own topics, and every

@@ -20,12 +20,15 @@ import { TERM_RATE, RATIO, DISTRIBUTION, RHYTHM } from './balance.js';
 import { OPENING, CLOSING, HEADINGS, PRESENCE } from './structure.js';
 import { FEATURE } from './features.js';
 import { TABLE, CITED, LINES, LENGTH } from './obligations.js';
+import { GRAMMAR } from './grammar.js';
 import { findPattern, PATTERN_LABEL, PATTERN_IDS, proseWords, styleDistanceDocs, authorSelfMargins, type PatternId } from './style.js';
 
 export interface Span {
   readonly start: number; readonly end: number; readonly text: string; readonly why: string;
   /** for a machine-writing move, the family it belongs to (./tells.ts): what a per-family rule keys on, never the wording of `why` */
   readonly family?: string;
+  /** for a mechanical error (./grammar.ts): the text that corrects it in place, "" to remove it; absent where the checker offers none */
+  readonly replacement?: string;
 }
 
 export interface ObserverResult {
@@ -259,6 +262,8 @@ const OBSERVERS: Readonly<Record<ObserverId, Observer>> = {
   FEATURE,
   // ── What a method requires of the work: a table, and figures the writer was given (./obligations.ts) ──
   TABLE, CITED, LINES, LENGTH,
+  // ── Mechanical errors: spelling, agreement, punctuation, by an engine the process wires in (./grammar.ts) ──
+  GRAMMAR,
 };
 
 export const observerFor = (id: ObserverId): Observer => OBSERVERS[id];

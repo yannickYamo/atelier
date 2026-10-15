@@ -21,6 +21,7 @@ import { findTerms } from '../observers/text.js';
 import { planRepair, repairPrompt, applyRepair, acceptRepair, addsNoWords, cutSpan, REPAIR_SYSTEM, REPAIR_SYSTEM_WITH_PLACEHOLDERS, REPAIR_SCHEMA, type Reverted, type Applied } from './repair.js';
 import { keysOf, measurementId } from '../state/rule-key.js';
 import { mechanicalFixes } from './mechanical-repair.js';
+import { ensureGrammar, readGrammar, GRAMMAR_NOTE_SUFFIX } from '../observers/grammar.js';
 import type { RepairPair } from '../state/canonical-state.js';
 import { createHash } from 'node:crypto';
 
@@ -124,7 +125,17 @@ export function checkDraft(skill: string, v: StandardVersion, text: string, opts
     result: { verdict: learned.length ? 'VIOLATED' as const : 'MET' as const, value: learned.length,
       spans: learned.map((sp) => ({ ...sp, why: `"${sp.text}", a phrase this skill's drafts repeat and your pieces never use` })),
       detail: learned.length ? `${learned.length} learned machine phrase(s)` : 'none of the learned machine phrases' } }] : [];
-  const report = { ...base, checked: [...base.checked, ...tellLine], failed: base.failed || tellLine.some((c) => acts(c) && c.result.verdict === 'VIOLATED') };
+  // WHAT THE GRAMMAR CHECKER WAS UNSURE OF, beside the rule's own line: `<rule id>·check`, PREFERRED, never enforced,
+  // never rewritten (core/loop/repair.ts skips it) and never a regression. The rule's line holds only what is confirmed.
+  const grammarNotes = base.checked.flatMap((c) => {
+    const r = v.requirements.find((q) => q.requirementId === c.requirementId);
+    if (c.observer !== 'GRAMMAR' || !r?.measurement || c.result.verdict === 'NOT_APPLICABLE') return [];
+    const unsure = readGrammar(text, r.measurement.params, opts.context).uncertain;
+    return unsure.length ? [{ requirementId: `${c.requirementId}${GRAMMAR_NOTE_SUFFIX}`, statement: 'Constructions the grammar checker is unsure of: listed for you to check, never changed.',
+      materiality: 'PREFERRED', enforced: false, phase: 'STYLE' as const, observer: 'GRAMMAR',
+      result: { verdict: 'VIOLATED' as const, spans: unsure, value: unsure.length, detail: `${unsure.length} to check; none changed` } }] : [];
+  });
+  const report = { ...base, checked: [...base.checked, ...tellLine, ...grammarNotes], failed: base.failed || tellLine.some((c) => acts(c) && c.result.verdict === 'VIOLATED') };
   const fmt = opts.format ? checkFormat(text, opts.format) : null;
   const fmtLines = opts.format && fmt ? [
     { requirementId: 'FORMAT', statement: `What ${opts.format.label} holds.`, materiality: 'REQUIRED', phase: 'STYLE' as const,
@@ -239,6 +250,8 @@ export const READER_REPORT = 'UNSOURCED·reader';
 
 /** `checkDraft`, after the claim reader (when there is one) has read the text. Every async path uses this. */
 export async function checkDraftAsync(skill: string, v: StandardVersion, text: string, opts: CheckOptions = {}): Promise<VerifyReport> {
+  // The grammar engine, loaded once, before the first check of a standard that carries the rule (../observers/grammar.ts).
+  await ensureGrammar(v);
   if (opts.guardClaims !== false && opts.claimSensor) await opts.claimSensor.read(text);
   if (opts.guardClaims !== false && opts.format?.claims === 'list' && opts.judge) await opts.judge.readAnswer(answerSentences(text));
   return checkDraft(skill, v, text, opts);

@@ -12,7 +12,9 @@ export default defineConfig({
     testTimeout: 30_000,
     // THE SUITE IS OFFLINE. A developer's ANTHROPIC_API_KEY would otherwise let every spawned command
     // call the claim reader for real. Tests of the reader set ATELIER_CLAIMS=model and script it.
-    env: { ATELIER_CLAIMS: 'pattern' },
+    // The grammar engine builds its dictionary in about five seconds per process, and most of this suite spawns the
+    // binary many times over: it is set aside here, and the tests of the grammar rule turn it on themselves.
+    env: { ATELIER_CLAIMS: 'pattern', ATELIER_GRAMMAR: 'off' },
     // Source imports use .js specifiers (NodeNext), which is what `tsc` emits and what Node runs.
     // Vitest resolves them back to the .ts on disk, so the tests exercise the same module graph the
     // build produces rather than a parallel one.

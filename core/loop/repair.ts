@@ -20,6 +20,10 @@ import { sentencesOf, paragraphsOf } from '../observers/registry.js';
 import { acts, type VerifyReport } from '../observers/verify.js';
 import { displacedFamilies } from '../observers/style.js';
 import { spanIntegrity, namesIn, numbersIn } from './integrity.js';
+import { isGrammarNote } from '../observers/grammar.js';
+
+/** What a rewrite is told for a mechanical error no correction in place could fix: the error, and nothing else. */
+const GRAMMAR_HINT = 'Fix only the mechanical error named, in the fewest words; change no other word, and keep every figure, name and spelling the author chose';
 
 /** Observers whose spans ARE the thing to remove: a banned term, a flagged hedge, a counted habit, an
  *  occurrence over a word rate. */
@@ -96,6 +100,8 @@ export function planRepair(text: string, report: VerifyReport,
     // Nor is a citation that is no line of the material: the right number is on the page the writer was given, not
     // in the sentence, and a rewrite that only has the sentence can drop the citation or guess another.
     if (c.obligation === 'DELIVERABLE' || c.observer === 'LINES') continue;
+    // What the grammar checker was unsure of is listed for the person and rewritten by nobody.
+    if (isGrammarNote(c)) continue;
     for (const sp of c.result.spans) {
       // A span that IS a paragraph (the paragraph-length rule) is rewritten as one; any other span
       // grows to whole sentences at BOTH ends. A span that ends inside the next sentence ("The fix is not
@@ -106,7 +112,7 @@ export function planRepair(text: string, report: VerifyReport,
       const last = sentences.find((s) => sp.end > s.start && sp.end <= s.end);
       const start = para ? para.start : sent ? Math.min(sent.start, sp.start) : sp.start;
       const end = para ? para.end : Math.max(sent?.end ?? sp.end, last?.end ?? sp.end, sp.end);
-      const move = c.pattern ? MOVE_HINT[c.pattern] : undefined;
+      const move = c.pattern ? MOVE_HINT[c.pattern] : c.observer === 'GRAMMAR' ? GRAMMAR_HINT : undefined;
       raw.push({ start, end, reason: `${c.requirementId}: ${c.statement} (${sp.why})${move ? `. ${move}` : ''}`, rid: c.requirementId,
         // Only a PART of a sentence is licensed to go. A span that is the whole sentence ("sentences
         // opening That's") asks for the sentence to be recast, not for its claims to be dropped. A MOVE
@@ -302,6 +308,8 @@ export function regressions(before: VerifyReport, after: VerifyReport): string[]
   return after.checked.filter((c) => {
     const b = was.get(c.requirementId);
     if (c.result.verdict !== 'VIOLATED') return false;
+    // The grammar checker's uncertain list is a note to the person, not a rule: a rewrite that adds one is not worse.
+    if (isGrammarNote(c)) return false;
     if (b?.verdict !== 'VIOLATED') return true;
     if (c.result.spans.length > b.spans.length) return true;
     return typeof c.result.error === 'number' && typeof b.error === 'number' && Math.abs(c.result.error) - Math.abs(b.error) >= GRADED_STEP - 1e-9;
