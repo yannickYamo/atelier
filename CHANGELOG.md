@@ -7,6 +7,26 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+### Added: mechanical errors are found and corrected, and the voice is left alone
+
+A skill held drafts to the author's habits and never to spelling or agreement: "They was late" passed every check.
+
+- **A grammar check, offline** (`core/observers/grammar.ts`, `providers/harper.ts`). The `GRAMMAR` observer reads a
+  text with harper.js, loaded once and only when a standard carries the rule. It reports one span per confirmed
+  mechanical error, of a documented list of kinds: common-word spelling and typos, subject–verb agreement, a word
+  repeated by accident, a/an, a missing apostrophe in a contraction, double punctuation, a space before punctuation.
+  Anything else the checker proposes is listed under the rule as "to check" and never changed. If the checker cannot
+  load, the rule reads as unverified with the reason.
+- **The author's voice is protected.** Code, quotations, block quotes, URLs, citations, figures, names, the
+  standard's own terms and the words of the author's own pieces are never flagged. Spelling follows the dialect the
+  pieces spell in. Fragments, "And" and "But" openers, one-word sentences and doubled words of emphasis are never errors.
+- **New builds carry the rule.** Building from pieces or from a method proposes "No mechanical errors: spelling,
+  agreement, punctuation." as required, through the usual approval. Stored standards are untouched, and an existing
+  skill rebuilds to the same bytes. `--measure GRAMMAR:dialect=british` declares it by hand.
+- **Repair corrects in place** (`core/loop/mechanical-repair.ts`): the checker's suggestion, inside the span, kept
+  only if no other rule is newly broken and every figure and name is unchanged. A correction that would change a
+  figure or a name is refused. An error with no sure correction gets a sentence rewrite that fixes only that error.
+
 ### Fixed: the pattern check reads a count written in words, and lists it for you to check
 
 A draft said "three of your prospects will believe the products overlap" and "Twelve-plus optimizers", counts the

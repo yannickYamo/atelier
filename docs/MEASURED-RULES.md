@@ -36,6 +36,7 @@ it, but there is nothing specific to rewrite.
 | `RHYTHM` | how much sentence, paragraph or section lengths vary (standard deviation over mean): pace, not length | `RHYTHM:unit=SENTENCE,minCv=0.4` |
 | `STYLE_DISTANCE` | Burrows' Delta: closer to the author's function-word profile than to the model's | computed by discovery, never declared by hand |
 | `FEATURE` | one counted feature from `core/observers/features.ts` (colons, parentheses, the serial comma, sentence-length tails, cadence, sentence openers, passives, three-item lists, links, lexical diversity, pronouns, modals, names, reading ease, commas per sentence, unevenness, and more), held to a band on both sides | `FEATURE:feature=colon,minValue=2,maxValue=9` |
+| `GRAMMAR` | mechanical errors: common-word spelling, subject–verb agreement, a word repeated by accident, a/an, a missing apostrophe in a contraction, double punctuation, a space before punctuation (see below) | `GRAMMAR:dialect=british,vocabulary=zorbletron\|widgit` |
 
 Named patterns for `PATTERN_RATE`: `EM_DASH`, `SPACED_HYPHEN`, `SEMICOLON`, `NOT_X_ITS_Y`,
 `THAT_OPENER`, `HERES_OPENER`, `SIGNPOST`, `INTENSIFIER`, `SHORT_VERDICT`, `BOLD_SPAN`,
@@ -56,6 +57,32 @@ Declare one on your own rule with `atelier add --statement "…" --kind BOUNDARY
 or add one to an existing rule with `atelier amend --rule <rule> --measure "<spec>" --reason "…"`. The
 parser is strict: a target you did not mean is worse than a refusal, because it is enforced on every
 output from then on.
+
+### Mechanical errors
+
+Every new build proposes one editorial rule, required by default and approved like any other: *No mechanical
+errors: spelling, agreement, punctuation.* A skill built before it existed does not gain it. The checker is
+harper.js, which runs offline in the process; it loads on the first standard that carries the rule. If it cannot
+load, the check says so with the reason and the rule reads as unverified, never as met.
+
+The checker proposes far more than the rule acts on. A finding counts only when it is one of these kinds, listed
+in `core/observers/grammar.ts` (`MECHANICAL_RULES`): common-word spelling and common typos, subject–verb agreement
+(the pronoun cases the checker covers: "they was", "he go"), a word repeated by accident, a/an, a missing
+apostrophe in a standard contraction, double punctuation, a space before punctuation. Everything else it proposes
+(capitalisation, style, word choice, a fragment, an "And" or "But" opener, a one-word sentence) is listed under
+the rule as "to check" and never changed.
+
+Never flagged: code and inline code, quotations and block quotes, URLs and link targets, paths and `path:line`
+citations, figures and currency, front matter, capitalised words (names, products, acronyms), words the
+standard's other rules name, words of the request and the bound material, words the author's own pieces use, a
+word the text uses three times or more, and a word doubled for emphasis ("very very"). Spelling is checked in the
+dialect the pieces spell in (the same British/American count the style check uses); where they do not settle it,
+only a word wrong in both dialects counts.
+
+Repair corrects each error in place with the checker's suggestion, inside the error's span, and keeps the result
+only if the whole text's figures and names are unchanged and no other rule is newly broken. A correction that
+would change a figure or a name is refused and listed. An error with no sure correction gets a sentence rewrite
+told to fix only that error. `ATELIER_GRAMMAR=off` sets the check aside for a process.
 
 ## Counted features, and which of them are your taste
 
