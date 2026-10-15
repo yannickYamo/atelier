@@ -6,7 +6,8 @@
 
 import type { StoredSignal } from '../../core/observers/selection.js';
 import { compositeVoiceOf, type CompositeRecord } from '../../core/composite/selection.js';
-import { selectCompositePieces, selectVoicePieces, selectWithinBudget, isExcerpt, usualLength, lengthSpan, PIECE_BUDGET_WORDS, COMPACT_PIECE_BUDGET_WORDS, COMPACT_PIECE_FORM, type PieceForm, type Voice } from '../../core/compiler/voice.js';
+import { withoutFrontMatter } from '../../core/composite/authors.js';
+import { selectCompositePieces, selectVoicePieces, selectWithinBudget, isExcerpt, usualLength, lengthSpan, compositeLength, PIECE_BUDGET_WORDS, COMPACT_PIECE_BUDGET_WORDS, COMPACT_PIECE_FORM, type PieceForm, type Voice } from '../../core/compiler/voice.js';
 import { derivePersona, reconcilePersona, standardForbids } from '../../core/compiler/persona.js';
 import type { Budget } from '../../core/inference/client.js';
 import { sessionCorpus, sessionPairs, unsplitPairs } from '../corpus.js';
@@ -150,7 +151,7 @@ async function chooseVoice(L: store.StoreLayout, v: StandardVersion): Promise<Vo
   // pieces again must never spend, nor bring back a persona the owner turned off.
   const derivesPersona = !voice || personaFlag === 'auto';
   // This run's pieces: the run being built is this skill's, whatever name it is built under.
-  const readable = derivesPersona || reselect ? sessionCorpus() : [];
+  const readable = derivesPersona || reselect ? sessionCorpus().map(withoutFrontMatter) : [];
   // A budget or a form with no pieces to apply it to is refused, with or without a stored voice: never ignored.
   if (reselect && readable.length < 3) {
     die(loadSession().source
@@ -175,7 +176,9 @@ async function chooseVoice(L: store.StoreLayout, v: StandardVersion): Promise<Vo
   // This run's choice, or, rebuilt where the run is not at hand, the one kept with the skill.
   const comp = loadSession().composite ?? store.getComposite(L);
   if (comp && (!voice || (reselect && voice.composite))) {
-    const made = compositeVoice(comp, v, wordBudget ?? COMPACT_PIECE_BUDGET_WORDS, asked.form ?? (stored?.pieceForm ?? COMPACT_PIECE_FORM));
+    // `--piece-budget default` gives the budget up: one whole piece from each writer, as for a single author.
+    const whole = asked.budget === null;
+    const made = compositeVoice(comp, v, whole ? null : wordBudget ?? COMPACT_PIECE_BUDGET_WORDS, asked.form ?? (whole ? 'whole' : stored?.pieceForm ?? COMPACT_PIECE_FORM));
     if (made) {
       const by = made.composite?.pieceAuthors ?? [];
       console.log(`Voice: a composite of ${made.composite?.authors.length ?? 0} writer(s); ${by.length ? `one piece each from ${by.join(', ')}` : 'none of their pieces fits the budget'}, served as theirs. Turn off with --voice none.`);
@@ -285,7 +288,7 @@ async function chooseVoice(L: store.StoreLayout, v: StandardVersion): Promise<Vo
  * each, labelled with whose they are; the traits taken from each, for "how I sound"; and every piece of every author
  * in the folder for the copying check alone (never served). Null when no author's pieces can be read here.
  */
-function compositeVoice(c: CompositeRecord, v: StandardVersion, budget: number, form: PieceForm): Voice | null {
+function compositeVoice(c: CompositeRecord, v: StandardVersion, budget: number | null, form: PieceForm): Voice | null {
   const pathsFile = runFile('corpus-paths.json');
   if (!existsSync(pathsFile)) return null;
   const reserved = new Set((loadSession().reservation?.reserved ?? []).map((u) => u.unitId));
@@ -294,17 +297,18 @@ function compositeVoice(c: CompositeRecord, v: StandardVersion, budget: number, 
     const f = files.find((x) => x.id === id);
     if (!f || reserved.has(id) || !existsSync(f.path)) return null;
     const r = extract(f.path);
-    return r.ok ? (r as { text: string }).text : null;
+    return r.ok ? withoutFrontMatter((r as { text: string }).text) : null;
   };
   const statementOf = (id: string): string => v.requirements.find((r) => r.requirementId === id)?.statement ?? loadSession().proposals.find((p) => p.requirementId === id)?.statement ?? id;
   const chosen = compositeVoiceOf(c, statementOf);
   const textsOf = (name: string): string[] => (c.authors.find((a) => a.name === name)?.pieces ?? []).flatMap((id) => { const t = textOf(id); return t ? [t] : []; });
   const every = c.authors.flatMap((a) => textsOf(a.name));
   if (!every.length) return null;
-  const served = selectCompositePieces(chosen.map((a) => ({ author: a.name, pieces: textsOf(a.name) })), budget, form);
+  const served = selectCompositePieces(chosen.map((a) => ({ author: a.name, pieces: textsOf(a.name) })), budget ?? Number.POSITIVE_INFINITY, form);
   return {
-    passages: [], lengthWords: usualLength(every), pieces: served.map((x) => x.text),
-    ...(form === 'excerpts' ? { pieceForm: form } : {}), pieceBudget: budget,
+    // The chosen writers' length range, or none when they write pieces of different lengths (`compositeLength`).
+    passages: [], lengthWords: compositeLength(chosen.map((a) => textsOf(a.name))), pieces: served.map((x) => x.text),
+    ...(form === 'excerpts' ? { pieceForm: form } : {}), ...(budget === null ? {} : { pieceBudget: budget }),
     composite: { authors: chosen, pieceAuthors: served.map((x) => x.author) },
     guardPieces: every,
   };

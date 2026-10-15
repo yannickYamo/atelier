@@ -49,7 +49,8 @@ const KEYWORDS: readonly (readonly [TraitClass, RegExp])[] = [
 export function keywordClasses(text: string, available: readonly TraitClass[]): TraitClass[] {
   const t = text.trim();
   if (!t) return [];
-  if (/\b(everything|all of it|the whole thing|all)\b/i.test(t) && !/\b(not|except|but)\b/i.test(t)) return [...available];
+  // Only an explicit "everything" or "all of it" takes every class: "above all, the openings" names one.
+  if (/\b(everything|all of it)\b/i.test(t) && !/\b(not|except|but)\b/i.test(t)) return [...available];
   return KEYWORDS.filter(([, re]) => re.test(t)).map(([c]) => c).filter((c) => available.includes(c));
 }
 

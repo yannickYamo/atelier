@@ -29,6 +29,7 @@ import { proposalsAcross, countedOffers, tellOffers, grammarOffer, stepsOf, shor
 import { shortFormOptions, type ShortFormOptions } from '../../core/observers/short-form.js';
 import { ensureGrammar } from '../../core/observers/grammar.js';
 import { readCase, corpusFiles } from '../corpus.js';
+import { withoutFrontMatter } from '../../core/composite/authors.js';
 import { observesOf, propositionOf, type Observes } from '../../core/eval/observes.js';
 import { planFor, describePlan } from '../../core/plan/execution-plan.js';
 import { ratifyClose } from './ratify.js';
@@ -300,7 +301,7 @@ export async function method(): Promise<void> {
   // The finished example is installed with the skill as the one worked example: what good looks like, for a writer
   // that has the method beside it. Its own task and material are not part of it.
   const exampleFile = runFile(`method-example-${sha(example.reference)}.md`);
-  writeAtomic(exampleFile, example.reference);
+  writeAtomic(exampleFile, withoutFrontMatter(example.reference));
   process.env.ATELIER_ORCHESTRATED = '1';
   // Every step is the owner's and every check is code: the build asks no model for a reading of the examples.
   process.env.ATELIER_BUILD_NO_MODEL = '1';

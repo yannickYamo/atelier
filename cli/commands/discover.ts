@@ -30,7 +30,7 @@ import { shortFormMeasured, shortFormOptions } from '../../core/observers/short-
 import { buildProfile } from '../../core/fidelity/profile.js';
 import { SELECTION } from '../../core/observers/selection.js';
 import { CLASS_MIN_PIECES, CONTEXT_CLASSES, contextClassOf, type ContextClass } from '../../core/fidelity/types.js';
-import { buildTraitTable } from '../../core/composite/traits.js';
+import { buildTraitTable, describeTraitCounts } from '../../core/composite/traits.js';
 import { buildRetrievalIndex } from '../../core/fidelity/retrieval.js';
 import { calibrateTypicality } from '../../core/fidelity/typicality.js';
 import { judgeCountedFeatures, signalsOf } from '../../core/observers/selection.js';
@@ -42,7 +42,7 @@ import * as store from '../../core/state/store.js';
 import { skillNameFrom } from '../../renderers/agent-skill/render.js';
 import { mapLimit } from '../../core/inference/concurrency.js';
 import { GenerationIncomplete, ModelUnavailable } from '../../core/inference/client.js';
-import { sha, die, argv, orchestrated, proposerModel, proposerIsDefault, diagnoserModel, modelFor, providerFor, MODEL_DEFAULT, PROPOSER_DEFAULT, type ProposalMeta, clientFor, clientAndBinding, loadSession, saveSession, sourceProvenance, numericFlag, priceOverrideFor, runFile, flag, DATA } from '../runtime.js';
+import { sha, die, argv, orchestrated, proposerModel, proposerIsDefault, diagnoserModel, modelFor, providerFor, MODEL_DEFAULT, PROPOSER_DEFAULT, type ProposalMeta, clientFor, clientAndBinding, loadSession, saveSession, sourceProvenance, numericFlag, priceOverrideFor, runFile, flag, DATA, canReach } from '../runtime.js';
 import { priceFor, ANTHROPIC_PRICING, PRICES_CHECKED_ON } from '../../providers/pricing.js';
 
 // ── discover ─────────────────────────────────────────────────────────────────────────────────
@@ -107,6 +107,10 @@ export async function discover(): Promise<void> {
       + `\n  See where it is: atelier status`);
   }
 
+  // NO MODEL, SEVERAL AUTHORS: what can be counted in each author's pieces is read, and nothing else (`atelier new`
+  // takes this path with no key set). With one author and no model, `atelier new` builds from the examples instead.
+  const noModel = !canReach('discovery');
+  if (noModel && !s.authors) die('no model is set up (ANTHROPIC_API_KEY), so there is nothing to read the rules with. Build from the examples alone: atelier new <folder>');
   // `let`: a refused or unserved default proposer is replaced, and every later proposer call uses the replacement.
   let client = clientFor(proposerModel());
   let proposals: Requirement[];
@@ -175,8 +179,8 @@ export async function discover(): Promise<void> {
   // The override wins: a person who names their rate is the authority on it. The shipped table is a
   // dated seed for the case where nobody has.
   const modelName = proposerModel();
-  const rate = priceOverrideFor('discovery') ?? priceFor(ANTHROPIC_PRICING, modelName);
-  if (!rate) {
+  const rate = noModel ? null : priceOverrideFor('discovery') ?? priceFor(ANTHROPIC_PRICING, modelName);
+  if (!rate && !noModel) {
     console.log(`\nEstimated discovery size ~${Math.round(inTok).toLocaleString()} in / ~${outTok.toLocaleString()} out tokens `
       + `(${VANTAGES} vantages, then ~${RULES} rules against ${heldCount} held-out piece(s)).`);
     console.log(`No rate is known for "${modelName}", so this cannot be quoted in dollars. Give one with`);
@@ -361,7 +365,7 @@ export async function discover(): Promise<void> {
       const mine = new Set(openItems.filter((i) => authors.of[i.id] === name).map((i) => i.id));
       if (!mine.size) continue;
       const aItems = openItems.filter((i) => mine.has(i.id)); const aGoldens = openGoldens.filter((g) => mine.has(g.contextId));
-      const r = await readRules(aItems, aGoldens, pBase, name);
+      const r = noModel ? { proposals: [], proposalMeta: {}, heldOutChecked: false, heldOutIds: null } : await readRules(aItems, aGoldens, pBase, name);
       pBase += r.proposals.length;
       heldOutChecked = heldOutChecked && r.heldOutChecked; heldOutPieces += r.heldOutIds?.length ?? 0;
       // The counts, on this author's pieces alone: those with a proposal role as read, the rest as held out; with no
@@ -394,8 +398,7 @@ export async function discover(): Promise<void> {
     writeAtomic(runFile('trait-table.json'), JSON.stringify(table, null, 1));
     persist(heldOutPieces || null);
     for (const f of ['signals.json', 'fidelity.json', 'retrieval.json', 'typicality.json']) rmSync(runFile(f), { force: true });
-    const n = (k: string): number => table.rows.filter((r) => r.kind === k).length;
-    console.log(`Read. ${proposals.length} rule(s) from ${authors.names.length} authors, each on its own: ${n('SHARED')} shared, ${n('UNIQUE')} unique to one, ${n('CONFLICTING')} conflicting, ${n('TASK_DEPENDENT')} task-dependent. Discovery cost $${budget.spentUsd.toFixed(2)}.`);
+    console.log(`Read. ${describeTraitCounts(table)}${grammar.measurement ? ', and the editorial rule every build carries' : ''}. ${noModel ? 'Counted only: no model read them.' : `Discovery cost $${budget.spentUsd.toFixed(2)}.`}`);
     return;
   }
 

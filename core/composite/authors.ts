@@ -68,3 +68,9 @@ export function detectAuthors(files: readonly { readonly id: string; readonly te
 /** One line for the build screen. */
 export const describeAuthors = (authors: AuthorMap, pieces: number): string =>
   `${pieces} piece(s) by ${authors.names.length} authors (${authors.how === 'FRONT_MATTER' ? 'author: in each piece' : authors.how === 'SUBFOLDERS' ? 'a folder per author' : '--authors'}): each is read on its own first. ${authors.names.join(', ')}.`;
+
+/**
+ * A PIECE AS IT IS SERVED: without its front matter. `author:`, `topic:` and the like are about the piece, not its
+ * writing; served in a voice file they read as part of the author's prose, and a composite's names leak into drafts.
+ */
+export const withoutFrontMatter = (text: string): string => text.replace(/^﻿?---\r?\n(?:[^\n]*\r?\n)*?(?:---|\.\.\.)[ \t]*(?:\r?\n|$)/, '').replace(/^\s*\n/, '');

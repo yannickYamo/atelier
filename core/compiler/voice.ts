@@ -22,6 +22,7 @@ import type { TraitClass } from '../composite/traits.js';
 import { paragraphsOf, wordsOf, quantile } from '../observers/text.js';
 import { functionProfile, proseWords, patternRate, FUNCTION_WORDS, type PatternId } from '../observers/style.js';
 import type { Persona } from './persona.js';
+import { contextClassOf } from '../fidelity/types.js';
 
 /** How a chosen piece is shown: all of it, or its opening and a passage from its middle. */
 export type PieceForm = 'whole' | 'excerpts';
@@ -412,4 +413,16 @@ export function selectWithinBudget(pieces: readonly string[], budgetWords: numbe
   const cost = shown.map((t) => (t.trim() ? exportWords(t) + exportWords(pieceLabel(1, form === 'excerpts' && isExcerpt(t))) : 0));
   const eligible = pieces.map((_, i) => i).filter((i) => cost[i] > 0 && cost[i] <= budgetWords);
   return spanningOrder(pieces, eligible, (i) => cost[i], budgetWords).map((i) => shown[i]);
+}
+
+/**
+ * THE LENGTH OF A COMPOSITE: the range the chosen writers' usual lengths span (each writer's median piece), or null
+ * when they write pieces of different length classes (core/fidelity/types.ts): one length over all of them would be
+ * the average nobody chose, and a request names its own.
+ */
+export function compositeLength(byAuthor: readonly (readonly string[])[]): readonly [number, number] | null {
+  const medians = byAuthor.map((ps) => ps.map((t) => proseWords(t)).filter((n) => n > 0)).filter((ls) => ls.length).map((ls) => quantile(ls, 0.5));
+  if (!medians.length || new Set(medians.map((m) => contextClassOf(Math.round(m)))).size > 1) return null;
+  const round = (n: number): number => (n < 200 ? Math.max(10, Math.round(n / 10) * 10) : Math.round(n / 100) * 100);
+  return [round(Math.min(...medians)), round(Math.max(...medians))] as const;
 }
