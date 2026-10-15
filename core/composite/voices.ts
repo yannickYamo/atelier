@@ -17,18 +17,23 @@
 // |y| + floor). Shape can sharpen an existing voice difference but never create one by itself. Every distance is in
 // [0, 1] and absolute: near-identical pieces are near 0 whatever the rest of the folder holds.
 //
-// THE NUMBER OF VOICES. The pieces are joined by average linkage (deterministic: ties go to the lower index), and
-// every cut from 2 voices to min(8, pieces / 2) is scored by its mean SILHOUETTE (how much nearer each piece is to
-// its own voice than to the next one; 1 is perfectly apart, 0 is no structure). The best cut is taken when
+// THE NUMBER OF VOICES. The pieces are joined by average linkage (deterministic: ties go to the lower index). Every cut
+// of 2 to min(8, pieces / 2) voices is read, a piece left alone folded into the voice it is nearest (one odd piece is an
+// outlier of a voice, not a voice of its own). The strongest cut is the one with the highest mean SILHOUETTE over pieces
+// of a like format. How cleanly real writers separate depends on the writers, the topics and the number of pieces, so
+// no fixed silhouette tells one writer from two; the cut is read against the folder itself. Thirty reference folders
+// are built from the same pieces with every feature shuffled across them on its own (seeded, so the same everywhere):
+// the same values, with nothing travelling together the way one writer's habits do. The folder splits when
 //
-//   its silhouette over like-format comparisons is at least 0.5, and
-//   every voice has at least 2 pieces (one odd piece is an outlier of a voice, not a voice of its own), and
-//   every pair of voices has like-format pieces to compare (a format-only split has none), and
-//   the two closest voices sit at least 0.3 apart in voice signals on those comparable pieces
+//   its strongest cut beats every reference's strongest cut, and sits at least 4 standard deviations above their mean,
+//   every two voices have pieces of a like format to compare (a format-only split has none),
+//   the two closest voices sit at least 0.25 apart in voice signals on those pieces, and
+//   every voice holds at least 400 words (below that, no one's habits can be read apart from noise)
 //
-// otherwise the folder is ONE voice, exactly as it always was. Fewer than 4 pieces are one voice: there is nothing to
-// compare a split with. The confidence recorded is the silhouette of the cut taken, or, for one voice, one minus the
-// best silhouette any cut reached (how far the folder was from splitting).
+// otherwise the folder is ONE voice, exactly as it always was. On real writers' folders this splits two writers with
+// three or more pieces each and keeps one writer whole across topics and formats; three or more writers may be read as
+// two, which is the safe side. Fewer than 4 pieces are one voice. The confidence recorded is the share of reference
+// folders a split beat, or, for one voice, one minus how far the folder got toward splitting.
 //
 // Nothing here calls a model, and the same pieces give the same grouping on every machine.
 
@@ -37,14 +42,16 @@ import { FEATURES } from '../observers/features.js';
 import { FUNCTION_WORDS, proseLine } from '../fidelity/stylometry.js';
 import { authorsDeclared, detectAuthors, withoutFrontMatter, type AuthorMap } from './authors.js';
 
-/** A cut is taken only at this mean silhouette or above. */
-export const MIN_SILHOUETTE = 0.5;
 /**
  * Two voices are told apart only when they sit at least this far apart on average (the closest pair of voices, by the
  * mean distance between comparable pieces). Silhouette measures how clean a split is, not how wide: pieces that
  * differ only in format or shape remain one writer.
  */
-export const MIN_VOICE_GAP = 0.3;
+export const MIN_VOICE_GAP = 0.25;
+/** Each voice of a split must hold at least this many words: below it, no one's habits can be read apart from noise. */
+export const MIN_VOICE_WORDS = 400;
+/** A split's strongest cut must sit at least this many standard deviations above the reference folders' strongest cuts. */
+export const MIN_EXCESS = 4;
 /** A voice is read from at least this many pieces. */
 export const MIN_PIECES_PER_VOICE = 2;
 /** Below this many pieces a folder is one voice. */
@@ -73,7 +80,7 @@ export interface VoiceGrouping {
   readonly criterion: string;
 }
 
-export const CRITERION = `average-linkage clusters of how the pieces are written (function words, character runs, punctuation and wording; their shape counts only as far as these agree); the cut of 2 to ${MAX_VOICES} voices with the highest mean silhouette over pieces of a like format, taken when it is at least ${MIN_SILHOUETTE}, every voice has at least ${MIN_PIECES_PER_VOICE} pieces, every two voices have pieces of a like format (list or prose, short or long) to be compared on, and on those pieces the closest two voices are at least ${MIN_VOICE_GAP} apart; otherwise one voice`;
+export const CRITERION = `average-linkage clusters of how the pieces are written (function words, character runs, punctuation and wording; their shape counts only as far as these agree), a piece left alone folded into its nearest voice; the strongest cut, by mean silhouette over pieces of a like format, is taken when it beats all 30 reference folders built by shuffling each feature across the pieces and sits at least 4 standard deviations above them, every two voices have pieces of a like format, the closest two voices are at least ${MIN_VOICE_GAP} apart, and every voice holds at least 400 words; otherwise one voice`;
 
 type Vec = readonly (number | null)[];
 type Kind = 'LIST' | 'PROSE';
@@ -91,11 +98,11 @@ const VOICE_FEATURES = FEATURES.filter((f) => f.layer === 1 || f.layer === 4 || 
 const SHAPE_FEATURES = FEATURES.filter((f) => !VOICE_FEATURES.includes(f));
 
 /** A line's list or thread marker, its heading marks and bold: format, not words. */
-const LIST_LINE = /^\s*(?:[-*+]|\d+[.)/])\s+\S/;
+const LIST_LINE = /^\s*(?:(?:[-*+]|\d+[.)/])\s+\S|\|)/;
 const unformatted = (text: string): string => text.split('\n')
   .map((l) => l.replace(/^\s*(?:[-*+]|\d+[.)/])\s+/, '').replace(/^#{1,6}\s+/, '').replace(/\*\*/g, '')).join('\n');
 
-/** LIST when at least half its lines are list items or numbered thread posts; otherwise PROSE. */
+/** LIST when at least half its lines are list items, numbered thread posts or table rows; otherwise PROSE. */
 function kindOf(text: string): Kind {
   const lines = text.split('\n').map((l) => l.trim()).filter((l) => l && !/^#{1,6}\s/.test(l));
   return lines.length && lines.filter((l) => LIST_LINE.test(l)).length * 2 >= lines.length ? 'LIST' : 'PROSE';
@@ -184,7 +191,10 @@ interface Distances {
 }
 
 export function distancesOf(texts: readonly string[]): Distances {
-  const rs = readingsOf(texts.map(withoutFrontMatter));
+  return distancesFrom(readingsOf(texts.map(withoutFrontMatter)));
+}
+
+function distancesFrom(rs: readonly Reading[]): Distances {
   const fl = {
     fw: floorsOf(rs.map((r) => r.fw), 5), tg: floorsOf(rs.map((r) => r.tg), 2),
     vc: floorsOf(rs.map((r) => r.vc), 1e-3), sc: floorsOf(rs.map((r) => r.sc), 1e-3), sh: floorsOf(rs.map((r) => r.sh), 1e-3),
@@ -201,6 +211,38 @@ export function distancesOf(texts: readonly string[]): Distances {
     return (voice[i][j] + Math.min(shape, voice[i][j])) / 2;
   }));
   return { voice, style, alike: rs.map((a) => rs.map((b) => alikeFormat(a, b))) };
+}
+
+/** A seeded generator (mulberry32): the same folder gives the same reference folders on every machine. */
+function rng(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => { a = (a + 0x6d2b79f5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+}
+
+/**
+ * A REFERENCE FOLDER WITH NO WRITERS IN IT: every feature's values shuffled across the pieces, each feature on its own.
+ * Each feature keeps exactly the values the folder has; what goes is the way they travel together, which is what a
+ * writer is. Format (list or prose, length) stays with each piece, so a reference is compared like for like.
+ */
+function shuffled(rs: readonly Reading[], next: () => number): Reading[] {
+  const col = <T>(vs: readonly (T | null)[]): (T | null)[] => {
+    const out = [...vs];
+    for (let i = out.length - 1; i > 0; i--) { const j = Math.floor(next() * (i + 1)); [out[i], out[j]] = [out[j], out[i]]; }
+    return out;
+  };
+  const block = (get: (r: Reading) => Vec | null): (Vec | null)[] => {
+    const vs = rs.map(get);
+    const have = vs.flatMap((v, i) => (v ? [{ i, v }] : []));
+    const width = have.length ? have[0].v.length : 0;
+    const out: (number | null)[][] = vs.map((v) => (v ? [...v] : []));
+    for (let f = 0; f < width; f++) {
+      const values = col(have.map((h) => h.v[f]));
+      have.forEach((h, k) => { out[h.i][f] = values[k]; });
+    }
+    return vs.map((v, i) => (v ? out[i] : null));
+  };
+  const fw = block((r) => r.fw); const tg = block((r) => r.tg); const vc = block((r) => r.vc); const sc = block((r) => r.sc); const sh = block((r) => r.sh);
+  return rs.map((r, i) => ({ ...r, fw: fw[i], tg: tg[i] ?? r.tg, vc: vc[i] ?? r.vc, sc: sc[i] ?? r.sc, sh: sh[i] ?? r.sh }));
 }
 
 /** The distance matrix the pieces are grouped by (see `distancesOf`). */
@@ -258,39 +300,103 @@ const r3 = (x: number): number => Math.round(x * 1000) / 1000;
  * the names it gives ("voice 1", "voice 2", in the order of each voice's first piece) do not depend on how the folder
  * was listed.
  */
+/** How many reference folders a split is weighed against. */
+export const REFERENCES = 30;
+/** The seed of the reference folders: fixed, so a folder groups the same way on every machine and every run. */
+const SEED = 20261015;
+
+interface Cut { readonly k: number; readonly clusters: number[][]; readonly silhouette: number; readonly gap: number; readonly alike: boolean }
+
+/** A piece alone in its cluster is an outlier of the nearest voice, not a voice of its own: it joins the voice it is nearest. */
+function folded(c: readonly (readonly number[])[], d: readonly (readonly number[])[]): number[][] {
+  let out = c.map((x) => [...x]);
+  for (;;) {
+    const small = out.findIndex((x) => x.length < MIN_PIECES_PER_VOICE);
+    if (small < 0 || out.length < 2) return out;
+    const others = out.map((x, k) => ({ k, d: k === small ? Infinity : mean(out[small].flatMap((i) => x.map((j) => d[i][j]))) }));
+    const to = others.reduce((m, o) => (o.d < m.d ? o : m)).k;
+    out[to] = [...out[to], ...out[small]].sort((x, y) => x - y);
+    out = out.filter((_, k) => k !== small).sort((x, y) => x[0] - y[0]);
+  }
+}
+
+/** Every distinct cut of 2 or more voices the linkage offers, outliers folded in, each scored on pieces of a like format. */
+function cutsOf(dist: Distances, n: number): Cut[] {
+  const { voice, style, alike } = dist;
+  const tree = linkage(style);
+  const top = Math.min(MAX_VOICES, Math.floor(n / MIN_PIECES_PER_VOICE));
+  const between = (a: readonly number[], b: readonly number[]): number | null => {
+    const pairs = a.flatMap((i) => b.flatMap((j) => (alike[i][j] ? [voice[i][j]] : [])));
+    return pairs.length ? mean(pairs) : null;
+  };
+  const seen = new Set<string>(); const out: Cut[] = [];
+  for (let k = 2; k <= Math.min(n, top + 2); k++) {
+    const raw = tree.get(k);
+    if (!raw) continue;
+    const c = folded(raw, voice);
+    if (c.length < 2 || c.length > top) continue;
+    const key = JSON.stringify(c);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    // A cut two of whose voices share no format separates formats, not writers.
+    const pairs = c.flatMap((x, i) => c.slice(i + 1).map((y) => between(x, y)));
+    const isAlike = pairs.every((x) => x !== null);
+    out.push({ k: c.length, clusters: c, silhouette: silhouetteOf(voice, c, alike), gap: isAlike ? Math.min(...pairs.map((x) => x ?? 0)) : 0, alike: isAlike });
+  }
+  return out;
+}
+
+/** The strongest cut between writers: the highest silhouette among cuts whose voices can be compared; a tie goes to fewer voices. */
+const strongest = (cs: readonly Cut[]): Cut | null => cs.filter((c) => c.alike).reduce<Cut | null>((m, c) => (!m || c.silhouette > m.silhouette + 1e-9 ? c : m), null);
+
+/**
+ * THE VOICES IN A FOLDER, from the writing alone. `pieces` in a fixed order (their ids sorted), so the grouping and
+ * the names it gives ("voice 1", "voice 2", in the order of each voice's first piece) do not depend on how the folder
+ * was listed.
+ *
+ * WHETHER IT SPLITS IS READ AGAINST THE FOLDER ITSELF, not against a fixed number. How cleanly real writers separate
+ * depends on the writers, the topics and the number of pieces, so no one threshold tells one writer from two. The
+ * strongest cut is compared with the strongest cut of REFERENCES folders built from the same pieces with every feature
+ * shuffled across them on its own: the same values, with nothing travelling together the way a writer's habits do. The
+ * folder splits only when its strongest cut beats every reference and sits at least MIN_EXCESS standard deviations
+ * above their mean, and its closest two voices are at least MIN_VOICE_GAP apart.
+ */
+/**
+ * THE DECISION, ON ITS OWN: whether the strongest cut is a split between writers, and how sure that is. `nulls` are the
+ * strongest silhouettes of the reference folders; `thinnest` is the fewest words any voice of the cut holds.
+ */
+export function splitDecision(cut: { readonly silhouette: number; readonly gap: number; readonly alike: boolean; readonly thinnest: number } | null, nulls: readonly number[]): { readonly split: boolean; readonly confidence: number } {
+  if (!cut || !nulls.length) return { split: false, confidence: 1 };
+  const mu = mean([...nulls]); const sd = Math.sqrt(mean(nulls.map((x) => (x - mu) ** 2))) || 1e-6;
+  const excess = (cut.silhouette - mu) / sd;
+  const beats = nulls.filter((x) => x < cut.silhouette).length;
+  const strong = cut.alike && beats === nulls.length && excess >= MIN_EXCESS && cut.gap >= MIN_VOICE_GAP;
+  // HOW SURE. A split: the share of reference folders its cut beat. One voice: one minus how far the folder got toward
+  // splitting (each test met as a share of what it needs), so a folder that nearly split never reads as a sure one.
+  if (strong && cut.thinnest >= MIN_VOICE_WORDS) return { split: true, confidence: (beats + 1) / (nulls.length + 1) };
+  // Too little text in a voice to read it either way: one voice, said with no confidence in either direction.
+  if (strong) return { split: false, confidence: 0.5 };
+  const toward = cut.alike ? Math.min(1, Math.max(0, excess) / MIN_EXCESS) * Math.min(1, cut.gap / MIN_VOICE_GAP) * (beats / nulls.length) : 0;
+  return { split: false, confidence: 1 - toward };
+}
+
 export function groupByStyle(pieces: readonly { readonly id: string; readonly text: string }[]): VoiceGrouping {
   const sorted = [...pieces].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
   const one = (confidence: number, tried: VoiceGrouping['tried']): VoiceGrouping => ({
     groups: [{ name: 'voice 1', pieces: sorted.map((p) => p.id) }], silhouette: null, confidence: r3(confidence), tried, criterion: CRITERION });
   if (sorted.length < MIN_PIECES_TO_GROUP) return one(1, []);
-  const { voice, style, alike } = distancesOf(sorted.map((p) => p.text));
-  const cuts = linkage(style);
-  const top = Math.min(MAX_VOICES, Math.floor(sorted.length / MIN_PIECES_PER_VOICE));
-  const tried: VoiceGrouping['tried'][number][] = [];
-  // How far two voices sit apart, read on their pieces of a like format alone; null when they have none.
-  const between = (a: readonly number[], b: readonly number[]): number | null => {
-    const pairs = a.flatMap((i) => b.flatMap((j) => (alike[i][j] ? [voice[i][j]] : [])));
-    return pairs.length ? mean(pairs) : null;
-  };
-  for (let k = 2; k <= top; k++) {
-    const c = cuts.get(k);
-    if (!c) continue;
-    const pairs = c.flatMap((x, i) => c.slice(i + 1).map((y) => between(x, y)));
-    // A cut two of whose voices share no format separates formats, not writers: an essay and a list, a tweet and a
-    // long piece, cannot be told apart as writing, so nothing says they are two writers.
-    const isAlike = pairs.every((x) => x !== null);
-    const gap = isAlike ? Math.min(...pairs.map((x) => x ?? 0)) : 0;
-    tried.push({ k, silhouette: r3(silhouetteOf(voice, c, alike)), gap: r3(gap), alike: isAlike,
-      valid: isAlike && c.every((x) => x.length >= MIN_PIECES_PER_VOICE) && gap >= MIN_VOICE_GAP });
-  }
-  const valid = tried.filter((t) => t.valid);
-  // The best valid cut; a tie goes to fewer voices.
-  const best = valid.reduce<(typeof tried)[number] | null>((m, t) => (!m || t.silhouette > m.silhouette ? t : m), null);
-  if (!best || best.silhouette < MIN_SILHOUETTE) return one(1 - Math.max(0, ...tried.map((t) => t.silhouette)), tried);
-  const c = cuts.get(best.k) ?? [];
+  const rs = readingsOf(sorted.map((p) => withoutFrontMatter(p.text)));
+  const cuts = cutsOf(distancesFrom(rs), rs.length);
+  const best = strongest(cuts);
+  const next = rng(SEED);
+  const nulls = Array.from({ length: REFERENCES }, () => strongest(cutsOf(distancesFrom(shuffled(rs, next)), rs.length))?.silhouette ?? 0);
+  const thinnest = best ? Math.min(...best.clusters.map((x) => x.reduce((n, i) => n + rs[i].words, 0))) : 0;
+  const d = splitDecision(best ? { silhouette: best.silhouette, gap: best.gap, alike: best.alike, thinnest } : null, nulls);
+  const tried = cuts.map((c) => ({ k: c.k, silhouette: r3(c.silhouette), gap: r3(c.gap), alike: c.alike, valid: d.split && c === best }));
+  if (!best || !d.split) return one(d.confidence, tried);
   return {
-    groups: c.map((idx, k) => ({ name: `voice ${k + 1}`, pieces: idx.map((i) => sorted[i].id) })),
-    silhouette: best.silhouette, confidence: best.silhouette, tried, criterion: CRITERION,
+    groups: best.clusters.map((idx, k) => ({ name: `voice ${k + 1}`, pieces: idx.map((i) => sorted[i].id) })),
+    silhouette: r3(best.silhouette), confidence: r3(d.confidence), tried, criterion: CRITERION,
   };
 }
 

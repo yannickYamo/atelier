@@ -100,7 +100,7 @@ describe('atelier new on ten pieces by five unnamed voices, with a model', () =>
 
   it('finds the five voices from the writing, with its confidence, in one line', () => {
     expect(out).not.toMatch(/^EXIT/);
-    expect(out).toMatch(/5 voices found in 10 pieces, by how they are written \(confidence 0\.\d\d\): each is read on its own first\./);
+    expect(out).toMatch(/5 voices found in 10 pieces, by how they are written \(confidence [01]\.\d\d\): each is read on its own first\./);
     expect(inf.grouping.how).toBe('INFERRED');
     expect(inf.grouping.voices.map((v) => [...v.pieces].sort())).toEqual(FIVE_GROUPS.map((g) => [...g]));
     expect(inf.grouping.confidence).toBeGreaterThanOrEqual(0.5);

@@ -18,14 +18,16 @@ builds in one call, and says what it did in one line:
 
 - **The voices are found in the writing** (`core/composite/voices.ts`) when no author is declared. Pieces are compared
   on voice signals such as function-word rates, character runs, punctuation and wording. Layout, format and length do
-  not decide authorship; shape can strengthen a split only where the voice signals already agree. The pieces are
-  joined by average linkage, and the number of voices is the cut with the best mean silhouette, taken only when it is
-  at least 0.5, every voice has at least two pieces, every pair of voices has like-format pieces that can be compared,
-  and the two closest voices sit at least 0.3 apart on those pieces. Otherwise the folder is one voice and builds
-  exactly as before. One writer's essays, short posts, tweets, threads and lists therefore stay one voice without
-  labels. Stubs too short to be examples are left out of the grouping as they are of the corpus. Front matter, a
-  folder per author and `--authors` still decide when given, a single declared author included. The build says
-  "3 voices found in 9 pieces" with the grouping's confidence.
+  not decide authorship; shape can strengthen a split only where the voice signals already agree. Whether a folder
+  splits is read against the folder itself rather than a fixed threshold: its strongest cut is compared with the
+  strongest cuts of thirty reference folders built from the same pieces with every feature shuffled across them, and a
+  split is taken only when it beats every one of them by at least four standard deviations, its voices sit at least
+  0.25 apart on comparable pieces, and each voice holds at least 400 words. A piece left alone joins the voice it is
+  nearest. On real writers' folders this separates two writers with three or more pieces each and keeps one writer
+  whole across topics, formats and lengths; three or more writers may be read as two, and a folder too short to tell
+  stays one voice, which are the safe sides. The build says "3 voices found in 9 pieces" with the grouping's
+  confidence. Front matter, a folder per author and `--authors` still decide when given, a single declared author
+  included.
 - **Each voice is read on its own from three vantages**: the two discovery always used, and the effect reading (what
   the writing does to a reader). A rule only the effect reading found is marked so in the record, and said to be not
   yet measured. Two classes join the trait table: figures of speech and imagery, and emotion and effect on the reader.
@@ -48,8 +50,9 @@ builds in one call, and says what it did in one line:
   `composite-inference.json`, and shown by `atelier report --skill <name>`.
 - Pinned in `tests/atelier-composite-inferred.test.ts`, `tests/atelier-composite-inferred-journey.test.ts` and
   `tests/atelier-voices-format.test.ts`: ten pieces by five invented voices with no front matter grouped into the five;
-  unlabelled folders mixing one writer's essays, short posts, tweets, threads and lists kept as one; two writers in the
-  same format still separated; weights checked against hand-worked values; every inferred trait preferred and
+  unlabelled folders mixing one writer's essays, short posts, tweets, threads and lists kept as one; invented writers with
+  natural variation (one across many topics kept whole, two on the same topics split, a minority writer found); each
+  guard of the split decision checked on hand-set values; weights checked against hand-worked values; every inferred trait preferred and
   non-blocking until explicitly made required; a stated liking moving only what it names; clashes settled with their
   reasons; shared rules taken as method; a byte-identical rebuild with no model call; and the same flow with no model
   set up.
