@@ -1,0 +1,38 @@
+{"id": "s001", "step": "Cite only lines in the diff.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": "LINES"}
+{"id": "s002", "step": "Point to the line.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": "LINES"}
+{"id": "s003", "step": "Reference the changed line.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": "LINES"}
+{"id": "s004", "step": "Quote the line you mean.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": "LINES"}
+{"id": "s005", "step": "Give the file and line.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": "LINES"}
+{"id": "s006", "step": "Cite as path:line.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": "LINES"}
+{"id": "s007", "step": "Point at the exact line in the change.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": "LINES"}
+{"id": "s008", "step": "Include the file path and line number.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": "LINES"}
+{"id": "s009", "step": "Every finding points at the code.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": "LINES_EACH"}
+{"id": "s010", "step": "Each finding cites its line.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": "LINES_EACH"}
+{"id": "s011", "step": "Cite the file and line for every finding.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": "LINES_EACH"}
+{"id": "s012", "step": "Every claim about the code points at the code.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": "LINES_EACH"}
+{"id": "s013", "step": "Each comment cites its line.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": "LINES_EACH"}
+{"id": "s014", "step": "Each blocking issue cites the file path with a line number.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": "LINES_EACH"}
+{"id": "s015", "step": "For each issue, give the file and line.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": "LINES_EACH"}
+{"id": "s016", "step": "Do not cite as path:line; link to the file instead.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": null}
+{"id": "s017", "step": "Never point to a line in the summary.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": null}
+{"id": "s018", "step": "Point to the line where there is one.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": null}
+{"id": "s019", "step": "If a finding is about code, give the file and line.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": null}
+{"id": "s020", "step": "Quote the line unless it is long.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": null}
+{"id": "s021", "step": "Start with a one-line summary of what the change does.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": null}
+{"id": "s022", "step": "Keep every sentence under one line.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": null}
+{"id": "s023", "step": "Quote the offending code exactly as it stands in the diff, in inline code.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": null}
+{"id": "s024", "step": "Don't reference line numbers; they move.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": null}
+{"id": "s025", "step": "Leave a blank line between findings.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": null}
+{"id": "s026", "step": "Name the test that would have caught it.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": "NAMES_TEST"}
+{"id": "s027", "step": "Suggest a test for each fix.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": "NAMES_TEST"}
+{"id": "s028", "step": "Propose tests for the change.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": "NAMES_TEST"}
+{"id": "s029", "step": "Add a test case for the bug.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": "NAMES_TEST"}
+{"id": "s030", "step": "Write the test's name in backticks.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": "NAMES_TEST"}
+{"id": "s031", "step": "Ask whether the change needs a test, and say which test if it does.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": null}
+{"id": "s032", "step": "Never name a test you did not run.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": null}
+{"id": "s033", "step": "Name the test where one exists.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": null}
+{"id": "s034", "step": "Add a Test Coverage section.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": null}
+{"id": "s035", "step": "Put between 3 and 6 rows in the Test Coverage table.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": null}
+{"id": "s036", "step": "Say whether the tests pass.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": null}
+{"id": "s037", "step": "Run the tests before writing anything.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": null}
+{"id": "s038", "step": "Say whether the change is correct.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": null}
