@@ -106,6 +106,44 @@ const withinTolerance = (a: number, b: number): boolean => Math.abs(a - b) <= Ma
 
 type Relation = 'SAME' | 'CONFLICT' | 'UNRELATED';
 
+/**
+ * PLAINLY OPPOSED, WHATEVER ELSE THE TWO SAY. "Use contractions throughout, in a chatty register" against "Never use
+ * contractions; keep a formal, precise register" share too few words to pass as one subject, and both would instruct
+ * the writer. So a subject both name is compared on its own: the clause that names it says never (never, avoid, no,
+ * without...) in one and not in the other. And a known pair of opposites on a subject both name (British against
+ * American spelling, short against long paragraphs) is a conflict when each side holds one of the two and not both.
+ */
+const SUBJECT = /\b(contractions?|headings?|lists?|bullet(?:s| points?)?|first person|questions?|sources?|citations?|dash(?:es)?|emoji|jargon|footnotes?|anecdotes?|examples?|figures?|paragraphs?|sentences?|spellings?|exclamation marks?|semicolons?|tables?|hedg(?:e|es|ing))\b/gi;
+const CLAUSE_NEGATION = /\b(never|no|not|avoid|avoids|without|don't|do not|doesn't|rarely|none)\b/i;
+const OPPOSITES: readonly (readonly [RegExp, RegExp])[] = [
+  [/\bbritish\b/i, /\bamerican\b/i],
+  [/\b(short|shorter|brief|tight)\b/i, /\b(long|longer|run long|lengthy)\b/i],
+  [/\b(informal|chatty|casual|conversational)\b/i, /\bformal\b/i],
+  [/\bfirst person\b/i, /\bthird person\b/i],
+];
+const singular = (w: string): string => w.toLowerCase().replace(/^bullet.*/, 'bullet').replace(/^hedg.*/, 'hedge').replace(/(?:es|s)$/, '').replace(/dash$/, 'dash');
+const subjectsOf = (s: string): Map<string, boolean> => {
+  const out = new Map<string, boolean>();
+  for (const clause of s.split(/[;:.!?]|,\s*(?:and|but)\b|\bbut\b/i)) {
+    for (const m of clause.matchAll(SUBJECT)) {
+      const k = singular(m[1]); const neg = CLAUSE_NEGATION.test(clause);
+      // A subject named twice keeps the first clause's polarity.
+      if (!out.has(k)) out.set(k, neg);
+    }
+  }
+  return out;
+};
+export function plainlyOpposed(a: string, b: string): boolean {
+  const sa = subjectsOf(a); const sb = subjectsOf(b);
+  const shared = [...sa.keys()].filter((k) => sb.has(k));
+  if (shared.some((k) => sa.get(k) !== sb.get(k))) return true;
+  if (!shared.length) return false;
+  return OPPOSITES.some(([x, y]) => {
+    const ax = x.test(a); const ay = y.test(a); const bx = x.test(b); const by = y.test(b);
+    return (ax && !ay && by && !bx) || (ay && !ax && bx && !by);
+  });
+}
+
 /** How two rules of one class from two authors stand to each other. */
 export function relationOf(a: Pick<Requirement, 'statement' | 'measurement' | 'kind'>, b: Pick<Requirement, 'statement' | 'measurement' | 'kind'>): Relation {
   if (a.measurement && b.measurement) {
@@ -120,6 +158,7 @@ export function relationOf(a: Pick<Requirement, 'statement' | 'measurement' | 'k
     return numeric.every((k) => withinTolerance(pa[k] as number, pb[k] as number)) ? 'SAME' : 'CONFLICT';
   }
   if (a.measurement || b.measurement) return 'UNRELATED';
+  if (plainlyOpposed(a.statement, b.statement)) return 'CONFLICT';
   const wa = contentWords(a.statement); const wb = contentWords(b.statement);
   if (jaccard(wa, wb) < SAME_SUBJECT) return 'UNRELATED';
   // The same subject, and one says never where the other says do: a conflict. (A boundary against a generative rule too.)
@@ -196,4 +235,10 @@ export function buildTraitTable(proposals: readonly Requirement[], sourceOf: (id
     return { id, author, cls, classes, kind, with: [...new Set([...c, ...s])] };
   });
   return { rows, conflicts };
+}
+
+/** The table in one line, the same wherever it is said: rows, and how they stand (a task-dependent conflict is a conflict). */
+export function describeTraitCounts(table: TraitTable): string {
+  const n = (...k: TraitKind[]): number => table.rows.filter((r) => k.includes(r.kind)).length;
+  return `${table.rows.length} rule(s) read, each author on their own: ${n('SHARED')} shared, ${n('UNIQUE')} unique to one author, ${n('CONFLICTING', 'TASK_DEPENDENT')} in conflict between authors`;
 }

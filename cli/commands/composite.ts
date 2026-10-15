@@ -18,7 +18,7 @@ import { existsSync } from 'node:fs';
 import { readJson } from '../../core/state/read-json.js';
 import type { Requirement } from '../../core/state/canonical-state.js';
 import { suggestAll, modeFromIntent, type Suggestion, type SkillMode } from '../../core/ratification/suggest.js';
-import { buildTraitTable, TRAIT_LABEL, type TraitClass, type TraitTable } from '../../core/composite/traits.js';
+import { buildTraitTable, describeTraitCounts, TRAIT_LABEL, type TraitClass, type TraitTable } from '../../core/composite/traits.js';
 import { readAdmiration, keywordClasses, type AdmireLine } from '../../core/composite/admire.js';
 import { composeSelection, describeComposite, openQuestions, type CompositeAuthor, type CompositeRecord, type ConflictAnswer } from '../../core/composite/selection.js';
 import type { AuthorMap } from '../../core/composite/authors.js';
@@ -199,11 +199,12 @@ function suggestionsByAuthor(pending: readonly Requirement[], s: Session, mode: 
 
 /**
  * THE RULINGS.
- *   Selected by the person's own line about its author, and accepted here: the OWNER'S WORD, not inferred evidence. A
+ *   Selected by the person's own line about its author, or the side they chose in a conflict (`--conflict n=A`), and
+ *     accepted here: the OWNER'S WORD, not inferred evidence. A
  *     worded rule is ratified REQUIRED, so it instructs the writer; a counted one is a target the drafts are steered and
  *     chosen by and never a failure (PREFERRED), until the person makes it required with `--set`. Its ruling says
  *     "selected by you from <author>".
- *   Chosen otherwise (a conflict the person answered, "both" of two statements): the weight its own author's evidence
+ *   Chosen otherwise ("both" of two statements, kept and shown): the weight its own author's evidence
  *     suggests, as any proposal.
  *   A habit: approved, shown and not instructed. Set aside, or one side of an open conflict: rejected, with the reason.
  * Nothing here makes a counted rule blocking: only the person's `--set` does.
@@ -243,9 +244,7 @@ export function decisionsFor(record: CompositeRecord, pending: readonly Requirem
 }
 
 function printAsk(authors: AuthorMap, table: TraitTable, continueWith: string | undefined): void {
-  const n = (k: string): number => table.rows.filter((r) => r.kind === k).length;
-  console.log(`\n${table.rows.length} rule(s) read, each author on their own: ${n('SHARED')} shared, ${n('UNIQUE')} unique to one author, `
-    + `${n('CONFLICTING') + n('TASK_DEPENDENT')} in conflict between authors.`);
+  console.log(`\n${describeTraitCounts(table)}.`);
   console.log('Your skill is the combination you choose, so nothing is chosen yet. For each author, say what you like about their pieces:');
   for (const name of authors.names) {
     const classes = availableOf(table, name).map((c) => TRAIT_LABEL[c]);

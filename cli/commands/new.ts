@@ -12,9 +12,9 @@
 // continues, when the second call names a different folder: continuing would build from work the
 // person did not just point at.
 
-import { existsSync } from 'node:fs';
-import { basename, resolve } from 'node:path';
-import { die, argv, flag, positional, loadSession, saveSession, assertReachable, canReach, sourceProvenance, runFile, DATA } from '../runtime.js';
+import { existsSync, statSync } from 'node:fs';
+import { basename, relative, resolve } from 'node:path';
+import { die, argv, flag, flagAll, positional, loadSession, saveSession, assertReachable, canReach, sourceProvenance, runFile, DATA } from '../runtime.js';
 import { readJson } from '../../core/state/read-json.js';
 import { modeFromIntent, type SkillMode } from '../../core/ratification/suggest.js';
 import * as store from '../../core/state/store.js';
@@ -23,6 +23,8 @@ import { ensureGrammar } from '../../core/observers/grammar.js';
 import { normalizeClass } from '../../core/observers/doc-class.js';
 import { floorDimensions, proposeMargins, buildContract } from '../../core/distinctiveness/measured.js';
 import { extract } from '../../core/intake/extract.js';
+import { detectAuthors } from '../../core/composite/authors.js';
+import { corpusFiles } from '../corpus.js';
 import { intake } from './intake.js';
 import { discover } from './discover.js';
 import { method } from './method.js';
@@ -36,6 +38,13 @@ const MODES: readonly SkillMode[] = ['GENERATE', 'GUARD', 'RESPOND'];
 
 /** A path as a person can paste it back into a shell. */
 const shellWord = (p: string): string => (/^[\w./~-]+$/.test(p) ? p : `'${p.replace(/'/g, `'\\''`)}'`);
+
+/** Whether the pieces at `path` are declared to be by several authors: the same reading intake makes. */
+function severalAuthors(path: string): boolean {
+  const dir = statSync(path).isDirectory();
+  const files = corpusFiles(path).flatMap((f) => { const r = extract(f); return r.ok ? [{ id: dir ? relative(path, f) : basename(f), text: (r as { text: string }).text }] : []; });
+  return detectAuthors(files, flagAll('--authors')) !== null;
+}
 
 /** The folder the sealed corpus was read from, for runs that predate recording it. */
 const sealedFrom = (): string | null => {
@@ -76,7 +85,18 @@ export async function newSkill(): Promise<void> {
   // NO MODEL IS NOT A REASON TO BUILD NOTHING. What can be counted in the examples is read without one; a model
   // adds the rules only a reading finds, and can be added later. Decided before anything is written for the other
   // path, and what the person said the skill is for is kept as what it is for.
-  if ((s.run.state === 'EMPTY' || !s.evidence) && !canReach('discovery')) {
+  const keyless = !canReach('discovery');
+  // PIECES BY SEVERAL AUTHORS, WITH NO MODEL: told apart exactly as with one (core/composite/authors.ts, declared only),
+  // and read the same way, each author on their own: what can be counted in each one's pieces, the trait table, and the
+  // composite screen, where the person's lines are read by their words. Pooled into one author's examples they would
+  // give the average of them all, which nobody asked for.
+  const fresh = s.run.state === 'EMPTY' || !s.evidence;
+  const composite = fresh && keyless && severalAuthors(path);
+  // Nothing at build reads with a model when none is set up: the persona and the other readings are left out, and said.
+  if (keyless) process.env.ATELIER_BUILD_NO_MODEL = '1';
+  if (composite) {
+    console.log('No model is set up (ANTHROPIC_API_KEY), so each author is read for what can be counted in their pieces alone, and what you say you like about each is read by its words.\n  To have a model read them too, set the key and run this again in a folder of its own.\n');
+  } else if (fresh && keyless) {
     console.log('No model is set up (ANTHROPIC_API_KEY), so the skill is built from what can be counted in your examples, with no rules read by a model and none for you to approve.\n  To have a model read them too, set the key and run this again in a folder of its own.\n');
     if (intent && !argv.includes('--for')) argv.push('--for', intent);
     await method();
@@ -106,7 +126,7 @@ export async function newSkill(): Promise<void> {
   const shownBefore = s.run.state === 'PROPOSED';
   // ── START, OR CONTINUE ──────────────────────────────────────────────────────────────────────
   if (s.run.state === 'EMPTY' || !s.evidence) {
-    assertReachable('discovery');
+    if (!composite) assertReachable('discovery');
     if (!intent) console.log('No purpose given, so rules are weighed for producing new work. Say what it is for as a second argument.\n');
     else console.log(`For: "${intent}" — ${declared ? `${mode.toLowerCase()}, as you declared` : read.why}.\n`);
     // A held-out check without having to know what one is: some of the work is set aside before
