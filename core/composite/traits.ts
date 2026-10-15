@@ -19,6 +19,8 @@
 
 import type { Measurement, Requirement } from '../state/canonical-state.js';
 import type { ContextClass } from '../fidelity/types.js';
+import { NUMBER_WORDS } from '../loop/numbers.js';
+import { boundedNumber, quantitiesOf, quantityRelation, withinTolerance, type Quantity } from './quantity.js';
 
 export type TraitClass = 'opening' | 'structure' | 'evidence' | 'pace' | 'voice' | 'method';
 export const TRAIT_CLASSES: readonly TraitClass[] = ['opening', 'structure', 'evidence', 'pace', 'voice', 'method'];
@@ -38,9 +40,9 @@ const BY_OBSERVER: Readonly<Partial<Record<string, TraitClass>>> = {
 /**
  * THE WORDS OF EACH CLASS: one list, read the same way for a rule (here) and for what a person says they like
  * (./admire.ts, when no model reads their line). A statement carries every class whose words it uses, wherever they
- * stand in it. A count's unit ("fifteen words in a sentence") is not a word about words.
+ * stand in it. A count's unit ("fifteen words in a sentence", "eight hundred words") is not a word about words.
  */
-const COUNT_UNIT = String.raw`(?<!\b(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|fifteen|twenty|thirty|forty|fifty|hundred)\s)`;
+const COUNT_UNIT = String.raw`(?<!\b(?:\d[\d,]*|${NUMBER_WORDS.join('|')})[\s-])`;
 export const CLASS_WORDS: readonly (readonly [TraitClass, RegExp])[] = [
   ['opening', /\b(open|opens|opening|openings|begin|begins|beginning|first (?:sentence|line|paragraph|words)|lead(?:s)? with|start(?:s)? with|hook|title)\b/i],
   ['evidence', /\b(evidence|figure|figures|number|numbers|data|source|sources|cite|cites|citation|citations|example|examples|specific|specifics|detail|details|proof|statistic|statistics|quote|quotes|footnote|reference|references)\b/i],
@@ -51,6 +53,13 @@ export const CLASS_WORDS: readonly (readonly [TraitClass, RegExp])[] = [
 const BY_WORDS = CLASS_WORDS;
 
 /**
+ * A LENGTH SAID IN WORDS IS CLASSED AS A COUNT OF IT IS: the piece's length as LENGTH is (structure), a sentence's or a
+ * paragraph's as SENTENCE_LENGTH and PARAGRAPH_LENGTH are (pace). "Keep the piece to about 300 words" names no class
+ * word, and is not a decision move.
+ */
+const quantityClasses = (statement: string): TraitClass[] => [...new Set(quantitiesOf(statement).map((q): TraitClass => (q.measure === 'piece' ? 'structure' : 'pace')))];
+
+/**
  * WHAT A RULE IS ABOUT, AS EVERY CLASS IT CARRIES. The observer decides for a counted rule; for a worded one, every class
  * whose words it uses, in the fixed order of TRAIT_CLASSES (never the order of its words), so "a paragraph may run long
  * when the evidence needs it" is both pace and evidence, and so is the same rule said the other way round. A rule with
@@ -59,7 +68,7 @@ const BY_WORDS = CLASS_WORDS;
 export function traitClassesOf(r: Pick<Requirement, 'statement' | 'measurement'>): TraitClass[] {
   const byObserver = r.measurement ? BY_OBSERVER[r.measurement.observer] : undefined;
   if (byObserver) return [byObserver];
-  const found = new Set(BY_WORDS.filter(([, re]) => re.test(r.statement)).map(([cls]) => cls));
+  const found = new Set([...BY_WORDS.filter(([, re]) => re.test(r.statement)).map(([cls]) => cls), ...quantityClasses(r.statement)]);
   const ordered = TRAIT_CLASSES.filter((c) => found.has(c));
   return ordered.length ? ordered : ['method'];
 }
@@ -82,7 +91,7 @@ export function primaryClassOf(r: Pick<Requirement, 'statement' | 'measurement'>
     const at = re ? r.statement.search(re) : -1;
     if (at >= 0 && (!best || at < best.at)) best = { cls, at };
   }
-  return best?.cls ?? 'method';
+  return best?.cls ?? quantityClasses(r.statement)[0] ?? 'method';
 }
 
 export type TraitKind = 'SHARED' | 'UNIQUE' | 'CONFLICTING' | 'TASK_DEPENDENT';
@@ -124,8 +133,7 @@ const jaccard = (a: Set<string>, b: Set<string>): number => { const inter = [...
 /** Two worded rules are about the same thing when they share this much of their content words. */
 export const SAME_SUBJECT = 0.34;
 
-/** How far two limits may sit apart and still be one trait: within 30% of the larger, and never less than 2 apart counts. */
-const withinTolerance = (a: number, b: number): boolean => Math.abs(a - b) <= Math.max(2, 0.3 * Math.max(Math.abs(a), Math.abs(b)));
+/** How far two limits may sit apart and still be one trait: within 30% of the larger, and never less than 2 apart counts (./quantity.ts). */
 
 type Relation = 'SAME' | 'CONFLICT' | 'UNRELATED';
 
@@ -162,10 +170,6 @@ const RESTRICT = /^(that|which|who|whose|with|without|unless|except|when|wheneve
 /** Prepositions that narrow a subject, unless what follows is the whole piece: "in headings" narrows, "in the piece" does not. */
 const PREPOSITION = /^(in|on|at|for|from|of|to|within|inside|under|across|about|after|before)$/i;
 const GENERAL_SCOPE = /^(?:(?:the |a |an |any |your |my |this |each |every |all )?(?:piece|pieces|text|texts|writing|prose|draft|drafts|work|article|articles|post|posts|essay|essays|body|copy|it|them|general|places?|anywhere|everything)|(?:any|all|every|whatever) (?:kinds?|sorts?|forms?|types?))\b/i;
-const NUMBER_WORD = String.raw`(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|fifteen|twenty|thirty|forty|fifty|a dozen)`;
-/** A ceiling, not a ban: "never more than twenty words", "no paragraph should run past five sentences". */
-const CAP = new RegExp(String.raw`\b(?:more than|longer than|fewer than|less than|past|beyond|over|exceed(?:s|ing)?|above|up to)\s+${NUMBER_WORD}\b`, 'i');
-
 interface Dimension { readonly name: string; readonly values: readonly (readonly [string, RegExp])[]; readonly needsSubject?: true }
 const DIMENSIONS: readonly Dimension[] = [
   { name: 'register', values: [['casual', /\b(casual|conversational|informal|chatty|relaxed|colloquial|like a friend)\b/gi], ['formal', /\b(formal|impersonal)\b/gi]] },
@@ -220,7 +224,8 @@ export function readPolarity(statement: string): Reading {
     const subj = [...clause.matchAll(SUBJECT)].map((m) => ({ k: singular(m[1]), at: m.index ?? 0, end: (m.index ?? 0) + m[0].length }));
     const vals = DIMENSIONS.flatMap((dim) => dim.values.flatMap(([v, re]) => [...clause.matchAll(re)].map((m) => ({ dim, v, at: m.index ?? 0, end: (m.index ?? 0) + m[0].length }))));
     const k = tokens.findIndex((t) => CLAUSE_NEGATION.test(t.w) || (/^not$/i.test(t.w)));
-    const cap = k >= 0 && CAP.test(clause);
+    // A ceiling, not a ban: "never more than twenty words", "no paragraph should run past five sentences" (./quantity.ts).
+    const cap = k >= 0 && boundedNumber(clause);
     // The span a negation governs, [from, to): what is banned; `narrowFrom` on, what only narrows it.
     let from = Infinity; let to = Infinity; let narrowFrom = Infinity; let phraseScoped = false;
     if (k >= 0 && !cap) {
@@ -287,61 +292,26 @@ const bansOutright = (statement: string): boolean => {
   const r = readPolarity(statement);
   if ([...r.subjects.values()].includes('neg')) return true;
   if ([...r.subjects.values()].includes('scoped') || r.narrowed) return false;
-  return NEGATION.test(statement) && !CAP.test(statement);
+  return NEGATION.test(statement) && !boundedNumber(statement);
 };
 
 /**
- * A NUMBER A WORDED RULE SETS ON A COUNTED SUBJECT: sentences in a paragraph, words in a sentence. A ceiling ("two
- * sentences at most", "no more than twenty words") or an allowance ("let a paragraph run to eight sentences": it may
- * go that far). Null when the statement names no such number.
+ * A NUMBER A WORDED RULE SETS ON A COUNTED SUBJECT, as the bound it is: a ceiling ("two sentences at most", "no more
+ * than twenty words"), a floor ("at least six sentences") or an allowance ("let a paragraph run to eight sentences": it
+ * may go that far). Read by the one quantity grammar (./quantity.ts); null when the rule sets no single bound on
+ * the words of a sentence or the sentences of a paragraph (a range, a size said "about", or no number).
  */
 interface Bound { readonly subject: 'paragraph' | 'sentence'; readonly kind: 'ceiling' | 'allowance' | 'floor'; readonly n: number }
-const NUM: Readonly<Record<string, number>> = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12, fifteen: 15, twenty: 20, thirty: 30, forty: 40, fifty: 50 };
-const numOf = (x: string): number => (/^\d/.test(x) ? Number(x) : NUM[x.toLowerCase()]);
 export function boundOf(said: string): Bound | null {
-  // "a single sentence" is one sentence: "keep each paragraph to a single sentence" is a ceiling of one.
-  const statement = said.replace(/\b(?:a single|one single|just one|only one)\s+(sentences?)\b/gi, 'one $1');
-  const N = String.raw`(\d+|${Object.keys(NUM).join('|')})`;
-  const unitFor = (subject: Bound['subject']): string => (subject === 'paragraph' ? 'sentences?' : 'words?');
-  for (const subject of ['paragraph', 'sentence'] as const) {
-    if (!new RegExp(String.raw`\b${subject}s?\b`, 'i').test(statement)) continue;
-    const u = unitFor(subject);
-    // A range, "two to four sentences": not one bound.
-    if (new RegExp(String.raw`\b${N}\s*(?:to|-|–)\s*${N}\s+${u}\b`, 'i').test(statement)) continue;
-    const allowance = new RegExp(String.raw`\b(?:run|runs|go|goes|stretch|stretches|extend|extends|grow|grows)\s+(?:to|up to)\s+${N}\s+${u}\b|\b(?:let|may|can|allow)\b[^.;]*?\bup to\s+${N}\s+${u}\b`, 'i').exec(statement);
-    if (allowance) return { subject, kind: 'allowance', n: numOf(allowance[1] ?? allowance[2]) };
-    const floor = new RegExp(String.raw`\b(?:at least|no fewer than|a minimum of)\s+${N}\s+${u}\b`, 'i').exec(statement);
-    if (floor) return { subject, kind: 'floor', n: numOf(floor[1]) };
-    const ceiling = new RegExp(String.raw`\b(?:at most|no more than|not more than|never more than|never exceed(?:s|ing)?|no longer than|under|fewer than|less than|a maximum of|up to|within|to)\s+${N}\s+${u}\b|\b${N}\s+${u}\s+(?:at most|or fewer|or less|max(?:imum)?)\b`, 'i').exec(statement);
-    const past = ceiling ? null : new RegExp(String.raw`\b(?:no|never|not)\b[^.;]*?\b(?:past|beyond|longer than|more than|over)\s+${N}\s+${u}\b`, 'i').exec(statement);
-    if (past) return { subject, kind: 'ceiling', n: numOf(past[1]) };
-    if (ceiling) {
-      const said = ceiling[0].toLowerCase(); const n0 = numOf(ceiling[1] ?? ceiling[2]);
-      return { subject, kind: 'ceiling', n: /^(?:under|fewer than|less than)/.test(said) ? n0 - 1 : n0 };
-    }
+  for (const q of quantitiesOf(said)) {
+    if (!((q.measure === 'paragraph' && q.unit === 'sentences') || (q.measure === 'sentence' && q.unit === 'words'))) continue;
+    const subject = q.measure;
+    if (q.allows && q.max !== null) return { subject, kind: 'allowance', n: q.max };
+    if (q.min === null && q.max !== null) return { subject, kind: 'ceiling', n: q.max };
+    if (q.max === null && q.min !== null) return { subject, kind: 'floor', n: q.min };
   }
   return null;
 }
-/** The bound a counted rule holds, on the same subjects. */
-const countedBound = (m: Measurement): Bound | null => {
-  if (m.observer === 'PARAGRAPH_LENGTH' && typeof m.params.maxSentences === 'number') return { subject: 'paragraph', kind: 'ceiling', n: m.params.maxSentences };
-  if (m.observer === 'SENTENCE_LENGTH' && typeof m.params.p90Max === 'number') return { subject: 'sentence', kind: 'ceiling', n: m.params.p90Max };
-  return null;
-};
-/**
- * Two bounds on one subject: the same trait, opposed, or nothing either says of the other. Two ceilings never
- * oppose: "at most six sentences" and "three sentences at most" are both met by a paragraph of three, so they are one
- * trait when close and compatible when not. A floor above a ceiling leaves no room for either: opposed. An allowance
- * ("let it run to eight") is a permission, so only one well past a ceiling opposes it.
- */
-const boundsRelation = (x: Bound, y: Bound): Relation => {
-  if (x.subject !== y.subject) return 'UNRELATED';
-  const opposed = (c: Bound, o: Bound): boolean => (o.kind === 'floor' ? o.n > c.n : o.kind === 'allowance' && o.n > c.n && !withinTolerance(c.n, o.n));
-  if (x.kind === 'ceiling' && y.kind === 'ceiling') return withinTolerance(x.n, y.n) ? 'SAME' : 'UNRELATED';
-  if (x.kind === 'ceiling') return opposed(x, y) ? 'CONFLICT' : 'UNRELATED';
-  if (y.kind === 'ceiling') return opposed(y, x) ? 'CONFLICT' : 'UNRELATED';
-  return 'UNRELATED';
-};
 
 /**
  * A QUANTITY SAID IN WORDS ON A SUBJECT A COUNT MEASURES, compared with the count's band: "long, winding sentences of
@@ -358,123 +328,122 @@ const boundsRelation = (x: Bound, y: Bound): Relation => {
 /** A sentence "long" in plain words runs past this many words; a paragraph "long", past this many sentences. */
 export const LONG_SENTENCE_WORDS = 20;
 export const LONG_PARAGRAPH_SENTENCES = 5;
-const WORD_N = String.raw`(\d[\d,]*|${Object.keys(NUM).join('|')})`;
-const numIn = (x: string): number => (/^\d/.test(x) ? Number(x.replace(/,/g, '')) : NUM[x.toLowerCase()]);
-interface WordedQuantity {
-  readonly subject: 'sentence' | 'paragraph' | 'piece' | 'heading' | 'list';
-  /** every unit at least this (a floor), or a typical unit of this size (a target) */
-  readonly floor?: number; readonly target?: number;
-  /** the piece's words: at most, at least */
-  readonly max?: number; readonly min?: number;
+/** Every quantity a worded rule sets, by the one grammar, with "long" said in plain words as a floor of its own. */
+interface WordedReading {
+  readonly ranges: readonly Quantity[];
   /** "long" in plain words, with no number */
-  readonly long?: true;
+  readonly long: readonly ('sentence' | 'paragraph')[];
   /** headings or lists asked for (true), or banned outright (false) */
-  readonly present?: boolean;
+  readonly present: Readonly<Partial<Record<'heading' | 'list', boolean>>>;
 }
-export function wordedQuantities(statement: string): WordedQuantity[] {
-  const out: WordedQuantity[] = [];
+function wordedReading(statement: string, ranges: readonly Quantity[] = quantitiesOf(statement)): WordedReading {
   const t = statement;
-  // Sentences: "sentences of thirty words or more", "at least twenty words a sentence", "sentences of forty words", "long sentences".
-  if (/\bsentences?\b/i.test(t)) {
-    const floor = new RegExp(String.raw`\b${WORD_N}\s+(?:words?\s+or\s+(?:more|longer)|or\s+more\s+words?)\b|\b(?:at least|no fewer than|a minimum of)\s+${WORD_N}\s+words?\b`, 'i').exec(t);
-    const allowance = boundOf(t)?.kind === 'allowance';
-    if (floor && !allowance) out.push({ subject: 'sentence', floor: numIn(floor[1] ?? floor[2]) });
-    else {
-      const target = new RegExp(String.raw`\bsentences?\s+(?:of|around|about)\s+(?:about\s+|around\s+)?${WORD_N}\s+words?\b(?!\s+or\s+(?:fewer|less))`, 'i').exec(t);
-      if (target && !/\b(?:under|at most|no more than|fewer than|less than|up to|within)\s/i.test(t.slice(Math.max(0, target.index - 14), target.index + target[0].length))) out.push({ subject: 'sentence', target: numIn(target[1]) });
-    }
-    const r = readPolarity(t);
-    if (r.values.get('length')?.pos.has('long') && r.subjects.get('sentence') === 'pos' && !NEGATION.test(t)) out.push({ subject: 'sentence', long: true });
-  }
-  if (/\bparagraphs?\b/i.test(t)) {
-    const r = readPolarity(t);
-    if (r.values.get('length')?.pos.has('long') && r.subjects.get('paragraph') !== 'neg') out.push({ subject: 'paragraph', long: true });
-  }
-  // The piece's words: a number of words said of no sentence, paragraph, heading or section.
-  if (!/\b(?:sentences?|paragraphs?|headings?|titles?|sections?|lines?|captions?|quotes?|summary|summaries)\b/i.test(t)) {
-    const range = new RegExp(String.raw`\b(?:between\s+)?${WORD_N}\s*(?:to|-|–|and)\s*${WORD_N}\s+words?\b`, 'i').exec(t);
-    const most = new RegExp(String.raw`\b(?:under|at most|no more than|not more than|never more than|fewer than|less than|a maximum of|up to|within|no longer than)\s+${WORD_N}\s+words?\b|\b${WORD_N}\s+words?\s+(?:at most|or fewer|or less|max(?:imum)?)\b`, 'i').exec(t);
-    const least = new RegExp(String.raw`\b(?:at least|no fewer than|a minimum of|more than|over)\s+${WORD_N}\s+words?\b|\b${WORD_N}\s+words?\s+or\s+more\b`, 'i').exec(t);
-    if (range) out.push({ subject: 'piece', min: numIn(range[1]), max: numIn(range[2]) });
-    else if (most || least) {
-      const strict = most && /^(?:under|fewer than|less than)/i.test(most[0]);
-      out.push({ subject: 'piece', ...(most ? { max: numIn(most[1] ?? most[2]) - (strict ? 1 : 0) } : {}), ...(least ? { min: numIn(least[1] ?? least[2]) + (/^(?:more than|over)/i.test(least[0]) ? 1 : 0) } : {}) });
-    }
-  }
-  // Headings and lists, asked for or banned outright (a kind of either counts as the thing a count sees).
+  const long: ('sentence' | 'paragraph')[] = [];
   const r = readPolarity(t);
+  if (/\bsentences?\b/i.test(t) && r.values.get('length')?.pos.has('long') && r.subjects.get('sentence') === 'pos' && !NEGATION.test(t)) long.push('sentence');
+  if (/\bparagraphs?\b/i.test(t) && r.values.get('length')?.pos.has('long') && r.subjects.get('paragraph') !== 'neg') long.push('paragraph');
+  // Headings and lists, asked for or banned outright (a kind of either counts as the thing a count sees).
+  const present: Partial<Record<'heading' | 'list', boolean>> = {};
   for (const [subject, keys] of [['heading', ['heading', 'subheading']], ['list', ['list', 'bullet', 'numbered list']]] as const) {
     const ps = keys.map((k) => r.subjects.get(k)).filter(Boolean);
-    if (ps.includes('pos')) out.push({ subject, present: true });
-    else if (r.subjects.get(keys[0]) === 'neg') out.push({ subject, present: false });
+    if (ps.includes('pos')) present[subject] = true;
+    else if (r.subjects.get(keys[0]) === 'neg') present[subject] = false;
   }
-  return out;
+  return { ranges, long, present };
 }
-/** Whether a quantity said in words cannot be met inside a counted band. */
-function wordedAgainstBand(q: WordedQuantity, m: Measurement): boolean {
+/** "Long" in plain words, as the floor it sets. */
+const longFloor = (k: 'sentence' | 'paragraph'): Quantity => (k === 'sentence'
+  ? { measure: 'sentence', unit: 'words', min: LONG_SENTENCE_WORDS, max: null } : { measure: 'paragraph', unit: 'sentences', min: LONG_PARAGRAPH_SENTENCES, max: null });
+
+/** How a worded reading stands to a counted band: a plain non-overlap conflicts; a ceiling close to the count's is the same trait. */
+function wordedAgainstCount(w: WordedReading, m: Measurement): Relation {
   const n = (k: string): number | null => (typeof m.params[k] === 'number' ? m.params[k] : null);
   const unit = Array.isArray(m.params.unit) ? String(m.params.unit[0]).toLowerCase() : 'words';
   const inSection = Array.isArray(m.params.in) && m.params.in.length > 0;
-  if (q.subject === 'sentence') {
-    // A floor on every sentence, or a typical sentence, sets the median at least that high; "long" asks for some at least.
-    const median = m.observer === 'SENTENCE_LENGTH' ? n('medianMax') : m.observer === 'LENGTH' && unit === 'sentence' ? n('max') : null;
-    const tail = m.observer === 'SENTENCE_LENGTH' ? n('p90Max') : m.observer === 'LENGTH' && unit === 'sentence' ? n('max') : null;
-    if (q.floor !== undefined && median !== null && q.floor > median) return true;
-    if (q.target !== undefined && median !== null && q.target > median) return true;
-    if (q.long && tail !== null && tail < LONG_SENTENCE_WORDS) return true;
-    return false;
+  let same = false;
+  // Sentences: a floor on every sentence, or a typical sentence, sets the median at least that high; "long" asks for
+  // some sentences at least that long, so only the nine-in-ten ceiling can rule it out; a permission ("may run to
+  // forty words") opposes a ceiling well below it.
+  const median = m.observer === 'SENTENCE_LENGTH' ? n('medianMax') : m.observer === 'LENGTH' && unit === 'sentence' ? n('max') : null;
+  const tail = m.observer === 'SENTENCE_LENGTH' ? n('p90Max') : m.observer === 'LENGTH' && unit === 'sentence' ? n('max') : null;
+  for (const q of w.ranges) {
+    if (q.measure === 'sentence' && q.unit === 'words' && tail !== null && median !== null) {
+      if (q.allows) { if (quantityRelation(q, { measure: 'sentence', unit: 'words', min: null, max: tail }) === 'CONFLICT') return 'CONFLICT'; continue; }
+      if ((q.min ?? 0) > median) return 'CONFLICT';
+      if (q.min === null && q.max !== null && withinTolerance(q.max, tail)) same = true;
+    }
+    if (q.measure === 'paragraph' && q.unit === 'sentences' && m.observer === 'PARAGRAPH_LENGTH' && n('maxSentences') !== null) {
+      const rel = quantityRelation(q, { measure: 'paragraph', unit: 'sentences', min: null, max: n('maxSentences') });
+      if (rel === 'CONFLICT') return 'CONFLICT';
+      if (rel === 'SAME') same = true;
+    }
+    if (q.measure === 'piece' && q.unit === 'words' && m.observer === 'LENGTH' && unit === 'words' && !inSection) {
+      if (quantityRelation(q, { measure: 'piece', unit: 'words', min: n('min'), max: n('max') }) === 'CONFLICT') return 'CONFLICT';
+    }
   }
-  if (q.subject === 'paragraph') {
-    const max = m.observer === 'PARAGRAPH_LENGTH' ? n('maxSentences') : null;
-    return Boolean(q.long && max !== null && max < LONG_PARAGRAPH_SENTENCES);
+  if (w.long.includes('sentence') && tail !== null && tail < LONG_SENTENCE_WORDS) return 'CONFLICT';
+  if (w.long.includes('paragraph') && m.observer === 'PARAGRAPH_LENGTH' && (n('maxSentences') ?? Infinity) < LONG_PARAGRAPH_SENTENCES) return 'CONFLICT';
+  for (const subject of ['heading', 'list'] as const) {
+    const p = w.present[subject];
+    if (p === undefined) continue;
+    const rate = subject === 'heading'
+      ? (m.observer === 'HEADINGS' ? { lo: n('minPer1000'), hi: n('maxPer1000') } : null)
+      : (m.observer === 'FEATURE' && Array.isArray(m.params.feature) && m.params.feature.includes('listItem') ? { lo: n('minValue'), hi: n('maxValue') } : null);
+    if (rate && (p ? rate.hi === 0 : (rate.lo ?? 0) > 0)) return 'CONFLICT';
   }
-  if (q.subject === 'piece') {
-    if (m.observer !== 'LENGTH' || unit !== 'words' || inSection) return false;
-    const lo = n('min'); const hi = n('max');
-    return (q.max !== undefined && lo !== null && q.max < lo) || (q.min !== undefined && hi !== null && q.min > hi);
-  }
-  const rate = q.subject === 'heading'
-    ? (m.observer === 'HEADINGS' ? { lo: n('minPer1000'), hi: n('maxPer1000') } : null)
-    : (m.observer === 'FEATURE' && Array.isArray(m.params.feature) && m.params.feature.includes('listItem') ? { lo: n('minValue'), hi: n('maxValue') } : null);
-  if (!rate || q.present === undefined) return false;
-  return q.present ? rate.hi === 0 : (rate.lo ?? 0) > 0;
+  return same ? 'SAME' : 'UNRELATED';
 }
 
 /**
- * WHAT A WORDED RULE ALLOWS, AS A RANGE ON EACH QUANTITY IT SETS: words in a sentence, sentences in a paragraph, words
- * in the whole piece, headings and lists (none, or at least one). Read from the same words as against a count
- * (`boundOf`, `wordedQuantities`): a ceiling is [0, n], a floor [n, ∞), a typical size n is n, "long" is at least the
- * length a plain "long" means, a ban [0, 0] and an ask [1, ∞).
+ * TWO WORDED READINGS, compared as ranges exactly as a worded rule is against a count: "under 300 words" against "at
+ * least 800 words", "under ten words" against "sentences of about thirty words", "a single sentence" against "at least
+ * six sentences". Ranges that do not meet conflict; ranges that overlap leave room for both; "long" in plain words is a
+ * floor; headings or lists asked for against the same banned.
  */
-interface Span { readonly lo: number; readonly hi: number }
-function spansOf(statement: string): Map<string, Span> {
-  const out = new Map<string, Span>();
-  const put = (k: string, lo: number, hi: number): void => { const s = out.get(k) ?? { lo: 0, hi: Infinity }; out.set(k, { lo: Math.max(s.lo, lo), hi: Math.min(s.hi, hi) }); };
-  const b = boundOf(statement);
-  if (b?.kind === 'ceiling') put(b.subject, 0, b.n);
-  if (b?.kind === 'floor') put(b.subject, b.n, Infinity);
-  for (const q of wordedQuantities(statement)) {
-    if (q.subject === 'sentence' || q.subject === 'paragraph') {
-      if (q.floor !== undefined) put(q.subject, q.floor, Infinity);
-      if (q.target !== undefined) put(q.subject, q.target, q.target);
-      if (q.long) put(q.subject, q.subject === 'sentence' ? LONG_SENTENCE_WORDS : LONG_PARAGRAPH_SENTENCES, Infinity);
-    } else if (q.subject === 'piece') put('piece', q.min ?? 0, q.max ?? Infinity);
-    else if (q.present !== undefined) put(q.subject, q.present ? 1 : 0, q.present ? Infinity : 0);
-  }
-  return out;
+function readingsConflict(a: WordedReading, b: WordedReading): boolean {
+  const ra = [...a.ranges, ...a.long.map(longFloor)]; const rb = [...b.ranges, ...b.long.map(longFloor)];
+  if (ra.some((x) => rb.some((y) => quantityRelation(x, y) === 'CONFLICT'))) return true;
+  return (['heading', 'list'] as const).some((k) => a.present[k] !== undefined && b.present[k] !== undefined && a.present[k] !== b.present[k]);
 }
+
 /**
- * TWO WORDED RULES ON ONE QUANTITY, compared as ranges exactly as a worded rule is against a count: "under 300 words"
- * against "at least 800 words", "under ten words" against "sentences of about thirty words", "a single sentence"
- * against "at least six sentences". Ranges that do not meet conflict; ranges that overlap leave room for both.
+ * TWO COUNTED BANDS ON ONE OBSERVER. Each limit is read as a bound on what it limits: `max`, `maxPer1000`, `medianMax`
+ * a ceiling, `min`, `minPer1000` a floor, paired by what they limit (`minPer1000` with `maxPer1000`). Two ceilings, or
+ * two floors, never conflict: a text under the lower ceiling is under both. Only bands that cannot meet do: one's
+ * floor above the other's ceiling. Close on every limit, they are one trait.
  */
-export function wordedRangesConflict(a: string, b: string): boolean {
-  const sa = spansOf(a); const sb = spansOf(b);
-  return [...sa].some(([k, x]) => { const y = sb.get(k); return y !== undefined && Math.max(x.lo, y.lo) > Math.min(x.hi, y.hi); });
+const CEILING_KEY = /max|Max|^allow$/; const FLOOR_KEY = /min|Min|^need$/;
+const limitOf = (k: string): string => k.replace(/^(?:max|min)/, '').replace(/(?:Max|Min)$/, '').replace(/^(?:allow|need)$/, '');
+function countedRelation(pa: Measurement['params'], pb: Measurement['params']): Relation {
+  const ranges = (p: Measurement['params']): Map<string, { lo: number; hi: number }> => {
+    const out = new Map<string, { lo: number; hi: number }>();
+    for (const [k, v] of Object.entries(p)) {
+      if (typeof v !== 'number') continue;
+      const ceiling = CEILING_KEY.test(k); const floor = !ceiling && FLOOR_KEY.test(k);
+      if (!ceiling && !floor) continue;
+      const base = limitOf(k); const r = out.get(base) ?? { lo: -Infinity, hi: Infinity };
+      out.set(base, ceiling ? { ...r, hi: Math.min(r.hi, v) } : { ...r, lo: Math.max(r.lo, v) });
+    }
+    return out;
+  };
+  const ra = ranges(pa); const rb = ranges(pb);
+  for (const [k, x] of ra) { const y = rb.get(k); if (y && Math.max(x.lo, y.lo) > Math.min(x.hi, y.hi)) return 'CONFLICT'; }
+  const numeric = Object.keys(pa).filter((k) => typeof pa[k] === 'number' && typeof pb[k] === 'number');
+  return numeric.every((k) => withinTolerance(pa[k] as number, pb[k] as number)) ? 'SAME' : 'UNRELATED';
 }
+
+/** A rule as two rules are compared: its words, its count if it has one, and (for a worded rule) every reading of its quantities. */
+export type ReadRule = Pick<Requirement, 'statement' | 'measurement' | 'kind'> & {
+  /**
+   * The readings of its quantities when more than one stands: the grammar's (./quantity.ts) and the model's, where the
+   * two disagree. Absent, the grammar's alone. It conflicts with a rule either reading conflicts with.
+   */
+  readonly readings?: readonly (readonly Quantity[])[];
+};
+const readingsOf = (r: ReadRule): WordedReading[] => (r.readings?.length ? r.readings : [quantitiesOf(r.statement)]).map((q) => wordedReading(r.statement, q));
 
 /** How two rules of one class from two authors stand to each other. */
-export function relationOf(a: Pick<Requirement, 'statement' | 'measurement' | 'kind'>, b: Pick<Requirement, 'statement' | 'measurement' | 'kind'>): Relation {
+export function relationOf(a: ReadRule, b: ReadRule): Relation {
   if (a.measurement && b.measurement) {
     if (a.measurement.observer !== b.measurement.observer) return 'UNRELATED';
     const pa = a.measurement.params; const pb = b.measurement.params;
@@ -482,24 +451,19 @@ export function relationOf(a: Pick<Requirement, 'statement' | 'measurement' | 'k
     for (const key of ['pattern', 'feature', 'terms', 'unit']) {
       if (key in pa || key in pb) { if (JSON.stringify(pa[key] ?? null) !== JSON.stringify(pb[key] ?? null)) return 'UNRELATED'; }
     }
-    const numeric = Object.keys(pa).filter((k) => typeof pa[k] === 'number' && typeof pb[k] === 'number');
-    if (!numeric.length) return 'SAME';
-    return numeric.every((k) => withinTolerance(pa[k] as number, pb[k] as number)) ? 'SAME' : 'CONFLICT';
+    return countedRelation(pa, pb);
   }
   // A WORDED RULE AGAINST A COUNTED ONE, on a subject both put a number on: "let a paragraph run to eight sentences"
   // against "3 sentences at most" is a conflict, whichever of the two is counted.
   const counted = a.measurement ?? b.measurement;
   if (counted) {
     const worded = a.measurement ? b : a;
-    const cb = countedBound(counted); const wb = boundOf(worded.statement);
-    const byBound = cb && wb ? boundsRelation(cb, wb) : 'UNRELATED';
-    if (byBound !== 'UNRELATED') return byBound;
-    return wordedQuantities(worded.statement).some((q) => wordedAgainstBand(q, counted)) ? 'CONFLICT' : 'UNRELATED';
+    const rels = readingsOf(worded).map((w) => wordedAgainstCount(w, counted));
+    return rels.includes('CONFLICT') ? 'CONFLICT' : rels.includes('SAME') ? 'SAME' : 'UNRELATED';
   }
-  // TWO WORDED RULES on one quantity: an allowance against a ceiling as two bounds, every other number as two ranges.
-  const ba = boundOf(a.statement); const bb = boundOf(b.statement);
-  if (ba && bb && boundsRelation(ba, bb) === 'CONFLICT') return 'CONFLICT';
-  if (wordedRangesConflict(a.statement, b.statement)) return 'CONFLICT';
+  // TWO WORDED RULES on one quantity, as two ranges (a permission against a ceiling as two bounds), every reading of each.
+  const qa = readingsOf(a); const qb = readingsOf(b);
+  if (qa.some((x) => qb.some((y) => readingsConflict(x, y)))) return 'CONFLICT';
   if (plainlyOpposed(a.statement, b.statement)) return 'CONFLICT';
   const wa = contentWords(a.statement); const wb = contentWords(b.statement);
   if (jaccard(wa, wb) < SAME_SUBJECT) return 'UNRELATED';
@@ -543,6 +507,11 @@ export const labelOf = (a: Requirement, b: Requirement): string => {
     const names: Readonly<Record<string, string>> = { PARAGRAPH_LENGTH: 'paragraph length', SENTENCE_LENGTH: 'sentence length', HEDGE_RATE: 'hedging', FRAGMENT_SHARE: 'fragments', OPENING: 'opening length', HEADINGS: 'headings', RHYTHM: 'rhythm' };
     return names[m.observer] ?? m.observer.toLowerCase().replace(/_/g, ' ');
   }
+  // Two lengths said in words, on one measure: "piece length" whatever words each uses ("under 2,000 characters", "a
+  // five-minute read").
+  const measures = quantitiesOf(a.statement).map((q) => q.measure);
+  const common = quantitiesOf(b.statement).find((q) => measures.includes(q.measure));
+  if (common) return `${common.measure} length`;
   const shared = [...contentWords(a.statement)].filter((w) => contentWords(b.statement).has(w));
   // The subject the two share, named as a person would: "paragraph length", not "let, paragraph, run".
   const SUBJECTS: readonly (readonly [string, string])[] = [['paragraph', 'paragraph length'], ['sentence', 'sentence length'], ['contraction', 'contractions'],

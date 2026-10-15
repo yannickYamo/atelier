@@ -25,7 +25,10 @@ const rule = (id: string, statement: string, measurement: Measurement | null = n
 const worded = (statement: string): Pick<Requirement, 'statement' | 'measurement' | 'kind'> => ({ statement, kind: 'GENERATIVE' });
 const counted = (measurement: Measurement): Pick<Requirement, 'statement' | 'measurement' | 'kind'> => ({ statement: 'counted', measurement, kind: 'GENERATIVE' });
 const SL = (medianMax: number, p90Max: number): Measurement => ({ observer: 'SENTENCE_LENGTH', params: { medianMax, p90Max } });
-const sentences = (id: string, m: number, p: number): Requirement => rule(id, `I keep sentences short: a median under ${m} words, and nine in ten under ${p}.`, SL(m, p));
+// A counted band with a floor and a ceiling: two of them conflict only when they do not meet (two ceilings never do).
+const RH = (lo: number, hi: number): Measurement => ({ observer: 'RHYTHM', params: { minCv: lo, maxCv: hi } });
+const rhythm = (id: string, lo: number, hi: number): Requirement => rule(id, `My sentence lengths vary by ${lo} to ${hi}.`, RH(lo, hi));
+const LW = (min: number, max: number): Measurement => ({ observer: 'LENGTH', params: { unit: ['words'], min, max } });
 const author = (name: string, classes: TraitClass[] = []): CompositeAuthor => ({ name, pieces: [`${name}.md`], admired: classes.length ? 'everything' : null, classes });
 const instructs = (d: CompositeDecision | undefined): boolean => d?.outcome === 'SELECTED' && !d.shownOnly && !d.mergedInto;
 
@@ -128,13 +131,13 @@ describe('a worded quantity on a counted subject is compared with the band', () 
     expect(relationOf(worded('Never use lists of any kind.'), lists)).toBe('CONFLICT');
     expect(relationOf(worded('Use bullet lists for options.'), lists)).not.toBe('CONFLICT');
   });
-  it('the reviewer\'s run: bram\'s thirty-word sentences never ship with a "both" range under them', () => {
-    const x = setup({ ada: [sentences('m1', 6, 7)], bram: [rule('p9', 'Write long, winding sentences of thirty words or more.'), sentences('m3', 23, 49)] });
+  it('the reviewer\'s run: bram\'s long pieces never ship with a "both" range under them', () => {
+    const x = setup({ ada: [rule('m1', 'My pieces run 300 to 500 words.', LW(300, 500))], bram: [rule('p9', 'Write at least 3,000 words.'), rule('m3', 'My pieces run 1500 to 2500 words.', LW(1500, 2500))] });
     const t = tableOf(x);
     expect(nOf(t, 'm1', 'p9')).toBeGreaterThan(0);
-    const rec = composeSelection(t, x.rules, [author('ada', ['pace']), author('bram', ['pace'])], { [nOf(t, 'm1', 'm3')]: 'both' });
+    const rec = composeSelection(t, x.rules, [author('ada', ['structure']), author('bram', ['structure'])], { [nOf(t, 'm1', 'm3')]: 'both' });
     const carrier = rec.decisions.find((d) => d.range);
-    expect(carrier?.range).toEqual(SL(23, 49));
+    expect(carrier?.range).toEqual(LW(300, 2500));
     expect(instructs(carrier) && instructs(rec.decisions.find((d) => d.id === 'p9'))).toBe(false);
     expect(shippedContradictions(rec, x.rules)).toEqual([]);
   });
@@ -213,10 +216,10 @@ describe('a pair the model reads as impossible to follow together is asked, neve
       { spentUsd: 0, capUsd: 1 }, lines)).rejects.toThrow(/nothing usable/);
   });
   it('the list it is given is the rules that will instruct, a range at its merged limits', () => {
-    const y = setup({ kai: [sentences('k1', 5, 13)], nora: [sentences('n1', 16, 22)] });
+    const y = setup({ kai: [rhythm('k1', 0.1, 0.2)], nora: [rhythm('n1', 0.3, 0.4)] });
     const t2 = tableOf(y);
     const rec = composeSelection(t2, y.rules, [author('kai'), author('nora')], { 1: 'both' });
-    expect(instructionLines(rec, y.rules)).toEqual([{ id: 'k1', author: 'kai', statement: 'I keep sentences short: a median under 16 words, and nine in ten under 22.' }]);
+    expect(instructionLines(rec, y.rules)).toEqual([{ id: 'k1', author: 'kai', statement: 'My sentence lengths vary by 0.1 to 0.4.' }]);
   });
 });
 
@@ -224,7 +227,7 @@ describe('a pair the model reads as impossible to follow together is asked, neve
 describe('a conflict the person answered, opened again by the guard', () => {
   // The reviewer's five-author run: "both" for kai and nora makes one range; "B" for lena against otto chooses otto;
   // the range and otto cannot both instruct, and nothing the person said decides between them.
-  const x = setup({ kai: [sentences('k1', 5, 13)], lena: [sentences('l1', 40, 49)], nora: [sentences('n1', 16, 22)], otto: [sentences('o1', 11, 12)] });
+  const x = setup({ kai: [rhythm('k1', 0.1, 0.2)], lena: [rhythm('l1', 0.5, 0.6)], nora: [rhythm('n1', 0.3, 0.4)], otto: [rhythm('o1', 0.7, 0.8)] });
   const t = tableOf(x);
   const answers: Record<number, ConflictAnswer> = { [nOf(t, 'k1', 'n1')]: 'both', [nOf(t, 'l1', 'o1')]: 'B' };
   const rec = composeSelection(t, x.rules, ['kai', 'lena', 'nora', 'otto'].map((a) => author(a)), answers);
@@ -235,7 +238,7 @@ describe('a conflict the person answered, opened again by the guard', () => {
   const opener = nOf(t, 'k1', 'o1');
   it('says why, quoting what would ship, and which conflict to answer', () => {
     expect(both?.reopened?.in).toBe(opener);
-    expect(both?.reopened?.why).toBe(`your answer "both" would ship two instructions that cannot both be followed: kai's "I keep sentences short: a median under 16 words, and nine in ten under 22." (one range, by your answer "both") and otto's "I keep sentences short: a median under 11 words, and nine in ten under 12.". Neither instructs until you answer conflict ${opener}`);
+    expect(both?.reopened?.why).toBe(`your answer "both" would ship two instructions that cannot both be followed: kai's "My sentence lengths vary by 0.1 to 0.4." (one range, by your answer "both") and otto's "My sentence lengths vary by 0.7 to 0.8.". Neither instructs until you answer conflict ${opener}`);
     expect(screen).toContain(`→ open again: your answer "both" would ship two instructions that cannot both be followed`);
     expect(chose?.reopened?.why).toMatch(/^your answer B would ship two instructions that cannot both be followed/);
   });
@@ -256,12 +259,12 @@ describe('a conflict the person answered, opened again by the guard', () => {
     expect(openLine(rec)).toContain(`${openQuestions(rec).length} conflict(s) kept as open question(s)`);
   });
   it('the screen shows a "both" range at its merged limits, as the build states it', () => {
-    const y = setup({ kai: [sentences('k1', 5, 13)], nora: [sentences('n1', 16, 22)] });
+    const y = setup({ kai: [rhythm('k1', 0.1, 0.2)], nora: [rhythm('n1', 0.3, 0.4)] });
     const r = composeSelection(tableOf(y), y.rules, [author('kai'), author('nora')], { 1: 'both' });
     const lines = describeComposite(r, (id) => y.rules.find((p) => p.requirementId === id)?.statement ?? id, (id) => y.rules.find((p) => p.requirementId === id)?.measurement);
-    expect(lines.find((l) => l.includes('k1  '))).toContain('I keep sentences short: a median under 16 words, and nine in ten under 22.   (as one range with the other side)');
+    expect(lines.find((l) => l.includes('k1  '))).toContain('My sentence lengths vary by 0.1 to 0.4.   (as one range with the other side)');
     const built = decisionsFor(r, y.rules, new Map(), new Map()).find((d) => d.id === 'k1');
-    expect(built).toMatchObject({ statement: 'I keep sentences short: a median under 16 words, and nine in ten under 22.' });
+    expect(built).toMatchObject({ statement: 'My sentence lengths vary by 0.1 to 0.4.' });
   });
 });
 

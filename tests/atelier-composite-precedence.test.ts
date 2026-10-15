@@ -27,14 +27,15 @@ const rule = (id: string, statement: string, measurement: Measurement | null = n
   evidence: null, evidenceItemId: null, wouldBeAbsentIf: null, materiality: null, realizationTolerance: null, outputShape: null,
   ...(measurement ? { measurement } : {}),
 });
-const hedge = (id: string, n: number): Requirement => rule(id, `I hedge rarely: at most ${n} hedging words per thousand.`, { observer: 'HEDGE_RATE', params: { maxPer1000: n } });
-const pace = (id: string, med: number, p90: number): Requirement => rule(id, `I keep sentences short: a median under ${med} words, and nine in ten under ${p90}.`, { observer: 'SENTENCE_LENGTH', params: { medianMax: med, p90Max: p90 } });
+// Counted bands with a floor and a ceiling: two conflict only when they do not meet (two ceilings never do).
+const voice = (id: string, lo: number, hi: number): Requirement => rule(id, `I use the first person ${lo} to ${hi} times per thousand words.`, { observer: 'PATTERN_RATE', params: { pattern: ['FIRST_PERSON'], minPer1000: lo, maxPer1000: hi } });
+const pace = (id: string, lo: number, hi: number): Requirement => rule(id, `My sentence lengths vary by ${lo} to ${hi}.`, { observer: 'RHYTHM', params: { minCv: lo, maxCv: hi } });
 
-// Five authors, as the reviewer's run had them: lena's and nora's and otto's hedging bands disagree pairwise; kai's,
-// nora's and otto's sentence bands disagree pairwise.
+// Five authors: lena's and nora's and otto's first-person bands meet nowhere, pairwise; nor do kai's, nora's and
+// otto's rhythm bands.
 const BY: readonly (readonly [string, Requirement])[] = [
-  ['lena', hedge('h1', 22)], ['nora', hedge('h2', 2)], ['otto', hedge('h3', 9)],
-  ['kai', pace('s1', 5, 13)], ['nora', pace('s2', 16, 22)], ['otto', pace('s3', 30, 40)],
+  ['lena', voice('h1', 20, 25)], ['nora', voice('h2', 1, 3)], ['otto', voice('h3', 8, 10)],
+  ['kai', pace('s1', 0.1, 0.2)], ['nora', pace('s2', 0.3, 0.4)], ['otto', pace('s3', 0.6, 0.8)],
 ];
 const proposals = BY.map(([, r]) => r);
 const source = Object.fromEntries(BY.map(([a, r]) => [r.requirementId, a]));
@@ -63,7 +64,7 @@ describe('one outcome per rule, across every conflict it is in', () => {
     const screen = describeComposite(rec, statementOf).join('\n');
     expect(screen).not.toMatch(/→ lena \(/);
     const other = conflictOf('h1', 'h3');
-    expect(screen).toContain(`  ${other}. hedging`);
+    expect(screen).toContain(`  ${other}. pattern rate`);
     expect(standOf(rec.conflicts[other - 1], lena, rec.decisions.find((d) => d.id === 'h3'))).toMatch(/^→ neither instructs: lena set aside \(your answer to conflict \d+\)/);
   });
   it('an explicit choice holds against admiration of the other side elsewhere', () => {
@@ -77,20 +78,20 @@ describe('one outcome per rule, across every conflict it is in', () => {
     expect(rec.decisions.find((d) => d.id === 's1')?.outcome).toBe('REJECTED');
   });
   it('"both" makes one range rule, whatever admiration says in another conflict', () => {
-    // kai and nora's sentence bands, both: one range (median under 16, nine in ten under 22), carried by kai's rule;
+    // kai and nora's rhythm bands, both: one range (0.1 to 0.4), carried by kai's rule;
     // otto's band, admired, still conflicts with kai's and is not what the person answered there.
     const n = conflictOf('s1', 's2');
     const rec = composeSelection(table, proposals, AUTHORS, { [n]: 'both' });
     const kai = rec.decisions.find((d) => d.id === 's1'); const nora = rec.decisions.find((d) => d.id === 's2');
-    expect(kai).toMatchObject({ outcome: 'SELECTED', range: { observer: 'SENTENCE_LENGTH', params: { medianMax: 16, p90Max: 22 } } });
+    expect(kai).toMatchObject({ outcome: 'SELECTED', range: { observer: 'RHYTHM', params: { minCv: 0.1, maxCv: 0.4 } } });
     expect(nora).toMatchObject({ outcome: 'REJECTED', mergedInto: 's1' });
     const ds = decisionsFor(rec, proposals, new Map(), new Map());
     const carried = ds.find((d) => d.id === 's1');
     expect(carried?.decision).toBe('APPROVE');
-    expect(carried?.measure).toBe('SENTENCE_LENGTH:medianMax=16,p90Max=22');
+    expect(carried?.measure).toBe('RHYTHM:minCv=0.1,maxCv=0.4');
     // the rule says the limits it is checked against
-    expect(carried?.statement).toBe('I keep sentences short: a median under 16 words, and nine in ten under 22.');
-    expect(describeComposite(rec, statementOf).join('\n')).toContain(`  ${n}. sentence length`);
+    expect(carried?.statement).toBe('My sentence lengths vary by 0.1 to 0.4.');
+    expect(describeComposite(rec, statementOf).join('\n')).toContain(`  ${n}. rhythm`);
     expect(standOf(rec.conflicts[n - 1], kai, nora)).toBe('→ both, as one range (your answer)');
   });
   it('a conflict nobody answered is never settled silently: both admired, it stays open, and the line says so', () => {

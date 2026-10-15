@@ -1,12 +1,12 @@
 // tests/atelier-composite.test.ts — PIECES BY SEVERAL AUTHORS, COMBINED AS THE PERSON CHOSE (core/composite).
 //
 // Five invented authors, each with labelled traits:
-//   A  question openings, short paragraphs        B  dense evidence, long paragraphs
+//   A  question openings, an even rhythm          B  dense evidence, a varied rhythm
 //   C  fast pace, fragments                       D  formal, no contractions
 //   E  narrative openings
 // The expected outcomes are written from those labels, not read off the code: A's openings, B's evidence and C's
 // pacing are chosen when admired; D is kept only when admired; E's opening is kept though four of five lack it; the
-// A-against-B paragraph conflict is surfaced and stays a question when nobody answers it.
+// A-against-B rhythm conflict (two bands that do not meet) is surfaced and stays a question when nobody answers it.
 import { describe, it, expect } from 'vitest';
 import type { Measurement, Requirement } from '../core/state/canonical-state.js';
 import { detectAuthors, frontMatterAuthor } from '../core/composite/authors.js';
@@ -29,9 +29,9 @@ const rule = (id: string, statement: string, measurement: Measurement | null = n
 // Each author's proposals, as discovery reads them one author at a time (ids numbered across authors).
 const PROPOSALS: readonly (readonly [string, Requirement])[] = [
   ['A', rule('p1', 'Open with a question the reader is already asking.')],
-  ['A', rule('m1', 'Paragraphs run at most 2 sentences.', { observer: 'PARAGRAPH_LENGTH', params: { maxSentences: 2 } })],
+  ['A', rule('m1', 'My sentences vary little: a spread between 0.1 and 0.3.', { observer: 'RHYTHM', params: { minCv: 0.1, maxCv: 0.3 } })],
   ['B', rule('p2', 'Back every claim with a cited figure and its source.')],
-  ['B', rule('m2', 'Paragraphs run at most 8 sentences.', { observer: 'PARAGRAPH_LENGTH', params: { maxSentences: 8 } })],
+  ['B', rule('m2', 'My sentences vary widely: a spread between 0.6 and 0.9.', { observer: 'RHYTHM', params: { minCv: 0.6, maxCv: 0.9 } })],
   ['B', rule('m3', 'Hedge at most 3 times per 1000 words.', { observer: 'HEDGE_RATE', params: { maxPer1000: 3 } })],
   ['C', rule('p3', 'Keep the pace fast with sentence fragments.')],
   ['C', rule('m4', 'Half the sentences run 8 words or fewer.', { observer: 'SENTENCE_LENGTH', params: { medianMax: 8, p90Max: 14 } })],
@@ -96,7 +96,7 @@ describe('the trait table: classes and kinds, per author, never pooled', () => {
     expect(row('m1')?.kind).toBe('CONFLICTING');
     expect(row('m2')?.kind).toBe('CONFLICTING');
     expect(table.conflicts).toHaveLength(1);
-    expect(table.conflicts[0]).toMatchObject({ label: 'paragraph length', sides: [{ author: 'A' }, { author: 'B' }] });
+    expect(table.conflicts[0]).toMatchObject({ label: 'rhythm', sides: [{ author: 'A' }, { author: 'B' }] });
   });
   it('a conflict between authors who write pieces of different lengths is task-dependent, not taste', () => {
     const t = buildTraitTable(proposals, sourceOf, (a) => (a === 'A' ? 'short' : 'long'));
@@ -146,14 +146,14 @@ describe('the composite: what the person chose, not the average and not any one 
     const admired = composeSelection(table, proposals, LIKES.map((a) => (a.name === 'D' ? author('D', 'its formal tone', ['voice']) : a)));
     expect(admired.decisions.find((d) => d.id === 'p4')?.outcome).toBe('SELECTED');
   });
-  it('surfaces the A-against-B paragraph conflict and stores it as a question when nobody answers', () => {
+  it('surfaces the A-against-B rhythm conflict and stores it as a question when nobody answers', () => {
     expect(outcome('m1')).toBe('OPEN');
     expect(outcome('m2')).toBe('OPEN');
     expect(openQuestions(c)).toHaveLength(1);
     expect(c.conflicts[0]).toMatchObject({ answer: null, resolvedBy: null });
     const screen = describeComposite(c, (id) => proposals.find((p) => p.requirementId === id)?.statement ?? id).join('\n');
-    expect(screen).toMatch(/1\. paragraph length/);
-    expect(screen).toMatch(/A {2}A: Paragraphs run at most 2 sentences/);
+    expect(screen).toMatch(/1\. rhythm/);
+    expect(screen).toMatch(/A {2}A: My sentences vary little: a spread between 0\.1 and 0\.3/);
     expect(screen).toMatch(/open: neither instructs/);
     expect(screen).toMatch(/From A: openings/);
     expect(screen).toMatch(/D: nothing said, so nothing is taken from this author alone/);
@@ -163,11 +163,11 @@ describe('the composite: what the person chose, not the average and not any one 
     expect(a.decisions.find((d) => d.id === 'm1')?.outcome).toBe('SELECTED');
     expect(a.decisions.find((d) => d.id === 'm2')?.outcome).toBe('REJECTED');
     const both = composeSelection(table, proposals, LIKES, { 1: 'both' });
-    expect(both.decisions.find((d) => d.id === 'm1')).toMatchObject({ outcome: 'SELECTED', range: { observer: 'PARAGRAPH_LENGTH', params: { maxSentences: 8 } } });
+    expect(both.decisions.find((d) => d.id === 'm1')).toMatchObject({ outcome: 'SELECTED', range: { observer: 'RHYTHM', params: { minCv: 0.1, maxCv: 0.9 } } });
     expect(both.decisions.find((d) => d.id === 'm2')).toMatchObject({ outcome: 'REJECTED', mergedInto: 'm1' });
   });
   it('admiring exactly one side settles it, and says so', () => {
-    const paceA = composeSelection(table, proposals, LIKES.map((x) => (x.name === 'A' ? author('A', 'openings and short paragraphs', ['opening', 'pace']) : x)));
+    const paceA = composeSelection(table, proposals, LIKES.map((x) => (x.name === 'A' ? author('A', 'openings and the even rhythm', ['opening', 'pace']) : x)));
     expect(paceA.conflicts[0]).toMatchObject({ answer: 'A', resolvedBy: 'ADMIRATION' });
   });
   it('every proposal gets exactly one outcome: none dropped in silence', () => {
@@ -201,7 +201,7 @@ describe('the composite: what the person chose, not the average and not any one 
     expect(decisionsFor(c, proposals, sugg, new Map([['p1', 'required']])).find((d) => d.id === 'p1')).toMatchObject({ materiality: 'REQUIRED' });
     // 'both' carries the range in the grammar `decide` takes
     const both = decisionsFor(composeSelection(table, proposals, LIKES, { 1: 'both' }), proposals, sugg, new Map());
-    expect(both.find((d) => d.id === 'm1')).toMatchObject({ decision: 'APPROVE', measure: 'PARAGRAPH_LENGTH:maxSentences=8' });
+    expect(both.find((d) => d.id === 'm1')).toMatchObject({ decision: 'APPROVE', measure: 'RHYTHM:minCv=0.1,maxCv=0.9' });
   });
   it('the same answers give the same composite, byte for byte', () => {
     expect(JSON.stringify(composeSelection(table, proposals, LIKES))).toBe(JSON.stringify(c));
