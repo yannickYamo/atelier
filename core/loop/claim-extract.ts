@@ -28,6 +28,7 @@
 //
 // Runs on whatever backend the person configures (their own API included): `ATELIER_CLAIMS_MODEL`.
 
+import { readingAs } from '../inference/step-guard.js';
 import type { InferenceClient, Budget } from '../inference/client.js';
 import { spend } from '../inference/client.js';
 import { wordsOf } from '../observers/text.js';
@@ -543,7 +544,7 @@ export function modelSensor(client: InferenceClient, budget: Budget, model: stri
       try {
         const readOnce = async (): Promise<ExtractedSpecific[]> => {
           const res = await spend(budget, 0.02, async () => {
-            const x = await client.complete({
+            const x = await readingAs('claim reader', client).complete({
               stableBlock: EXTRACT_SYSTEM, variableBlock: context,
               userMessage: `THE DRAFT, sentence by sentence:\n<draft>\n${numbered(text)}\n</draft>`,
               toolName: 'emit_specifics', toolDescription: 'Return every specific the draft asserts, with where it comes from.',

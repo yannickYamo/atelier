@@ -129,11 +129,12 @@ describe('withRedraft: the owner first, figures guarded, notes only what is far'
   const enforced: Unmet = { id: 'x1', statement: 'Include a section on costs.', detail: 'missing' };
   const near: Unmet = { id: 'g1', statement: 'Few colons.', detail: 'colons 3', off: 0.3, graded: true };
   const far: Unmet = { id: 'g2', statement: 'Few asides.', detail: 'asides 9', off: 0.8, graded: true };
-  const run = async (o: { second: string; displaced?: readonly string[]; misses: (out: string) => Unmet[]; figures?: boolean }) => {
+  const run = async (o: { second: string; displaced?: readonly string[]; misses: (out: string) => Unmet[] }) => {
     const notes: string[] = []; const sent: string[] = [];
     const go = withRedraft(async (t) => noRepair(t), { unmet: (d) => o.misses(d.output), notes, redraft: async (note) => { sent.push(note); return o.second; },
-      displaced: () => o.displaced ?? [], ...(o.figures ? { addedFigures: (a: string, b: string) => addedFigures(a, b, 'the request') } : {}) });
-    const d = await go('first draft', stepLedger());
+      displaced: () => o.displaced ?? [] });
+    // the figures a step may add are held by the run's ledger: the request and the material it was given
+    const d = await go('first draft', stepLedger(null, null, [], 'the request'));
     return { d, notes, sent };
   };
   it('a redraft for an enforced miss tells only the graded misses over 0.5 widths', async () => {
@@ -154,7 +155,7 @@ describe('withRedraft: the owner first, figures guarded, notes only what is far'
     expect(notes.join(' ')).toMatch(/^The draft misses 1 thing\(s\) your pieces usually do/);
   });
   it('S3: a redraft that adds a figure no draft, request or material holds is not kept', async () => {
-    const { d, notes } = await run({ second: 'second, with 37 percent of rescues', figures: true, misses: (out) => (out === 'first draft' ? [enforced] : []) });
+    const { d, notes } = await run({ second: 'second, with 37 percent of rescues', misses: (out) => (out === 'first draft' ? [enforced] : []) });
     expect(d.output).toBe('first draft');
     expect(notes.join(' ')).toMatch(/It added a figure that neither the earlier draft, the request nor your material holds \(37\)/);
     expect(addedFigures('We had 3 boats.', '1. We had 3 boats.\n2. And 12 crew.', 'the request')).toEqual(['12']);

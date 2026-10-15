@@ -673,6 +673,11 @@ export interface RepairRecord {
    * off in any way; absent under --no-repair, which runs no repair at all.
    */
   readonly controller?: ControllerRecord;
+  /**
+   * UNMEASURABLE IS NOT HELD: the enforced rules the draft was read on (broken or held) that the delivered text is too short
+   * to read. Said as not measured on every surface (core/eval/record-build.ts), never as held; the run is not conformant on them.
+   */
+  readonly unmeasured?: readonly string[];
   readonly why: string;
 }
 

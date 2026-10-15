@@ -7,6 +7,31 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+### Fixed: what every step is held to
+
+- **No step adds a figure you did not give.** A draft written again around a cut claim kept "Our seals are rated for
+  9,000 cycles.", in a reply delivered with nothing listed. Every change to the text, whichever part of the repair
+  proposes it, is now refused when it adds a figure (digits, a number in words, a percentage, a sum, a day or a month)
+  that neither the text before it, the request nor your material holds; the record names the figure. The draft written
+  again for a length or a missing section did this already; the check is now made in one place for every step, and
+  that draft's own copy of it is gone.
+- **A rule the text became too short to measure is not said to hold.** Cutting an invented claim took a reply from 173
+  words to 135; two rules it broke could no longer be measured, and the run printed "c4, x1 held once the draft was
+  corrected" and called the work conformant. A rule read on the draft, broken or held, that the delivered text is too
+  short to read is now "not measured" on every surface: the run says so in one line, the evaluation shows it
+  unverified, the work needs review and is not conformant on its account. A change whose only effect on a broken rule
+  is to make it unreadable is not progress, and is not kept for it. A rule that does not apply to the request or the
+  format is as before.
+- **A cut claim leaves no empty paragraph.** A sentence that was a paragraph of its own goes with its blank line.
+- **A structured output written again around an invented claim is a step.** It is now counted on its own record,
+  refused when the budget will not hold it, and kept only on the same rule as every other step.
+- **No model call outside a step while the repair runs.** The clients a run uses now check each call: inside the
+  repair, a call is allowed only inside a step or from one of the readers that only read (the claim reader, the taste
+  reader, the structure reader, the subject reader, the reader of what the request asks). Any other call is an error:
+  the test suite fails on it, and a run says it on screen and keeps it on its record.
+- **Two smaller fixes.** When the budget runs out before the reply is read against the request, the run says so in one line. The
+  structural edits' record says how many sentence rewrite calls the step made.
+
 ### Changed: two authors' lengths on one measure are always asked
 
 - **Whether two authors' lengths can both be followed is no longer read from their words.** Reading worded lengths
