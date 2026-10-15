@@ -12,8 +12,8 @@
 // A conflict is answered by the person (`--conflict 1=A`), or by their admiration when exactly one side's class
 // was admired from its author; with both sides admired, or neither, it stays open. Nothing here guesses.
 
-import type { Requirement } from '../state/canonical-state.js';
-import { TRAIT_LABEL, type Conflict, type TraitClass, type TraitKind, type TraitTable } from './traits.js';
+import type { Measurement, Requirement } from '../state/canonical-state.js';
+import { TRAIT_LABEL, mergedMeasurement, type Conflict, type TraitClass, type TraitKind, type TraitTable } from './traits.js';
 
 export interface CompositeAuthor {
   readonly name: string;
@@ -33,6 +33,10 @@ export interface CompositeDecision {
   readonly outcome: Outcome; readonly why: string;
   /** on 'both as a range': the id this one is merged into, and so does not stand on its own */
   readonly mergedInto?: string;
+  /** on 'both as a range' of two counted rules: the one range both limits fit in, carried by the side that stands */
+  readonly range?: Measurement;
+  /** on 'both' of two worded rules, which cannot be one range: each is kept, shown and never instructed over the other */
+  readonly shownOnly?: true;
 }
 
 export interface AnsweredConflict extends Conflict {
@@ -67,15 +71,22 @@ export function composeSelection(table: TraitTable, proposals: readonly Requirem
     if (aa !== ab) return { ...c, answer: aa ? 'A' : 'B', resolvedBy: 'ADMIRATION' };
     return { ...c, answer: null, resolvedBy: null };
   });
-  const sideOutcome = new Map<string, { outcome: Outcome; why: string; mergedInto?: string }>();
+  const byId = new Map(proposals.map((p) => [p.requirementId, p]));
+  const sideOutcome = new Map<string, { outcome: Outcome; why: string; mergedInto?: string; range?: Measurement; shownOnly?: true }>();
   for (const c of conflicts) {
     const [a, b] = c.sides;
     const who = `${a.author} against ${b.author} on ${c.label}`;
     if (c.answer === null) {
       for (const s of c.sides) sideOutcome.set(s.id, { outcome: 'OPEN', why: `conflict ${c.n} (${who}) is unanswered: neither side instructs until you answer it` });
     } else if (c.answer === 'both') {
-      sideOutcome.set(a.id, { outcome: 'SELECTED', why: `conflict ${c.n} (${who}): both, as one range` });
-      sideOutcome.set(b.id, { outcome: 'REJECTED', why: `conflict ${c.n} (${who}): merged into ${a.id} as one range`, mergedInto: a.id });
+      const range = mergedMeasurement(byId.get(a.id)?.measurement, byId.get(b.id)?.measurement);
+      if (range) {
+        sideOutcome.set(a.id, { outcome: 'SELECTED', why: `conflict ${c.n} (${who}): both, as one range`, range });
+        sideOutcome.set(b.id, { outcome: 'REJECTED', why: `conflict ${c.n} (${who}): merged into ${a.id} as one range`, mergedInto: a.id });
+      } else {
+        // Two worded rules make no range: both are kept, and neither instructs over the other.
+        for (const side of c.sides) sideOutcome.set(side.id, { outcome: 'SELECTED', why: `conflict ${c.n} (${who}): both kept, shown and not instructed, since two statements make no range`, shownOnly: true });
+      }
     } else {
       const win = c.answer === 'A' ? a : b; const lose = c.answer === 'A' ? b : a;
       const how = c.resolvedBy === 'ADMIRATION' ? `you admired ${win.author}'s ${TRAIT_LABEL[c.cls]}` : `you answered ${c.answer}`;
@@ -95,8 +106,9 @@ export function composeSelection(table: TraitTable, proposals: readonly Requirem
     return [{ ...base, outcome: 'REJECTED' as const, why: `${r.author}'s ${TRAIT_LABEL[r.cls]} was not what you chose from them` }];
   });
 
-  const byId = new Map(proposals.map((p) => [p.requirementId, p]));
-  const steps = decisions.filter((d) => d.outcome === 'SELECTED' && d.cls === 'method').map((d) => ({ id: d.id, author: d.author, statement: byId.get(d.id)?.statement ?? '' }));
+  // RECURRING DECISION MOVES: method rules chosen, or shared by two or more authors. Offered as a methodology the
+  // person may adopt, marked a proposal read from the examples; a method note of theirs (`--method`) is authoritative instead.
+  const steps = decisions.filter((d) => d.cls === 'method' && (d.outcome === 'SELECTED' || d.kind === 'SHARED')).map((d) => ({ id: d.id, author: d.author, statement: byId.get(d.id)?.statement ?? '' }));
   return { authors, decisions, conflicts, methodology: steps.length ? { proposal: true, steps } : null };
 }
 
@@ -114,16 +126,16 @@ export function describeComposite(c: CompositeRecord, statementOf: (id: string) 
   for (const a of c.authors) {
     const mine = selected.filter((d) => d.author === a.name);
     const classes = [...new Set(mine.map((d) => d.cls))].map((k) => TRAIT_LABEL[k]);
-    if (!a.admired) { out.push(`  ${a.name}: nothing said, so nothing is taken from this author alone${mine.length ? '' : ''}.`); continue; }
-    if (!mine.length) { out.push(`  ${a.name}: "${a.admired}" — nothing read from these pieces carries that, so nothing is taken.`); continue; }
-    out.push(`  From ${a.name}: ${classes.join('; ')}  ("${a.admired}")`);
-    for (const d of mine) out.push(`      ${d.id.padEnd(4)} ${statementOf(d.id)}${d.kind === 'UNIQUE' ? '   (this author alone)' : d.kind === 'SHARED' ? '   (shared with another author)' : ''}`);
+    if (!a.admired && !mine.length) { out.push(`  ${a.name}: nothing said, so nothing is taken from this author alone.`); continue; }
+    if (!mine.length) { out.push(`  ${a.name}: "${a.admired}": nothing read from these pieces carries that, so nothing is taken.`); continue; }
+    out.push(`  From ${a.name}: ${classes.join('; ')}${a.admired ? `  ("${a.admired}")` : '  (from a conflict you answered)'}`);
+    for (const d of mine) out.push(`      ${d.id.padEnd(4)} ${statementOf(d.id)}${d.kind === 'UNIQUE' ? '   (this author alone)' : d.kind === 'SHARED' ? '   (shared with another author)' : ''}${d.range ? '   (as one range with the other side)' : ''}${d.shownOnly ? '   (shown, not instructed)' : ''}`);
   }
   if (c.conflicts.length) {
     out.push('', `Conflicts between authors (${c.conflicts.length}): never averaged, and never guessed.`);
     for (const x of c.conflicts) {
       const [a, b] = x.sides;
-      const stand = x.answer === null ? `→ open: neither instructs. Answer with --conflict ${x.n}=A, ${x.n}=B or ${x.n}=both (one range)`
+      const stand = x.answer === null ? `→ open: neither instructs. answer with --conflict ${x.n}=A, ${x.n}=B or ${x.n}=both (one range), or leave it for later`
         : x.answer === 'both' ? '→ both, as one range' : `→ ${x.answer === 'A' ? a.author : b.author} (${x.resolvedBy === 'ADMIRATION' ? 'from what you admired' : 'your answer'})`;
       out.push(`  ${x.n}. ${x.label}${x.taskDependent ? ' (the two write pieces of different lengths: this may be the kind of work, not taste)' : ''}`);
       out.push(`      A  ${a.author}: ${a.statement}`);

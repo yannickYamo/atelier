@@ -61,6 +61,7 @@ import { findOwnershipBreaches, describeBreaches } from '../../core/state/output
 import { assertHistoryNotServed, foldRepairs } from '../../core/architecture/repair-memory.js';
 import type { SkillVersion, InvocationSettings } from '../../core/state/canonical-state.js';
 import * as store from '../../core/state/store.js';
+import { copyGuardPieces } from '../../core/compiler/voice.js';
 import { listsBecause, unmeasuredKind } from '../../core/loop/claim-extract.js';
 import { planFor } from '../../core/plan/execution-plan.js';
 import { checkSatisfiable, describeSatisfiability, type SatisfiabilityVerdict } from '../../core/state/prerequisite.js';
@@ -2015,7 +2016,7 @@ function reportIntegrity(report: RunReport, rec: Invocation, classNote: string |
   // THE AUTHOR'S PIECES ARE FOR VOICE, NOT FOR COPYING. The skill serves some of the author's own
   // writing (core/compiler/voice.ts); an output that repeats a long run of it verbatim has lifted it.
   const voice = store.getVoice(L);
-  const served = [...(voice?.passages ?? []), ...(voice?.pieces ?? [])];
+  const served = copyGuardPieces(voice);
   if (served.length) {
     const overlap = overlapIndex(served, voice?.standardWording ?? [])(rec.output); const lifted = overlap.longestShared;
     if (overlap.standard) report.detail(`(${overlap.standard} six-word run(s) shared with three or more of your pieces: your standard wording, not counted as copying)`);

@@ -64,9 +64,9 @@ export async function readAdmiration(client: InferenceClient, budget: Budget, li
   const variableBlock = said.map((l) => `WRITER: ${l.author}\nAVAILABLE: ${l.available.join(', ') || '(none)'}\nLINE: ${l.text.trim()}`).join('\n\n');
   const r = await spend(budget, 0.05, async () => {
     const x = await client.complete({ stableBlock: SYSTEM, variableBlock, userMessage: 'Map every line now.',
-      toolName: 'emit_admired', toolDescription: 'The trait classes each line admires, per writer.', schema: ADMIRE_SCHEMA, maxTokens: 1500 });
+      toolName: 'emit_admired', toolDescription: 'The trait classes each line admires, per writer.', schema: ADMIRE_SCHEMA, maxTokens: 1500, temperature: 0 });
     return { value: x, cost: x.cost };
-  });
+  }, 'preference');
   const picks = (r.json as { picks?: { author?: unknown; classes?: unknown }[] } | null)?.picks;
   if (!Array.isArray(picks)) throw new Error('the admiration reader returned nothing usable');
   const out: Record<string, TraitClass[]> = Object.fromEntries(lines.map((l) => [l.author, []]));

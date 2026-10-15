@@ -69,6 +69,15 @@ export interface Voice {
   readonly guardPieces?: readonly string[];
 }
 
+/**
+ * WHAT AN OUTPUT IS CHECKED FOR COPYING AGAINST: the passages and pieces the skill serves and, for a composite, every
+ * piece of every author it was combined from, served or not. A sentence lifted from any of them is copying.
+ */
+export const copyGuardPieces = (voice: Pick<Voice, 'passages' | 'pieces' | 'guardPieces'> | null | undefined): string[] => {
+  const served = [...(voice?.passages ?? []), ...(voice?.pieces ?? [])];
+  return [...served, ...(voice?.guardPieces ?? []).filter((p) => !served.includes(p))];
+};
+
 export interface CompositeVoice {
   readonly authors: readonly { readonly name: string; readonly classes: readonly TraitClass[]; readonly traits: readonly string[] }[];
   /** the author of each entry of `pieces`, in order */

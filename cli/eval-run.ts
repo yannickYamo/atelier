@@ -5,6 +5,7 @@
 // recorded or the skill holds: the panel never computes a number the record does not support.
 
 import * as store from '../core/state/store.js';
+import { copyGuardPieces } from '../core/compiler/voice.js';
 import * as fstore from '../core/state/fidelity-store.js';
 import { acts, type VerifyReport, type RuleCheck } from '../core/observers/verify.js';
 import { INCONCLUSIVE, UNREAD, CLAIMS_TO_CHECK, PUBLIC_FACTS } from '../core/loop/run-repair.js';
@@ -91,7 +92,7 @@ export function buildRunEval(x: RunEvalInput): EvalSummary {
   const q = deciding && version ? QUALIFIED_READERS.find((r) => r.version === version && r.measured && (x.sensor?.instrument.includes(r.model) ?? false)) : undefined;
   // COPYING: the longest run of words shared with a piece of the author's the skill serves.
   const voice = store.getVoice(x.L);
-  const served = [...(voice?.passages ?? []), ...(voice?.pieces ?? [])];
+  const served = copyGuardPieces(voice);
   // Wording found in three or more pieces of the corpus is the author's standard wording, and is not counted.
   const longest = served.length ? overlapIndex(served, voice?.standardWording ?? [])(rec.output).longestShared : null;
   const formatLine = line('FORMAT');
@@ -208,7 +209,7 @@ export function recordForText(x: { L: store.StoreLayout; std: StandardVersion; t
   // what it finds lands on the gating line and fails the text; where it may not, it is listed. The record says the same.
   // (And where the check did fail the text on its gating line, it decided: the record cannot say less than the check.)
   const deciding = !x.unmeasured || spans('UNSOURCED') > 0;
-  const voice = store.getVoice(x.L); const served = [...(voice?.passages ?? []), ...(voice?.pieces ?? [])];
+  const voice = store.getVoice(x.L); const served = copyGuardPieces(voice);
   const shared = served.length ? overlapIndex(served, voice?.standardWording ?? [], { words: true })(x.text) : null;
   return buildRecord({
     requirements: x.std.requirements, waived: x.waived ?? new Map(), request: x.request ?? null,
