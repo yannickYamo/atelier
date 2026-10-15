@@ -11,6 +11,7 @@ import type { Requirement, StandardVersion } from '../state/canonical-state.js';
 import { isGeneralScope } from '../state/canonical-state.js';
 import type { CutAuthority } from '../loop/cut-authority.js';
 import { planFor } from '../plan/execution-plan.js';
+import { GRAMMAR_NOT_RUN } from './grammar.js';
 
 export interface RuleCheck {
   readonly requirementId: string;
@@ -67,6 +68,10 @@ export function verifyText(skill: string, v: StandardVersion, text: string, cont
   };
 }
 
+/** A check whose engine could not run: nothing was read, so the rule is not checked (never "does not apply"). */
+export const notRun = (c: { readonly result: { readonly verdict: string; readonly detail: string } }): boolean =>
+  c.result.verdict === 'NOT_APPLICABLE' && c.result.detail.startsWith(GRAMMAR_NOT_RUN);
+
 /**
  * The check, line by line: each mark is the verdict of a check. `partly`: the rules whose check reads only part of
  * them (core/eval/record.ts); under such a check that held, the line says so and names the part nobody read. Given them, the last line is left to the caller, who has the record.
@@ -74,7 +79,8 @@ export function verifyText(skill: string, v: StandardVersion, text: string, cont
 export function describeVerify(r: VerifyReport, partly?: ReadonlyMap<string, string>): string {
   const lines: string[] = [];
   for (const c of r.checked) {
-    const mark = c.result.verdict === 'MET' ? 'ok  ' : c.result.verdict === 'VIOLATED' ? (acts(c) ? 'FAIL' : 'warn') : 'n/a ';
+    // A check whose engine did not run (the grammar checker switched off or not loaded) read nothing: not checked, never n/a.
+    const mark = c.result.verdict === 'MET' ? 'ok  ' : c.result.verdict === 'VIOLATED' ? (acts(c) ? 'FAIL' : 'warn') : notRun(c) ? 'not checked' : 'n/a ';
     lines.push(`${mark}  ${c.requirementId}  ${c.statement}`);
     lines.push(`        ${c.result.detail}`);
     if (c.result.verdict === 'MET' && partly?.has(c.requirementId)) lines.push(`        the check held, and it reads only part of this rule. Not checked, yours to read: ${partly.get(c.requirementId)}`);
@@ -89,7 +95,8 @@ export function describeVerify(r: VerifyReport, partly?: ReadonlyMap<string, str
     for (const c of r.conditional) lines.push(`  to check ${c.requirementId} on every text: atelier amend --skill ${r.skill} --rule ${c.requirementId} --applies-when GENERAL --reason "<why>"`);
   }
   if (r.unchecked.length) lines.push(`\n${r.unchecked.length} rule(s) are about judgement, not measurement, and no count checks them: ${r.unchecked.map((u) => u.requirementId).join(', ')} (the taste reader reads them: verify --taste)`);
-  if (!partly) lines.push(r.failed ? '\nA REQUIRED rule is broken.' : '\nNo REQUIRED rule is broken.');
+  const missed = r.checked.filter((c) => acts(c) && notRun(c)).map((c) => c.requirementId);
+  if (!partly) lines.push(r.failed ? '\nA REQUIRED rule is broken.' : missed.length ? `\nNo REQUIRED rule that was checked is broken; not checked: ${missed.join(', ')}.` : '\nNo REQUIRED rule is broken.');
   return lines.join('\n');
 }
 

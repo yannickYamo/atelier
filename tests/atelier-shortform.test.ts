@@ -102,9 +102,10 @@ describe('the platform limit: from the format or from --limit, never read off th
   });
   it('the character band is held under the limit, and the screen says so', () => {
     const at = shortFormOffers(cases(GOOD.slice(0, 15)), { limit: { chars: 150, from: '--limit' } });
-    const chars = at.proposals.find((p) => (p.measurement?.params.shape as string[] | undefined)?.[0] === 'characters')!;
-    expect(chars.measurement!.params.max).toBe(150);
-    expect(chars.statement).toMatch(/150 is the platform's limit/);
+    // Some of these pieces run past 150: the limit is stated apart, as the platform's rule, and the band stays theirs.
+    const chars = at.proposals.find((p) => p.platform)!;
+    expect(chars.measurement!.params).toMatchObject({ shape: ['characters'], max: 150 });
+    expect(chars.statement).toBe('At most 150 characters: the platform\'s limit.');
     expect(at.limits.join('\n')).toMatch(/Platform limit: 150 characters \(--limit\).*examples run past it/);
     expect(shapeBandRules(GOOD.slice(0, 15), { limit: 280 }).find((s) => s.shape === 'characters')!.measurement.params.max).toBeLessThanOrEqual(280);
   });

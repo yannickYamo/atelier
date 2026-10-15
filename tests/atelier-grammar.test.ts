@@ -113,10 +113,13 @@ describe('the grammar rule, with the real engine', () => {
   it('a British author keeps British spelling, an American one American, and with no dialect recorded only a word wrong in both counts', () => {
     expect(measure('The colour of the harbour pleased the neighbours.', m({ dialect: ['british'] })).verdict).toBe('MET');
     expect(measure('The color of the harbor pleased the neighbors.', m({ dialect: ['american'] })).verdict).toBe('MET');
-    const uk = measure('The color of the harbour pleased the neighbours.', m({ dialect: ['british'] }));
-    expect(uk.spans).toMatchObject([{ text: 'color', replacement: 'colour' }]);
-    const us = measure('The colour of the harbor pleased the neighbors.', m({ dialect: ['american'] }));
-    expect(us.spans).toMatchObject([{ text: 'colour', replacement: 'color' }]);
+    // The other dialect's spelling is a word, not a slip: listed with the recorded dialect's form, never changed.
+    const uk = readGrammar('The color of the harbour pleased the neighbours.', { dialect: ['british'] });
+    expect(uk.confirmed).toEqual([]);
+    expect(uk.uncertain).toMatchObject([{ text: 'color', why: expect.stringMatching(/it suggests "colour"/) }]);
+    const us = readGrammar('The colour of the harbor pleased the neighbors.', { dialect: ['american'] });
+    expect(us.confirmed).toEqual([]);
+    expect(us.uncertain).toMatchObject([{ text: 'colour', why: expect.stringMatching(/it suggests "color"/) }]);
     expect(measure('The colour of the harbor pleased everyone.', m()).verdict).toBe('MET');
     expect(measure('We recieve the harbor report.', m()).spans).toMatchObject([{ text: 'recieve', replacement: 'receive' }]);
   });
@@ -180,7 +183,7 @@ describe('the guards, on a scripted engine', () => {
     const text = 'The grommit held.';
     await under([lint({ rule: 'SpellCheck', kind: 'Spelling', start: 4, end: 11, replacement: 'bracket' })]);
     expect(readGrammar(text, {}).confirmed).toEqual([]);
-    expect(readGrammar(text, {}).uncertain[0].why).toMatch(/another word/);
+    expect(readGrammar(text, {}).uncertain[0].why).toMatch(/^a word the checker does not know \(SpellCheck/);
   });
   it('a correction handed straight to the repair that would move a figure or drop a name is not made', () => {
     const text = 'We asked Acme for 40 units. They was pleased.';
