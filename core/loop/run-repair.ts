@@ -20,7 +20,7 @@ import { checkFormat, type FormatProfile } from '../observers/formats.js';
 import { findTerms } from '../observers/text.js';
 import { signalRules, signalChecks, isSignal, displacement, ownerWords, type Displacement } from './graded.js';
 import type { FidelityProfile, ControllerSettings } from '../fidelity/types.js';
-import { decide, controllerRecord, recordTarget, ENFORCED_WEIGHT, SETTLED_ERROR, type ControllerInput, type Decision, type EnforcedMiss, type GradedMiss } from './controller.js';
+import { decide, controllerRecord, recordTarget, stepWords, ENFORCED_WEIGHT, SETTLED_ERROR, type ControllerInput, type Decision, type EnforcedMiss, type GradedMiss } from './controller.js';
 import { applyOperator, operatorsToward, sitesOf, keepsWords } from '../fidelity/operators.js';
 import { SITES_PER_OPERATOR } from '../fidelity/structural.js';
 import { spanIntegrity } from './integrity.js';
@@ -1033,7 +1033,8 @@ export async function refineToStandard(
     if (d.kind === 'stop') {
       stoppedBecause = d.why;
       // A step the budget cannot hold is a repair that could not run: the draft is delivered as it stands, and said so.
-      if (d.why.startsWith('the budget')) why = `the rewrite could not run (${d.why}); the draft is delivered as it stands`;
+      // The step named is the one the budget refused (a redraft is not "the rewrite").
+      if (d.why.startsWith('the budget')) why = `the ${stepWords(d.refused ?? 'rewrite')} could not run (${d.why}); the draft is delivered as it stands`;
       break;
     }
     const snap = processSpendByPurpose();
