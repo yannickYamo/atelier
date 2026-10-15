@@ -337,6 +337,7 @@ export type SpendPurpose =
   | 'voice pass'       // the in-context voice rewrite and its gate's second read
   | 'nearness'         // which of the author's pieces are on the request's subject
   | 'structure'        // reading a text's paragraph moves
+  | 'preference'       // reading what the person likes about each author's pieces into trait classes (core/composite/admire.ts)
   | 'other';
 
 /** What the provider reported for one call. Absent where a call site does not pass it on. */

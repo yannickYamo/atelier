@@ -237,7 +237,20 @@ pieces carry on average.
 ## What the loop does with them
 
 `invoke` and the Claude Code plugin check every draft. When a REQUIRED rule is broken, only the spans
-that broke it are rewritten (`core/loop/repair.ts`). The guarantees are:
+that broke it are rewritten (`core/loop/repair.ts`).
+
+Which step comes next is chosen by a bounded controller (`core/loop/controller.ts`), not a fixed number of
+passes. An enforced rule broken in place is rewritten first; one that needs something the draft lacks is
+written again; invented claims are cut in code before anything else; then a length out of its band; then the
+author's counted features, furthest out first. A feature under 0.5 band widths out is moved by re-punctuation
+(no model), from 0.5 to 1.5 its carrier sentences are rewritten (one per band width, at most three), and
+beyond that, or with three features out, the piece is written again with each miss's direction and distance.
+A step is taken while its expected movement per dollar, priced from what the run has already paid, is at
+least `controller.minGainPerUsd` (2), the budget holds it, and fewer than `controller.maxActions` (4) steps
+were taken. The repair stops when every enforced rule holds and no feature is over 0.5 band widths out, when
+the same step failed twice on a target and the step it switched to failed too, when the budget is spent, or
+when nothing left can be reached. Every step, its expected and observed movement and cost, and the reason it
+stopped are recorded under `repair.controller` and printed by `atelier report`. The guarantees are:
 
 - **The splice is deterministic.** The model returns replacement text for numbered spans, and the
   code puts them back. Nothing outside a span can change.
