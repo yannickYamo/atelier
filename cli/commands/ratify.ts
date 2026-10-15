@@ -400,12 +400,13 @@ export function parseMeasure(spec: string): Measurement {
     HEADINGS: ['avoid', 'case', 'maxWords', 'minPer1000', 'maxPer1000'], RHYTHM: ['unit', 'minCv', 'maxCv'],
     FEATURE: ['feature', 'minValue', 'maxValue'], PRESENCE: ['sections', 'in', 'any', 'min', 'figure', 'starts', 'body', 'opens', 'closes', 'labels', 'options'],
     TABLE: ['columns', 'minRows'], CITED: ['allow'], LINES: ['min', 'perItem', 'sections'], LENGTH: ['unit', 'min', 'max', 'in', 'labels', 'need', 'sections'], NAMES_TEST: [],
-    SHAPE: ['shape', 'kinds', 'min', 'max', 'urlChars'] };
+    SHAPE: ['shape', 'kinds', 'min', 'max', 'urlChars'],
+    GRAMMAR: ['dialect', 'vocabulary'] };
   const TEXT_KEYS = new Set(['pattern', 'prefer', 'case', 'unit', 'in']);
   // A shape and its kinds are case-sensitive ids (core/observers/shape.ts): `characters`, `claim`.
   const ID_LIST_KEYS = new Set(['shape', 'kinds']);
   // Word lists, "|"-separated: TERM_RATE:terms=but|so,minPer1000=4. Kept as written, lower-cased.
-  const LIST_KEYS = new Set(['terms', 'numerator', 'denominator', 'avoid', 'sections', 'any', 'starts', 'columns', 'options']);
+  const LIST_KEYS = new Set(['vocabulary', 'terms', 'numerator', 'denominator', 'avoid', 'sections', 'any', 'starts', 'columns', 'options']);
   // Number lists, "/"-separated: DISTRIBUTION:edges=8/20/35,shares=0.3/0.4/0.2/0.1,tolerance=0.2.
   const NUMBER_LIST_KEYS = new Set(['edges', 'shares']);
   const params: Record<string, number | string[] | number[]> = observer === 'LEXICON'
@@ -419,6 +420,8 @@ export function parseMeasure(spec: string): Measurement {
       if (TEXT_KEYS.has(k)) return [k, [k === 'prefer' ? v : v.trim().toUpperCase()]];
       // A feature id is case-sensitive (core/observers/features.ts), and its band may sit below zero.
       if (k === 'feature') return [k, [v.trim()]];
+      // A dialect is a word the grammar observer reads lower-case: GRAMMAR:dialect=british.
+      if (k === 'dialect') return [k, [v.trim().toLowerCase()]];
       if (ID_LIST_KEYS.has(k)) return [k, v.split('|').map((t) => t.trim()).filter(Boolean)];
       if (observer === 'FEATURE') {
         if (!/^-?\d+(\.\d+)?$/.test(v.trim())) die(`--measure: "${kv}" is not name=number`);

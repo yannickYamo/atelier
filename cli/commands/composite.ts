@@ -159,7 +159,8 @@ export async function compositeReview(opts: ReviewOptions = {}): Promise<boolean
   const sugg = suggestionsByAuthor(pending, s, mode);
   // THE SCREEN IS PRINTED BEFORE ANYTHING IS RECORDED, unless this very composite was printed by an earlier call:
   // a continuation that brings new lines or answers changes it, and only the person may make it theirs.
-  const screen = describeComposite(record, statementOf);
+  const editorial = pending.filter((p) => p.measurement?.observer === 'GRAMMAR').map((p) => `Every author: ${p.requirementId}  ${p.statement}  (REQUIRED: the editorial rule every build carries)`);
+  const screen = [...describeComposite(record, statementOf), ...editorial];
   const screenKey = sha(screen.join('\n'));
   if (!accepted || !opts.shownBefore || s.compositeShown !== screenKey) {
     console.log('');
@@ -211,6 +212,14 @@ export function decisionsFor(record: CompositeRecord, pending: readonly Requirem
   const piecesFor = new Map(record.authors.map((a) => [a.name, a.pieces]));
   const byId = new Map(record.decisions.map((d) => [d.id, d]));
   return pending.map((p) => {
+    // THE OWNER'S EDITORIAL RULE (core/observers/grammar.ts): no author's trait, so no row; REQUIRED on every build,
+    // the composite's included, and changed only by the person's own --set.
+    if (p.measurement?.observer === 'GRAMMAR') {
+      const suggested = { decision: 'APPROVE' as const, materiality: 'REQUIRED' as const, why: 'the editorial rule every build carries, across every author: corrected in place where the checker is sure, never a word of anyone\'s voice' };
+      const c = changes.get(p.requirementId);
+      if (c === 'reject') return { id: p.requirementId, decision: 'REJECT', suggested };
+      return { id: p.requirementId, decision: 'APPROVE', materiality: c && c in WEIGHTS ? WEIGHTS[c] : 'REQUIRED', suggested };
+    }
     const d = byId.get(p.requirementId);
     const s = sugg.get(p.requirementId);
     const from = d ? `from ${d.author} (${(piecesFor.get(d.author) ?? []).join(', ')})` : 'from no author';
