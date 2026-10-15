@@ -418,7 +418,10 @@ export function readGrammar(text: string, params: Measurement['params'], context
     const problem = text.slice(l.start, l.end);
     const label = MECHANICAL_RULES[l.rule] ?? (MECHANICAL_KINDS.has(l.kind) ? 'a common typo' : null);
     const span = (why: string, replacement?: string): Span => ({ start: l.start, end: l.end, text: problem, why, ...(replacement !== undefined ? { replacement } : {}) });
-    const note = (why: string): void => { uncertain.push(span(`${why} (${l.rule}: ${l.message.replace(/\s+/g, ' ').trim()})`)); };
+    // A stretch of spacing alone ("waited , and": the span is the space) is shown with the words around it.
+    const around = (): string => `${/\S*\s*$/u.exec(text.slice(Math.max(0, l.start - 40), l.start))?.[0] ?? ''}${problem}${/^[^\s\p{L}\p{N}]*(?:\s+\S+)?/u.exec(text.slice(l.end, l.end + 40))?.[0] ?? ''}`.trim();
+    const where = problem.trim() ? '' : ` in "${around()}"`;
+    const note = (why: string): void => { uncertain.push(span(`${why}${where} (${l.rule}: ${l.message.replace(/\s+/g, ' ').trim()})`)); };
     if (label === null) { note('the checker proposes a change this rule does not make'); continue; }   // (c) not in the list
     if (Object.hasOwn(LISTED_RULES, l.rule)) { note(LISTED_RULES[l.rule]); continue; }   // a legitimate reading exists
     let fix = l.replacement;
@@ -464,7 +467,9 @@ export function readGrammar(text: string, params: Measurement['params'], context
       if (namesOf(problem).some((n) => !kept.has(bare(n)))) { note('the correction would change a name'); continue; }
       if (fix.includes('\n')) { note('the correction spans a line break'); continue; }
     }
-    confirmed.push(span(fix === null ? `${label}: ${l.message.replace(/\s+/g, ' ').trim()}` : `${label}: "${problem.trim()}" → "${fix.trim() || '(removed)'}"`, fix ?? undefined));
+    // Where only spacing changes (" ," to ",", " ." to "."), the change is said by the words around it, never as "(removed)".
+    const spacing = fix !== null && fix.trim() === problem.trim();
+    confirmed.push(span(fix === null ? `${label}: ${l.message.replace(/\s+/g, ' ').trim()}` : spacing ? `${label} in "${around()}"` : `${label}: "${problem.trim()}" → "${fix.trim()}"`, fix ?? undefined));
   }
   // A finding the rule acts on is not also listed to check: the engine's own note on the same stretch goes.
   const byPlace = (a: Span, b: Span): number => a.start - b.start || a.end - b.end;
@@ -477,7 +482,7 @@ export function readGrammar(text: string, params: Measurement['params'], context
 /** Kinds of error found, for a detail line: "spelling ×2, a/an". */
 const kindsOf = (spans: readonly Span[]): string => {
   const n = new Map<string, number>();
-  for (const s of spans) { const k = s.why.split(':')[0]; n.set(k, (n.get(k) ?? 0) + 1); }
+  for (const s of spans) { const k = s.why.split(':')[0].replace(/ in ".*"$/, ''); n.set(k, (n.get(k) ?? 0) + 1); }
   return [...n].map(([k, c]) => (c > 1 ? `${k} ×${c}` : k)).join(', ');
 };
 
@@ -486,7 +491,12 @@ const kindsOf = (spans: readonly Span[]): string => {
  * said (a run's panel, its report, the --json record), so a count is never shown without what it counts.
  */
 export const toCheckList = (spans: readonly Span[], most = 8): string =>
-  spans.slice(0, most).map((u) => `"${u.text.trim()}" (${u.why.replace(/ \([A-Za-z]+: [\s\S]*\)$/, '')})`).join('; ') + (spans.length > most ? `; and ${spans.length - most} more` : '');
+  spans.slice(0, most).map((u) => {
+    const why = u.why.replace(/ \([A-Za-z]+: [\s\S]*\)$/, '');
+    // A stretch of spacing is shown by the words around it: "waited , and" (a space before a comma).
+    const at = /[\p{L}\p{N}]/u.test(u.text) ? null : / in "(.*)"$/.exec(why);
+    return at ? `"${at[1]}" (${why.slice(0, at.index)})` : `"${u.text.trim()}" (${why})`;
+  }).join('; ') + (spans.length > most ? `; and ${spans.length - most} more` : '');
 
 export const GRAMMAR: Observer = {
   id: 'GRAMMAR',

@@ -123,11 +123,13 @@ correction ("I is") are listed.
 
 Never flagged: code and inline code, quotations and block quotes, URLs and link targets, paths and `path:line`
 citations, file names, email addresses, @mentions, #hashtags, $cashtags, emoji, ALL-CAPS tokens, figures and
-currency, front matter, quotations in guillemets and low-high quotes (« », ‹ ›, „ “), capitalised words (names, products, acronyms; a known misspelling with a capital is
-listed, wherever it stands, since it may be a name), words the
-standard's other rules name, words of the request and the bound material, words the author's own pieces use (with the checker off at build, every word of theirs that is not a common
-English word), a
-word the text uses three times or more, and a word said twice ("very very", "had had"). These guards hold for a known
+currency, front matter, and quotations in guillemets and low-high quotes (« », ‹ ›, „ “). A name the checker knows
+("Paris") is not flagged either. Listed with a note and never changed, under `--fix-grammar` too: a capitalised word
+the checker does not know, wherever it stands, as "a name, an acronym or a coined word" (a known misspelling with a
+capital is listed the same way, since it may be a name); a word the standard's other rules name, a word of the
+request or the bound material, and a word the author's own pieces use (with the checker off at build, every word of
+theirs that is not a common English word), each as the author's own; a word the text uses three times or more, as
+a spelling the author chooses; and a word said twice ("very very", "had had"). These guards hold for a known
 misspelling too: one the author's pieces or the request use, or one used three times, is listed, not changed. The
 words listed to check are read in the dialect the pieces spell in (the same British/American count the style check
 uses), so a word of the other dialect is listed; where the pieces do not settle it, only a word unknown in both
@@ -137,8 +139,9 @@ By default the repair loop has no grammar step and no rewrite is made for a gram
 correcting mechanical errors is the controller's last kind of step, after enforced rules, length
 and graded features, so a later rewrite cannot undo it; it needs no model call. Repair corrects each error in place, inside the error's span (a misspelling with the list's correction, an agreement with the table's, anything else with the checker's suggestion), and keeps the result
 only if the whole text's figures and names are unchanged and no other rule is newly broken. A correction that
-would change a figure or a name is refused and listed. An error with no sure correction gets a sentence rewrite
-told to fix only that error. `ATELIER_GRAMMAR=off` switches the check off for a process; the rule then reads as not
+would change a figure or a name is refused and listed. A slip whose correction another of your rules refuses (it
+would newly break that rule) stays in the text, and the grammar rule then reads broken: under `--fix-grammar` that
+can block a run. Without the flag nothing is corrected and nothing blocks. `ATELIER_GRAMMAR=off` switches the check off for a process; the rule then reads as not
 checked, with that reason, exactly as when the checker cannot load, so a required grammar rule leaves the run at
 NEEDS REVIEW and never reads as met.
 
