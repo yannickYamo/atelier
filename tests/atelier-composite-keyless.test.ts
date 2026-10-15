@@ -59,6 +59,8 @@ describe('keyless atelier new on pieces by four authors', () => {
   it('shows the composite screen, the lines read by their words, and builds the combination', () => {
     expect(second).not.toMatch(/^EXIT/);
     expect(second).toContain('(your lines were read by their words, not by a model)');
+    // with no model to read the final instructions, the screen says how contradictions between authors were checked
+    expect(second).toContain('Contradictions between authors are checked by keyword only; read the instructions below.');
     expect(second).toContain('Your composite:');
     expect(second).toMatch(/From Cal: pacing and paragraph construction/);
     expect(second).toContain('Your composite is recorded');

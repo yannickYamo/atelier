@@ -203,6 +203,11 @@ export function sectionLength(step: string, sections: readonly string[]): Measur
 const SMALL: Readonly<Record<string, number>> = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12 };
 const SMALL_N = String.raw`(\d{1,2}|${Object.keys(SMALL).join('|')})`;
 const smallOf = (x: string): number => (/^\d/.test(x) ? Number(x) : SMALL[x.toLowerCase()]);
+/**
+ * A CEILING SAID AS A NEGATED VERB: "Paragraphs must not run beyond four sentences", "should not exceed five", "never let a
+ * paragraph exceed five sentences". The negation sets the limit; it does not turn the step into a judgement.
+ */
+const CEILING_NEGATION = /\b(?:must|should|may|can|do|does|will)\s*(?:not|n't)\s+(?:ever\s+)?(?:exceed|run\s+(?:past|beyond|over|longer than)|go\s+(?:past|beyond|over)|be\s+longer than|(?:have|hold|contain)\s+more than)\b|\bnever\s+let\s+(?:a|any|the|your|each|every)?\s*paragraphs?\s+(?:exceed|run\s+(?:past|beyond|over|longer than)|go\s+(?:past|beyond|over)|(?:have|hold|contain)\s+more than)\b/i;
 function paragraphLength(step: string): Measurement | null {
   const t = step.trim();
   if (!/\bparagraphs?\b/i.test(t) || /\b(?:first|last|final|opening|closing|second|third|next|previous|this|that)\s+paragraph\b/i.test(t)) return null;
@@ -216,7 +221,7 @@ function paragraphLength(step: string): Measurement | null {
   const ceilingWords = /\bno\s+paragraph\b|\bnever\b|\bnot\b|n't\b/i;
   if (/\b(?:are|is)\s+(?:fine|ok|okay|allowed|acceptable|welcome)\b|\b(?:may|can)\b/i.test(t) && !ceilingWords.test(t)) return null;
   // A negation is read only as "no paragraph …", "no more than", "no longer than", or "never exceed / never more than".
-  if (negated(t.replace(/\bno (?:paragraph|more than|longer than)\b/gi, ' ').replace(/\bnever\s+(?:exceed(?:s|ing)?|run(?:s)?\s+(?:past|longer than|beyond)|(?:have|has|be)?\s*(?:more|longer)\s+than)\b/gi, ' '))) return null;
+  if (negated(t.replace(/\bno (?:paragraph|more than|longer than)\b/gi, ' ').replace(/\bnever\s+(?:exceed(?:s|ing)?|run(?:s)?\s+(?:past|longer than|beyond)|(?:have|has|be)?\s*(?:more|longer)\s+than)\b/gi, ' ').replace(new RegExp(CEILING_NEGATION.source, 'gi'), ' '))) return null;
   // Another instruction in the same step with its own object: "Number the paragraphs, and keep the summary to two
   // sentences" holds the summary, not every paragraph, to its count.
   const afterParagraph = t.slice(t.search(/\bparagraphs?\b/i));
@@ -246,7 +251,7 @@ function paragraphLength(step: string): Measurement | null {
     if (/^\s+(?:of|from|after|before)\b/i.test(after.slice(m.index + m[0].length))) return null;
     // "more than N" and its kin set a ceiling only under "no paragraph" or "never": "paragraphs of more than three
     // sentences" says nothing of a limit.
-    if (/longer|more|over|past|beyond|exceed/i.test(m[0]) && !/^(?:at most|no more than|no longer than)/i.test(m[0]) && !/\bno paragraph\b|\bnever\b/i.test(t)) return null;
+    if (/longer|more|over|past|beyond|exceed/i.test(m[0]) && !/^(?:at most|no more than|no longer than)/i.test(m[0]) && !/\bno paragraph\b|\bnever\b/i.test(t) && !CEILING_NEGATION.test(t)) return null;
     const max = smallOf(m[1]) + shift;
     return max >= 1 ? { observer: 'PARAGRAPH_LENGTH', params: { maxSentences: max } } : null;
   }
