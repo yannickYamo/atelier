@@ -7,6 +7,31 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+### Fixed: two worded rules on one quantity are compared as ranges, and the screen counts what it asks
+
+- **Worded against worded, as ranges.** "Keep the whole piece under 300 words.", "Write at least 800 words." and "Keep
+  the piece between 400 and 600 words." from three authors all instructed at once: two worded rules were compared by
+  their words, never by their numbers. Now piece length, sentence length, paragraph length, headings and lists are read
+  as ranges from both statements, exactly as a worded rule is read against a count: ranges that do not meet conflict
+  ("under ten words" against "sentences of about thirty words", "a single sentence" against "at least six sentences",
+  "never more than eight words in a sentence" against "thirty words or more"); ranges that overlap leave room for both.
+- **Two ceilings never conflict.** "Keep paragraphs to at most six sentences" against "I keep paragraphs to 3 sentences
+  at most" was a conflict, though a paragraph of three meets both; so was a worded sentence cap against a shorter
+  counted one. Both now instruct. A floor above a ceiling is still a conflict, now without a tolerance between them.
+- **A pair asked is held open on both sides.** When one rule of a pair the model read as contradicting was already
+  held open by another pair, the other side instructed, and the screen credited it to an answer given to a different
+  conflict or printed an empty reason ("→ sol ()"). Now neither side instructs, the answer that chose it is said to be
+  open again, and no line prints an empty reason.
+- **The count of open questions is the number the screen shows open.** With five authors the screen showed six
+  conflicts open or open again and the closing line said four; with `--set`, one shown open was counted as three. The
+  count is now read from the same standing as each conflict's line.
+- **An answer after the build is said, not dropped.** `atelier new <folder> --accept --conflict 9=B` on a skill already
+  built changed nothing and said nothing. It now says the answer was not applied and gives the commands that rebuild
+  with every answer.
+- **The keyword-only line says what it misses.** With no model to read the final instructions, the screen now adds
+  that a whole-piece structure rule (one unbroken block of prose) may still sit beside a structure it rules out
+  (headings or lists), so the person reads them.
+
 ### Fixed: a composite's instructions never contradict, by any route, and the screen says what will ship
 
 - **`--set <id>=required` goes through the same final check.** A rule made required with `--set` used to bypass it:

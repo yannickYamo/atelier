@@ -54,25 +54,27 @@ const sixSource = Object.fromEntries(SIX.rules.map((r) => [r.id, r.author]));
 const sixTable = buildTraitTable(sixRules, (id) => sixSource[id]);
 const sixAuthors = Object.keys(SIX.admired).map((name) => author(name, SIX.classes[name] ?? [], SIX.admired[name]));
 const sixStatement = (id: string): string => sixRules.find((p) => p.requirementId === id)?.statement ?? id;
-const RUN: Record<number, ConflictAnswer> = { 3: 'B', 17: 'B', 18: 'B', 20: 'A', 23: 'both', 36: 'both', 42: 'A', 47: 'both' };
+// The reviewer's answers, renumbered: five pairs of two ceilings on one length ("never more than fifteen words" against a
+// band under 22) are no longer conflicts, so the reviewer's 17, 18, 20, 23, 36, 42 and 47 are now 16, 17, 19, 22, 34, 40 and 42.
+const RUN: Record<number, ConflictAnswer> = { 3: 'B', 16: 'B', 17: 'B', 19: 'A', 22: 'both', 34: 'both', 40: 'A', 42: 'both' };
 
 describe('six authors: the answer to one conflict and admiration in another never ship a contradiction', () => {
-  it('the table is the one the reviewer answered: conflict 20 is "Avoid headings" against "Give every section a heading"', () => {
-    expect(sixTable.conflicts.length).toBe(57);
-    expect(sixTable.conflicts[19].sides.map((s) => s.statement)).toEqual(['Avoid headings; let paragraphs carry the structure.', 'Give every section a heading.']);
+  it('the table is the one the reviewer answered: their conflict 20, now 19, is "Avoid headings" against "Give every section a heading"', () => {
+    expect(sixTable.conflicts.length).toBe(52);
+    expect(sixTable.conflicts[18].sides.map((s) => s.statement)).toEqual(['Avoid headings; let paragraphs carry the structure.', 'Give every section a heading.']);
   });
-  for (const [label, answers] of [['--conflict 20=A', { 20: 'A' }], ['the run\'s eight answers', RUN]] as const) {
+  for (const [label, answers] of [['--conflict 19=A', { 19: 'A' }], ['the run\'s eight answers', RUN]] as const) {
     it(`${label}: "Avoid headings…" instructs, "Use short headings." does not`, () => {
       const rec = composeSelection(sixTable, sixRules, sixAuthors, answers);
       const ds = new Map(decisionsFor(rec, sixRules, new Map(), new Map()).map((d) => [d.id, d]));
       expect(ds.get('p13')).toMatchObject({ decision: 'APPROVE', materiality: 'REQUIRED' });
       expect(ds.get('p44')?.decision).toBe('REJECT');
-      expect(rec.decisions.find((d) => d.id === 'p44')).toMatchObject({ outcome: 'REJECTED', settledBy: { n: 20, how: 'ANSWER' } });
+      expect(rec.decisions.find((d) => d.id === 'p44')).toMatchObject({ outcome: 'REJECTED', settledBy: { n: 19, how: 'ANSWER' } });
       expect(contradictionsLeft(rec, sixRules)).toEqual([]);
-      // the screen says what was built: conflict 21 (bram against faro on headings) stands with bram, by the answer to 20
-      const c21 = rec.conflicts[20];
+      // the screen says what was built: conflict 20 (bram against faro on headings) stands with bram, by the answer to 19
+      const c21 = rec.conflicts[19];
       expect(c21.sides.map((s) => s.id)).toEqual(['p13', 'p44']);
-      expect(standOf(c21, rec.decisions.find((d) => d.id === 'p13'), rec.decisions.find((d) => d.id === 'p44'))).toBe('→ bram (your answer to conflict 20)');
+      expect(standOf(c21, rec.decisions.find((d) => d.id === 'p13'), rec.decisions.find((d) => d.id === 'p44'))).toBe('→ bram (your answer to conflict 19)');
       const screen = describeComposite(rec, sixStatement).join('\n');
       expect(screen).not.toMatch(/both stand: bram/);
       expect(screen).not.toMatch(/p44 +Use short headings\./);
@@ -84,7 +86,7 @@ describe('six authors: the answer to one conflict and admiration in another neve
     const next = (): number => { seed = (seed * 1103515245 + 12345) % 2147483648; return seed; };
     for (let k = 0; k < 40; k++) {
       const given: Record<number, ConflictAnswer> = {};
-      for (let n = 1; n <= 57; n++) { const v = choices[next() % 4]; if (v && next() % 3 === 0) given[n] = v; }
+      for (let n = 1; n <= 52; n++) { const v = choices[next() % 4]; if (v && next() % 3 === 0) given[n] = v; }
       const rec = composeSelection(sixTable, sixRules, sixAuthors, given);
       expect(contradictionsLeft(rec, sixRules), JSON.stringify(given)).toEqual([]);
     }
@@ -99,15 +101,20 @@ describe('six authors: the answer to one conflict and admiration in another neve
       for (const n of Object.keys(RUN).map(Number)) expect(ns.includes(n), line).toBe(false);
     }
   });
-  it('the count of open questions is true after the guard: "neither side instructs" only where neither does', () => {
+  it('the count of open questions is true after the guard, and is what the screen asks', () => {
     const rec = composeSelection(sixTable, sixRules, sixAuthors, RUN);
     const byId = new Map(rec.decisions.map((d) => [d.id, d]));
     const stands = (id: string): boolean => { const d = byId.get(id); return instructs(d) || (d?.mergedInto !== undefined && instructs(byId.get(d.mergedInto))); };
-    const unanswered = rec.conflicts.filter((c) => c.answer === null);
-    const neither = unanswered.filter((c) => !c.sides.some((s) => stands(s.id)));
+    // read from the screen: a conflict shown open or open again, or asked here; and one where one side stands and this one is asked
+    const lines = rec.conflicts.map((c) => ({ c, stand: standOf(c, byId.get(c.sides[0].id), byId.get(c.sides[1].id)) }));
+    const neither = lines.filter(({ c, stand }) => stand.startsWith('→ open') || (stand.startsWith('→ neither instructs') && stand.includes(`--conflict ${c.n}=A`)));
+    const oneSide = lines.filter(({ c, stand }) => !neither.some((x) => x.c === c) && stand.includes(`--conflict ${c.n}=A`));
+    for (const { c } of neither) expect(c.sides.some((s) => stands(s.id))).toBe(false);
+    for (const { c } of oneSide) expect(c.sides.some((s) => stands(s.id))).toBe(true);
     const line = openLine(rec);
     expect(line).toContain(` ${neither.length} conflict(s) kept as open question(s); neither side instructs.`);
-    expect(line).toContain(` ${unanswered.length - neither.length} more unanswered, where one side stands by your answer to another conflict.`);
+    if (oneSide.length) expect(line).toContain(` ${oneSide.length} more unanswered, where one side stands by your answer to another conflict.`);
+    else expect(line).not.toContain('more unanswered');
   });
   it('a merged range\'s example shows each contributing author\'s observation', () => {
     const rec = composeSelection(sixTable, sixRules, sixAuthors, RUN);
@@ -133,13 +140,14 @@ describe('six authors: the answer to one conflict and admiration in another neve
 //   route 2, no class in common: ada's "Use emoji freely." (a method rule: it names no class) and dee's "Never use
 //     emoji; keep the tone plain." (voice) are never paired by the table; each is admired;
 //   route 3, a counted band: kai's and lena's sentence bands answered "both" make one range up to forty words, while
-//     otto, admired for pace, holds sentences to fifteen.
+//     otto, admired for pace, counts a median under twelve words. (A worded ceiling, "never more than fifteen words",
+//     no longer serves: two ceilings are both met by short sentences, so they never conflict.)
 const ROUTES = [
   rule('h1', 'Avoid headings; let paragraphs carry the structure.'), rule('h2', 'Give every section a heading.'), rule('h3', 'Use short headings.'),
   rule('e1', 'Use emoji freely.'), rule('e2', 'Never use emoji; keep the tone plain.'),
   rule('s1', 'I keep sentences short: a median under 10 words, and nine in ten under 15.', { observer: 'SENTENCE_LENGTH', params: { medianMax: 10, p90Max: 15 } }, 'your median is 8 words'),
   rule('s2', 'I keep sentences short: a median under 30 words, and nine in ten under 40.', { observer: 'SENTENCE_LENGTH', params: { medianMax: 30, p90Max: 40 } }, 'your median is 26 words'),
-  rule('s3', 'Never more than fifteen words in a sentence.'),
+  rule('s3', 'I keep sentences short: a median under 12 words, and nine in ten under 16.', { observer: 'SENTENCE_LENGTH', params: { medianMax: 12, p90Max: 16 } }, 'your median is 11 words'),
 ];
 const ROUTE_SRC: Record<string, string> = { h1: 'bram', h2: 'cleo', h3: 'faro', e1: 'ada', e2: 'dee', s1: 'kai', s2: 'lena', s3: 'otto' };
 const routeTable = buildTraitTable(ROUTES, (id) => ROUTE_SRC[id]);
@@ -150,7 +158,7 @@ const routeAnswers = (): Record<number, ConflictAnswer> => ({ [nOf('h1', 'h2')]:
 const routeStatement = (id: string): string => ROUTES.find((p) => p.requirementId === id)?.statement ?? id;
 
 describe('three routes by which a contradiction could instruct, all caught by the final guard', () => {
-  it('the table pairs what it pairs: emoji is never compared, and kai\'s band agrees with otto\'s fifteen words', () => {
+  it('the table pairs what it pairs: emoji is never compared, and kai\'s band agrees with otto\'s', () => {
     expect(nOf('e1', 'e2')).toBe(-1);
     expect(nOf('s1', 's3')).toBe(-1);
     expect(nOf('h1', 'h3')).toBeGreaterThan(0);
@@ -170,7 +178,7 @@ describe('three routes by which a contradiction could instruct, all caught by th
     // route 1: bram's ban stands by the answer; faro's short headings are set aside, naming that answer
     expect(d('h1')?.outcome).toBe('SELECTED');
     expect(d('h3')).toMatchObject({ outcome: 'REJECTED', settledBy: { n: nOf('h1', 'h2'), how: 'ANSWER' } });
-    // route 3: the range stands by the answer "both"; otto's fifteen words are set aside
+    // route 3: the range stands by the answer "both"; otto's band is set aside
     expect(d('s1')).toMatchObject({ outcome: 'SELECTED', range: { observer: 'SENTENCE_LENGTH', params: { medianMax: 30, p90Max: 40 } } });
     expect(d('s3')?.outcome).toBe('REJECTED');
     // route 2: nobody answered, so neither instructs, and the pair is asked under a number after the table's
