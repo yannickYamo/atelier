@@ -45,6 +45,8 @@ const KIND_LABEL: Readonly<Record<string, string>> = {
   capital: 'capitalised', lower: 'in lower case', digit: 'a digit', symbol: 'a symbol or emoji',
 };
 export const sayKind = (k: string): string => KIND_LABEL[k] ?? k;
+/** A count with its unit, singular for one: "1 sentence", "1 word in the longest sentence", "3 line breaks". */
+export const countOf = (n: number, unit: string): string => `${n} ${n === 1 ? unit.replace(/^(characters|words|sentences|line breaks|blank lines|hashtags|mentions|links)\b/, (u) => u.slice(0, -1)) : unit}`;
 
 export interface Shape {
   readonly characters: number; readonly words: number; readonly sentences: number; readonly longestSentence: number;
@@ -80,7 +82,8 @@ export function closingKindOf(ss: readonly Sentence[]): ClosingKind | null {
 }
 
 export function firstWordCaseOf(body: string): FirstWordCase | null {
-  const c = body.trim()[0];
+  // A markdown heading's marker is markup, not the first word: "# A cosy launch" opens on "A".
+  const c = body.trim().replace(/^#{1,6}[ \t]+/, '')[0];
   if (!c) return null;
   return /\p{Lu}/u.test(c) ? 'capital' : /\p{Ll}/u.test(c) ? 'lower' : /\d/.test(c) ? 'digit' : 'symbol';
 }
@@ -157,7 +160,7 @@ export const SHAPE: Observer = {
     const off = lo !== null && v < lo ? 'short' : hi !== null && v > hi ? 'long' : null;
     const asked = lo !== null && hi !== null ? `${lo} to ${hi}` : hi !== null ? `at most ${hi}` : `at least ${lo}`;
     const unit = id === 'longestSentence' ? 'words in the longest sentence' : SHAPE_LABEL[id];
-    if (!off) return { verdict: 'MET', spans: [], value: v, error: 0, detail: `${v} ${unit} (${asked})` };
+    if (!off) return { verdict: 'MET', spans: [], value: v, error: 0, detail: `${countOf(v, unit)} (${asked})` };
     const by = off === 'long' ? v - (hi ?? v) : (lo ?? v) - v;
     const width = lo !== null && hi !== null && hi > lo ? hi - lo : 1;
     const error = Math.round(((off === 'long' ? by : -by) / width) * 1000) / 1000;
@@ -172,10 +175,10 @@ export const SHAPE: Observer = {
     } else if (off === 'long' && id === 'sentences') {
       spans = sentencesOf(body).slice(hi ?? 0).map((s) => ({ start: at + s.start, end: at + s.end, text: s.text, why: `a sentence over the ${hi} your pieces carry` }));
     } else {
-      spans = [{ start: at, end: at + body.length, text: body.slice(0, 80), why: `${v} ${unit}; your pieces run ${asked}: ${off} by ${by}` }];
+      spans = [{ start: at, end: at + body.length, text: body.slice(0, 80), why: `${countOf(v, unit)}; your pieces run ${asked}: ${off} by ${by}` }];
     }
     // A ceiling of none is said as none: "no hashtags; this has 3", not "3 hashtags (at most 0): long by 3".
-    const detail = hi === 0 && off === 'long' ? `no ${unit}; this has ${v}` : `${v} ${unit} (${asked}): ${off} by ${by}`;
+    const detail = hi === 0 && off === 'long' ? `no ${unit}; this has ${v}` : `${countOf(v, unit)} (${asked}): ${off} by ${by}`;
     return { verdict: 'VIOLATED', spans, value: v, error, detail };
   },
 };
