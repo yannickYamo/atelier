@@ -147,7 +147,7 @@ const WHY: Readonly<Record<Claim['kind'], { readonly cut: string; readonly slot:
  */
 export function unsourcedClaims(text: string, material: string, placeholders = false): Claim[] {
   const why = (k: Claim['kind']): string => (placeholders ? WHY[k].slot : WHY[k].cut);
-  // Whole numbers only, as their value: "40" is not supported by "400", nor "4%" by "2024"; "three" is by "3" (./numbers.ts).
+  // Whole numbers only, as their value: "40" is not supported by "400", nor "4%" by "2024"; "forty" supports "40" (./numbers.ts).
   const matNumbers = new Set(numbersIn(material));
   // A story is supported by ONE passage that tells it, not by topic words scattered across the notes.
   const passages = material.split(/\n\s*\n|(?<=[.!?])\s+/).map((p) => new Set(contentWords(p))).filter((p) => p.size);
@@ -180,15 +180,27 @@ export function unsourcedClaims(text: string, material: string, placeholders = f
       const numbers = numbersIn(s.text).filter((n) => !/^(?:19|20)\d\d$/.test(n));
       if (numbers.length && !numbers.every((n) => matNumbers.has(n))) {
         out.push({ ...s, kind: 'FIGURE', why: why('FIGURE') });
-        continue;
       }
     }
-    // A count written in words ("three of your prospects", "twelve-plus optimizers") is a figure whether or not
-    // it is presented as a finding, and is supported by the same value in the material, in words or in digits.
+  }
+  return out;
+}
+
+/**
+ * A COUNT WRITTEN IN WORDS, LISTED AND NEVER CUT. "Three of your prospects", "twelve-plus optimizers": a count
+ * the material never gave is a figure by the reader's own definition, and the pattern check read only digits.
+ * But the pattern cannot tell "nine people" invented from "nine people" remembered, and nobody has measured how
+ * often such a count is the writer's own, so these are a finding of lower confidence: the check lists them for
+ * the person (run-repair.ts, UNSOURCED·check) and never fails or cuts a draft on them, whatever the kind of
+ * work. Supported like a figure in digits: by the same value in the material, in words or in digits.
+ */
+export const WORD_COUNT_WHY = 'a count written in words that is not in your material or your request: listed for you to check, never cut; if it is yours, add it to your material (atelier material)';
+export function wordCountClaims(text: string, material: string): Claim[] {
+  const matNumbers = new Set(numbersIn(material));
+  const out: Claim[] = [];
+  for (const s of claimUnitsOf(text)) {
     const counts = spelledCounts(s.text);
-    if (counts.length && !linkedByPerson && !counts.every((n) => matNumbers.has(n))) {
-      out.push({ ...s, kind: 'FIGURE', why: why('FIGURE') });
-    }
+    if (counts.length && !counts.every((n) => matNumbers.has(n))) out.push({ ...s, kind: 'FIGURE', why: WORD_COUNT_WHY });
   }
   return out;
 }
