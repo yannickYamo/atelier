@@ -32,7 +32,7 @@ export const DIMENSIONS: readonly Exclude<Dimension, 'UNSORTED'>[] = ['ARGUMENT'
 const BY_OBSERVER: Readonly<Record<string, Dimension>> = {
   LEXICON: 'VOCABULARY', TERM_RATE: 'VOCABULARY', RATIO: 'VOCABULARY', HEDGE_RATE: 'REGISTER', STYLE_DISTANCE: 'VOCABULARY',
   SENTENCE_LENGTH: 'PACE', FRAGMENT_SHARE: 'PACE', DISTRIBUTION: 'PACE', RHYTHM: 'PACE', PARAGRAPH_LENGTH: 'STRUCTURE',
-  HEADINGS: 'STRUCTURE', OPENING: 'CADENCE', CLOSING: 'CADENCE',
+  HEADINGS: 'STRUCTURE', OPENING: 'CADENCE', CLOSING: 'CADENCE', SHAPE: 'STRUCTURE',
 };
 
 /** PATTERN_RATE counts constructions of different kinds; sorted by the pattern. Typed over every pattern, so a new one cannot go unsorted. */

@@ -56,7 +56,7 @@ export const TERM_RATE: Observer = {
   observe(text, p) {
     const words = proseWordCount(text);
     // A rate over fewer words than this is one occurrence either way, and says nothing.
-    if (words < 150) return { verdict: 'NOT_APPLICABLE', spans: [], value: null, detail: 'under 150 words' };
+    if (words < 150) return { verdict: 'NOT_APPLICABLE', spans: [], value: null, detail: 'too short to measure: under 150 words' };
     const hits = findTerms(text, list(p, 'terms') ?? []);
     const rate = r1((hits.length / words) * 1000);
     const lo = num(p, 'minPer1000'); const hi = num(p, 'maxPer1000');

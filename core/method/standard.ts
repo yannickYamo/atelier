@@ -33,6 +33,8 @@ import { PER_ROLE_LIMIT } from '../observers/selection.js';
 import { tablesOf, figuresOf, targetOf } from '../observers/obligations.js';
 import { citesLines } from '../loop/locators.js';
 import { deriveMeasuredRules, piecesBreaking } from '../observers/derive.js';
+import { isShortForm, shapeBandRules, pooledRateRules, shortFormLimits, shortFormBrief, type ShapeBandRule, type PooledRateRule, type ShortFormOptions } from '../observers/short-form.js';
+import { allowed, CORPUS_RULE_SHARE } from '../ratification/suggest.js';
 import { machineTellRule } from '../observers/contrast.js';
 import { PATTERN_LABEL } from '../observers/style.js';
 import { norm, lowered, tableColumns, isConditional, sectionsPlaced, sectionsNamed, sectionsOutright, optionsOf, statedCount, sectionLength, sectionsOpening, citesPlaces, namesTest } from './step-readers.js';
@@ -451,8 +453,42 @@ export function tellOffers(cases: readonly (Pick<GoldenCase, 'reference'> & { re
   return out;
 }
 
-export function countedOffers(stated: readonly MethodProposal[], cases: readonly (Pick<GoldenCase, 'reference'> & { readonly id: string })[]): MethodProposal[] {
+export function countedOffers(stated: readonly MethodProposal[], cases: readonly (Pick<GoldenCase, 'reference'> & { readonly id: string })[], shortForm: ShortFormOptions = {}): MethodProposal[] {
   const said = new Set(stated.flatMap((p) => (p.measurement?.observer === 'LENGTH' ? ((p.measurement.params.in as readonly string[] | undefined) ?? []).map(norm) : [])));
   const sectionsLeft = sectionLengthsFromExamples(cases).filter((p) => !((p.measurement?.params.in as readonly string[] | undefined) ?? []).some((x) => said.has(norm(x))));
+  // SHORT PIECES ARE READ FOR THEIR SHAPE AND THEIR POOLED RATES (../observers/short-form.ts), and more of them are
+  // offered than of long-form counts: twenty tweets carry a dozen shapes, and each is one line of the skill.
+  if (isShortForm(cases.map((c) => c.reference))) return [...shortFormOffers(cases, shortForm).proposals, ...countedFromExamples(cases), ...sectionsLeft].slice(0, SHORT_FORM_OFFER_LIMIT);
   return [...countedFromExamples(cases), ...sectionsLeft].slice(0, PER_ROLE_LIMIT);
+}
+
+export type { ShortFormOptions };
+/** How many counted offers a skill built from short pieces carries at most: the shapes, the rates, and what else was counted. */
+export const SHORT_FORM_OFFER_LIMIT = 20;
+
+/**
+ * WHAT SHORT PIECES SHOW: their shape bands and their pooled rates, as offers beside the method, and the limits of the
+ * corpus in lines for the build screen. A shape band is required where every example meets it and there are enough
+ * examples (`ShapeBandRule.required`); a rate is always a preference. A band the author's own pieces break beyond
+ * what the review allows (../ratification/suggest.ts, `allowed`) is not offered: it would be a rule against them.
+ */
+export function shortFormOffers(cases: readonly (Pick<GoldenCase, 'reference'> & { readonly id: string })[], opts: ShortFormOptions = {}): { proposals: MethodProposal[]; limits: string[]; brief: string | null; shapes: ShapeBandRule[]; rates: PooledRateRule[] } {
+  const texts = cases.map((c) => c.reference);
+  if (!isShortForm(texts) || texts.length < 3) return { proposals: [], limits: [], brief: null, shapes: [], rates: [] };
+  const mayBreak = allowed(texts.length, CORPUS_RULE_SHARE);
+  // Pieces that answer requests take their length and shape from the request (../compiler/scope.ts): no band of it.
+  const shapes = opts.answers ? [] : shapeBandRules(texts, { limit: opts.limit?.chars ?? null, ...(opts.urlChars !== undefined ? { urlChars: opts.urlChars } : {}) })
+    // A band the pieces break is not theirs, and is not offered; a ceiling that is the platform's limit is the owner's
+    // fact and is offered whatever the pieces do, with how many of them run past it.
+    .filter((s) => s.limited === true || piecesBreaking(texts, s.measurement).length === 0);
+  const rates = pooledRateRules(texts).filter((r) => piecesBreaking(texts, r.measurement).length <= mayBreak);
+  const met = (m: Measurement): string => { const k = piecesBreaking(texts, m).length; return k === 0 ? `all ${texts.length} of your examples meet it` : `all but ${k} of your ${texts.length} examples meet it`; };
+  const proposals: MethodProposal[] = [
+    ...shapes.map((s): MethodProposal => ({ statement: s.statement, origin: 'SHOWN_BY_EXAMPLE', obligation: 'DELIVERABLE', measurement: s.measurement, conflict: null, counted: true,
+      onExample: `${s.evidence}; ${met(s.measurement)}${s.required ? '' : `; read from ${texts.length} examples, ${s.more} more would let it block`}`, ...(s.required ? { required: true as const } : {}) })),
+    ...rates.map((r): MethodProposal => ({ statement: r.statement, origin: 'SHOWN_BY_EXAMPLE', obligation: 'DELIVERABLE', measurement: r.measurement, conflict: null, counted: true,
+      onExample: `${r.evidence}; ${met(r.measurement)}; a rate chooses between drafts and never blocks` })),
+  ];
+  const answers = opts.answers === true;
+  return { proposals, limits: shortFormLimits(texts, shapes, rates, opts.limit ?? null, answers), brief: shortFormBrief(texts, shapes, rates, opts.limit ?? null, answers), shapes, rates };
 }

@@ -399,8 +399,11 @@ export function parseMeasure(spec: string): Measurement {
     OPENING: ['avoid', 'minWords', 'maxWords'], CLOSING: ['avoid', 'minWords', 'maxWords'],
     HEADINGS: ['avoid', 'case', 'maxWords', 'minPer1000', 'maxPer1000'], RHYTHM: ['unit', 'minCv', 'maxCv'],
     FEATURE: ['feature', 'minValue', 'maxValue'], PRESENCE: ['sections', 'in', 'any', 'min', 'figure', 'starts', 'body', 'opens', 'closes', 'labels', 'options'],
-    TABLE: ['columns', 'minRows'], CITED: ['allow'], LINES: ['min', 'perItem', 'sections'], LENGTH: ['unit', 'min', 'max', 'in', 'labels', 'need', 'sections'], NAMES_TEST: [] };
+    TABLE: ['columns', 'minRows'], CITED: ['allow'], LINES: ['min', 'perItem', 'sections'], LENGTH: ['unit', 'min', 'max', 'in', 'labels', 'need', 'sections'], NAMES_TEST: [],
+    SHAPE: ['shape', 'kinds', 'min', 'max', 'urlChars'] };
   const TEXT_KEYS = new Set(['pattern', 'prefer', 'case', 'unit', 'in']);
+  // A shape and its kinds are case-sensitive ids (core/observers/shape.ts): `characters`, `claim`.
+  const ID_LIST_KEYS = new Set(['shape', 'kinds']);
   // Word lists, "|"-separated: TERM_RATE:terms=but|so,minPer1000=4. Kept as written, lower-cased.
   const LIST_KEYS = new Set(['terms', 'numerator', 'denominator', 'avoid', 'sections', 'any', 'starts', 'columns', 'options']);
   // Number lists, "/"-separated: DISTRIBUTION:edges=8/20/35,shares=0.3/0.4/0.2/0.1,tolerance=0.2.
@@ -416,6 +419,7 @@ export function parseMeasure(spec: string): Measurement {
       if (TEXT_KEYS.has(k)) return [k, [k === 'prefer' ? v : v.trim().toUpperCase()]];
       // A feature id is case-sensitive (core/observers/features.ts), and its band may sit below zero.
       if (k === 'feature') return [k, [v.trim()]];
+      if (ID_LIST_KEYS.has(k)) return [k, v.split('|').map((t) => t.trim()).filter(Boolean)];
       if (observer === 'FEATURE') {
         if (!/^-?\d+(\.\d+)?$/.test(v.trim())) die(`--measure: "${kv}" is not name=number`);
         return [k, Number(v)];
@@ -429,7 +433,8 @@ export function parseMeasure(spec: string): Measurement {
       if (!/^\d+(\.\d+)?$/.test(v.trim())) die(`--measure: "${kv}" is not name=number`);
       const n = Number(v);
       // Zero is a real target for a rate cap and for a share bound; for a length it describes no text.
-      const zeroOk = n === 0 && (['HEDGE_RATE', 'PATTERN_RATE', 'TERM_RATE', 'LINES'].includes(observer) || ['minShare', 'maxShare', 'minPer1000', 'maxPer1000', 'minWords'].includes(k));
+      // (And a shape's "none": SHAPE:shape=hashtags,max=0 is a count of zero hashtags.)
+      const zeroOk = n === 0 && (['HEDGE_RATE', 'PATTERN_RATE', 'TERM_RATE', 'LINES', 'SHAPE'].includes(observer) || ['minShare', 'maxShare', 'minPer1000', 'maxPer1000', 'minWords'].includes(k));
       if (n <= 0 && !zeroOk) die(`--measure: ${k} must be greater than zero`);
       return [k, n];
     }));

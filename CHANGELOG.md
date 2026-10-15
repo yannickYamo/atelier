@@ -154,6 +154,39 @@ rewrite and a later draft was told only the range it had missed.
   steering caused, taken from the run's ledger under their own purpose (`graded`), never estimated. Every repair now
   also records its rewrites kept and refused, with the reasons (`repair.edits`).
 
+### Added: short form (tweets, short posts, concise replies) is measured and held
+
+A skill built from five tweets learned two rules: every counted measure needed 150 words, so a folder of tweets
+measured nothing, and a 486-character corporate paragraph read NEEDS REVIEW against a tweet skill, the same as a good
+tweet. Short pieces are now read for what they carry.
+
+- **Shape bands, with no word floor** (`core/observers/shape.ts`, `core/observers/short-form.ts`). Each piece's length
+  in characters (as the platform counts them: a link on X is 23), words, sentences and longest sentence, its line
+  breaks, hashtags, mentions, links and emoji, what it opens and closes on, and how its first word is cased, banded
+  like a section's length. A band every example meets is required from five examples; under five it is shown and used
+  to choose between drafts, and the build screen says how many more examples would let it block. A skill that answers
+  requests (`--mode respond`, or an answer class) takes its length and shape from the request, as before: its rates
+  are read, and no band of its shape is held.
+- **Rates pooled over the pieces** (`core/observers/pooled.ts`). Where the pieces are short (median under 150 words), a
+  counted feature with at least ten occurrences across them is read as one rate over all their words, and a short
+  output is held to the count its length expects (a two-sided Poisson tail at 5%; a figure, a name or a link is only
+  ever capped). Rates are preferences: they choose between drafts and never block.
+- **The platform's limit is never read off the pieces.** It is the format's (`--class x-post`: 280) or yours
+  (`--limit <chars>` at build, run or verify), the character band is held under it, and the build screen says where
+  it came from and how many of your examples run past it.
+- **A long-form standard asked for a short piece** (`--class x-post`, or `--limit` under 1,000 characters on `run` or
+  `verify`) is no longer refused as another kind of document: it keeps every step of your method and every ban; the bands counted off your longer pieces (paragraphs,
+  sentence mix, word count, rates) are recorded as not applying to that output, never as unverified; the output is
+  held to the limit; and the writer is told that the essential argument has to survive the compression.
+- **Floors by evidence, not by length**, on the discovery path (`core/observers/derive.ts`, `contrast.ts`): a counted
+  rule's floor is a pooled count (thirty sentences, ten occurrences) at any length, and one read from fewer than five
+  pieces is suggested as a preference with how many more pieces would let it block. A move the author never makes is a ban and is not affected.
+- **Nothing unmeasurable reads as met**: a rate on a text too short for it says "too short to measure" and does not
+  apply.
+- Measured on a fixture of 20 tweets by one invented author and 10 pieces that are not theirs, a skill built from 15:
+  before, 5 of 5 held-back tweets passed and 1 of 10 bad pieces was blocked (3 of 10 with `--class x-post`, by the
+  280-character limit alone); now 5 of 5 pass and 9 of 10 are blocked. Pinned in `tests/atelier-shortform.test.ts`.
+
 ### Fixed: the pattern check reads a count written in words, and lists it for you to check
 
 A draft said "three of your prospects will believe the products overlap" and "Twelve-plus optimizers", counts the
