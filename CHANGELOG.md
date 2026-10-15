@@ -7,6 +7,39 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+### Fixed: a composite's instructions never contradict, by any route, and the screen says what will ship
+
+- **`--set <id>=required` goes through the same final check.** A rule made required with `--set` used to bypass it:
+  answering the headings conflict for "Use headings to break up the piece." and then `--set` on "Write in continuous
+  prose with no headings and no lists." shipped both. Now the rule made required is the person's latest word: it
+  stands, the rule it contradicts is set aside even when an earlier answer chose it, and the screen says so in one
+  line. Two rules both made required that contradict are an open question; neither ships until it is answered.
+- **A worded quantity is compared with a counted band.** "Write long, winding sentences of thirty words or more"
+  against "a median under 6 words", or against a "both" range whose median is under 23, is a conflict; so is "Write
+  long sentences" where nine in ten sentences are under 7 words, "Let a paragraph run long" under a cap of two
+  sentences, "Keep it under 500 words" against a piece of at least 800, and asking for headings or lists where the
+  count allows none (or banning them where it requires some). Only a plain non-overlap counts: a band that leaves
+  room for what the words ask is not a conflict.
+- **A ban on a subject covers its kinds.** "Never use lists of any kind" conflicts with "Use bullet lists" and "Use
+  numbered lists"; "Never use headings" with subheadings; quotes with block quotes; examples with worked examples. A
+  ban on one kind leaves the others ("Never use subheadings" does not conflict with "Use headings").
+- **A model reads the final instructions once.** With a model set up, after the check above, the rules that will
+  instruct (a range at its merged limits) are given to it numbered, each with its author, and it names every pair that
+  cannot both be followed in one piece, with a one-line reason quoting both. Every pair you did not answer "both" is an
+  open question on the screen, marked "read by the model at build": neither side instructs until you answer it. It
+  never settles a conflict and never touches how an output is judged. One call per list of instructions, on its own
+  ledger line (`composite contradictions`), kept with the run, so a continuation with the same list and every rebuild
+  call nothing. With no model the screen says: "Contradictions between authors are checked by keyword only; read the
+  instructions below."
+- **An answer the check opens again says why, and is counted.** When what an answer chose cannot instruct beside
+  another rule and nothing you said decides between them, that conflict reads "open again: your answer "both" would
+  ship two instructions that cannot both be followed: …", names the conflict to answer, and is counted among the
+  open questions. The record, the count and the screen agree on every conflict.
+- **A "both" range is shown at its merged limits**, the limits it is built and checked with, not its carrier's own.
+- Smaller: "Paragraphs must not run beyond four sentences" and "Never let a paragraph exceed five sentences" are now
+  read as ceilings on every paragraph (the labelled corpus gains both, and no step it held is read differently); a
+  conflict on grammatical person is labelled "person"; "focus" and "quizzes" are read as "focus" and "quiz".
+
 ### Fixed: every repair step of a run is counted once
 
 - **One step counter per run.** The controller counted its own steps, while a draft that only ran long was cut, and a
@@ -319,6 +352,9 @@ apart and builds the combination you choose.
   evidence's ruling: shared, or by an author you admired for something else, it is kept as a habit, shown and never
   instructed; otherwise it is set aside. A conflict nobody answered is kept
   as an open question and neither side instructs; nothing is guessed.
+- **What will instruct is checked last** (`core/composite/selection.ts`, `core/composite/contradictions.ts`): every pair
+  of rules from two authors that would both instruct is read by the conflict detector, and, with a model set up, the
+  final list is read once more by a model for pairs no keyword sees. A pair you did not answer "both" never ships.
 - **A composite voice** (`core/compiler/voice.ts`, `renderers/agent-skill/render.ts`): one excerpt from every author
   something was taken from, an equal share of the compact budget each, labelled with whose it is; "how I sound" is
   written from the traits chosen, not from any one author; no persona is derived, since one read over every author's

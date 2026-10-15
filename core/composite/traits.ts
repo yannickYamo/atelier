@@ -45,7 +45,7 @@ export const CLASS_WORDS: readonly (readonly [TraitClass, RegExp])[] = [
   ['opening', /\b(open|opens|opening|openings|begin|begins|beginning|first (?:sentence|line|paragraph|words)|lead(?:s)? with|start(?:s)? with|hook|title)\b/i],
   ['evidence', /\b(evidence|figure|figures|number|numbers|data|source|sources|cite|cites|citation|citations|example|examples|specific|specifics|detail|details|proof|statistic|statistics|quote|quotes|footnote|reference|references)\b/i],
   ['pace', /\b(sentence|sentences|paragraph|paragraphs|pace|pacing|rhythm|fragment|fragments|brisk|fast|slow|cadence|clipped|tempo)\b/i],
-  ['structure', /\b(structure|structured|argument|arguments|section|sections|order|sequence|outline|heading|headings|list|lists|bullet|bullets|numbered|step|steps|close|closes|closing|end|ends|ending|conclusion|transition|transitions|moves)\b/i],
+  ['structure', /\b(structure|structured|argument|arguments|section|sections|order|sequence|outline|heading|headings|subheading|subheadings|list|lists|bullet|bullets|numbered|step|steps|close|closes|closing|end|ends|ending|conclusion|transition|transitions|moves)\b/i],
   ['voice', new RegExp(String.raw`\b(tone|register|voice|formal|informal|casual|conversational|chatty|relaxed|colloquial|impersonal|person|tense|contraction|contractions|first person|we|humou?r|wry|warm|dry|plain|jargon|hedge|hedges|hedging|spelling|dash|dashes|${COUNT_UNIT}word|${COUNT_UNIT}words|phrasing|vocabulary|irony|understatement|slang|diction)\b`, 'i')],
 ];
 const BY_WORDS = CLASS_WORDS;
@@ -143,7 +143,13 @@ type Relation = 'SAME' | 'CONFLICT' | 'UNRELATED';
  * Opposed: a subject one bans and the other asks for, generally; or two values of one question that cannot both hold
  * (casual against formal, first person against third, present tense against past).
  */
-const SUBJECT = /\b(contractions?|headings?|lists?|bullet(?:s| points?)?|questions?|sources?|citations?|dash(?:es)?|emoji|jargon|footnotes?|anecdotes?|examples?|figures?|paragraphs?|sentences?|spellings?|exclamation marks?|semicolons?|tables?|hedg(?:e|es|ing))\b/gi;
+const SUBJECT = /\b(contractions?|sub-?headings?|headings?|numbered lists?|lists?|bullet(?:s| points?)?|questions?|sources?|citations?|dash(?:es)?|emoji|jargon|footnotes?|anecdotes?|worked examples?|examples?|figures?|paragraphs?|sentences?|spellings?|exclamation marks?|semicolons?|tables?|hedg(?:e|es|ing)|block ?quotes?|quotes|quotations?)\b/gi;
+/**
+ * A SUBJECT AND ITS KINDS. A ban on the general subject covers every kind of it: "never use lists of any kind" bans
+ * bullet lists and numbered lists; "never use headings" bans subheadings. A ban on one kind says nothing of the others.
+ */
+export const KIND_OF: Readonly<Record<string, string>> = { bullet: 'list', 'numbered list': 'list', subheading: 'heading', 'block quote': 'quote', 'worked example': 'example' };
+
 const CLAUSE_NEGATION = /^(never|no|not|avoid|avoids|without|don't|doesn't|rarely|none)$/i;
 /**
  * Words that may sit between a negation and what it governs: "never use bullet lists", "with no lists", "never as I".
@@ -155,7 +161,7 @@ const FILLER = /^(use|using|uses|write|writing|include|including|put|add|any|a|a
 const RESTRICT = /^(that|which|who|whose|with|without|unless|except|when|whenever|where|if|than)$/i;
 /** Prepositions that narrow a subject, unless what follows is the whole piece: "in headings" narrows, "in the piece" does not. */
 const PREPOSITION = /^(in|on|at|for|from|of|to|within|inside|under|across|about|after|before)$/i;
-const GENERAL_SCOPE = /^(?:the |a |an |any |your |my |this |each |every |all )?(?:piece|pieces|text|texts|writing|prose|draft|drafts|work|article|articles|post|posts|essay|essays|body|copy|it|them|general|places?|anywhere|everything)\b/i;
+const GENERAL_SCOPE = /^(?:(?:the |a |an |any |your |my |this |each |every |all )?(?:piece|pieces|text|texts|writing|prose|draft|drafts|work|article|articles|post|posts|essay|essays|body|copy|it|them|general|places?|anywhere|everything)|(?:any|all|every|whatever) (?:kinds?|sorts?|forms?|types?))\b/i;
 const NUMBER_WORD = String.raw`(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|fifteen|twenty|thirty|forty|fifty|a dozen)`;
 /** A ceiling, not a ban: "never more than twenty words", "no paragraph should run past five sentences". */
 const CAP = new RegExp(String.raw`\b(?:more than|longer than|fewer than|less than|past|beyond|over|exceed(?:s|ing)?|above|up to)\s+${NUMBER_WORD}\b`, 'i');
@@ -173,8 +179,14 @@ const DIMENSIONS: readonly Dimension[] = [
 /** One word as its subject: "sources" is source, "dashes" is dash, "bullet points" is bullet. */
 export const singular = (w: string): string => {
   const x = w.toLowerCase().replace(/\s+/g, ' ');
-  if (x.startsWith("bullet")) return 'bullet';
-  if (x.startsWith("hedg")) return 'hedge';
+  if (x.startsWith('bullet')) return 'bullet';
+  if (x.startsWith('hedg')) return 'hedge';
+  if (/^block ?quote/.test(x)) return 'block quote';
+  if (/^quot(?:e|es|ation|ations)$/.test(x)) return 'quote';
+  if (/^sub-?heading/.test(x)) return 'subheading';
+  // "focus", "status", "analysis", "class": already one; "quizzes" is quiz.
+  if (/(?:us|is|ss)$/.test(x)) return x;
+  if (x.endsWith('zzes')) return x.slice(0, -3);
   if (/(?:ch|sh|ss|x|z)es$/.test(x)) return x.slice(0, -2);
   return /[^s]s$/.test(x) ? x.slice(0, -1) : x;
 };
@@ -257,6 +269,9 @@ export function plainlyOpposed(a: string, b: string): boolean {
   const ra = readPolarity(a); const rb = readPolarity(b);
   const shared = [...ra.subjects.keys()].filter((k) => rb.subjects.has(k));
   if (shared.some((k) => { const x = ra.subjects.get(k); const y = rb.subjects.get(k); return (x === 'pos' && y === 'neg') || (x === 'neg' && y === 'pos'); })) return true;
+  // A ban on a general subject against asking for one of its kinds: "never use lists of any kind" / "use bullet lists".
+  const bansKind = (ban: Reading, ask: Reading): boolean => [...ask.subjects].some(([k, p]) => p === 'pos' && KIND_OF[k] !== undefined && ban.subjects.get(KIND_OF[k]) === 'neg');
+  if (bansKind(ra, rb) || bansKind(rb, ra)) return true;
   return DIMENSIONS.some((dim) => {
     if (dim.needsSubject && !shared.length) return false;
     const x = ra.values.get(dim.name); const y = rb.values.get(dim.name);
@@ -321,6 +336,103 @@ const boundsRelation = (x: Bound, y: Bound): Relation => {
   return 'UNRELATED';
 };
 
+/**
+ * A QUANTITY SAID IN WORDS ON A SUBJECT A COUNT MEASURES, compared with the count's band: "long, winding sentences of
+ * thirty words or more" cannot be written under "a median under 6 words", nor under a range whose median is under 23;
+ * "write long sentences" cannot be written where nine in ten sentences are under 7 words; "keep it under 500 words"
+ * cannot be met by a piece that must run to 800; "use headings" cannot hold where the count allows none. Only a
+ * plain non-overlap is a conflict: a band that leaves room for what the words ask is not.
+ *
+ *   sentence length   SENTENCE_LENGTH (median and nine-in-ten ceilings), LENGTH of one sentence (a ceiling on each)
+ *   paragraph length  PARAGRAPH_LENGTH (a ceiling on each)
+ *   word count        LENGTH in words, of the whole piece (a floor, a ceiling or both)
+ *   headings, lists   HEADINGS and the list-item FEATURE, as a rate: none allowed, or some required
+ */
+/** A sentence "long" in plain words runs past this many words; a paragraph "long", past this many sentences. */
+export const LONG_SENTENCE_WORDS = 20;
+export const LONG_PARAGRAPH_SENTENCES = 5;
+const WORD_N = String.raw`(\d[\d,]*|${Object.keys(NUM).join('|')})`;
+const numIn = (x: string): number => (/^\d/.test(x) ? Number(x.replace(/,/g, '')) : NUM[x.toLowerCase()]);
+interface WordedQuantity {
+  readonly subject: 'sentence' | 'paragraph' | 'piece' | 'heading' | 'list';
+  /** every unit at least this (a floor), or a typical unit of this size (a target) */
+  readonly floor?: number; readonly target?: number;
+  /** the piece's words: at most, at least */
+  readonly max?: number; readonly min?: number;
+  /** "long" in plain words, with no number */
+  readonly long?: true;
+  /** headings or lists asked for (true), or banned outright (false) */
+  readonly present?: boolean;
+}
+export function wordedQuantities(statement: string): WordedQuantity[] {
+  const out: WordedQuantity[] = [];
+  const t = statement;
+  // Sentences: "sentences of thirty words or more", "at least twenty words a sentence", "sentences of forty words", "long sentences".
+  if (/\bsentences?\b/i.test(t)) {
+    const floor = new RegExp(String.raw`\b${WORD_N}\s+(?:words?\s+or\s+(?:more|longer)|or\s+more\s+words?)\b|\b(?:at least|no fewer than|a minimum of)\s+${WORD_N}\s+words?\b`, 'i').exec(t);
+    const allowance = boundOf(t)?.kind === 'allowance';
+    if (floor && !allowance) out.push({ subject: 'sentence', floor: numIn(floor[1] ?? floor[2]) });
+    else {
+      const target = new RegExp(String.raw`\bsentences?\s+(?:of|around|about)\s+(?:about\s+|around\s+)?${WORD_N}\s+words?\b(?!\s+or\s+(?:fewer|less))`, 'i').exec(t);
+      if (target && !/\b(?:under|at most|no more than|fewer than|less than|up to|within)\s/i.test(t.slice(Math.max(0, target.index - 14), target.index + target[0].length))) out.push({ subject: 'sentence', target: numIn(target[1]) });
+    }
+    const r = readPolarity(t);
+    if (r.values.get('length')?.pos.has('long') && r.subjects.get('sentence') === 'pos' && !NEGATION.test(t)) out.push({ subject: 'sentence', long: true });
+  }
+  if (/\bparagraphs?\b/i.test(t)) {
+    const r = readPolarity(t);
+    if (r.values.get('length')?.pos.has('long') && r.subjects.get('paragraph') !== 'neg') out.push({ subject: 'paragraph', long: true });
+  }
+  // The piece's words: a number of words said of no sentence, paragraph, heading or section.
+  if (!/\b(?:sentences?|paragraphs?|headings?|titles?|sections?|lines?|captions?|quotes?|summary|summaries)\b/i.test(t)) {
+    const range = new RegExp(String.raw`\b(?:between\s+)?${WORD_N}\s*(?:to|-|–|and)\s*${WORD_N}\s+words?\b`, 'i').exec(t);
+    const most = new RegExp(String.raw`\b(?:under|at most|no more than|not more than|never more than|fewer than|less than|a maximum of|up to|within|no longer than)\s+${WORD_N}\s+words?\b|\b${WORD_N}\s+words?\s+(?:at most|or fewer|or less|max(?:imum)?)\b`, 'i').exec(t);
+    const least = new RegExp(String.raw`\b(?:at least|no fewer than|a minimum of|more than|over)\s+${WORD_N}\s+words?\b|\b${WORD_N}\s+words?\s+or\s+more\b`, 'i').exec(t);
+    if (range) out.push({ subject: 'piece', min: numIn(range[1]), max: numIn(range[2]) });
+    else if (most || least) {
+      const strict = most && /^(?:under|fewer than|less than)/i.test(most[0]);
+      out.push({ subject: 'piece', ...(most ? { max: numIn(most[1] ?? most[2]) - (strict ? 1 : 0) } : {}), ...(least ? { min: numIn(least[1] ?? least[2]) + (/^(?:more than|over)/i.test(least[0]) ? 1 : 0) } : {}) });
+    }
+  }
+  // Headings and lists, asked for or banned outright (a kind of either counts as the thing a count sees).
+  const r = readPolarity(t);
+  for (const [subject, keys] of [['heading', ['heading', 'subheading']], ['list', ['list', 'bullet', 'numbered list']]] as const) {
+    const ps = keys.map((k) => r.subjects.get(k)).filter(Boolean);
+    if (ps.includes('pos')) out.push({ subject, present: true });
+    else if (r.subjects.get(keys[0]) === 'neg') out.push({ subject, present: false });
+  }
+  return out;
+}
+/** Whether a quantity said in words cannot be met inside a counted band. */
+function wordedAgainstBand(q: WordedQuantity, m: Measurement): boolean {
+  const n = (k: string): number | null => (typeof m.params[k] === 'number' ? m.params[k] : null);
+  const unit = Array.isArray(m.params.unit) ? String(m.params.unit[0]).toLowerCase() : 'words';
+  const inSection = Array.isArray(m.params.in) && m.params.in.length > 0;
+  if (q.subject === 'sentence') {
+    // A floor on every sentence, or a typical sentence, sets the median at least that high; "long" asks for some at least.
+    const median = m.observer === 'SENTENCE_LENGTH' ? n('medianMax') : m.observer === 'LENGTH' && unit === 'sentence' ? n('max') : null;
+    const tail = m.observer === 'SENTENCE_LENGTH' ? n('p90Max') : m.observer === 'LENGTH' && unit === 'sentence' ? n('max') : null;
+    if (q.floor !== undefined && median !== null && q.floor > median) return true;
+    if (q.target !== undefined && median !== null && q.target > median) return true;
+    if (q.long && tail !== null && tail < LONG_SENTENCE_WORDS) return true;
+    return false;
+  }
+  if (q.subject === 'paragraph') {
+    const max = m.observer === 'PARAGRAPH_LENGTH' ? n('maxSentences') : null;
+    return Boolean(q.long && max !== null && max < LONG_PARAGRAPH_SENTENCES);
+  }
+  if (q.subject === 'piece') {
+    if (m.observer !== 'LENGTH' || unit !== 'words' || inSection) return false;
+    const lo = n('min'); const hi = n('max');
+    return (q.max !== undefined && lo !== null && q.max < lo) || (q.min !== undefined && hi !== null && q.min > hi);
+  }
+  const rate = q.subject === 'heading'
+    ? (m.observer === 'HEADINGS' ? { lo: n('minPer1000'), hi: n('maxPer1000') } : null)
+    : (m.observer === 'FEATURE' && Array.isArray(m.params.feature) && m.params.feature.includes('listItem') ? { lo: n('minValue'), hi: n('maxValue') } : null);
+  if (!rate || q.present === undefined) return false;
+  return q.present ? rate.hi === 0 : (rate.lo ?? 0) > 0;
+}
+
 /** How two rules of one class from two authors stand to each other. */
 export function relationOf(a: Pick<Requirement, 'statement' | 'measurement' | 'kind'>, b: Pick<Requirement, 'statement' | 'measurement' | 'kind'>): Relation {
   if (a.measurement && b.measurement) {
@@ -340,7 +452,9 @@ export function relationOf(a: Pick<Requirement, 'statement' | 'measurement' | 'k
   if (counted) {
     const worded = a.measurement ? b : a;
     const cb = countedBound(counted); const wb = boundOf(worded.statement);
-    return cb && wb ? boundsRelation(cb, wb) : 'UNRELATED';
+    const byBound = cb && wb ? boundsRelation(cb, wb) : 'UNRELATED';
+    if (byBound !== 'UNRELATED') return byBound;
+    return wordedQuantities(worded.statement).some((q) => wordedAgainstBand(q, counted)) ? 'CONFLICT' : 'UNRELATED';
   }
   const ba = boundOf(a.statement); const bb = boundOf(b.statement);
   if (ba && bb && boundsRelation(ba, bb) === 'CONFLICT') return 'CONFLICT';
@@ -349,7 +463,10 @@ export function relationOf(a: Pick<Requirement, 'statement' | 'measurement' | 'k
   if (jaccard(wa, wb) < SAME_SUBJECT) return 'UNRELATED';
   // Both name a subject the polarity reading has already compared: the same subject, not opposed.
   const ra = readPolarity(a.statement); const rb = readPolarity(b.statement);
-  if ([...ra.subjects.keys()].some((k) => rb.subjects.has(k))) return 'SAME';
+  // A subject and a kind of it ("never use bullet lists" / "use lists") count as one subject here: a ban on one kind
+  // leaves the others, so the two are not opposed.
+  const related = (k: string, j: string): boolean => k === j || KIND_OF[k] === j || KIND_OF[j] === k;
+  if ([...ra.subjects.keys()].some((k) => [...rb.subjects.keys()].some((j) => related(k, j)))) return 'SAME';
   // The same subject, and one bans outright where the other does not: a conflict. (A boundary against a generative rule too.)
   const na = bansOutright(a.statement) || a.kind === 'BOUNDARY'; const nb = bansOutright(b.statement) || b.kind === 'BOUNDARY';
   return na === nb ? 'SAME' : 'CONFLICT';
@@ -387,9 +504,16 @@ export const labelOf = (a: Requirement, b: Requirement): string => {
   const shared = [...contentWords(a.statement)].filter((w) => contentWords(b.statement).has(w));
   // The subject the two share, named as a person would: "paragraph length", not "let, paragraph, run".
   const SUBJECTS: readonly (readonly [string, string])[] = [['paragraph', 'paragraph length'], ['sentence', 'sentence length'], ['contraction', 'contractions'],
-    ['open', 'openings'], ['opening', 'openings'], ['hedge', 'hedging'], ['heading', 'headings'], ['list', 'lists'], ['example', 'examples'], ['figure', 'figures']];
+    ['open', 'openings'], ['opening', 'openings'], ['hedge', 'hedging'], ['heading', 'headings'], ['list', 'lists'], ['example', 'examples'], ['figure', 'figures'],
+    ['person', 'person'], ['tense', 'tense'], ['register', 'register'], ['spelling', 'spelling'], ['quote', 'quotes']];
   const named = SUBJECTS.find(([w]) => shared.includes(w));
-  return named ? named[1] : shared.slice(0, 3).join(', ') || 'one statement against another';
+  if (named) return named[1];
+  // No word shared, but one names a kind of what the other names: "lists" against "bullet lists", "headings" against "subheadings".
+  const ka = [...readPolarity(a.statement).subjects.keys()]; const kb = [...readPolarity(b.statement).subjects.keys()];
+  const general = ka.flatMap((k) => kb.flatMap((j) => (k === j ? [k] : KIND_OF[k] === j ? [j] : KIND_OF[j] === k ? [k] : [])))[0];
+  const plural: Readonly<Record<string, string>> = { list: 'lists', heading: 'headings', quote: 'quotes', example: 'examples' };
+  if (general) return plural[general] ?? general;
+  return shared.slice(0, 3).join(', ') || 'one statement against another';
 };
 
 /**

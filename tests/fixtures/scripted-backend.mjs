@@ -63,6 +63,16 @@ const server = createServer((req, res) => {
     // provider's filter does.
     if (hit && hit.finish) { res.end(JSON.stringify({ choices: [{ finish_reason: hit.finish, message: {} }], usage: { prompt_tokens: 10, completion_tokens: 0 } })); return; }
     if (hit) answer = hit.answer;
+    // THE COMPOSITE'S CONTRADICTION READING (core/composite/contradictions.ts) answers "no pair" unless a test scripts it
+    // (`byTool: { emit_contradictions: { pairs: [...] } }`, or a `when`), so a backend scripted for other calls reads none.
+    // `{ pairsByText: [[textA, textB, reason]] }` names a pair by the words of its two instructions, answered with the
+    // numbers the request gave them ("3. (bram) Let every sentence…"), so a test need not know the order of the list.
+    if (answer && Array.isArray(answer.pairsByText)) {
+      const text = String(JSON.parse(body || '{}')?.messages?.map((m) => (typeof m.content === 'string' ? m.content : Array.isArray(m.content) ? m.content.map((b) => b?.text ?? '').join('\n') : '')).join('\n') ?? '');
+      const numberOf = (words) => { const m = new RegExp(`(?:^|\\n|\\s)(\\d+)\\. \\([^)]*\\) [^\\n]*${words.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`).exec(text); return m ? Number(m[1]) : null; };
+      answer = { pairs: answer.pairsByText.map(([a, b, reason]) => ({ a: numberOf(a), b: numberOf(b), reason })).filter((x) => x.a !== null && x.b !== null) };
+    }
+    if (JSON.parse(body || '{}')?.tools?.[0]?.function?.name === 'emit_contradictions' && !(answer && Array.isArray(answer.pairs))) answer = { pairs: [] };
     // A STRUCTURE READING (core/structure/moves.ts) must label every numbered paragraph once: `{ labelAll: [moves] }`
     // answers with one label per "[n]" the request carries, cycling through the moves given.
     if (answer && Array.isArray(answer.labelAll)) {
