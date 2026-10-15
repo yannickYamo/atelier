@@ -33,7 +33,6 @@ import { findPattern } from './style.js';
 import { numbersIn } from '../loop/integrity.js';
 
 export type GrammarDialect = 'american' | 'british';
-export const GRAMMAR_DIALECTS: readonly GrammarDialect[] = ['american', 'british'];
 
 /** One finding of the engine, in the offsets of the text it was given (UTF-16 code units, as JavaScript counts). */
 export interface GrammarLint {
