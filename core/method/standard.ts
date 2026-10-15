@@ -33,7 +33,7 @@ import { PER_ROLE_LIMIT } from '../observers/selection.js';
 import { tablesOf, figuresOf, targetOf } from '../observers/obligations.js';
 import { citesLines } from '../loop/locators.js';
 import { deriveMeasuredRules, piecesBreaking } from '../observers/derive.js';
-import { isShortForm, shapeBandRules, pooledRateRules, shortFormLimits, type ShapeBandRule, type PooledRateRule, type ShortFormOptions } from '../observers/short-form.js';
+import { isShortForm, shapeBandRules, pooledRateRules, shortFormLimits, shortFormBrief, type ShapeBandRule, type PooledRateRule, type ShortFormOptions } from '../observers/short-form.js';
 import { allowed, CORPUS_RULE_SHARE } from '../ratification/suggest.js';
 import { machineTellRule } from '../observers/contrast.js';
 import { PATTERN_LABEL } from '../observers/style.js';
@@ -464,11 +464,12 @@ export const SHORT_FORM_OFFER_LIMIT = 20;
  * examples (`ShapeBandRule.required`); a rate is always a preference. A band the author's own pieces break beyond
  * what the review allows (../ratification/suggest.ts, `allowed`) is not offered: it would be a rule against them.
  */
-export function shortFormOffers(cases: readonly (Pick<GoldenCase, 'reference'> & { readonly id: string })[], opts: ShortFormOptions = {}): { proposals: MethodProposal[]; limits: string[]; shapes: ShapeBandRule[]; rates: PooledRateRule[] } {
+export function shortFormOffers(cases: readonly (Pick<GoldenCase, 'reference'> & { readonly id: string })[], opts: ShortFormOptions = {}): { proposals: MethodProposal[]; limits: string[]; brief: string | null; shapes: ShapeBandRule[]; rates: PooledRateRule[] } {
   const texts = cases.map((c) => c.reference);
-  if (!isShortForm(texts) || texts.length < 3) return { proposals: [], limits: [], shapes: [], rates: [] };
+  if (!isShortForm(texts) || texts.length < 3) return { proposals: [], limits: [], brief: null, shapes: [], rates: [] };
   const mayBreak = allowed(texts.length, CORPUS_RULE_SHARE);
-  const shapes = shapeBandRules(texts, { limit: opts.limit?.chars ?? null, ...(opts.urlChars !== undefined ? { urlChars: opts.urlChars } : {}) })
+  // Pieces that answer requests take their length and shape from the request (../compiler/scope.ts): no band of it.
+  const shapes = opts.answers ? [] : shapeBandRules(texts, { limit: opts.limit?.chars ?? null, ...(opts.urlChars !== undefined ? { urlChars: opts.urlChars } : {}) })
     // A band the pieces break is not theirs, and is not offered; a ceiling that is the platform's limit is the owner's
     // fact and is offered whatever the pieces do, with how many of them run past it.
     .filter((s) => s.limited === true || piecesBreaking(texts, s.measurement).length === 0);
@@ -480,5 +481,6 @@ export function shortFormOffers(cases: readonly (Pick<GoldenCase, 'reference'> &
     ...rates.map((r): MethodProposal => ({ statement: r.statement, origin: 'SHOWN_BY_EXAMPLE', obligation: 'DELIVERABLE', measurement: r.measurement, conflict: null, counted: true,
       onExample: `${r.evidence}; ${met(r.measurement)}; a rate chooses between drafts and never blocks` })),
   ];
-  return { proposals, limits: shortFormLimits(texts, shapes, rates, opts.limit ?? null), shapes, rates };
+  const answers = opts.answers === true;
+  return { proposals, limits: shortFormLimits(texts, shapes, rates, opts.limit ?? null, answers), brief: shortFormBrief(texts, shapes, rates, opts.limit ?? null, answers), shapes, rates };
 }

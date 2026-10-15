@@ -266,7 +266,8 @@ export async function method(): Promise<void> {
   const whole = argv.includes('--report');
   console.log(`${notePath === null ? 'No method note: built from your examples' : `Method: ${basename(notePath)}`}  ·  ${cases.length === 1 ? `example: ${example.id}` : `${cases.length} examples from ${basename(goldenPath)}`}${whole && cases.length > 1 ? `; checks read from ${example.id}, then held against the rest` : ''}${whole && example.material.length ? ` with ${example.material.length} file(s) of material` : ''}\n`);
   for (const line of whole ? describeMethod(proposals, example.caseClass) : shortScreen(proposals)) console.log(line);
-  if (short.limits.length) { console.log(''); for (const line of short.limits) console.log(`Short form: ${line}`); }
+  // The limits of a corpus of short pieces: one line on the screen, the whole account with --report.
+  if (short.brief) { console.log(''); for (const line of whole ? short.limits : [short.brief]) console.log(`Short form: ${line}`); }
 
   // THE KIND OF WORK, SAID AND RECORDED, NEVER ASKED. It decides one thing: on a kind the claim check was measured on
   // (essays, posts), a sentence not found in bound material is cut; anywhere else it is listed for the owner to check.
