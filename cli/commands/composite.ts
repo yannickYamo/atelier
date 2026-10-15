@@ -177,9 +177,9 @@ export async function compositeReview(opts: ReviewOptions = {}): Promise<boolean
   applyDecisions(decisionsFor(record, pending, sugg, changes));
   saveSession({ ...loadSession(), composite: record });
   const open = openQuestions(record);
-  console.log(`${changes.size ? `Your changes: ${[...changes].map(([k, v]) => `${k} → ${v}`).join(' · ')}. ` : ''}`
+  console.log((changes.size ? `Your changes: ${[...changes].map(([k, v]) => `${k} → ${v}`).join(' · ')}. ` : '')
     + `Your composite is recorded: ${record.decisions.filter((d) => d.outcome === 'SELECTED').length} rule(s) chosen.`
-    + `${open.length ? ` ${open.length} conflict(s) kept as open question(s); neither side of each instructs.` : ''}`);
+    + (open.length ? ` ${open.length} conflict(s) kept as open question(s); neither side of each instructs.` : ''));
   if (!orchestrated()) console.log('To build it: atelier new <the same folder> --accept');
   return true;
 }

@@ -102,7 +102,7 @@ export async function discover(): Promise<void> {
   let client = clientFor(proposerModel());
   let proposals: Requirement[];
   let proposalMeta: Record<string, ProposalMeta>;
-  let heldOutChecked = true;
+  let heldOutChecked: boolean;
 
   // ─── THE SPLIT IS USED WHENEVER THE CORPUS ALLOWS IT ────────────────────────────────────────
   //
@@ -340,13 +340,14 @@ export async function discover(): Promise<void> {
   // composite screen `atelier new` shows next.
   if (s.authors) {
     const authors = s.authors;
-    proposals = []; proposalMeta = {}; heldOutChecked = true; let heldOutPieces = 0; let mBase = 0;
+    proposals = []; proposalMeta = {}; heldOutChecked = true; let heldOutPieces = 0; let mBase = 0; let pBase = 0;
     const lengthClass: Record<string, ContextClass> = {};
     for (const name of authors.names) {
       const mine = new Set(openItems.filter((i) => authors.of[i.id] === name).map((i) => i.id));
       if (!mine.size) continue;
       const aItems = openItems.filter((i) => mine.has(i.id)); const aGoldens = openGoldens.filter((g) => mine.has(g.contextId));
-      const r = await readRules(aItems, aGoldens, proposals.length, name);
+      const r = await readRules(aItems, aGoldens, pBase, name);
+      pBase += r.proposals.length;
       heldOutChecked = heldOutChecked && r.heldOutChecked; heldOutPieces += r.heldOutIds?.length ?? 0;
       // The counts, on this author's pieces alone: those with a proposal role as read, the rest as held out; with no
       // role among them (the plan gave this author's one piece to the other side), every piece of theirs is read.
@@ -360,7 +361,7 @@ export async function discover(): Promise<void> {
       proposalMeta = { ...proposalMeta,
         ...Object.fromEntries(Object.entries(r.proposalMeta).map(([id, m]) => [id, { ...m, source: name } satisfies ProposalMeta])),
         ...Object.fromEntries(measured.map((m) => [m.requirement.requirementId, { framings: [], alsoPhrasedAs: [], heldOut: null, needs: null, inSample: m.conformance,
-          corpus: { pieces: own.length, breaking: piecesBreaking(own, m.requirement.measurement as Measurement) }, source: name } satisfies ProposalMeta])) };
+          corpus: { pieces: own.length, breaking: m.requirement.measurement ? piecesBreaking(own, m.requirement.measurement) : [] }, source: name } satisfies ProposalMeta])) };
       const words = own.map((t) => wordsOf(proseRegions(t).map((x) => x.text).join('\n\n')).length);
       lengthClass[name] = contextClassOf(Math.round(quantile(words, 0.5)));
       if (measured.length) console.log(`  ${measured.length} rule(s) counted from ${name}'s pieces alone: ${measured.map((m) => m.requirement.requirementId).join(', ')}.`);

@@ -117,7 +117,8 @@ export function relationOf(a: Pick<Requirement, 'statement' | 'measurement' | 'k
  * lower limit the smaller; other parameters must agree. Null when the two cannot be one range.
  */
 export function mergedMeasurement(a: Measurement | null | undefined, b: Measurement | null | undefined): Measurement | null {
-  if (!a || !b || a.observer !== b.observer) return null;
+  if (!a || !b) return null;
+  if (a.observer !== b.observer) return null;
   const params: Record<string, Measurement['params'][string]> = {};
   for (const k of new Set([...Object.keys(a.params), ...Object.keys(b.params)])) {
     const x = a.params[k]; const y = b.params[k];
@@ -139,7 +140,11 @@ const labelOf = (a: Requirement, b: Requirement): string => {
     return names[m.observer] ?? m.observer.toLowerCase().replace(/_/g, ' ');
   }
   const shared = [...contentWords(a.statement)].filter((w) => contentWords(b.statement).has(w));
-  return shared.slice(0, 3).join(', ') || 'one statement against another';
+  // The subject the two share, named as a person would: "paragraph length", not "let, paragraph, run".
+  const SUBJECTS: readonly (readonly [string, string])[] = [['paragraph', 'paragraph length'], ['sentence', 'sentence length'], ['contraction', 'contractions'],
+    ['open', 'openings'], ['opening', 'openings'], ['hedge', 'hedging'], ['heading', 'headings'], ['list', 'lists'], ['example', 'examples'], ['figure', 'figures']];
+  const named = SUBJECTS.find(([w]) => shared.includes(w));
+  return named ? named[1] : shared.slice(0, 3).join(', ') || 'one statement against another';
 };
 
 /**

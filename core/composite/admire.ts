@@ -71,7 +71,7 @@ export async function readAdmiration(client: InferenceClient, budget: Budget, li
   if (!Array.isArray(picks)) throw new Error('the admiration reader returned nothing usable');
   const out: Record<string, TraitClass[]> = Object.fromEntries(lines.map((l) => [l.author, []]));
   for (const p of picks) {
-    const line = said.find((l) => l.author.toLowerCase() === String(p.author ?? '').trim().toLowerCase());
+    const line = said.find((l) => l.author.toLowerCase() === (typeof p.author === 'string' ? p.author : '').trim().toLowerCase());
     if (!line) continue;
     const classes = (Array.isArray(p.classes) ? p.classes : []).map((c) => String(c).toLowerCase()).filter((c): c is TraitClass => (TRAIT_CLASSES as readonly string[]).includes(c) && line.available.includes(c as TraitClass));
     out[line.author] = [...new Set([...out[line.author], ...classes])];
