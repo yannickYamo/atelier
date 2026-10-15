@@ -1,0 +1,62 @@
+[
+ {
+  "id": "negation",
+  "band": [
+   1.068,
+   33.12
+  ],
+  "authorMedian": 14.925,
+  "modelMedian": 4.184,
+  "auc": 1
+ },
+ {
+  "id": "explanatory",
+  "band": [
+   -0.922,
+   4.613
+  ],
+  "authorMedian": 0,
+  "modelMedian": 4.184,
+  "auc": 0
+ },
+ {
+  "id": "specificsDensity",
+  "band": [
+   -0.092,
+   0.461
+  ],
+  "authorMedian": 0,
+  "modelMedian": 0.418,
+  "auc": 0
+ },
+ {
+  "id": "firmModal",
+  "band": [
+   1.331,
+   13.018
+  ],
+  "authorMedian": 6.944,
+  "modelMedian": 4.184,
+  "auc": 0.833
+ },
+ {
+  "id": "names",
+  "band": [
+   4.16,
+   21.308
+  ],
+  "authorMedian": 9.615,
+  "modelMedian": 16.736,
+  "auc": 0.167
+ },
+ {
+  "id": "imperative",
+  "band": [
+   -0.008,
+   0.039
+  ],
+  "authorMedian": 0,
+  "modelMedian": 0,
+  "auc": 0.75
+ }
+]

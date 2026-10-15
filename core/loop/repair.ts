@@ -330,6 +330,10 @@ export const featureParamsOf = (v: Pick<StandardVersion, 'requirements'>) => (c:
   return m?.observer === 'FEATURE' ? m.params : (c as { params?: Readonly<Record<string, unknown>> }).params;
 };
 
+/** The measurement params of a standard's rule, whatever its observer (or a check's own): what `distanceOf` reads a rate's direction from. */
+export const ruleParamsOf = (v: Pick<StandardVersion, 'requirements'>) => (c: RuleCheck): Readonly<Record<string, unknown>> | undefined =>
+  v.requirements.find((x) => x.requirementId === c.requirementId)?.measurement?.params ?? (c as { params?: Readonly<Record<string, unknown>> }).params;
+
 export interface RegressionOptions {
   /**
    * STEERING IS SUBORDINATE TO THE OWNER'S RULES. The checks a step may not be refused for: the graded features and
@@ -337,22 +341,112 @@ export interface RegressionOptions {
    * here, as worse or as better.
    */
   readonly ignore?: ReadonlySet<string>;
+  /** a rule's measurement params, to read which way a rate is out (a ceiling or a floor); without it the check's detail says */
+  readonly paramsOf?: ParamsOf;
+}
+
+/** A check's measurement params, where the caller knows the standard: what says whether a rate is a ceiling or a floor. */
+export type ParamsOf = (c: RuleCheck) => Readonly<Record<string, unknown>> | undefined;
+
+/** The observers whose broken check is read by its measured value (./controller.ts, rule A): rates, counts, lengths. */
+const BY_VALUE = new Set(['PATTERN_RATE', 'HEDGE_RATE', 'TERM_RATE', 'LEXICON', 'LENGTH', 'FEATURE']);
+
+/**
+ * HOW FAR A BROKEN CHECK IS FROM HOLDING, by its measured value on the text as it is (no length rescaling):
+ *   FEATURE (and any check carrying a band distance)  |error|, in widths of its band;
+ *   PATTERN_RATE, TERM_RATE                            how far the rate is past its ceiling or under its floor, per 1,000 words;
+ *   HEDGE_RATE                                         the rate (a ceiling only);
+ *   LEXICON                                            the count of banned uses;
+ *   LENGTH                                             the words (or characters, sentences) outside the range; a cap on the
+ *                                                      longest sentence, the count of sentences over it.
+ * A check that carries no value (or a kind of measure that changed between the two texts) is read by its count of places.
+ */
+export function distanceOf(c: RuleCheck, paramsOf?: ParamsOf): { readonly kind: 'error' | 'value' | 'places'; readonly d: number } {
+  const places = { kind: 'places' as const, d: c.result.spans.length };
+  const v = c.result.value; const e = c.result.error;
+  if (c.observer === 'FEATURE' || (typeof e === 'number' && !BY_VALUE.has(c.observer ?? ''))) return typeof e === 'number' ? { kind: 'error', d: Math.abs(e) } : places;
+  if (!BY_VALUE.has(c.observer ?? '') || typeof v !== 'number') return places;
+  const p = paramsOf?.(c) ?? {};
+  const num = (k: string): number | null => { const x = p[k]; return typeof x === 'number' ? x : null; };
+  if (c.observer === 'LEXICON' || c.observer === 'HEDGE_RATE') return { kind: 'value', d: v };
+  if (c.observer === 'LENGTH') {
+    if (((p.unit as readonly string[] | undefined)?.[0] ?? '').toLowerCase() === 'sentence') return { kind: 'value', d: v };
+    const lo = num('min'); const hi = num('max');
+    if (lo === null && hi === null) { const m = /: (?:long|short) by (\d+)/.exec(c.result.detail); return m ? { kind: 'value', d: Number(m[1]) } : places; }
+    return { kind: 'value', d: Math.max(0, hi !== null ? v - hi : 0, lo !== null ? lo - v : 0) };
+  }
+  // PATTERN_RATE, TERM_RATE: a ceiling, a floor or both. A move the author never makes is broken at any rate: the rate of
+  // all such moves is its value, read as a ceiling at zero.
+  if (((p.never as readonly string[] | undefined) ?? []).length) return { kind: 'value', d: v };
+  const lo = num('minPer1000'); const hi = num('maxPer1000');
+  // Without the params, the check's own detail says which side it is out: "(at least …)" is a floor, lower is further.
+  if (lo === null && hi === null) return { kind: 'value', d: /\(at least [\d.]+\)/.test(c.result.detail) ? -v : v };
+  return { kind: 'value', d: Math.max(0, hi !== null ? v - hi : 0, lo !== null ? lo - v : 0) };
+}
+
+/** The least move of each kind of measure that counts: GRADED_STEP band widths, any rise in a rate or a count. */
+const stepOf = (kind: 'error' | 'value' | 'places'): number => (kind === 'error' ? GRADED_STEP - 1e-9 : 1e-9);
+
+/** Is `a` further from holding than `b` was, read on one measure? A change of measure falls back to the count of places. */
+function further(b: RuleCheck, a: RuleCheck, paramsOf?: ParamsOf): boolean {
+  let x = distanceOf(b, paramsOf); let y = distanceOf(a, paramsOf);
+  if (x.kind !== y.kind) { x = { kind: 'places', d: b.result.spans.length }; y = { kind: 'places', d: a.result.spans.length }; }
+  return y.d - x.d >= stepOf(y.kind) && (y.kind !== 'places' || y.d > x.d);
+}
+/** Is `a` nearer holding than `b` was, read on one measure? */
+function nearerOn(b: RuleCheck, a: RuleCheck | undefined, paramsOf?: ParamsOf): boolean {
+  if (a?.result.verdict !== 'VIOLATED') return true;
+  let x = distanceOf(b, paramsOf); let y = distanceOf(a, paramsOf);
+  if (x.kind !== y.kind) { x = { kind: 'places', d: b.result.spans.length }; y = { kind: 'places', d: a.result.spans.length }; }
+  return x.d - y.d >= stepOf(y.kind) && (y.kind !== 'places' || y.d < x.d);
+}
+
+/**
+ * THE ONE ACCEPTANCE RULE (./controller.ts, rule A): the enforced rules `after` breaks that `before` did not, or breaks
+ * further from holding by their value (`distanceOf`), each read on its own text with no length rescaling. Empty: no
+ * enforced rule got worse. Every replacement of the working text is held to it, whichever loop proposes it: a rewrite,
+ * a carrier rewrite, the operators, a fix without a model, a trim, a draft written again for any reason, a shape round.
+ * The grammar checker's uncertain list is a note to the person, not a rule.
+ */
+export function enforcedNeverWorse(before: VerifyReport, after: VerifyReport, enforcedIds: ReadonlySet<string>, paramsOf?: ParamsOf): string[] {
+  const was = new Map(before.checked.map((c) => [c.requirementId, c]));
+  return after.checked.filter((c) => {
+    if (!enforcedIds.has(c.requirementId) || c.result.verdict !== 'VIOLATED' || isGrammarNote(c)) return false;
+    const b = was.get(c.requirementId);
+    if (b?.result.verdict !== 'VIOLATED') return true;
+    return further(b, c, paramsOf);
+  }).map((c) => c.requirementId);
+}
+
+/**
+ * The targets a step moved nearer holding (now held, or nearer by their value): a step made FOR enforced rules is kept
+ * only when this is not empty (./controller.ts, rule A).
+ */
+export function enforcedNearer(before: VerifyReport, after: VerifyReport, targets: Iterable<string>, paramsOf?: ParamsOf): string[] {
+  const now = new Map(after.checked.map((c) => [c.requirementId, c]));
+  return [...targets].filter((id) => {
+    const b = before.checked.find((c) => c.requirementId === id);
+    return b?.result.verdict === 'VIOLATED' && nearerOn(b, now.get(id), paramsOf);
+  });
 }
 
 /**
  * What got worse between two reports: a rule that was not broken and now is (whatever it was before —
  * MET, or not measurable because the text was too short), or a broken rule further from holding.
  *
- * Further from holding is read by distance wherever a check carries one: a FEATURE check's spans are the CARRIERS of
- * a rate (../observers/features.ts), where a rewrite starts, not how many places are wrong, and three carriers can
- * become one while the value moves twice as far out. So for every FEATURE check with an error, enforced or graded,
- * |error| up by GRADED_STEP is worse, and its span count is never read. Every other check is worse when broken in
- * more places. Shared by the repair loop and by `fix`, so "worse" means one thing everywhere.
+ * Further from holding is read by distance wherever a check carries one (`distanceOf`): a FEATURE check's spans are the
+ * CARRIERS of a rate (../observers/features.ts), and a rate's spans are where a rewrite starts, not how far it is out:
+ * three carriers can become one while the value moves twice as far out. So an enforced check is read as
+ * `enforcedNeverWorse` reads it, and a steering FEATURE check by |error| up by GRADED_STEP; only a check that carries no
+ * value is worse when broken in more places. Shared by the repair loop and by `fix`, so "worse" means one thing everywhere.
  */
 export function regressions(before: VerifyReport, after: VerifyReport, opts: RegressionOptions = {}): string[] {
   const was = new Map(before.checked.map((c) => [c.requirementId, c.result]));
+  const acting = new Set(after.checked.filter((c) => acts(c) && !opts.ignore?.has(c.requirementId)).map((c) => c.requirementId));
+  const enforcedWorse = new Set(enforcedNeverWorse(before, after, acting, opts.paramsOf));
   return after.checked.filter((c) => {
     if (opts.ignore?.has(c.requirementId)) return false;
+    if (acting.has(c.requirementId)) return enforcedWorse.has(c.requirementId);
     const b = was.get(c.requirementId);
     if (c.result.verdict !== 'VIOLATED') return false;
     // The grammar checker's uncertain list is a note to the person, not a rule: a rewrite that adds one is not worse.
@@ -380,19 +474,33 @@ export function addsNoWords(before: string, after: string): boolean {
 }
 
 /**
- * Keep a repair only if nothing got worse, and at least one REQUIRED rule that was broken now holds or is nearer
- * holding. A change that adds no word (`wordsAdded: false`: an em dash made a comma) cannot add an invented specific,
- * so the reading of specifics read again is no evidence against it: an em dash fix was thrown away because that
- * reading listed one sentence more.
+ * Keep a repair only if nothing got worse, and it moved something nearer holding. The owner's enforced rules are read
+ * by the one acceptance rule (`enforcedNeverWorse`, on each text as it is); the steering checks by `regressions`, on
+ * the before-report the caller read at the new length. A step made FOR enforced rules (`targets`) must, in addition,
+ * move at least one of its targets nearer holding (`enforcedNearer`): a rewrite for one rule that only happened to
+ * move another is not that rule's repair. A change that adds no word (`wordsAdded: false`: an em dash made a comma)
+ * cannot add an invented specific, so the reading of specifics read again is no evidence against it: an em dash fix
+ * was thrown away because that reading listed one sentence more.
  */
 export function acceptRepair(before: VerifyReport, after: VerifyReport,
   opts: { wordsAdded?: boolean;
     /** GRADED checks (run-repair.ts, `CheckOptions.graded`) read as enforced on these copies: only what the record's wording says of them */
     graded?: ReadonlySet<string>;
     /** steering checks never read for this step (`RegressionOptions.ignore`) */
-    ignore?: ReadonlySet<string> } = {}): RegressionVerdict {
-  const worse = regressions(before, after, { ignore: opts.ignore }).filter((id) => opts.wordsAdded !== false || !id.startsWith('UNSOURCED'));
+    ignore?: ReadonlySet<string>;
+    /** the enforced rules the step was made for: one of them must be nearer holding after it */
+    targets?: readonly string[];
+    /** the rules the standard enforces (read before any copy marks a graded check as acting); absent, every acting check that is not graded */
+    enforced?: ReadonlySet<string>;
+    /** what says whether a rate is a ceiling or a floor (`distanceOf`) */
+    paramsOf?: ParamsOf } = {}): RegressionVerdict {
+  const enforced = new Set([...(opts.enforced ?? [...before.checked, ...after.checked].filter((c) => acts(c) && !opts.graded?.has(c.requirementId)).map((c) => c.requirementId))]
+    .filter((id) => !opts.ignore?.has(id)));
+  const steer = regressions(before, after, { ignore: new Set([...(opts.ignore ?? []), ...enforced]), paramsOf: opts.paramsOf });
+  const worse = [...enforcedNeverWorse(before, after, enforced, opts.paramsOf), ...steer].filter((id) => opts.wordsAdded !== false || !id.startsWith('UNSOURCED'));
   if (worse.length) return { ok: false, why: `the rewrite made ${worse.join(', ')} worse` };
+  const closer = opts.targets?.length ? enforcedNearer(before, after, opts.targets, opts.paramsOf) : null;
+  if (closer && !closer.length) return { ok: false, why: `the rewrite moved none of ${opts.targets?.join(', ')} nearer holding` };
   const broken = (r: VerifyReport) => r.checked.filter((c) => acts(c) && c.result.verdict === 'VIOLATED' && !opts.ignore?.has(c.requirementId));
   const req = (r: VerifyReport): number => broken(r).length;
   // Said as what was counted: a graded check reads as enforced on the copy it is counted on, and is no REQUIRED rule.
@@ -412,5 +520,6 @@ export function acceptRepair(before: VerifyReport, after: VerifyReport,
     const kind = moved.every((x) => opts.graded?.has(x.id)) ? 'graded feature(s)' : 'feature rule(s)';
     return { ok: true, why: `${kind} nearer the band: ${moved.map((x) => `${x.id} ${x.from.toFixed(1)} → ${x.to.toFixed(1)}`).join(', ')}` };
   }
+  if (closer?.length) return { ok: true, why: `nearer holding by their value: ${closer.join(', ')}` };
   return { ok: false, why: `the rewrite fixed no ${label} rule` };
 }

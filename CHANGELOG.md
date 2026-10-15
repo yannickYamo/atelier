@@ -7,6 +7,28 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+### Fixed: one acceptance rule, one step record and one hand-off for every repair step
+
+- **A rule you require is never delivered worse by its value.** Every replacement of the text (a span rewrite, a
+  carrier rewrite, re-punctuation, a fix without a model, a cut for length, a draft written again for a rule, for the
+  features or for both, a shape round, a reply written again to cover the request) is now judged by one rule: no rule
+  you require newly broken, and none already broken further out by its measured value on the text as it is (a rate
+  past its ceiling or under its floor, a count, a length, a band distance). The count of places is read only for a
+  rule that carries no value. A draft written again for the features was kept with the hedge rate at 10 per 1,000
+  words where the first draft had 9, in the same three places; a draft written again for a length and the features
+  was kept with twice the semicolons of a ban. Both are now not kept, and the line says which rule.
+- **A step for a rule must move that rule.** A rewrite, a fix without a model or a draft written again for rules you
+  require is kept only if at least one of those rules is nearer holding. A fix without a model is recorded against the
+  rules it changed, and only those.
+- **One step record a run.** Every repair step is entered on one record before it runs; the step limit and the
+  budget are read from it alone, and a step they would not hold is recorded as refused. A draft written again that was
+  not kept, and the earlier draft refined again after it, used to count apart: runs took five and six steps under a
+  limit of four. They now share the record, and the limit holds. Under `--until-typical` each round keeps its own.
+- **A draft handed over is told exactly what it was handed.** A rule no single sentence carries (a floor rate) is told
+  with where the draft stands ("your pieces use at least 22.5 per 1,000 words; this draft has 17.4"); a draft is never
+  written again with nothing named; the line said afterwards names those rules, not other misses. Under
+  `--until-typical` each such line names its round.
+
 ### Fixed: a composite's instructions never contradict, by any route, and the screen says what will ship
 
 - **`--set <id>=required` goes through the same final check.** A rule made required with `--set` used to bypass it:
