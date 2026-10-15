@@ -190,7 +190,7 @@ export function summariseEffects(records: readonly EffectSource[]): ControllerEf
   for (const r of ordered) {
     for (const d of r.repair?.controller?.decisions ?? []) {
       if (d.action !== 'rewrite' && d.action !== 'operators' && d.action !== 'carrier-rewrite' && d.action !== 'redraft') continue;
-      if (d.outcome === 'handed to a redraft' || d.outcome === 'could not run') continue;
+      if (d.outcome === 'handed to a redraft' || d.outcome === 'could not run' || d.outcome === 'refused') continue;
       const moved = d.outcome === 'kept' ? Math.max(0, d.observed.movement) / Math.max(1, d.targets.length) : 0;
       const a = acc.get(d.action);
       if (!a) { acc.set(d.action, { movement: moved, usd: d.observed.usd, n: 1 }); continue; }

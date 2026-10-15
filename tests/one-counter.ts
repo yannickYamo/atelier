@@ -6,6 +6,7 @@
 //   1. the model-calling steps the record shows are exactly the model calls the scripted writer answered for them;
 //   2. the steps counted (every chosen step; a hand-off, a step that could not run, the claim cut and the mechanical
 //      fixes are not steps) never exceed the documented limit of four a run, the steps carried in as history included.
+//      A step the limit or the budget refused is on the record as 'refused', and is no step.
 import { expect } from 'vitest';
 import type { ControllerDecisionRecord, ControllerRecord } from '../core/state/canonical-state.js';
 
@@ -13,7 +14,7 @@ import type { ControllerDecisionRecord, ControllerRecord } from '../core/state/c
 export const MAX_STEPS = 4;
 const MODEL = new Set(['rewrite', 'carrier-rewrite', 'redraft', 'trim']);
 const NOT_A_STEP = new Set(['cut', 'mechanical']);
-const took = (d: ControllerDecisionRecord): boolean => d.outcome !== 'handed to a redraft' && d.outcome !== 'could not run';
+const took = (d: ControllerDecisionRecord): boolean => d.outcome !== 'handed to a redraft' && d.outcome !== 'could not run' && d.outcome !== 'refused';
 
 /** The model-calling steps a record shows as taken. */
 export const modelStepsOn = (r: ControllerRecord | undefined): number => (r?.decisions ?? []).filter((d) => MODEL.has(d.action) && took(d)).length;
@@ -27,4 +28,17 @@ export const stepsOn = (decisions: readonly ControllerDecisionRecord[]): number 
 export function expectOneCounter(r: ControllerRecord | undefined, calls: number, history: readonly ControllerDecisionRecord[] = [], max = MAX_STEPS): void {
   expect(modelStepsOn(r), 'model-calling steps recorded = model calls taken').toBe(calls);
   expect(stepsOn([...history, ...(r?.decisions ?? [])]), `steps counted ≤ ${max}`).toBeLessThanOrEqual(max);
+}
+
+/**
+ * THE RUN'S ONE LEDGER, read off a scripted run through the binary (core/loop/controller.ts, rule B): the model-calling
+ * steps recorded, over every shape round when there are rounds, are exactly the repair calls the backend answered
+ * (counted by the test from the backend's log, never from the record), and the steps of each run, or of each round under
+ * --until-typical, never exceed the limit.
+ */
+export function expectLedger(r: ControllerRecord | undefined, repairCalls: number, max = MAX_STEPS): void {
+  const runs = r?.rounds?.length ? r.rounds.map((x) => x.decisions) : [r?.decisions ?? []];
+  const model = runs.reduce((n, ds) => n + ds.filter((d) => MODEL.has(d.action) && took(d)).length, 0);
+  expect(model, 'model-calling steps recorded = repair calls the backend answered').toBe(repairCalls);
+  for (const ds of runs) expect(stepsOn(ds), `steps counted per run or round ≤ ${max}`).toBeLessThanOrEqual(max);
 }

@@ -57,10 +57,11 @@ describe('a redraft for graded misses alone never undoes what a rule the owner r
     expect(step?.observed.note).toMatch(/further from holding \(x1: "Use at most 5 asides in parentheses per 1,000 words\."\)/);
     expect(notes.join(' ')).not.toMatch(/^Written again/);
   });
-  it('a redraft for what the work requires is still judged as before: a rule is never refused for the owner\'s own order', async () => {
+  it('a redraft for what the work requires is held to the same rule: one that moves x1 further out is not kept, whatever it was for', async () => {
     const section: Unmet = { id: 'x2', statement: 'End with the timetable.', detail: 'missing' };
     const d = await withRedraft(async (t) => delivered(t), { notes: [], unmet: (x) => (x.output === first ? [section] : []), redraft: async () => second })(first);
-    expect(d.output).toBe(second);
+    expect(d.output).toBe(first);
+    expect(d.repair?.controller?.decisions.find((x) => x.action === 'redraft')?.observed.note).toMatch(/further from holding \(x1: /);
   });
 });
 

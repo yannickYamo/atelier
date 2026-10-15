@@ -321,9 +321,12 @@ are judged apart:
 1. A rule you require (a REQUIRED feature rule included) is judged by its value on the text as it is, and is
    repaired as a rule you require: its carrier sentences rewritten through the controller, never steered as a
    feature your pieces usually hold, nor written again as one. It is judged held or broken first, then how far
-   out, then, for a rule that is not a counted feature, in how many places. A rate is
+   out by its measured value: a rate by how far it is past its ceiling or under its floor, a hedge rate by its
+   rate, a banned word by its count, a length by the words outside its range, a counted feature by its distance
+   from the band. Only a rule that carries no value is read by how many places break it. A rate is
    never rescaled for a change of length on such a rule: "at most 5 asides per 1,000 words" broken at 11.7 and
-   delivered at 16 is worse. Comparing a rate at the new length is for the features your pieces usually hold.
+   delivered at 16 is worse, and so is a hedge rate that goes from 9 to 10 per 1,000 words in the same three
+   places. Comparing a rate at the new length is for the features your pieces usually hold.
 2. The gain-per-dollar gate and the effects a release has learned are read for steering steps only. A step for
    a rule you require is taken whenever the step limit and the budget allow it.
 3. The step limit is per run: the steps on the first draft, the draft written again (one step) and the steps on
@@ -340,6 +343,26 @@ are judged apart:
    request for a redraft that no redraft followed.
 5. What a draft written again moved is recorded as the real change in its distance from the band, and the
    effects a release learns are read from those records.
+
+Three rules hold every step of a run, whichever part of the repair takes it:
+
+- **One acceptance rule.** Every replacement of the text (a span rewrite, a carrier rewrite, re-punctuation, a
+  fix without a model, a cut for length, a draft written again for a rule, for the features or for both, a shape
+  round) is kept only if no rule you require is newly broken and none already broken is further out by its
+  value (point 1 above). A step made for rules you require must also bring at least one of them nearer holding:
+  a rewrite for the hedge rate that only happened to remove a semicolon is not the hedge rate's repair. A fix
+  without a model is recorded against the rules it changed, and only those.
+- **One ledger.** A run keeps one record of its steps, and every repair step is entered on it before it runs (a
+  step that cannot run is recorded as such; one the step limit or the budget would not hold is recorded as
+  refused, and is no step). The step limit and the budget are read from it alone. When a draft written again is
+  not kept and the earlier draft is refined again, that refinement continues the same record, the steps taken on
+  the draft not kept among them, so a run of four steps is four steps. Under `--until-typical` each shape round has
+  a record of its own.
+- **One hand-off.** When the repair hands a draft over to be written again, the new draft is told exactly the
+  rules it was handed, each in your words with where the draft stands, including a rule no single sentence
+  carries ("your pieces use at least 22.5 per 1,000 words; this draft has 17.4"). A draft is never written again
+  with nothing named, and the line said afterwards names those rules, not others. Under `--until-typical` that
+  line names its round.
 
 The guarantees are:
 

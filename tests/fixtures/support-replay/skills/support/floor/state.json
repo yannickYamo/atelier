@@ -1,0 +1,129 @@
+{
+ "contract": {
+  "instrument": "scoreDimensionByPolicy",
+  "dimensions": {
+   "R-b01df7": {
+    "nonInferiorityMargin": 1,
+    "gateRole": "OBSERVE",
+    "rationale": "half the author's interquartile range (0) across 8 piece(s), and at least one occurrence at their length, on: I keep sentences short: a median under 12 words, and nine in ten under 16."
+   },
+   "R-5f5b9a": {
+    "nonInferiorityMargin": 1,
+    "gateRole": "OBSERVE",
+    "rationale": "half the author's interquartile range (0) across 8 piece(s), and at least one occurrence at their length, on: I keep paragraphs to 4 sentences at most."
+   },
+   "R-399dd9": {
+    "nonInferiorityMargin": 3.51,
+    "gateRole": "OBSERVE",
+    "rationale": "half the author's interquartile range (0) across 8 piece(s), and at least one occurrence at their length, on: I hedge rarely: at most 2 hedging words per thousand."
+   },
+   "R-b8128d": {
+    "nonInferiorityMargin": 1,
+    "gateRole": "OBSERVE",
+    "rationale": "half the author's interquartile range (0) across 8 piece(s), and at least one occurrence at their length, on: No mechanical errors: spelling, agreement, punctuation."
+   },
+   "R-8e5e36": {
+    "nonInferiorityMargin": 3.51,
+    "gateRole": "OBSERVE",
+    "rationale": "half the author's interquartile range (0) across 8 piece(s), and at least one occurrence at their length, on: Never use semicolons."
+   },
+   "R-bd71be": {
+    "nonInferiorityMargin": 3.51,
+    "gateRole": "OBSERVE",
+    "rationale": "half the author's interquartile range (0) across 8 piece(s), and at least one occurrence at their length, on: Never use intensifiers (\"quietly\", \"genuinely\", \"deeply\", \"fundamentally\")."
+   },
+   "R-81a9b6": {
+    "nonInferiorityMargin": 3.51,
+    "gateRole": "OBSERVE",
+    "rationale": "half the author's interquartile range (0) across 8 piece(s), and at least one occurrence at their length, on: Use one-sentence paragraphs within my range: between 2.1 and 9.9 per 1,000 words (I use about 4.6)."
+   },
+   "R-a19aa3": {
+    "nonInferiorityMargin": 3.51,
+    "gateRole": "OBSERVE",
+    "rationale": "half the author's interquartile range (0) across 8 piece(s), and at least one occurrence at their length, on: Use repeated sentence openings (the same two words starting three or more sentences) within my range: between 22.5 and 71.8 per 1,000 words (I use about 35.9)."
+   },
+   "R-9de09f": {
+    "nonInferiorityMargin": 3.51,
+    "gateRole": "OBSERVE",
+    "rationale": "half the author's interquartile range (0) across 8 piece(s), and at least one occurrence at their length, on: Keep contrastive verdicts in any spelling (\"isn't X, it's Y\", \"not X but Y\", \"has little to do with\", \"X rather than Y\") rare: at most 0.5 per 1,000 words."
+   },
+   "R-e23970": {
+    "nonInferiorityMargin": 3.51,
+    "gateRole": "OBSERVE",
+    "rationale": "half the author's interquartile range (0) across 8 piece(s), and at least one occurrence at their length, on: Write in the first person, as I do: between 15.4 and 103.4 \"I\", \"my\" or \"me\" per 1,000 words (I use about 51.7). A view or a hedge in the first person (\"I think\", \"I'd hold this loosely\", \"I'm skeptical\") needs no source; a first-hand story or figure does."
+   },
+   "R-4aafd1": {
+    "nonInferiorityMargin": 3.51,
+    "gateRole": "OBSERVE",
+    "rationale": "half the author's interquartile range (0) across 8 piece(s), and at least one occurrence at their length, on: Write none of the moves that mark text as machine-written (announcing an insight others \"miss\", grading your own list, \"the single most\", announcing candour, \"that's the whole game\", reading the reader's mind, one thing \"wearing another's clothes\", a contrastive verdict as the opening line, an em dash, a run of three or more very short sentences)."
+   },
+   "R-69d898": {
+    "nonInferiorityMargin": 3.51,
+    "gateRole": "OBSERVE",
+    "rationale": "half the author's interquartile range (0) across 8 piece(s), and at least one occurrence at their length, on: Write out what I write out (\"do not\", \"it is\"): at most 1 contractions per 1,000 words."
+   },
+   "R-c378df": {
+    "nonInferiorityMargin": 7.55,
+    "gateRole": "OBSERVE",
+    "rationale": "half the author's interquartile range (15.1) across 8 piece(s), and at least one occurrence at their length, on: Write out as often as I do, not more: at most 83.6 uncontracted forms per 1,000 words."
+   },
+   "R-149257": {
+    "nonInferiorityMargin": 0.05,
+    "gateRole": "OBSERVE",
+    "rationale": "half the author's interquartile range (0) across 8 piece(s), and at least one occurrence at their length, on: Keep parenthetical asides at zero: my pieces have none."
+   },
+   "R-149257-2": {
+    "nonInferiorityMargin": 0.08,
+    "gateRole": "OBSERVE",
+    "rationale": "half the author's interquartile range (0) across 8 piece(s), and at least one occurrence at their length, on: Keep the length of your short sentences (10th percentile, words) within my range: 3.6 to 4.4 (I'm around 4)."
+   },
+   "R-149257-3": {
+    "nonInferiorityMargin": 0.45,
+    "gateRole": "OBSERVE",
+    "rationale": "half the author's interquartile range (0) across 8 piece(s), and at least one occurrence at their length, on: Keep the length of your long sentences (90th percentile, words) within my range: 11.25 to 15.75 (I'm around 13)."
+   },
+   "R-149257-4": {
+    "nonInferiorityMargin": 0.05,
+    "gateRole": "OBSERVE",
+    "rationale": "half the author's interquartile range (0) across 8 piece(s), and at least one occurrence at their length, on: Keep sentences opening on The, This, That, It, These or There within my range: 20% to 39% (I'm around 24%)."
+   },
+   "R-149257-5": {
+    "nonInferiorityMargin": 0.06,
+    "gateRole": "OBSERVE",
+    "rationale": "half the author's interquartile range (0) across 8 piece(s), and at least one occurrence at their length, on: Keep the length of your short paragraphs (10th percentile, words) within my range: 2.7 to 3.3 (I'm around 3)."
+   },
+   "R-149257-6": {
+    "nonInferiorityMargin": 1.5,
+    "gateRole": "OBSERVE",
+    "rationale": "half the author's interquartile range (0) across 8 piece(s), and at least one occurrence at their length, on: Keep the length of your long paragraphs (90th percentile, words) within my range: 26.5 to 41.5 (I'm around 31)."
+   },
+   "R-41ee6d": {
+    "nonInferiorityMargin": 0.05,
+    "gateRole": "OBSERVE",
+    "rationale": "half the author's interquartile range (0) across 3 piece(s), and at least one occurrence at their length, on: Stay closer to my word habits than to your defaults (the function words I use, and how often)."
+   },
+   "R-0e36f8": {
+    "nonInferiorityMargin": 5,
+    "gateRole": "OBSERVE",
+    "rationale": "half the author's interquartile range (10) across 8 piece(s), and at least one occurrence at their length, on: Lean on my connectives (\"so\"/\"now\"): at least 6.2 per 1,000 words together."
+   },
+   "R-0ff932": {
+    "nonInferiorityMargin": 3.51,
+    "gateRole": "OBSERVE",
+    "rationale": "half the author's interquartile range (0) across 8 piece(s), and at least one occurrence at their length, on: Keep the model's stock vocabulary rare (\"seamless\"/\"ensuring\"): at most 0.5 per 1,000 words together."
+   },
+   "R-cd78e9": {
+    "nonInferiorityMargin": 1,
+    "gateRole": "OBSERVE",
+    "rationale": "half the author's interquartile range (0) across 8 piece(s), and at least one occurrence at their length, on: Open the way I do, without the stock moves: never \"in today's\", \"in an era\", \"in a world where\", \"imagine\"…."
+   },
+   "R-f25631": {
+    "nonInferiorityMargin": 1,
+    "gateRole": "OBSERVE",
+    "rationale": "half the author's interquartile range (0) across 8 piece(s), and at least one occurrence at their length, on: Close the way I do, without the stock moves: never \"in conclusion\", \"to sum up\", \"in summary\", \"ultimately\"…."
+   }
+  }
+ },
+ "tasks": [],
+ "qualification": null
+}

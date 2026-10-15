@@ -107,7 +107,7 @@ describe('(c) (d) (e) one cap per run, no hand-off without a redraft, the real m
     const go = withRedraft(async (t) => (t === 'first' ? handed(t) : noRepair(t)), { notes: [], redraft: async () => { drafts += 1; return 'second'; },
       unmet: (d) => (d.output === 'first' ? [far(14)] : [far(4.78)]),
       check: () => reportOf([]),
-      resume: async (t, h) => { histories.push(h); return noRepair(t); } });
+      resume: async (t, h) => { histories.push([...h.entries]); return noRepair(t); } });
     const d = await go('first');
     // the scripted first draft's own carrier rewrite, and the draft written here
     expectOneCounter(d.repair?.controller, 1 + drafts);
