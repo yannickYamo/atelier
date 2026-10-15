@@ -370,6 +370,15 @@ describe('through the binary: a graded miss is repaired on its carriers and leav
     // nothing required fails on this skill: whatever is left for a person to read, the state is not BLOCKED
     expect(out.eval.record?.state).toMatch(/^(VERIFIED|NEEDS_REVIEW)$/);
   });
+  it('--no-repair: the controller never runs, and neither the JSON nor the record carries its steps', async () => {
+    const before = await rewritesSent();
+    const out = invoke('--no-repair') as { output: string; controller?: unknown };
+    expect(await rewritesSent()).toBe(before);
+    expect(out.output).toBe(draft);
+    expect(out.controller).toBeUndefined();
+    const rec = store.listInvocations({ root: data, skillName: 'asides' }).find((r) => r.output === draft);
+    expect(rec).toBeDefined(); expect(rec?.repair?.controller).toBeUndefined();
+  });
   it('any other value is refused, naming the switch, before anything is spent', () => {
     expect(() => invoke('--graded', 'all')).toThrow(/--graded takes only none/);
     expect(() => invoke('--graded', 'parenthesis')).toThrow(/--graded takes only none/);
