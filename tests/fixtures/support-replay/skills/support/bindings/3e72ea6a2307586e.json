@@ -1,0 +1,34 @@
+{
+ "bindings": [
+  {
+   "binding": {
+    "providerAdapter": "openai-compatible",
+    "backend": "http://127.0.0.1:45757",
+    "requestedModel": "scripted",
+    "structuredOutput": "FORCED_TOOL_CALL",
+    "parameters": {
+     "tokenLimitParam": "max_tokens",
+     "strictSchema": true
+    },
+    "runtimeProfile": null
+   },
+   "hash": "2a4bb2fdb4e45763",
+   "firstSeenAt": "2026-10-15T10:07:17.785Z"
+  },
+  {
+   "binding": {
+    "providerAdapter": "openai-compatible",
+    "backend": "http://127.0.0.1:40669",
+    "requestedModel": "scripted",
+    "structuredOutput": "FORCED_TOOL_CALL",
+    "parameters": {
+     "tokenLimitParam": "max_tokens",
+     "strictSchema": true
+    },
+    "runtimeProfile": null
+   },
+   "hash": "846da8a2dff19220",
+   "firstSeenAt": "2026-10-15T11:14:13.064Z"
+  }
+ ]
+}

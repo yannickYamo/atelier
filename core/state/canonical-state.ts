@@ -688,7 +688,8 @@ export interface ControllerDecisionRecord {
   /** expected movement: summed band widths toward the band (graded), or rules held (enforced, weighted) */
   readonly expectedGain: number;
   readonly expectedCostUsd: number;
-  readonly outcome: 'kept' | 'not kept' | 'no change' | 'handed to a redraft' | 'could not run';
+  /** 'refused': the step limit or the budget would not hold it, so it was never taken (and is no step) */
+  readonly outcome: 'kept' | 'not kept' | 'no change' | 'handed to a redraft' | 'could not run' | 'refused';
   readonly observed: {
     /** what moved, in the units of `expectedGain`; 0 when nothing was kept */
     readonly movement: number;

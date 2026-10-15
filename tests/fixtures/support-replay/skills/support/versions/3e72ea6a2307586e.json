@@ -1,0 +1,9 @@
+{
+ "skillVersionHash": "3e72ea6a2307586e",
+ "skillName": "support",
+ "standardVersionHash": "52cf27430d4f79c6",
+ "architectureHash": "5538dacd04a5cb87",
+ "materializedHash": "3acc94c206b129e5",
+ "builtAt": "2026-10-15T10:07:15.007Z",
+ "description": "Use when asked to: replies to customers who wrote to support about a problem with an order."
+}
