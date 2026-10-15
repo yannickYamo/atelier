@@ -33,7 +33,8 @@
 //
 // A rule the person made required with `--set` is their latest word: it outranks an earlier answer, and the screen says
 // so in one line. A pair the model read as impossible to follow together (./contradictions.ts) is never settled by rank:
-// unless the person answered that pair, neither side instructs. An answer whose choice the guard had to open again is
+// unless the person answered that pair, neither side instructs. Nor is a pair that conflicts only by the model's reading
+// of a rule's numbers, where it and the quantity grammar (./quantity.ts) read them two ways. An answer whose choice the guard had to open again is
 // said so, with why, and counted as open.
 //
 // One author's own rules are not paired here: they are read from one body of work, as in a skill of one author.
@@ -41,7 +42,8 @@
 
 import type { Measurement, Requirement } from '../state/canonical-state.js';
 import { restateLimits } from '../observers/derive.js';
-import { TRAIT_LABEL, labelOf, mergedMeasurement, primaryClassOf, relationOf, type Conflict, type ConflictSide, type TraitClass, type TraitKind, type TraitTable } from './traits.js';
+import { TRAIT_LABEL, labelOf, mergedMeasurement, primaryClassOf, relationOf, type Conflict, type ConflictSide, type ReadRule, type TraitClass, type TraitKind, type TraitTable } from './traits.js';
+import { describeQuantity, quantitiesOf, sameReading, type Quantity } from './quantity.js';
 
 export interface CompositeAuthor {
   readonly name: string;
@@ -104,12 +106,38 @@ export interface AnsweredConflict extends Conflict {
 
 /** A pair the model read as impossible to follow together, by rule id, with its reason. */
 export interface ModelPair { readonly a: string; readonly b: string; readonly reason: string }
+/** A quantity the model read in a rule's words (./contradictions.ts), by rule id. */
+export interface ModelQuantity { readonly id: string; readonly quantity: Quantity }
 
 /** What the person said beyond the conflicts: the rules they made required (`--set <id>=required`), and the model's reading. */
 export interface ComposeOptions {
   readonly forced?: ReadonlySet<string>;
   readonly modelPairs?: readonly ModelPair[];
+  readonly modelQuantities?: readonly ModelQuantity[];
 }
+
+/**
+ * A WORDED RULE READ TWO WAYS: the quantity grammar (./quantity.ts) and the model read its numbers differently. Both
+ * readings stand: the rule is held against any rule either reading conflicts with, and the screen says so. Only the
+ * rules the model gave a reading for are compared; a rule it read nothing in keeps the grammar's reading alone.
+ */
+export function readTwoWays(proposals: readonly Requirement[], modelQuantities: readonly ModelQuantity[]): Map<string, { readonly grammar: Quantity[]; readonly model: Quantity[] }> {
+  const out = new Map<string, { grammar: Quantity[]; model: Quantity[] }>();
+  const byId = new Map(proposals.map((p) => [p.requirementId, p]));
+  const ids = [...new Set(modelQuantities.map((q) => q.id))];
+  for (const id of ids) {
+    const p = byId.get(id);
+    if (!p || p.measurement) continue;
+    const grammar = quantitiesOf(p.statement);
+    const model = modelQuantities.filter((q) => q.id === id).map((q) => q.quantity);
+    if (!sameReading(grammar, model)) out.set(id, { grammar, model });
+  }
+  return out;
+}
+const saidQ = (qs: readonly Quantity[]): string => (qs.length ? qs.map(describeQuantity).join(' and ') : 'no quantity');
+/** The screen's line for a rule read two ways. */
+export const twoWaysLine = (id: string, statement: string, r: { readonly grammar: readonly Quantity[]; readonly model: readonly Quantity[] }): string =>
+  `read two ways: ${id} "${statement}" is ${saidQ(r.grammar)} by its words, and ${saidQ(r.model)} by the model; it is held against any rule either reading conflicts with.`;
 
 /** The composite as stored on the skill: what was chosen from whom, and what stays open. Data, so a rebuild reads it and changes nothing. */
 export interface CompositeRecord {
@@ -257,13 +285,15 @@ export function composeSelection(table: TraitTable, proposals: readonly Requirem
     const { shownOnly: _shown, openIn: _open, ...rest } = d;
     return { ...rest, outcome: 'SELECTED', why: `you made it required (--set ${d.id}=required)`, byAdmiration: true, settledBy: { n: d.settledBy?.n ?? d.openIn ?? 0, how: 'SET' } };
   });
-  const guarded = guardInstructing(withSet, conflicts, byId, answers, repeats, options.modelPairs ?? []);
+  const twoWays = readTwoWays(proposals, options.modelQuantities ?? []);
+  const guarded = guardInstructing(withSet, conflicts, byId, answers, repeats, options.modelPairs ?? [], twoWays);
   const decisions = guarded.decisions;
+  const notes = [...[...twoWays].map(([id, r]) => twoWaysLine(id, byId.get(id)?.statement ?? id, r)), ...guarded.notes];
 
   // RECURRING DECISION MOVES: method rules chosen, or shared by two or more authors. Offered as a methodology the
   // person may adopt, marked a proposal read from the examples; a method note of theirs (`--method`) is authoritative instead.
   const steps = decisions.filter((d) => d.cls === 'method' && (d.outcome === 'SELECTED' || d.kind === 'SHARED')).map((d) => ({ id: d.id, author: d.author, statement: byId.get(d.id)?.statement ?? '' }));
-  return { authors, decisions, conflicts: guarded.conflicts, methodology: steps.length ? { proposal: true, steps } : null, ...(guarded.notes.length ? { notes: guarded.notes } : {}) };
+  return { authors, decisions, conflicts: guarded.conflicts, methodology: steps.length ? { proposal: true, steps } : null, ...(notes.length ? { notes } : {}) };
 }
 
 /** Whether a decided rule will instruct the writer: chosen, not merely shown, and not carried in another rule's range. */
@@ -278,15 +308,18 @@ export const instructs = (d: CompositeDecision | undefined): boolean => d?.outco
  * settled by rank: unless the person answered that pair, neither side instructs and the pair is asked.
  */
 export function guardInstructing(decided: readonly CompositeDecision[], conflicts: readonly AnsweredConflict[], byId: ReadonlyMap<string, Requirement>,
-  answers: Readonly<Record<number, ConflictAnswer>>, repeats: ReadonlySet<string> = new Set(), modelPairs: readonly ModelPair[] = []): { decisions: CompositeDecision[]; conflicts: AnsweredConflict[]; notes: string[] } {
+  answers: Readonly<Record<number, ConflictAnswer>>, repeats: ReadonlySet<string> = new Set(), modelPairs: readonly ModelPair[] = [],
+  twoWays: ReadonlyMap<string, { readonly grammar: readonly Quantity[]; readonly model: readonly Quantity[] }> = new Map()): { decisions: CompositeDecision[]; conflicts: AnsweredConflict[]; notes: string[] } {
   const ds = new Map(decided.map((d) => [d.id, d]));
   const order = decided.map((d) => d.id);
   // A range's carrier stands for every rule merged into it (a repetition of one rule is not a range member).
   const membersOf = (id: string): string[] => [id, ...decided.filter((d) => d.mergedInto === id && !repeats.has(d.id)).map((d) => d.id)];
-  const asRead = (d: CompositeDecision): Pick<Requirement, 'statement' | 'measurement' | 'kind'> => {
-    const p = byId.get(d.id);
-    return { statement: p?.statement ?? '', measurement: d.range ?? p?.measurement ?? undefined, kind: p?.kind ?? 'GENERATIVE' };
+  const asRead = (d: CompositeDecision, both = true): ReadRule => {
+    const p = byId.get(d.id); const two = both ? twoWays.get(d.id) : undefined;
+    return { statement: p?.statement ?? '', measurement: d.range ?? p?.measurement ?? undefined, kind: p?.kind ?? 'GENERATIVE', ...(two ? { readings: [two.grammar, two.model] } : {}) };
   };
+  // A pair that conflicts only by the model's reading of a rule's numbers is the model's to ask, never settled by rank.
+  const byReading: ModelPair[] = [];
   const side = (d: CompositeDecision): ConflictSide => ({ id: d.id, author: d.author, statement: byId.get(d.id)?.statement ?? d.id });
   const live = decided.filter(instructs);
   const all: AnsweredConflict[] = [...conflicts];
@@ -302,6 +335,11 @@ export function guardInstructing(decided: readonly CompositeDecision[], conflict
     for (let j = i + 1; j < live.length; j++) {
       const a = live[i]; const b = live[j];
       if (a.author === b.author || relationOf(asRead(a), asRead(b)) !== 'CONFLICT') continue;
+      if ((twoWays.has(a.id) || twoWays.has(b.id)) && relationOf(asRead(a, false), asRead(b, false)) !== 'CONFLICT') {
+        const two = [a, b].filter((d) => twoWays.has(d.id)).map((d) => { const r = twoWays.get(d.id); return `${d.id} read two ways (${saidQ(r?.grammar ?? [])} by its words, ${saidQ(r?.model ?? [])} by the model)`; });
+        byReading.push({ a: a.id, b: b.id, reason: two.join('; ') });
+        continue;
+      }
       const known = knownFor(a.id, b.id);
       if (known) {
         const aFirst = membersOf(a.id).includes(known.sides[0].id);
@@ -320,7 +358,7 @@ export function guardInstructing(decided: readonly CompositeDecision[], conflict
   // from two authors, and not already found. Numbered after every pair the keyword reading found.
   const at = new Map(order.map((id, i) => [id, i]));
   const liveIds = new Set(live.map((d) => d.id));
-  const pairs = modelPairs
+  const pairs = [...byReading, ...modelPairs]
     .filter((p) => p.a !== p.b && liveIds.has(p.a) && liveIds.has(p.b) && ds.get(p.a)?.author !== ds.get(p.b)?.author)
     .map((p) => ((at.get(p.a) ?? 0) <= (at.get(p.b) ?? 0) ? p : { a: p.b, b: p.a, reason: p.reason }))
     .sort((x, y) => (at.get(x.a) ?? 0) - (at.get(y.a) ?? 0) || (at.get(x.b) ?? 0) - (at.get(y.b) ?? 0));
@@ -493,9 +531,12 @@ export function describeComposite(c: CompositeRecord, statementOf: (id: string) 
   if (c.conflicts.length) {
     out.push('', `Conflicts between authors (${c.conflicts.length}): never averaged, and never guessed.`);
     const decided = new Map(c.decisions.map((d) => [d.id, d]));
+    // "both (one range)" is offered only where the two sides make one range: two counted bands on one observer.
+    const byN = new Map(c.conflicts.map((x) => [x.n, x]));
+    const ranged = (n: number): boolean => { const x = byN.get(n); return Boolean(x && measurementOf && mergedMeasurement(measurementOf(x.sides[0].id), measurementOf(x.sides[1].id))); };
     for (const x of c.conflicts) {
       const [a, b] = x.sides;
-      const stand = standOf(x, decided.get(a.id), decided.get(b.id));
+      const stand = standOf(x, decided.get(a.id), decided.get(b.id), ranged);
       out.push(`  ${x.n}. ${x.label}${x.taskDependent ? ' (the two write pieces of different lengths: this may be the kind of work, not taste)' : ''}${x.provenance ? ` (read by the model at build: ${x.reason ?? 'the two cannot both be followed'})` : x.foundLast ? ' (found among the rules that would instruct: the two cannot both)' : ''}`);
       out.push(`      A  ${a.author}: ${a.statement}`);
       out.push(`      B  ${b.author}: ${b.statement}`);
@@ -517,13 +558,13 @@ export function describeComposite(c: CompositeRecord, statementOf: (id: string) 
  * HOW ONE CONFLICT STANDS, READ FROM WHAT WAS FINALLY DECIDED ON ITS TWO RULES, so the screen can never say one thing
  * and the build do another: a rule kept by the answer to another conflict, or set aside by one, is said so here.
  */
-export function standOf(x: AnsweredConflict, da: CompositeDecision | undefined, db: CompositeDecision | undefined): string {
-  return standingOf(x, da, db).line;
+export function standOf(x: AnsweredConflict, da: CompositeDecision | undefined, db: CompositeDecision | undefined, ranged: (n: number) => boolean = () => false): string {
+  return standingOf(x, da, db, ranged).line;
 }
 
 /** How a conflict stands, as its line and as the question it asks (NEITHER: open, or open again; ONE_SIDE: one side stands, the other waits on this conflict). */
 interface Standing { readonly line: string; readonly asks: 'NEITHER' | 'ONE_SIDE' | null }
-function standingOf(x: AnsweredConflict, da: CompositeDecision | undefined, db: CompositeDecision | undefined): Standing {
+function standingOf(x: AnsweredConflict, da: CompositeDecision | undefined, db: CompositeDecision | undefined, ranged: (n: number) => boolean = () => false): Standing {
   const [a, b] = x.sides;
   const reason = (d: CompositeDecision | undefined): string => {
     const by = d?.settledBy;
@@ -536,7 +577,8 @@ function standingOf(x: AnsweredConflict, da: CompositeDecision | undefined, db: 
   const stands = (d: CompositeDecision | undefined): boolean => d?.outcome === 'SELECTED' && !d.shownOnly;
   const inRange = (d: CompositeDecision | undefined, other: CompositeDecision | undefined): boolean =>
     Boolean(d && other && ((d.mergedInto !== undefined && (d.mergedInto === other.id || d.mergedInto === other.mergedInto)) || other.mergedInto === d.id));
-  const ask = `answer with --conflict ${x.n}=A, ${x.n}=B or ${x.n}=both (one range), or leave it for later`;
+  const both = (n: number): string => (ranged(n) ? `${n}=both (one range)` : `${n}=both`);
+  const ask = `answer with --conflict ${x.n}=A, ${x.n}=B or ${both(x.n)}, or leave it for later`;
   const settled = (line: string): Standing => ({ line, asks: null });
   if (x.reopened) return { line: `→ open again: ${x.reopened.why}: --conflict ${x.reopened.in}=A, ${x.reopened.in}=B or ${x.reopened.in}=both`, asks: 'NEITHER' };
   if (da?.outcome === 'OPEN' && db?.outcome === 'OPEN') return { line: `→ open: neither instructs. ${ask}`, asks: 'NEITHER' };
@@ -545,7 +587,7 @@ function standingOf(x: AnsweredConflict, da: CompositeDecision | undefined, db: 
   const sa = stands(da) || (da?.mergedInto !== undefined && da.settledBy !== undefined);
   const sb = stands(db) || (db?.mergedInto !== undefined && db.settledBy !== undefined);
   const openAt = (d: CompositeDecision | undefined): number => d?.openIn ?? x.n;
-  const askAt = (n: number): string => `answer with --conflict ${n}=A, ${n}=B or ${n}=both (one range), or leave it for later`;
+  const askAt = (n: number): string => `answer with --conflict ${n}=A, ${n}=B or ${both(n)}, or leave it for later`;
   const waits = (side: ConflictSide, d: CompositeDecision | undefined): string => (d?.outcome === 'OPEN'
     ? `; ${side.author}'s does not instruct until you answer conflict ${openAt(d)}${openAt(d) === x.n ? `: ${ask}` : ''}` : '');
   // A side merged into another rule's range stands through that rule, and is said so.
@@ -560,6 +602,21 @@ function standingOf(x: AnsweredConflict, da: CompositeDecision | undefined, db: 
   const firstOpen = da?.outcome === 'OPEN' ? openAt(da) : db?.outcome === 'OPEN' ? openAt(db) : null;
   // Asked here when the side held open waits on this very conflict; else it is asked, and counted, where it waits.
   return { line: `→ neither instructs: ${why(a, da)}, ${why(b, db)}${firstOpen !== null ? `. ${askAt(firstOpen)}` : ''}`, asks: firstOpen === x.n ? 'NEITHER' : null };
+}
+
+/**
+ * WHETHER THE PIECE'S LENGTH IS LEFT OPEN: a rule on it (a worded length of the whole piece, or a count of its words)
+ * sits in a conflict nobody answered, so neither side instructs. The build then states no length of its own.
+ */
+export function pieceLengthOpen(c: CompositeRecord, ruleOf: (id: string) => Pick<Requirement, 'statement' | 'measurement'> | undefined): boolean {
+  return c.decisions.some((d) => {
+    if (d.outcome !== 'OPEN') return false;
+    const r = ruleOf(d.id);
+    if (!r) return false;
+    const m = r.measurement;
+    if (m) return m.observer === 'LENGTH' && !(Array.isArray(m.params.in) && m.params.in.length > 0) && (!Array.isArray(m.params.unit) || String(m.params.unit[0]).toLowerCase() === 'words');
+    return quantitiesOf(r.statement).some((q) => q.measure === 'piece');
+  });
 }
 
 /** One line per author for the skill's "How I sound": the classes taken, and the rules that carry them. */

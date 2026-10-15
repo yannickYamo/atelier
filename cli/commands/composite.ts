@@ -21,8 +21,8 @@ import type { Measurement, Requirement } from '../../core/state/canonical-state.
 import { suggestAll, modeFromIntent, type Suggestion, type SkillMode } from '../../core/ratification/suggest.js';
 import { buildTraitTable, describeTraitCounts, TRAIT_LABEL, type TraitClass, type TraitTable } from '../../core/composite/traits.js';
 import { readAdmiration, keywordClasses, type AdmireLine } from '../../core/composite/admire.js';
-import { composeSelection, describeComposite, instructs, openQuestions, openStanding, type CompositeAuthor, type CompositeRecord, type ConflictAnswer, type ModelPair } from '../../core/composite/selection.js';
-import { readContradictions, type InstructionLine } from '../../core/composite/contradictions.js';
+import { composeSelection, describeComposite, instructs, openQuestions, openStanding, type CompositeAuthor, type CompositeRecord, type ConflictAnswer, type ModelPair, type ModelQuantity } from '../../core/composite/selection.js';
+import { readInstructionLines, type InstructionLine } from '../../core/composite/contradictions.js';
 import type { AuthorMap } from '../../core/composite/authors.js';
 import { formatMeasure } from './amend.js';
 import { restateLimits } from '../../core/observers/derive.js';
@@ -101,7 +101,8 @@ async function readLines(s: Session, lines: readonly AdmireLine[]): Promise<{ cl
 /** Said on the composite screen when no model read the final instructions for contradictions. */
 export const KEYWORD_ONLY_LINE = 'Contradictions between authors are checked by keyword only: a whole-piece structure rule may still sit beside a structure it rules out (one unbroken block of prose beside headings or lists), so read the instructions below.';
 
-interface ContradictionRead { readonly key: string; readonly pairs: readonly ModelPair[]; readonly via: 'MODEL' | 'KEYWORDS' }
+/** The model's one reading of the final instructions: the pairs it names, and the quantities it read (absent in a reading kept before it read them). */
+interface ContradictionRead { readonly key: string; readonly pairs: readonly ModelPair[]; readonly quantities?: readonly ModelQuantity[]; readonly via: 'MODEL' | 'KEYWORDS' }
 const contradictionFile = (): string => runFile('composite-contradictions.json');
 const storedContradictions = (): ContradictionRead | null => {
   const f = contradictionFile();
@@ -120,25 +121,27 @@ export function instructionLines(record: CompositeRecord, proposals: readonly Re
 }
 
 /**
- * THE FINAL INSTRUCTIONS, READ ONCE BY A MODEL for pairs that cannot both be followed (core/composite/contradictions.ts),
- * and kept with the run under a hash of the list: a continuation with the same list, and every rebuild, read nothing
- * again. With no model, or a reading that failed, the screen says the check was by keyword only.
+ * THE FINAL INSTRUCTIONS, READ ONCE BY A MODEL for pairs that cannot both be followed and for the quantities they state
+ * (core/composite/contradictions.ts), and kept with the run under a hash of the list: a continuation with the same list,
+ * and every rebuild, read nothing again. With no model, or a reading that failed, the screen says the check was by
+ * keyword only.
  */
-async function readInstructions(lines: readonly InstructionLine[]): Promise<{ pairs: readonly ModelPair[]; via: 'MODEL' | 'KEYWORDS' | 'NONE' }> {
-  if (!canReach('discovery')) return { pairs: [], via: 'KEYWORDS' };
-  if (new Set(lines.map((l) => l.author)).size < 2) return { pairs: [], via: 'NONE' };
+async function readInstructions(lines: readonly InstructionLine[]): Promise<{ pairs: readonly ModelPair[]; quantities: readonly ModelQuantity[]; via: 'MODEL' | 'KEYWORDS' | 'NONE' }> {
+  if (!canReach('discovery')) return { pairs: [], quantities: [], via: 'KEYWORDS' };
+  if (new Set(lines.map((l) => l.author)).size < 2) return { pairs: [], quantities: [], via: 'NONE' };
   const key = sha(JSON.stringify(lines.map((l) => [l.id, l.author, l.statement])));
   const stored = storedContradictions();
-  if (stored?.key === key) return { pairs: stored.pairs, via: stored.via };
+  if (stored?.key === key) return { pairs: stored.pairs, quantities: stored.quantities ?? [], via: stored.via };
   let read: ContradictionRead;
   try {
-    read = { key, pairs: await readContradictions(clientFor(proposerModel()), { spentUsd: 0, capUsd: numericFlag('--cap', 3.0), maxCalls: 1 }, lines), via: 'MODEL' };
+    const r = await readInstructionLines(clientFor(proposerModel()), { spentUsd: 0, capUsd: numericFlag('--cap', 3.0), maxCalls: 1 }, lines);
+    read = { key, pairs: r.pairs, quantities: r.quantities, via: 'MODEL' };
   } catch (e) {
     console.log(`(the instructions could not be read by the model: ${(e as Error).message.split('\n')[0]})`);
-    read = { key, pairs: [], via: 'KEYWORDS' };
+    read = { key, pairs: [], quantities: [], via: 'KEYWORDS' };
   }
   writeAtomic(contradictionFile(), JSON.stringify(read, null, 1));
-  return read;
+  return { pairs: read.pairs, quantities: read.quantities ?? [], via: read.via };
 }
 
 /** Ask, in a terminal, for the lines not given. Enter says nothing about that author. */
@@ -200,7 +203,7 @@ export async function compositeReview(opts: ReviewOptions = {}): Promise<boolean
   if (fromFlags.errors.length) die(fromFlags.errors.join('\n'));
   const changes = fromFlags.changes;
   const forcedOf = (): Set<string> => new Set([...changes].filter(([, v]) => v === 'required').map(([k]) => k));
-  const shown = composeSelection(table, pending, compAuthors, answersOf(s.conflictAnswers ?? {}), { forced: forcedOf(), modelPairs: storedContradictions()?.pairs ?? [] });
+  const shown = composeSelection(table, pending, compAuthors, answersOf(s.conflictAnswers ?? {}), { forced: forcedOf(), modelPairs: storedContradictions()?.pairs ?? [], modelQuantities: storedContradictions()?.quantities ?? [] });
   const answered = { ...(s.conflictAnswers ?? {}), ...parseConflictAnswers(flagAll('--conflict'), Math.max(table.conflicts.length, shown.conflicts.length)) };
   if (JSON.stringify(answered) !== JSON.stringify(s.conflictAnswers ?? {})) { saveSession({ ...s, conflictAnswers: answered }); s = loadSession(); }
   const answers = answersOf(answered);
@@ -209,7 +212,7 @@ export async function compositeReview(opts: ReviewOptions = {}): Promise<boolean
     const forced = forcedOf();
     const first = composeSelection(table, pending, compAuthors, answers, { forced });
     const read = await readInstructions(instructionLines(first, s.proposals));
-    return { record: read.pairs.length ? composeSelection(table, pending, compAuthors, answers, { forced, modelPairs: read.pairs }) : first, via: read.via };
+    return { record: read.pairs.length || read.quantities.length ? composeSelection(table, pending, compAuthors, answers, { forced, modelPairs: read.pairs, modelQuantities: read.quantities }) : first, via: read.via };
   };
   let { record, via } = await compose();
   const statementOf = (id: string): string => s.proposals.find((p) => p.requirementId === id)?.statement ?? id;

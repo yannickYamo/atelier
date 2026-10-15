@@ -67,10 +67,12 @@ const server = createServer((req, res) => {
     // (`byTool: { emit_contradictions: { pairs: [...] } }`, or a `when`), so a backend scripted for other calls reads none.
     // `{ pairsByText: [[textA, textB, reason]] }` names a pair by the words of its two instructions, answered with the
     // numbers the request gave them ("3. (bram) Let every sentence…"), so a test need not know the order of the list.
-    if (answer && Array.isArray(answer.pairsByText)) {
+    // `{ quantitiesByText: [[text, measure, unit, min, max]] }` gives the quantity read in the instruction with those words.
+    if (answer && (Array.isArray(answer.pairsByText) || Array.isArray(answer.quantitiesByText))) {
       const text = String(JSON.parse(body || '{}')?.messages?.map((m) => (typeof m.content === 'string' ? m.content : Array.isArray(m.content) ? m.content.map((b) => b?.text ?? '').join('\n') : '')).join('\n') ?? '');
       const numberOf = (words) => { const m = new RegExp(`(?:^|\\n|\\s)(\\d+)\\. \\([^)]*\\) [^\\n]*${words.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`).exec(text); return m ? Number(m[1]) : null; };
-      answer = { pairs: answer.pairsByText.map(([a, b, reason]) => ({ a: numberOf(a), b: numberOf(b), reason })).filter((x) => x.a !== null && x.b !== null) };
+      answer = { pairs: (answer.pairsByText ?? []).map(([a, b, reason]) => ({ a: numberOf(a), b: numberOf(b), reason })).filter((x) => x.a !== null && x.b !== null),
+        quantities: (answer.quantitiesByText ?? []).map(([t, measure, unit, min, max]) => ({ n: numberOf(t), measure, unit, min, max })).filter((x) => x.n !== null) };
     }
     if (JSON.parse(body || '{}')?.tools?.[0]?.function?.name === 'emit_contradictions' && !(answer && Array.isArray(answer.pairs))) answer = { pairs: [] };
     // A STRUCTURE READING (core/structure/moves.ts) must label every numbered paragraph once: `{ labelAll: [moves] }`
