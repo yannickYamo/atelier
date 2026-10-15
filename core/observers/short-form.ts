@@ -285,16 +285,30 @@ export function shortFormTransfer(requirements: readonly Requirement[], limit: {
   if (!limit || limit.chars > SHORT_REQUEST_CHARS || isShortFormStandard(requirements)) return null;
   const stated = (r: Requirement): boolean => r.provenance === 'EXPERT_STATED' || r.provenance === 'EXPERT_ADDED' || r.authority === 'EXPERT_AUTHORED';
   const doesNotApply = new Map<string, string>();
+  // A LENGTH THE OWNER STATED THAT THE FORMAT CANNOT HOLD ("between 300 and 450 words" in a post of 280 characters) is
+  // their rule for their longer pieces: it is said once, as not applying to this format, never a block on every post.
+  const conflicts: string[] = [];
   for (const r of requirements) {
     const m = r.measurement;
+    if (r.authority !== 'EXPERT_REJECTED' && m?.observer === 'LENGTH' && stated(r) && !m.params.in) {
+      const min = typeof m.params.min === 'number' ? m.params.min : null;
+      const unit = ((m.params.unit as readonly string[] | undefined)?.[0] ?? 'words').toLowerCase();
+      // a word takes at least two characters with its space: a floor of words over half the limit cannot fit
+      if (min !== null && (unit === 'words' ? min * 2 > limit.chars : unit === 'characters' || unit === 'chars' ? min > limit.chars : false)) {
+        doesNotApply.set(r.requirementId, `your length ("${r.statement}") cannot be met in at most ${limit.chars} characters (${limit.from}): it holds for your longer pieces, not this format`);
+        conflicts.push(r.statement);
+        continue;
+      }
+    }
     // GRAMMAR is never in LONG_FORM_COUNTED: a mechanical error is one in a tweet as in an essay, so it always holds.
     if (r.authority === 'EXPERT_REJECTED' || !m || !LONG_FORM_COUNTED.has(m.observer) || isBan(m) || stated(r)) continue;
     doesNotApply.set(r.requirementId, `a band counted off your longer pieces; this output is short form (at most ${limit.chars} characters, ${limit.from})`);
   }
-  const n = doesNotApply.size;
+  const n = doesNotApply.size - conflicts.length;
+  const conflict = conflicts.length ? ` Your stated length (${conflicts.map((c) => `"${c}"`).join('; ')}) cannot fit at most ${limit.chars} characters, so it does not apply to this format.` : '';
   return {
     doesNotApply, limit,
-    note: `\n\n(This is short form: at most ${limit.chars} characters (${limit.from}). The standard was read from longer pieces. Its method and its bans hold; its counts of length, paragraphs and sentence mix do not apply here. Compress the piece, and keep the essential argument: it must survive the compression.)`,
-    said: `Short form (at most ${limit.chars} characters, ${limit.from}) from a standard read from longer pieces: its method and bans hold; ${n === 0 ? 'none of its rules is a band counted off longer pieces' : `${n} band${n === 1 ? '' : 's'} counted off your longer pieces do${n === 1 ? 'es' : ''} not apply to this output`}.`,
+    note: `\n\n(This is short form: at most ${limit.chars} characters (${limit.from}). The standard was read from longer pieces. Its method and its bans hold; its counts of length, paragraphs and sentence mix do not apply here.${conflicts.length ? ' Neither does the length stated for the longer pieces.' : ''} Compress the piece, and keep the essential argument: it must survive the compression.)`,
+    said: `Short form (at most ${limit.chars} characters, ${limit.from}) from a standard read from longer pieces: its method and bans hold; ${n === 0 ? 'none of its rules is a band counted off longer pieces' : `${n} band${n === 1 ? '' : 's'} counted off your longer pieces do${n === 1 ? 'es' : ''} not apply to this output`}.${conflict}`,
   };
 }

@@ -18,14 +18,13 @@ import type { ContextJudge } from './context-judge.js';
 import type { ClaimSensor } from './claim-extract.js';
 import { checkFormat, type FormatProfile } from '../observers/formats.js';
 import { findTerms } from '../observers/text.js';
-import { errorAtLength, featureWordCount } from '../observers/features.js';
-import { signalRules, signalChecks, isSignal, displacement, type Displacement } from './graded.js';
+import { signalRules, signalChecks, isSignal, displacement, ownerWords, type Displacement } from './graded.js';
 import type { FidelityProfile, ControllerSettings } from '../fidelity/types.js';
 import { decide, controllerRecord, ENFORCED_WEIGHT, SETTLED_ERROR, type ControllerInput, type Decision, type EnforcedMiss, type GradedMiss } from './controller.js';
 import { applyOperator, operatorsToward, sitesOf, keepsWords } from '../fidelity/operators.js';
 import { SITES_PER_OPERATOR } from '../fidelity/structural.js';
 import { spanIntegrity } from './integrity.js';
-import { planRepair, repairPrompt, applyRepair, acceptRepair, addsNoWords, cutSpan, REPAIR_SYSTEM, REPAIR_SYSTEM_WITH_PLACEHOLDERS, REPAIR_SCHEMA, type Reverted, type Applied } from './repair.js';
+import { planRepair, repairPrompt, applyRepair, acceptRepair, addsNoWords, readAtLength, featureParamsOf, cutSpan, REPAIR_SYSTEM, REPAIR_SYSTEM_WITH_PLACEHOLDERS, REPAIR_SCHEMA, type Reverted, type Applied } from './repair.js';
 import { keysOf, measurementId } from '../state/rule-key.js';
 import { mechanicalFixes, grammarFixes } from './mechanical-repair.js';
 import { ensureGrammar, readGrammar, isGrammarNote, GRAMMAR_NOTE_SUFFIX } from '../observers/grammar.js';
@@ -642,6 +641,15 @@ export async function refineToStandard(
   const withSignals = (t: string, r: VerifyReport): VerifyReport => (profile ? { ...r, checked: [...r.checked, ...signalChecks(t, profile)] } : r);
   const recorded = (r: VerifyReport): VerifyReport => (profile ? { ...r, checked: r.checked.filter((c) => !isSignal(c.requirementId)) } : r);
   const check = async (t: string): Promise<VerifyReport> => withSignals(t, memory.apply(t, await checkDraftAsync(skill, v, t, opts)));
+  // LENGTH DRIFT, for every FEATURE check's distance. A rate per 1,000 words rises when a rewrite shortens the text with
+  // the count unchanged; the before-report the acceptance compares against reads each FEATURE miss with its value
+  // scaled to the after-length (./repair.ts, `readAtLength`), so only the count's own move is read.
+  const paramsOfCheck = featureParamsOf(v);
+  const atLength = (r: VerifyReport, from: string, to: string): VerifyReport => readAtLength(r, from, to, paramsOfCheck);
+  // STEERING IS SUBORDINATE TO THE OWNER'S RULES. A step taken for an enforced rule (a rewrite, a mechanical or grammar
+  // fix, a draft written again) is never refused for a graded feature or a SIGNAL band it moved: those are read only
+  // on steps pointed at them (a carrier rewrite, the operators).
+  const steering = (r: VerifyReport): Set<string> => new Set(r.checked.filter((c) => isSignal(c.requirementId) || (graded.has(c.requirementId) && !acts(c))).map((c) => c.requirementId));
   let first = await check(draft);
   // WHAT KEEPS THE LOOP GOING (./controller.ts): an enforced rule broken, or a graded miss over SETTLED_ERROR band widths.
   // A graded miss nearer its band than that is delivered as it is: no pull to the median.
@@ -653,7 +661,7 @@ export async function refineToStandard(
   // apart, and charged to the ledger under their own purpose, so the record's calls and cost are the ledger's.
   const edits = { accepted: 0, rejected: 0, reasons: [] as string[] }; const gradedEdits = { accepted: 0, rejected: 0, reasons: [] as string[] };
   const ledgerBefore = processSpendByPurpose();
-  const editsRecord = (): { edits: RepairEdits } | Record<string, never> => (edits.accepted + edits.rejected ? { edits: { ...edits, reasons: [...new Set(edits.reasons)] } } : {});
+  const editsRecord = (): { edits: RepairEdits } | Record<string, never> => (edits.accepted + edits.rejected ? { edits: { ...edits, reasons: [...new Set(edits.reasons.map(ownerWords))] } } : {});
   const displaced: string[] = [];
   const gradedRecord = (final: VerifyReport, finalText: string): { graded: GradedRecord } | Record<string, never> => {
     if (!gradedOn) return {};
@@ -670,12 +678,12 @@ export async function refineToStandard(
     const line = spendBetween(ledgerBefore, processSpendByPurpose()).find((l) => l.purpose === 'graded');
     const disp = displacement(draft, finalText, profile, gradedTargeted);
     return { graded: { features: [...new Set(graded.values())].sort(), targeted: gradedTargeted.size, repaired: gradedRepaired.size, steered: [...gradedTargeted].sort(), redrafts: 0, notes: [], values,
-      edits: { ...gradedEdits, reasons: [...new Set(gradedEdits.reasons)] }, calls: line?.calls ?? 0, costUsd: line?.usd ?? 0,
+      edits: { ...gradedEdits, reasons: [...new Set(gradedEdits.reasons.map(ownerWords))] }, calls: line?.calls ?? 0, costUsd: line?.usd ?? 0,
       ...(disp ? { displacement: { before: disp.before, after: disp.after, refusedFor: [...displaced] } } : {}) } };
   };
   // THE BOUNDED CONTROLLER (./controller.ts): each step chosen from the report as it stands, recorded with what it was
   // expected to gain and cost, what it did, and what the ledger charged for it; and why the loop stopped.
-  const decisions: ControllerDecisionRecord[] = []; let stoppedBecause: string | null = null;
+  const decisions: ControllerDecisionRecord[] = []; let stoppedBecause: string | null = null; let handed = false;
   const unreachable = new Set<string>();
   const STEP_PURPOSES: readonly SpendPurpose[] = ['repair', 'graded', 'steering'];
   const costSince = (snap: readonly SpendLine[], purposes: readonly SpendPurpose[] = STEP_PURPOSES): { calls: number; usd: number } => {
@@ -726,7 +734,9 @@ export async function refineToStandard(
       observedUsdPerCall: { ...(rewriteUsd !== undefined ? { rewrite: rewriteUsd, 'carrier-rewrite': rewriteUsd } : {}), ...(draftUsd !== undefined ? { redraft: draftUsd } : {}) },
       can: { redraft: opts.controller?.redraft ?? false, rewrite: canRewrite }, unreachable };
   };
-  const controllerOf = (): { controller: ReturnType<typeof controllerRecord> } => ({ controller: controllerRecord(decisions, stoppedBecause ?? 'every enforced rule holds and nothing graded is off') });
+  // Said to the owner: no SIGNAL feature is named by its id in a why, a note or a reason (./graded.ts, `ownerWords`).
+  const controllerOf = (): { controller: ReturnType<typeof controllerRecord> } => ({ controller: controllerRecord(decisions.map((d) => ({ ...d, why: ownerWords(d.why),
+    observed: { ...d.observed, ...(d.observed.note ? { note: ownerWords(d.observed.note) } : {}) } })), ownerWords(stoppedBecause ?? 'every enforced rule holds and nothing graded is off'), handed) });
   if (!pending(first)) {
     const toCheck = listedClaims(first);
     const settled = decide(controllerInput(draft, first, true), opts.controller?.settings ?? null);
@@ -836,7 +846,7 @@ export async function refineToStandard(
     sameInstrument();
     // A FIX THAT NEEDS NO MODEL IS NEVER DROPPED IN SILENCE. When it cannot be kept (it would break another rule),
     // the record says which fix and why, so a refusal names the real conflict and not the rule the fix was for.
-    const accepted = acceptRepair(report, after, { wordsAdded: !addsNoWords(text, m.text) });
+    const accepted = acceptRepair(atLength(report, text, m.text), after, { wordsAdded: !addsNoWords(text, m.text), ignore: steering(report) });
     const step = { action: 'mechanical' as const, targets: [...new Set(broken(report))], why: `fixed without a model: ${m.fixed.join('; ')}`, expectedGain: 0, expectedCostUsd: 0 };
     if (!accepted.ok) { record(step, snap, 'not kept', 0, accepted.why); if (!notKept.length) notKept.push(`${m.fixed.join('; ')} not kept: ${accepted.why}`); return; }
     record(step, snap, 'kept', ENFORCED_WEIGHT * (broken(report).length - broken(after).length));
@@ -850,16 +860,6 @@ export async function refineToStandard(
   const pairs: RepairPair[] = [];
   const keys = keysOf(v.requirements);
   const keyOf = new Map(v.requirements.map((r, i) => [r.requirementId, keys[i]]));
-  // LENGTH DRIFT, for the graded checks' distance. A rate per 1,000 words rises when a rewrite shortens the text with
-  // the count unchanged; the before-report the acceptance compares against reads each graded miss with its value
-  // scaled to the after-length (../observers/features.ts, `errorAtLength`), so only the count's own move is read.
-  const featureParams = new Map(v.requirements.flatMap((r) => (r.measurement?.observer === 'FEATURE' ? [[r.requirementId, r.measurement.params] as const] : [])));
-  const atLength = (r: VerifyReport, soft: ReadonlySet<string>, from: string, to: string): VerifyReport => {
-    if (!soft.size) return r;
-    const wb = featureWordCount(from); const wa = featureWordCount(to);
-    return { ...r, checked: r.checked.map((c) => { const p = soft.has(c.requirementId) ? featureParams.get(c.requirementId) ?? (c as { params?: Record<string, unknown> }).params : undefined;
-      return p && c.result.verdict === 'VIOLATED' && typeof c.result.value === 'number' ? { ...c, result: { ...c.result, error: errorAtLength(p, c.result.value, wb, wa) } } : c; }) };
-  };
   const checkOf = new Map(v.requirements.flatMap((r) => (r.measurement ? [[r.requirementId, measurementId(r.measurement)] as const] : [])));
   /** What a step moved: rules held (weighted, a share for fewer places) for a rewrite; band widths nearer for a graded step. */
   const movedBy = (ids: readonly string[], before: VerifyReport, after: VerifyReport, enforcedStep: boolean): number => {
@@ -867,9 +867,11 @@ export async function refineToStandard(
     return ids.reduce((n, id) => {
       const b = find(before, id); const a = find(after, id);
       if (b?.result.verdict !== 'VIOLATED') return n;
-      const off = (c: RuleCheck | undefined): number => (c?.result.verdict !== 'VIOLATED' ? 0 : enforcedStep ? c.result.spans.length || 1 : Math.abs(c.result.error ?? 0));
+      // a FEATURE check is read by its distance, never by its carriers (./repair.ts, `regressions`)
+      const distance = b.observer === 'FEATURE' && typeof b.result.error === 'number';
+      const off = (c: RuleCheck | undefined): number => (c?.result.verdict !== 'VIOLATED' ? 0 : enforcedStep && !distance ? c.result.spans.length || 1 : Math.abs(c.result.error ?? 0));
       const was = off(b); const now = off(a);
-      return n + (enforcedStep ? ENFORCED_WEIGHT * Math.max(0, was - now) / Math.max(1, was) : Math.max(0, was - now));
+      return n + (enforcedStep ? ENFORCED_WEIGHT * Math.max(0, was - now) / (was || 1) : Math.max(0, was - now));
     }, 0);
   };
   /** The report the planner reads: only the step's targets are planned; every other check keeps its verdict for the acceptance. */
@@ -881,6 +883,7 @@ export async function refineToStandard(
    */
   const rewriteStep = async (d: Decision): Promise<{ outcome: ControllerDecisionRecord['outcome']; movement: number; note?: string; stop?: string }> => {
     const ids = new Set(d.targets);
+    const enforcedStep = d.action === 'rewrite';
     const gradedIds = d.action === 'carrier-rewrite' ? ids : new Set<string>();
     const plannable = focus(withGraded(withoutClaims(report), gradedIds), ids);
     const accuracy = accuracyTried || d.action !== 'rewrite' ? [] : planRepair(text, plannable, { phase: 'ACCURACY' });
@@ -933,7 +936,7 @@ export async function refineToStandard(
     const tally = gradedPass ? [edits, gradedEdits] : [edits];
     for (const r of reverted) {
       const t = targets.find((x) => x.id === r.id);
-      kept.push(`"${t?.text.slice(0, 80) ?? `span ${r.id}`}" kept: the rewrite ${r.kind === 'MOVE' || r.kind === 'SLOT' ? 'changed' : 'lost'} ${r.lost.join(', ')}`);
+      kept.push(`"${t?.text.slice(0, 80) ?? `span ${r.id}`}" kept: the rewrite ${r.kind === 'MOVE' || r.kind === 'SLOT' ? 'changed ' : r.lost.every((l) => l.startsWith('added ')) ? '' : 'lost '}${r.lost.join(', ')}`);
       for (const id of t?.requirementIds ?? []) if (!revertedRules.includes(id)) revertedRules.push(id);
       for (const e of tally) { e.rejected += 1; e.reasons.push(`refused (${r.kind ?? 'MEANING'}): ${r.lost.join(', ')}`); }
     }
@@ -942,14 +945,17 @@ export async function refineToStandard(
     // A rewrite that adds an invented claim makes UNSOURCED worse, and `acceptRepair` refuses it.
     const verdict = next === text
       ? { ok: false, why: reverted.length ? `every rewrite was refused (${reverted.map((r) => r.lost[0]).slice(0, 2).join('; ')})` : 'the rewrite returned nothing usable' }
-      : acceptRepair(atLength(withGraded(report, gradedIds), soft, text, next), withGraded(after, gradedIds), { graded: soft });
-    // THE DISPLACEMENT GUARD (./graded.ts): a rewrite that puts more of the author's features outside their bands, or
-    // pushes one it was not pointed at far out, is refused whatever it fixed. Enforced rules keep the acceptance above.
+      : acceptRepair(atLength(withGraded(report, gradedIds), text, next), withGraded(after, gradedIds), { graded: soft, ...(enforcedStep ? { ignore: steering(report) } : {}) });
+    // THE DISPLACEMENT GUARD (./graded.ts): a steering rewrite that puts more of the author's features outside their
+    // bands, or pushes one it was not pointed at far out, is refused whatever it moved. A rewrite for an enforced rule
+    // is never refused by it: what it displaced is recorded as observed, and the owner's rule is kept.
     const pointedAt = new Set(targets.flatMap((t) => t.requirementIds.map((id) => graded.get(id)).filter((f): f is string => f !== undefined)));
     const disp: Displacement | null = verdict.ok && next !== text ? displacement(text, next, profile, pointedAt) : null;
-    const displacedWhy = disp?.refusedFor.length ? `it displaced what your pieces hold: ${disp.refusedFor.join('; ')}` : null;
+    const displacedWhy = disp?.refusedFor.length && !enforcedStep ? `it displaced what your pieces hold: ${disp.refusedFor.join('; ')}` : null;
+    const observedNote = disp?.refusedFor.length && enforcedStep ? `displacement observed: ${disp.refusedFor.join('; ')}` : undefined;
     if (!verdict.ok || displacedWhy) {
-      why = `a rewrite was discarded: ${displacedWhy ?? verdict.why}`;
+      // A steering step not kept leaves a draft that holds every rule saying so: the discard is on the step's record.
+      if (enforcedStep || report.failed) why = `a rewrite was discarded: ${displacedWhy ?? verdict.why}`;
       if (disp && displacedWhy) displaced.push(...disp.refusedFor);
       for (const e of tally) { e.rejected += applied.length; if (applied.length || !reverted.length) e.reasons.push(`discarded: ${displacedWhy ?? verdict.why}`); }
       return { outcome: 'not kept', movement: 0, note: displacedWhy ?? verdict.why };
@@ -958,7 +964,7 @@ export async function refineToStandard(
     // A graded feature is repaired when a kept rewrite moved its value toward the band.
     const errorOf = (r: VerifyReport, id: string): number => Math.abs(r.checked.find((c) => c.requirementId === id)?.result.error ?? 0);
     for (const id of gradedIds) if (errorOf(after, id) < errorOf(report, id)) gradedRepaired.add(graded.get(id) ?? id);
-    const movement = movedBy(d.targets, atLength(withGraded(report, gradedIds), soft, text, next), after, d.action === 'rewrite');
+    const movement = movedBy(d.targets, atLength(withGraded(report, gradedIds), text, next), after, enforcedStep);
     text = next; report = after;
     // An accepted pass's style rewrites are examples of this standard in action. One rule per pair.
     for (const a of applied) {
@@ -968,7 +974,7 @@ export async function refineToStandard(
       if (rid && key && a.before !== a.after && !soft.has(rid)) pairs.push({ key, check: checkOf.get(rid), before: a.before, after: a.after });
     }
     why = report.failed ? verdict.why : 'every REQUIRED measured rule now holds';
-    return { outcome: 'kept', movement };
+    return { outcome: 'kept', movement, ...(observedNote ? { note: observedNote } : {}) };
   };
   /**
    * AN OPERATOR STEP (../fidelity/operators.ts): re-punctuation of the words already there, only the operators whose
@@ -994,10 +1000,10 @@ export async function refineToStandard(
           if (next === null || next === text) continue;
           if (!keepsWords(text, next) || !spanIntegrity(text, next, new Set(['and']), false).ok) continue;
           const after = read(next);
-          if (!acceptRepair(atLength(withGraded(before, idSet), soft, text, next), withGraded(after, idSet), { graded: soft }).ok) continue;
+          if (!acceptRepair(atLength(withGraded(before, idSet), text, next), withGraded(after, idSet), { graded: soft }).ok) continue;
           const disp = displacement(text, next, profile, features);
           if (disp?.refusedFor.length) { displaced.push(...disp.refusedFor); continue; }
-          const movement = movedBy(ids, atLength(withGraded(before, idSet), soft, text, next), after, false);
+          const movement = movedBy(ids, atLength(withGraded(before, idSet), text, next), after, false);
           for (const x of features) { gradedTargeted.add(x); gradedRepaired.add(x); }
           text = next; report = await check(next);
           sameInstrument();
@@ -1022,7 +1028,7 @@ export async function refineToStandard(
     const snap = processSpendByPurpose();
     if (d.action === 'redraft') {
       // Written again by the caller (cli/commands/invoke.ts, `withRedraft`), told each miss's direction and distance.
-      record(d, snap, 'handed to a redraft', 0);
+      record(d, snap, 'handed to a redraft', 0); handed = true;
       stoppedBecause = `handed to a redraft: ${d.why}`;
       break;
     }
@@ -1033,7 +1039,7 @@ export async function refineToStandard(
       if (g.text === text) { record(d, snap, 'no change', 0, 'no correction could be made in place'); for (const id of d.targets) unreachable.add(id); continue; }
       const after = await check(g.text);
       sameInstrument();
-      const accepted = acceptRepair(report, after, { wordsAdded: !addsNoWords(text, g.text) });
+      const accepted = acceptRepair(atLength(report, text, g.text), after, { wordsAdded: !addsNoWords(text, g.text), ignore: steering(report) });
       if (!accepted.ok) { record(d, snap, 'not kept', 0, accepted.why); for (const id of d.targets) unreachable.add(id); if (!notKept.length) notKept.push(`${g.fixed.join('; ')} not kept: ${accepted.why}`); continue; }
       record(d, snap, 'kept', movedBy(d.targets, report, after, true), g.fixed.join('; '));
       text = g.text; report = after; mechanical.push(...g.fixed);
@@ -1083,5 +1089,5 @@ export async function refineToStandard(
   return { output: text, report: recorded(report),
     repair: { passes, violatedBefore: broken(first), violatedAfter: broken(report), originalOutputHash: sha(draft), draft,
       ...(kept.length ? { integrityReverted: kept, revertedRules } : {}), ...(pairs.length ? { pairs: pairs.slice(0, MAX_PAIRS_KEPT) } : {}),
-      ...(cut.length ? { storiesCut: cut } : {}), ...(toCheck.length ? { claimsToCheck: toCheck } : {}), ...editsRecord(), ...gradedRecord(report, text), ...controllerOf(), why } };
+      ...(cut.length ? { storiesCut: cut } : {}), ...(toCheck.length ? { claimsToCheck: toCheck } : {}), ...editsRecord(), ...gradedRecord(report, text), ...controllerOf(), why: ownerWords(why) } };
 }

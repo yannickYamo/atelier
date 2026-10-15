@@ -17,7 +17,8 @@ import { retrieveNear, type Nearness } from '../core/fidelity/nearness.js';
 import { renderNotes, noteProblem } from '../core/fidelity/experience.js';
 import { baselineOf } from '../core/fidelity/profile.js';
 import { DEFAULT_SETTINGS, type FidelityProfile, type ImplementationRelease, type ImplementationSettings } from '../core/fidelity/types.js';
-import type { StandardVersion } from '../core/state/canonical-state.js';
+import type { InvocationRecord, StandardVersion } from '../core/state/canonical-state.js';
+import { summariseEffects } from '../core/fidelity/estimator.js';
 import { readJson } from '../core/state/read-json.js';
 import { restrictCalibration, type TypicalityCalibration } from '../core/fidelity/typicality.js';
 import { runFile } from './runtime.js';
@@ -170,9 +171,21 @@ export function implementationBlock(release: ImplementationRelease, index: Retri
   return { text: parts.length ? `\n\n${parts.join('\n\n')}` : '', retrieved };
 }
 
+/**
+ * WHAT THE REPAIR CONTROLLER LEARNS, WRITTEN WHEN A RELEASE IS MADE. The effect of each repair action (what it moved per
+ * target, what it cost), read by `summariseEffects` over this skill's recorded runs under the same standard, goes into
+ * the new release's `controller.effects`; a run reads it from its release and never from the runs themselves. With no
+ * step on record the settings are returned as they are.
+ */
+export function withMeasuredEffects(settings: ImplementationSettings, runs: readonly InvocationRecord[], standardVersionHash: string): ImplementationSettings {
+  const effects = summariseEffects(runs.filter((r) => r.standardVersionHash === standardVersionHash));
+  return Object.keys(effects).length ? { ...settings, controller: { ...settings.controller, effects } } : settings;
+}
+
 /** A new release under `from` with changed settings: the only way settings change. */
 export function releaseWithSettings(L: store.StoreLayout, from: ImplementationRelease, settings: ImplementationSettings, why: string): ImplementationRelease {
-  const r = fstore.putRelease(L, makeRelease({ ...withoutId(from), parent: from.id, settings, createdAt: new Date().toISOString(), why }));
+  const measured = withMeasuredEffects(settings, store.listLearningInvocations(L), from.standardVersionHash);
+  const r = fstore.putRelease(L, makeRelease({ ...withoutId(from), parent: from.id, settings: measured, createdAt: new Date().toISOString(), why }));
   fstore.setActiveRelease(L, r.id);
   return r;
 }

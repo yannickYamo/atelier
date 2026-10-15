@@ -17,7 +17,9 @@
 //      ratified measurement; the loop has no authority to relax a target to make a draft pass.
 
 import { sentencesOf, paragraphsOf } from '../observers/registry.js';
-import { acts, type VerifyReport } from '../observers/verify.js';
+import { acts, type RuleCheck, type VerifyReport } from '../observers/verify.js';
+import { errorAtLength, featureWordCount } from '../observers/features.js';
+import type { StandardVersion } from '../state/canonical-state.js';
 import { displacedFamilies } from '../observers/style.js';
 import { spanIntegrity, namesIn, numbersIn } from './integrity.js';
 import { isGrammarNote } from '../observers/grammar.js';
@@ -290,33 +292,68 @@ export function cutSpan(text: string, start: number, end: number): string {
 export interface RegressionVerdict { readonly ok: boolean; readonly why: string }
 
 /**
- * The least a GRADED check's |error| (in widths of its band) may move for the move to count: a fall of this much is
- * progress on it (`acceptRepair`), and a rise of this much is a regression on it (`regressions`). Read on graded checks
- * alone: without `--graded` no distance is read.
+ * The least a FEATURE check's |error| (in widths of its band) may move for the move to count: a fall of this much is
+ * progress on it (`acceptRepair`), and a rise of this much is a regression on it (`regressions`). Read on every FEATURE
+ * check that carries an error, enforced or graded; a caller comparing two lengths of one text reads the earlier
+ * report at the later length first (`readAtLength`), so a shorter text raising every rate is not read as a move.
  */
 export const GRADED_STEP = 0.1;
 
+/** Is this a FEATURE check with a distance to read? Its spans are carriers of a rate, not places that are wrong. */
+const hasDistance = (c: { observer?: string; result: { error?: number } }): boolean => c.observer === 'FEATURE' && typeof c.result.error === 'number';
+
+/**
+ * A report with each broken FEATURE check's error read as it would be at another length (../observers/features.ts,
+ * `errorAtLength`): what the earlier text of an edit is compared as, so only the count's own move is read. `paramsOf`
+ * gives a check's FEATURE params (the standard's measurement, or a SIGNAL check's own band); a check without them is
+ * read as it is.
+ */
+export function readAtLength(r: VerifyReport, from: string, to: string, paramsOf: (c: RuleCheck) => Readonly<Record<string, unknown>> | undefined): VerifyReport {
+  const wb = featureWordCount(from); const wa = featureWordCount(to);
+  return { ...r, checked: r.checked.map((c) => {
+    const v = c.result.value;
+    const p = c.observer === 'FEATURE' && c.result.verdict === 'VIOLATED' && typeof v === 'number' ? paramsOf(c) : undefined;
+    return p && typeof v === 'number' ? { ...c, result: { ...c.result, error: errorAtLength(p, v, wb, wa) } } : c;
+  }) };
+}
+
+/** The FEATURE params of a standard's rule, or of a check that carries its own (a SIGNAL band): what `readAtLength` reads. */
+export const featureParamsOf = (v: Pick<StandardVersion, 'requirements'>) => (c: RuleCheck): Readonly<Record<string, unknown>> | undefined => {
+  const m = v.requirements.find((x) => x.requirementId === c.requirementId)?.measurement;
+  return m?.observer === 'FEATURE' ? m.params : (c as { params?: Readonly<Record<string, unknown>> }).params;
+};
+
+export interface RegressionOptions {
+  /**
+   * STEERING IS SUBORDINATE TO THE OWNER'S RULES. The checks a step may not be refused for: the graded features and
+   * the profile's SIGNAL bands, when the step was taken for an enforced rule (./run-repair.ts). They are never read
+   * here, as worse or as better.
+   */
+  readonly ignore?: ReadonlySet<string>;
+}
+
 /**
  * What got worse between two reports: a rule that was not broken and now is (whatever it was before —
- * MET, or not measurable because the text was too short), or a broken rule broken in more places.
+ * MET, or not measurable because the text was too short), or a broken rule further from holding.
  *
- * A FEATURE check is the exception to "more places". Its spans are the CARRIERS of a rate (../observers/features.ts),
- * where a rewrite starts, not how many places are wrong: the same value over a different text is covered by three
- * carriers or by two. So a FEATURE check is read by its verdict, as it was before the carriers, and by its distance
- * only when it is GRADED (`graded`, the ids `--graded` made targets): for those alone, |error| up by GRADED_STEP is
- * worse, since their places are capped and a value could otherwise drift from one band-width out to three and pass.
- * Shared by the repair loop and by `fix`, so "worse" means one thing everywhere.
+ * Further from holding is read by distance wherever a check carries one: a FEATURE check's spans are the CARRIERS of
+ * a rate (../observers/features.ts), where a rewrite starts, not how many places are wrong, and three carriers can
+ * become one while the value moves twice as far out. So for every FEATURE check with an error, enforced or graded,
+ * |error| up by GRADED_STEP is worse, and its span count is never read. Every other check is worse when broken in
+ * more places. Shared by the repair loop and by `fix`, so "worse" means one thing everywhere.
  */
-export function regressions(before: VerifyReport, after: VerifyReport, graded: ReadonlySet<string> = new Set()): string[] {
+export function regressions(before: VerifyReport, after: VerifyReport, opts: RegressionOptions = {}): string[] {
   const was = new Map(before.checked.map((c) => [c.requirementId, c.result]));
   return after.checked.filter((c) => {
+    if (opts.ignore?.has(c.requirementId)) return false;
     const b = was.get(c.requirementId);
     if (c.result.verdict !== 'VIOLATED') return false;
     // The grammar checker's uncertain list is a note to the person, not a rule: a rewrite that adds one is not worse.
     if (isGrammarNote(c)) return false;
     if (b?.verdict !== 'VIOLATED') return true;
     if (c.observer === 'FEATURE') {
-      return graded.has(c.requirementId) && typeof c.result.error === 'number' && typeof b.error === 'number' && Math.abs(c.result.error) - Math.abs(b.error) >= GRADED_STEP - 1e-9;
+      const e = c.result.error;
+      return typeof e === 'number' && typeof b.error === 'number' && Math.abs(e) - Math.abs(b.error) >= GRADED_STEP - 1e-9;
     }
     return c.result.spans.length > b.spans.length;
   }).map((c) => c.requirementId);
@@ -336,36 +373,37 @@ export function addsNoWords(before: string, after: string): boolean {
 }
 
 /**
- * Keep a repair only if nothing got worse, and at least one REQUIRED rule that was broken now holds. A change that adds
- * no word (`wordsAdded: false`: an em dash made a comma) cannot add an invented specific, so the reading of specifics
- * read again is no evidence against it: an em dash fix was thrown away because that reading listed one sentence more.
+ * Keep a repair only if nothing got worse, and at least one REQUIRED rule that was broken now holds or is nearer
+ * holding. A change that adds no word (`wordsAdded: false`: an em dash made a comma) cannot add an invented specific,
+ * so the reading of specifics read again is no evidence against it: an em dash fix was thrown away because that
+ * reading listed one sentence more.
  */
 export function acceptRepair(before: VerifyReport, after: VerifyReport,
   opts: { wordsAdded?: boolean;
-    /** GRADED checks (run-repair.ts, `CheckOptions.graded`), never enforced rules: for these alone, progress is also a fall in |error| of GRADED_STEP or more */
-    graded?: ReadonlySet<string> } = {}): RegressionVerdict {
-  const worse = regressions(before, after, opts.graded).filter((id) => opts.wordsAdded !== false || !id.startsWith('UNSOURCED'));
+    /** GRADED checks (run-repair.ts, `CheckOptions.graded`) read as enforced on these copies: only what the record's wording says of them */
+    graded?: ReadonlySet<string>;
+    /** steering checks never read for this step (`RegressionOptions.ignore`) */
+    ignore?: ReadonlySet<string> } = {}): RegressionVerdict {
+  const worse = regressions(before, after, { ignore: opts.ignore }).filter((id) => opts.wordsAdded !== false || !id.startsWith('UNSOURCED'));
   if (worse.length) return { ok: false, why: `the rewrite made ${worse.join(', ')} worse` };
-  const broken = (r: VerifyReport) => r.checked.filter((c) => acts(c) && c.result.verdict === 'VIOLATED');
+  const broken = (r: VerifyReport) => r.checked.filter((c) => acts(c) && c.result.verdict === 'VIOLATED' && !opts.ignore?.has(c.requirementId));
   const req = (r: VerifyReport): number => broken(r).length;
   // Said as what was counted: a graded check reads as enforced on the copy it is counted on, and is no REQUIRED rule.
   const gradedCount = broken(before).filter((c) => opts.graded?.has(c.requirementId)).length;
   const label = gradedCount === 0 ? 'REQUIRED' : gradedCount === req(before) ? 'graded' : 'REQUIRED or graded';
   // Progress is fewer broken REQUIRED rules, or the same rules broken in fewer places: fixing one of two
   // invented figures is a step, and discarding it threw away a good placeholder and ended the loop.
-  // A FEATURE miss counts its places as the carriers it is pointed at (../observers/features.ts), for every FEATURE
-  // rule, enforced or not: a repair needs a target. So a REQUIRED feature rule's miss pointed at two carriers where it
-  // was pointed at three is progress here, by design; one newly broken is refused above, as any rule is.
-  const spans = (r: VerifyReport): number => broken(r).reduce((n, c) => n + Math.max(1, c.result.spans.length), 0);
   if (req(after) < req(before)) return { ok: true, why: `${label} rules broken: ${req(before)} → ${req(after)}` };
+  // A FEATURE check's places are the carriers it is pointed at, never how far it is out: fewer carriers with the value
+  // further out is no step. Its progress is a fall in |error| of GRADED_STEP (in band widths) or more, read below.
+  const spans = (r: VerifyReport): number => broken(r).filter((c) => !hasDistance(c)).reduce((n, c) => n + Math.max(1, c.result.spans.length), 0);
   if (spans(after) < spans(before)) return { ok: true, why: `places breaking a ${label} rule: ${spans(before)} → ${spans(after)}` };
-  // A GRADED feature's spans are capped, so a rewrite that moves it a good way toward the band and not into it shows
-  // the same count of places. For graded checks only, a fall in |error| of GRADED_STEP (in band widths) is progress;
-  // what is newly broken was refused above, as for any rewrite. An enforced rule's progress is the two counts above.
-  if (opts.graded?.size) {
-    const errorOf = (r: VerifyReport, id: string): number => Math.abs(r.checked.find((c) => c.requirementId === id)?.result.error ?? 0);
-    const moved = [...opts.graded].map((id) => ({ id, from: errorOf(before, id), to: errorOf(after, id) })).filter((x) => x.from - x.to >= GRADED_STEP);
-    if (moved.length) return { ok: true, why: `graded feature(s) nearer the band: ${moved.map((x) => `${x.id} ${x.from.toFixed(1)} → ${x.to.toFixed(1)}`).join(', ')}` };
+  const errorOf = (r: VerifyReport, id: string): number => Math.abs(r.checked.find((c) => c.requirementId === id)?.result.error ?? 0);
+  const moved = broken(before).filter(hasDistance).map((c) => ({ id: c.requirementId, from: errorOf(before, c.requirementId), to: errorOf(after, c.requirementId) }))
+    .filter((x) => x.from - x.to >= GRADED_STEP - 1e-9);
+  if (moved.length) {
+    const kind = moved.every((x) => opts.graded?.has(x.id)) ? 'graded feature(s)' : 'feature rule(s)';
+    return { ok: true, why: `${kind} nearer the band: ${moved.map((x) => `${x.id} ${x.from.toFixed(1)} → ${x.to.toFixed(1)}`).join(', ')}` };
   }
   return { ok: false, why: `the rewrite fixed no ${label} rule` };
 }

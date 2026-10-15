@@ -15,7 +15,7 @@
 // claim or moves a banned move onto a sibling is refused), and prints the repaired text. Nothing else
 // in the text is touched: it keeps its own voice.
 
-import { profileOf } from '../../core/observers/selection.js';
+import { profileOf, bandWords } from '../../core/observers/selection.js';
 import { checksFor, shortFormRequest } from '../checks.js';
 import { readFileSync, existsSync } from 'node:fs';
 import * as store from '../../core/state/store.js';
@@ -133,7 +133,7 @@ export async function verify(): Promise<void> {
       else {
         console.log('\nprofile (0 = inside your range; 1 = a full range-width outside):');
         for (const l of profile.layers) console.log(`  ${l.layer.padEnd(28)} ${l.distance.toFixed(2)}  (${l.features} feature${l.features === 1 ? '' : 's'})`);
-        for (const e of profile.entries) console.log(`    ${e.id.padEnd(20)} ${e.value ?? 'n/a'}  your range ${e.band[0]} to ${e.band[1]}${e.distance ? `  → ${e.distance} off` : ''}`);
+        for (const e of profile.entries) console.log(`    ${e.id.padEnd(20)} ${e.value ?? 'n/a'}  your range ${bandWords(e.band)}${e.distance ? `  → ${e.distance} off` : ''}`);
       }
     }
     if (taste) console.log(`\n${taste.text}`);

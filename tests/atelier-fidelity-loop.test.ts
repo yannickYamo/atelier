@@ -315,7 +315,12 @@ describe('through the binary: discovery builds the profile, invoke steers and re
       return execFileSync('node', [CLI, ...args, '--provider', 'openai-compatible', '--base-url', `http://127.0.0.1:${port}`, '--model', 'scripted'], {
         encoding: 'utf8', cwd: proj, env: { ...process.env, ATELIER_DATA: data, ATELIER_PROJECT_DIR: proj, ATELIER_PRICE_IN: '1', ATELIER_PRICE_OUT: '1', ATELIER_CLAIMS: 'pattern' },
       });
-    } catch (e) { const x = e as { status?: number; stdout?: string; stderr?: string }; return `EXIT:${x.status}\n${x.stderr ?? ''}${x.stdout ?? ''}`; }
+    } catch (e) {
+      const x = e as { status?: number; stdout?: string; stderr?: string };
+      // A blocked run read by a machine exits 1 with its JSON whole, as `atelier run` does: the JSON is the answer.
+      if (x.status === 1 && args.includes('--json') && x.stdout?.trimStart().startsWith('{')) return x.stdout;
+      return `EXIT:${x.status}\n${x.stderr ?? ''}${x.stdout ?? ''}`;
+    }
   };
 
   it('new … --accept builds the profile and the first implementation release', () => {
