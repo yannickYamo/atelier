@@ -643,7 +643,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   // THE BOUNDED CONTROLLER (core/loop/controller.ts): the release's settings, whether a draft can be written again when it
   // asks (only where `withRedraft` runs), the run's ledger from its start, for what a step costs, and the steps already
   // taken on a piece being refined again after a redraft that did no better.
-  const refineFor = (history?: readonly ControllerDecisionRecord[]) => trackGraded(refineDraft({ client, budget, name, std: std!, taste,
+  const refineFor = (history?: readonly ControllerDecisionRecord[], held: Standard | null = std) => trackGraded(refineDraft({ client, budget, name, std: held ?? die('no standard to refine against'), taste,
     checks: { ...checks, controller: { settings: runSettings?.controller ?? null, redraft: unmet !== null, ledgerFrom: ledgerBefore, ...(history ? { history } : {}) } } }), gradedTrace);
   const rec = await runOnce(L, sv, servedForRun, servedHash, deliveryForRun, taskForRun, client, budget, binding,
     resolveProvenance(flag('--provenance'), process.env), contractFile,
