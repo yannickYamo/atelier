@@ -43,21 +43,28 @@
 //      caller's trims (a draft that only runs long, cut) and drafts written again are steps here, recorded as 'trim' and
 //      'redraft', asked of `stepGate` before they are taken, counted against maxActions and priced from the ledger.
 //
-// TWO LOOPS, ONE RULE EACH. The controller's steps run inside the repair loop (./run-repair.ts); the trims and drafts
-// written again run around it (cli/commands/invoke.ts, `withRedraft`, and the shape rounds). Neither keeps bookkeeping or
-// acceptance of its own:
+// TWO LOOPS, ONE RULE EACH. The controller's steps run inside the repair loop (./run-repair.ts); the trims, the drafts
+// written again, the structural edits, the voice pass and the draft written again for what the request asks run around
+// it (cli/commands/invoke.ts, `repairChain`), the taste reader's rewrite after it (../taste/repair.ts). None keeps
+// bookkeeping or acceptance of its own: every one of them goes through ONE STEP (./repair.ts, `applyStep`), which asks the
+// ledger, enters the step, runs it, judges it and settles it. Nothing else may replace the working text.
 //  (A) ONE ACCEPTANCE RULE (./repair.ts, `enforcedNeverWorse`, `enforcedNearer`). Every replacement of the working text,
 //      whichever loop proposes it (a rewrite, a carrier rewrite, the operators, a fix without a model, a trim, a draft
-//      written again for rules, for steering or for both, a shape round), is kept only if no ENFORCED rule is newly
-//      broken and none already broken is further from holding BY ITS VALUE (`distanceOf`: a rate past its ceiling or
-//      under its floor, a count, a length outside its range, a band distance), each read on the actual text with no
-//      length rescaling; only a check that carries no value is read by its count of places. A step made FOR enforced
-//      rules must, in addition, move at least one of its own targets nearer holding.
-//  (B) ONE LEDGER (`stepLedger`). One step ledger a run (one a shape round), created by the outermost loop and handed to
-//      every refinement. Every text-changing or model-calling step is entered on it before it runs; a step the cap or the
-//      budget refuses is entered as 'refused' and is no step. The cap, the budget and the controller's history are read
-//      from it alone, and a piece refined again after a redraft that was not kept continues the same ledger: nothing is
-//      recomputed, so the steps taken on the draft not kept count.
+//      written again for rules, for steering, for both or for what the request asks, the structural edits, the voice pass,
+//      the taste rewrite, a draft written again around a claim cut, a shape round), is kept only if no ENFORCED rule is
+//      newly broken and none already broken is further from holding BY ITS VALUE (`distanceOf`, with each rule's own
+//      params: a rate past its ceiling or under its floor, a count, a length outside its range, a band distance), each read
+//      on the actual text with no length rescaling; only a check that carries no value is read by its count of places. A
+//      step made FOR enforced rules must, in addition, move at least one of its own targets nearer holding. A step's own
+//      goal and guards (fewer parts left out, the reader's confirmation, no fragment) come on top, never instead.
+//  (B) ONE LEDGER (`stepLedger`). One step ledger a run (one a shape round), made by the run alone (`withShape`) and handed
+//      to every refinement; no wrapper makes one. Every text-changing or model-calling step is entered on it before it
+//      runs and counted against maxActions (the claim cut and the fixes without a model are recorded, never counted); a
+//      step the cap or the budget refuses, the controller's own choices included (`decide` hands its refusals back), is
+//      entered as 'refused' and is no step. The cap, the budget and the controller's history are read from it alone, and a
+//      piece written again inside the chain (a draft for the controller, a draft for what the request asks) is refined on
+//      the same ledger: nothing is recomputed, so the steps taken on a draft not kept count, and are marked as that draft's
+//      (`onDraftNotKept`). The record of a run is its ledger, every step with the calls and dollars it cost.
 //  (C) THE HAND-OFF CONTRACT. A redraft the controller hands over is sent with exactly the targets it was handed, each
 //      named in its note, an enforced rule no span carries included (a floor rate: "your pieces use at least … per 1,000
 //      words; this draft has …"). A redraft is never sent with no target, and its outcome line names the handed targets,
@@ -101,10 +108,14 @@ export const DEFAULT_COST: Readonly<Record<ControllerAction, number>> = {
   cut: 0, mechanical: 0, operators: 0, rewrite: 0.05, 'carrier-rewrite': 0.05, redraft: 0.4, grammar: 0,
   // a trim returns the whole piece, as a draft does: reserved at a draft's price until the ledger says otherwise
   trim: 0.4,
+  // the steps the loops around the controller take: a whole draft, a few sentences, a few paragraphs, one span rewrite
+  coverage: 0.4, steer: 0.04, voice: 0.1, taste: 0.05, 'claim-redraft': 0.05,
 };
-const MODEL_ACTIONS: ReadonlySet<ControllerAction> = new Set(['rewrite', 'carrier-rewrite', 'redraft', 'trim']);
+/** Steps that need a model call to run. The structural edits ('steer') may run on the free operators alone. */
+const MODEL_ACTIONS: ReadonlySet<ControllerAction> = new Set(['rewrite', 'carrier-rewrite', 'redraft', 'trim', 'coverage', 'voice', 'taste', 'claim-redraft']);
 /** Steps counted against maxActions, as against code that always runs (the claim cut, the mechanical fixes). */
-const CHOSEN: ReadonlySet<ControllerAction> = new Set(['rewrite', 'operators', 'carrier-rewrite', 'redraft', 'grammar', 'trim']);
+const CHOSEN: ReadonlySet<ControllerAction> = new Set(['rewrite', 'operators', 'carrier-rewrite', 'redraft', 'grammar', 'trim',
+  'coverage', 'steer', 'voice', 'taste', 'claim-redraft']);
 
 /**
  * THE STEPS A RUN HAS TAKEN, the one count every caller reads. A redraft is one step: its hand-off is on the record but
@@ -115,13 +126,16 @@ export const stepsTaken = (history: readonly ControllerDecisionRecord[]): number
 
 /** A step said in plain words, as a stop names the one that could not run. */
 export const stepWords = (a: ControllerAction): string => ({ cut: 'cut of invented claims', mechanical: 'fix without a model', rewrite: 'rewrite', operators: 're-punctuation',
-  'carrier-rewrite': 'carrier rewrite', redraft: 'redraft', grammar: 'grammar fix', trim: 'cut for length' } satisfies Record<ControllerAction, string>)[a];
+  'carrier-rewrite': 'carrier rewrite', redraft: 'redraft', grammar: 'grammar fix', trim: 'cut for length', coverage: 'draft written again for what the request asks',
+  steer: 'structural edit', voice: 'voice pass', taste: 'taste rewrite', 'claim-redraft': 'draft written again around a cut claim' } satisfies Record<ControllerAction, string>)[a];
 
 /** The stop said when the step limit is reached. */
 export const capStop = (maxActions: number): string => `the controller took its ${maxActions} steps`;
 
 /** Why the budget cannot hold one step, said as what ran out; null when it can. */
 function budgetRefusal(action: ControllerAction, cost: number, budget: ControllerInput['budget']): string | null {
+  // A step that needs no call and costs nothing is never refused by the budget.
+  if (!MODEL_ACTIONS.has(action) && cost <= 0) return null;
   const noCall = MODEL_ACTIONS.has(action) && budget.callsLeft !== null && budget.callsLeft < 1;
   if (cost <= budget.usdLeft && !noCall) return null;
   // Said as what ran out: the calls, or the dollars, never a cost of "$0.00" beside an empty purse of calls.
@@ -130,15 +144,15 @@ function budgetRefusal(action: ControllerAction, cost: number, budget: Controlle
 }
 
 /**
- * MAY A CALLER TAKE THIS STEP? For a step the controller does not choose itself but that counts all the same (a trim, a
- * draft written again by the caller): null when the step limit and the budget hold it, or the stop, said as which ran
- * out. A redraft the controller handed over was allowed when it was handed over (the hand-off is no step), and is not
- * asked again.
+ * MAY THIS STEP BE TAKEN? Asked of every step before it runs (`applyStep`, ./repair.ts), whoever proposes it: null when
+ * the step limit and the budget hold it, or the stop, said as which ran out. The claim cut and the fixes without a model
+ * are no steps and are never refused by the limit; a step that needs no call and costs nothing is never refused by the
+ * budget. A step the controller chose passes here as it passed `decide`, which read the same ledger.
  */
-export function stepGate(action: 'trim' | 'redraft', expectedCostUsd: number, history: readonly ControllerDecisionRecord[],
+export function stepGate(action: ControllerAction, expectedCostUsd: number, history: readonly ControllerDecisionRecord[],
   budget: ControllerInput['budget'] | null, s: ControllerSettings | null = null): string | null {
   const set = controllerSettings(s);
-  if (stepsTaken(history) >= set.maxActions) return capStop(set.maxActions);
+  if (CHOSEN.has(action) && stepsTaken(history) >= set.maxActions) return capStop(set.maxActions);
   return budget ? budgetRefusal(action, expectedCostUsd, budget) : null;
 }
 
@@ -166,10 +180,14 @@ export interface StepLedger {
   settle(at: number, outcome: ControllerDecisionRecord['outcome'], observed: ControllerDecisionRecord['observed']): ControllerDecisionRecord;
   /** enter a record that is no step of its own (a hand-off to a redraft, the claim cut), settled as it is */
   add(d: ControllerDecisionRecord): void;
-  /** may a caller take this step? null when the cap and the budget hold it; otherwise it is entered as refused and the stop is returned */
-  gate(step: PlannedStep & { readonly action: 'trim' | 'redraft' }): string | null;
+  /** may this step be taken? null when the cap and the budget hold it; otherwise it is entered as refused and the stop is returned */
+  gate(step: PlannedStep): string | null;
+  /** enter a step the cap or the budget refused, with why, unless the same refusal already stands since the last step taken */
+  refuse(step: PlannedStep, why: string): void;
   /** a draft not kept asked for nothing: its hand-offs, entered from `from` on, are taken off (a hand-off is no step) */
   withdrawHandOffs(from: number): void;
+  /** the steps entered from `from` on were taken on the draft that the step at `draftAt` wrote, and that draft was not kept */
+  markOnDraftNotKept(from: number, draftAt: number): void;
 }
 
 /** A new ledger for one run, with the steps already taken on it (a caller that refines a piece again) when there are any. */
@@ -177,19 +195,38 @@ export function stepLedger(settings: ControllerSettings | null = null, budget: (
   history: readonly ControllerDecisionRecord[] = []): StepLedger {
   const entries: ControllerDecisionRecord[] = [...history];
   const NONE = { movement: 0, calls: 0, usd: 0 };
+  const refuse = (step: PlannedStep, why: string): void => {
+    // One refusal said once: the same step refused for the same reason since the last step taken is not entered again.
+    for (let i = entries.length - 1; i >= 0 && (entries[i].outcome === 'refused' || !CHOSEN.has(entries[i].action)); i--) {
+      const e = entries[i];
+      if (e.outcome === 'refused' && e.action === step.action && e.observed.note === why && e.targets.join('\u0000') === step.targets.join('\u0000')) return;
+    }
+    entries.push({ action: step.action, targets: [...step.targets], why: step.why, expectedGain: step.expectedGain, expectedCostUsd: step.expectedCostUsd,
+      outcome: 'refused', observed: { ...NONE, note: why } });
+  };
   return {
     settings, entries,
     budget: () => (budget ? budget() : null),
     begin(step) { entries.push({ action: step.action, targets: [...step.targets], why: step.why, expectedGain: step.expectedGain, expectedCostUsd: step.expectedCostUsd, outcome: 'could not run', observed: { ...NONE } }); return entries.length - 1; },
     settle(at, outcome, observed) { const d = { ...entries[at], outcome, observed: { ...observed } }; entries[at] = d; return d; },
     add(d) { entries.push(d); },
+    refuse,
     gate(step) {
       const refused = stepGate(step.action, step.expectedCostUsd, entries, budget ? budget() : null, settings);
-      if (refused) entries.push({ action: step.action, targets: [...step.targets], why: step.why, expectedGain: step.expectedGain, expectedCostUsd: step.expectedCostUsd,
-        outcome: 'refused', observed: { ...NONE, note: refused } });
+      if (refused) refuse(step, refused);
       return refused;
     },
-    withdrawHandOffs(from) { for (let i = entries.length - 1; i >= from; i--) if (entries[i].outcome === 'handed to a redraft') entries.splice(i, 1); },
+    withdrawHandOffs(from) {
+      for (let i = entries.length - 1; i >= from; i--) {
+        if (entries[i].outcome !== 'handed to a redraft') continue;
+        entries.splice(i, 1);
+        // a step that names the draft it was taken on by its place keeps naming the same draft
+        for (let k = 0; k < entries.length; k++) { const on = entries[k].onDraftNotKept; if (on !== undefined && on > i + 1) entries[k] = { ...entries[k], onDraftNotKept: on - 1 }; }
+      }
+    },
+    markOnDraftNotKept(from, draftAt) {
+      for (let k = from; k < entries.length; k++) if (entries[k].onDraftNotKept === undefined) entries[k] = { ...entries[k], onDraftNotKept: draftAt + 1 };
+    },
   };
 }
 
@@ -226,8 +263,13 @@ export interface ControllerInput {
   readonly unreachable: ReadonlySet<string>;
 }
 
+/** A step the budget would not hold when the controller chose: entered on the ledger as refused (`StepLedger.refuse`). */
+export interface Refusal { readonly step: PlannedStep; readonly why: string }
+
 export interface Decision {
   readonly kind: 'act';
+  /** the steps before this one in priority that the budget refused */
+  readonly refusals?: readonly Refusal[];
   readonly action: ControllerAction;
   readonly targets: readonly string[];
   readonly why: string;
@@ -238,7 +280,9 @@ export interface Decision {
 }
 export interface Stop { readonly kind: 'stop'; readonly why: string;
   /** the step the budget could not hold, where that is why the controller stopped: what the stop names as not run */
-  readonly refused?: ControllerAction }
+  readonly refused?: ControllerAction;
+  /** every step the budget refused on the way to the stop, each to be entered on the ledger as refused */
+  readonly refusals?: readonly Refusal[] }
 
 /** The release's settings with every absent field at its default. */
 export function controllerSettings(s?: ControllerSettings | null): Required<Omit<ControllerSettings, 'effects'>> & { effects: ControllerEffects } {
@@ -328,7 +372,7 @@ export function decide(input: ControllerInput, s: ControllerSettings | null = nu
   // a steering step only; a step for an enforced rule is priced and expected at the documented defaults, or at what this
   // run has itself paid, and is never weighed against minGainPerUsd.
   const usdPerCall = (a: ControllerAction, steering = true): number => input.observedUsdPerCall[a]
-    ?? (steering && a !== 'cut' && a !== 'mechanical' && a !== 'grammar' && a !== 'trim' ? set.effects[a]?.usdPerAction : undefined) ?? DEFAULT_COST[a];
+    ?? (steering && (a === 'rewrite' || a === 'operators' || a === 'carrier-rewrite' || a === 'redraft') ? set.effects[a]?.usdPerAction : undefined) ?? DEFAULT_COST[a];
   const prior = (a: 'rewrite' | 'operators' | 'carrier-rewrite' | 'redraft', steering = true): number => (steering ? set.effects[a]?.movement : undefined) ?? DEFAULT_EFFECT[a];
   const candidates: Decision[] = [];
   /** the candidates taken for an enforced rule: never gated by expected gain per dollar */
@@ -411,9 +455,13 @@ export function decide(input: ControllerInput, s: ControllerSettings | null = nu
       : 'only what no step here can reach is left (nothing to rewrite in it, or a region the guards protect)' };
   }
   let refused: string | null = null; let budgetRefusedGraded = false; let refusedAction: ControllerAction | null = null;
+  // A STEP THE BUDGET REFUSED IS ON THE RECORD (rule B): each is handed back with the decision, to be entered as refused.
+  const refusals: Refusal[] = [];
+  const refusal = (c: Decision, why: string): Refusal => ({ step: { action: c.action, targets: c.targets, why: c.why, expectedGain: c.expectedGain, expectedCostUsd: c.expectedCostUsd }, why });
   for (const c of candidates) {
     const short = budgetRefusal(c.action, c.expectedCostUsd, input.budget);
     if (short) {
+      refusals.push(refusal(c, short));
       if (refused === null) refusedAction = c.action;
       refused ??= short;
       if (!forEnforced.has(c)) budgetRefusedGraded = true;
@@ -423,7 +471,7 @@ export function decide(input: ControllerInput, s: ControllerSettings | null = nu
       refused ??= `it stopped paying: ${c.action} was expected to move ${c.expectedGain} for ${usd(c.expectedCostUsd)}, under ${set.minGainPerUsd} per dollar`;
       continue;
     }
-    return c;
+    return refusals.length ? { ...c, refusals } : c;
   }
   // A FREE STEP STILL RUNS WHEN THE BUDGET HOLDS NO MODEL CALL: the operators, on the far misses they can move and have
   // not failed on, before the stop.
@@ -432,10 +480,11 @@ export function decide(input: ControllerInput, s: ControllerSettings | null = nu
     if (free.length) {
       return { kind: 'act', action: 'operators', targets: free.map((g) => g.id),
         why: `${refused}; the operators still run, no model: graded miss(es) at ${free.map((g) => `${g.id} ${Math.abs(g.error).toFixed(2)}`).join(', ')} band widths`,
-        expectedGain: r3(free.reduce((n, g) => n + Math.min(Math.abs(g.error), effectOf('operators', g.operatorEffect ?? prior('operators'), input.history)), 0)), expectedCostUsd: 0 };
+        expectedGain: r3(free.reduce((n, g) => n + Math.min(Math.abs(g.error), effectOf('operators', g.operatorEffect ?? prior('operators'), input.history)), 0)), expectedCostUsd: 0, refusals };
     }
   }
-  return { kind: 'stop', why: refused ?? 'nothing to do', ...(refused !== null && refusedAction !== null && refused.startsWith('the budget') ? { refused: refusedAction } : {}) };
+  return { kind: 'stop', why: refused ?? 'nothing to do', ...(refused !== null && refusedAction !== null && refused.startsWith('the budget') ? { refused: refusedAction } : {}),
+    ...(refusals.length ? { refusals } : {}) };
 }
 
 /** The record of a draft's steps, with the calls and dollars summed from the steps themselves. */
@@ -469,7 +518,8 @@ export const redraftHandOff = (r: ControllerRecord | undefined): ControllerDecis
 /** One plain line per step, for `atelier report`. */
 export function describeController(r: ControllerRecord): string[] {
   return [...r.decisions.map((d, i) => ownerWords(`${i + 1}. ${d.action} on ${d.targets.join(', ') || '-'}: ${d.why}; expected ${d.expectedGain} for ${usd(d.expectedCostUsd)}; `
-    + `${d.outcome}${d.observed.movement ? `, moved ${d.observed.movement}` : ''}, ${d.observed.calls} call(s), $${d.observed.usd.toFixed(4)}${d.observed.note ? ` (${d.observed.note})` : ''}`)),
+    + `${d.outcome}${d.observed.movement ? `, moved ${d.observed.movement}` : ''}, ${d.observed.calls} call(s), $${d.observed.usd.toFixed(4)}${d.observed.note ? ` (${d.observed.note})` : ''}`
+    + (d.onDraftNotKept !== undefined ? `; taken on the draft step ${d.onDraftNotKept} wrote, which was not kept` : ''))),
   `stopped: ${ownerWords(r.stoppedBecause)} · ${r.callsUsed} call(s), $${r.usdUsed.toFixed(4)} on its steps`,
   // every shape round's steps, each round with a step limit of its own
   ...(r.rounds ?? []).filter((x) => !x.kept).map((x) => `shape round ${x.round} (not kept): ${x.decisions.length ? x.decisions.map((d) => `${d.action} on ${d.targets.join(', ') || '-'} ${d.outcome}`).join('; ') : 'no step'}; stopped: ${ownerWords(x.stoppedBecause)} · ${x.callsUsed} call(s), $${x.usdUsed.toFixed(4)}`)];

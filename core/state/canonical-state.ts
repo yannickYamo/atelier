@@ -676,8 +676,14 @@ export interface RepairRecord {
   readonly why: string;
 }
 
-/** What the bounded controller may do on one step. */
-export type ControllerAction = 'cut' | 'mechanical' | 'rewrite' | 'operators' | 'carrier-rewrite' | 'redraft' | 'grammar' | 'trim';
+/**
+ * What one step on a run's ledger may be (core/loop/controller.ts, rule B). The controller chooses the first eight; the
+ * rest are taken by the loops around it and counted all the same: a draft written again to give what the request asks
+ * for ('coverage'), the structural edits toward the author's range ('steer'), the voice pass ('voice'), a rewrite the
+ * taste reader asked for ('taste') and a draft written again around a claim cut that would leave a fragment ('claim-redraft').
+ */
+export type ControllerAction = 'cut' | 'mechanical' | 'rewrite' | 'operators' | 'carrier-rewrite' | 'redraft' | 'grammar' | 'trim'
+  | 'coverage' | 'steer' | 'voice' | 'taste' | 'claim-redraft';
 
 /** One step the controller took, and what came of it. Movement is movement: never a probability of acceptance. */
 export interface ControllerDecisionRecord {
@@ -698,6 +704,11 @@ export interface ControllerDecisionRecord {
     readonly usd: number;
     readonly note?: string;
   };
+  /**
+   * the step was taken on a draft written again that was not kept: the 1-based place, in the same list, of the step
+   * that wrote that draft. It counts against the limit all the same; its text was never delivered.
+   */
+  readonly onDraftNotKept?: number;
 }
 
 export interface ControllerRecord {
