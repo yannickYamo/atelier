@@ -7,7 +7,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { methodReading, methodLine } from '../../core/eval/obligations.js';
 import type { CheckContext } from '../../core/observers/registry.js';
-import { checksFor, claimInstrumentOf, contextJudgeFor, smallReaderFor, CLAIMS_MODEL_DEFAULT } from '../checks.js';
+import { checksFor, claimInstrumentOf, contextJudgeFor, smallReaderFor, CLAIMS_MODEL_DEFAULT, shortFormRequest } from '../checks.js';
 import { regressions } from '../../core/loop/repair.js';
 import { refineToStandard, checkDraft, checkDraftAsync, enforceClaims, heavyCut, listedClaims, brokenByCut, gradedRules, PUBLIC_FACTS, INCONCLUSIVE, type CheckOptions } from '../../core/loop/run-repair.js';
 import { signalChecks, displacement } from '../../core/loop/graded.js';
@@ -19,7 +19,7 @@ import { factLedger, factCoverage, type Fact } from '../../core/loop/fact-ledger
 import { steerTowardRange, type Application } from '../../core/fidelity/structural.js';
 import { LOOP_SETTINGS, DIVERSITY_TEMPERATURES, type FidelityProfile, type FidelityReading, type FidelityRecord, type ImplementationSettings } from '../../core/fidelity/types.js';
 import type { RepairRecord, RepairEdits, GradedRecord, Requirement, ControllerRecord, ControllerDecisionRecord } from '../../core/state/canonical-state.js';
-import { askedForRedraft, joinRecords, DEFAULT_COST, DEFAULT_EFFECT, ENFORCED_WEIGHT } from '../../core/loop/controller.js';
+import { askedForRedraft, joinRecords, controllerRecord, DEFAULT_COST, DEFAULT_EFFECT, ENFORCED_WEIGHT } from '../../core/loop/controller.js';
 import { releaseFor, implementationBlock } from '../fidelity.js';
 import { buildRunEval } from '../eval-run.js';
 import { needsReview } from '../../core/eval/record.js';
@@ -314,7 +314,12 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const { L, sv, servedText, servedHash, contractFile, delivery } = resolveServedSkill(name);
   // A standard measures one kind of document; asking it for another is refused before anything is spent.
   const cls = checkClass(store.getDocClass(L), flag('--class'));
-  if (!cls.ok) die(cls.why);
+  // A SHORT PIECE FROM A STANDARD READ FROM LONGER ONES (core/observers/short-form.ts): asked for a post on X, or for
+  // `--limit <chars>`, a long-form standard keeps its method and its bans, and its counted bands do not apply.
+  const shortAsked = shortFormRequest(store.getStandard(L, sv.standardVersionHash)?.requirements ?? null, flag('--class'), flag('--limit'));
+  const short = typeof shortAsked === 'string' ? die(shortAsked) : shortAsked;
+  const transfer = short.transfer;
+  if (!cls.ok && !transfer) die(cls.why);
   // A SKILL THAT CITES LINES IS SHOWN THE LINE NUMBERS (core/loop/locators.ts), read from the skill as served.
   const lineCiting = citesLines(servedText);
   const { material, materialText, task } = taskWithMaterial(L, asked, lineCiting);
@@ -562,7 +567,13 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   }
   // Out of register the author's range steers only on the features the policy carries; the rest are read, not steered by.
   const carried = fid && policy && register?.status === 'out' ? carriedProfile(fid.profile, policy) : fid?.profile ?? null;
+  if (transfer) {
+    report.say(transfer.said);
+    for (const q of std?.requirements ?? []) if (transfer.doesNotApply.has(q.requirementId)) withheld.push(q.statement);
+  }
   const checks = { ...checksFor(L, { material: materialText, task: asked, context: { request: asked, material }, guardClaims: !argv.includes('--allow-unsourced'), placeholders: argv.includes('--placeholders'), ...(judge ? { judge } : {}) }),
+    ...(short.format ? { format: short.format } : {}),
+    ...(transfer ? { doesNotApply: transfer.doesNotApply } : {}),
     ...(waived.size ? { waived } : {}), ...(graded !== undefined ? { graded, gradedProfile: carried } : {}) };
   // DRAFTS THAT DIFFER (core/fidelity/types.ts, `diversity`): each draft its own temperature and its own slice of
   // the author's closest passages, so the shared block carries only the notes.
@@ -604,7 +615,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const servedForRun = `${withheld.length ? withoutRules(servedText, withheld) : servedText}${impl.text}${carryBlock}${lengthNote}`;
   const deliveryForRun = withheld.length ? { ...delivery, withheldRules: withheld } : delivery;
   // What the person said was wrong with an earlier version (`atelier fix`) goes to the writer whatever shape was asked for.
-  const corrected = `${task}${correctionFor(flag('--correcting'))}`;
+  const corrected = `${task}${correctionFor(flag('--correcting'))}${transfer?.note ?? ''}`;
   const taskForRun = shape === 'SHAPE' ? `${corrected}\n\n(The request's own format instruction overrides any presentation rule in the skill: follow the request exactly.)`
     : shape === 'BARE' ? `${corrected}\n\n(Deliver only the piece itself: no preamble, no note about it, no commentary after it.)` : corrected;
   // LONG FORM BY SECTION (core/fidelity/sections.ts), behind --sections: planned once, each section written with
@@ -641,13 +652,15 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const unmet = std && !argv.includes('--no-redraft') ? unmetReader(std, ownBand && ownSpan && enough ? { band: ownBand, span: ownSpan } : null, askedWords, graded, graded !== undefined ? carried : null) : null;
   let delivered: Delivered | null = null;
   const keepDelivered = (refine: (draft: string) => Promise<Delivered>) => async (draft: string): Promise<Delivered> => (delivered = await refine(draft));
+  // THE BOUNDED CONTROLLER (core/loop/controller.ts): the release's settings, whether a draft can be written again when it
+  // asks (only where `withRedraft` runs), the run's ledger from its start, for what a step costs, and the steps already
+  // taken on a piece being refined again after a redraft that did no better.
+  const refineFor = (history?: readonly ControllerDecisionRecord[], held: Standard | null = std) => trackGraded(refineDraft({ client, budget, name, std: held ?? die('no standard to refine against'), taste,
+    checks: { ...checks, controller: { settings: runSettings?.controller ?? null, redraft: unmet !== null, ledgerFrom: ledgerBefore, ...(history ? { history } : {}) } } }), gradedTrace);
   const rec = await runOnce(L, sv, servedForRun, servedHash, deliveryForRun, taskForRun, client, budget, binding,
     resolveProvenance(flag('--provenance'), process.env), contractFile,
     flag('--task') ? 'FLAG' : 'POSITIONAL',
-    std && !argv.includes('--no-repair') ? keepDelivered(withGradedRecord(withStructureRead(withShape(withCoverage(withVoice(withEdits(withRedraft(trackGraded(refineDraft({ client, budget, name, std, taste,
-      // THE BOUNDED CONTROLLER (core/loop/controller.ts): the release's settings, whether a draft can be written again
-      // when it asks (only where `withRedraft` runs), and the run's ledger from its start, for what a step costs.
-      checks: { ...checks, controller: { settings: runSettings?.controller ?? null, redraft: unmet !== null, ledgerFrom: ledgerBefore } } }), gradedTrace), unmet ? { unmet, notes: completions, redraft: async (note, purpose) => (await spendOneWithResult(client, budget, servedForRun, taskForRun, null, note, {}, purpose)).piece, graded: gradedTrace,
+    std && !argv.includes('--no-repair') ? keepDelivered(withGradedRecord(withStructureRead(withShape(withCoverage(withVoice(withEdits(withRedraft(refineFor(), unmet ? { unmet, notes: completions, resume: (text, history) => refineFor(history)(text), redraft: async (note, purpose) => (await spendOneWithResult(client, budget, servedForRun, taskForRun, null, note, {}, purpose)).piece, graded: gradedTrace,
         displaced: (from: string, to: string) => displacement(from, to, graded !== undefined ? carried : null, new Set())?.refusedFor ?? [] } : null), fid && (editBudget > 0 || argv.includes('--fidelity')) ? { client, budget, name, std, checks, profile: editProfile ?? fid.profile, editBudget, trace, taste } : null),
       voiceRuns && bank && fid ? { client, budget, name, std, checks, bank, copied: fid.index ? overlapIndex(fid.index.passages.map((p) => p.text)) : null, trace, taste, reader: smallReaderFor()?.client ?? null, gate: runSettings?.voiceGate === 'reader' ? 'reader' as const : 'lists' as const } : null),
       strict && judge?.covers ? { client, budget, judge, asked, servedText: servedForRun, task: taskForRun, notes: completions } : null),
@@ -661,7 +674,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
       return (r.checked.find((c) => c.requirementId === 'UNSOURCED' && acts(c))?.result.spans ?? []).map((sp) => sp.text);
     } : null, settingsFor(checks, taste, nDrafts, carryBlock ? carryNote : ''),
     // A structured output is JSON, not prose: no reading of it means anything against a prose range.
-    fid && std && contractFile === null ? (output: string) => fidelityRecord(fid, output, trace, impl.retrieved, applicability(name, std, output, waived, withheld, checks.context), ledger,
+    fid && std && contractFile === null ? (output: string) => fidelityRecord(fid, output, trace, impl.retrieved, applicability(name, std, output, waived, withheld, checks.context, transfer?.doesNotApply), ledger,
       { ...(runSettings ?? fid.release.settings), drafts: nDrafts, editBudget, ...(voiceMode === 'incontext' ? { voice: 'incontext' as const } : { voice: undefined }),
         ...(sampling ? { selection: 'sample' as const } : { selection: undefined }), ...(contextWanted ? { context: 'local' as const } : { context: undefined }), ...(nearnessWanted ? { nearness: 'reader' as const } : { nearness: undefined }),
         ...(strict ? { delivery: 'strict' as const } : { delivery: undefined }) }, overridden,
@@ -718,7 +731,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
       sent: { skill: countWords(servedForRun) - countWords(impl.text) - countWords(carryBlock), added: countWords(impl.text) + countWords(carryBlock) + perDraftWords, request: countWords(taskForRun) },
       durationMs: Date.now() - started, drafts: nDrafts, report: finalReport, contract: contractFile !== null,
       request: askedWords ? requestLength(rec.output, askedWords) : stated && notHeld ? { asked: stated.raw, met: null, detail: notHeld } : null,
-      applicability: rec.fidelity?.applicability ?? (std ? applicability(name, std, rec.output, waived, withheld, checks.context) : []),
+      applicability: rec.fidelity?.applicability ?? (std ? applicability(name, std, rec.output, waived, withheld, checks.context, transfer?.doesNotApply) : []),
       // WHAT THE REQUEST ASKED FOR, AGAINST THE DELIVERED TEXT: read under strict delivery, from the run's cache when
       // the loop already read this text. A monitor on the panel: it never decides the verdict.
       coverage: strict && judge?.covers ? await judge.covers(asked, rec.output).catch(() => null) : null,
@@ -1441,7 +1454,13 @@ export function withRedraft(refine: (draft: string) => Promise<Delivered>,
     /** where the graded note lines sent and the drafts written for graded misses alone are counted */
     graded?: GradedTrace | null;
     /** the displacement guard (core/loop/graded.ts) on a draft written again: why it may not be kept, or nothing */
-    displaced?: (before: string, after: string) => readonly string[] } | null) {
+    displaced?: (before: string, after: string) => readonly string[];
+    /**
+     * THE NEXT SMALLER STEP, after a redraft the controller asked for did no better: the piece as it was before the
+     * redraft refined again, with every step already taken (the failed redraft among them) as the controller's history,
+     * so a carrier rewrite or the operators are tried on the same targets instead of the draft being left as it was.
+     */
+    resume?: (text: string, history: readonly ControllerDecisionRecord[]) => Promise<Delivered> } | null) {
   if (!c) return refine;
   // Said in the owner's own words, with the id beside it: "x3" alone tells them nothing.
   const named = (us: readonly Unmet[]): string => us.map((u) => (u.id === LENGTH_ID ? `the length ${u.of === 'request' ? 'the request asks for' : 'your pieces run'} (the draft: ${u.detail})` : `${u.id}: "${u.statement.length > 70 ? `${u.statement.slice(0, 67)}...` : u.statement}"`)).join('; ');
@@ -1506,9 +1525,22 @@ export function withRedraft(refine: (draft: string) => Promise<Delivered>,
         const outcome = displaced.length ? `${redraftOutcome(missing, missing2, false, named, whose)} It displaced what your pieces hold: ${displaced.join('; ')}.` : redraftOutcome(missing, missing2, better, named, whose);
         // a cut the checks refuse leaves the draft as it was, and the next pass writes it shorter instead
         // THE STEP ON THE RECORD: what the draft written again moved, what it cost, and the steps taken on it after.
-        const joined = joinRecords(d.repair?.controller, { ...drafted, outcome: better ? 'kept' : 'not kept', observed: { ...drafted.observed, movement: better ? Math.round(Math.max(0, redraftGain(missing) - redraftGain(missing2)) * 1000) / 1000 : 0, note: outcome } },
-          d2.repair?.controller, better ? undefined : `the draft written again did not do better: ${outcome}`);
+        const redrafted: ControllerDecisionRecord = { ...drafted, outcome: better ? 'kept' : 'not kept', observed: { ...drafted.observed, movement: better ? Math.round(Math.max(0, redraftGain(missing) - redraftGain(missing2)) * 1000) / 1000 : 0, note: outcome } };
+        // A draft that is not kept hands nothing on: its own request for a redraft never happened.
+        const after2 = better ? d2.repair?.controller : d2.repair?.controller && controllerRecord(d2.repair.controller.decisions.filter((x) => x.outcome !== 'handed to a redraft'), d2.repair.controller.stoppedBecause);
+        const joined = joinRecords(d.repair?.controller, redrafted, after2, better ? undefined : `the draft written again did not do better: ${outcome}`);
         if (!better && cutting) { picking = false; d = withController(d, joined); c.notes.push(`${outcome} The cut was not kept; the next pass writes it shorter.`); continue; }
+        if (!better && asked && c.resume) {
+          // A FAILED REDRAFT SWITCHES DOWN, never stops the repair: the piece before it is refined again with the failed
+          // redraft in the controller's history, which then tries a carrier rewrite on the same targets, then the operators.
+          const d3 = await c.resume(d.output, [...(d.repair?.controller?.decisions ?? []), redrafted]);
+          const ctl = controllerRecord([...joined.decisions, ...(d3.repair?.controller?.decisions ?? [])], d3.repair?.controller?.stoppedBecause ?? joined.stoppedBecause);
+          const first = d.repair;
+          const cutAll = [...new Set([...(first?.storiesCut ?? []), ...(d3.repair?.storiesCut ?? [])])];
+          const resumed: Delivered = withController(d3.repair && first ? { ...d3, repair: { ...d3.repair, draft: first.draft, originalOutputHash: first.originalOutputHash, violatedBefore: first.violatedBefore,
+            passes: first.passes + d3.repair.passes, ...(cutAll.length ? { storiesCut: cutAll } : {}) } } : d3, ctl);
+          return say(resumed, outcome);
+        }
         if (!better) return say(withController(d, joined), outcome);
         const kept: Delivered = withController(d2.repair ? d2 : { ...d2, repair: { passes: 0, violatedBefore: ids, violatedAfter: brokenIn(d2.report), originalOutputHash: sha(piece), draft: piece, why: `written again with what ${missing.every((u) => u.graded) ? 'your pieces usually do' : 'the work requires'} named` } }, joined);
         // A cut keeps the draft from before it, so what was taken out can be read (the record holds the draft cut from).
@@ -1797,11 +1829,15 @@ function fidelityRecord(fid: NonNullable<ReturnType<typeof releaseFor>>, output:
  * otherwise, served and, where it carries a measurement, checked. A study that finds a rule missing from
  * this list, or waived without a reason, has found a confound.
  */
-export function applicability(name: string, std: Standard, output: string, waived: ReadonlyMap<string, string>, withheld: readonly string[], context?: CheckContext): NonNullable<FidelityRecord['applicability']> {
+export function applicability(name: string, std: Standard, output: string, waived: ReadonlyMap<string, string>, withheld: readonly string[], context?: CheckContext,
+  doesNotApply?: ReadonlyMap<string, string>): NonNullable<FidelityRecord['applicability']> {
   const v = verifyText(name, std, output, context);
   const verdict = new Map(v.checked.map((c) => [c.requirementId, c.result.verdict]));
   const conditional = new Map(v.conditional.map((c) => [c.requirementId, c.appliesWhen]));
   return std.requirements.filter((q) => q.authority !== 'EXPERT_REJECTED').map((q) => {
+    // Not a rule set aside: one that does not apply to an output of this kind (a long-form band on a short piece).
+    const off = doesNotApply?.get(q.requirementId);
+    if (off) return { requirementId: q.requirementId, status: 'NOT_APPLICABLE' as const, why: off };
     const why = waived.get(q.requirementId) ?? (withheld.includes(q.statement) ? 'withheld from this run\'s prompt' : null);
     if (why) return { requirementId: q.requirementId, status: 'WAIVED' as const, why };
     if (verdict.get(q.requirementId) === 'NOT_APPLICABLE') return { requirementId: q.requirementId, status: 'NOT_APPLICABLE' as const, why: 'outside what its measurement can judge in this text' };

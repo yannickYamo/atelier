@@ -68,16 +68,35 @@ describe('what matters most first', () => {
 
 describe('when it stops', () => {
   const miss = { graded: [{ id: 'g', error: 1.0, operatorEffect: null }] };
-  it('the same action failing twice on the same target switches once, then stops', () => {
+  it('a failed step is never repeated on its target: a redraft that did no better gives way to a carrier rewrite, then the operators, then a stop naming the failures', () => {
+    const far = { graded: [{ id: 'g', error: 2.0, operatorEffect: 0.3 }] };
+    expect(decide(input(far))).toMatchObject({ action: 'redraft' });
+    const r1 = [step('redraft', ['g'], 'not kept')];
+    const d1 = decide(input({ ...far, history: r1 }));
+    // the carrier rewrite, sized to the miss (ceil 2.0 = 2 sentences), and the switch said with its reason
+    expect(d1).toMatchObject({ kind: 'act', action: 'carrier-rewrite', targets: ['g'], carriers: 2 });
+    expect((d1 as { why: string }).why).toMatch(/; switched to it because redraft on g not kept$/);
+    const r2 = [...r1, { ...step('carrier-rewrite', ['g'], 'not kept'), observed: { movement: 0, calls: 1, usd: 0.05, note: 'it displaced what your pieces hold' } }];
+    const d2 = decide(input({ ...far, history: r2 }));
+    expect(d2).toMatchObject({ action: 'operators', targets: ['g'] });
+    expect((d2 as { why: string }).why).toContain('carrier-rewrite on g not kept (it displaced what your pieces hold)');
+    const r3 = [...r2, step('operators', ['g'], 'no change', 0, 0, 0)];
+    expect(decide(input({ ...far, history: r3 }))).toEqual({ kind: 'stop', why: 'every action tried failed on what is left: g (redraft, carrier-rewrite, operators)' });
+    // the carrier rewrite is capped at three sentences however far out
+    expect(decide(input({ graded: [{ id: 'g', error: 5, operatorEffect: null }], history: r1 }))).toMatchObject({ action: 'carrier-rewrite', carriers: 3 });
+  });
+  it('an operator step that fails escalates to a carrier rewrite once, then stops', () => {
+    const small = { enforced: [{ id: 'r9', kind: 'omission' as const }], can: { redraft: false, rewrite: true }, graded: [{ id: 'g', error: 0.4, operatorEffect: 0.2 }] };
+    expect(decide(input(small))).toMatchObject({ action: 'operators' });
+    const o1 = [step('operators', ['g'], 'no change', 0, 0, 0)];
+    expect(decide(input({ ...small, history: o1 }))).toMatchObject({ action: 'carrier-rewrite', targets: ['g'], carriers: 1 });
+    expect(decide(input({ ...small, history: [...o1, step('carrier-rewrite', ['g'], 'not kept')] })))
+      .toEqual({ kind: 'stop', why: 'every action tried failed on what is left: g (operators, carrier-rewrite)' });
+  });
+  it('a carrier rewrite that failed once is not repeated; one that moved something is', () => {
     const once = [step('carrier-rewrite', ['g'], 'not kept')];
-    expect(decide(input({ ...miss, history: once }))).toMatchObject({ action: 'carrier-rewrite' });
-    const twice = [...once, step('carrier-rewrite', ['g'], 'not kept')];
-    expect(decide(input({ ...miss, history: twice }))).toMatchObject({ action: 'redraft', targets: ['g'] });
-    const switched = [...twice, step('redraft', ['g'], 'not kept')];
-    expect(decide(input({ ...miss, history: switched })))
-      .toEqual({ kind: 'stop', why: 'the same repair failed on what is left, and the action it switched to failed too' });
-    // a kept step that moved something is no failure
-    expect(decide(input({ ...miss, history: [...once, step('carrier-rewrite', ['g'], 'kept', 0.3)] }))).toMatchObject({ action: 'carrier-rewrite' });
+    expect(decide(input({ ...miss, history: once }))).toMatchObject({ kind: 'stop', why: 'every action tried failed on what is left: g (carrier-rewrite)' });
+    expect(decide(input({ ...miss, history: [step('carrier-rewrite', ['g'], 'kept', 0.3)] }))).toMatchObject({ action: 'carrier-rewrite' });
   });
   it('the budget: a step it cannot hold is not taken, and the stop says so', () => {
     const d = decide(input({ ...miss, budget: { usdLeft: 0.01, callsLeft: null } }));
@@ -97,7 +116,7 @@ describe('when it stops', () => {
     expect(decide(input({ ...miss, history: four.slice(0, 4) }))).toMatchObject({ kind: 'act' });
   });
   it('one more draft only where the release allows it and an enforced rule still fails that nothing else reaches', () => {
-    const stuck = { enforced: [{ id: 'r', kind: 'span' as const }], history: [step('rewrite', ['r'], 'not kept'), step('rewrite', ['r'], 'not kept')] };
+    const stuck = { enforced: [{ id: 'r', kind: 'span' as const }], history: [step('rewrite', ['r'], 'not kept')] };
     expect(decide(input(stuck))).toMatchObject({ kind: 'stop' });
     expect(decide(input(stuck), { extraDraft: true })).toMatchObject({ kind: 'act', action: 'redraft', targets: ['r'] });
   });
@@ -186,18 +205,32 @@ describe('through the loop', () => {
     expect(r.repair?.controller?.decisions.map((d) => [d.action, d.targets, d.outcome])).toEqual([['redraft', ['r1'], 'handed to a redraft']]);
     expect(r.repair?.controller?.stoppedBecause).toMatch(/^handed to a redraft: 1 enforced rule\(s\) need something the draft does not have/);
   });
-  it('repeated failed rewrites switch to a redraft, then stop; each step\'s cost is the ledger\'s', async () => {
-    // a band two thirds of the value wide at 1.0 width out: the writer returns the spans as they were, so nothing moves
+  const failedRedraft: ControllerDecisionRecord = { action: 'redraft', targets: ['p1'], why: 'far', expectedGain: 1, expectedCostUsd: 0.4, outcome: 'not kept', observed: { movement: 0, calls: 1, usd: 0.3, note: 'one more draft did not do better' } };
+  it('after a redraft that did no better, a carrier rewrite is tried on the same target and kept when it helps', async () => {
+    // two widths out (a band a third of the value): the redraft failed, so two carrier sentences are rewritten without asides
+    const writer = scripted([reps(asideS.replace(/[()]/g, ''))]);
+    const r = await refineToStandard(writer, { spentUsd: 0, capUsd: 1 }, 'd', stdWith(0, value / 3), text, 2, opts({ controller: { redraft: true, history: [failedRedraft] } }));
+    const ctl = r.repair!.controller!;
+    expect(ctl.decisions[0]).toMatchObject({ action: 'carrier-rewrite', targets: ['p1'], outcome: 'kept' });
+    expect(ctl.decisions[0].why).toMatch(/switched to it because redraft on p1 not kept \(one more draft did not do better\)/);
+    expect(ctl.decisions[0].observed.movement).toBeGreaterThan(0);
+    // the history is the caller's: only this piece's own steps are recorded here
+    expect(ctl.decisions.some((d) => d.action === 'redraft')).toBe(false);
+    expect((r.output.match(/\(/g) ?? []).length).toBeLessThan((text.match(/\(/g) ?? []).length);
+  });
+  it('a target every action fails on ends the repair with a stop naming the failures; each step\'s cost is the ledger\'s', async () => {
+    // the writer returns the spans as they were, so the carrier rewrite moves nothing; no effect matrix, so no operators
     const writer = scripted([reps(asideS)]);
     const before = processSpendByPurpose();
-    const r = await refineToStandard(writer, { spentUsd: 0, capUsd: 1 }, 'd', stdWith(0, value / 2), text, 2, opts({ controller: { redraft: true } }));
+    const r = await refineToStandard(writer, { spentUsd: 0, capUsd: 1 }, 'd', stdWith(0, value / 3), text, 2, opts({ controller: { redraft: true, history: [failedRedraft] } }));
     const ledger = spendBetween(before, processSpendByPurpose()).filter((l) => l.purpose === 'repair' || l.purpose === 'graded');
     const ctl = r.repair!.controller!;
-    expect(ctl.decisions.map((d) => [d.action, d.outcome])).toEqual([['carrier-rewrite', 'not kept'], ['carrier-rewrite', 'not kept'], ['redraft', 'handed to a redraft']]);
-    expect(ctl.decisions[0]).toMatchObject({ targets: ['p1'], expectedGain: 0.4, expectedCostUsd: 0.05 });
+    expect(ctl.decisions.map((d) => [d.action, d.outcome])).toEqual([['carrier-rewrite', 'not kept']]);
+    expect(ctl.decisions[0]).toMatchObject({ targets: ['p1'], expectedCostUsd: 0.05 });
+    expect(ctl.stoppedBecause).toBe('every action tried failed on what is left: p1 (redraft, carrier-rewrite)');
     expect(ctl.callsUsed).toBe(ledger.reduce((n, l) => n + l.calls, 0));
     expect(ctl.usdUsed).toBeCloseTo(ledger.reduce((n, l) => n + l.usd, 0), 9);
-    expect(ctl.callsUsed).toBe(2); expect(ctl.usdUsed).toBeCloseTo(0.002, 9);
+    expect(ctl.callsUsed).toBe(1); expect(ctl.usdUsed).toBeCloseTo(0.001, 9);
     expect(r.output).toBe(text);
   });
   it('one agreement error and one graded miss: the graded miss is moved first, then the error corrected in place, with no call for it', async () => {
@@ -249,7 +282,7 @@ describe('through the loop', () => {
     expect((r.output.match(/\(/g) ?? []).length).toBeLessThan((text.match(/\(/g) ?? []).length);
   });
   it('the same draft and settings give the same steps', async () => {
-    const run = () => refineToStandard(scripted([reps(asideS)]), { spentUsd: 0, capUsd: 1 }, 'd', stdWith(0, value / 2), text, 2, opts({ controller: { redraft: true } }));
+    const run = () => refineToStandard(scripted([reps(asideS)]), { spentUsd: 0, capUsd: 1 }, 'd', stdWith(0, value / 3), text, 2, opts({ controller: { redraft: true, history: [failedRedraft] } }));
     expect((await run()).repair?.controller).toEqual((await run()).repair?.controller);
   });
 });

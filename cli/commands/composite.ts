@@ -73,7 +73,7 @@ function traitTable(s: Session): TraitTable {
 }
 
 /** The classes each author's rules fall in: what a line about them can select. */
-const availableOf = (table: TraitTable, name: string): TraitClass[] => [...new Set(table.rows.filter((r) => r.author === name).map((r) => r.cls))];
+const availableOf = (table: TraitTable, name: string): TraitClass[] => [...new Set(table.rows.filter((r) => r.author === name).flatMap((r) => r.classes))];
 
 /**
  * THE LINES READ INTO CLASSES: once, by the model, and kept with the run under a hash of the lines, so a continuation
@@ -197,9 +197,15 @@ function suggestionsByAuthor(pending: readonly Requirement[], s: Session, mode: 
 }
 
 /**
- * THE RULINGS. Chosen: approved at the weight its own author's evidence suggests (never above it without the person's
- * `--set`). A habit: approved, shown and not instructed. Set aside, or one side of an open conflict: rejected, with
- * the reason. Each ruling's reason names the author and the pieces the rule was read from.
+ * THE RULINGS.
+ *   Selected by the person's own line about its author, and accepted here: the OWNER'S WORD, not inferred evidence. A
+ *     worded rule is ratified REQUIRED, so it instructs the writer; a counted one is a target the drafts are steered and
+ *     chosen by and never a failure (PREFERRED), until the person makes it required with `--set`. Its ruling says
+ *     "selected by you from <author>".
+ *   Chosen otherwise (a conflict the person answered, "both" of two statements): the weight its own author's evidence
+ *     suggests, as any proposal.
+ *   A habit: approved, shown and not instructed. Set aside, or one side of an open conflict: rejected, with the reason.
+ * Nothing here makes a counted rule blocking: only the person's `--set` does.
  */
 export function decisionsFor(record: CompositeRecord, pending: readonly Requirement[], sugg: ReadonlyMap<string, Suggestion>, changes: ReadonlyMap<string, string>): RatificationDecision[] {
   const piecesFor = new Map(record.authors.map((a) => [a.name, a.pieces]));
@@ -208,11 +214,16 @@ export function decisionsFor(record: CompositeRecord, pending: readonly Requirem
     const d = byId.get(p.requirementId);
     const s = sugg.get(p.requirementId);
     const from = d ? `from ${d.author} (${(piecesFor.get(d.author) ?? []).join(', ')})` : 'from no author';
-    const decision: 'APPROVE' | 'REJECT' = !d || d.outcome === 'REJECTED' || d.outcome === 'OPEN' ? 'REJECT' : 'APPROVE';
+    // A habit keeps the evidence's ruling: one its author's own pieces argue against is rejected, as in any review.
+    const decision: 'APPROVE' | 'REJECT' = !d || d.outcome === 'REJECTED' || d.outcome === 'OPEN' || (d.outcome === 'HABIT' && s?.decision === 'REJECT') ? 'REJECT' : 'APPROVE';
+    const owners = Boolean(d?.byAdmiration && d.outcome === 'SELECTED' && !d.shownOnly);
+    const counted = Boolean(p.measurement ?? d?.range);
     const weight = !d || decision === 'REJECT' ? null
-      : d.outcome === 'HABIT' || d.shownOnly ? 'PREFERRED'
-        : s?.decision === 'APPROVE' && s.materiality ? s.materiality : 'PREFERRED';
-    const suggested = { decision, materiality: weight, why: `composite, ${from}: ${d?.why ?? 'no trait row'}${s ? `; evidence: ${s.why}` : ''}` };
+      : owners ? (counted ? 'PREFERRED' : 'REQUIRED')
+        : d.outcome === 'HABIT' || d.shownOnly ? 'PREFERRED'
+          : s?.decision === 'APPROVE' && s.materiality ? s.materiality : 'PREFERRED';
+    const said = owners ? `selected by you ${from}${counted ? ', a counted target that steers and never fails a draft' : ''}` : `composite, ${from}`;
+    const suggested = { decision, materiality: weight, why: `${said}: ${d?.why ?? 'no trait row'}${s ? `; evidence: ${s.why}` : ''}` };
     const range = d?.range ? formatMeasure(d.range) : null;
     const c = changes.get(p.requirementId);
     if (c === 'reject') return { id: p.requirementId, decision: 'REJECT', suggested };

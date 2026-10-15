@@ -71,7 +71,9 @@ export interface ProposalEvidence {
     /** a rule on sentence length where the writer's rhythm is not a signature of theirs (core/observers/rhythm-signature.ts): why, in words */
     readonly contextual?: string;
     /** the proposed limit was moved to where the author's pieces are; the counts are against the limit before it was moved */
-    readonly fitted?: boolean } | null;
+    readonly fitted?: boolean;
+    /** read from fewer of the author's pieces than a rule needs to block (`PIECES_TO_REQUIRE`): how many, and how many more */
+    readonly thin?: { readonly pieces: number; readonly more: number } } | null;
   /** a measured rule against the author's own pieces (read and held out): how many pieces, and which break it */
   readonly corpus?: { readonly pieces: number; readonly breaking: readonly number[] } | null;
 }
@@ -125,6 +127,14 @@ export function suggest(p: Requirement, e: ProposalEvidence | undefined, mode: S
     }
     // A style distance is a measure to pick drafts by, not a span anything can rewrite; a floor ("at
     // least so many bold phrases") has nothing to point a repair at either. Both are shown by default.
+    // THIN EVIDENCE NEVER BLOCKS. A count read from three or four pieces describes them, and may be the habit of
+    // the author or the accident of the pieces: shown and used to choose between drafts, and the screen says how
+    // many more pieces would let it block. A move the author never makes is a ban, not a count, and is not thin.
+    const bans = Array.isArray(p.measurement.params.never) && p.measurement.params.never.length > 0;
+    if (e.inSample.thin && !bans) {
+      const { pieces, more } = e.inSample.thin;
+      return { decision: 'APPROVE', materiality: 'PREFERRED', needs, strength: 1, why: `${seen}; read from ${pieces} examples, ${more} more would let it block` };
+    }
     if (p.measurement.observer === 'STYLE_DISTANCE') {
       return { decision: 'APPROVE', materiality: 'PREFERRED', needs, strength: 2,
         why: `${present} of ${applicable} ${where} are closer to you than to the model; used to choose between drafts` };
@@ -238,6 +248,17 @@ export function suggest(p: Requirement, e: ProposalEvidence | undefined, mode: S
 // between drafts. It stops failing an output on its own. The person can make it required on the same screen: this
 // changes a default, never a ruling. A session recorded before the corpus was counted has no such evidence, and
 // its suggestions are left as they were.
+
+/**
+ * FLOORS BY EVIDENCE, NOT BY LENGTH. A counted rule is read from at least MIN_PIECES_TO_COUNT of the author's pieces,
+ * of any length; it may block only once PIECES_TO_REQUIRE pieces show it. Under that it is thin: shown, and used to
+ * choose between drafts.
+ */
+export const MIN_PIECES_TO_COUNT = 3;
+export const PIECES_TO_REQUIRE = 5;
+/** The thin-evidence mark for a rule read from this many pieces, or undefined when there are enough to block. */
+export const thinEvidence = (pieces: number): { readonly pieces: number; readonly more: number } | undefined =>
+  (pieces < PIECES_TO_REQUIRE ? { pieces, more: PIECES_TO_REQUIRE - pieces } : undefined);
 
 /** A rule is suggested REQUIRED only if at least this share of the author's own pieces meet it. */
 export const CORPUS_RULE_SHARE = 0.95;
