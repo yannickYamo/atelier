@@ -270,3 +270,23 @@ describe('review: a filter reported as an HTTP 400, and the cost of a filtered c
     }
   });
 });
+
+describe('a blocked runtime run is a row, never a failed call', () => {
+  it('exit 1 with a BLOCKED record is recorded once, with its state, and the arm goes on', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'atelier-rt-blocked-'));
+    const rec = { output: 'A review.', toCheck: [], costUsd: 0.01, invocationId: 'i1', eval: { record: { state: 'BLOCKED', entries: [] }, spend: [] } };
+    writeFileSync(join(dir, 'calls'), '');
+    writeFileSync(join(dir, 'cli.mjs'), `import { appendFileSync } from 'node:fs'; appendFileSync(${JSON.stringify(join(dir, 'calls'))}, 'x'); process.stdout.write(${JSON.stringify(JSON.stringify(rec))}); process.exitCode = 1;\n`);
+    writeFileSync(join(dir, 'tasks.jsonl'), ['a', 'b'].map((id) => JSON.stringify({ id, prompt: `Review change ${id}.` })).join('\n') + '\n');
+    writeFileSync(join(dir, 'runtimes.json'), JSON.stringify({ s: { cli: join(dir, 'cli.mjs'), data: dir, proj: dir, skill: 's', args: ['--provider', 'openai-compatible'] } }));
+    const out = join(dir, 'o.jsonl');
+    const r = spawnSync(process.execPath, [resolve('bench/compare/run.mjs'), '--tasks', join(dir, 'tasks.jsonl'), '--arm', 'atelier-runtime:s', '--runtimes', join(dir, 'runtimes.json'), '--out', out, '--model', 'scripted'],
+      { encoding: 'utf8', env: { ...process.env, ANTHROPIC_API_KEY: '' } });
+    expect(r.status, r.stderr).toBe(0);
+    const rows = readFileSync(out, 'utf8').trim().split('\n').map((l) => JSON.parse(l) as Record<string, unknown>);
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toMatchObject({ response: 'A review.', atelier_state: 'BLOCKED' });
+    // once per task: never retried
+    expect(readFileSync(join(dir, 'calls'), 'utf8')).toBe('xx');
+  });
+});
