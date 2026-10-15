@@ -99,7 +99,7 @@ async function readLines(s: Session, lines: readonly AdmireLine[]): Promise<{ cl
 }
 
 /** Said on the composite screen when no model read the final instructions for contradictions. */
-export const KEYWORD_ONLY_LINE = 'Contradictions between authors are checked by keyword only; read the instructions below.';
+export const KEYWORD_ONLY_LINE = 'Contradictions between authors are checked by keyword only: a whole-piece structure rule may still sit beside a structure it rules out (one unbroken block of prose beside headings or lists), so read the instructions below.';
 
 interface ContradictionRead { readonly key: string; readonly pairs: readonly ModelPair[]; readonly via: 'MODEL' | 'KEYWORDS' }
 const contradictionFile = (): string => runFile('composite-contradictions.json');

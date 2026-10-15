@@ -404,12 +404,16 @@ export function guardInstructing(decided: readonly CompositeDecision[], conflict
     undecided.push(f);
   }
   // 2. Nothing the person said decides it: neither instructs, and the pair is asked, never guessed.
+  //    A side already held open by another such pair holds this one open too: the other side does not instruct in its
+  //    place, so "neither instructs" is true of every pair asked. Only a side set aside leaves the other standing.
   for (const f of undecided) {
     const da = ds.get(f.a); const db = ds.get(f.b);
-    if (!instructs(da) || !instructs(db) || !da || !db) continue;
+    if (!da || !db) continue;
+    const held = (d: CompositeDecision): boolean => instructs(d) || d.outcome === 'OPEN';
+    if (!held(da) || !held(db) || (!instructs(da) && !instructs(db))) continue;
     const c = conflictOf.get(f.c.n) ?? f.c;
     if (rank(da) === 2 && rank(db) === 2) notes.push(`--set ${da.id}=required and --set ${db.id}=required cannot both be followed: neither instructs until you answer conflict ${c.n}.`);
-    open(f.a, c); open(f.b, c);
+    for (const d of [da, db]) if (instructs(d)) open(d.id, c);
     update(c, { answer: null, resolvedBy: null });
   }
   // 3. AN ANSWER THE GUARD OPENED AGAIN: what it chose now waits on another conflict. Said, with why, and counted as open,
@@ -434,16 +438,19 @@ export function guardInstructing(decided: readonly CompositeDecision[], conflict
   return { decisions: order.flatMap((id) => { const d = ds.get(id); return d ? [d] : []; }), conflicts: [...conflictOf.values()].sort((x, y) => x.n - y.n), notes };
 }
 
-/** The open conflicts, split by whether one side still instructs through an answer to another conflict. */
+/**
+ * The questions the screen asks, split as it shows them: NEITHER, a conflict shown open or open again (neither side
+ * instructs); ONE SIDE, a conflict where one side stands by an answer to another conflict and the other waits on this
+ * one. A conflict shown waiting on another conflict's answer is counted there, once.
+ */
 export function openStanding(c: CompositeRecord): { readonly neither: AnsweredConflict[]; readonly oneSide: AnsweredConflict[] } {
   const byId = new Map(c.decisions.map((d) => [d.id, d]));
-  const open = openQuestions(c);
-  const stands = (x: AnsweredConflict): boolean => x.sides.some((s) => instructs(byId.get(s.id)) || byId.get(s.id)?.mergedInto !== undefined && instructs(byId.get(byId.get(s.id)?.mergedInto ?? '')));
-  return { neither: open.filter((x) => !stands(x)), oneSide: open.filter(stands) };
+  const asked = (want: Standing['asks']): AnsweredConflict[] => c.conflicts.filter((x) => standingOf(x, byId.get(x.sides[0].id), byId.get(x.sides[1].id)).asks === want);
+  return { neither: asked('NEITHER'), oneSide: asked('ONE_SIDE') };
 }
 
-/** The conflicts still open on a composite, which the build and the skill's record show and never answer. */
-export const openQuestions = (c: CompositeRecord): AnsweredConflict[] => c.conflicts.filter((x) => x.answer === null || x.reopened !== undefined);
+/** The conflicts the screen shows open, or open again: the build and the skill's record show them and never answer. */
+export const openQuestions = (c: CompositeRecord): AnsweredConflict[] => openStanding(c).neither;
 
 /**
  * THE COMPOSITE SCREEN, as lines. One screen, not one per rule: what comes from whom, by class; the conflicts and
@@ -511,10 +518,17 @@ export function describeComposite(c: CompositeRecord, statementOf: (id: string) 
  * and the build do another: a rule kept by the answer to another conflict, or set aside by one, is said so here.
  */
 export function standOf(x: AnsweredConflict, da: CompositeDecision | undefined, db: CompositeDecision | undefined): string {
+  return standingOf(x, da, db).line;
+}
+
+/** How a conflict stands, as its line and as the question it asks (NEITHER: open, or open again; ONE_SIDE: one side stands, the other waits on this conflict). */
+interface Standing { readonly line: string; readonly asks: 'NEITHER' | 'ONE_SIDE' | null }
+function standingOf(x: AnsweredConflict, da: CompositeDecision | undefined, db: CompositeDecision | undefined): Standing {
   const [a, b] = x.sides;
   const reason = (d: CompositeDecision | undefined): string => {
     const by = d?.settledBy;
-    if (!by) return '';
+    // A rule chosen by the person's line about its author, outside any answer.
+    if (!by) return d?.outcome === 'SELECTED' ? 'from what you admired' : '';
     if (by.how === 'ANSWER') return by.n === x.n ? 'your answer' : `your answer to conflict ${by.n}`;
     if (by.how === 'SET') return 'your --set, your latest word';
     return 'from what you admired';
@@ -523,10 +537,11 @@ export function standOf(x: AnsweredConflict, da: CompositeDecision | undefined, 
   const inRange = (d: CompositeDecision | undefined, other: CompositeDecision | undefined): boolean =>
     Boolean(d && other && ((d.mergedInto !== undefined && (d.mergedInto === other.id || d.mergedInto === other.mergedInto)) || other.mergedInto === d.id));
   const ask = `answer with --conflict ${x.n}=A, ${x.n}=B or ${x.n}=both (one range), or leave it for later`;
-  if (x.reopened) return `→ open again: ${x.reopened.why}: --conflict ${x.reopened.in}=A, ${x.reopened.in}=B or ${x.reopened.in}=both`;
-  if (da?.outcome === 'OPEN' && db?.outcome === 'OPEN') return `→ open: neither instructs. ${ask}`;
-  if (inRange(da, db)) return `→ both, as one range (${reason(da?.range ? da : db) || reason(da)})`;
-  if (da?.shownOnly && db?.shownOnly) return `→ both kept, shown and not instructed (${reason(da)})`;
+  const settled = (line: string): Standing => ({ line, asks: null });
+  if (x.reopened) return { line: `→ open again: ${x.reopened.why}: --conflict ${x.reopened.in}=A, ${x.reopened.in}=B or ${x.reopened.in}=both`, asks: 'NEITHER' };
+  if (da?.outcome === 'OPEN' && db?.outcome === 'OPEN') return { line: `→ open: neither instructs. ${ask}`, asks: 'NEITHER' };
+  if (inRange(da, db)) return settled(`→ both, as one range (${reason(da?.range ? da : db) || reason(da) || 'your answer'})`);
+  if (da?.shownOnly && db?.shownOnly) return settled(`→ both kept, shown and not instructed (${reason(da) || 'your answer'})`);
   const sa = stands(da) || (da?.mergedInto !== undefined && da.settledBy !== undefined);
   const sb = stands(db) || (db?.mergedInto !== undefined && db.settledBy !== undefined);
   const openAt = (d: CompositeDecision | undefined): number => d?.openIn ?? x.n;
@@ -535,13 +550,16 @@ export function standOf(x: AnsweredConflict, da: CompositeDecision | undefined, 
     ? `; ${side.author}'s does not instruct until you answer conflict ${openAt(d)}${openAt(d) === x.n ? `: ${ask}` : ''}` : '');
   // A side merged into another rule's range stands through that rule, and is said so.
   const said = (side: ConflictSide, d: CompositeDecision | undefined): string => (d?.mergedInto ? `${side.author}, carried in one range by ${d.mergedInto}` : side.author);
-  if (sa && sb) return `→ both stand: ${said(a, da)} (${reason(da)}) and ${said(b, db)} (${reason(db)})`;
-  if (sa) return `→ ${said(a, da)} (${reason(da)})${waits(b, db)}`;
-  if (sb) return `→ ${said(b, db)} (${reason(db)})${waits(a, da)}`;
+  const by = (d: CompositeDecision | undefined): string => { const r = reason(d); return r ? ` (${r})` : ''; };
+  const waitsHere = (d: CompositeDecision | undefined): boolean => d?.outcome === 'OPEN' && openAt(d) === x.n;
+  if (sa && sb) return settled(`→ both stand: ${said(a, da)}${by(da)} and ${said(b, db)}${by(db)}`);
+  if (sa) return { line: `→ ${said(a, da)}${by(da)}${waits(b, db)}`, asks: waitsHere(db) ? 'ONE_SIDE' : null };
+  if (sb) return { line: `→ ${said(b, db)}${by(db)}${waits(a, da)}`, asks: waitsHere(da) ? 'ONE_SIDE' : null };
   const why = (side: ConflictSide, d: CompositeDecision | undefined): string => `${side.author} ${d?.outcome === 'OPEN' ? `open in conflict ${openAt(d)}`
     : d?.shownOnly ? `kept, shown and not instructed (${reason(d) || 'your answer'})` : `set aside (${reason(d) || 'not what you chose'})`}`;
   const firstOpen = da?.outcome === 'OPEN' ? openAt(da) : db?.outcome === 'OPEN' ? openAt(db) : null;
-  return `→ neither instructs: ${why(a, da)}, ${why(b, db)}${firstOpen !== null ? `. ${askAt(firstOpen)}` : ''}`;
+  // Asked here when the side held open waits on this very conflict; else it is asked, and counted, where it waits.
+  return { line: `→ neither instructs: ${why(a, da)}, ${why(b, db)}${firstOpen !== null ? `. ${askAt(firstOpen)}` : ''}`, asks: firstOpen === x.n ? 'NEITHER' : null };
 }
 
 /** One line per author for the skill's "How I sound": the classes taken, and the rules that carry them. */

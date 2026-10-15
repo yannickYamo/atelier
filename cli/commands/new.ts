@@ -146,6 +146,17 @@ export async function newSkill(): Promise<void> {
       die(`this run has already built its skill, so --piece-budget and --pieces would be ignored here. Rebuild it with them: atelier build --name ${s.skillName ?? '<name>'} --piece-budget <words>`);
     }
     console.log(`Continuing the run already in this project (state ${s.run.state}).\n`);
+    // AN ANSWER AFTER THE BUILD changes nothing built: the conflicts were settled when the composite was accepted. Said
+    // plainly, with the one way to build with it, never dropped in silence.
+    const late = flagAll('--conflict');
+    if (s.run.state === 'BUILT' && s.authors && late.length) {
+      const given = [...Object.entries(s.conflictAnswers ?? {}).flatMap(([n, v]) => (v ? [`${n}=${v}`] : [])), ...late]
+        .reduce<string[]>((all, x) => [...all.filter((y) => y.split('=')[0] !== x.split('=')[0]), x], []);
+      const admired = Object.entries(s.admire ?? {}).map(([a, t]) => ` --admire ${shellWord(`${a}=${t}`)}`).join('');
+      console.log(`--conflict ${late.join(', --conflict ')}: not applied. This skill is already built, with the answers given when you accepted it; an answer after the build needs a rebuild with the answer.\n`
+        + `  To rebuild with it, start the run again and give every answer on the call that accepts (your pieces are read again):\n`
+        + `    atelier abort\n    atelier new ${shellWord(corpus)}${s.intent ? ` ${shellWord(s.intent.text)}` : ''}${s.skillName ? ` --name ${shellWord(s.skillName)}` : ''}${admired} --accept ${given.map((x) => `--conflict ${x}`).join(' ')}\n`);
+    }
     if (intent && !s.intent) { saveSession({ ...s, intent: { text: intent, mode } }); s = loadSession(); }
     if (flag('--name') && s.skillName !== skillNameFrom(name)) { saveSession({ ...s, skillName: skillNameFrom(name) }); s = loadSession(); }
   }
