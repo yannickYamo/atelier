@@ -55,7 +55,9 @@ describe('a trim and a draft written again are steps on the one counter', () => 
     expectOneCounter(ctl, 2 + w.calls);
     expect(stepsOn(ctl?.decisions ?? [])).toBe(4);
     expect(w.calls).toBe(2);
-    expect(ctl?.decisions.filter((x) => x.outcome !== 'handed to a redraft').map((x) => x.action)).toEqual(['rewrite', 'rewrite', 'trim', 'trim']);
+    expect(ctl?.decisions.filter((x) => x.outcome !== 'handed to a redraft' && x.outcome !== 'refused').map((x) => x.action)).toEqual(['rewrite', 'rewrite', 'trim', 'trim']);
+    // the third trim is on the record as refused, with the stop as its note
+    expect(ctl?.decisions.filter((x) => x.outcome === 'refused').map((x) => [x.action, x.observed.note])).toEqual([['trim', 'the controller took its 4 steps']]);
     expect(ctl?.stoppedBecause).toBe('the controller took its 4 steps; the trim was not taken');
     expect(notes.join('\n')).toContain('no further cut was made: the controller took its 4 steps');
   });
@@ -211,7 +213,7 @@ describe.skipIf(!existsSync(CLI))('end to end: a draft that runs long after two 
     const sent = (await log()).slice(before).filter((b) => b.includes('emit_replacements') || b.includes('<earlier-draft>')).length;
     expectOneCounter(out.controller, sent);
     expect(stepsOn(out.controller.decisions)).toBe(4);
-    expect(out.controller.decisions.filter((d) => d.outcome !== 'handed to a redraft').map((d) => d.action)).toEqual(['rewrite', 'rewrite', 'trim', 'trim']);
+    expect(out.controller.decisions.filter((d) => d.outcome !== 'handed to a redraft' && d.outcome !== 'refused').map((d) => d.action)).toEqual(['rewrite', 'rewrite', 'trim', 'trim']);
     expect(out.controller.stoppedBecause).toBe('the controller took its 4 steps; the trim was not taken');
     expect(out.report.join('\n')).toContain('no further cut was made: the controller took its 4 steps');
   }, 120_000);

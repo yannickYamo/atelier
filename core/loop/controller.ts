@@ -43,6 +43,26 @@
 //      caller's trims (a draft that only runs long, cut) and drafts written again are steps here, recorded as 'trim' and
 //      'redraft', asked of `stepGate` before they are taken, counted against maxActions and priced from the ledger.
 //
+// TWO LOOPS, ONE RULE EACH. The controller's steps run inside the repair loop (./run-repair.ts); the trims and drafts
+// written again run around it (cli/commands/invoke.ts, `withRedraft`, and the shape rounds). Neither keeps bookkeeping or
+// acceptance of its own:
+//  (A) ONE ACCEPTANCE RULE (./repair.ts, `enforcedNeverWorse`, `enforcedNearer`). Every replacement of the working text,
+//      whichever loop proposes it (a rewrite, a carrier rewrite, the operators, a fix without a model, a trim, a draft
+//      written again for rules, for steering or for both, a shape round), is kept only if no ENFORCED rule is newly
+//      broken and none already broken is further from holding BY ITS VALUE (`distanceOf`: a rate past its ceiling or
+//      under its floor, a count, a length outside its range, a band distance), each read on the actual text with no
+//      length rescaling; only a check that carries no value is read by its count of places. A step made FOR enforced
+//      rules must, in addition, move at least one of its own targets nearer holding.
+//  (B) ONE LEDGER (`stepLedger`). One step ledger a run (one a shape round), created by the outermost loop and handed to
+//      every refinement. Every text-changing or model-calling step is entered on it before it runs; a step the cap or the
+//      budget refuses is entered as 'refused' and is no step. The cap, the budget and the controller's history are read
+//      from it alone, and a piece refined again after a redraft that was not kept continues the same ledger: nothing is
+//      recomputed, so the steps taken on the draft not kept count.
+//  (C) THE HAND-OFF CONTRACT. A redraft the controller hands over is sent with exactly the targets it was handed, each
+//      named in its note, an enforced rule no span carries included (a floor rate: "your pieces use at least … per 1,000
+//      words; this draft has …"). A redraft is never sent with no target, and its outcome line names the handed targets,
+//      not other misses.
+//
 // Pure: the caller reads the report, the ledger and the budget, and executes and records what is decided here.
 
 import type { ControllerAction, ControllerDecisionRecord, ControllerRecord } from '../state/canonical-state.js';
@@ -91,7 +111,7 @@ const CHOSEN: ReadonlySet<ControllerAction> = new Set(['rewrite', 'operators', '
  * is no step of its own. A step that could not run (a call that failed, a hand-off no draft followed) took nothing.
  */
 export const stepsTaken = (history: readonly ControllerDecisionRecord[]): number =>
-  history.filter((d) => CHOSEN.has(d.action) && d.outcome !== 'handed to a redraft' && d.outcome !== 'could not run').length;
+  history.filter((d) => CHOSEN.has(d.action) && d.outcome !== 'handed to a redraft' && d.outcome !== 'could not run' && d.outcome !== 'refused').length;
 
 /** A step said in plain words, as a stop names the one that could not run. */
 export const stepWords = (a: ControllerAction): string => ({ cut: 'cut of invented claims', mechanical: 'fix without a model', rewrite: 'rewrite', operators: 're-punctuation',
@@ -120,6 +140,57 @@ export function stepGate(action: 'trim' | 'redraft', expectedCostUsd: number, hi
   const set = controllerSettings(s);
   if (stepsTaken(history) >= set.maxActions) return capStop(set.maxActions);
   return budget ? budgetRefusal(action, expectedCostUsd, budget) : null;
+}
+
+/** What a step is, before it runs: what it is for and what it is expected to move and cost. */
+export type PlannedStep = Pick<ControllerDecisionRecord, 'action' | 'targets' | 'why' | 'expectedGain' | 'expectedCostUsd'>;
+
+/**
+ * THE RUN'S ONE STEP LEDGER (rule B, at the head of this file). Created once per run (once per shape round under
+ * `--until-typical`) and handed to every loop that changes the text or calls a model for a repair: the controller's
+ * steps (core/loop/run-repair.ts) and the trims and drafts written again (cli/commands/invoke.ts, `withRedraft`). Each
+ * step is entered BEFORE it runs (`begin`, read as 'could not run' until it is settled), so a step that throws is on the
+ * record as one that could not run; a step the cap or the budget refuses is entered as 'refused' (`gate`). The cap and
+ * the budget are read from here alone, and the steps the controller reads as its history are these entries: a piece
+ * refined again after a redraft that was not kept continues this ledger, with nothing recomputed.
+ */
+export interface StepLedger {
+  readonly settings: ControllerSettings | null;
+  /** every step of the run, in the order each was begun */
+  readonly entries: readonly ControllerDecisionRecord[];
+  /** the budget as it stands, where the run reads one */
+  budget(): ControllerInput['budget'] | null;
+  /** enter a step before it runs; its place on the ledger */
+  begin(step: PlannedStep): number;
+  /** what the step at `at` did; may be called again when the step's outcome is known only later (a draft written again) */
+  settle(at: number, outcome: ControllerDecisionRecord['outcome'], observed: ControllerDecisionRecord['observed']): ControllerDecisionRecord;
+  /** enter a record that is no step of its own (a hand-off to a redraft, the claim cut), settled as it is */
+  add(d: ControllerDecisionRecord): void;
+  /** may a caller take this step? null when the cap and the budget hold it; otherwise it is entered as refused and the stop is returned */
+  gate(step: PlannedStep & { readonly action: 'trim' | 'redraft' }): string | null;
+  /** a draft not kept asked for nothing: its hand-offs, entered from `from` on, are taken off (a hand-off is no step) */
+  withdrawHandOffs(from: number): void;
+}
+
+/** A new ledger for one run, with the steps already taken on it (a caller that refines a piece again) when there are any. */
+export function stepLedger(settings: ControllerSettings | null = null, budget: (() => ControllerInput['budget']) | null = null,
+  history: readonly ControllerDecisionRecord[] = []): StepLedger {
+  const entries: ControllerDecisionRecord[] = [...history];
+  const NONE = { movement: 0, calls: 0, usd: 0 };
+  return {
+    settings, entries,
+    budget: () => (budget ? budget() : null),
+    begin(step) { entries.push({ action: step.action, targets: [...step.targets], why: step.why, expectedGain: step.expectedGain, expectedCostUsd: step.expectedCostUsd, outcome: 'could not run', observed: { ...NONE } }); return entries.length - 1; },
+    settle(at, outcome, observed) { const d = { ...entries[at], outcome, observed: { ...observed } }; entries[at] = d; return d; },
+    add(d) { entries.push(d); },
+    gate(step) {
+      const refused = stepGate(step.action, step.expectedCostUsd, entries, budget ? budget() : null, settings);
+      if (refused) entries.push({ action: step.action, targets: [...step.targets], why: step.why, expectedGain: step.expectedGain, expectedCostUsd: step.expectedCostUsd,
+        outcome: 'refused', observed: { ...NONE, note: refused } });
+      return refused;
+    },
+    withdrawHandOffs(from) { for (let i = entries.length - 1; i >= from; i--) if (entries[i].outcome === 'handed to a redraft') entries.splice(i, 1); },
+  };
 }
 
 export interface EnforcedMiss {
@@ -207,7 +278,7 @@ export const recordTarget = targetKey;
 const hits = (d: ControllerDecisionRecord, id: string): boolean => d.targets.some((t) => targetKey(t) === targetKey(id));
 
 /** A step failed when it kept nothing or moved nothing. A hand-off to a redraft is no step of its own: its redraft is. */
-const failed = (d: ControllerDecisionRecord): boolean => d.outcome !== 'handed to a redraft' && (d.outcome !== 'kept' || d.observed.movement <= 0);
+const failed = (d: ControllerDecisionRecord): boolean => d.outcome !== 'handed to a redraft' && d.outcome !== 'refused' && (d.outcome !== 'kept' || d.observed.movement <= 0);
 
 /** The chosen actions that failed on a target, in the order they failed. */
 const failuresOn = (id: string, history: readonly ControllerDecisionRecord[]): ControllerAction[] =>
@@ -222,7 +293,7 @@ function actionFor(base: 'operators' | 'carrier-rewrite' | 'redraft', id: string
 
 /** What one action is expected to move per target: the measured prior, moved halfway toward this run's own observations. */
 function effectOf(action: 'rewrite' | 'operators' | 'carrier-rewrite' | 'redraft', prior: number, history: readonly ControllerDecisionRecord[]): number {
-  const seen = history.filter((d) => d.action === action && d.outcome !== 'could not run' && d.outcome !== 'handed to a redraft');
+  const seen = history.filter((d) => d.action === action && d.outcome !== 'could not run' && d.outcome !== 'handed to a redraft' && d.outcome !== 'refused');
   if (!seen.length) return prior;
   const observed = seen.reduce((n, d) => n + d.observed.movement / Math.max(1, d.targets.length), 0) / seen.length;
   return Math.max(0, (prior + observed) / 2);
@@ -264,7 +335,7 @@ export function decide(input: ControllerInput, s: ControllerSettings | null = nu
   const forEnforced = new Set<Decision>();
   const enforcedStep = (c: Decision): void => { candidates.push(c); forEnforced.add(c); };
   const failedOnce = (id: string, a: ControllerAction): boolean => failuresOn(id, input.history).includes(a);
-  const hadRedraft = input.history.some((d) => d.action === 'redraft');
+  const hadRedraft = input.history.some((d) => d.action === 'redraft' && d.outcome !== 'refused');
 
   // (1) ENFORCED: span rules rewritten, then omissions written again.
   const spans = enforced.filter((m) => m.kind === 'span' && !failedOnce(m.id, 'rewrite'));

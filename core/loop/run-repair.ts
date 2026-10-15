@@ -20,11 +20,11 @@ import { checkFormat, type FormatProfile } from '../observers/formats.js';
 import { findTerms } from '../observers/text.js';
 import { signalRules, signalChecks, isSignal, displacement, ownerWords, type Displacement } from './graded.js';
 import type { FidelityProfile, ControllerSettings } from '../fidelity/types.js';
-import { decide, controllerRecord, recordTarget, stepWords, ENFORCED_WEIGHT, SETTLED_ERROR, type ControllerInput, type Decision, type EnforcedMiss, type GradedMiss } from './controller.js';
+import { decide, controllerRecord, recordTarget, stepWords, stepLedger, ENFORCED_WEIGHT, SETTLED_ERROR, type ControllerInput, type Decision, type EnforcedMiss, type GradedMiss, type PlannedStep, type StepLedger } from './controller.js';
 import { applyOperator, operatorsToward, sitesOf, keepsWords } from '../fidelity/operators.js';
 import { SITES_PER_OPERATOR } from '../fidelity/structural.js';
 import { spanIntegrity } from './integrity.js';
-import { planRepair, repairPrompt, applyRepair, acceptRepair, addsNoWords, readAtLength, featureParamsOf, cutSpan, REPAIR_SYSTEM, REPAIR_SYSTEM_WITH_PLACEHOLDERS, REPAIR_SCHEMA, type Reverted, type Applied } from './repair.js';
+import { planRepair, repairPrompt, applyRepair, acceptRepair, addsNoWords, readAtLength, featureParamsOf, ruleParamsOf, cutSpan, REPAIR_SYSTEM, REPAIR_SYSTEM_WITH_PLACEHOLDERS, REPAIR_SCHEMA, type Reverted, type Applied } from './repair.js';
 import { keysOf, measurementId } from '../state/rule-key.js';
 import { mechanicalFixes, grammarFixes } from './mechanical-repair.js';
 import { ensureGrammar, readGrammar, isGrammarNote, GRAMMAR_NOTE_SUFFIX } from '../observers/grammar.js';
@@ -129,7 +129,13 @@ export interface CheckOptions {
    * a step is read from what this run has paid.
    */
   readonly controller?: { readonly settings?: ControllerSettings | null; readonly redraft?: boolean; readonly ledgerFrom?: readonly SpendLine[];
-    /** steps already taken on this piece (a redraft that did no better, and the steps before it): what failed is not repeated */
+    /**
+     * THE RUN'S STEP LEDGER (./controller.ts, rule B): every step of the run, whichever loop took it, entered before it
+     * runs; the cap, the budget and the history the controller reads are read from it. Absent, this refinement keeps a
+     * ledger of its own, starting from `history`.
+     */
+    readonly ledger?: StepLedger;
+    /** steps already taken on this piece, for a caller with no ledger of its own to hand: what failed is not repeated */
     readonly history?: readonly ControllerDecisionRecord[] };
 }
 
@@ -694,17 +700,29 @@ export async function refineToStandard(
   };
   // THE BOUNDED CONTROLLER (./controller.ts): each step chosen from the report as it stands, recorded with what it was
   // expected to gain and cost, what it did, and what the ledger charged for it; and why the loop stopped.
-  const decisions: ControllerDecisionRecord[] = []; let stoppedBecause: string | null = null; let handed = false;
+  let stoppedBecause: string | null = null; let handed = false;
   const unreachable = new Set<string>();
   const STEP_PURPOSES: readonly SpendPurpose[] = ['repair', 'graded', 'steering'];
   const costSince = (snap: readonly SpendLine[], purposes: readonly SpendPurpose[] = STEP_PURPOSES): { calls: number; usd: number } => {
     const ls = spendBetween(snap, processSpendByPurpose()).filter((l) => purposes.includes(l.purpose));
     return { calls: ls.reduce((n, l) => n + l.calls, 0), usd: Math.round(ls.reduce((n, l) => n + l.usd, 0) * 1e6) / 1e6 };
   };
-  const record = (d: Pick<Decision, 'action' | 'targets' | 'why' | 'expectedGain' | 'expectedCostUsd'>, snap: readonly SpendLine[], outcome: ControllerDecisionRecord['outcome'], movement: number, note?: string): void => {
-    decisions.push({ action: d.action, targets: [...d.targets], why: d.why, expectedGain: d.expectedGain, expectedCostUsd: d.expectedCostUsd, outcome,
-      observed: { movement: Math.round(movement * 1000) / 1000, ...costSince(snap), ...(note ? { note } : {}) } });
+  // THE RUN'S ONE LEDGER (./controller.ts, rule B): this refinement's steps are entered on it before each runs, and the
+  // controller reads the whole run's steps from it. A caller with none to hand gets one of its own here.
+  const settings = opts.controller?.settings ?? null;
+  const budgetNow = (): ControllerInput['budget'] => ({ usdLeft: budget.capUsd - budget.spentUsd - (budget.inFlightUsd ?? 0), callsLeft: budget.maxCalls !== undefined ? budget.maxCalls - (budget.calls ?? 0) : null });
+  const ledger = opts.controller?.ledger ?? stepLedger(settings, budgetNow, opts.controller?.history ?? []);
+  const ledgerStart = ledger.entries.length;
+  /** this refinement's own steps: the ledger's entries from where it began */
+  const decisions = (): ControllerDecisionRecord[] => ledger.entries.slice(ledgerStart);
+  const begin = (d: PlannedStep): number => ledger.begin(d);
+  const settle = (at: number, snap: readonly SpendLine[], outcome: ControllerDecisionRecord['outcome'], movement: number, note?: string): void => {
+    ledger.settle(at, outcome, { movement: Math.round(movement * 1000) / 1000, ...costSince(snap), ...(note ? { note } : {}) });
   };
+  /** a step entered and settled at once: code that always runs, recorded where it ran */
+  const record = (d: PlannedStep, snap: readonly SpendLine[], outcome: ControllerDecisionRecord['outcome'], movement: number, note?: string): void => { settle(begin(d), snap, outcome, movement, note); };
+  // THE ONE ACCEPTANCE RULE (./controller.ts, rule A) reads which way a rate is out from the standard's own params.
+  const paramsOf = ruleParamsOf(v);
   const ledgerFrom = opts.controller?.ledgerFrom ?? ledgerBefore;
   const perCall = (purposes: readonly SpendPurpose[]): number | undefined => {
     const ls = spendBetween(ledgerFrom, processSpendByPurpose()).filter((l) => purposes.includes(l.purpose));
@@ -738,19 +756,18 @@ export async function refineToStandard(
       const f = graded.get(c.requirementId) ?? c.requirementId; const e = c.result.error ?? 0; const was = byFeature.get(f);
       if (!was || Math.abs(e) > Math.abs(was.error)) byFeature.set(f, { id: c.requirementId, error: e, operatorEffect: operatorEffect(t, c) });
     }
-    const usdLeft = budget.capUsd - budget.spentUsd - (budget.inFlightUsd ?? 0);
     const rewriteUsd = perCall(['repair', 'graded']); const draftUsd = perCall(['writing']);
     return { enforced, claims: flaggedClaims(r).length, length: null, graded: [...byFeature.values()], grammar,
-      budget: { usdLeft, callsLeft: budget.maxCalls !== undefined ? budget.maxCalls - (budget.calls ?? 0) : null }, history: [...(opts.controller?.history ?? []), ...decisions],
+      budget: ledger.budget() ?? budgetNow(), history: ledger.entries,
       observedUsdPerCall: { ...(rewriteUsd !== undefined ? { rewrite: rewriteUsd, 'carrier-rewrite': rewriteUsd } : {}), ...(draftUsd !== undefined ? { redraft: draftUsd } : {}) },
       can: { redraft: opts.controller?.redraft ?? false, rewrite: canRewrite }, unreachable };
   };
   // Said to the owner: no SIGNAL feature is named by its id in a why, a note or a reason (./graded.ts, `ownerWords`).
-  const controllerOf = (): { controller: ReturnType<typeof controllerRecord> } => ({ controller: controllerRecord(decisions.map((d) => ({ ...d, targets: d.targets.map(recordTarget), why: ownerWords(d.why),
+  const controllerOf = (): { controller: ReturnType<typeof controllerRecord> } => ({ controller: controllerRecord(decisions().map((d) => ({ ...d, targets: d.targets.map(recordTarget), why: ownerWords(d.why),
     observed: { ...d.observed, ...(d.observed.note ? { note: ownerWords(d.observed.note) } : {}) } })), ownerWords(stoppedBecause ?? 'every enforced rule holds and nothing graded is off'), handed) });
   if (!pending(first)) {
     const toCheck = listedClaims(first);
-    const settled = decide(controllerInput(draft, first, true), opts.controller?.settings ?? null);
+    const settled = decide(controllerInput(draft, first, true), settings);
     stoppedBecause = settled.kind === 'stop' ? settled.why : `every enforced rule holds and no graded miss is over ${SETTLED_ERROR} band widths`;
     return { output: draft, report: recorded(first), repair: toCheck.length || gradedOn ? { passes: 0, violatedBefore: [], violatedAfter: [], originalOutputHash: sha(draft), draft,
       ...(toCheck.length ? { claimsToCheck: toCheck } : {}), ...gradedRecord(first, draft), ...(gradedOn ? controllerOf() : {}), why: 'every REQUIRED measured rule holds' } : null };
@@ -825,11 +842,11 @@ export async function refineToStandard(
   };
   // (2) CLAIMS, in code, before any step the controller chooses: recorded as a step, with what the cut cost the ledger.
   const flaggedFirst = flaggedClaims(first).length; const cutSnap = processSpendByPurpose();
+  const cutAt = flaggedFirst ? begin({ action: 'cut', targets: ['UNSOURCED'], why: `${flaggedFirst} invented claim(s) flagged: cut in code before anything else`, expectedGain: flaggedFirst, expectedCostUsd: 0 }) : -1;
   const enforced = await cutSafely(draft, first);
   let text = enforced.text; let report = enforced.report; let passes = 0;
   cut.push(...enforced.cut);
-  if (flaggedFirst) record({ action: 'cut', targets: ['UNSOURCED'], why: `${flaggedFirst} invented claim(s) flagged: cut in code before anything else`, expectedGain: flaggedFirst, expectedCostUsd: 0 },
-    cutSnap, enforced.cut.length ? 'kept' : 'no change', enforced.cut.length, enforced.cut.length ? undefined : 'nothing could be cut without breaking the text');
+  if (flaggedFirst) settle(cutAt, cutSnap, enforced.cut.length ? 'kept' : 'no change', enforced.cut.length, enforced.cut.length ? undefined : 'nothing could be cut without breaking the text');
   let why = cut.length ? 'invented claims cut' : 'every REQUIRED measured rule now holds';
   // ONE INSTRUMENT ON BOTH SIDES OF EVERY COMPARISON. A claim reader that fails mid-loop degrades for
   // good (./claim-extract.ts, modelSensor), and from then on reads every text by the pattern check. The
@@ -853,14 +870,16 @@ export async function refineToStandard(
     const m = mechanicalFixes(v, report, text, { grammar: last });
     if (m.text === text) return;
     const snap = processSpendByPurpose();
+    // ONLY THE RULES IT CHANGED: each fix is said as "<rule>: <what>", and those rules are the step's targets.
+    const changed = [...new Set(m.fixed.map((f) => f.split(':')[0].trim()))];
+    const at = begin({ action: 'mechanical', targets: changed, why: `fixed without a model: ${m.fixed.join('; ')}`, expectedGain: 0, expectedCostUsd: 0 });
     const after = await check(m.text);
     sameInstrument();
     // A FIX THAT NEEDS NO MODEL IS NEVER DROPPED IN SILENCE. When it cannot be kept (it would break another rule),
     // the record says which fix and why, so a refusal names the real conflict and not the rule the fix was for.
-    const accepted = acceptRepair(atLength(report, text, m.text), after, { wordsAdded: !addsNoWords(text, m.text), ignore: steering(report) });
-    const step = { action: 'mechanical' as const, targets: [...new Set(broken(report))], why: `fixed without a model: ${m.fixed.join('; ')}`, expectedGain: 0, expectedCostUsd: 0 };
-    if (!accepted.ok) { record(step, snap, 'not kept', 0, accepted.why); if (!notKept.length) notKept.push(`${m.fixed.join('; ')} not kept: ${accepted.why}`); return; }
-    record(step, snap, 'kept', ENFORCED_WEIGHT * (broken(report).length - broken(after).length));
+    const accepted = acceptRepair(atLength(report, text, m.text), after, { wordsAdded: !addsNoWords(text, m.text), ignore: steering(report), targets: changed, enforced: enforcedIds, paramsOf });
+    if (!accepted.ok) { settle(at, snap, 'not kept', 0, accepted.why); if (!notKept.length) notKept.push(`${m.fixed.join('; ')} not kept: ${accepted.why}`); return; }
+    settle(at, snap, 'kept', ENFORCED_WEIGHT * (broken(report).length - broken(after).length));
     text = m.text; report = after; mechanical.push(...m.fixed);
   };
   if (report.failed) await fixMechanically();
@@ -956,7 +975,8 @@ export async function refineToStandard(
     // A rewrite that adds an invented claim makes UNSOURCED worse, and `acceptRepair` refuses it.
     const verdict = next === text
       ? { ok: false, why: reverted.length ? `every rewrite was refused (${reverted.map((r) => r.lost[0]).slice(0, 2).join('; ')})` : 'the rewrite returned nothing usable' }
-      : acceptRepair(atLength(withGraded(report, gradedIds), text, next), withGraded(after, gradedIds), { graded: soft, ...(enforcedStep ? { ignore: steering(report) } : {}) });
+      : acceptRepair(atLength(withGraded(report, gradedIds), text, next), withGraded(after, gradedIds), { graded: soft, enforced: enforcedIds, paramsOf,
+        ...(enforcedStep ? { ignore: steering(report), targets: d.targets } : {}) });
     // THE DISPLACEMENT GUARD (./graded.ts): a steering rewrite that puts more of the author's features outside their
     // bands, or pushes one it was not pointed at far out, is refused whatever it moved. A rewrite for an enforced rule
     // is never refused by it: what it displaced is recorded as observed, and the owner's rule is kept.
@@ -1011,7 +1031,7 @@ export async function refineToStandard(
           if (next === null || next === text) continue;
           if (!keepsWords(text, next) || !spanIntegrity(text, next, new Set(['and']), false).ok) continue;
           const after = read(next);
-          if (!acceptRepair(atLength(withGraded(before, idSet), text, next), withGraded(after, idSet), { graded: soft }).ok) continue;
+          if (!acceptRepair(atLength(withGraded(before, idSet), text, next), withGraded(after, idSet), { graded: soft, enforced: enforcedIds, paramsOf }).ok) continue;
           const disp = displacement(text, next, profile, features);
           if (disp?.refusedFor.length) { displaced.push(...disp.refusedFor); continue; }
           const movement = movedBy(ids, atLength(withGraded(before, idSet), text, next), after, false);
@@ -1024,7 +1044,6 @@ export async function refineToStandard(
     }
     return { kept: false, movement: 0, note: 'no operator moved a target without breaking or displacing something' };
   };
-  const settings = opts.controller?.settings ?? null;
   // THE STEPS. Each one chosen by the controller from the report as it stands (./controller.ts, `decide`), carried out
   // through the paths that already existed (the span rewrite, the operators, a draft written again by the caller), and
   // recorded with what it moved and what the ledger charged for it. The loop ends where the controller stops.
@@ -1039,7 +1058,8 @@ export async function refineToStandard(
     }
     const snap = processSpendByPurpose();
     if (d.action === 'redraft') {
-      // Written again by the caller (cli/commands/invoke.ts, `withRedraft`), told each miss's direction and distance.
+      // Written again by the caller (cli/commands/invoke.ts, `withRedraft`), told each miss's direction and distance:
+      // the hand-off is no step; the draft written again is entered on the same ledger by the caller.
       record(d, snap, 'handed to a redraft', 0); handed = true;
       stoppedBecause = `handed to a redraft: ${d.why}`;
       break;
@@ -1047,13 +1067,14 @@ export async function refineToStandard(
     if (d.action === 'grammar') {
       // MECHANICAL ERRORS, in place (./mechanical-repair.ts): the checker's correction inside each confirmed span, kept only
       // on the never-worse terms every step has. One not kept leaves its rule to the end, listed, and never retried here.
+      const at = begin(d);
       const g = grammarFixes(v, report, text, new Set(d.targets));
-      if (g.text === text) { record(d, snap, 'no change', 0, 'no correction could be made in place'); for (const id of d.targets) unreachable.add(id); continue; }
+      if (g.text === text) { settle(at, snap, 'no change', 0, 'no correction could be made in place'); for (const id of d.targets) unreachable.add(id); continue; }
       const after = await check(g.text);
       sameInstrument();
-      const accepted = acceptRepair(atLength(report, text, g.text), after, { wordsAdded: !addsNoWords(text, g.text), ignore: steering(report) });
-      if (!accepted.ok) { record(d, snap, 'not kept', 0, accepted.why); for (const id of d.targets) unreachable.add(id); if (!notKept.length) notKept.push(`${g.fixed.join('; ')} not kept: ${accepted.why}`); continue; }
-      record(d, snap, 'kept', movedBy(d.targets, report, after, true), g.fixed.join('; '));
+      const accepted = acceptRepair(atLength(report, text, g.text), after, { wordsAdded: !addsNoWords(text, g.text), ignore: steering(report), targets: d.targets, enforced: enforcedIds, paramsOf });
+      if (!accepted.ok) { settle(at, snap, 'not kept', 0, accepted.why); for (const id of d.targets) unreachable.add(id); if (!notKept.length) notKept.push(`${g.fixed.join('; ')} not kept: ${accepted.why}`); continue; }
+      settle(at, snap, 'kept', movedBy(d.targets, report, after, true), g.fixed.join('; '));
       text = g.text; report = after; mechanical.push(...g.fixed);
       continue;
     }
@@ -1064,12 +1085,14 @@ export async function refineToStandard(
       continue;
     }
     if (d.action === 'operators') {
+      const at = begin(d);
       const o = await operatorStep(d.targets);
-      record(d, snap, o.kept ? 'kept' : 'no change', o.movement, o.note);
+      settle(at, snap, o.kept ? 'kept' : 'no change', o.movement, o.note);
       continue;
     }
+    const at = begin(d);
     const step = await rewriteStep(d);
-    record(d, snap, step.outcome, step.movement, step.note);
+    settle(at, snap, step.outcome, step.movement, step.note);
     if (step.stop) { stoppedBecause = step.stop; break; }
   }
   // The last fixes include mechanical errors the controller's steps did not reach (its step limit, say).
@@ -1082,12 +1105,12 @@ export async function refineToStandard(
   // AND AGAIN AT THE END, on the text that ships: whatever the passes did, no flagged claim survives them.
   // Once the flagged claims were kept uncut, cutting them again at the end would only repeat the attempt.
   const lastSnap = processSpendByPurpose(); const flaggedLast = keptUncut ? 0 : flaggedClaims(report).length;
+  // A claim a rewrite put back is cut again: a step like the first cut, entered before it runs, recorded with what it cost.
+  const lastAt = flaggedLast ? begin({ action: 'cut', targets: ['UNSOURCED'], why: `${flaggedLast} invented claim(s) flagged after the steps: cut in code`, expectedGain: flaggedLast, expectedCostUsd: 0 }) : -1;
   const last = keptUncut ? { text, report, cut: [] as string[] } : await cutSafely(text, report);
   sameInstrument();
   if (last.cut.length) { text = last.text; report = last.report; cut.push(...last.cut); }
-  // A claim a rewrite put back is cut again: a step like the first cut, recorded with what it cost.
-  if (flaggedLast) record({ action: 'cut', targets: ['UNSOURCED'], why: `${flaggedLast} invented claim(s) flagged after the steps: cut in code`, expectedGain: flaggedLast, expectedCostUsd: 0 },
-    lastSnap, last.cut.length ? 'kept' : 'no change', last.cut.length);
+  if (flaggedLast) settle(lastAt, lastSnap, last.cut.length ? 'kept' : 'no change', last.cut.length);
   if (cut.length && !report.failed) why = 'every REQUIRED measured rule now holds (invented claims cut)';
   const heavy = heavyCut(draft, cut);
   if (heavy) why = `${heavy}; ${why}`;

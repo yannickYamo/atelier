@@ -1,0 +1,17 @@
+{
+ "parent": null,
+ "standardVersionHash": "52cf27430d4f79c6",
+ "skillVersionHash": "3e72ea6a2307586e",
+ "settings": {
+  "drafts": 2,
+  "editBudget": 0,
+  "retrievalK": 3,
+  "notesCap": 0
+ },
+ "notes": [],
+ "profileHash": "bf298e54ba50d54b",
+ "retrievalHash": "90af7292b456f3a7",
+ "createdAt": "2026-10-15T10:07:15.099Z",
+ "why": "the first release, built with the skill",
+ "id": "7f761ba21062c956"
+}
