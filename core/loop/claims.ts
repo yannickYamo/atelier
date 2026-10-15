@@ -123,6 +123,8 @@ const ANONYMOUS_SOURCE = /\b(?:a|one|an) (?:legal scholar|scholar|researcher|pro
 const CONTINUES = /^(?:(?:\w+ (?:months?|weeks?|days?|years?) later|later|then|afterwards|by the end|eventually|nobody|everyone|the team|our|we|I)\b)/i;
 const STATISTIC = /\b\d{1,3}(?:,\d{3})+\b|\b\d+(?:\.\d+)?\s?%|\b\d+(?:\.\d+)?\s?percent\b|[$€£]\s?\d|\b\d+(?:\.\d+)?\s?(?:million|billion|thousand)\b|\b\d{4,}\b/;
 const FINDING = /\b(?:according to|(?:a|the|this|their|our|its) (?:\w+ ){0,3}(?:report|study|survey|census|analysis|benchmark)|data (?:from|shows?)|found that|estimates? (?:that|put)|as of (?:19|20)\d\d|signator(?:y|ies)|by most counts|tracks roughly|I (?:ran|measured|benchmarked|counted)|we (?:ran|measured|benchmarked|counted))\b/i;
+/** The figures a sentence states in digits, read exactly as the cut check always read them. */
+const digitFigures = (s: string): string[] => (s.match(/\d[\d,]*(?:\.\d+)?/g) ?? []).map((n) => n.replace(/[.,]$/, ''));
 const LINKED = /\]\(https?:|https?:\/\//;
 const STOP = new Set(['the', 'and', 'that', 'with', 'this', 'from', 'were', 'was', 'have', 'had', 'into', 'about', 'their', 'there', 'then', 'than', 'when', 'what', 'which', 'would', 'could', 'because', 'years', 'ago', 'last', 'later', 'months', 'weeks']);
 
@@ -147,8 +149,11 @@ const WHY: Readonly<Record<Claim['kind'], { readonly cut: string; readonly slot:
  */
 export function unsourcedClaims(text: string, material: string, placeholders = false): Claim[] {
   const why = (k: Claim['kind']): string => (placeholders ? WHY[k].slot : WHY[k].cut);
-  // Whole numbers only, as their value: "40" is not supported by "400", nor "4%" by "2024"; "forty" supports "40" (./numbers.ts).
-  const matNumbers = new Set(numbersIn(material));
+  // Whole numbers only: "40" is not supported by "400", nor "4%" by "2024". What can be CUT is read from digits
+  // alone, so a spelled number in a sentence ("within two weeks") never turns a supported digit figure into an
+  // unsupported one; spelled counts go to the listed path only (wordCountClaims). The material supports a digit
+  // figure written either way: "forty" in the notes supports "40" (./numbers.ts).
+  const matNumbers = new Set([...digitFigures(material), ...numbersIn(material)]);
   // A story is supported by ONE passage that tells it, not by topic words scattered across the notes.
   const passages = material.split(/\n\s*\n|(?<=[.!?])\s+/).map((p) => new Set(contentWords(p))).filter((p) => p.size);
   const storySupported = (sentence: string): boolean => {
@@ -177,7 +182,7 @@ export function unsourcedClaims(text: string, material: string, placeholders = f
     const urls = s.text.match(/https?:\/\/[^\s)\]]+/g) ?? [];
     const linkedByPerson = LINKED.test(s.text) && urls.length > 0 && urls.every((u) => material.includes(u));
     if (STATISTIC.test(s.text) && FINDING.test(s.text) && !linkedByPerson) {
-      const numbers = numbersIn(s.text).filter((n) => !/^(?:19|20)\d\d$/.test(n));
+      const numbers = digitFigures(s.text).filter((n) => !/^(?:19|20)\d\d$/.test(n));
       if (numbers.length && !numbers.every((n) => matNumbers.has(n))) {
         out.push({ ...s, kind: 'FIGURE', why: why('FIGURE') });
       }
