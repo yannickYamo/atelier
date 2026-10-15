@@ -98,7 +98,7 @@ export const VALUED_OPTIONS: readonly string[] = ['correcting',
 ];
 
 export const BOOLEAN_OPTIONS: readonly string[] = [
-  'accept', 'accept-new-binding', 'profile', 'auto-reserve', 'cluster-per-file', 'drop', 'dry-run', 'indifferent',
+  'accept', 'accept-new-binding', 'fix-grammar', 'profile', 'auto-reserve', 'cluster-per-file', 'drop', 'dry-run', 'indifferent',
   'allow-unsourced', 'answer-only', 'bare', 'clear', 'holdout', 'json', 'list', 'loop', 'no-contrast', 'no-repair', 'repair', 'never-this-transition', 'no-negative-probe', 'none', 'public-source',
   'ai-assisted', 'blind-expert', 'delivery-proven', 'no-ai-assist', 'per-passage',
   'regenerate',

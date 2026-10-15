@@ -10,7 +10,7 @@ import type { StandardVersion } from '../state/canonical-state.js';
 import { isMarkup } from '../observers/visible.js';
 import { acts, type VerifyReport } from '../observers/verify.js';
 import { paragraphSentences, wordsOf } from '../observers/text.js';
-import { protectedRanges } from '../observers/grammar.js';
+import { protectedRanges, grammarFixing } from '../observers/grammar.js';
 import { numbersIn, namesIn } from './integrity.js';
 import type { Span } from '../observers/registry.js';
 
@@ -19,28 +19,36 @@ import type { Span } from '../observers/registry.js';
  * is replaced by exactly that correction, last first so earlier offsets stay true; a span with none is left for the
  * sentence rewrite. Nothing outside a span changes, no span inside a protected region is touched (the observer never
  * flags one; this checks again on the text it has), the whole text's word count moves by no more than the
- * corrections themselves, and its figures and names are the same after as before (./integrity.ts). Returns the text and how many spans were corrected.
+ * corrections themselves, and its figures and names are the same after as before (./integrity.ts). Returns the text,
+ * how many spans were corrected, and each change as it was made ("recieve" → "receive"), so every one is recorded.
  */
-export function correctMechanicalErrors(text: string, spans: readonly Span[]): { text: string; corrected: number } {
+export function correctMechanicalErrors(text: string, spans: readonly Span[]): { text: string; corrected: number; changes: string[] } {
   const guarded = protectedRanges(text);
   const fixable = spans.filter((s) => s.replacement !== undefined && s.end > s.start && s.end <= text.length && text.slice(s.start, s.end) === s.text
     && !guarded.some((g) => s.start < g.end && s.end > g.start)).sort((a, b) => b.start - a.start);
-  let out = text; let corrected = 0; let lastStart = Infinity; let allowed = 0;
+  let out = text; let corrected = 0; let lastStart = Infinity; let allowed = 0; const changes: string[] = [];
+  // A change is said as the stretch it was and what it became, with a few words around a mark ("done ." → "done.").
+  const said = (s: Span, rep: string): string => {
+    const mark = !/\p{L}/u.test(s.text);
+    const word = mark ? (/[\p{L}\p{N}'’]+$/u.exec(text.slice(Math.max(0, s.start - 30), s.start))?.[0] ?? '') : '';
+    const next = mark && /^[,.]/.test(text.slice(s.end)) ? text[s.end] : '';
+    return `"${(word + s.text + next).replace(/;/g, ',').trim()}" → "${(word + rep + next).replace(/;/g, ',').trim() || '(removed)'}"`;
+  };
   for (const s of fixable) {
     if (s.end > lastStart) continue;                                                     // overlapping: the later one only
     const rep = s.replacement ?? '';
     allowed += Math.abs(wordsOf(rep).length - wordsOf(s.text).length);
     out = `${out.slice(0, s.start)}${rep}${out.slice(s.end)}`;
-    corrected += 1; lastStart = s.start;
+    corrected += 1; lastStart = s.start; changes.unshift(said(s, rep));
   }
   // The bound, read on the result: a correction may move the count by its own words and no more.
-  if (Math.abs(wordsOf(out).length - wordsOf(text).length) > allowed) return { text, corrected: 0 };
+  if (Math.abs(wordsOf(out).length - wordsOf(text).length) > allowed) return { text, corrected: 0, changes: [] };
   // And the claims, read on the whole text: every figure as it was, and no name lost. The observer refuses such a
   // correction lint by lint; this holds the sum of them to the same line, so nothing they claimed can move.
   const figures = (t: string): string => [...numbersIn(t)].sort().join('|');
   const kept = new Set(namesIn(out));
-  if (figures(out) !== figures(text) || namesIn(text).some((n) => !kept.has(n))) return { text, corrected: 0 };
-  return { text: out, corrected };
+  if (figures(out) !== figures(text) || namesIn(text).some((n) => !kept.has(n))) return { text, corrected: 0, changes: [] };
+  return { text: out, corrected, changes };
 }
 
 /**
@@ -129,15 +137,18 @@ export function splitLongParagraphs(text: string, max: number): string {
  */
 /**
  * The mechanical errors of the GRAMMAR rules named (all of them when `only` is absent), corrected in place on the spans
- * the report holds for this text. The controller's grammar step (./run-repair.ts) and the last fixes both use it.
+ * the report holds for this text. The controller's grammar step (./run-repair.ts) and the last fixes both use it. Only
+ * under `--fix-grammar` (core/observers/grammar.ts, `grammarFixing`): by default nothing is changed. Each change is
+ * recorded by name: "<rule>: N mechanical error(s) corrected: "recieve" → "receive", …".
  */
 export function grammarFixes(v: StandardVersion, report: VerifyReport, text: string, only?: ReadonlySet<string>): { text: string; fixed: string[] } {
+  if (!grammarFixing()) return { text, fixed: [] };
   const broken = new Set(report.checked.filter((c) => acts(c) && c.result.verdict === 'VIOLATED').map((c) => c.requirementId));
   let out = text; const fixed: string[] = [];
   for (const c of report.checked) {
     if (!broken.has(c.requirementId) || c.observer !== 'GRAMMAR' || (only && !only.has(c.requirementId)) || !v.requirements.some((r) => r.requirementId === c.requirementId)) continue;
     const g = correctMechanicalErrors(out, c.result.spans);
-    if (g.corrected) { out = g.text; fixed.push(`${c.requirementId}: ${g.corrected} mechanical error(s) corrected`); }
+    if (g.corrected) { out = g.text; fixed.push(`${c.requirementId}: ${g.corrected} mechanical error(s) corrected: ${g.changes.join(', ')}`); }
     // One rule's spans index the text as it was: after a correction moves offsets, the next rule waits for a re-check.
     if (g.corrected) break;
   }

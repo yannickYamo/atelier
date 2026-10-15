@@ -269,7 +269,8 @@ describe.skipIf(!existsSync(CLI))('end to end: the hand-off honoured, one exit c
     add('No spelling mistakes.', 'REQUIRED', 'GRAMMAR:dialect=american');
     add('Few asides in parentheses.', 'PREFERRED', 'FEATURE:feature=parenthesis,minValue=0,maxValue=2');
     run('ratify-close', '--work-type', 'writing'); run('build', '--name', 'ferry');
-    const r = run('invoke', '--skill', 'ferry', 'write a note about the ferry', '--json', '--allow-unsourced', ...model());
+    // --fix-grammar: the misspelling is the mechanical fix this case is about (by default it is only listed)
+    const r = run('invoke', '--skill', 'ferry', 'write a note about the ferry', '--json', '--allow-unsourced', '--fix-grammar', ...model());
     const j = JSON.parse(r.out) as { output: string; controller: { decisions: { action: string; outcome: string }[] }; graded: { redrafts: number; values: Record<string, { before: number; after: number }> } };
     const steps = j.controller.decisions.map((d) => `${d.action}|${d.outcome}`);
     // the hand-off, then the mechanical fix after it, then the redraft it asked for

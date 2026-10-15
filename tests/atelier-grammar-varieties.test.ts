@@ -111,7 +111,9 @@ describe('a code path, a dialect, a language mixed in: listed, never changed (re
   });
   it('a word of a trade, of a language mixed with English, or an older spelling is no longer a known misspelling', () => {
     for (const w of REMOVED) expect(Object.hasOwn(MISSPELLINGS, w), w).toBe(false);
-    expect(Object.keys(MISSPELLINGS)).toHaveLength(452);
+    // 452 less the eight a review found can be meant or met as written, or whose one correction is not certain.
+    for (const w of ['wiht', 'personell', 'collegue', 'equipement', 'congradulations', 'playwrite', 'mischievious', 'comming']) expect(Object.hasOwn(MISSPELLINGS, w), w).toBe(false);
+    expect(Object.keys(MISSPELLINGS)).toHaveLength(444);
     unchanged(WORDS_UNCHANGED);
   });
   it('a dialect\'s agreement ("we was", "they was", "I has", "he go") is listed; only "he are", "she are", "I are" are corrected', () => {
