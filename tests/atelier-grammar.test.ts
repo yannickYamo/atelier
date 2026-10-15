@@ -16,8 +16,9 @@ import { join, resolve } from 'node:path';
 import { measure } from '../core/observers/registry.js';
 import { verifyText } from '../core/observers/verify.js';
 import { setGrammarProvider, ensureGrammar, resetGrammar, readGrammar, protectedRanges, dialectOfPieces, authorVocabulary, grammarStatus,
-  MECHANICAL_RULES, GRAMMAR_NOT_RUN, GRAMMAR_NOTE_SUFFIX, isGrammarNote, type GrammarEngine, type GrammarLint } from '../core/observers/grammar.js';
+  MECHANICAL_RULES, GRAMMAR_NOT_RUN, GRAMMAR_OFF, GRAMMAR_NOTE_SUFFIX, isGrammarNote, type GrammarEngine, type GrammarLint } from '../core/observers/grammar.js';
 import { harperGrammar } from '../providers/harper.js';
+import { grammarProvider, stubGrammar } from '../providers/grammar.js';
 import { correctMechanicalErrors, mechanicalFixes } from '../core/loop/mechanical-repair.js';
 import { planRepair, regressions, acceptRepair } from '../core/loop/repair.js';
 import { checkDraft } from '../core/loop/run-repair.js';
@@ -194,6 +195,22 @@ describe('the guards, on a scripted engine', () => {
   afterAll(() => { resetGrammar(); setGrammarProvider(harperGrammar); });
 });
 
+describe('the suite\'s fixed checker (ATELIER_GRAMMAR=stub)', () => {
+  it('is what the suite wires in, through the same wiring point as harper', () => {
+    expect(grammarProvider({ ATELIER_GRAMMAR: 'stub' })).toBe(stubGrammar);
+    expect(grammarProvider({})).toBe(harperGrammar);
+  });
+  it('reads clean text as MET and its known slips as confirmed errors with corrections', async () => {
+    resetGrammar(); setGrammarProvider(stubGrammar); await ensureGrammar();
+    try {
+      expect(measure('They were late to the meeting. The plan still holds.', m())).toMatchObject({ verdict: 'MET', detail: 'no mechanical error' });
+      const r = measure('They was late. We recieve the the report.', m());
+      expect(r.verdict).toBe('VIOLATED');
+      expect(correctMechanicalErrors('They was late. We recieve the the report.', r.spans).text).toBe('They were late. We receive the report.');
+    } finally { resetGrammar(); setGrammarProvider(harperGrammar); }
+  });
+});
+
 describe('an engine that cannot load', () => {
   it('leaves the check NOT_APPLICABLE with the reason, and the record unverified, never passed', async () => {
     resetGrammar();
@@ -201,29 +218,33 @@ describe('an engine that cannot load', () => {
     await ensureGrammar();
     const r = measure('They was late.', m());
     expect(r.verdict).toBe('NOT_APPLICABLE');
-    expect(r.detail).toBe(`${GRAMMAR_NOT_RUN}: no wasm here`);
+    expect(r.detail).toBe(`${GRAMMAR_NOT_RUN}: could not load: no wasm here`);
     const g = rule();
     const record = buildRecord({ requirements: [g], checked: [{ id: 'g1', statement: g.statement, required: true, verdict: 'NOT_APPLICABLE', detail: r.detail }],
       waived: new Map(), request: null, claims: null, copying: null });
     const e = record.entries.find((x) => x.id === 'g1');
     expect(e?.result).toBe('UNVERIFIED');
-    expect(e?.observation.incomplete).toMatch(/not checked: g1 \(the grammar check could not run: no wasm here\)/);
+    expect(e?.observation.incomplete).toMatch(/not checked: g1 \(the grammar check could not run: could not load: no wasm here\)/);
     expect(record.state).toBe('NEEDS_REVIEW');
     // With no engine wired in at all, the same: a reason, never a pass.
     resetGrammar(); setGrammarProvider(null); await ensureGrammar();
-    expect(measure('They was late.', m()).detail).toMatch(/no grammar checker is wired into this process/);
+    expect(measure('They was late.', m()).detail).toMatch(/could not load: no grammar checker is wired into this process/);
     resetGrammar(); setGrammarProvider(harperGrammar);
   });
-  it('turned off by the owner, the check is set aside with that reason and reads as not applicable', () => {
+  it('switched off by the owner, the check reads exactly like a load failure: unverified with the reason, a required rule needs review', () => {
     process.env.ATELIER_GRAMMAR = 'off';
     try {
       const r = measure('They was late.', m());
       expect(r.verdict).toBe('NOT_APPLICABLE');
-      expect(r.detail).toMatch(/^set aside: the grammar check is turned off/);
+      expect(r.detail).toBe(`${GRAMMAR_NOT_RUN}: ${GRAMMAR_OFF}`);
+      expect(r.detail).toMatch(/switched off/);
       const g = rule();
       const record = buildRecord({ requirements: [g], checked: [{ id: 'g1', statement: g.statement, required: true, verdict: 'NOT_APPLICABLE', detail: r.detail }],
         waived: new Map(), request: null, claims: null, copying: null });
-      expect(record.entries.find((x) => x.id === 'g1')?.result).toBe('NOT_APPLICABLE');
+      const e = record.entries.find((x) => x.id === 'g1');
+      expect(e?.result).toBe('UNVERIFIED');
+      expect(e?.observation.incomplete).toMatch(/not checked: g1 \(the grammar check could not run: switched off/);
+      expect(record.state).toBe('NEEDS_REVIEW');
     } finally { process.env.ATELIER_GRAMMAR = 'on'; }
   });
 });
@@ -279,6 +300,11 @@ describe('through the binary', () => {
     expect(r.out).toMatch(new RegExp(`warn {2}${g?.requirementId ?? 'g'}·check {2}Constructions the grammar checker is unsure of`));
     writeFileSync(join(proj, 'clean.md'), 'They were late to the meeting. The plan still holds.');
     expect(tryRun('verify', '--skill', 'posts', 'clean.md', '--allow-unsourced').code).toBe(0);
+    // Switched off, the same clean draft is not passed on the rule: it is named as not checked, and needs review.
+    const off = execFileSync('node', [CLI, 'verify', '--skill', 'posts', 'clean.md', '--allow-unsourced'], { encoding: 'utf8', cwd: proj,
+      env: { ...process.env, ATELIER_DATA: data, ATELIER_PROJECT_DIR: proj, ATELIER_GRAMMAR: 'off' }, stdio: ['ignore', 'pipe', 'pipe'] });
+    expect(off).toMatch(/NEEDS REVIEW/);
+    expect(off).toMatch(/switched off for this process/);
   }, 120_000);
 
   it('a skill built before this rule rebuilds to the same bytes, and gains no rule', () => {

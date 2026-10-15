@@ -11,6 +11,8 @@ import { processSpendByPurpose, spendBetween, type InferenceClient } from '../co
 import { featureOf } from '../core/observers/features.js';
 import type { ControllerDecisionRecord, StandardVersion } from '../core/state/canonical-state.js';
 import type { FidelityProfile } from '../core/fidelity/types.js';
+import { setGrammarProvider, resetGrammar, ensureGrammar } from '../core/observers/grammar.js';
+import { stubGrammar } from '../providers/grammar.js';
 
 const input = (over: Partial<ControllerInput> = {}): ControllerInput => ({ enforced: [], claims: 0, length: null, graded: [], grammar: null,
   budget: { usdLeft: 1, callsLeft: null }, history: [], observedUsdPerCall: {}, can: { redraft: true, rewrite: true }, unreachable: new Set(), ...over });
@@ -197,6 +199,34 @@ describe('through the loop', () => {
     expect(ctl.usdUsed).toBeCloseTo(ledger.reduce((n, l) => n + l.usd, 0), 9);
     expect(ctl.callsUsed).toBe(2); expect(ctl.usdUsed).toBeCloseTo(0.002, 9);
     expect(r.output).toBe(text);
+  });
+  it('one agreement error and one graded miss: the graded miss is moved first, then the error corrected in place, with no call for it', async () => {
+    resetGrammar(); setGrammarProvider(stubGrammar); await ensureGrammar();
+    const faulty = text.replace(plainS, 'They was sure the rule holds in this case, whatever the reader brings to it.');
+    const v0 = featureOf('parenthesis')!.measure(faulty)!;
+    const g1 = { requirementId: 'g1', statement: 'No mechanical errors: spelling, agreement, punctuation.', materiality: 'REQUIRED', authority: 'USER_ADOPTED', appliesWhen: 'GENERAL', kind: 'BOUNDARY',
+      measurement: { observer: 'GRAMMAR', params: {} } };
+    // the writer turns the asides of the carrier sentences it is given into commas, every word kept: the rate falls
+    const writer = scripted([reps('The rule holds here, as it did last year, and it holds there too, most of the time, at least.')]);
+    const r = await refineToStandard(writer, { spentUsd: 0, capUsd: 1 }, 'd', stdWith(0, v0 / 2, [g1]), faulty, 2, opts());
+    const steps = r.repair!.controller!.decisions.map((d) => [d.action, d.targets, d.outcome]);
+    expect(steps[0]).toEqual(['carrier-rewrite', ['p1'], 'kept']);
+    const at = steps.findIndex((d) => d[0] === 'grammar');
+    expect(at).toBeGreaterThan(0);
+    expect(steps[at]).toEqual(['grammar', ['g1'], 'kept']);
+    expect(r.repair!.controller!.decisions[at]).toMatchObject({ expectedCostUsd: 0, observed: { calls: 0, usd: 0 } });
+    expect(r.output).toContain('They were sure the rule holds');
+    expect(r.repair?.violatedAfter).toEqual([]);
+  });
+  it('through decide: grammar comes after enforced rules, length and graded misses, is free, and is never chosen for nothing', () => {
+    const graded = [{ id: 'p', error: 1.0, operatorEffect: null }];
+    expect(decide(input({ graded, grammar: ['g'] }))).toMatchObject({ action: 'carrier-rewrite', targets: ['p'] });
+    expect(decide(input({ enforced: [{ id: 'r', kind: 'span' }], grammar: ['g'] }))).toMatchObject({ action: 'rewrite', targets: ['r'] });
+    // alone, with no model call left, it is still taken: it costs nothing and calls nothing
+    expect(decide(input({ grammar: ['g'], budget: { usdLeft: 0, callsLeft: 0 }, can: { redraft: false, rewrite: false } })))
+      .toMatchObject({ kind: 'act', action: 'grammar', targets: ['g'], expectedCostUsd: 0, expectedGain: 2 });
+    expect(decide(input({ grammar: [] }))).toMatchObject({ kind: 'stop' });
+    expect(decide(input({ grammar: ['g'], unreachable: new Set(['g']) }))).toMatchObject({ kind: 'stop' });
   });
   it('the budget stop is recorded, and nothing is called', async () => {
     const writer = scripted([reps('x')]);

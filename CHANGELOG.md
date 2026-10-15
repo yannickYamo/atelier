@@ -155,15 +155,18 @@ A skill held drafts to the author's habits and never to spelling or agreement: "
   text with harper.js, loaded once and only when a standard carries the rule. It reports one span per confirmed
   mechanical error, of a documented list of kinds: common-word spelling and typos, subject–verb agreement, a word
   repeated by accident, a/an, a missing apostrophe in a contraction, double punctuation, a space before punctuation.
-  Anything else the checker proposes is listed under the rule as "to check" and never changed. If the checker cannot
-  load, the rule reads as unverified with the reason.
+  Subject–verb agreement is checked only where the checker catches it, with a pronoun subject ("they was", "he go");
+  agreement with any other subject is not checked. Anything else the checker proposes is listed under the rule as
+  "to check" and never changed. If the checker cannot load, or `ATELIER_GRAMMAR=off` switches it off, the rule reads
+  as not checked with the reason, and a required grammar rule leaves the run at NEEDS REVIEW.
 - **The author's voice is protected.** Code, quotations, block quotes, URLs, citations, figures, names, the
   standard's own terms and the words of the author's own pieces are never flagged. Spelling follows the dialect the
   pieces spell in. Fragments, "And" and "But" openers, one-word sentences and doubled words of emphasis are never errors.
 - **New builds carry the rule.** Building from pieces or from a method proposes "No mechanical errors: spelling,
   agreement, punctuation." as required, through the usual approval. Stored standards are untouched, and an existing
   skill rebuilds to the same bytes. `--measure GRAMMAR:dialect=british` declares it by hand.
-- **Repair corrects in place** (`core/loop/mechanical-repair.ts`): the checker's suggestion, inside the span, kept
+- **Repair corrects in place** (`core/loop/mechanical-repair.ts`), as the repair controller's last kind of step
+  (`core/loop/controller.ts`), after enforced rules, length and graded features, with no model call: the checker's suggestion, inside the span, kept
   only if no other rule is newly broken and every figure and name is unchanged. A correction that would change a
   figure or a name is refused. An error with no sure correction gets a sentence rewrite that fixes only that error.
 

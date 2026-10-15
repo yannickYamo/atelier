@@ -94,10 +94,10 @@ let provider: GrammarProvider | null = null;
 let engine: GrammarEngine | null = null;
 let failure: string | null = null;
 let loading: Promise<void> | null = null;
-/** `ATELIER_GRAMMAR=off`: the owner's switch. The check is set aside with that reason, never reported as run. */
+/** `ATELIER_GRAMMAR=off`: the owner's switch. The check is then not run, and reads as not checked with that reason. */
 const turnedOff = (): boolean => process.env.ATELIER_GRAMMAR === 'off';
-/** How a check the owner turned off opens its detail: the record reads it as set aside, not as a check that failed to run. */
-export const GRAMMAR_OFF = 'set aside: the grammar check is turned off for this process (ATELIER_GRAMMAR=off)';
+/** Why a switched-off check did not run: like a load failure, it reads as unverified, never as passed or not applicable. */
+export const GRAMMAR_OFF = 'switched off for this process (ATELIER_GRAMMAR=off)';
 
 /** Wire the engine's loader in. Called once by the process (cli/atelier.mts); a test may wire a scripted one. */
 export function setGrammarProvider(p: GrammarProvider | null): void { provider = p; engine = null; failure = null; loading = null; }
@@ -112,14 +112,14 @@ export function resetGrammar(): void { engine = null; failure = null; loading = 
 export async function ensureGrammar(v?: { readonly requirements: readonly { readonly measurement?: Measurement; readonly authority: string }[] }): Promise<void> {
   if (v && !v.requirements.some((r) => r.authority !== 'EXPERT_REJECTED' && r.measurement?.observer === 'GRAMMAR')) return;
   if (engine || failure || turnedOff()) return;
-  if (!provider) { failure = 'no grammar checker is wired into this process'; return; }
-  loading ??= provider.load().then((e) => { engine = e; }, (e: unknown) => { failure = (e instanceof Error ? e.message : String(e)).split('\n')[0] || 'the grammar checker failed to load'; });
+  if (!provider) { failure = 'could not load: no grammar checker is wired into this process'; return; }
+  loading ??= provider.load().then((e) => { engine = e; }, (e: unknown) => { failure = `could not load: ${(e instanceof Error ? e.message : String(e)).split('\n')[0] || 'the grammar checker failed'}`; });
   await loading;
 }
 
 /** Whether a check can run now, and if not, why. */
-export const grammarStatus = (): { readonly ready: true } | { readonly ready: false; readonly reason: string; readonly off?: true } =>
-  (turnedOff() ? { ready: false, reason: GRAMMAR_OFF, off: true } : engine ? { ready: true } : { ready: false, reason: failure ?? 'the grammar checker was not loaded before the check ran' });
+export const grammarStatus = (): { readonly ready: true } | { readonly ready: false; readonly reason: string } =>
+  (turnedOff() ? { ready: false, reason: GRAMMAR_OFF } : engine ? { ready: true } : { ready: false, reason: failure ?? 'the grammar checker could not load before the check ran' });
 
 // ── WHAT IS NEVER FLAGGED ───────────────────────────────────────────────────────────────────────
 
@@ -288,7 +288,7 @@ export const GRAMMAR: Observer = {
   },
   observe(text, p, context) {
     const status = grammarStatus();
-    if (!status.ready) return { verdict: 'NOT_APPLICABLE', spans: [], value: null, detail: status.off ? status.reason : `${GRAMMAR_NOT_RUN}: ${status.reason}` };
+    if (!status.ready) return { verdict: 'NOT_APPLICABLE', spans: [], value: null, detail: `${GRAMMAR_NOT_RUN}: ${status.reason}` };
     const r = readGrammar(text, p, context);
     const toCheck = r.uncertain.length ? `; ${r.uncertain.length} construction(s) the checker is unsure of, listed to check` : '';
     if (!r.confirmed.length) return { verdict: 'MET', spans: [], value: 0, error: 0, detail: `no mechanical error${toCheck}` };
