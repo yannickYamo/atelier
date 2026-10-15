@@ -252,10 +252,16 @@ export function statedCount(step: string): Measurement | null {
 
 /** A step that forbids, or conditions: "do not cite…", "where there is one", "if a finding is about code". */
 export const FORBIDS_OR_CONDITIONS = /\b(?:do not|don't|never|not|no(?!-)|unless|if|when|where|whenever|except|optional(?:ly)?|avoid|without|instead of|rather than)\b/i;
-/** A verb of citing, with a line as its object: "cite the line", "point to the exact line", "reference the changed line", "quote the line". */
-const CITES_A_LINE = /\b(?:cit(?:e|es|ed|ing)|referenc(?:e|es|ed|ing)|point(?:s|ed|ing)?\s+(?:to|at)|quot(?:e|es|ed|ing))\b[^.;]*?\b(?:lines?|line numbers?)\b/i;
-/** A verb of giving, with a file and its line as its object: "give the file and line", "the file path with a line number". */
-const GIVES_FILE_AND_LINE = /\b(?:giv(?:e|es|ing)|nam(?:e|es|ing)|stat(?:e|es|ing)|includ(?:e|es|ing)|say|says|writ(?:e|es|ing)|carr(?:y|ies|ying)|with|show|shows)\b[^.;]*?\b(?:file|path|filename)(?:\s+(?:name|path))?\s+(?:and|with|plus|,)\s+(?:the\s+|a\s+|its\s+)?lines?(?:\s+numbers?)?\b/i;
+/**
+ * A line as the thing cited: "the line", "its line", "the changed line", "line numbers", "lines in the diff". Not a
+ * line that is a part of the writing ("the first line", "the bottom line", "one line") nor another noun the word
+ * starts ("line manager", "line items", "line count").
+ */
+const A_CITED_LINE = String.raw`(?:\b(?:the|its|their|each|every|a|that|only)\s+(?:(?:exact|changed|specific|offending|relevant|added|new|modified|precise)\s+)?lines?\b(?!\s+(?:manager|items?|counts?|breaks?|spacing|lengths?|of\s+(?:the\s+|your\s+|a\s+)?(?:poem|email|letter|song|story|verse|post|essay|speech|piece)))|\b(?:file|path)(?:\s+(?:name|path))?\s+(?:and|with|plus|,)\s+(?:the\s+|a\s+|its\s+)?lines?(?:\s+numbers?)?\b(?!\s+(?:counts?|items?|manager|breaks?|lengths?))|\blines?\s+numbers?\b|\blines?\s+(?:in|of|from)\s+the\s+(?:diff|change|code|patch|file|source)\b)`;
+/** A verb of citing, with such a line as its object: "cite the line", "point to the exact line", "reference the changed line", "quote the line". */
+const CITES_A_LINE = new RegExp(String.raw`\b(?:cit(?:e|es|ed|ing)|referenc(?:e|es|ed|ing)|point(?:s|ed|ing)?\s+(?:to|at)|quot(?:e|es|ed|ing))\b[^.;]*?${A_CITED_LINE}`, 'i');
+/** A verb of giving, with a file and its line as its object: "give the file and line", "the file path with a line number". Not "line count", "line items". */
+const GIVES_FILE_AND_LINE = /\b(?:giv(?:e|es|ing)|nam(?:e|es|ing)|stat(?:e|es|ing)|includ(?:e|es|ing)|say|says|writ(?:e|es|ing)|carr(?:y|ies|ying)|with|show|shows)\b[^.;]*?\b(?:file|path|filename)(?:\s+(?:name|path))?\s+(?:and|with|plus|,)\s+(?:the\s+|a\s+|its\s+)?lines?(?:\s+numbers?)?\b(?!\s+(?:counts?|items?|manager|breaks?|lengths?))/i;
 /** The things a review is made of, which a step may ask to cite one by one. */
 const AN_ITEM = String.raw`(?:findings?|claims?|issues?|comments?|items?|remarks?|points?|risks?|problems?|defects?|suggestions?|nits?|bullets?)`;
 /** "Every finding points at the code", "each claim about the code points to the line". */
@@ -285,8 +291,11 @@ export function sectionsMentioned(step: string, sections: readonly string[]): st
 
 /**
  * IS THE STEP ABOUT NAMING A TEST? "Name the test that would have caught it", "suggest a test for each fix", "write
- * the test's name". A verb of naming or proposing, then "test" as what is named; not a test's table, column or
- * section (those are other steps), and not where the step forbids or conditions it ("say which test if it does").
+ * the test's name". A verb of naming or proposing, then "test" as what is named, followed by what a named test is
+ * followed by ("that would…", "for each fix", the sentence's end). Not a test's table, column, results or environment
+ * ("add the test results", "name the test environment"), not how tests are written ("write tests in plain
+ * language"), and not where the step forbids or conditions it ("say which test if it does").
  */
-const NAMES_A_TEST = /\b(?:nam(?:e|es|ing)|add(?:s|ed|ing)?|writ(?:e|es|ing)|propos(?:e|es|ing)|suggest(?:s|ed|ing)?)\b[^.;]*?\btests?\b(?!\s+(?:coverage|table|column|section|heading|rows?|plan))/i;
+const NAMES_A_TEST = new RegExp(String.raw`\b(?:nam(?:e|es|ing)|add(?:s|ed|ing)?|writ(?:e|es|ing)|propos(?:e|es|ing)|suggest(?:s|ed|ing)?)\b[^.;]*?\btests?`
+  + String.raw`(?:(?:'s)?\s+names?\b|(?:\s+(?:cases?|functions?))?(?=\s+(?:that|which|for|to|covering|catching|would|could|named|called|of)\b|\s*[.,;:)]|\s*$))`, 'i');
 export const namesTest = (step: string): boolean => NAMES_A_TEST.test(step) && !FORBIDS_OR_CONDITIONS.test(step);

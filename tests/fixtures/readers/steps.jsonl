@@ -36,3 +36,16 @@
 {"id": "s036", "step": "Say whether the tests pass.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": null}
 {"id": "s037", "step": "Run the tests before writing anything.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": null}
 {"id": "s038", "step": "Say whether the change is correct.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": null}
+{"id": "s039", "step": "Quote the opening line of the poem.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": null}
+{"id": "s040", "step": "Quote the first line of the email back to the customer.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": null}
+{"id": "s041", "step": "Reference the line manager by name.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": null}
+{"id": "s042", "step": "Give the file name and line count.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": null}
+{"id": "s043", "step": "Point to the bottom line early.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": null}
+{"id": "s044", "step": "Start with the file and line items from the invoice.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": null}
+{"id": "s045", "step": "Write tests in plain language.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": null}
+{"id": "s046", "step": "Add the test results to the summary.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": null}
+{"id": "s047", "step": "Name the test environment.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": null}
+{"id": "s048", "step": "Suggest a test drive date.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": null}
+{"id": "s049", "step": "Each point cites the line it rests on.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": "LINES_EACH"}
+{"id": "s050", "step": "Cite line numbers for every quote from the transcript.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": "LINES"}
+{"id": "s051", "step": "Name the test case that covers the fix.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": "NAMES_TEST"}

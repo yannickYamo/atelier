@@ -7,6 +7,34 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+### Added: a review's citations and named tests are read by code
+
+A review method says "cite the file and line for every finding" and "name the test that would have caught it". Only a
+step that named the `path:line` form was checked; any other wording was left to judgement, and a review whose findings
+pointed at nothing passed with the step beside it unread.
+
+- **More wordings of a citation step are checked** (`core/method/step-readers.ts`). "Cite only lines in the diff",
+  "point to the line", "reference the changed line", "quote the line", "give the file and line" and "every finding
+  points at the code" are read as asking for citations, and each citation is looked up in the material as before. A
+  step that forbids the form or asks for it only sometimes ("do not cite…", "where there is one") stays a judgement,
+  and so does a line that is part of the writing or another noun ("the first line of the poem", "the bottom line",
+  "line manager", "line count").
+- **Every finding carries a citation** (LINES `perItem`, `core/observers/obligations.ts`). Where the step asks for one
+  on each finding, each list item or paragraph under the findings (the section the step names, else a heading that
+  calls them findings, issues or risks, else every list item) must hold a `path:line`; one that holds none fails with
+  its own span. "None." and "No issues found" are not findings. Read in part: whether the cited line supports the
+  claim is yours.
+- **The work names a test** (NAMES_TEST). "Name the test that would have caught it", "suggest a test for each fix" and
+  the like are held by looking for a test file (`client.test.ts`, `test_retry.py`) or a test name in backticks. A
+  draft that names none fails and is written again. Read in part: whether the named test is the right one is yours.
+  "Write tests in plain language", "add the test results" and a test coverage table are not this step.
+- **A pass of these never verifies on its own.** Each is PARTIAL, so a review that holds all of them is NEEDS REVIEW
+  with the unread part named, and a verdict step with no options named stays a judgement in your words.
+- **A `.diff` or `.patch` beside an example is read as its material** (`core/golden/case.ts`), as `.json` or `.csv`
+  already were.
+- A labelled set of 51 method steps (`tests/fixtures/readers/steps.jsonl`), wordings that ask and wordings that do not,
+  holds the reading: a change may gain an agreement, never lose one or give a step a check its words do not ask for.
+
 ### Fixed: the pattern check reads a count written in words, and lists it for you to check
 
 A draft said "three of your prospects will believe the products overlap" and "Twelve-plus optimizers", counts the
