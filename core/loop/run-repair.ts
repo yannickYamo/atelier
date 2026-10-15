@@ -10,7 +10,7 @@ import { spend } from '../inference/client.js';
 import type { StandardVersion, RepairRecord } from '../state/canonical-state.js';
 import { acts, verifyText, type VerifyReport, type RuleCheck } from '../observers/verify.js';
 import { planFor } from '../plan/execution-plan.js';
-import { unsourcedClaims, claimUnitsOf } from './claims.js';
+import { unsourcedClaims, wordCountClaims, claimUnitsOf } from './claims.js';
 import { derivedFromKnown } from './derived.js';
 import { answerWorkClaims, answerSentences, judgedOnly } from './answer-claims.js';
 import { assertMayCut, type CutAuthority } from './cut-authority.js';
@@ -165,6 +165,13 @@ export function checkDraft(skill: string, v: StandardVersion, text: string, opts
   const toCut = unmeasured ? [] : listOnly ? workClaims : claims;
   const toList = unmeasured ? everyFinding
     : listOnly ? [...claims.filter((c) => !workClaims.some((w) => w.start === c.start)), ...judgeFlags.filter((j) => !claims.some((c) => c.start === j.start))] : [];
+  // A COUNT WRITTEN IN WORDS IS LISTED, NEVER CUT. "Nine people", "three of your prospects": the pattern check
+  // reads a spelled-out count with less confidence than a figure in digits (./claims.ts, wordCountClaims), and a
+  // review found it in true sentences. Whatever the kind of work, these join the list for the person to check
+  // and never fail the draft. A qualified reader's reading carries none: it types such counts itself.
+  const words = (gating?.listed ?? (opts.claimSensor ? [] : wordCountClaims(text, opts.material ?? '')))
+    .filter((w) => !toCut.some((c) => c.start === w.start) && !toList.some((c) => c.start === w.start));
+  const listed = [...toList, ...words].sort((x, y) => x.start - y.start);
   const statement = 'Never invent a story, a quotation, an attribution or a specific the person did not supply.';
   // Which instrument found what may be cut: the patterns decide an answer's work claims; otherwise the
   // gating reading's instrument, qualified or not (./cut-authority.ts refuses the ones that may not cut).
@@ -174,12 +181,13 @@ export function checkDraft(skill: string, v: StandardVersion, text: string, opts
   const line = { requirementId: 'UNSOURCED', statement: listOnly ? 'Never claim work done, a result seen, or a detail of the person\'s own system that the request did not give.' : statement,
     materiality: 'REQUIRED', phase: 'ACCURACY' as const, authority,
     result: { verdict: toCut.length ? 'VIOLATED' as const : 'MET' as const, spans: [...toCut], value: toCut.length,
-      detail: `${unmeasured ? `${unmeasured}: ${toList.length ? `${toList.length} sentence(s) listed to check, none cut` : 'nothing found, and nothing would be cut'}`
+      detail: `${unmeasured ? `${unmeasured}: ${listed.length ? `${listed.length} sentence(s) listed to check, none cut` : 'nothing found, and nothing would be cut'}`
         : toCut.length ? `${toCut.length} claim(s) not in the material supplied` : 'no unsourced stories, quotations or specifics'} [${by}]` } };
-  const checkLine = toList.length ? [{ requirementId: CLAIMS_TO_CHECK, statement: unmeasured ? `Not found in what you supplied: listed for you to check, never cut, because ${unmeasured}.`
-    : 'Specifics not in the material supplied: listed for you to check, never cut in this format.',
+  const checkLine = listed.length ? [{ requirementId: CLAIMS_TO_CHECK, statement: unmeasured ? `Not found in what you supplied: listed for you to check, never cut, because ${unmeasured}.`
+    : listOnly ? 'Specifics not in the material supplied: listed for you to check, never cut in this format.'
+      : 'Counts written in words that are not in the material supplied: listed for you to check, never cut; the pattern check reads them with less confidence than a figure in digits.',
     materiality: 'PREFERRED', phase: 'ACCURACY' as const,
-    result: { verdict: 'VIOLATED' as const, spans: [...toList], value: toList.length, detail: `${toList.length} specific(s) to check [${by}]` } }] : [];
+    result: { verdict: 'VIOLATED' as const, spans: [...listed], value: listed.length, detail: `${listed.length} specific(s) to check [${by}]` } }] : [];
   const readerOnly = reading?.gate && !unmeasured ? reading : null;
   const readerLine = readerOnly ? [{ requirementId: READER_REPORT, statement,
     materiality: 'PREFERRED', phase: 'ACCURACY' as const,

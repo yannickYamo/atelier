@@ -98,26 +98,48 @@ export const numbersIn = (s: string): string[] => {
  * percent": a number that quantifies what follows it is a figure, as the reader's own definition says, and
  * the pattern check read only digits, so an invented count of people passed it whole. A phrase counts when
  * it is written in words (digits are read by the statistic patterns), is not the lone "one" (a count of one
- * is how prose says "a", and a true sentence would be cut for it), is not preceded by a determiner that
- * points at a set already named ("the three teams", "these two"), and is followed, across a space or a
- * hyphen and an optional "-plus"/"+", by the thing it counts: a word that is not a function word, or "of"
- * and that word ("three of your prospects", "two of them"). "Two or three of them" is one count, the one the
- * thing follows; "a few weeks" has no number and is never a figure. Returns each count's value, in order.
+ * is how prose says "a", and a true sentence would be cut for it), is not inside a quotation, is not preceded
+ * by a determiner that points at a set already named ("the three teams", "these two"), and is followed, across
+ * a space or a hyphen and an optional "-plus"/"+", by the thing it counts: a word that is not a function word,
+ * or "of" and that word ("three of your prospects", "two of them").
+ *
+ * WHAT PROSE COUNTS WITHOUT ASSERTING A FIGURE is left alone, because the pattern check cannot tell it from
+ * one and a review found it in true sentences: a span of time or an age ("two weeks", "ten minutes later",
+ * "three years old"), the writer's own family ("I have two kids"), the structure of the piece itself ("three
+ * reasons", "two things", "a hundred small decisions") and the "a hundred"/"a thousand" of hyperbole, which
+ * counts only when the thing it counts is one a figure measures (people, customers, dollars, percent...). An
+ * "N-plus" form is always a count. "A few weeks" has no number and is never a figure. Returns each count's
+ * value, in order.
  */
 const OF_DETERMINERS = /^(?:the|your|our|their|my|its|his|her|these|those|all)$/;
+const TIME_OR_AGE = /^(?:seconds?|minutes?|hours?|days?|nights?|weeks?|weekends?|months?|quarters?|years?|decades?|centur(?:y|ies)|lifetimes?)$/;
+const FAMILY = /^(?:kids?|child|children|sons?|daughters?|brothers?|sisters?|siblings?|parents?|grandchild|grandchildren|grandparents?|cousins?|dogs?|cats?|pets?)$/;
+const STRUCTURE = /^(?:reasons?|things?|ways?|steps?|parts?|points?|questions?|kinds?|types?|options?|lessons?|rules?|principles?|ideas?|examples?|cases?|words?|sentences?|paragraphs?|sections?|chapters?|categor(?:y|ies)|approach(?:es)?|strateg(?:y|ies)|takeaways?|mistakes?|problems?|factors?|elements?|levels?|stages?|phases?|pieces?|items?|notes?|caveats?|habits?|signs?|decisions?|choices?|tips?|tricks?|patterns?|modes?|dimensions?|camps?|buckets?|answers?|objections?|assumptions?|conditions?|criteri(?:on|a)|paths?|scenarios?)$/;
+const MEASURED = /^(?:people|persons?|customers?|prospects?|users?|clients?|buyers?|readers?|subscribers?|employees?|engineers?|developers?|teams?|compan(?:y|ies)|firms?|vendors?|startups?|products?|tools?|calls?|tokens?|dollars?|euros?|pounds?|cents?|percent|requests?|tickets?|deals?|accounts?|seats?|licen[cs]es?|servers?|machines?|orders?|units?|rows?|records?)$/;
+const FIRST_PERSON = /\b(?:I|[Ww]e|[Mm]y|[Oo]ur|me|us|I've|[Ww]e've|I'm)\b/;
 export function spelledCounts(s: string): string[] {
   const out: string[] = [];
+  const quoted = [...s.matchAll(/["“][^"”]*["”]/g)].map((m) => [m.index, m.index + m[0].length] as const);
   for (const p of numberPhrases(s)) {
-    if (/^\d/.test(s[p.index]) || s.slice(p.index, p.index + p.length).toLowerCase() === 'one') continue;
+    const phrase = s.slice(p.index, p.index + p.length).toLowerCase();
+    if (/^\d/.test(phrase) || phrase === 'one' || quoted.some(([a, b]) => p.index > a && p.index < b)) continue;
     const before = /([A-Za-z]+)[\s-]+$/.exec(s.slice(0, p.index));
     if (before && ONE_AFTER_NOT_A_FIGURE.has(before[1].toLowerCase())) continue;
-    const rest = s.slice(p.index + p.length).replace(/^(?:[\s-]*plus\b|\s*\+)/i, '');
+    const after = s.slice(p.index + p.length);
+    const rest = after.replace(/^(?:[\s-]*plus\b|\s*\+)/i, '');
+    const plus = rest.length < after.length;
     if (/^\s*%/.test(rest)) { out.push(p.value); continue; }
-    const m = /^[\s-]+(?:of\s+(?:([A-Za-z]+)\s+)?)?([A-Za-z]+)/.exec(rest);
+    const m = /^[\s-]+(?:of\s+(?:([A-Za-z]+)\s+)?)?([A-Za-z]+)(?:[\s-]+([A-Za-z]+))?/.exec(rest);
     if (!m) continue;
     // "two of the": the determiner is consumed only when a word follows it; "two of the" at the end counts nothing.
-    const word = (m[1] !== undefined && !OF_DETERMINERS.test(m[1].toLowerCase()) ? m[1] : m[2]).toLowerCase();
-    if (ONE_BEFORE_NOT_A_FIGURE.has(word)) continue;
+    const ofDet = m[1] !== undefined && OF_DETERMINERS.test(m[1].toLowerCase());
+    const words = (m[1] !== undefined && !ofDet ? [m[1], m[2]] : [m[2], m[3]]).filter((w): w is string => w !== undefined).map((w) => w.toLowerCase());
+    if (ONE_BEFORE_NOT_A_FIGURE.has(words[0])) continue;
+    if (!plus) {
+      if (words.some((w) => TIME_OR_AGE.test(w) || STRUCTURE.test(w))) continue;
+      if (words.some((w) => FAMILY.test(w)) && FIRST_PERSON.test(s)) continue;
+      if (phrase.startsWith('a ') && Number(p.value) >= 100 && !words.some((w) => MEASURED.test(w))) continue;
+    }
     out.push(p.value);
   }
   return out;
