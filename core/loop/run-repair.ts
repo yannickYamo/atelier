@@ -128,7 +128,9 @@ export interface CheckOptions {
    * and a far miss is rewritten on its carriers instead), and the ledger as it stood when the run began, so the cost of
    * a step is read from what this run has paid.
    */
-  readonly controller?: { readonly settings?: ControllerSettings | null; readonly redraft?: boolean; readonly ledgerFrom?: readonly SpendLine[] };
+  readonly controller?: { readonly settings?: ControllerSettings | null; readonly redraft?: boolean; readonly ledgerFrom?: readonly SpendLine[];
+    /** steps already taken on this piece (a redraft that did no better, and the steps before it): what failed is not repeated */
+    readonly history?: readonly ControllerDecisionRecord[] };
 }
 
 
@@ -703,7 +705,7 @@ export async function refineToStandard(
     const usdLeft = budget.capUsd - budget.spentUsd - (budget.inFlightUsd ?? 0);
     const rewriteUsd = perCall(['repair', 'graded']); const draftUsd = perCall(['writing']);
     return { enforced, claims: flaggedClaims(r).length, length: null, graded: [...byFeature.values()], grammar: null,
-      budget: { usdLeft, callsLeft: budget.maxCalls !== undefined ? budget.maxCalls - (budget.calls ?? 0) : null }, history: decisions,
+      budget: { usdLeft, callsLeft: budget.maxCalls !== undefined ? budget.maxCalls - (budget.calls ?? 0) : null }, history: [...(opts.controller?.history ?? []), ...decisions],
       observedUsdPerCall: { ...(rewriteUsd !== undefined ? { rewrite: rewriteUsd, 'carrier-rewrite': rewriteUsd } : {}), ...(draftUsd !== undefined ? { redraft: draftUsd } : {}) },
       can: { redraft: opts.controller?.redraft ?? false, rewrite: canRewrite }, unreachable };
   };

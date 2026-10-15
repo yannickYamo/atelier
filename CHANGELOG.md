@@ -26,9 +26,13 @@ step. It changes how the standard is carried out, never the standard.
   this run has already paid per call. A step is taken while it is expected to move at least two band widths per
   dollar, the budget holds it, and fewer than four steps were taken. It stops when every enforced rule holds and no
   feature is more than 0.5 band widths out (a correct draft with one harmless deviation is delivered as written);
-  when the same step has failed twice on the same target and the step it switched to failed too; when the budget is
-  spent; or when only what no step can reach is left. A draft is written again for the author's features alone only
-  when the controller asked for it.
+  when every step it could take on what is left has failed; when the budget is spent; or when only what no step can
+  reach is left. A draft is written again for the author's features alone only when the controller asked for it.
+- **A failed step is never repeated on its target.** A draft written again that does no better gives way to a carrier
+  rewrite of the same features (at most three sentences each) on the draft before it, then to the operators; an
+  operator step that fails gives way to a carrier rewrite once. Each switch is recorded with the failure that caused it,
+  and a stop after the last names every action that failed on each target. All of it stays within the step cap and the
+  budget.
 - **On the record.** `repair.controller` lists every step with what it was aimed at, why, what it was expected to move
   and cost, what it moved, and what the ledger charged for it, and why the repair stopped; `invoke --json` carries it
   and `atelier report` prints it. Movement is movement, never a probability of acceptance. `--no-repair` runs no repair
