@@ -7,6 +7,29 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+### Changed: grammar findings are listed, never changed, unless you pass --fix-grammar
+
+- **By default the grammar check changes nothing.** Even the narrow in-place set (a or an, two commas, a space before
+  "." or ",", "he/she/I are", a list of known misspellings) changed 62 of 150 sentences written to be right as they
+  stand: letter names ("plan a", "vitamin a"), compound subjects ("Both he and she are"), shell arguments
+  ("git add ."), a URL or path before a full stop, spaced poetry, a word quoted rather than used ("students write
+  recieve when they mean receive"), config keys, CSS classes, lower-case names, other languages. Every finding is now
+  listed with its text and the checker's note on the run, in `report`, in `verify` and in `--json`, and no model
+  rewrite is made for one. The repair loop has no grammar step by default.
+- **A finding never blocks.** With findings, the rule reads "listed for you to check: N possible slips" and is
+  unverified, so the run reads NEEDS REVIEW, never VERIFIED or BLOCKED. With none, the rule is met. A checker that
+  is off or did not load still reads as not checked.
+- **`--fix-grammar` on `run`, `invoke` and `verify`** applies the in-place set exactly as before. Its help says the
+  risk plainly: it may change words that are right in context (letter names, code, quoted examples), so read the
+  changes. Each change is now recorded by what it was and what it became (`"are" → "is"`) and shown with the run.
+- **Eight entries left the misspelling list** ("wiht", "personell", "collegue", "equipement", "congradulations",
+  "playwrite", "mischievious", "comming"): each can be meant or met as written, or has no certain correction. The
+  list now holds 444 and is used only under `--fix-grammar`.
+- Tests: `tests/atelier-grammar-listonly.test.ts` runs 150 sentences with a legitimate reading and 10 real slips
+  through the default path in all three dialect settings (no change, every finding listed), a run with a slip (NEEDS
+  REVIEW, text unchanged), a clean run (rule met) and `--fix-grammar` (each change recorded). The tests of the
+  in-place set now switch the flag on for what they check.
+
 ### Fixed: a composite's instructions never contradict, by any route, and the screen says what will ship
 
 - **`--set <id>=required` goes through the same final check.** A rule made required with `--set` used to bypass it:
