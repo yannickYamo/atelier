@@ -293,7 +293,9 @@ describe('through the loop', () => {
     expect(writer.calls).toBe(0);
     expectOneCounter(r.repair?.controller, writer.calls);
     expect(r.repair?.controller?.stoppedBecause).toMatch(/^the budget: carrier-rewrite would cost about \$0.05/);
-    expect(r.repair?.controller?.decisions).toEqual([]);
+    // the step the budget refused is on the record as refused, and is no step (core/loop/controller.ts, rule B)
+    expect(r.repair?.controller?.decisions.map((d) => [d.action, d.outcome, d.observed.calls])).toEqual([['carrier-rewrite', 'refused', 0]]);
+    expect(r.repair?.controller?.decisions[0]?.observed.note).toMatch(/^the budget: carrier-rewrite would cost about \$0.05/);
   });
   it('an operator step moves a miss with no model call, by the profile\'s effect matrix, when the budget holds no model call', async () => {
     const profile: FidelityProfile = { version: 1, corpusHash: 'c', detector: null, hash: 'h', bands: [],
@@ -302,7 +304,9 @@ describe('through the loop', () => {
     const r = await refineToStandard(writer, { spentUsd: 0.99, capUsd: 1 }, 'd', stdWith(0, value / 2), text, 2, opts({ gradedProfile: profile }));
     expect(writer.calls).toBe(0);
     expectOneCounter(r.repair?.controller, writer.calls);
-    const first = r.repair?.controller?.decisions[0];
+    // the carrier rewrite the budget refused is on the record first, as refused; the free step is the first taken
+    expect(r.repair?.controller?.decisions[0]).toMatchObject({ action: 'carrier-rewrite', outcome: 'refused' });
+    const first = r.repair?.controller?.decisions.find((d) => d.outcome !== 'refused');
     expect(first).toMatchObject({ action: 'operators', targets: ['p1'], outcome: 'kept', expectedCostUsd: 0, observed: { calls: 0, usd: 0 } });
     expect(first?.why).toMatch(/^the budget: carrier-rewrite would cost about \$0\.05.*; the operators still run, no model/);
     expect(first?.observed.movement).toBeGreaterThan(0);

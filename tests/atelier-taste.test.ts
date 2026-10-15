@@ -1,4 +1,5 @@
 // tests/atelier-taste.test.ts — THE TASTE READER: READ TWICE AND QUOTED, EARNED FROM THE OWNER, ACTING ONLY WHEN EARNED.
+import { stepLedger } from '../core/loop/controller.js';
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { mkdtempSync, writeFileSync, existsSync } from 'node:fs';
@@ -166,7 +167,7 @@ describe('taste repair: only where the reader holds VETO, only a quoted passage,
   const std = { ...v, requirements: [close] } as StandardVersion;
   it('without VETO, nothing is touched', async () => {
     const c = stub({});
-    const r = await refineTaste(c, c, { spentUsd: 0, capUsd: 1 }, 'd', std, TEXT, missed, new Set(), null);
+    const r = await refineTaste(c, c, { spentUsd: 0, capUsd: 1 }, 'd', std, TEXT, missed, new Set(), null, {}, null, { ledger: stepLedger() });
     expect(r.output).toBe(TEXT);
     expect(c.calls).toEqual([]);
   });
@@ -175,12 +176,12 @@ describe('taste repair: only where the reader holds VETO, only a quoted passage,
     const fixedText = 'At the top, height got cheap and stopping stayed dear.';
     const confirm = stub({ emit_replacements: () => ({ replacements: [{ id: 1, text: fixedText }] }),
       emit_readings: () => readings([{ n: 1, verdict: 'FOLLOWED', quote: fixedText }]) });
-    const kept = await refineTaste(confirm, confirm, { spentUsd: 0, capUsd: 1 }, 'd', std, TEXT, missed, keys, null);
+    const kept = await refineTaste(confirm, confirm, { spentUsd: 0, capUsd: 1 }, 'd', std, TEXT, missed, keys, null, {}, null, { ledger: stepLedger() });
     expect(kept.output).toContain(fixedText);
     expect(kept.fixed).toEqual(['p14']);
     const deny = stub({ emit_replacements: () => ({ replacements: [{ id: 1, text: fixedText }] }),
       emit_readings: () => readings([{ n: 1, verdict: 'MISSED', kind: 'PRESENCE', quote: fixedText }]) });
-    const refused = await refineTaste(deny, deny, { spentUsd: 0, capUsd: 1 }, 'd', std, TEXT, missed, keys, null);
+    const refused = await refineTaste(deny, deny, { spentUsd: 0, capUsd: 1 }, 'd', std, TEXT, missed, keys, null, {}, null, { ledger: stepLedger() });
     expect(refused.output).toBe(TEXT);
     expect(refused.why).toMatch(/does not read any targeted rule as followed/);
     // THE TASTE REWRITE IS TOLD WHAT THE PERSON ASKED FOR. With --placeholders it gets the placeholder
@@ -189,7 +190,7 @@ describe('taste repair: only where the reader holds VETO, only a quoted passage,
       const seen: string[] = [];
       const c: InferenceClient = { complete: async (req: InferenceRequest) => { if (req.toolName === 'emit_replacements') seen.push(req.stableBlock);
         return anInferenceResult({ json: req.toolName === 'emit_replacements' ? { replacements: [{ id: 1, text: fixedText }] } : readings([{ n: 1, verdict: 'FOLLOWED', quote: fixedText }]) }); } };
-      await refineTaste(c, c, { spentUsd: 0, capUsd: 1 }, 'd', std, TEXT, missed, keys, null, { placeholders });
+      await refineTaste(c, c, { spentUsd: 0, capUsd: 1 }, 'd', std, TEXT, missed, keys, null, { placeholders }, null, { ledger: stepLedger() });
       return seen;
     };
     expect(await systems(true)).toEqual([REPAIR_SYSTEM_WITH_PLACEHOLDERS]);
@@ -199,14 +200,14 @@ describe('taste repair: only where the reader holds VETO, only a quoted passage,
     const fixedText = 'At the top, height got cheap and stopping stayed dear.';
     const unsure = stub({ emit_replacements: () => ({ replacements: [{ id: 1, text: fixedText }] }),
       emit_readings: () => readings([{ n: 1, verdict: 'UNCLEAR' }]) });
-    const r = await refineTaste(unsure, unsure, { spentUsd: 0, capUsd: 1 }, 'd', std, TEXT, missed, keys, null);
+    const r = await refineTaste(unsure, unsure, { spentUsd: 0, capUsd: 1 }, 'd', std, TEXT, missed, keys, null, {}, null, { ledger: stepLedger() });
     expect(r.output).toBe(TEXT);
     expect(r.fixed).toEqual([]);
   });
   it('a quote that cannot be located is not targeted, and no call is spent on it', async () => {
     const c = stub({});
     const lost: TasteReading[] = [{ ...missed[0], quote: 'words that are nowhere' }];
-    const r = await refineTaste(c, c, { spentUsd: 0, capUsd: 1 }, 'd', std, TEXT, lost, keys, null);
+    const r = await refineTaste(c, c, { spentUsd: 0, capUsd: 1 }, 'd', std, TEXT, lost, keys, null, {}, null, { ledger: stepLedger() });
     expect(r.targeted).toEqual([]);
     expect(c.calls).toEqual([]);
   });

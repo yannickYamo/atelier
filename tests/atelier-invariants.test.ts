@@ -7,6 +7,7 @@
 //
 // THIS FILE IS FROZEN. A test here changes only when the owner changes what the product promises. A new bug becomes
 // a test of the parser or the observer it was in; it does not become a new case here.
+import { stepLedger } from '../core/loop/controller.js';
 import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync, statSync, mkdtempSync } from 'node:fs';
 import { join } from 'node:path';
@@ -270,7 +271,7 @@ describe('6 · a repair cannot silently break a REQUIRED rule the draft was meet
     const report = (broken: readonly string[]) => ({ failed: broken.length > 0, unchecked: [], checked: broken.map((id) => ({ requirementId: id, materiality: 'REQUIRED', result: { verdict: 'VIOLATED', detail: 'd', spans: [], value: null } })) }) as never;
     const first = { output: 'first', report: report([]), repair: null }; const second = { output: 'second', report: report(['other']), repair: null };
     const refine = async (d: string) => (d === 'draft' ? first : second) as never;
-    const out = await withRedraft(refine, { unmet: (d) => (d.output === 'first' ? [{ id: 'x1', statement: 'a section', detail: 'missing' }] : []), redraft: async () => 'again', notes: [] })('draft');
+    const out = await withRedraft(refine, { unmet: (d) => (d.output === 'first' ? [{ id: 'x1', statement: 'a section', detail: 'missing' }] : []), redraft: async () => 'again', notes: [] })('draft', stepLedger());
     expect(out.output).toBe('first');
   });
 });
