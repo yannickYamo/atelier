@@ -26,7 +26,7 @@ export const UNATTRIBUTED = 'unattributed';
 
 /** `author:` in a piece's front matter, or null. The value is taken as written, trimmed of quotes. */
 export function frontMatterAuthor(text: string): string | null {
-  const fm = /^﻿?---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(text);
+  const fm = /^\uFEFF?---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(text);
   if (!fm) return null;
   const line = fm[1].split(/\r?\n/).find((l) => /^author\s*:/i.test(l));
   if (!line) return null;
