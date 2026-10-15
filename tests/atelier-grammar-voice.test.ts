@@ -1,7 +1,7 @@
 // tests/atelier-grammar-voice.test.ts — GRAMMAR CORRECTS WITHOUT NORMALISING THE VOICE.
 //
-// Correctness improves and the author's voice is left alone: a spelling is changed only where the slip is certain
-// (a well-known misspelling, or a neighbouring-key slip of a very common word with one candidate); a coinage, slang,
+// Correctness improves and the author's voice is left alone: a spelling is changed only where the word is a
+// well-known misspelling with one correction (./atelier-grammar-known.test.ts holds the list's own guards); a coinage, slang,
 // a word of one dialect, a compound or a plural the checker would respell is listed, never changed. @mentions,
 // hashtags, cashtags, emoji, email addresses, file names and ALL-CAPS tokens are never touched. A pronoun agreement
 // the author's own pieces use is theirs; without that evidence only the clear cases are corrected, and vernacular is
@@ -14,7 +14,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, readdi
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { setGrammarProvider, ensureGrammar, resetGrammar, readGrammar, protectedRanges, authorVocabulary, authorConstructions, grammarMeasurement,
-  certainSpelling, grammarStatus, type GrammarEngine, type GrammarLint } from '../core/observers/grammar.js';
+  knownMisspelling, grammarStatus, type GrammarEngine, type GrammarLint } from '../core/observers/grammar.js';
 import { MISSPELLINGS, COMMON_WORDS } from '../core/observers/grammar-words.js';
 import { harperGrammar } from '../providers/harper.js';
 import { correctMechanicalErrors } from '../core/loop/mechanical-repair.js';
@@ -55,7 +55,6 @@ const TRUE_FIXES: readonly (readonly [string, string])[] = [
   ['We shipped it,, finally.', 'We shipped it, finally.'],
   ['I has a question about the API.', 'I have a question about the API.'],
   ['You was right about the migration.', 'You were right about the migration.'],
-  ['I will be thete by noon.', 'I will be there by noon.'],
 ];
 // The rest of the reviewer's set: nothing in any of them may be changed.
 const UNCHANGED: readonly string[] = [
@@ -69,7 +68,7 @@ const UNCHANGED: readonly string[] = [
   'Wait... what?', 'It don\'t matter now.', 'I is the one who knocks.', 'Their roadmap is aspirational at best.', 'The colour of the programme was grey.', 'The organization realized its error.',
 ];
 
-describe('a spelling fix is made only where the slip is certain (real engine)', () => {
+describe('a spelling fix is made only for a known misspelling (real engine)', () => {
   beforeAll(async () => { process.env.ATELIER_GRAMMAR = 'on'; resetGrammar(); setGrammarProvider(harperGrammar); await ensureGrammar(); expect(grammarStatus().ready).toBe(true); }, 60_000);
 
   it('a coinage, slang, a British word, a closed compound and a plural are listed and never changed', () => {
@@ -118,9 +117,9 @@ describe('a spelling fix is made only where the slip is certain (real engine)', 
 });
 
 describe('the lists that make a fix certain', () => {
-  it('a documented misspelling list of at least 100 entries, none of them a common word, each with one correction', () => {
+  it('a documented misspelling list of at least 300 entries, none of them a common word, each with one correction', () => {
     const entries = Object.entries(MISSPELLINGS);
-    expect(entries.length).toBeGreaterThanOrEqual(100);
+    expect(entries.length).toBeGreaterThanOrEqual(300);
     for (const [wrong, right] of entries) {
       expect(COMMON_WORDS.has(wrong), wrong).toBe(false);
       expect(right.length, wrong).toBeGreaterThan(0);
@@ -132,15 +131,9 @@ describe('the lists that make a fix certain', () => {
     expect(COMMON_WORDS.size).toBeLessThan(2100);
     for (const w of ['color', 'colour', 'center', 'centre', 'the', 'there']) expect(COMMON_WORDS.has(w), w).toBe(true);
   });
-  it('a neighbouring-key slip is certain only when it has one common-word candidate', () => {
-    expect(certainSpelling('thete')).toBe('there');
-    expect(certainSpelling('wotk')).toBe('work');
-    expect(certainSpelling('fime')).toBeNull();          // time or fine
-    expect(certainSpelling('learnings')).toBeNull();     // a final "s" is never the extra letter
-    expect(certainSpelling('grokkable')).toBeNull();
-    expect(certainSpelling('arvo')).toBeNull();
-    expect(certainSpelling('rhe')).toBeNull();           // too short to be sure
-    expect(certainSpelling('Recieve')).toBe('receive');
+  it('only a known misspelling has a correction: no neighbouring-key guess is ever made', () => {
+    expect(knownMisspelling('Recieve')).toBe('receive');
+    for (const w of ['thete', 'wotk', 'fime', 'learnings', 'grokkable', 'arvo', 'rhe', 'yeet', 'vite', 'cosy', 'storey']) expect(knownMisspelling(w), w).toBeNull();
   });
   it('the protected regions cover each kind of token whole', () => {
     const text = 'Hi @sam_rides #roadbike $TSLA jo@ex.com notes.md NASA 🔥 ok';
@@ -252,7 +245,7 @@ describe('through the binary', () => {
     expect(out).toMatch(/Grammar, listed for you to check and never changed \(2\): "don't" \(.*\); "arvo" \(a word the checker does not know/);
     const id = readdirSync(join(data, 'skills', 'posts', 'invocations'))[0].replace(/\.json$/, '');
     const report = run('report', id);
-    expect(report).toMatch(/2 construction\(s\) the checker is unsure of, listed to check: "don't"/);
+    expect(report).toMatch(/held; 2 listed to check: "don't"/);
     expect(report.replace(/\s+/g, ' ')).toContain('"arvo" (a word the checker does not know');
     await script(piece);
     const json = run('invoke', '--skill', 'posts', 'a short note', ...model(), '--json');
