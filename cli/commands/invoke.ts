@@ -10,7 +10,7 @@ import type { CheckContext } from '../../core/observers/registry.js';
 import { checksFor, claimInstrumentOf, contextJudgeFor, smallReaderFor, CLAIMS_MODEL_DEFAULT, shortFormRequest } from '../checks.js';
 import { regressions, readAtLength, featureParamsOf } from '../../core/loop/repair.js';
 import { numbersIn } from '../../core/loop/integrity.js';
-import { refineToStandard, checkDraft, checkDraftAsync, enforceClaims, heavyCut, listedClaims, brokenByCut, gradedRules, PUBLIC_FACTS, INCONCLUSIVE, type CheckOptions } from '../../core/loop/run-repair.js';
+import { refineToStandard, checkDraft, checkDraftAsync, withWaivers, enforceClaims, heavyCut, listedClaims, brokenByCut, gradedRules, PUBLIC_FACTS, INCONCLUSIVE, type CheckOptions } from '../../core/loop/run-repair.js';
 import { signalChecks, displacement, isSignal } from '../../core/loop/graded.js';
 import { signalDistance } from '../../core/observers/selection.js';
 import { featureOf, featureMove } from '../../core/observers/features.js';
@@ -21,9 +21,9 @@ import { factLedger, factCoverage, type Fact } from '../../core/loop/fact-ledger
 import { steerTowardRange, type Application } from '../../core/fidelity/structural.js';
 import { LOOP_SETTINGS, DIVERSITY_TEMPERATURES, type FidelityProfile, type FidelityReading, type FidelityRecord, type ImplementationSettings } from '../../core/fidelity/types.js';
 import type { RepairRecord, RepairEdits, GradedRecord, Requirement, ControllerRecord, ControllerDecisionRecord, StandardVersion } from '../../core/state/canonical-state.js';
-import { askedForRedraft, redraftHandOff, joinRecords, controllerRecord, DEFAULT_COST, DEFAULT_EFFECT, ENFORCED_WEIGHT, SETTLED_ERROR } from '../../core/loop/controller.js';
+import { askedForRedraft, redraftHandOff, joinRecords, controllerRecord, recordTarget, DEFAULT_COST, DEFAULT_EFFECT, ENFORCED_WEIGHT, SETTLED_ERROR } from '../../core/loop/controller.js';
 import { releaseFor, implementationBlock } from '../fidelity.js';
-import { buildRunEval } from '../eval-run.js';
+import { buildRunEval, copyLimit } from '../eval-run.js';
 import { needsReview } from '../../core/eval/record.js';
 import { renderPanel, type EvalSummary } from '../../core/eval/summary.js';
 import { putEval } from '../../core/state/eval-store.js';
@@ -108,8 +108,6 @@ export function resolveServedSkill(name: string, opts: { readonly index?: boolea
   return resolveServedVersion(L, wanted, flag('--context') ?? '', opts);
 }
 
-/** A run of this many words repeated from a served piece of the author's is copying, not an echo of a phrase. */
-const LIFTED_RUN = 12;
 
 /**
  * What a SkillVersion serves a model, exactly as `invoke` serves it: SKILL.md and every example file
@@ -162,10 +160,11 @@ export function resolveServedVersion(L: store.StoreLayout, wanted: string, conte
  * WHERE THE AUTHOR'S OWN LENGTH APPLIES. The request states no length and asks for no detail or brevity; it asks
  * for no shape of its own (code, a list, one line); the skill writes pieces, not answers, whose length belongs to
  * the request; the request is in the register the pieces are in; and the run is not a contract check or a long
- * piece planned section by section. Anywhere else the span of the pieces says nothing about this output.
+ * piece planned section by section; nor is it a short form (a post on X) from a standard read from longer pieces, whose
+ * length those pieces cannot speak to. Anywhere else the span of the pieces says nothing about this output.
  */
-export const ownLengthApplies = (c: { stated: boolean; asked: boolean; shape: boolean; contract: boolean; answers: boolean; outOfRegister: boolean; sections: boolean; ruled?: boolean }): boolean =>
-  !c.stated && !c.asked && !c.shape && !c.contract && !c.answers && !c.outOfRegister && !c.sections && !c.ruled;
+export const ownLengthApplies = (c: { stated: boolean; asked: boolean; shape: boolean; contract: boolean; answers: boolean; outOfRegister: boolean; sections: boolean; ruled?: boolean; shortForm?: boolean }): boolean =>
+  !c.stated && !c.asked && !c.shape && !c.contract && !c.answers && !c.outOfRegister && !c.sections && !c.ruled && !c.shortForm;
 /** Does the owner require a length of the whole work, in words? Then that is the length, and their pieces' span adds no second one. */
 export const lengthIsRuled = (std: Standard | null): boolean => (std ? planFor(std).rulesLength : false);
 
@@ -638,7 +637,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   // is another sample of a noisy reader, and two samples of one run disagreed (7, 2 and 5 flags in a live test).
   const completions: string[] = [];
   // THE AUTHOR'S OWN LENGTH, WHERE IT APPLIES (`ownLengthApplies`): one more thing the drafts are chosen by.
-  const ownBand = ownLengthApplies({ stated: Boolean(stated), asked: Boolean(lengthAsked), shape: shape === 'SHAPE', contract: contractFile !== null,
+  const ownBand = ownLengthApplies({ shortForm: Boolean(transfer), stated: Boolean(stated), asked: Boolean(lengthAsked), shape: shape === 'SHAPE', contract: contractFile !== null,
     answers: checks.format?.claims === 'list' || (std ? isReplyWork(std.workType) : false), outOfRegister: register?.status === 'out', sections: argv.includes('--sections'), ruled: lengthIsRuled(std) })
     ? ownLengthBand(store.getVoice(L)?.lengthSpan) : null;
   // What one more draft would be told, when a draft leaves it unmet (`withRedraft`).
@@ -665,7 +664,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const rec = await runOnce(L, sv, servedForRun, servedHash, deliveryForRun, taskForRun, client, budget, binding,
     resolveProvenance(flag('--provenance'), process.env), contractFile,
     flag('--task') ? 'FLAG' : 'POSITIONAL',
-    std && !argv.includes('--no-repair') ? keepDelivered(withGradedRecord(withStructureRead(withShape(withCoverage(withVoice(withEdits(withRedraft(refineFor(), unmet ? { unmet, notes: completions, resume: (text, history) => refineFor(history)(text), redraft: async (note, purpose) => (await spendOneWithResult(client, budget, servedForRun, taskForRun, null, note, {}, purpose)).piece, graded: gradedTrace,
+    std && !argv.includes('--no-repair') ? keepDelivered(withGradedRecord(withStructureRead(withShape(withCoverage(withVoice(withEdits(withRedraft(refineFor(), unmet ? { unmet, notes: completions, resume: (text, history) => refineFor(history)(text), check: (text: string) => checkDraft(name, std, text, { ...checks, claimSensor: undefined }), redraft: async (note, purpose) => (await spendOneWithResult(client, budget, servedForRun, taskForRun, null, note, {}, purpose)).piece, graded: gradedTrace,
         displaced: (from: string, to: string) => displacement(from, to, graded !== undefined ? carried : null, new Set())?.refusedFor ?? [],
         addedFigures: (from: string, to: string) => addedFigures(from, to, materialText) } : null), fid && (editBudget > 0 || argv.includes('--fidelity')) ? { client, budget, name, std, checks, profile: editProfile ?? fid.profile, editBudget, trace, taste } : null),
       voiceRuns && bank && fid ? { client, budget, name, std, checks, bank, copied: fid.index ? overlapIndex(fid.index.passages.map((p) => p.text)) : null, trace, taste, reader: smallReaderFor()?.client ?? null, gate: runSettings?.voiceGate === 'reader' ? 'reader' as const : 'lists' as const } : null),
@@ -1030,19 +1029,40 @@ export interface GradedTrace { notes: string[]; redrafts: number; edits: { accep
   /** the displacement guard's count on the first draft, and every refusal it made across the run's rewrites and redrafts */
   displacedBefore: number | null; displaced: string[] }
 
-/** Which features a run steered and which way, from the record: "parenthetical asides fewer (17.2 → 4.3 per 1,000 words)". */
-export function steeredLine(g: GradedRecord): string {
+/**
+ * Which features a run STEERED and which way they went, from the record: "parenthetical asides fewer (17.2 → 4.3 per
+ * 1,000 words)". Only steering is said here: a feature an enforced rule of the owner's holds (`enforced`) is the owner's
+ * rule, reported with the rules, never as "steered toward your range". The way is the one the value was observed to
+ * move, never the one it was aimed.
+ */
+export function steeredLine(g: GradedRecord, enforced: ReadonlySet<string> = new Set()): string {
   // A feature that did not move was aimed at, not steered: it is not said as moved ("higher (0.392 → 0.392)").
-  return g.steered.filter((id) => !g.values[id] || g.values[id].before !== g.values[id].after).map((id) => {
+  // What a draft written again moved is steering as much as a rewrite's: every feature observed nearer its range is said.
+  const ids = [...new Set([...g.steered, ...nearerRange(g)])];
+  return ids.filter((id) => !enforced.has(id) && (!g.values[id] || g.values[id].before !== g.values[id].after)).map((id) => {
     const f = featureOf(id); const x = g.values[id];
     if (!f || !x) return id;
-    const move = x.before !== null ? featureMove({ feature: [id], ...(x.lo !== null ? { minValue: x.lo } : {}), ...(x.hi !== null ? { maxValue: x.hi } : {}) }, x.before) : null;
-    const way = move ? (/\b(fewer|lower)\b/.test(move) ? (f.unit === 'value' ? 'lower' : 'fewer') : (f.unit === 'value' ? 'higher' : 'more')) : 'toward your range';
+    const way = x.before !== null && x.after !== null ? (x.after < x.before ? (f.unit === 'value' ? 'lower' : 'fewer') : (f.unit === 'value' ? 'higher' : 'more')) : 'toward your range';
     const unit = f.unit === 'per1000' ? ' per 1,000 words' : '';
     const fmt = (v: number | null): string => (v === null ? '?' : f.unit === 'share' ? `${Math.round(v * 100)}%` : `${v}`);
     return `${f.label} ${way} (${fmt(x.before)} → ${fmt(x.after)}${unit}${x.source === 'profile' ? ', from your pieces' : ''})`;
   }).join('; ');
 }
+
+/** The features whose value was observed nearer its range on the delivered text than on the first draft. */
+export const nearerRange = (g: GradedRecord): string[] => Object.entries(g.values).filter(([, x]) => {
+  if (x.before === null || x.after === null) return false;
+  const off = (v: number): number => (x.lo !== null && v < x.lo ? x.lo - v : x.hi !== null && v > x.hi ? v - x.hi : 0);
+  return off(x.after) < off(x.before);
+}).map(([id]) => id).sort();
+
+/** The features an enforced rule of the standard holds: the owner's rules, never said as steering. */
+export const enforcedFeatures = (std: Standard | null): Set<string> => {
+  if (!std) return new Set();
+  const on = new Set(planFor(std).rules.filter((p) => p.enforced).map((p) => p.id));
+  return new Set(std.requirements.filter((q) => on.has(q.requirementId) && q.measurement?.observer === 'FEATURE')
+    .map((q) => (q.measurement?.params.feature as readonly string[] | undefined)?.[0]).filter((f): f is string => typeof f === 'string'));
+};
 
 /** Every text the loop refines adds its graded rewrites to the trace; the first keeps its values as the run's "before". */
 function trackGraded(refine: (draft: string) => Promise<Delivered>, t: GradedTrace | null) {
@@ -1272,7 +1292,7 @@ export function unmetReader(std: Standard, own: { band: readonly [number, number
  * A FEATURE check's detail without the amount it closes on ("…; about 25.5 to remove"): where the miss carries its move
  * (`featureMove`, "about 25.5 fewer parenthetical asides per 1,000 words"), the line says the move once.
  */
-const withoutAmount = (detail: string): string => detail.replace(/;\s*(?:about\s+)?[\d.]+(?:\s+points)?\s+to\s+(?:remove|add)\s*$/, '');
+const withoutAmount = (detail: string): string => detail.replace(/;\s*(?:about\s+|under\s+)?[\d.]+(?:\s+points)?\s+to\s+(?:remove|add)\s*$/, '');
 
 /** Each miss on its own line: the rule in the owner's words, what the check found, what to aim for, and which way and how far. */
 const missLines = (unmet: readonly Unmet[]): string => unmet.map((u) => `- ${u.statement} (${u.detail}${u.aim ? `; ${u.aim}` : ''}${u.move ? `; ${u.move}` : ''})`).join('\n');
@@ -1482,20 +1502,46 @@ export function withRedraft(refine: (draft: string) => Promise<Delivered>,
      * redraft refined again, with every step already taken (the failed redraft among them) as the controller's history,
      * so a carrier rewrite or the operators are tried on the same targets instead of the draft being left as it was.
      */
-    resume?: (text: string, history: readonly ControllerDecisionRecord[]) => Promise<Delivered> } | null) {
+    resume?: (text: string, history: readonly ControllerDecisionRecord[]) => Promise<Delivered>;
+    /** the deterministic checks on a text as written, before any step: what a draft written again moved is read on it */
+    check?: (text: string) => VerifyReport } | null) {
   if (!c) return refine;
   // Said in the owner's own words, with the id beside it: "x3" alone tells them nothing.
   // A SIGNAL feature has no id the owner knows: it is said by its statement alone (core/loop/graded.ts, `ownerWords`).
   const named = (us: readonly Unmet[]): string => us.map((u) => (u.id === LENGTH_ID ? `the length ${u.of === 'request' ? 'the request asks for' : 'your pieces run'} (the draft: ${u.detail})`
     : `${isSignal(u.id) ? '' : `${u.id}: `}"${u.statement.length > 70 ? `${u.statement.slice(0, 67)}...` : u.statement}"`)).join('; ');
   // A graded miss is never something the method requires: it is what the author's pieces usually do.
-  const whose = (us: readonly Unmet[]): string => (us.some((u) => u.id === LENGTH_ID) ? 'the work requires' : us.every((u) => u.graded) ? 'your pieces usually do'
-    : us.some((u) => u.graded) ? 'the method requires or your pieces usually do' : 'the method requires');
+  // A length among them is the work's; a habit beside it is still only what the pieces usually do.
+  const whose = (us: readonly Unmet[]): string => {
+    const required = us.some((u) => u.id === LENGTH_ID) ? 'the work requires' : 'the method requires';
+    const habits = us.some((u) => u.graded); const rules = us.some((u) => !u.graded);
+    return habits && rules ? `${required} or your pieces usually do` : habits ? 'your pieces usually do' : required;
+  };
   const others = (x: Delivered, us: readonly Unmet[]): number => brokenIn(x.report).filter((id) => !us.some((u) => u.id === id)).length;
+  // NO HAND-OFF WITHOUT A REDRAFT. Where the controller handed a draft over and no draft is written again after it (nothing
+  // the reader can name, the allowance spent), the next smaller step follows on the same draft, with every step so far
+  // as its history; with nothing to take it, the record says the hand-off was not carried out.
+  const settle = async (x: Delivered): Promise<Delivered> => {
+    const ctl = x.repair?.controller;
+    if (!askedForRedraft(ctl) || !ctl) return x;
+    // The hand-off answered on the record: no draft was written for it, so the record cannot end on the request.
+    const asked = redraftHandOff(ctl);
+    const none: ControllerDecisionRecord = { action: 'redraft', targets: asked?.targets ?? [], why: asked?.why ?? 'handed to a redraft', expectedGain: asked?.expectedGain ?? 0, expectedCostUsd: asked?.expectedCostUsd ?? 0,
+      outcome: 'could not run', observed: { movement: 0, calls: 0, usd: 0, note: 'no draft was written again for it: nothing it could be told, or the redrafts allowed were used' } };
+    const decisions = [...ctl.decisions, none];
+    if (c.resume) {
+      const d3 = await c.resume(x.output, decisions);
+      const merged = controllerRecord([...decisions, ...(d3.repair?.controller?.decisions ?? [])], d3.repair?.controller?.stoppedBecause ?? ctl.stoppedBecause);
+      const first = x.repair;
+      return withController(d3.repair && first ? { ...d3, repair: { ...d3.repair, draft: first.draft, originalOutputHash: first.originalOutputHash, violatedBefore: first.violatedBefore,
+        passes: first.passes + d3.repair.passes } } : d3, merged);
+    }
+    return withController(x, controllerRecord(decisions, `${ctl.stoppedBecause}; no draft could be written again`));
+  };
   return async (draft: string) => {
     let d = await refine(draft);
     let missing = c.unmet(d);
-    if (!missing.length) return d;
+    if (!missing.length) return settle(d);
     // What is recorded as broken before is rules, by their ids: the length is no rule of the standard, and counted
     // as one it was reported as a rule held "once the draft was corrected" and read as a recurrence.
     const ids = missing.filter((u) => u.id !== LENGTH_ID).map((u) => u.id);
@@ -1519,9 +1565,12 @@ export function withRedraft(refine: (draft: string) => Promise<Delivered>,
       if (trimming) trims += 1; else redrafts += 1;
       const cutting = trimming && picking;
       const asked = redraftHandOff(d.repair?.controller);
+      // A DRAFT WRITTEN AGAIN IS A GRADED STEP LIKE ANY: where the controller asked for it, the graded misses it is told
+      // and recorded for are the ones it named (at most three, the furthest first); every rule the work requires is told.
+      const aimed = asked ? missing.filter((u) => !u.graded || asked.targets.includes(recordTarget(u.id))) : missing;
       const step = (outcome: ControllerDecisionRecord['outcome'], snap: readonly SpendLine[], movement: number, note?: string): ControllerDecisionRecord => {
         const cost = spendBetween(snap, processSpendByPurpose()).filter((l) => l.purpose === 'writing' || l.purpose === 'graded');
-        return { action: 'redraft', targets: missing.map((u) => u.id), why: trimming ? 'the piece runs long: cut to its length' : asked?.why ?? `written again with ${missing.length} miss(es) named`,
+        return { action: 'redraft', targets: aimed.map((u) => recordTarget(u.id)), why: trimming ? 'the piece runs long: cut to its length' : asked?.why ?? `written again with ${missing.length} miss(es) named`,
           expectedGain: asked?.expectedGain ?? redraftGain(missing), expectedCostUsd: asked?.expectedCostUsd ?? DEFAULT_COST.redraft, outcome,
           observed: { movement: Math.round(movement * 1000) / 1000, calls: cost.reduce((n, l) => n + l.calls, 0), usd: Math.round(cost.reduce((n, l) => n + l.usd, 0) * 1e6) / 1e6, ...(note ? { note } : {}) } };
       };
@@ -1538,12 +1587,20 @@ export function withRedraft(refine: (draft: string) => Promise<Delivered>,
           const gradedOnly = !trimming && missing.every((u) => u.graded);
           // A draft written again for what the work requires carries, of the graded misses, only those far enough out to
           // keep a repair going (over SETTLED_ERROR band widths): a nearer one is never a pull on the owner's draft.
-          const told = gradedOnly ? missing : missing.filter((u) => !u.graded || (u.off ?? 0) > SETTLED_ERROR);
+          const told = gradedOnly ? aimed : aimed.filter((u) => !u.graded || (u.off ?? 0) > SETTLED_ERROR);
           if (c.graded && !trimming) { c.graded.notes.push(...gradedLines(told)); if (gradedOnly) c.graded.redrafts += 1; }
           piece = await c.redraft(trimming ? trimNote(missing, d.output) : redraftNote(told, d.output), gradedOnly ? 'graded' : 'writing');
         }
         const drafted = step('kept', stepSnap, 0);
-        const d2 = await refine(piece);
+        // WHAT THE DRAFT WRITTEN AGAIN MOVED, read on it as written, before any step on it: the real change in |error|.
+        const raw = c.check ? c.unmet({ output: piece, report: c.check(piece), repair: null }) : null;
+        // A DRAFT WRITTEN AGAIN IS JUDGED ON ITSELF: one no nearer as written is not refined (its steps would be the
+        // steps' doing, not the draft's), and the smaller steps go on the earlier draft instead.
+        const noNearer = raw !== null && c.check !== undefined && !nearer(raw, missing);
+        // ONE RUN, ONE CAP: the new draft is refined with every step so far, this draft among them, as its history.
+        const d2: Delivered = noNearer && c.check ? { output: piece, report: c.check(piece), repair: null }
+          : c.resume ? await c.resume(piece, [...(d.repair?.controller?.decisions ?? []), { ...drafted, observed: { ...drafted.observed, movement: raw ? redraftMoved(aimed, raw) : redraftGain(aimed) } }])
+            : await refine(piece);
         const missing2 = c.unmet(d2);
         // A draft written again for graded misses alone may not displace what the author's pieces hold, any more than a
         // steering rewrite may. One written for what the work requires is never refused for it: the owner's rules come
@@ -1561,7 +1618,7 @@ export function withRedraft(refine: (draft: string) => Promise<Delivered>,
           : `${redraftOutcome(missing, missing2, better, named, whose)}${forRules && seen.length && better ? ` Displacement observed: ${seen.join('; ')}.` : ''}`;
         // a cut the checks refuse leaves the draft as it was, and the next pass writes it shorter instead
         // THE STEP ON THE RECORD: what the draft written again moved, what it cost, and the steps taken on it after.
-        const redrafted: ControllerDecisionRecord = { ...drafted, outcome: better ? 'kept' : 'not kept', observed: { ...drafted.observed, movement: better ? Math.round(Math.max(0, redraftGain(missing) - redraftGain(missing2)) * 1000) / 1000 : 0, note: outcome } };
+        const redrafted: ControllerDecisionRecord = { ...drafted, outcome: better ? 'kept' : 'not kept', observed: { ...drafted.observed, movement: redraftMoved(aimed, raw ?? missing2), note: outcome } };
         // A draft that is not kept hands nothing on: its own request for a redraft never happened.
         const after2 = better ? d2.repair?.controller : d2.repair?.controller && controllerRecord(d2.repair.controller.decisions.filter((x) => x.outcome !== 'handed to a redraft'), d2.repair.controller.stoppedBecause);
         const joined = joinRecords(d.repair?.controller, redrafted, after2, better ? undefined : `the draft written again did not do better: ${outcome}`);
@@ -1575,19 +1632,23 @@ export function withRedraft(refine: (draft: string) => Promise<Delivered>,
           const cutAll = [...new Set([...(first?.storiesCut ?? []), ...(d3.repair?.storiesCut ?? [])])];
           const resumed: Delivered = withController(d3.repair && first ? { ...d3, repair: { ...d3.repair, draft: first.draft, originalOutputHash: first.originalOutputHash, violatedBefore: first.violatedBefore,
             passes: first.passes + d3.repair.passes, ...(cutAll.length ? { storiesCut: cutAll } : {}) } } : d3, ctl);
-          return say(resumed, outcome);
+          // Said of the text delivered, not only of the first draft: what the smaller steps left.
+          const left = c.unmet(resumed);
+          const after = left.length ? `After the smaller steps that followed, it ${left.every((u) => u.graded) ? 'misses' : 'leaves out'} ${left.length} (${named(left)}).`
+            : 'After the smaller steps that followed, none of them is left.';
+          return await settle(say(resumed, `${outcome} ${after}`));
         }
-        if (!better) return say(withController(d, joined), outcome);
+        if (!better) return await settle(say(withController(d, joined), outcome));
         const kept: Delivered = withController(d2.repair ? d2 : { ...d2, repair: { passes: 0, violatedBefore: ids, violatedAfter: brokenIn(d2.report), originalOutputHash: sha(piece), draft: piece, why: `written again with what ${missing.every((u) => u.graded) ? 'your pieces usually do' : 'the work requires'} named` } }, joined);
         // A cut keeps the draft from before it, so what was taken out can be read (the record holds the draft cut from).
         d = say(precut !== null && kept.repair ? { ...kept, repair: { ...kept.repair, draft: precut, originalOutputHash: sha(precut) } } : kept, outcome);
         missing = missing2;
       } catch (err) {
         const why = `the draft to add them could not be written (${(err as Error).message.split('\n')[0]})`;
-        return say(withController(d, joinRecords(d.repair?.controller, step('could not run', stepSnap, 0, why), undefined, why)), `The draft ${missing.every((u) => u.graded) ? 'misses' : 'leaves out'} ${missing.length} thing(s) ${whose(missing)} (${named(missing)}); ${why}.`);
+        return await settle(say(withController(d, joinRecords(d.repair?.controller, step('could not run', stepSnap, 0, why), undefined, why)), `The draft ${missing.every((u) => u.graded) ? 'misses' : 'leaves out'} ${missing.length} thing(s) ${whose(missing)} (${named(missing)}); ${why}.`));
       }
     }
-    return d;
+    return settle(d);
   };
 }
 
@@ -1604,6 +1665,14 @@ export function addedFigures(before: string, after: string, source: string): str
 
 /** What a draft written again is expected to move: each rule (and a length) it misses held, and each graded miss's distance, up to one width. */
 const redraftGain = (unmet: readonly Unmet[]): number => unmet.reduce((n, u) => n + (u.graded ? Math.min(u.off ?? 0, DEFAULT_EFFECT.redraft) : ENFORCED_WEIGHT), 0);
+
+/**
+ * WHAT A DRAFT WRITTEN AGAIN MOVED: for each graded miss, its |error| before minus after (band widths, the real change,
+ * however far: 14 → 4.78 is 9.22, never capped at what was expected); for each rule or length, ENFORCED_WEIGHT when it
+ * now holds. Signed: a draft that moved a feature further out records that.
+ */
+export const redraftMoved = (before: readonly Unmet[], after: readonly Unmet[]): number =>
+  Math.round(before.reduce((n, u) => { const a = after.find((x) => x.id === u.id); return n + (u.graded ? (u.off ?? 0) - (a?.off ?? 0) : a ? 0 : ENFORCED_WEIGHT); }, 0) * 1000) / 1000;
 
 /** The delivered text with the controller's record of every step taken on the way to it. */
 function withController(d: Delivered, controller: ControllerRecord): Delivered {
@@ -2058,7 +2127,8 @@ export const stillBrokenWhy = (why: string): string => {
 /** The counted checks and the invented-claim check: a rule still broken is always said, and so is a cut. */
 function reportChecks(report: RunReport, rec: Invocation, std: Standard | null, checks: Checks): void {
   // A SKILL BUILT FROM A METHOD says on every run what of the method was held, by kind (core/eval/obligations.ts).
-  const verified = std ? verifyText(rec.skillName, std, rec.output, checks.context) : null;
+  // Read with this run's waivers: a rule the format cannot hold is neither counted nor missing.
+  const verified = std ? withWaivers(verifyText(rec.skillName, std, rec.output, checks.context), checks) : null;
   const held = std && verified ? methodReading(std.requirements, verified) : null;
   // A REQUIRED rule whose check did not run (the grammar checker switched off or not loaded) is not said to hold.
   const notChecked = (verified?.checked ?? []).filter((c) => acts(c) && notRun(c)).map((c) => c.requirementId);
@@ -2077,12 +2147,15 @@ function reportChecks(report: RunReport, rec: Invocation, std: Standard | null, 
     report.detail(`checked against the standard: ${r.violatedBefore.length} REQUIRED rule(s) broken in the draft (${r.violatedBefore.join(', ')}); `
       + `${r.passes} rewrite pass(es) of only the spans that broke them; ${r.violatedAfter.length ? `still broken: ${r.violatedAfter.join(', ')}` : 'all now hold'}.`);
     if (r.graded) {
-      report.detail(`graded features (never a failure): ${r.graded.features.join(', ') || 'none'}; ${r.graded.targeted} targeted by a rewrite, ${r.graded.repaired} moved toward your range; `
+      report.detail(`graded features (never a failure): ${r.graded.features.join(', ') || 'none'}; ${r.graded.targeted} targeted by a rewrite, ${nearerRange(r.graded).length} observed nearer your range; `
         + `${r.graded.redrafts} draft(s) written again for them; ${r.graded.edits.accepted} rewrite(s) kept, ${r.graded.edits.rejected} not; ${r.graded.calls} call(s), $${r.graded.costUsd.toFixed(4)}, on their account`
         + `${r.graded.displacement ? `; features outside your range: ${r.graded.displacement.before} on the first draft, ${r.graded.displacement.after} delivered${r.graded.displacement.refusedFor.length ? `; ${r.graded.displacement.refusedFor.length} rewrite(s) refused for displacing others` : ''}` : ''}.`);
-      const steered = steeredLine(r.graded);
+      const steered = steeredLine(r.graded, enforcedFeatures(std));
       if (steered) report.say(`Steered toward your range, never a block: ${steered}.`);
     }
+    // A REPAIR THE BUDGET STOPPED IS SAID ON EVERY SURFACE, not only in --json: what it could not pay for, and how to allow it.
+    const stop = budgetStopLine(r.controller);
+    if (stop) report.say(stop);
     const heavy = r.storiesCut ? heavyCut(r.draft ?? '', r.storiesCut) : null;
     if (heavy) report.say(`Warning: ${heavy}.`);
     const unconfirmed = r.violatedAfter.includes(INCONCLUSIVE);
@@ -2176,6 +2249,14 @@ function reportRestyle(report: RunReport, output: string, material: readonly { n
   for (const a of added) report.detail(`    added: "${a.slice(0, 200)}"`);
 }
 
+/** What a run says when its repair steps stopped on the budget, or null when they stopped for another reason. */
+export const budgetStopLine = (c: ControllerRecord | undefined): string | null =>
+  (c?.stoppedBecause.startsWith('the budget') ? `Repair stopped by the budget: ${c.stoppedBecause.replace(/^the budget: /, '')}. Allow more with --cap <usd> or --max-calls <n>.` : null);
+
+/** What a run says of a passage lifted from the author's examples, at the evaluation's limit and in its words; null under it. */
+export const liftedLine = (longest: number, limit: number): string | null =>
+  (longest >= limit ? `(a passage is lifted from one of your examples: a run of ${longest} words is shared with one of them (${limit - 1} at most). Rewrite that sentence.)` : null);
+
 /** Copying, text that is not the deliverable, and an output contract that did not reach the provider: said. */
 function reportIntegrity(report: RunReport, rec: Invocation, classNote: string | null | undefined, std: Standard | null, L: store.StoreLayout): void {
   if (classNote && std?.requirements.some((q) => q.measurement)) report.detail(`(${classNote})`);
@@ -2186,7 +2267,9 @@ function reportIntegrity(report: RunReport, rec: Invocation, classNote: string |
   if (served.length) {
     const overlap = overlapIndex(served, voice?.standardWording ?? [])(rec.output); const lifted = overlap.longestShared;
     if (overlap.standard) report.detail(`(${overlap.standard} six-word run(s) shared with three or more of your pieces: your standard wording, not counted as copying)`);
-    if (lifted >= LIFTED_RUN) report.say(`(the output repeats ${lifted} words in a row from one of your passages the skill carries: that is copying, not voice. Rewrite that sentence.)`);
+    // ONE LIMIT, ONE WORDING: the evaluation's (cli/eval-run.ts, `copyLimit`; core/eval/record-build.ts, the lifted entry).
+    const line = liftedLine(lifted, copyLimit(voice));
+    if (line) report.say(line);
   }
   // Checked on the OUTPUT, never the served bytes — those legitimately contain every marker, and
   // passing them in would report a breach on every invocation.

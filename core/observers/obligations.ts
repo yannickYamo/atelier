@@ -18,6 +18,18 @@ import { proseWords } from './style.js';
 import { sentencesOf } from './text.js';
 import { sectionBodyOf, sectionHeadsOf, headingsOf } from './structure.js';
 
+/** Observers that read a ban: a word, a hedge, a counted move or term. Their spans are the places to fix, whatever kind of thing a method called the rule. */
+export const BAN_OBSERVERS: ReadonlySet<string> = new Set(['LEXICON', 'HEDGE_RATE', 'PATTERN_RATE', 'TERM_RATE']);
+
+/**
+ * IS A MISS OF THIS RULE SOMETHING LEFT OUT? A part the work must contain, a citation that is no line of the material,
+ * a test the work never named: no sentence rewrite fixes those, so the piece is written again. A ban stated as a method
+ * step ("Never use the words simply or just") is a DELIVERABLE by kind, but its miss is a word in a sentence: it is a
+ * span rule, rewritten in place, and never said as left out.
+ */
+export const isOmission = (c: { readonly obligation?: string; readonly observer?: string }): boolean =>
+  (c.obligation === 'DELIVERABLE' && !(c.observer !== undefined && BAN_OBSERVERS.has(c.observer))) || c.observer === 'LINES' || c.observer === 'NAMES_TEST';
+
 const list = (p: Measurement['params'], k: string): readonly string[] => { const v = p[k]; return Array.isArray(v) && v.every((x): x is string => typeof x === 'string') ? v : []; };
 const num = (p: Measurement['params'], k: string): number | null => (typeof p[k] === 'number' ? p[k] : null);
 const norm = (s: string): string => s.toLowerCase().replace(/[*_`]/g, '').replace(/\s+/g, ' ').trim();

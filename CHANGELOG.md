@@ -7,6 +7,37 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+### Fixed: your rules and your range never share a gate
+
+- **A rule you require is judged on the text as it is.** A REQUIRED feature rule ("at most 5 asides per 1,000 words")
+  is held, then read by how far out it is, on the text itself. Comparing a rate at a new length is for the features
+  your pieces usually hold. A shorter rewrite that raised a required rate from 11.7 to 16 had been kept as progress;
+  it is now refused as worse.
+- **Learned effects and the gain-per-dollar gate steer only.** After a release learned that rewrites moved little, a
+  broken REQUIRED rule was never rewritten. A step for a rule you require is now taken whenever the step limit and
+  the budget allow it.
+- **The step limit is per run.** The steps on the first draft, the draft written again (one step) and the steps on
+  it count together; a run had taken five.
+- **A request for a redraft is always answered.** A draft written again that is kept but still far out is rewritten
+  on its carriers, then re-punctuated; a run no longer ends on "handed to a redraft" with nothing after it. A draft
+  written again that is no nearer as written is not refined: the smaller steps go on the first draft, and the line
+  says what they left.
+- **A redraft records what it moved**: the real change in distance from the range (14 to 4.78 is 9.22, not 0), and
+  the effects a release learns are read from that.
+- **At most three features a step.** A draft written again for the features is told the three furthest out, never
+  one already within half a band width, and its reason names exactly those.
+- **A ban stated as a method step is rewritten in place**, never reported as something the draft left out.
+- **What the run says matches what happened.** "Steered toward your range" lists only the features your pieces
+  usually hold, in the direction they moved, including those a redraft moved. A miss that rounds to nothing says
+  "under 0.1", never "about 0". A habit beside a length is still "your pieces usually do". A redraft that left two
+  misses no longer reads as holding what was missing. A figure a rewrite added reads "the figure 3, added", beside
+  "the figure 3" for one it lost. The run and the evaluation use one copying limit and one wording. A repair the
+  budget stopped is said on the run, in `run`, and in the run's saved text, and a step that needs no model still
+  runs when the budget holds no call. A step on a feature of your pieces is recorded under the feature's name.
+- **A short post from a long-form skill** is no longer measured against the long pieces' length, and a method step
+  that does not apply to the format is neither counted nor missing on the method line.
+- The comparison runner keeps the record of a BLOCKED `invoke --json` run instead of failing on its exit code.
+
 ### Fixed: a comparison run keeps a blocked Atelier answer as a row
 
 - `invoke --json` now exits 1 when the work it delivered is BLOCKED, as `run` does. The comparison runner had read any
