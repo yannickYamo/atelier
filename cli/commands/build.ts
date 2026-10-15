@@ -5,7 +5,7 @@
 // command file reads as one job rather than as a slice of everything.
 
 import type { StoredSignal } from '../../core/observers/selection.js';
-import { compositeVoiceOf, type CompositeRecord } from '../../core/composite/selection.js';
+import { compositeVoiceOf, pieceLengthOpen, type CompositeRecord } from '../../core/composite/selection.js';
 import { withoutFrontMatter } from '../../core/composite/authors.js';
 import { selectCompositePieces, selectVoicePieces, selectWithinBudget, isExcerpt, usualLength, lengthSpan, compositeLength, PIECE_BUDGET_WORDS, COMPACT_PIECE_BUDGET_WORDS, COMPACT_PIECE_FORM, type PieceForm, type Voice } from '../../core/compiler/voice.js';
 import { derivePersona, reconcilePersona, standardForbids } from '../../core/compiler/persona.js';
@@ -38,7 +38,7 @@ import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { writeAtomic } from '../../core/state/fs-atomic.js';
 import { join } from 'node:path';
 import { readJson } from '../../core/state/read-json.js';
-import type { StandardVersion } from '../../core/state/canonical-state.js';
+import type { Requirement, StandardVersion } from '../../core/state/canonical-state.js';
 import { compileArchitecture, observedBoundaries, type SkillArchitecture } from '../../core/architecture/compile.js';
 import type { HostAdapter } from '../../adapters/host-adapter.js';
 import { renderAgentSkill, assertPortable, skillNameFrom, defaultDescription } from '../../renderers/agent-skill/render.js';
@@ -300,6 +300,7 @@ function compositeVoice(c: CompositeRecord, v: StandardVersion, budget: number |
     return r.ok ? withoutFrontMatter((r as { text: string }).text) : null;
   };
   const statementOf = (id: string): string => v.requirements.find((r) => r.requirementId === id)?.statement ?? loadSession().proposals.find((p) => p.requirementId === id)?.statement ?? id;
+  const ruleOf = (id: string): Requirement | undefined => v.requirements.find((r) => r.requirementId === id) ?? loadSession().proposals.find((p) => p.requirementId === id);
   const chosen = compositeVoiceOf(c, statementOf);
   const textsOf = (name: string): string[] => (c.authors.find((a) => a.name === name)?.pieces ?? []).flatMap((id) => { const t = textOf(id); return t ? [t] : []; });
   const every = c.authors.flatMap((a) => textsOf(a.name));
@@ -307,7 +308,7 @@ function compositeVoice(c: CompositeRecord, v: StandardVersion, budget: number |
   const served = selectCompositePieces(chosen.map((a) => ({ author: a.name, pieces: textsOf(a.name) })), budget ?? Number.POSITIVE_INFINITY, form);
   return {
     // The chosen writers' length range, or none when they write pieces of different lengths (`compositeLength`).
-    passages: [], lengthWords: compositeLength(chosen.map((a) => textsOf(a.name))), pieces: served.map((x) => x.text),
+    passages: [], lengthWords: compositeLength(chosen.map((a) => textsOf(a.name)), pieceLengthOpen(c, ruleOf)), pieces: served.map((x) => x.text),
     ...(form === 'excerpts' ? { pieceForm: form } : {}), ...(budget === null ? {} : { pieceBudget: budget }),
     composite: { authors: chosen, pieceAuthors: served.map((x) => x.author) },
     guardPieces: every,

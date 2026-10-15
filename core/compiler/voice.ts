@@ -418,9 +418,12 @@ export function selectWithinBudget(pieces: readonly string[], budgetWords: numbe
 /**
  * THE LENGTH OF A COMPOSITE: the range the chosen writers' usual lengths span (each writer's median piece), or null
  * when they write pieces of different length classes (core/fidelity/types.ts): one length over all of them would be
- * the average nobody chose, and a request names its own.
+ * the average nobody chose, and a request names its own. Null too when the authors' rules on the piece's length are
+ * left open (`lengthOpen`: a conflict on it nobody answered, so neither side instructs): a band read from their
+ * medians would decide what the person has not, so the skill says nothing of length and the person sets it.
  */
-export function compositeLength(byAuthor: readonly (readonly string[])[]): readonly [number, number] | null {
+export function compositeLength(byAuthor: readonly (readonly string[])[], lengthOpen = false): readonly [number, number] | null {
+  if (lengthOpen) return null;
   const medians = byAuthor.map((ps) => ps.map((t) => proseWords(t)).filter((n) => n > 0)).filter((ls) => ls.length).map((ls) => quantile(ls, 0.5));
   if (!medians.length || new Set(medians.map((m) => contextClassOf(Math.round(m)))).size > 1) return null;
   const round = (n: number): number => (n < 200 ? Math.max(10, Math.round(n / 10) * 10) : Math.round(n / 100) * 100);

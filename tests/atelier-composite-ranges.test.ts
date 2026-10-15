@@ -186,13 +186,15 @@ const load = (name: string): { f: Fixture; rules: Requirement[]; table: ReturnTy
   return { f, rules, table: buildTraitTable(rules, (id) => src[id]), authors: names.map((n) => authorOf(n, f.classes[n] ?? [], f.admired[n] ?? null)), answers };
 };
 describe('the count of open questions is the number the screen shows open', () => {
-  it('five authors, no model, "2=both 6=B 7=A": six shown open or open again, six counted', () => {
+  it('five authors, no model: every count is a ceiling, so no two conflict, and nothing is counted open', () => {
+    // Sentence bands from a median under 5 to under 40 words, paragraphs of at most 2 or 3 sentences, hedging at most 2
+    // or 22 per thousand: a piece under the lower ceiling is under both, so none of the eleven pairs once shown is asked.
     const k = load('five-authors-keyless.json');
+    expect(k.table.conflicts).toEqual([]);
     const rec = composeSelection(k.table, k.rules, k.authors, k.answers);
-    const shown = asked(rec).filter((x) => x.open).map((x) => x.n);
-    expect(shown).toHaveLength(6);
-    expect(openQuestions(rec).map((c) => c.n)).toEqual(shown);
-    expect(openLine(rec)).toBe(' 6 conflict(s) kept as open question(s); neither side instructs.');
+    expect(asked(rec).filter((x) => x.open)).toEqual([]);
+    expect(openQuestions(rec)).toEqual([]);
+    expect(openLine(rec)).toBe('');
   });
   it('three authors with --set: one shown open, one counted, and nothing "more unanswered"', () => {
     const k = load('three-authors-set.json');

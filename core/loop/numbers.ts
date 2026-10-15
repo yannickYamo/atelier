@@ -15,6 +15,8 @@ const TEENS: Readonly<Record<string, number>> = { ten: 10, eleven: 11, twelve: 1
   seventeen: 17, eighteen: 18, nineteen: 19 };
 const TENS: Readonly<Record<string, number>> = { twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60, seventy: 70, eighty: 80, ninety: 90 };
 const SCALES: Readonly<Record<string, number>> = { thousand: 1e3, million: 1e6, billion: 1e9 };
+/** Every word that is part of a number spelled out ("twenty", "hundred", "dozen"), for readers that must know one when they see it. */
+export const NUMBER_WORDS: readonly string[] = [...Object.keys(UNITS), ...Object.keys(TEENS), ...Object.keys(TENS), 'hundred', ...Object.keys(SCALES), 'dozen'];
 /**
  * "ONE" IS USUALLY NOT A FIGURE. "One of the reasons", "no one", "the one that", "one day": read as 1,
  * each would demand a 1 in the material, and a true story would be cut for a pronoun. So a lone "one"
