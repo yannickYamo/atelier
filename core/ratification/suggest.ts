@@ -91,6 +91,13 @@ export interface Suggestion {
 
 export function suggest(p: Requirement, e: ProposalEvidence | undefined, mode: SkillMode): Suggestion {
   const needs = e?.needs ?? null;
+  // THE ONE EDITORIAL RULE EVERY AUTHOR HOLDS. No count of their pieces is evidence for or against it: a mechanical
+  // error is not a habit. Suggested REQUIRED on every build; the owner demotes it like any rule, and `suggestAll`
+  // still holds it to their own pieces, with their vocabulary known (core/observers/grammar.ts).
+  if (p.measurement?.observer === 'GRAMMAR') {
+    return { decision: 'APPROVE', materiality: 'REQUIRED', needs, strength: 3,
+      why: 'corrected in place where the checker is sure, never a word of the voice; what it is unsure of is listed for you, never changed' };
+  }
   // A MEASURED rule is a count, and its evidence is how the author's own UNSEEN work fares against it.
   // Checked on held-out pieces and met by almost all of them, the target describes the author: it can
   // instruct. Checked only on the pieces it was computed from, it passes by construction and is shown,

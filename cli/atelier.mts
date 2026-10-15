@@ -59,6 +59,12 @@ import { existsSync } from 'node:fs';
 import { USAGE, wantsHelp, version } from './help.js';
 import { enrol, terminate, type Run } from '../core/state/run-state.js';
 import { policyFor } from '../core/state/policy.js';
+import { setGrammarProvider } from '../core/observers/grammar.js';
+import { grammarProvider } from '../providers/grammar.js';
+
+// THE GRAMMAR ENGINE, WIRED IN HERE AND NOWHERE ELSE. Core names what a mechanical error is and never imports the
+// engine; the process says which engine. It loads lazily, on the first standard that carries the rule.
+setGrammarProvider(grammarProvider());
 
 /**
  * EVALUATION SURFACE, NOT PRODUCT SURFACE.

@@ -107,7 +107,9 @@ export type ObserverId = 'LEXICON' | 'SENTENCE_LENGTH' | 'PARAGRAPH_LENGTH' | 'H
   // what a method requires of the work itself (core/observers/obligations.ts)
   | 'TABLE' | 'CITED' | 'LINES' | 'LENGTH' | 'NAMES_TEST'
   // the shape of one short piece: characters, words, sentences, line breaks, hashtags, what it opens and closes on (core/observers/shape.ts)
-  | 'SHAPE';
+  | 'SHAPE'
+  // mechanical errors, found by a grammar engine the process wires in (core/observers/grammar.ts)
+  | 'GRAMMAR';
 export interface Measurement {
   readonly observer: ObserverId;
   readonly params: Readonly<Record<string, number | readonly string[] | readonly number[]>>;

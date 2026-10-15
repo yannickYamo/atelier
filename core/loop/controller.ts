@@ -8,7 +8,7 @@
 // PRIORITY. (1) an enforced REQUIRED rule broken: a span rule is rewritten, an omission is written again;
 // (2) invented claims, cut in code before anything else (ordering only: no model step is ever chosen for them);
 // (3) a length out of its band; (4) graded features and far-out signals, the largest |error| first, at most
-// GRADED_PER_PASS a step; (5) grammar, where a GRAMMAR observer exists (none does yet: the input is the hook);
+// GRADED_PER_PASS a step; (5) mechanical errors the GRAMMAR rule confirmed, corrected in place in code (no model call);
 // (6) otherwise stop, or one more draft where the release allows it and an enforced rule still fails.
 //
 // SIZE. A graded miss under 0.5 band widths is moved by the deterministic operators (../fidelity/operators.ts); from
@@ -58,9 +58,9 @@ export const DEFAULT_EFFECT: Readonly<Record<'rewrite' | 'operators' | 'carrier-
 };
 /** Dollars per step when this run's ledger and the release say nothing: the estimates the calls are reserved at. */
 export const DEFAULT_COST: Readonly<Record<ControllerAction, number>> = {
-  cut: 0, mechanical: 0, operators: 0, rewrite: 0.05, 'carrier-rewrite': 0.05, redraft: 0.4, grammar: 0.05,
+  cut: 0, mechanical: 0, operators: 0, rewrite: 0.05, 'carrier-rewrite': 0.05, redraft: 0.4, grammar: 0,
 };
-const MODEL_ACTIONS: ReadonlySet<ControllerAction> = new Set(['rewrite', 'carrier-rewrite', 'redraft', 'grammar']);
+const MODEL_ACTIONS: ReadonlySet<ControllerAction> = new Set(['rewrite', 'carrier-rewrite', 'redraft']);
 /** Steps the controller chose, as against code that always runs (the claim cut, the mechanical fixes). */
 const CHOSEN: ReadonlySet<ControllerAction> = new Set(['rewrite', 'operators', 'carrier-rewrite', 'redraft', 'grammar']);
 
@@ -84,7 +84,7 @@ export interface ControllerInput {
   /** a length out of its band, in band widths, when the caller reads one */
   readonly length: { readonly error: number } | null;
   readonly graded: readonly GradedMiss[];
-  /** the rules a GRAMMAR observer finds broken; null where there is no such observer */
+  /** GRAMMAR rules broken by a confirmed error the checker can correct in place; null where no such rule is checked. What it is unsure of is never here */
   readonly grammar: readonly string[] | null;
   readonly budget: { readonly usdLeft: number; readonly callsLeft: number | null };
   /** this draft's steps so far */
@@ -167,13 +167,16 @@ const r3 = (x: number): number => Math.round(x * 1000) / 1000;
  */
 export function decide(input: ControllerInput, s: ControllerSettings | null = null): Decision | Stop {
   const set = controllerSettings(s);
+  // An in-place correction is deterministic: one that failed on a rule fails the same way again, so it is never repeated.
+  const grammarFailed = (id: string): boolean => input.history.some((d) => d.action === 'grammar' && d.targets.includes(id) && failed(d));
   const taken = input.history.filter((d) => CHOSEN.has(d.action)).length;
   const reachable = <T extends { id: string }>(xs: readonly T[]): T[] => xs.filter((x) => !input.unreachable.has(x.id));
   const enforced = reachable(input.enforced);
   const graded = reachable(input.graded).filter((g) => g.error !== 0)
     .sort((a, b) => Math.abs(b.error) - Math.abs(a.error) || a.id.localeCompare(b.id));
   // NOTHING MATERIAL LEFT: every enforced rule holds, no length is out, and no graded miss is over SETTLED_ERROR.
-  if (!input.enforced.length && !input.length && input.graded.every((g) => Math.abs(g.error) <= SETTLED_ERROR)) {
+  const grammar = (input.grammar ?? []).filter((id) => !input.unreachable.has(id) && !grammarFailed(id));
+  if (!input.enforced.length && !input.length && !grammar.length && input.graded.every((g) => Math.abs(g.error) <= SETTLED_ERROR)) {
     return { kind: 'stop', why: input.graded.length ? `every enforced rule holds and no graded miss is over ${SETTLED_ERROR} band widths` : 'every enforced rule holds and nothing graded is off' };
   }
   if (taken >= set.maxActions) return { kind: 'stop', why: `the controller took its ${set.maxActions} steps` };
@@ -225,10 +228,11 @@ export function decide(input: ControllerInput, s: ControllerSettings | null = nu
     const whyNow = switched.length ? `${why}; switched to it because ${[...new Set(switched)].join('; ')}` : why;
     candidates.push({ kind: 'act', action, targets: group.map((g) => g.id), why: whyNow, expectedGain: gain, expectedCostUsd: usdPerCall(action), ...(action === 'carrier-rewrite' ? { carriers: k } : {}) });
   }
-  // (5) GRAMMAR, where an observer reads it.
-  if (input.grammar?.length && input.can.rewrite) {
-    candidates.push({ kind: 'act', action: 'grammar', targets: [...input.grammar], why: `${input.grammar.length} grammar fault(s): rewritten in place`,
-      expectedGain: r3(input.grammar.length * DEFAULT_EFFECT.rewrite), expectedCostUsd: usdPerCall('grammar') });
+  // (5) MECHANICAL ERRORS the grammar rule confirmed: each corrected in place by the checker's own suggestion, in code.
+  // After everything above, so a rewrite of a sentence cannot undo it; free, so it never stops paying.
+  if (grammar.length) {
+    candidates.push({ kind: 'act', action: 'grammar', targets: grammar, why: `${grammar.length} rule(s) with a confirmed mechanical error: corrected in place, no model`,
+      expectedGain: r3(ENFORCED_WEIGHT * grammar.length), expectedCostUsd: usdPerCall('grammar') });
   }
   // (6) ONE MORE DRAFT, where the release allows it and an enforced rule still fails that nothing above can reach.
   if (!candidates.length && set.extraDraft && input.enforced.length && input.can.redraft && !hadRedraft) {

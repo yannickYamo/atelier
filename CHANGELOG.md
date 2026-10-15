@@ -191,6 +191,30 @@ tweet. Short pieces are now read for what they carry.
   before, 5 of 5 held-back tweets passed and 1 of 10 bad pieces was blocked (3 of 10 with `--class x-post`, by the
   280-character limit alone); now 5 of 5 pass and 9 of 10 are blocked. Pinned in `tests/atelier-shortform.test.ts`.
 
+### Added: mechanical errors are found and corrected, and the voice is left alone
+
+A skill held drafts to the author's habits and never to spelling or agreement: "They was late" passed every check.
+
+- **A grammar check, offline** (`core/observers/grammar.ts`, `providers/harper.ts`). The `GRAMMAR` observer reads a
+  text with harper.js, loaded once and only when a standard carries the rule. It reports one span per confirmed
+  mechanical error, of a documented list of kinds: common-word spelling and typos, subject–verb agreement, a word
+  repeated by accident, a/an, a missing apostrophe in a contraction, double punctuation, a space before punctuation.
+  Subject–verb agreement is checked only where the checker catches it, with a pronoun subject ("they was", "he go");
+  agreement with any other subject is not checked. Anything else the checker proposes is listed under the rule as
+  "to check" and never changed. If the checker cannot load, or `ATELIER_GRAMMAR=off` switches it off, the rule reads
+  as not checked with the reason, and a required grammar rule leaves the run at NEEDS REVIEW.
+- **The author's voice is protected.** Code, quotations, block quotes, URLs, citations, figures, names, the
+  standard's own terms and the words of the author's own pieces are never flagged. Spelling follows the dialect the
+  pieces spell in. Fragments, "And" and "But" openers, one-word sentences and doubled words of emphasis are never errors.
+- **New builds carry the rule.** Building from pieces, from a method, or from pieces by several authors proposes "No mechanical errors: spelling,
+  agreement, punctuation." as required, through the usual approval. Stored standards are untouched, and an existing
+  skill rebuilds to the same bytes. It holds for short output from a long-form standard too.
+  `--measure GRAMMAR:dialect=british` declares it by hand.
+- **Repair corrects in place** (`core/loop/mechanical-repair.ts`), as the repair controller's last kind of step
+  (`core/loop/controller.ts`), after enforced rules, length and graded features, with no model call: the checker's suggestion, inside the span, kept
+  only if no other rule is newly broken and every figure and name is unchanged. A correction that would change a
+  figure or a name is refused. An error with no sure correction gets a sentence rewrite that fixes only that error.
+
 ### Fixed: the pattern check reads a count written in words, and lists it for you to check
 
 A draft said "three of your prospects will believe the products overlap" and "Twelve-plus optimizers", counts the

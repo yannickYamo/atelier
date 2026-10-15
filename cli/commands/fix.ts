@@ -25,6 +25,7 @@
 // `assertStandardUnchanged` throws; it does not log.
 
 import { acts, verifyText } from '../../core/observers/verify.js';
+import { ensureGrammar } from '../../core/observers/grammar.js';
 import { regressions } from '../../core/loop/repair.js';
 import { resolvePromotion, shipsAutonomously, type PromotionDecision } from '../../core/convergence/promotion.js';
 import { describeBackup } from '../../adapters/install-tree.js';
@@ -516,6 +517,7 @@ async function settleBlindPick(
     // loop, and the candidate's has not: comparing the two would score the loop, not the carrier, and
     // reject every change. The draft the model first wrote is what the candidate is compared with.
     const champText = inv.repair?.draft ?? inv.output;
+    await ensureGrammar(std);
     const champReport = verifyText(name, std, champText); const candReport = verifyText(name, std, candRec.output);
     const verdictOf = (r: typeof champReport): Map<string, string> => new Map(r.checked.map((c) => [c.requirementId, c.result.verdict]));
     const champ = verdictOf(champReport); const cand = verdictOf(candReport);

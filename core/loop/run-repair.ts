@@ -27,7 +27,8 @@ import { SITES_PER_OPERATOR } from '../fidelity/structural.js';
 import { spanIntegrity } from './integrity.js';
 import { planRepair, repairPrompt, applyRepair, acceptRepair, addsNoWords, cutSpan, REPAIR_SYSTEM, REPAIR_SYSTEM_WITH_PLACEHOLDERS, REPAIR_SCHEMA, type Reverted, type Applied } from './repair.js';
 import { keysOf, measurementId } from '../state/rule-key.js';
-import { mechanicalFixes } from './mechanical-repair.js';
+import { mechanicalFixes, grammarFixes } from './mechanical-repair.js';
+import { ensureGrammar, readGrammar, isGrammarNote, GRAMMAR_NOTE_SUFFIX } from '../observers/grammar.js';
 import type { RepairPair } from '../state/canonical-state.js';
 import { createHash } from 'node:crypto';
 
@@ -153,7 +154,17 @@ export function checkDraft(skill: string, v: StandardVersion, text: string, opts
     result: { verdict: learned.length ? 'VIOLATED' as const : 'MET' as const, value: learned.length,
       spans: learned.map((sp) => ({ ...sp, why: `"${sp.text}", a phrase this skill's drafts repeat and your pieces never use` })),
       detail: learned.length ? `${learned.length} learned machine phrase(s)` : 'none of the learned machine phrases' } }] : [];
-  const report = { ...base, checked: [...base.checked, ...tellLine], failed: base.failed || tellLine.some((c) => acts(c) && c.result.verdict === 'VIOLATED') };
+  // WHAT THE GRAMMAR CHECKER WAS UNSURE OF, beside the rule's own line: `<rule id>·check`, PREFERRED, never enforced,
+  // never rewritten (core/loop/repair.ts skips it) and never a regression. The rule's line holds only what is confirmed.
+  const grammarNotes = base.checked.flatMap((c) => {
+    const r = v.requirements.find((q) => q.requirementId === c.requirementId);
+    if (c.observer !== 'GRAMMAR' || !r?.measurement || c.result.verdict === 'NOT_APPLICABLE') return [];
+    const unsure = readGrammar(text, r.measurement.params, opts.context).uncertain;
+    return unsure.length ? [{ requirementId: `${c.requirementId}${GRAMMAR_NOTE_SUFFIX}`, statement: 'Constructions the grammar checker is unsure of: listed for you to check, never changed.',
+      materiality: 'PREFERRED', enforced: false, phase: 'STYLE' as const, observer: 'GRAMMAR',
+      result: { verdict: 'VIOLATED' as const, spans: unsure, value: unsure.length, detail: `${unsure.length} to check; none changed` } }] : [];
+  });
+  const report = { ...base, checked: [...base.checked, ...tellLine, ...grammarNotes], failed: base.failed || tellLine.some((c) => acts(c) && c.result.verdict === 'VIOLATED') };
   const fmt = opts.format ? checkFormat(text, opts.format) : null;
   const fmtLines = opts.format && fmt ? [
     { requirementId: 'FORMAT', statement: `What ${opts.format.label} holds.`, materiality: 'REQUIRED', phase: 'STYLE' as const,
@@ -268,6 +279,8 @@ export const READER_REPORT = 'UNSOURCED·reader';
 
 /** `checkDraft`, after the claim reader (when there is one) has read the text. Every async path uses this. */
 export async function checkDraftAsync(skill: string, v: StandardVersion, text: string, opts: CheckOptions = {}): Promise<VerifyReport> {
+  // The grammar engine, loaded once, before the first check of a standard that carries the rule (../observers/grammar.ts).
+  await ensureGrammar(v);
   if (opts.guardClaims !== false && opts.claimSensor) await opts.claimSensor.read(text);
   if (opts.guardClaims !== false && opts.format?.claims === 'list' && opts.judge) await opts.judge.readAnswer(answerSentences(text));
   return checkDraft(skill, v, text, opts);
@@ -694,7 +707,11 @@ export async function refineToStandard(
   };
   const CLAIM_LINES = new Set(['UNSOURCED', INCONCLUSIVE, UNREAD]);
   const controllerInput = (t: string, r: VerifyReport, canRewrite: boolean): ControllerInput => {
-    const enforced: EnforcedMiss[] = r.checked.filter((c) => acts(c) && c.result.verdict === 'VIOLATED' && !CLAIM_LINES.has(c.requirementId))
+    // A GRAMMAR rule with a confirmed error the checker can correct is the controller's grammar step, after everything
+    // else; one whose errors have no sure correction is an enforced rule like any, its sentence rewritten.
+    const grammar = r.checked.filter((c) => acts(c) && c.result.verdict === 'VIOLATED' && c.observer === 'GRAMMAR' && !isGrammarNote(c)
+      && c.result.spans.some((sp) => sp.replacement !== undefined)).map((c) => c.requirementId);
+    const enforced: EnforcedMiss[] = r.checked.filter((c) => acts(c) && c.result.verdict === 'VIOLATED' && !CLAIM_LINES.has(c.requirementId) && !grammar.includes(c.requirementId))
       .map((c) => ({ id: c.requirementId, kind: c.obligation === 'DELIVERABLE' || c.observer === 'LINES' || !c.result.spans.length ? 'omission' as const : 'span' as const }));
     // one miss per feature: a rule and a signal on the same feature are one target, the further out of the two
     const byFeature = new Map<string, GradedMiss>();
@@ -704,7 +721,7 @@ export async function refineToStandard(
     }
     const usdLeft = budget.capUsd - budget.spentUsd - (budget.inFlightUsd ?? 0);
     const rewriteUsd = perCall(['repair', 'graded']); const draftUsd = perCall(['writing']);
-    return { enforced, claims: flaggedClaims(r).length, length: null, graded: [...byFeature.values()], grammar: null,
+    return { enforced, claims: flaggedClaims(r).length, length: null, graded: [...byFeature.values()], grammar,
       budget: { usdLeft, callsLeft: budget.maxCalls !== undefined ? budget.maxCalls - (budget.calls ?? 0) : null }, history: [...(opts.controller?.history ?? []), ...decisions],
       observedUsdPerCall: { ...(rewriteUsd !== undefined ? { rewrite: rewriteUsd, 'carrier-rewrite': rewriteUsd } : {}), ...(draftUsd !== undefined ? { redraft: draftUsd } : {}) },
       can: { redraft: opts.controller?.redraft ?? false, rewrite: canRewrite }, unreachable };
@@ -811,8 +828,8 @@ export async function refineToStandard(
   // because a rewrite can put a dash back. Kept only on the same terms as a rewrite: nothing gets worse.
   const mechanical: string[] = [];
   const notKept: string[] = [];
-  const fixMechanically = async (): Promise<void> => {
-    const m = mechanicalFixes(v, report, text);
+  const fixMechanically = async (last = false): Promise<void> => {
+    const m = mechanicalFixes(v, report, text, { grammar: last });
     if (m.text === text) return;
     const snap = processSpendByPurpose();
     const after = await check(m.text);
@@ -1009,9 +1026,22 @@ export async function refineToStandard(
       stoppedBecause = `handed to a redraft: ${d.why}`;
       break;
     }
-    if (d.action === 'grammar' || d.action === 'cut' || d.action === 'mechanical') {
-      // No grammar observer exists yet: the controller's input is the hook, and a step here reaches nothing.
-      record(d, snap, 'no change', 0, 'no step carries this out yet');
+    if (d.action === 'grammar') {
+      // MECHANICAL ERRORS, in place (./mechanical-repair.ts): the checker's correction inside each confirmed span, kept only
+      // on the never-worse terms every step has. One not kept leaves its rule to the end, listed, and never retried here.
+      const g = grammarFixes(v, report, text, new Set(d.targets));
+      if (g.text === text) { record(d, snap, 'no change', 0, 'no correction could be made in place'); for (const id of d.targets) unreachable.add(id); continue; }
+      const after = await check(g.text);
+      sameInstrument();
+      const accepted = acceptRepair(report, after, { wordsAdded: !addsNoWords(text, g.text) });
+      if (!accepted.ok) { record(d, snap, 'not kept', 0, accepted.why); for (const id of d.targets) unreachable.add(id); if (!notKept.length) notKept.push(`${g.fixed.join('; ')} not kept: ${accepted.why}`); continue; }
+      record(d, snap, 'kept', movedBy(d.targets, report, after, true), g.fixed.join('; '));
+      text = g.text; report = after; mechanical.push(...g.fixed);
+      continue;
+    }
+    if (d.action === 'cut' || d.action === 'mechanical') {
+      // Code that always runs, never a step the controller chooses: nothing to carry out here.
+      record(d, snap, 'no change', 0, 'not a chosen step');
       for (const id of d.targets) unreachable.add(id);
       continue;
     }
@@ -1024,7 +1054,8 @@ export async function refineToStandard(
     record(d, snap, step.outcome, step.movement, step.note);
     if (step.stop) { stoppedBecause = step.stop; break; }
   }
-  if (report.failed) await fixMechanically();
+  // The last fixes include mechanical errors the controller's steps did not reach (its step limit, say).
+  if (report.failed) await fixMechanically(true);
   if (mechanical.length) {
     const how = `fixed without a model: ${mechanical.join('; ')}`;
     why = report.failed ? `${why}; ${how}` : `every REQUIRED measured rule now holds (${how})`;

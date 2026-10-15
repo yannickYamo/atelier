@@ -19,6 +19,7 @@ import { readJson } from '../../core/state/read-json.js';
 import { modeFromIntent, type SkillMode } from '../../core/ratification/suggest.js';
 import * as store from '../../core/state/store.js';
 import { measure } from '../../core/observers/registry.js';
+import { ensureGrammar } from '../../core/observers/grammar.js';
 import { normalizeClass } from '../../core/observers/doc-class.js';
 import { floorDimensions, proposeMargins, buildContract } from '../../core/distinctiveness/measured.js';
 import { extract } from '../../core/intake/extract.js';
@@ -174,6 +175,8 @@ export async function newSkill(): Promise<void> {
 
   if (s.run.state !== 'BUILT') return;
   const built = s.skillName ?? name;
+  // The held-back pieces are read by every measured rule, the grammar rule among them: its engine, if not yet loaded.
+  await ensureGrammar();
   heldOutCheck(built);
   proposeFloor(built);
   console.log(`\nUse it:    /${built} <your task>   ·   atelier invoke --skill ${built} "<your task>"`);

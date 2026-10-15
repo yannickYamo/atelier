@@ -9,7 +9,39 @@
 import type { StandardVersion } from '../state/canonical-state.js';
 import { isMarkup } from '../observers/visible.js';
 import { acts, type VerifyReport } from '../observers/verify.js';
-import { paragraphSentences } from '../observers/text.js';
+import { paragraphSentences, wordsOf } from '../observers/text.js';
+import { protectedRanges } from '../observers/grammar.js';
+import { numbersIn, namesIn } from './integrity.js';
+import type { Span } from '../observers/registry.js';
+
+/**
+ * MECHANICAL ERRORS, CORRECTED IN PLACE. Each span the grammar rule flagged with a correction (core/observers/grammar.ts)
+ * is replaced by exactly that correction, last first so earlier offsets stay true; a span with none is left for the
+ * sentence rewrite. Nothing outside a span changes, no span inside a protected region is touched (the observer never
+ * flags one; this checks again on the text it has), the whole text's word count moves by no more than the
+ * corrections themselves, and its figures and names are the same after as before (./integrity.ts). Returns the text and how many spans were corrected.
+ */
+export function correctMechanicalErrors(text: string, spans: readonly Span[]): { text: string; corrected: number } {
+  const guarded = protectedRanges(text);
+  const fixable = spans.filter((s) => s.replacement !== undefined && s.end > s.start && s.end <= text.length && text.slice(s.start, s.end) === s.text
+    && !guarded.some((g) => s.start < g.end && s.end > g.start)).sort((a, b) => b.start - a.start);
+  let out = text; let corrected = 0; let lastStart = Infinity; let allowed = 0;
+  for (const s of fixable) {
+    if (s.end > lastStart) continue;                                                     // overlapping: the later one only
+    const rep = s.replacement ?? '';
+    allowed += Math.abs(wordsOf(rep).length - wordsOf(s.text).length);
+    out = `${out.slice(0, s.start)}${rep}${out.slice(s.end)}`;
+    corrected += 1; lastStart = s.start;
+  }
+  // The bound, read on the result: a correction may move the count by its own words and no more.
+  if (Math.abs(wordsOf(out).length - wordsOf(text).length) > allowed) return { text, corrected: 0 };
+  // And the claims, read on the whole text: every figure as it was, and no name lost. The observer refuses such a
+  // correction lint by lint; this holds the sum of them to the same line, so nothing they claimed can move.
+  const figures = (t: string): string => [...numbersIn(t)].sort().join('|');
+  const kept = new Set(namesIn(out));
+  if (figures(out) !== figures(text) || namesIn(text).some((n) => !kept.has(n))) return { text, corrected: 0 };
+  return { text: out, corrected };
+}
 
 /**
  * Em dashes, replaced by the punctuation a writer who never uses them would reach for. A pair inside one
@@ -95,9 +127,29 @@ export function splitLongParagraphs(text: string, max: number): string {
  * is theirs, and a cap on its rate is left to the rewrite. A paragraph is split only when a REQUIRED
  * paragraph-length rule is broken.
  */
-export function mechanicalFixes(v: StandardVersion, report: VerifyReport, text: string): { text: string; fixed: string[] } {
+/**
+ * The mechanical errors of the GRAMMAR rules named (all of them when `only` is absent), corrected in place on the spans
+ * the report holds for this text. The controller's grammar step (./run-repair.ts) and the last fixes both use it.
+ */
+export function grammarFixes(v: StandardVersion, report: VerifyReport, text: string, only?: ReadonlySet<string>): { text: string; fixed: string[] } {
   const broken = new Set(report.checked.filter((c) => acts(c) && c.result.verdict === 'VIOLATED').map((c) => c.requirementId));
   let out = text; const fixed: string[] = [];
+  for (const c of report.checked) {
+    if (!broken.has(c.requirementId) || c.observer !== 'GRAMMAR' || (only && !only.has(c.requirementId)) || !v.requirements.some((r) => r.requirementId === c.requirementId)) continue;
+    const g = correctMechanicalErrors(out, c.result.spans);
+    if (g.corrected) { out = g.text; fixed.push(`${c.requirementId}: ${g.corrected} mechanical error(s) corrected`); }
+    // One rule's spans index the text as it was: after a correction moves offsets, the next rule waits for a re-check.
+    if (g.corrected) break;
+  }
+  return { text: out, fixed };
+}
+
+export function mechanicalFixes(v: StandardVersion, report: VerifyReport, text: string, opts: { readonly grammar?: boolean } = {}): { text: string; fixed: string[] } {
+  const broken = new Set(report.checked.filter((c) => acts(c) && c.result.verdict === 'VIOLATED').map((c) => c.requirementId));
+  // Mechanical errors first, while the spans the check reported still index this text: the fixes below move offsets.
+  // Left out where the controller corrects them as a step of its own (`grammar: false`).
+  const g = opts.grammar === false ? { text, fixed: [] } : grammarFixes(v, report, text);
+  let out = g.text; const fixed: string[] = [...g.fixed];
   for (const r of v.requirements) {
     if (!broken.has(r.requirementId) || !r.measurement) continue;
     const p = r.measurement.params as { pattern?: readonly string[]; never?: readonly string[]; maxSentences?: number };
