@@ -42,14 +42,14 @@ describe('the grammar rule, with the real engine', () => {
   beforeAll(async () => { resetGrammar(); setGrammarProvider(harperGrammar); await ensureGrammar(); expect(grammarStatus().ready).toBe(true); }, 60_000);
 
   it('an unintended subject–verb agreement error is found, with its correction, and corrected in place', () => {
-    const text = 'They was late to the meeting. The plan still holds.';
+    const text = 'He are late to the meeting. The plan still holds.';
     const r = measure(text, m());
     expect(r.verdict).toBe('VIOLATED');
-    expect(r.spans).toMatchObject([{ text: 'was', replacement: 'were' }]);
+    expect(r.spans).toMatchObject([{ text: 'are', replacement: 'is' }]);
     expect(r.spans[0].why).toMatch(/subject–verb agreement/);
     expect(r.error).toBe(1);
     const fixed = correctMechanicalErrors(text, r.spans);
-    expect(fixed).toEqual({ text: 'They were late to the meeting. The plan still holds.', corrected: 1 });
+    expect(fixed).toEqual({ text: 'He is late to the meeting. The plan still holds.', corrected: 1 });
     expect(measure(fixed.text, m()).verdict).toBe('MET');
   });
   it('a wrong article and a space before a comma are corrected; a repeated word and a missing apostrophe are listed; nothing else moves', () => {
@@ -62,10 +62,10 @@ describe('the grammar rule, with the real engine', () => {
   });
   it('the fix runs through the mechanical repair and is kept by the never-worse acceptance', () => {
     const v = standard(rule());
-    const text = 'They was late to the meeting. The plan still holds.';
+    const text = 'He are late to the meeting. The plan still holds.';
     const before = verifyText('g', v, text);
     const fixed = mechanicalFixes(v, before, text);
-    expect(fixed.text).toBe('They were late to the meeting. The plan still holds.');
+    expect(fixed.text).toBe('He is late to the meeting. The plan still holds.');
     expect(fixed.fixed).toEqual(['g1: 1 mechanical error(s) corrected']);
     const after = verifyText('g', v, fixed.text);
     expect(acceptRepair(before, after, { wordsAdded: true })).toMatchObject({ ok: true });
@@ -78,11 +78,11 @@ describe('the grammar rule, with the real engine', () => {
     // A capitalisation the checker proposes is listed, never made.
     expect(r.uncertain.some((s) => /SentenceCapitalization|Capitaliz/.test(s.why))).toBe(true);
   });
-  it('double punctuation and a space before punctuation are corrected; an ellipsis, "!!" and a smiley are the author\'s', () => {
-    const text = 'We shipped it,, and then we waited ; the queue drained. Done ? Yes.. It held!! Wait... then :) fine.';
+  it('two commas and a space before a full stop are corrected; " ;", " ?", "..", "!!", an ellipsis and a smiley are the author\'s', () => {
+    const text = 'We shipped it,, and then we waited ; the queue drained . Done ? Yes.. It held!! Wait... then :) fine.';
     const r = measure(text, m());
-    expect(r.spans.map((s) => s.text)).toEqual([',,', ' ;', ' ?', '..']);
-    expect(correctMechanicalErrors(text, r.spans).text).toBe('We shipped it, and then we waited; the queue drained. Done? Yes. It held!! Wait... then :) fine.');
+    expect(r.spans.map((s) => s.text)).toEqual([',,', ' .']);
+    expect(correctMechanicalErrors(text, r.spans).text).toBe('We shipped it, and then we waited ; the queue drained. Done ? Yes.. It held!! Wait... then :) fine.');
   });
   it('a word repeated for emphasis is kept', () => {
     expect(readGrammar('It was very very late. No no, not that.', {}).confirmed).toEqual([]);
@@ -150,7 +150,7 @@ describe('the grammar rule, with the real engine', () => {
     expect(correctMechanicalErrors(text, r.spans).text).toBe(text.replace('lenght', 'length'));
   });
   it('the allowed kinds are a documented list, and nothing outside it is corrected', () => {
-    expect(Object.keys(MECHANICAL_RULES)).toEqual(['SpellCheck', 'PronounVerbAgreement', 'PronounInflectionBe', 'ThereIsAgreement', 'IAmAgreement', 'RepeatedWords', 'AnA', 'ItsContraction', 'CommaFixes', 'DoublePunctuation', 'SpaceBeforePunctuation']);
+    expect(Object.keys(MECHANICAL_RULES)).toEqual(['SpellCheck', 'PronounVerbAgreement', 'PronounInflectionBe', 'ThereIsAgreement', 'IAmAgreement', 'RepeatedWords', 'AnA', 'ItsContraction', 'CommaFixes', 'DoublePunctuation', 'SpaceBeforePunctuation', 'RepeatedMark', 'SpaceBeforeMark']);
     for (const s of readGrammar('The bug fix could of been worse, and i think teh plan holds.  Fine.', {}).confirmed) {
       expect(Object.values(MECHANICAL_RULES).concat('a common typo').some((label) => s.why.startsWith(label))).toBe(true);
     }
@@ -212,8 +212,8 @@ describe('the suite\'s fixed checker (ATELIER_GRAMMAR=stub)', () => {
       expect(measure('They were late to the meeting. The plan still holds.', m())).toMatchObject({ verdict: 'MET', detail: 'no mechanical error' });
       const r = measure('They was late. We recieve the the report.', m());
       expect(r.verdict).toBe('VIOLATED');
-      // A repeated word is listed, never collapsed: "the the" stays for the person to read.
-      expect(correctMechanicalErrors('They was late. We recieve the the report.', r.spans).text).toBe('They were late. We receive the the report.');
+      // A repeated word is listed, never collapsed: "the the" stays for the person to read; so is a dialect's "they was".
+      expect(correctMechanicalErrors('They was late. We recieve the the report.', r.spans).text).toBe('They was late. We receive the the report.');
     } finally { resetGrammar(); setGrammarProvider(harperGrammar); }
   });
 });
@@ -228,10 +228,10 @@ describe('a short output from a standard read from long pieces', () => {
       const transfer = shortFormTransfer(v.requirements, { chars: 280, from: 'x-post' });
       expect(transfer).not.toBeNull();
       expect([...transfer!.doesNotApply.keys()]).toEqual(['m1']);
-      const short = checkDraft('g', v, 'They was right. Ship it.', { guardClaims: false, doesNotApply: transfer!.doesNotApply });
-      expect(short.checked.find((c) => c.requirementId === 'g1')?.result).toMatchObject({ verdict: 'VIOLATED', spans: [{ text: 'was', replacement: 'were' }] });
+      const short = checkDraft('g', v, 'We recieve it today. Ship it.', { guardClaims: false, doesNotApply: transfer!.doesNotApply });
+      expect(short.checked.find((c) => c.requirementId === 'g1')?.result).toMatchObject({ verdict: 'VIOLATED', spans: [{ text: 'recieve', replacement: 'receive' }] });
       expect(short.failed).toBe(true);
-      expect(checkDraft('g', v, 'They were right. Ship it.', { guardClaims: false, doesNotApply: transfer!.doesNotApply }).checked.find((c) => c.requirementId === 'g1')?.result.verdict).toBe('MET');
+      expect(checkDraft('g', v, 'We receive it today. Ship it.', { guardClaims: false, doesNotApply: transfer!.doesNotApply }).checked.find((c) => c.requirementId === 'g1')?.result.verdict).toBe('MET');
     } finally { resetGrammar(); setGrammarProvider(harperGrammar); }
   });
 });
@@ -316,14 +316,14 @@ describe('through the binary', () => {
     const g = v.requirements.find((r) => r.measurement?.observer === 'GRAMMAR');
     expect(g).toMatchObject({ statement: 'No mechanical errors: spelling, agreement, punctuation.', materiality: 'REQUIRED', authority: 'EXPERT_RATIFIED', appliesWhen: 'GENERAL' });
     expect(readFileSync(join(proj, '.claude', 'skills', 'posts', 'SKILL.md'), 'utf8')).toContain('No mechanical errors');
-    writeFileSync(join(proj, 'draft.md'), 'They was late to the meeting, and the bug fix landed. The plan still holds.');
+    writeFileSync(join(proj, 'draft.md'), 'He are late to the meeting, and the bug fix landed. The plan still holds.');
     const r = tryRun('verify', '--skill', 'posts', 'draft.md', '--allow-unsourced');
     expect(r.code).toBe(1);
     expect(r.out).toMatch(new RegExp(`FAIL {2}${g?.requirementId ?? 'g'} {2}No mechanical errors`));
     expect(r.out).toMatch(/1 mechanical error\(s\): subject–verb agreement; 1 listed to check/);
-    expect(r.out).toMatch(/› "was" {2}\(subject–verb agreement: "was" → "were"\)/);
+    expect(r.out).toMatch(/› "are" {2}\(subject–verb agreement: "are" → "is"\)/);
     expect(r.out).toMatch(new RegExp(`warn {2}${g?.requirementId ?? 'g'}·check {2}Constructions the grammar checker is unsure of`));
-    writeFileSync(join(proj, 'clean.md'), 'They were late to the meeting. The plan still holds.');
+    writeFileSync(join(proj, 'clean.md'), 'He is late to the meeting. The plan still holds.');
     expect(tryRun('verify', '--skill', 'posts', 'clean.md', '--allow-unsourced').code).toBe(0);
     // Switched off, the same clean draft is not passed on the rule: it is named as not checked, and needs review.
     const off = execFileSync('node', [CLI, 'verify', '--skill', 'posts', 'clean.md', '--allow-unsourced'], { encoding: 'utf8', cwd: proj,
@@ -352,10 +352,10 @@ describe('through the binary', () => {
     mkdirSync(join(proj, 'posts'));
     PIECES.forEach((p, i) => { writeFileSync(join(proj, 'posts', `p${i + 1}.md`), p); });
     run('new', 'posts', '--no-model', '--name', 'posts');
-    await fetch(`http://127.0.0.1:${port}/__set`, { method: 'POST', body: JSON.stringify({ byTool: { emit_piece: { piece: 'They was late to the meeting. The plan still holds.' } } }) });
+    await fetch(`http://127.0.0.1:${port}/__set`, { method: 'POST', body: JSON.stringify({ byTool: { emit_piece: { piece: 'He are late to the meeting. The plan still holds.' } } }) });
     const out = run('invoke', '--skill', 'posts', 'a short note', '--allow-unsourced', '--provider', 'openai-compatible', '--base-url', `http://127.0.0.1:${port}`, '--model', 'scripted', '--json');
     const shown = JSON.parse(out.slice(out.indexOf('{'))) as { output: string; invocationId: string };
-    expect(shown.output).toContain('They were late to the meeting.');
+    expect(shown.output).toContain('He is late to the meeting.');
     // The stored invocation carries the repair: what was broken before, and how it was fixed.
     const rec = JSON.parse(readFileSync(join(data, 'skills', 'posts', 'invocations', `${shown.invocationId}.json`), 'utf8')) as { repair?: { why: string; violatedBefore: string[]; violatedAfter: string[] } };
     expect(rec.repair?.violatedBefore.length).toBe(1);

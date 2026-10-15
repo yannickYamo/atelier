@@ -46,13 +46,10 @@ const VOICE: readonly (readonly [string, string])[] = [
 ];
 // The reviewer's true errors, each with the one correction it must keep getting.
 const TRUE_FIXES: readonly (readonly [string, string])[] = [
-  ['They was late again, and nobody said a word.', 'They were late again, and nobody said a word.'],
-  ['He go to the market every Sunday.', 'He goes to the market every Sunday.'],
+  ['She are late again, and nobody said a word.', 'She is late again, and nobody said a word.'],
   ['I recieve too many emails about this.', 'I receive too many emails about this.'],
   ['He bought an bike last week.', 'He bought a bike last week.'],
   ['We shipped it,, finally.', 'We shipped it, finally.'],
-  ['I has a question about the API.', 'I have a question about the API.'],
-  ['You was right about the migration.', 'You were right about the migration.'],
 ];
 // The rest of the reviewer's set: nothing in any of them may be changed.
 const UNCHANGED: readonly string[] = [
@@ -63,7 +60,8 @@ const UNCHANGED: readonly string[] = [
   'Y\'all were right about the caching layer.', 'Gonna be a long night.', 'We use kubectl, terraform and a lot of bash glue.', 'The enshittification of every platform follows the same curve.',
   'I reckon the whole thing will blow over by spring.', 'He was gobsmacked by the bill.', 'The codebase is a palimpsest of three rewrites.', 'Async standups beat sync ones for a team across nine timezones.',
   'Jonh Smtih said the plan was fine.', 'We met on the 3th of May at the Hiltn.', 'the release went out at midnight and nobody noticed.', 'very very good indeed.',
-  'Wait... what?', 'It don\'t matter now.', 'I is the one who knocks.', 'Their roadmap is aspirational at best.', 'The colour of the programme was grey.', 'The organization realized its error.',
+  'Wait... what?', 'It don\'t matter now.', 'They was late again, and nobody said a word.', 'He go to the market every Sunday.',
+  'I has a question about the API.', 'You was right about the migration.', 'I is the one who knocks.', 'Their roadmap is aspirational at best.', 'The colour of the programme was grey.', 'The organization realized its error.',
 ];
 
 describe('a spelling fix is made only for a known misspelling (real engine)', () => {
@@ -94,7 +92,7 @@ describe('a spelling fix is made only for a known misspelling (real engine)', ()
     const theirs = readGrammar('It don\'t matter now.', { constructions: ['it don\'t'] });
     expect(theirs).toEqual({ confirmed: [], uncertain: [] });
     // A clear slip is still corrected even beside the author's habit.
-    expect(readGrammar('They was late.', { constructions: ['it don\'t'] }).confirmed).toMatchObject([{ text: 'was', replacement: 'were' }]);
+    expect(readGrammar('He are late.', { constructions: ['it don\'t'] }).confirmed).toMatchObject([{ text: 'are', replacement: 'is' }]);
     // A confirmed error with no correction is listed, never handed to a model rewrite.
     const knocks = readGrammar('I is the one who knocks.', {});
     expect(knocks.confirmed).toEqual([]);
@@ -122,7 +120,7 @@ describe('the lists that make a fix certain', () => {
       expect(COMMON_WORDS.has(wrong), wrong).toBe(false);
       expect(right.length, wrong).toBeGreaterThan(0);
     }
-    expect(MISSPELLINGS).toMatchObject({ recieve: 'receive', seperate: 'separate', definately: 'definitely', occured: 'occurred', untill: 'until' });
+    expect(MISSPELLINGS).toMatchObject({ recieve: 'receive', seperate: 'separate', definately: 'definitely', occured: 'occurred', acheive: 'achieve' });
   });
   it('about two thousand common words, in both dialects', () => {
     expect(COMMON_WORDS.size).toBeGreaterThan(1900);

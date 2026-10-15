@@ -54,11 +54,7 @@ const STILL_FIXED: readonly (readonly [string, string])[] = [
   ['The enviroment variables were never set.', 'The environment variables were never set.'],
   ['The neighbours were embarassed by the noise.', 'The neighbours were embarrassed by the noise.'],
   ['Our collegue in Pune pushed the fix.', 'Our colleague in Pune pushed the fix.'],
-  ['They was late for the standup again.', 'They were late for the standup again.'],
-  ['She go to the depot every Friday.', 'She goes to the depot every Friday.'],
-  ['He have two monitors and a laptop.', 'He has two monitors and a laptop.'],
-  ['I has a question about the invoice.', 'I have a question about the invoice.'],
-  ['We was never told about the outage.', 'We were never told about the outage.'],
+  ['He are late for the standup again.', 'He is late for the standup again.'],
   ['She wrote a essay on the strike.', 'She wrote an essay on the strike.'],
   ['He bought an new bike for the commute.', 'He bought a new bike for the commute.'],
   ['It was an useful meeting.', 'It was a useful meeting.'],
@@ -71,6 +67,9 @@ const NOW_LISTED: readonly (readonly [string, string])[] = [
   ['Tommorow we ship the beta.', 'Tommorow'], ['Begining next week, the office opens at eight.', 'Begining'],
   ['Thsi is the last time I touch that migration.', 'Thsi'], ['The the server rebooted twice.', 'The the'],
   ['We need a a bigger budget.', 'a a'], ['Its a trap.', 'Its'], ['He dont know the password.', 'dont'],
+  // a dialect's agreement: the levelled "was", a third person without "-s", the Northern "I has"
+  ['They was late for the standup again.', 'was'], ['She go to the depot every Friday.', 'go'], ['He have two monitors and a laptop.', 'have'],
+  ['I has a question about the invoice.', 'has'], ['We was never told about the outage.', 'was'],
 ];
 
 describe('the one rule, with the real engine', () => {
@@ -203,11 +202,11 @@ describe('through the binary, with no model key', () => {
     expect(r.out).toMatch(/4 examples from posts/);
   }, 120_000);
   it('verify --repair makes the mechanical fixes with no key, and lists what has a reading', () => {
-    writeFileSync(join(proj, 'b4.md'), 'We was riding into the wind all morning and it dont stop, but the the views was worth it.\n');
+    writeFileSync(join(proj, 'b4.md'), 'He are riding into the wind all morning and it dont stop, but the the views was worth it.\n');
     const r = run('verify', '--skill', 'walks', 'b4.md', '--repair');
     expect(r.code, r.out).toBe(0);
     expect(r.out).not.toMatch(/ANTHROPIC_API_KEY/);
-    expect(r.out).toMatch(/^We were riding into the wind all morning and it dont stop, but the the views was worth it\.$/m);
+    expect(r.out).toMatch(/^He is riding into the wind all morning and it dont stop, but the the views was worth it\.$/m);
   }, 120_000);
   it('verify --repair still asks for a key when a rewrite needs a model', () => {
     writeFileSync(join(proj, 'tells.md'), 'The thing most people miss about the pier is the wind. That\'s the whole game. Here\'s the honest truth: I loved it.\n');

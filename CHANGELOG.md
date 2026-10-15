@@ -7,6 +7,25 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+### Fixed: the grammar rule no longer changes a dialect, a code path or a language mixed in
+
+Under the rule that text is changed in place only where an error has no legitimate reading in any variety or register,
+these are now listed for you to read instead of changed:
+
+- **"a" or "an"** before a word read as letters ("an nda", "a usb stick", "an mri", "an sms", "an led"), before a "u"
+  whose sound the checker guesses ("a unanimous", "an urchin"), and before any word the checker does not know. It is
+  still corrected before a lower-case common English word the checker knows ("a essay", "an new bike").
+- **Punctuation typed twice**: "::" ("std::vector", "Vec::new"), ".." ("hmm.. not sure"), ";;", "!!" and "??". Two
+  commas after a word are still corrected.
+- **A space before "!", "?", ":" or ";"** (French and typographic spacing: "Bonjour !", "Q : Where"). A space before a
+  comma or a full stop is still corrected, and a quotation in « », ‹ ›, » « or „ “ is never read.
+- **Agreement a dialect uses**: "they was", "we was", "you was", "they is", "I has", "he go", "she have", "it have".
+  Only "he are", "she are" and "I are", which no variety uses, are corrected.
+- **Known misspellings**: 23 entries left the list because each is a word somewhere: of a trade ("stoped"), of a
+  language often mixed with English ("posible", "dilema", "assistent", "correspondance", "adress", "agression",
+  "paralel"), or an older spelling still met in print ("untill", "independant", "priviledge", "developement",
+  "peculier"). The list now holds 452.
+
 ### Fixed: steering never undoes what your rules hold
 
 - **A draft written again for your usual features alone keeps what a rule you require holds.** It was kept when it
