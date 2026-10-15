@@ -10,6 +10,7 @@ import { writeAtomic } from '../../core/state/fs-atomic.js';
 import { join, basename } from 'node:path';
 import { readJson } from '../../core/state/read-json.js';
 import { proposeAcrossFramings } from '../../core/discovery/propose.js';
+import { DEFAULT_FRAMINGS, COMPOSITE_FRAMINGS, type FramingId } from '../../core/discovery/framing.js';
 import { describeUnion } from '../../core/discovery/union.js';
 import { runDiscoveryChain } from '../../core/discovery/run-chain.js';
 import { anchoredQuote } from '../../core/discovery/conformance.js';
@@ -161,7 +162,9 @@ export async function discover(): Promise<void> {
   // budget and stopped at call 60 with nothing saved. The bound is the worst case this run can make —
   // both vantages, the matcher, every rule the union can keep against every held-out piece — so it
   // binds a runaway without binding the run it was sized for.
-  const worstCaseCalls = 2 /* vantages */ + 2 /* matcher */ + 24 * heldCount + 4;
+  // A composite reads each voice from three vantages (A, B and C: what the writing does to a reader), so three.
+  const vantages = s.authors ? COMPOSITE_FRAMINGS.length : DEFAULT_FRAMINGS.length;
+  const worstCaseCalls = vantages /* vantages */ + 2 * (vantages - 1) /* matcher */ + 24 * heldCount + 4;
   // With several authors each is read on its own, so the bound grows with their number (below).
   const budget: Budget = { spentUsd: 0, capUsd: numericFlag('--cap', 3.0), maxCalls: numericFlag('--max-calls', worstCaseCalls * Math.max(1, s.authors?.names.length ?? 1)) };
   const heldTok = heldItems.reduce((n, i) => n + tokOf(i.text), 0);
@@ -174,7 +177,7 @@ export async function discover(): Promise<void> {
   // fraction of its real cost and could sail past a cap set on the strength of that number.
   //
   // When nobody knows the rate, the estimate says so in tokens rather than inventing dollars.
-  const RULES = 12, VANTAGES = 2;
+  const RULES = 12, VANTAGES = vantages;
   const inTok = poolTok * VANTAGES + (heldTok / heldCount) * RULES * heldCount;
   const outTok = 4000 * VANTAGES + 300 * RULES * heldCount;
   // The override wins: a person who names their rate is the authority on it. The shipped table is a
@@ -220,12 +223,12 @@ export async function discover(): Promise<void> {
    * (core/composite), take one numbering. `who` names the author, and the step then reports in one line.
    */
   // The parameters keep the names of what they are given: the open pieces (never the reserve), or one author's share of them.
-  const readRules = async (openItems: readonly { id: string; text: string }[], openGoldens: typeof importPlan.goldens, base: number, who: string | null):
+  const readRules = async (openItems: readonly { id: string; text: string }[], openGoldens: typeof importPlan.goldens, base: number, who: string | null, framings: readonly FramingId[] = DEFAULT_FRAMINGS):
   Promise<{ proposals: Requirement[]; proposalMeta: Record<string, ProposalMeta>; heldOutChecked: boolean; heldOutIds: readonly string[] | null }> => {
   let proposals: Requirement[]; let proposalMeta: Record<string, ProposalMeta>; let heldOutChecked = true;
   let chain: Awaited<ReturnType<typeof runDiscoveryChain>>;
   try {
-    chain = await runDiscoveryChain(client, budget, 'skill', openItems, openGoldens, { standardDimensions: [ev.workType] }, usedModel);
+    chain = await runDiscoveryChain(client, budget, 'skill', openItems, openGoldens, { standardDimensions: [ev.workType] }, usedModel, framings);
   } catch (e) {
     const retry = discoveryRetry(e, proposerIsDefault());
     // THE NEXT MODEL THAT IS NOT THE ONE THAT DECLINED. With one model named for everything (ATELIER_MODEL, --model),
@@ -241,7 +244,7 @@ export async function discover(): Promise<void> {
       : `\n${usedModel}, the default reader, is not served by this backend; reading your work with ${fallbackModel} instead. The record names the model that read it.`);
     usedModel = fallbackModel;
     client = clientFor(fallbackModel);
-    chain = await runDiscoveryChain(client, budget, 'skill', openItems, openGoldens, { standardDimensions: [ev.workType] }, usedModel);
+    chain = await runDiscoveryChain(client, budget, 'skill', openItems, openGoldens, { standardDimensions: [ev.workType] }, usedModel, framings);
   }
 
   if ('refused' in chain) {
@@ -272,7 +275,7 @@ export async function discover(): Promise<void> {
     // two prompts differing by one clause recovered 3/9 and 4/9 of an author's own sealed rules, and
     // their union ~7/9. The disjointness sits below the same-framing noise floor on both models
     // tested, so it is the vantage doing the work rather than run-to-run variance.
-    const { union, byFraming } = await proposeAcrossFramings(client, budget, forProposal);
+    const { union, byFraming } = await proposeAcrossFramings(client, budget, forProposal, framings);
     if (!who) console.log(`\n${describeUnion(union, (r) => r.statement)}`);
 
     // ── WHAT A MACHINE CAN SETTLE ABOUT THIS MODEL'S OUTPUT ────────────────────────────────
@@ -366,7 +369,7 @@ export async function discover(): Promise<void> {
       const mine = new Set(openItems.filter((i) => authors.of[i.id] === name).map((i) => i.id));
       if (!mine.size) continue;
       const aItems = openItems.filter((i) => mine.has(i.id)); const aGoldens = openGoldens.filter((g) => mine.has(g.contextId));
-      const r = noModel ? { proposals: [], proposalMeta: {}, heldOutChecked: false, heldOutIds: null } : await readRules(aItems, aGoldens, pBase, name);
+      const r = noModel ? { proposals: [], proposalMeta: {}, heldOutChecked: false, heldOutIds: null } : await readRules(aItems, aGoldens, pBase, name, COMPOSITE_FRAMINGS);
       pBase += r.proposals.length;
       heldOutChecked = heldOutChecked && r.heldOutChecked; heldOutPieces += r.heldOutIds?.length ?? 0;
       // The counts, on this author's pieces alone: those with a proposal role as read, the rest as held out; with no
@@ -387,6 +390,21 @@ export async function discover(): Promise<void> {
       if (measured.length) console.log(`  ${measured.length} rule(s) counted from ${name}'s pieces alone: ${measured.map((m) => m.requirement.requirementId).join(', ')}.`);
       // Nothing counted, and nothing read: why, said, so an author with too little is not mistaken for one with no habits.
       else if (!r.proposals.length) console.log(`  nothing could be counted from ${name}'s ${aItems.length} piece(s) (${countedFloorOf(read.map((i) => i.text))}): an author is counted from at least ${MIN_SENTENCES} sentences, ${MIN_PARAGRAPHS} paragraphs or ${MIN_WORDS.toLocaleString('en-US')} words of their pieces read together, so each author needs more of their pieces, or longer ones, to be counted.`);
+    }
+    // A FEW PLAIN DRAFTS, so each voice's counted rules are weighed against what the model writes unasked as well as
+    // against the other voices (core/composite/infer.ts): two per voice, from four to ten, on the voices' own topics,
+    // kept with the run. Written only when a counted rule can use them; one that fails costs the comparison, not the run.
+    if (!noModel && proposals.some((p) => p.measurement)) {
+      let drafts: string[] = [];
+      try { ({ drafts } = await contrastDrafts(openItems, ev.corpusHash, contrastForm(openItems, declaredClass(s)), Math.min(10, Math.max(4, 2 * authors.names.length)))); } catch (e) {
+        console.log(`(the plain drafts could not be written: ${(e as Error).message.split('\n')[0]}; each voice is weighed against the others alone)`);
+      }
+      if (drafts.length >= 2) {
+        proposalMeta = Object.fromEntries(Object.entries(proposalMeta).map(([id, m]) => {
+          const p = proposals.find((x) => x.requirementId === id);
+          return [id, p?.measurement ? { ...m, vsDrafts: { drafts: drafts.length, breaking: piecesBreaking(drafts, p.measurement).length } } : m];
+        }));
+      }
     }
     // NO MECHANICAL ERRORS, for the composite too: the owner's editorial rule, not any one author's trait. It names no
     // author, so it is no row of the trait table; read over every author's pieces (each one's own words are known), and
@@ -623,7 +641,7 @@ export function contrastForm(read: readonly { text: string }[], cls: string | nu
  * Plain drafts by the model that will serve the skill, on the author's own titles, no skill applied.
  * Kept per corpus so continuing or re-running discovery does not pay for them twice.
  */
-async function contrastDrafts(read: readonly { id: string; text: string }[], corpusHash: string, form: { label: string; words: number }): Promise<ContrastDrafts> {
+async function contrastDrafts(read: readonly { id: string; text: string }[], corpusHash: string, form: { label: string; words: number }, count?: number): Promise<ContrastDrafts> {
   const path = runFile('contrast-drafts.json');
   // SEVERAL FAMILIES, WHEN ASKED. A detector trained against one model family does not recognise another's
   // imitations (held-out generator AUCs 0.37, 0.49, 0.73 in one study). `--contrast-models a,b` writes the drafts
@@ -635,7 +653,7 @@ async function contrastDrafts(read: readonly { id: string; text: string }[], cor
   // of the author's pieces, in turn; with one such class, all at the corpus's length as before.
   const lengths = classLengths(read, form.words);
   // Keyed by corpus, models, form and lengths: another model's habits, or another kind of piece, is another comparison.
-  const key = `${corpusHash}|${writers.map((w) => w.binding.requestedModel).join('+')}|${form.label}|${lengths.join('/')}|${flag('--contrast-drafts') ?? 'auto'}|crossed`;
+  const key = `${corpusHash}|${writers.map((w) => w.binding.requestedModel).join('+')}|${form.label}|${lengths.join('/')}|${flag('--contrast-drafts') ?? count ?? 'auto'}|crossed`;
   if (existsSync(path)) {
     const cached = readJson<ContrastCache>(path, { what: 'the contrast drafts' });
     if ((cached.key ?? cached.corpusHash) === key && cached.drafts.length) return contrastOf(cached);
@@ -649,7 +667,7 @@ async function contrastDrafts(read: readonly { id: string; text: string }[], cor
   // and writer, length and examples are crossed (below), so the default grows with the classes and the models.
   const W = writers.length; const Lg = lengths.length;
   const n = flag('--contrast-drafts') !== undefined ? Math.max(4, Math.floor(numericFlag('--contrast-drafts', 12)))
-    : Math.min(32, Math.max(12, SELECTION.minModel * Lg, 2 * W * Lg));
+    : count ?? Math.min(32, Math.max(12, SELECTION.minModel * Lg, 2 * W * Lg));
   const budget: Budget = { spentUsd: 0, capUsd: numericFlag('--contrast-cap', Math.max(3, 0.25 * n)), maxCalls: n + 2 };
   const base = contrastTopics(read, read.length);
   const topics = Array.from({ length: Math.min(n, Math.max(base.length, 1) * 3 * Math.max(1, W * Lg)) }, (_, i) => base[i % base.length] ?? 'a piece on your usual subject');

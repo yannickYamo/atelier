@@ -11,7 +11,8 @@
 // A folder with none of these is one author, exactly as it always was. Nothing here reads the prose: a
 // difference in style is never taken for a difference in author.
 
-export type AuthorsHow = 'FRONT_MATTER' | 'SUBFOLDERS' | 'LISTED';
+/** INFERRED: no author was declared, and the pieces were grouped by how they are written (./voices.ts). */
+export type AuthorsHow = 'FRONT_MATTER' | 'SUBFOLDERS' | 'LISTED' | 'INFERRED';
 
 export interface AuthorMap {
   /** the authors, in a fixed order (alphabetical), so every later screen and record lists them the same way */
@@ -63,6 +64,16 @@ export function detectAuthors(files: readonly { readonly id: string; readonly te
     return finish(Object.fromEntries(files.map((f) => [f.id, dir(f.id) ?? UNATTRIBUTED])), 'SUBFOLDERS');
   }
   return null;
+}
+
+/**
+ * WHETHER ANYONE SAID WHO WROTE THE PIECES: front matter naming an author, a folder per author (even one), or
+ * `--authors`. A declaration of one author is still a declaration: such a folder is never split by style (./voices.ts).
+ */
+export function authorsDeclared(files: readonly { readonly id: string; readonly text: string }[], listed: readonly string[] | null = null): boolean {
+  if (listed?.length) return true;
+  if (files.some((f) => frontMatterAuthor(f.text) !== null)) return true;
+  return files.length > 0 && files.every((f) => f.id.indexOf('/') > 0);
 }
 
 /** One line for the build screen. */

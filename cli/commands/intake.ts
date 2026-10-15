@@ -14,7 +14,8 @@ import { classOf, describeCases, inMaterialDir, materialDirOf, preferredForReser
 import { adaptSkillFolder, classifyPackagePath, type AdaptedPackage } from '../../core/intake/package.js';
 import type { ExpertEvidence } from '../../core/state/canonical-state.js';
 import { extract, READABLE, META_NAME } from '../../core/intake/extract.js';
-import { detectAuthors, describeAuthors } from '../../core/composite/authors.js';
+import { detectAuthors, describeAuthors, UNATTRIBUTED } from '../../core/composite/authors.js';
+import { describeVoices, voicesAsAuthors, type VoiceGrouping } from '../../core/composite/voices.js';
 import { formatOf } from '../../core/observers/formats.js';
 import { isShortForm } from '../../core/observers/pooled.js';
 
@@ -58,7 +59,7 @@ export function autoReserveIds(ids: readonly string[], rank: (id: string) => num
   return [...ids].sort((a, b) => rank(a) - rank(b) || sha(a).localeCompare(sha(b))).slice(0, k);
 }
 
-export function intake(path: string, workType: string, mode?: 'GENERATE' | 'GUARD' | 'RESPOND'): void {
+export function intake(path: string, workType: string, mode?: 'GENERATE' | 'GUARD' | 'RESPOND', opts: { readonly voices?: VoiceGrouping | null } = {}): void {
   let minChars = minCharsFor(mode);
   const dir = resolve(path);
   if (!existsSync(dir)) die(`no such path: ${dir}`);
@@ -264,8 +265,15 @@ export function intake(path: string, workType: string, mode?: 'GENERATE' | 'GUAR
   // PIECES BY SEVERAL AUTHORS ARE TOLD APART BEFORE ANYTHING READS THEM (core/composite/authors.ts): `author:` in each
   // piece, a folder per author, or `--authors`. Read as one author they would give the average of them all. Declared
   // only: with none of the three the folder is one author, as it always was.
-  const authors = detectAuthors(goldenFiles.map((r) => ({ id: r.file, text: r.text })), flagAll('--authors'));
-  if (authors) console.log(`${orchestrated() ? '' : '\n'}${describeAuthors(authors, goldenFiles.length)}`);
+  // NONE DECLARED: the voices `atelier new` found in the writing itself (core/composite/voices.ts), when it found more
+  // than one; a piece it did not group is said to be unattributed, never guessed into a voice.
+  const declared = detectAuthors(goldenFiles.map((r) => ({ id: r.file, text: r.text })), flagAll('--authors'));
+  const voices = !declared && opts.voices && opts.voices.groups.length > 1 ? opts.voices : null;
+  const inferredMap = voices ? voicesAsAuthors(voices) : null;
+  const inferredOf = inferredMap ? Object.fromEntries(goldenFiles.map((r) => [r.file, inferredMap.of[r.file] ?? UNATTRIBUTED])) : null;
+  const authors = declared ?? (inferredMap && inferredOf ? { ...inferredMap, names: [...inferredMap.names, ...(Object.values(inferredOf).includes(UNATTRIBUTED) ? [UNATTRIBUTED] : [])], of: inferredOf } : null);
+  if (declared) console.log(`${orchestrated() ? '' : '\n'}${describeAuthors(declared, goldenFiles.length)}`);
+  else if (voices && authors) console.log(`${orchestrated() ? '' : '\n'}${describeVoices(voices, goldenFiles.length)}`);
   const clusters = clusterAssignment(goldenFiles.map((r) => r.file), argv.includes('--cluster-per-file'));
   const goldenUnits: GoldenUnit[] = goldenFiles.map((r) => ({
     unitId: r.file, kind: 'PROSE_SECTION', context: workType, task: r.request ?? `produce ${r.file}`,
@@ -380,7 +388,7 @@ export function intake(path: string, workType: string, mode?: 'GENERATE' | 'GUAR
   }
   s = step(s, 'CORPUS_SEALED', { corpusHash });
   const publicSource = flag('--source-author') ?? (argv.includes('--public-source') ? 'a public source' : null);
-  saveSession({ ...s, evidence: ev, reservation, ...(publicSource ? { publicSource } : {}), ...(authors ? { authors } : {}) });
+  saveSession({ ...s, evidence: ev, reservation, ...(publicSource ? { publicSource } : {}), ...(authors ? { authors } : {}), ...(opts.voices && !declared ? { voices: opts.voices } : {}) });
   writeAtomic(runFile('corpus-paths.json'), JSON.stringify(files, null, 1));
   writeAtomic(runFile('import-plan.json'), JSON.stringify(plan, null, 1));
 

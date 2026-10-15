@@ -46,6 +46,7 @@ import { restateLimits } from '../observers/derive.js';
 import { TRAIT_LABEL, labelOf, mergedMeasurement, primaryClassOf, relationOf, type Conflict, type ConflictSide, type ReadRule, type TraitClass, type TraitKind, type TraitTable } from './traits.js';
 import { describeQuantity, quantitiesOf, sameReading, type Quantity } from './quantity.js';
 import { lengthMeasuresOf, readsAs, sharedLengthMeasures } from './length.js';
+import type { InferenceRecord } from './infer.js';
 
 export interface CompositeAuthor {
   readonly name: string;
@@ -78,13 +79,18 @@ export interface CompositeDecision {
    * in a conflict: the conflict whose answer (or admiration) settled this rule, and how; absent while it is open. SET: the
    * person made it required with `--set <id>=required`, their latest word (n is the conflict it stood in, or 0).
    */
-  readonly settledBy?: { readonly n: number; readonly how: 'ANSWER' | 'ADMIRATION' | 'SET' };
+  readonly settledBy?: { readonly n: number; readonly how: 'ANSWER' | 'ADMIRATION' | 'SET' | 'INFERENCE' };
   /** open: the unanswered conflict that keeps it from instructing */
   readonly openIn?: number;
   /** in a conflict: the numbers of every conflict this rule is a side of */
   readonly inConflicts?: readonly number[];
   /** its author was admired for what this rule is about */
   readonly admired?: true;
+  /**
+   * CHOSEN BY INFERENCE (./infer.ts): among the most characteristic of its voice, shared by every voice, or the side of
+   * a clash that was more characteristic. Not the owner's word: `atelier fix` outranks it.
+   */
+  readonly inferred?: true;
 }
 
 export interface AnsweredConflict extends Conflict {
@@ -93,7 +99,9 @@ export interface AnsweredConflict extends Conflict {
    * ANOTHER_ANSWER: settled by the guard, for the side the person chose in another conflict. SET: settled by the
    * person's `--set <id>=required`, their latest word, which outranks an answer given before it.
    */
-  readonly resolvedBy: 'ANSWER' | 'ADMIRATION' | 'ANOTHER_ANSWER' | 'SET' | null;
+  readonly resolvedBy: 'ANSWER' | 'ADMIRATION' | 'ANOTHER_ANSWER' | 'SET' | 'INFERENCE' | null;
+  /** INFERENCE: why the side that stands was taken (the more characteristic, then the more shared, then the larger voice) */
+  readonly settledWhy?: string;
   /** found by the final guard, not by the table: two rules of no shared class, or a range against a third rule */
   readonly foundLast?: true;
   /** found by the model's reading of the final instructions (./contradictions.ts), with its one-line reason */
@@ -111,11 +119,52 @@ export interface ModelPair { readonly a: string; readonly b: string; readonly re
 /** A quantity the model read in a rule's words (./contradictions.ts), by rule id. */
 export interface ModelQuantity { readonly id: string; readonly quantity: Quantity }
 
+/**
+ * WHAT THE PERSON VALUES, INFERRED (./infer.ts), in place of what they said they admire. Nothing is asked: each voice's
+ * most characteristic rules are taken, the rules every voice shares are method, and every clash goes to the side that
+ * weighs more. An answer, a `--set` or a preference the person did give outranks it.
+ */
+export interface InferredChoice {
+  /** each rule's weight: how consistently its voice shows it × how distinctive it is × any stated preference */
+  readonly weightOf: ReadonlyMap<string, number>;
+  /** the rules taken: each voice's most characteristic, and those every voice shares */
+  readonly chosen: ReadonlySet<string>;
+  /** the rules every voice shares: applied as method */
+  readonly method: ReadonlySet<string>;
+  /** how many voices show each rule, its own included */
+  readonly sharedBy: ReadonlyMap<string, number>;
+  /** how many pieces each voice has */
+  readonly piecesOf: ReadonlyMap<string, number>;
+  /** a length the request names: then no voice's rule on the piece's length is taken */
+  readonly requestLength?: string | null;
+  /** the rules on the piece's length, which a length in the request sets aside */
+  readonly pieceLength?: ReadonlySet<string>;
+}
+
 /** What the person said beyond the conflicts: the rules they made required (`--set <id>=required`), and the model's reading. */
 export interface ComposeOptions {
   readonly forced?: ReadonlySet<string>;
   readonly modelPairs?: readonly ModelPair[];
   readonly modelQuantities?: readonly ModelQuantity[];
+  readonly inferred?: InferredChoice;
+}
+
+const w2 = (x: number): string => x.toFixed(2);
+/**
+ * A CLASH SETTLED BY INFERENCE: the side with the higher weight stands; on a tie, the rule more voices show; then the
+ * voice with more pieces; then the side listed first. Always one side, always with its reason.
+ */
+export function settleByWeight(inf: InferredChoice, a: { id: string; author: string }, b: { id: string; author: string }): { readonly winner: 'A' | 'B'; readonly why: string } {
+  const wa = inf.weightOf.get(a.id) ?? 0; const wb = inf.weightOf.get(b.id) ?? 0;
+  if (Math.abs(wa - wb) > 1e-9) {
+    const [win, w, l] = wa > wb ? ['A' as const, wa, wb] : ['B' as const, wb, wa];
+    return { winner: win, why: `${(win === 'A' ? a : b).author}'s was more characteristic (weight ${w2(w)} against ${w2(l)})` };
+  }
+  const sa = inf.sharedBy.get(a.id) ?? 1; const sb = inf.sharedBy.get(b.id) ?? 1;
+  if (sa !== sb) { const win = sa > sb ? 'A' as const : 'B' as const; return { winner: win, why: `equally characteristic (weight ${w2(wa)}); ${(win === 'A' ? a : b).author}'s is shown by more voices (${Math.max(sa, sb)} against ${Math.min(sa, sb)})` }; }
+  const pa = inf.piecesOf.get(a.author) ?? 0; const pb = inf.piecesOf.get(b.author) ?? 0;
+  if (pa !== pb) { const win = pa > pb ? 'A' as const : 'B' as const; return { winner: win, why: `equally characteristic and equally shared; ${(win === 'A' ? a : b).author} has more pieces (${Math.max(pa, pb)} against ${Math.min(pa, pb)})` }; }
+  return { winner: 'A', why: `equal on every count (weight ${w2(wa)}, ${sa} voice(s), ${pa} piece(s) each): the first listed stands` };
 }
 
 /**
@@ -150,9 +199,12 @@ export interface CompositeRecord {
   readonly methodology: { readonly proposal: true; readonly steps: readonly { readonly id: string; readonly author: string; readonly statement: string }[] } | null;
   /** one line each, for the screen: a `--set` that outranked an earlier answer, or could not instruct */
   readonly notes?: readonly string[];
+  /** how the composite was inferred, when nothing was asked (./infer.ts): the grouping, the weights, every settled clash */
+  readonly inference?: InferenceRecord;
 }
 
 type SideOutcome = Pick<CompositeDecision, 'outcome' | 'why' | 'mergedInto' | 'range' | 'shownOnly' | 'byAdmiration' | 'settledBy' | 'inConflicts' | 'openIn'>;
+const wOf = (inf: InferredChoice, id: string): string => w2(inf.weightOf.get(id) ?? 0);
 
 /**
  * EVERY RULE IN A CONFLICT, DECIDED ONCE, ACROSS ALL ITS CONFLICTS. With three or more authors one rule sits in many
@@ -217,12 +269,12 @@ function resolvePerRule(conflicts: readonly AnsweredConflict[], byId: ReadonlyMa
       for (const id of members) { const ci = firstBoth.get(id) ?? c; set(id, { outcome: 'SELECTED', why: `conflict ${ci.n} (${who(ci)}): both kept, shown and not instructed, since two statements make no range`, shownOnly: true, settledBy: { n: ci.n, how: 'ANSWER' } }); }
     }
   }
-  // 3. Admiration, for conflicts nobody answered, and only for rules no answer decided.
+  // 3. Admiration, or inference, for conflicts nobody answered, and only for rules no answer decided.
   for (const c of conflicts) {
-    if (c.resolvedBy !== 'ADMIRATION') continue;
+    if (c.resolvedBy !== 'ADMIRATION' && c.resolvedBy !== 'INFERENCE') continue;
     const win = c.answer === 'A' ? c.sides[0] : c.sides[1]; const lose = c.answer === 'A' ? c.sides[1] : c.sides[0];
-    const how = `you admired ${win.author}'s ${TRAIT_LABEL[clsOf(win.id) ?? c.cls]}`;
-    if (!out.has(lose.id)) set(lose.id, { outcome: 'REJECTED', why: `conflict ${c.n} (${who(c)}): ${how}`, settledBy: { n: c.n, how: 'ADMIRATION' } });
+    const how = c.resolvedBy === 'INFERENCE' ? c.settledWhy ?? 'the more characteristic side stands' : `you admired ${win.author}'s ${TRAIT_LABEL[clsOf(win.id) ?? c.cls]}`;
+    if (!out.has(lose.id)) set(lose.id, { outcome: 'REJECTED', why: `conflict ${c.n} (${who(c)}): ${how}`, settledBy: { n: c.n, how: c.resolvedBy } });
   }
   // 4. Open: a conflict nobody answered, that admiration cannot settle, keeps every side no answer decided from instructing.
   for (const c of conflicts) {
@@ -233,9 +285,11 @@ function resolvePerRule(conflicts: readonly AnsweredConflict[], byId: ReadonlyMa
     }
   }
   for (const c of conflicts) {
-    if (c.resolvedBy !== 'ADMIRATION') continue;
+    if (c.resolvedBy !== 'ADMIRATION' && c.resolvedBy !== 'INFERENCE') continue;
     const win = c.answer === 'A' ? c.sides[0] : c.sides[1];
-    if (!out.has(win.id)) set(win.id, { outcome: 'SELECTED', why: `conflict ${c.n} (${who(c)}): you admired ${win.author}'s ${TRAIT_LABEL[clsOf(win.id) ?? c.cls]}`, byAdmiration: true, settledBy: { n: c.n, how: 'ADMIRATION' } });
+    if (out.has(win.id)) continue;
+    if (c.resolvedBy === 'INFERENCE') set(win.id, { outcome: 'SELECTED', why: `conflict ${c.n} (${who(c)}): ${c.settledWhy ?? 'the more characteristic side'}`, settledBy: { n: c.n, how: 'INFERENCE' } });
+    else set(win.id, { outcome: 'SELECTED', why: `conflict ${c.n} (${who(c)}): you admired ${win.author}'s ${TRAIT_LABEL[clsOf(win.id) ?? c.cls]}`, byAdmiration: true, settledBy: { n: c.n, how: 'ADMIRATION' } });
   }
   return out;
 }
@@ -250,12 +304,15 @@ export function composeSelection(table: TraitTable, proposals: readonly Requirem
   const byId = new Map(proposals.map((p) => [p.requirementId, p]));
   // The class each rule is taken for: what it is mainly about. Admiring a class takes the rules mainly about it.
   const clsOf = (id: string): TraitClass | undefined => { const p = byId.get(id); return p ? primaryClassOf(p) : rowOf.get(id)?.cls; };
-  const admired = (id: string): boolean => { const r = rowOf.get(id); const c = clsOf(id); return Boolean(r && c && classesOf.get(r.author)?.has(c)); };
+  const inf = options.inferred;
+  // INFERRED: what is taken is what was inferred, with a stated preference already in its weight (./infer.ts).
+  const admired = (id: string): boolean => { if (inf) return inf.chosen.has(id); const r = rowOf.get(id); const c = clsOf(id); return Boolean(r && c && classesOf.get(r.author)?.has(c)); };
 
-  // Conflicts first: what the person answered, else admiration of exactly one side, else open.
+  // Conflicts first: what the person answered, else (inferred) the side that weighs more, else admiration of exactly one side, else open.
   const conflicts: AnsweredConflict[] = table.conflicts.map((c) => {
     const given = answers[c.n];
     if (given) return { ...c, answer: given, resolvedBy: 'ANSWER' };
+    if (inf) { const s = settleByWeight(inf, c.sides[0], c.sides[1]); return { ...c, answer: s.winner, resolvedBy: 'INFERENCE', settledWhy: s.why }; }
     const [a, b] = c.sides;
     const aa = admired(a.id); const ab = admired(b.id);
     if (aa !== ab) return { ...c, answer: aa ? 'A' : 'B', resolvedBy: 'ADMIRATION' };
@@ -270,7 +327,12 @@ export function composeSelection(table: TraitTable, proposals: readonly Requirem
     // The same rule said again by its author stands and falls with the first, and is not a second rule.
     if (r.sameAs) return [{ ...base, outcome: 'REJECTED' as const, why: `the same rule as ${r.sameAs}, read again: it stands and falls with ${r.sameAs}`, mergedInto: r.sameAs }];
     const side = sideOutcome.get(r.id);
-    if (side) return [{ ...base, ...side, ...(admired(r.id) ? { admired: true as const } : {}) }];
+    if (side) return [{ ...base, ...side, ...(!inf && admired(r.id) ? { admired: true as const } : {}), ...(inf && side.outcome === 'SELECTED' && side.settledBy?.how === 'INFERENCE' ? { inferred: true as const } : {}) }];
+    if (inf) {
+      if (inf.method.has(r.id)) return [{ ...base, outcome: 'SELECTED' as const, why: `shown by every voice: applied as method`, inferred: true as const }];
+      if (inf.chosen.has(r.id)) return [{ ...base, outcome: 'SELECTED' as const, why: `among the most characteristic of ${r.author} (weight ${wOf(inf, r.id)})`, inferred: true as const }];
+      return [{ ...base, outcome: 'HABIT' as const, why: `not among the most characteristic of ${r.author} (weight ${wOf(inf, r.id)}): kept as a habit, shown and not instructed` }];
+    }
     if (admired(r.id)) return [{ ...base, outcome: 'SELECTED' as const, why: `you admired ${r.author}'s ${TRAIT_LABEL[cls]}`, byAdmiration: true as const, admired: true as const }];
     if (r.kind === 'SHARED') return [{ ...base, outcome: 'HABIT' as const, why: `shared with ${r.with.length} other rule(s) and not chosen: kept as a habit, shown and not instructed` }];
     // An author the person said they like, for something else: the rest of what their pieces show is kept as a habit,
@@ -288,14 +350,26 @@ export function composeSelection(table: TraitTable, proposals: readonly Requirem
     return { ...rest, outcome: 'SELECTED', why: `you made it required (--set ${d.id}=required)`, byAdmiration: true, settledBy: { n: d.settledBy?.n ?? d.openIn ?? 0, how: 'SET' } };
   });
   const twoWays = readTwoWays(proposals, options.modelQuantities ?? []);
-  const guarded = guardInstructing(withSet, conflicts, byId, answers, repeats, options.modelPairs ?? [], twoWays);
-  const decisions = guarded.decisions;
+  const guarded = guardInstructing(withSet, conflicts, byId, answers, repeats, options.modelPairs ?? [], twoWays, inf);
+  let decisions = guarded.decisions;
+  let settledConflicts = guarded.conflicts;
+  // A LENGTH THE REQUEST NAMES sets the piece's length: no voice's rule on it is taken, and a clash between two of them
+  // is settled by the request, not by either side.
+  if (inf?.requestLength && inf.pieceLength?.size) {
+    const out = inf.pieceLength;
+    const theirs = (d: CompositeDecision): boolean => d.settledBy?.how === 'ANSWER' || d.settledBy?.how === 'SET';
+    decisions = decisions.map((d) => (out.has(d.id) && !d.mergedInto && !theirs(d) && (d.outcome === 'SELECTED' || d.settledBy?.how === 'INFERENCE')
+      ? { id: d.id, author: d.author, cls: d.cls, kind: d.kind, outcome: 'REJECTED' as const, why: `the request names the length (${inf.requestLength}): no voice's length is taken`, ...(d.inConflicts ? { inConflicts: d.inConflicts } : {}) }
+      : d));
+    settledConflicts = settledConflicts.map((c) => (c.sides.every((x) => out.has(x.id)) && c.resolvedBy !== 'ANSWER'
+      ? { ...c, settledWhy: `the request names the length (${inf.requestLength}): neither side's length is taken` } : c));
+  }
   const notes = [...[...twoWays].map(([id, r]) => twoWaysLine(id, byId.get(id)?.statement ?? id, r)), ...guarded.notes];
 
   // RECURRING DECISION MOVES: method rules chosen, or shared by two or more authors. Offered as a methodology the
   // person may adopt, marked a proposal read from the examples; a method note of theirs (`--method`) is authoritative instead.
-  const steps = decisions.filter((d) => d.cls === 'method' && (d.outcome === 'SELECTED' || d.kind === 'SHARED')).map((d) => ({ id: d.id, author: d.author, statement: byId.get(d.id)?.statement ?? '' }));
-  return { authors, decisions, conflicts: guarded.conflicts, methodology: steps.length ? { proposal: true, steps } : null, ...(notes.length ? { notes } : {}) };
+  const steps = decisions.filter((d) => (inf ? inf.method.has(d.id) && d.outcome === 'SELECTED' : d.cls === 'method' && (d.outcome === 'SELECTED' || d.kind === 'SHARED'))).map((d) => ({ id: d.id, author: d.author, statement: byId.get(d.id)?.statement ?? '' }));
+  return { authors, decisions, conflicts: settledConflicts, methodology: steps.length ? { proposal: true, steps } : null, ...(notes.length ? { notes } : {}) };
 }
 
 /** Whether a decided rule will instruct the writer: chosen, not merely shown, and not carried in another rule's range. */
@@ -311,7 +385,8 @@ export const instructs = (d: CompositeDecision | undefined): boolean => d?.outco
  */
 export function guardInstructing(decided: readonly CompositeDecision[], conflicts: readonly AnsweredConflict[], byId: ReadonlyMap<string, Requirement>,
   answers: Readonly<Record<number, ConflictAnswer>>, repeats: ReadonlySet<string> = new Set(), modelPairs: readonly ModelPair[] = [],
-  twoWays: ReadonlyMap<string, { readonly grammar: readonly Quantity[]; readonly model: readonly Quantity[] }> = new Map()): { decisions: CompositeDecision[]; conflicts: AnsweredConflict[]; notes: string[] } {
+  twoWays: ReadonlyMap<string, { readonly grammar: readonly Quantity[]; readonly model: readonly Quantity[] }> = new Map(),
+  inferred?: InferredChoice): { decisions: CompositeDecision[]; conflicts: AnsweredConflict[]; notes: string[] } {
   const ds = new Map(decided.map((d) => [d.id, d]));
   const order = decided.map((d) => d.id);
   // A range's carrier stands for every rule merged into it (a repetition of one rule is not a range member).
@@ -388,7 +463,8 @@ export function guardInstructing(decided: readonly CompositeDecision[], conflict
   const setAside = (loser: string, winner: CompositeDecision, c: AnsweredConflict): void => {
     const by = winner.settledBy ?? { n: c.n, how: 'ANSWER' as const };
     const stands = by.how === 'SET' ? `stands by your --set ${winner.id}=required, your latest word`
-      : `stands by your answer${by.n === c.n ? '' : ` to conflict ${by.n}`}`;
+      : by.how === 'INFERENCE' ? `stands as the more characteristic${conflictOf.get(c.n)?.settledWhy ? ` (${conflictOf.get(c.n)?.settledWhy})` : ''}`
+        : `stands by your answer${by.n === c.n ? '' : ` to conflict ${by.n}`}`;
     for (const id of membersOf(loser)) {
       const d = ds.get(id); if (!d) continue;
       ds.set(id, { ...bare(d, c.n), outcome: 'REJECTED', settledBy: by, why: `conflict ${c.n} (${who(c)}): ${winner.author}'s rule ${stands}, and the two cannot both instruct` });
@@ -442,6 +518,21 @@ export function guardInstructing(decided: readonly CompositeDecision[], conflict
       continue;
     }
     undecided.push(f);
+  }
+  // 2. INFERRED: nothing the person said decides it, so the side that weighs more stands (`settleByWeight`), the
+  //    model's pairs included. Nothing is left open and nothing is asked.
+  if (inferred) {
+    for (const f of undecided) {
+      const da = ds.get(f.a); const db = ds.get(f.b);
+      if (!da || !db || !instructs(da) || !instructs(db)) continue;
+      const c = conflictOf.get(f.c.n) ?? f.c;
+      const s = settleByWeight(inferred, da, db);
+      const [win, lose] = s.winner === 'A' ? [da, db] : [db, da];
+      update(c, { answer: s.winner, resolvedBy: 'INFERENCE', settledWhy: s.why });
+      ds.set(win.id, { ...win, inConflicts: withConflict(win, c.n) });
+      setAside(lose.id, { ...win, settledBy: { n: c.n, how: 'INFERENCE' } }, c);
+    }
+    undecided.length = 0;
   }
   // 2. Nothing the person said decides it: neither instructs, and the pair is asked, never guessed.
   //    A side already held open by another such pair holds this one open too: the other side does not instruct in its
@@ -578,6 +669,7 @@ function standingOf(x: AnsweredConflict, da: CompositeDecision | undefined, db: 
     if (!by) return d?.outcome === 'SELECTED' ? 'from what you admired' : '';
     if (by.how === 'ANSWER') return by.n === x.n ? 'your answer' : `your answer to conflict ${by.n}`;
     if (by.how === 'SET') return 'your --set, your latest word';
+    if (by.how === 'INFERENCE') return 'the more characteristic';
     return 'from what you admired';
   };
   const stands = (d: CompositeDecision | undefined): boolean => d?.outcome === 'SELECTED' && !d.shownOnly;

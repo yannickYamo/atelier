@@ -23,6 +23,7 @@ import type { RatificationLedger } from '../core/ratification/decision-record.js
 import type { AuthorMap } from '../core/composite/authors.js';
 import type { CompositeRecord } from '../core/composite/selection.js';
 import type { TraitClass } from '../core/composite/traits.js';
+import type { VoiceGrouping } from '../core/composite/voices.js';
 import { processSpentUsd, type InferenceClient } from '../core/inference/client.js';
 import { AnthropicInferenceClient, accountRefusal } from '../providers/anthropic.js';
 import { ClaudeCodeAdapter } from '../adapters/claude-code/adapter.js';
@@ -679,8 +680,10 @@ export interface Session {
   conflictAnswers?: Readonly<Record<number, 'A' | 'B' | 'both' | null>> | null;
   /** a hash of the composite screen last printed: a continuation that would show the same screen need not print it again */
   compositeShown?: string | null;
-  /** the composite the person approved (core/composite/selection.ts): which proposals from which author, and the conflicts' answers */
+  /** the composite built (core/composite/selection.ts): which proposals from which voice, how every clash was settled, and the inference behind it */
   composite?: CompositeRecord | null;
+  /** how the pieces were grouped by how they are written, when no author was declared (core/composite/voices.ts) */
+  voices?: VoiceGrouping | null;
 }
 
 export interface ProposalMeta {
@@ -702,6 +705,8 @@ export interface ProposalMeta {
   readonly corpus?: { readonly pieces: number; readonly breaking: readonly number[] } | null;
   /** the author whose pieces alone this was read or counted from, when the pieces are by several (core/composite) */
   readonly source?: string;
+  /** for a counted rule of a composite: how many plain model drafts were measured, and how many fall outside its band (core/composite/infer.ts) */
+  readonly vsDrafts?: { readonly drafts: number; readonly breaking: number } | null;
 }
 
 /**

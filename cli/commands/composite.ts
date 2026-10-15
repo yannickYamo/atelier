@@ -1,27 +1,27 @@
-// cli/commands/composite.ts — THE PREFERENCE STEP, WHEN THE PIECES ARE BY SEVERAL AUTHORS.
+// cli/commands/composite.ts — THE COMBINATION, WHEN THE PIECES ARE BY SEVERAL VOICES: INFERRED, NEVER ASKED.
 //
-//   atelier new ./five-writers "an essay that combines what I like" \
-//     --admire ada.md="the way it opens with a question" --admire bea.md="how deep the evidence goes"
+//   atelier new ./pieces-i-like "an essay that combines what I like about each"
 //
-// Discovery has read each author on their own (./discover.ts) and sorted the proposals into a trait table
-// (core/composite/traits.ts). This step asks one thing per author, "What do you like about this one?", reads every
-// line in one model call (core/composite/admire.ts), and shows ONE screen: what is taken from whom, the conflicts
-// and how each stands, and what is kept as a habit or set aside (core/composite/selection.ts). Accepting it rules
-// on every proposal through the same `applyDecisions` the single-author review uses, each ruling naming the author
-// and pieces it came from. A conflict nobody answered stays a stored question: neither side instructs.
-//
-// Nothing is guessed. A line nobody gave selects nothing; `--yes` goes on with the lines given (none, if none).
+// The voices were told apart at intake: declared (front matter, a folder per author, --authors), or found in the
+// writing itself (core/composite/voices.ts). Discovery read each voice on its own (./discover.ts) and sorted the
+// proposals into a trait table (core/composite/traits.ts). This step weighs every rule (core/composite/infer.ts), takes
+// each voice's most characteristic, keeps what every voice shows as method, settles every clash by which side is more
+// characteristic (core/composite/selection.ts), rules on every proposal through the same `applyDecisions` the
+// single-author review uses, and says ONE line. Nothing is asked and nothing is left open; the whole table is in the
+// run's record and `atelier report --skill <name>`, and `atelier fix "<what was wrong>"` changes any of it.
 
-import { createInterface } from 'node:readline';
-import { die, argv, flagAll, flagEach, loadSession, saveSession, orchestrated, sha, runFile, canReach, clientFor, proposerModel, numericFlag, type Session } from '../runtime.js';
+import { die, flagAll, flagEach, loadSession, saveSession, sha, runFile, canReach, clientFor, proposerModel, numericFlag, type Session } from '../runtime.js';
 import { existsSync } from 'node:fs';
 import { writeAtomic } from '../../core/state/fs-atomic.js';
 import { readJson } from '../../core/state/read-json.js';
-import type { Measurement, Requirement } from '../../core/state/canonical-state.js';
+import type { Requirement } from '../../core/state/canonical-state.js';
 import { suggestAll, modeFromIntent, type Suggestion, type SkillMode } from '../../core/ratification/suggest.js';
-import { buildTraitTable, describeTraitCounts, TRAIT_LABEL, type TraitClass, type TraitTable } from '../../core/composite/traits.js';
+import { buildTraitTable, type TraitClass, type TraitTable } from '../../core/composite/traits.js';
+import { weighTraits, inferredChoice, inferenceRecord, likingIn } from '../../core/composite/infer.js';
+import { quantitiesOf, describeQuantity } from '../../core/composite/quantity.js';
+import { lengthMeasuresOf } from '../../core/composite/length.js';
 import { readAdmiration, keywordClasses, type AdmireLine } from '../../core/composite/admire.js';
-import { composeSelection, describeComposite, instructs, openQuestions, openStanding, type CompositeAuthor, type CompositeRecord, type ConflictAnswer, type ModelPair, type ModelQuantity } from '../../core/composite/selection.js';
+import { composeSelection, instructs, openStanding, type CompositeAuthor, type CompositeRecord, type ConflictAnswer, type ModelPair, type ModelQuantity } from '../../core/composite/selection.js';
 import { readInstructionLines, type InstructionLine } from '../../core/composite/contradictions.js';
 import type { AuthorMap } from '../../core/composite/authors.js';
 import { formatMeasure } from './amend.js';
@@ -37,8 +37,9 @@ const WEIGHTS: Readonly<Record<string, string>> = {
 const piecesOf = (authors: AuthorMap, name: string): string[] => Object.keys(authors.of).filter((id) => authors.of[id] === name);
 
 /**
- * `--admire <file or author>=<what you like>`, each kept whole (a line has commas in it). A piece names its author;
- * several lines for one author are joined. An unknown name is refused, not guessed.
+ * `--admire <file or voice>=<what you like>`, each kept whole (a line has commas in it). A piece names its voice;
+ * several lines for one voice are joined; a line with no name (`--admire "the openings"`) is about every voice. An
+ * unknown name is refused, not guessed.
  */
 export function parseAdmire(given: readonly string[], authors: AuthorMap): Record<string, string> {
   const lower = (x: string): string => x.toLowerCase().replace(/^\.\//, '');
@@ -46,7 +47,8 @@ export function parseAdmire(given: readonly string[], authors: AuthorMap): Recor
   const out: Record<string, string[]> = {};
   for (const g of given) {
     const eq = g.indexOf('=');
-    if (eq <= 0) die(`--admire takes <file or author>=<what you like about it>; got "${g}".`);
+    if (eq < 0) { const text = g.trim(); if (text) for (const n of authors.names) out[n] = [...(out[n] ?? []), text]; continue; }
+    if (eq === 0) die(`--admire takes <file or voice>=<what you like about it>, or just what you like; got "${g}".`);
     const key = lower(g.slice(0, eq).trim()); const text = g.slice(eq + 1).trim();
     const author = authors.names.find((n) => lower(n) === key)
       ?? authors.of[Object.keys(authors.of).find((id) => [id, id.split('/').pop() ?? id, stem(id)].map(lower).includes(key)) ?? ''];
@@ -91,15 +93,15 @@ async function readLines(s: Session, lines: readonly AdmireLine[]): Promise<{ cl
     if (!canReach('discovery')) throw new Error('no model is set up');
     read = { classes: await readAdmiration(clientFor(proposerModel()), { spentUsd: 0, capUsd: numericFlag('--cap', 3.0), maxCalls: 1 }, lines), via: 'MODEL' };
   } catch (e) {
-    console.log(`(what you said could not be read by the model: ${(e as Error).message.split('\n')[0]}; it was read by its words instead, which is cruder.)`);
+    if (canReach('discovery')) console.log(`(what you said you like could not be read by the model: ${(e as Error).message.split('\n')[0]}; it was read by its words instead, which is cruder.)`);
     read = { classes: Object.fromEntries(lines.map((l) => [l.author, keywordClasses(l.text, l.available)])), via: 'KEYWORDS' };
   }
   saveSession({ ...loadSession(), admireRead: { key, classes: read.classes, via: read.via } });
   return read;
 }
 
-/** Said on the composite screen when no model read the final instructions for contradictions. */
-export const KEYWORD_ONLY_LINE = 'Contradictions between authors are checked by keyword only: a whole-piece structure rule may still sit beside a structure it rules out (one unbroken block of prose beside headings or lists), so read the instructions below.';
+/** Said under the build line when no model read the final instructions for contradictions. */
+export const KEYWORD_ONLY_NOTE = 'clashes between voices were found by keyword only: a whole-piece structure rule may still sit beside a structure it rules out; atelier report --skill <name> lists what instructs';
 
 /** The model's one reading of the final instructions: the pairs it names, and the quantities it read (absent in a reading kept before it read them). */
 interface ContradictionRead { readonly key: string; readonly pairs: readonly ModelPair[]; readonly quantities?: readonly ModelQuantity[]; readonly via: 'MODEL' | 'KEYWORDS' }
@@ -144,121 +146,85 @@ async function readInstructions(lines: readonly InstructionLine[]): Promise<{ pa
   return { pairs: read.pairs, quantities: read.quantities ?? [], via: read.via };
 }
 
-/** Ask, in a terminal, for the lines not given. Enter says nothing about that author. */
-async function askLines(authors: AuthorMap, have: Record<string, string>): Promise<Record<string, string>> {
-  const rl = createInterface({ input: process.stdin, output: process.stdout });
-  const out = { ...have };
-  try {
-    for (const name of authors.names) {
-      if (out[name]) continue;
-      const said = (await new Promise<string>((res) => { rl.question(`What do you like about ${name} (${piecesOf(authors, name).join(', ')})? `, res); })).trim();
-      if (said) out[name] = said;
-    }
-  } finally { rl.close(); }
-  return out;
+/** A length the request names for the piece, as a person would say it; null when it names none. */
+export function requestLength(request: string | null | undefined): string | null {
+  const q = request ? quantitiesOf(request).find((x) => x.measure === 'piece') : undefined;
+  return q ? describeQuantity(q) : null;
 }
 
 /**
- * Show the composite screen and, when the person accepts, rule on every proposal. Returns whether a standard's worth
- * of decisions was recorded, as `review` does, so `atelier new` knows whether to build.
+ * THE COMPOSITE, INFERRED: nothing is asked and no screen is shown. Each voice's rules are weighed (how consistently
+ * it shows them, how unlike the other voices and a plain draft they are, and anything the person said they like:
+ * core/composite/infer.ts), each voice's most characteristic are taken, what every voice shows is method, and every
+ * clash goes to the side that weighs more (core/composite/selection.ts). Every proposal is ruled through the same
+ * `applyDecisions` the single-author review uses, each ruling naming the voice it came from and why. One line is said;
+ * the whole table goes in the run's record and `atelier report --skill`. Returns whether a standard's worth of
+ * decisions was recorded, as `review` does, so `atelier new` goes on to build.
+ *
+ * What the person did say outranks inference: an optional preference (`--admire <voice or piece>=<words>`, or
+ * `--admire "<words>"` for every voice, or a sentence of liking in the request) weighs the matching rules up; a hidden
+ * expert override, `--conflict <n>=A|B|both`, settles a clash their way; `--set <id>=required` makes a rule instruct.
  */
-export async function compositeReview(opts: ReviewOptions = {}): Promise<boolean> {
+export async function compositeReview(_opts: ReviewOptions = {}): Promise<boolean> {
   let s = loadSession();
-  const authors = s.authors ?? die('these pieces are by one author: there is no composite to choose.');
+  const authors = s.authors ?? die('these pieces are by one voice: there is nothing to combine.');
   const done = new Set(s.decided.map((d) => d.requirementId));
   const pending = s.proposals.filter((p) => !done.has(p.requirementId));
   if (!pending.length) return s.decided.length > 0;
   const table = traitTable(s);
 
-  // ── WHAT THE PERSON LIKES ABOUT EACH ─────────────────────────────────────────────────────────
+  // ── WHAT THE PERSON SAID THEY LIKE, IF ANYTHING: NEVER ASKED FOR ──────────────────────────────
   const given = parseAdmire(flagEach('--admire'), authors);
-  let admire: Record<string, string> = { ...(s.admire ?? {}), ...given };
-  let accepted = argv.includes('--accept');
-  const yes = argv.includes('--yes');
-  if (!accepted && !yes && process.stdin.isTTY && authors.names.some((n) => !admire[n])) {
-    console.log(`\n${authors.names.length} authors, each read on its own. One line each: what do you like about this one? (Enter: nothing)`);
-    admire = await askLines(authors, admire);
-  }
+  const admire: Record<string, string> = { ...(s.admire ?? {}), ...given };
   if (JSON.stringify(admire) !== JSON.stringify(s.admire ?? {})) { saveSession({ ...s, admire }); s = loadSession(); }
-
-  if (!Object.keys(admire).length && !yes) {
-    printAsk(authors, table, opts.continueWith);
-    return false;
-  }
-
+  // A line given with --admire is read as such lines always are (by a model when one is set up); a sentence of liking
+  // in the request is read by its words alone, so a request that names nothing it likes costs nothing.
   const lines: AdmireLine[] = authors.names.map((name) => ({ author: name, text: admire[name] ?? '', available: availableOf(table, name) }));
   const read = await readLines(s, lines);
   s = loadSession();
+  const liking = likingIn(s.intent?.text);
+  const fromRequest = Object.fromEntries(authors.names.map((n) => [n, liking ? keywordClasses(liking, availableOf(table, n)) : []]));
+  const liked: Record<string, TraitClass[]> = Object.fromEntries(authors.names.map((n) => [n, [...new Set([...(read.classes[n] ?? []), ...(fromRequest[n] ?? [])])]]));
+  // What was said is recorded only where it named something a voice's rules carry.
+  const said: Record<string, string> = Object.fromEntries(authors.names.flatMap((n) => {
+    const t = [read.classes[n]?.length ? admire[n] : undefined, fromRequest[n]?.length ? liking : undefined].filter(Boolean).join('; ');
+    return t ? [[n, t]] : [];
+  }));
 
-  // ── THE CONFLICTS' ANSWERS, KEPT WITH THE RUN UNTIL ACCEPTED ─────────────────────────────────
-  // The numbers a person may answer are the conflicts on the screen: the table's, and any the final guard found
-  // among the rules that would instruct (core/composite/selection.ts), numbered after them.
-  const compAuthors: CompositeAuthor[] = authors.names.map((name) => ({ name, pieces: piecesOf(authors, name), admired: admire[name] ?? null, classes: read.classes[name] ?? [] }));
-  const answersOf = (all: Record<number, ConflictAnswer | null>): Record<number, ConflictAnswer> =>
-    Object.fromEntries(Object.entries(all).filter((e): e is [string, ConflictAnswer] => e[1] !== null).map(([k, v]) => [Number(k), v]));
-  // A rule the person makes required with --set is their latest word: it goes through the same guard as every rule
-  // that will instruct, and wins over an answer given before it (core/composite/selection.ts).
+  // ── THE WEIGHTS, AND WHAT THEY TAKE ─────────────────────────────────────────────────────────
+  const weights = weighTraits(table, pending, (id) => s.proposalMeta?.[id], authors, liked);
+  const length = requestLength(s.intent?.text);
+  const inferred = inferredChoice(weights, authors, { requestLength: length, pieceLength: new Set(pending.filter((p) => lengthMeasuresOf(p).includes('piece')).map((p) => p.requirementId)) });
+  const compAuthors: CompositeAuthor[] = authors.names.map((name) => ({ name, pieces: piecesOf(authors, name), admired: admire[name] ?? null, classes: liked[name] ?? [] }));
+  // What the person said explicitly outranks inference: a hidden expert's answer to a clash, a --set.
+  const answered = { ...(s.conflictAnswers ?? {}), ...parseConflictAnswers(flagAll('--conflict'), Math.max(table.conflicts.length, 99)) };
+  if (JSON.stringify(answered) !== JSON.stringify(s.conflictAnswers ?? {})) { saveSession({ ...s, conflictAnswers: answered }); s = loadSession(); }
+  const answers = Object.fromEntries(Object.entries(answered).filter((e): e is [string, ConflictAnswer] => e[1] !== null).map(([k, v]) => [Number(k), v]));
   const ids = new Set(pending.map((p) => p.requirementId));
   const fromFlags = parseChanges(flagAll('--set').join(' '), ids);
   if (fromFlags.errors.length) die(fromFlags.errors.join('\n'));
   const changes = fromFlags.changes;
-  const forcedOf = (): Set<string> => new Set([...changes].filter(([, v]) => v === 'required').map(([k]) => k));
-  const shown = composeSelection(table, pending, compAuthors, answersOf(s.conflictAnswers ?? {}), { forced: forcedOf(), modelPairs: storedContradictions()?.pairs ?? [], modelQuantities: storedContradictions()?.quantities ?? [] });
-  const answered = { ...(s.conflictAnswers ?? {}), ...parseConflictAnswers(flagAll('--conflict'), Math.max(table.conflicts.length, shown.conflicts.length)) };
-  if (JSON.stringify(answered) !== JSON.stringify(s.conflictAnswers ?? {})) { saveSession({ ...s, conflictAnswers: answered }); s = loadSession(); }
-  const answers = answersOf(answered);
-  // The guard by keyword first; then the rules that would instruct are read once by the model, and what it finds is asked.
-  const compose = async (): Promise<{ record: CompositeRecord; via: 'MODEL' | 'KEYWORDS' | 'NONE' }> => {
-    const forced = forcedOf();
-    const first = composeSelection(table, pending, compAuthors, answers, { forced });
-    const read = await readInstructions(instructionLines(first, s.proposals));
-    return { record: read.pairs.length || read.quantities.length ? composeSelection(table, pending, compAuthors, answers, { forced, modelPairs: read.pairs, modelQuantities: read.quantities }) : first, via: read.via };
-  };
-  let { record, via } = await compose();
-  const statementOf = (id: string): string => s.proposals.find((p) => p.requirementId === id)?.statement ?? id;
-  const measurementOf = (id: string): Measurement | undefined => s.proposals.find((p) => p.requirementId === id)?.measurement ?? undefined;
+  const forced = new Set([...changes].filter(([, v]) => v === 'required').map(([k]) => k));
+  // The keyword guard first; then the rules that would instruct are read once by a model for pairs that cannot both
+  // be followed, and any it names is settled the same way, by weight.
+  const first = composeSelection(table, pending, compAuthors, answers, { forced, inferred });
+  const reading = await readInstructions(instructionLines(first, s.proposals));
+  const composed = reading.pairs.length || reading.quantities.length
+    ? composeSelection(table, pending, compAuthors, answers, { forced, inferred, modelPairs: reading.pairs, modelQuantities: reading.quantities }) : first;
+  const preference = Object.keys(said).length ? { said, classes: liked, via: read.via === 'NONE' ? 'KEYWORDS' : read.via } : null;
+  const record: CompositeRecord = { ...composed, inference: inferenceRecord(composed, authors, s.voices ?? null, weights, preference, length) };
 
-  // ── THE ONE SCREEN ───────────────────────────────────────────────────────────────────────────
+  // ── THE RULINGS ─────────────────────────────────────────────────────────────────────────────
   const mode: SkillMode = s.intent?.mode ?? modeFromIntent(s.intent?.text ?? '').mode;
   const sugg = suggestionsByAuthor(pending, s, mode);
-  // THE SCREEN IS PRINTED BEFORE ANYTHING IS RECORDED, unless this very composite was printed by an earlier call:
-  // a continuation that brings new lines or answers changes it, and only the person may make it theirs.
-  const editorial = pending.filter((p) => p.measurement?.observer === 'GRAMMAR').map((p) => `Every author: ${p.requirementId}  ${p.statement}  (REQUIRED: the editorial rule every build carries)`);
-  const screenOf = (r: CompositeRecord, v: typeof via): string[] => {
-    const lines = describeComposite(r, statementOf, measurementOf);
-    return [...lines.slice(0, 2), ...(v === 'KEYWORDS' ? [KEYWORD_ONLY_LINE] : []), ...lines.slice(2), ...editorial];
-  };
-  const screen = screenOf(record, via);
-  const screenKey = sha(screen.join('\n'));
-  if (!accepted || !opts.shownBefore || s.compositeShown !== screenKey) {
-    console.log('');
-    if (read.via === 'KEYWORDS') console.log('(your lines were read by their words, not by a model)');
-    for (const l of screen) console.log(l);
-    console.log('');
-    saveSession({ ...loadSession(), compositeShown: screenKey }); s = loadSession();
-  }
-  if (!accepted && process.stdin.isTTY) {
-    const before = [...forcedOf()].join(' ');
-    accepted = await promptAccept(ids, changes);
-    // A rule made required at the prompt goes through the guard too, and what changed is shown before it is recorded.
-    if (accepted && [...forcedOf()].join(' ') !== before) {
-      ({ record, via } = await compose());
-      for (const l of record.notes ?? []) console.log(l);
-    }
-  }
-  if (!accepted) {
-    printHowToAccept(opts.continueWith, record);
-    return false;
-  }
-
-  // A range's rule shows what each author's pieces showed of it, not its carrier's alone.
+  // A range's rule shows what each voice's pieces showed of it, not its carrier's alone.
   const ranged = rangeEvidence(record, s.proposals);
   if (ranged.size) { saveSession({ ...loadSession(), proposals: s.proposals.map((p) => (ranged.has(p.requirementId) ? { ...p, evidence: ranged.get(p.requirementId) ?? p.evidence } : p)) }); s = loadSession(); }
   applyDecisions(decisionsFor(record, pending, sugg, changes));
   saveSession({ ...loadSession(), composite: record });
-  console.log((changes.size ? `Your changes: ${[...changes].map(([k, v]) => `${k} → ${v}`).join(' · ')}. ` : '')
-    + `Your composite is recorded: ${record.decisions.filter((d) => d.outcome === 'SELECTED').length} rule(s) chosen.` + openLine(record));
-  if (!orchestrated()) console.log('To build it: atelier new <the same folder> --accept');
+  writeAtomic(runFile('composite-inference.json'), JSON.stringify(record.inference, null, 1));
+  console.log(`\n${record.inference?.line ?? ''}`);
+  if (reading.via === 'KEYWORDS' && new Set(instructionLines(record, s.proposals).map((l) => l.author)).size > 1) console.log(`  (${KEYWORD_ONLY_NOTE})`);
   return true;
 }
 
@@ -327,12 +293,16 @@ export function decisionsFor(record: CompositeRecord, pending: readonly Requirem
     // A habit keeps the evidence's ruling: one its author's own pieces argue against is rejected, as in any review.
     const decision: 'APPROVE' | 'REJECT' = !d || d.outcome === 'REJECTED' || d.outcome === 'OPEN' || (d.outcome === 'HABIT' && s?.decision === 'REJECT') ? 'REJECT' : 'APPROVE';
     const owners = Boolean(d?.byAdmiration && d.outcome === 'SELECTED' && !d.shownOnly);
+    // INFERRED (core/composite/infer.ts): taken as the most characteristic of its voice, its method, or the side of a
+    // clash that was more characteristic. It instructs as a chosen rule does, and its ruling says it was inferred.
+    const inferred = Boolean(d?.inferred && d.outcome === 'SELECTED' && !d.shownOnly);
     const counted = Boolean(p.measurement ?? d?.range);
     const weight = !d || decision === 'REJECT' ? null
-      : owners ? (counted ? 'PREFERRED' : 'REQUIRED')
+      : owners || inferred ? (counted ? 'PREFERRED' : 'REQUIRED')
         : d.outcome === 'HABIT' || d.shownOnly ? 'PREFERRED'
           : s?.decision === 'APPROVE' && s.materiality ? s.materiality : 'PREFERRED';
-    const saidBy = owners ? `selected by you ${from}${counted ? ', a counted target that steers and never fails a draft' : ''}` : `composite, ${from}`;
+    const target = counted ? ', a counted target that steers and never fails a draft' : '';
+    const saidBy = owners ? `selected by you ${from}${target}` : inferred ? `inferred ${from}${target}` : `composite, ${from}`;
     const suggested = { decision, materiality: weight, why: `${saidBy}: ${d?.why ?? 'no trait row'}${s ? `; evidence: ${s.why}` : ''}` };
     const range = d?.range ? formatMeasure(d.range) : null;
     // The rule that carries both limits says the limits it is checked against, not its own author's alone.
@@ -349,40 +319,4 @@ export function decisionsFor(record: CompositeRecord, pending: readonly Requirem
     if (decision === 'REJECT') return { id: p.requirementId, decision: 'REJECT', suggested };
     return { id: p.requirementId, decision: 'APPROVE', materiality: weight ?? 'PREFERRED', suggested, ...(range ? { measure: range, ...said } : {}), ...(s?.needs ? { needs: s.needs } : {}) };
   });
-}
-
-function printAsk(authors: AuthorMap, table: TraitTable, continueWith: string | undefined): void {
-  console.log(`\n${describeTraitCounts(table)}.`);
-  console.log('Your skill is the combination you choose, so nothing is chosen yet. For each author, say what you like about their pieces:');
-  for (const name of authors.names) {
-    const classes = availableOf(table, name).map((c) => TRAIT_LABEL[c]);
-    console.log(`  ${name.padEnd(14)} ${piecesOf(authors, name).join(', ')}   (read: ${classes.join('; ') || 'nothing'})`);
-  }
-  const cmd = continueWith ?? 'atelier new <the same folder>';
-  const first = authors.names[0] ?? 'author';
-  console.log(`Then:  ${cmd} --admire ${/\s/.test(first) ? `"${first}"` : first}="<what you like about this author>" --admire …`);
-  console.log(`  (--yes goes on with no line for an author: nothing is taken from them alone)`);
-}
-
-function printHowToAccept(continueWith: string | undefined, record: CompositeRecord): void {
-  const cmd = continueWith ? `${continueWith} --accept` : 'atelier new <the same folder> --accept';
-  const open = openQuestions(record);
-  console.log('Nothing was decided. When you are ready:');
-  console.log(`  ${cmd}   accept this composite${continueWith ? ', and build' : ''}`);
-  if (open.length) { const n = open[0].reopened?.in ?? open[0].n; console.log(`  ${cmd} --conflict ${n}=A   answer a conflict first (A, B, both, or later: left open)`); }
-  console.log(`  ${cmd} --set <id>=required   make a chosen rule instruct, or <id>=reject to drop one`);
-}
-
-async function promptAccept(ids: ReadonlySet<string>, changes: Map<string, string>): Promise<boolean> {
-  const rl = createInterface({ input: process.stdin, output: process.stdout });
-  try {
-    for (;;) {
-      const answer = (await new Promise<string>((res) => { rl.question('Enter to accept this composite · or type changes (p3=required p5=reject) · q to stop: ', res); })).trim();
-      if (answer.toLowerCase() === 'q') return false;
-      if (!answer) return true;
-      const { changes: more, errors } = parseChanges(answer, ids);
-      for (const e of errors) console.log(`  ${e}`);
-      for (const [k, v] of more) { changes.set(k, v); console.log(`  ${k} → ${v}`); }
-    }
-  } finally { rl.close(); }
 }

@@ -25,13 +25,14 @@ export const ADMIRE_SCHEMA: Record<string, unknown> = {
 };
 
 const SYSTEM = `A person has read pieces by several writers and said, in a line each, what they like about each writer's work.
-Map each line to the TRAIT CLASSES it names, from these six and no others:
+Map each line to the TRAIT CLASSES it names, from these and no others:
 
 ${TRAIT_CLASSES.map((c) => `  ${c.padEnd(10)} ${TRAIT_LABEL[c]}`).join('\n')}
 
 Rules: pick a class only when the line admires it (praise of how it opens is "opening"; of its figures, sources or
 examples, "evidence"; of its sentences, paragraphs or speed, "pace"; of its tone or register, "voice"; of how the
-argument is built or ordered, "structure"; of how the writer decides or works, "method"). "Everything" or "all of
+argument is built or ordered, "structure"; of how the writer decides or works, "method"; of its metaphors, analogies
+or imagery, "figure"; of what it makes a reader feel, "effect"). "Everything" or "all of
 it" is every class listed as available for that writer. Pick only from the classes listed as available for that
 writer: a class their pieces gave no rule for cannot be chosen. A line that admires nothing listed gets no class.
 Never pick a class for a writer whose line is empty.`;
@@ -48,6 +49,8 @@ const PRAISE: Readonly<Partial<Record<TraitClass, RegExp>>> = {
   evidence: /\b(depth|deep|dense|research)\b/i,
   pace: /\b(speed|quick|momentum)\b/i,
   voice: /\b(formality|funny|direct|style|sound|sounds)\b/i,
+  figure: /\b(vivid|picture|pictures|paints)\b/i,
+  effect: /\b(touching|gripping|haunting|heart|warmth|makes me|made me)\b/i,
   method: /\b(method|approach|decides|decision|decisions|discipline|process|way of working|moves|thinks|thinking|reasoning)\b/i,
 };
 const KEYWORDS: readonly (readonly [TraitClass, RegExp | undefined, RegExp | undefined])[] = TRAIT_CLASSES.map((c) => [c, CLASS_WORDS.find(([k]) => k === c)?.[1], PRAISE[c]]);
