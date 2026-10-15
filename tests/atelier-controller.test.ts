@@ -238,9 +238,9 @@ describe('through the loop', () => {
     expect(ctl.callsUsed).toBe(1); expect(ctl.usdUsed).toBeCloseTo(0.001, 9);
     expect(r.output).toBe(text);
   });
-  it('one agreement error and one graded miss: the graded miss is moved first, then the error corrected in place, with no call for it', async () => {
+  it('one mechanical error and one graded miss: the graded miss is moved first, then the error corrected in place, with no call for it', async () => {
     resetGrammar(); setGrammarProvider(stubGrammar); await ensureGrammar();
-    const faulty = text.replace(plainS, 'They was sure the rule holds in this case, whatever the reader brings to it.');
+    const faulty = text.replace(plainS, 'They seperate the rule from this case, whatever the reader brings to it.');
     const v0 = featureOf('parenthesis')!.measure(faulty)!;
     const g1 = { requirementId: 'g1', statement: 'No mechanical errors: spelling, agreement, punctuation.', materiality: 'REQUIRED', authority: 'USER_ADOPTED', appliesWhen: 'GENERAL', kind: 'BOUNDARY',
       measurement: { observer: 'GRAMMAR', params: {} } };
@@ -254,7 +254,7 @@ describe('through the loop', () => {
     expect(at).toBeGreaterThan(0);
     expect(steps[at]).toEqual(['grammar', ['g1'], 'kept']);
     expect(r.repair!.controller!.decisions[at]).toMatchObject({ expectedCostUsd: 0, observed: { calls: 0, usd: 0 } });
-    expect(r.output).toContain('They were sure the rule holds');
+    expect(r.output).toContain('They separate the rule from this case');
     expect(r.repair?.violatedAfter).toEqual([]);
   });
   it('through decide: grammar comes after enforced rules, length and graded misses, is free, and is never chosen for nothing', () => {
