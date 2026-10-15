@@ -25,7 +25,8 @@ import { draftHash, appendDecision, type RatificationLedger } from '../../core/r
 import { decide } from '../../core/ratification/authority.js';
 import type { Requirement } from '../../core/state/canonical-state.js';
 import type { GoldenCase } from '../../core/golden/case.js';
-import { proposalsAcross, countedOffers, tellOffers, stepsOf, type MethodProposal } from '../../core/method/standard.js';
+import { proposalsAcross, countedOffers, tellOffers, stepsOf, shortFormOffers, type MethodProposal, type ShortFormOptions } from '../../core/method/standard.js';
+import { formatOf } from '../../core/observers/formats.js';
 import { readCase, corpusFiles } from '../corpus.js';
 import { observesOf, propositionOf, type Observes } from '../../core/eval/observes.js';
 import { planFor, describePlan } from '../../core/plan/execution-plan.js';
@@ -140,6 +141,18 @@ function readExamples(goldenPath: string, notePath: string): { folder: string | 
   return { folder, cases };
 }
 
+/**
+ * `--limit <chars>`: the platform's character limit, the owner's to state; or the format's where `--class` names one
+ * that has it. Checked before anything is built: a limit that is not a whole number is refused, never guessed at.
+ */
+export function shortFormFlags(cls: string | undefined, given: string | undefined = flag('--limit')): ShortFormOptions {
+  if (given !== undefined && !/^\d{1,6}$/.test(given.trim())) die(`--limit takes a whole number of characters, got "${given}".`);
+  if (given !== undefined && Number(given) <= 0) die('--limit must be greater than zero.');
+  const f = formatOf(cls);
+  const limit = given !== undefined ? { chars: Number(given), from: '--limit' } : f?.maxChars !== undefined ? { chars: f.maxChars, from: f.label } : null;
+  return { limit, ...(f?.urlChars !== undefined ? { urlChars: f.urlChars } : {}) };
+}
+
 /** The command as it was typed, less some of its words: what to say to do the same thing again. */
 function typedWithout(drop: readonly string[]): string {
   const typed = process.argv.slice(2); const at = typed.indexOf('--name');
@@ -243,11 +256,17 @@ export async function method(): Promise<void> {
   // the owner judges: a skill of examples alone still has a standard, and says honestly what it is.
   const likeThese: MethodProposal[] = notePath === null ? [{ statement: `New work reads like the ${cases.length === 1 ? 'example' : `${cases.length} examples`} given: the same kind of piece, at their length, in their manner.`,
     origin: 'SHOWN_BY_EXAMPLE', obligation: 'JUDGEMENT', measurement: null, onExample: null, conflict: null }] : [];
-  const proposals = [...likeThese, ...read.proposals, ...countedOffers(read.proposals, cases), ...tellOffers(cases, note)];
+  // THE PLATFORM'S FACTS FOR SHORT PIECES, never assumed: a character limit from `--limit`, or from the format the class
+  // names (a post on X: 280), and how that format counts a link. Said on the screen, with what a small corpus can and
+  // cannot yet require (core/observers/short-form.ts).
+  const shortForm = shortFormFlags(flag('--class'));
+  const short = shortFormOffers(cases, shortForm);
+  const proposals = [...likeThese, ...read.proposals, ...countedOffers(read.proposals, cases, shortForm), ...tellOffers(cases, note)];
   const example = cases[lead];
   const whole = argv.includes('--report');
   console.log(`${notePath === null ? 'No method note: built from your examples' : `Method: ${basename(notePath)}`}  ·  ${cases.length === 1 ? `example: ${example.id}` : `${cases.length} examples from ${basename(goldenPath)}`}${whole && cases.length > 1 ? `; checks read from ${example.id}, then held against the rest` : ''}${whole && example.material.length ? ` with ${example.material.length} file(s) of material` : ''}\n`);
   for (const line of whole ? describeMethod(proposals, example.caseClass) : shortScreen(proposals)) console.log(line);
+  if (short.limits.length) { console.log(''); for (const line of short.limits) console.log(`Short form: ${line}`); }
 
   // THE KIND OF WORK, SAID AND RECORDED, NEVER ASKED. It decides one thing: on a kind the claim check was measured on
   // (essays, posts), a sentence not found in bound material is cut; anywhere else it is listed for the owner to check.
