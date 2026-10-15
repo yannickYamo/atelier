@@ -28,7 +28,8 @@ import { deriveContrastRules, contrastTopics } from '../../core/observers/contra
 import { shortFormMeasured, shortFormOptions } from '../../core/observers/short-form.js';
 import { buildProfile } from '../../core/fidelity/profile.js';
 import { SELECTION } from '../../core/observers/selection.js';
-import { CLASS_MIN_PIECES, CONTEXT_CLASSES, contextClassOf } from '../../core/fidelity/types.js';
+import { CLASS_MIN_PIECES, CONTEXT_CLASSES, contextClassOf, type ContextClass } from '../../core/fidelity/types.js';
+import { buildTraitTable } from '../../core/composite/traits.js';
 import { buildRetrievalIndex } from '../../core/fidelity/retrieval.js';
 import { calibrateTypicality } from '../../core/fidelity/typicality.js';
 import { judgeCountedFeatures, signalsOf } from '../../core/observers/selection.js';
@@ -102,7 +103,7 @@ export async function discover(): Promise<void> {
   let client = clientFor(proposerModel());
   let proposals: Requirement[];
   let proposalMeta: Record<string, ProposalMeta>;
-  let heldOutChecked = true;
+  let heldOutChecked: boolean;
 
   // ─── THE SPLIT IS USED WHENEVER THE CORPUS ALLOWS IT ────────────────────────────────────────
   //
@@ -148,7 +149,8 @@ export async function discover(): Promise<void> {
   // both vantages, the matcher, every rule the union can keep against every held-out piece — so it
   // binds a runaway without binding the run it was sized for.
   const worstCaseCalls = 2 /* vantages */ + 2 /* matcher */ + 24 * heldCount + 4;
-  const budget: Budget = { spentUsd: 0, capUsd: numericFlag('--cap', 3.0), maxCalls: numericFlag('--max-calls', worstCaseCalls) };
+  // With several authors each is read on its own, so the bound grows with their number (below).
+  const budget: Budget = { spentUsd: 0, capUsd: numericFlag('--cap', 3.0), maxCalls: numericFlag('--max-calls', worstCaseCalls * Math.max(1, s.authors?.names.length ?? 1)) };
   const heldTok = heldItems.reduce((n, i) => n + tokOf(i.text), 0);
   // ── THE ESTIMATE USES THE RATE THAT WILL ACTUALLY BE CHARGED ──────────────────────────────
   //
@@ -199,6 +201,15 @@ export async function discover(): Promise<void> {
   // the person's gateway served. A DEFAULT that is not served is swapped the same way, and said. A model
   // the person named is not swapped behind their back: that stops with the setting to change.
   let usedModel = proposerModel();
+  /**
+   * THE RULES READ FROM `openItems`, with the roles `openGoldens` gives them: the chain where the split allows it, one pass over
+   * every piece otherwise. Ids are numbered from `base`, so pieces by several authors, each read on their own
+   * (core/composite), take one numbering. `who` names the author, and the step then reports in one line.
+   */
+  // The parameters keep the names of what they are given: the open pieces (never the reserve), or one author's share of them.
+  const readRules = async (openItems: readonly { id: string; text: string }[], openGoldens: typeof importPlan.goldens, base: number, who: string | null):
+  Promise<{ proposals: Requirement[]; proposalMeta: Record<string, ProposalMeta>; heldOutChecked: boolean; heldOutIds: readonly string[] | null }> => {
+  let proposals: Requirement[]; let proposalMeta: Record<string, ProposalMeta>; let heldOutChecked = true;
   let chain: Awaited<ReturnType<typeof runDiscoveryChain>>;
   try {
     chain = await runDiscoveryChain(client, budget, 'skill', openItems, openGoldens, { standardDimensions: [ev.workType] }, usedModel);
@@ -234,21 +245,22 @@ export async function discover(): Promise<void> {
       ? openItems.filter((i) => goldenIds.has(i.id))
       : openItems.filter((i) => !skillIds.has(i.id));
 
-    console.log(`\nNot enough to validate against: ${chain.detail}`);
+    if (who) console.log(`${who}: ${forProposal.length} piece(s), read in one pass; too few to check a rule on work the reader had not seen.`);
+    else console.log(`\nNot enough to validate against: ${chain.detail}`);
     // The page's "not checked against unseen work" caveat reads this flag, and nothing ever wrote
     // it — the one warning built for exactly this downgrade could never render. The first fix wrote it
     // onto `s.run`, but the run saved below is `t.run`, the transition taken before this branch, so
     // the flag was set on an object nobody persisted. It is carried to the save instead.
     heldOutChecked = false;
-    console.log(`Falling back to a single pass over ${forProposal.length} piece(s). Every rule below is a`);
-    console.log(`PROPOSAL nothing has checked — no rule was tested against work the proposer had not read.`);
+    if (!who) console.log(`Falling back to a single pass over ${forProposal.length} piece(s). Every rule below is a`);
+    if (!who) console.log(`PROPOSAL nothing has checked — no rule was tested against work the proposer had not read.`);
     if (skillIds.size) console.log(`Your existing skill is NOT among them — a standard read off the skill we are improving would only restate it.`);
     // SEVERAL VANTAGES, NOT ONE. A single framing recovers one layer of an author and misses another:
     // two prompts differing by one clause recovered 3/9 and 4/9 of an author's own sealed rules, and
     // their union ~7/9. The disjointness sits below the same-framing noise floor on both models
     // tested, so it is the vantage doing the work rather than run-to-run variance.
     const { union, byFraming } = await proposeAcrossFramings(client, budget, forProposal);
-    console.log(`\n${describeUnion(union, (r) => r.statement)}`);
+    if (!who) console.log(`\n${describeUnion(union, (r) => r.statement)}`);
 
     // ── WHAT A MACHINE CAN SETTLE ABOUT THIS MODEL'S OUTPUT ────────────────────────────────
     //
@@ -265,33 +277,36 @@ export async function discover(): Promise<void> {
       }
       console.log(`\nThese are defects, not opinions. Candidates are still shown; you are deciding on them either way.`);
     }
-    proposalMeta = Object.fromEntries(union.members.map((m, i) => [`p${i + 1}`, {
+    proposalMeta = Object.fromEntries(union.members.map((m, i) => [`p${base + i + 1}`, {
       framings: m.framings, alsoPhrasedAs: m.rules.slice(1).map((r) => r.rule.statement),
       heldOut: null, needs: null } satisfies ProposalMeta]));
     proposals = union.members.map((m, i) => {
       const r = m.rules[0].rule;
       return {
-        requirementId: `p${i + 1}`, statement: r.statement, appliesWhen: r.appliesWhen,
+        requirementId: `p${base + i + 1}`, statement: r.statement, appliesWhen: r.appliesWhen,
         kind: r.kind, authority: 'DERIVED_UNRATIFIED' as const,
         provenance: sourceProvenance(), evidence: r.evidence ?? null, evidenceItemId: r.evidenceItemId ?? null,
         wouldBeAbsentIf: r.wouldBeAbsentIf?.trim() || null, materiality: null, realizationTolerance: null, outputShape: null };
     });
   } else {
-    console.log(`\nProposed from ${chain.proposalIds.length} piece(s): ${chain.proposalIds.join(', ')}`);
-    console.log(`Checked against ${chain.heldOutIds.length} the proposer never saw: ${chain.heldOutIds.join(', ')}  (${chain.observeCalls} checks)`);
+    if (who) console.log(`${who}: proposed from ${chain.proposalIds.length} piece(s), checked against ${chain.heldOutIds.length} the reader never saw (${chain.observeCalls} checks).`);
+    else {
+      console.log(`\nProposed from ${chain.proposalIds.length} piece(s): ${chain.proposalIds.join(', ')}`);
+      console.log(`Checked against ${chain.heldOutIds.length} the proposer never saw: ${chain.heldOutIds.join(', ')}  (${chain.observeCalls} checks)`);
+    }
     proposalMeta = Object.fromEntries(chain.hypotheses.map((h, i) => {
       const d = h.hypothesis.description;
       const member = chain.framingUnion?.members.find((m) => m.rules.some((r) => r.rule.description === d));
       const factor = chain.proposed.find((f) => f.description === d);
       const applicable = h.golden.filter((g) => g.applicable).length;
-      return [`p${i + 1}`, {
+      return [`p${base + i + 1}`, {
         framings: member?.framings ?? [],
         alsoPhrasedAs: (member?.rules ?? []).map((r) => r.rule.description).filter((x) => x !== d),
         heldOut: { applicable, present: h.golden.filter((g) => g.applicable && g.present).length },
         needs: factor?.needs?.trim() ? factor.needs.trim() : null } satisfies ProposalMeta];
     }));
     proposals = chain.hypotheses.map((h, i) => ({
-      requirementId: `p${i + 1}`, statement: h.hypothesis.description,
+      requirementId: `p${base + i + 1}`, statement: h.hypothesis.description,
       appliesWhen: h.hypothesis.appliesWhen.map((x) => x.describe).join('; ') || 'GENERAL',
       // The chain does not type rules as GENERATIVE/BOUNDARY; it types EVIDENCE. Everything arrives
       // GENERATIVE, and a prohibition is recognised where the author confirms one — which is the
@@ -313,8 +328,62 @@ export async function discover(): Promise<void> {
     const seen = chain.hypotheses.filter((h) => h.golden.some((g) => g.applicable && g.present)).length;
     // How discovery got to its rules is detail: under `atelier new` the review screen follows, and it is what matters.
     if (!orchestrated()) console.log(`${chain.proposed.length} proposed, ${proposals.length} survived validation, ${seen} seen again in held-out work.`);
-
   }
+    return { proposals, proposalMeta, heldOutChecked, heldOutIds: 'heldOutIds' in chain ? chain.heldOutIds : null };
+  };
+
+  // ── PIECES BY SEVERAL AUTHORS: EACH READ ON ITS OWN, NEVER POOLED (core/composite) ──────────────
+  //
+  // Read as one author, five writers give the average of five, which nobody asked for. So each author's pieces go
+  // through the same discovery alone: the rules a model reads, and the counts (sentence and paragraph length, hedging)
+  // taken per author. Every proposal names its author. The rules the model and the author's drafts would separate
+  // (contrast), the fidelity profile and the signals are pooled measures, and are not made here. Then a free pass
+  // sorts the proposals into shared, unique, conflicting and task-dependent (core/composite/traits.ts), for the
+  // composite screen `atelier new` shows next.
+  // ONE PLACE THE PAID-FOR READING IS SAVED, whichever path made it: two call sites would let a later edit persist on
+  // one and not the other.
+  const persist = (heldOutPieces: number | null): void => {
+    saveSession({ ...s, run: { ...(t as { run: Run }).run, heldOutChecked, ...(heldOutPieces !== null ? { heldOutPieces } : {}) }, proposals, proposalMeta });
+  };
+  if (s.authors) {
+    const authors = s.authors;
+    proposals = []; proposalMeta = {}; heldOutChecked = true; let heldOutPieces = 0; let mBase = 0; let pBase = 0;
+    const lengthClass: Record<string, ContextClass> = {};
+    for (const name of authors.names) {
+      const mine = new Set(openItems.filter((i) => authors.of[i.id] === name).map((i) => i.id));
+      if (!mine.size) continue;
+      const aItems = openItems.filter((i) => mine.has(i.id)); const aGoldens = openGoldens.filter((g) => mine.has(g.contextId));
+      const r = await readRules(aItems, aGoldens, pBase, name);
+      pBase += r.proposals.length;
+      heldOutChecked = heldOutChecked && r.heldOutChecked; heldOutPieces += r.heldOutIds?.length ?? 0;
+      // The counts, on this author's pieces alone: those with a proposal role as read, the rest as held out; with no
+      // role among them (the plan gave this author's one piece to the other side), every piece of theirs is read.
+      const readRole = new Set(aGoldens.filter((g) => g.role === 'PROPOSAL').map((g) => g.contextId));
+      const read = readRole.size ? aItems.filter((i) => readRole.has(i.id)) : aItems;
+      const held = readRole.size ? aItems.filter((i) => !readRole.has(i.id)) : [];
+      const measured = deriveMeasuredRules(read, held, sourceProvenance()).map((m, k) => ({ ...m, requirement: { ...m.requirement, requirementId: `m${mBase + k + 1}` } }));
+      mBase += measured.length;
+      const own = aItems.map((i) => i.text);
+      proposals = [...proposals, ...r.proposals, ...measured.map((m) => m.requirement)];
+      proposalMeta = { ...proposalMeta,
+        ...Object.fromEntries(Object.entries(r.proposalMeta).map(([id, m]) => [id, { ...m, source: name } satisfies ProposalMeta])),
+        ...Object.fromEntries(measured.map((m) => [m.requirement.requirementId, { framings: [], alsoPhrasedAs: [], heldOut: null, needs: null, inSample: m.conformance,
+          corpus: { pieces: own.length, breaking: m.requirement.measurement ? piecesBreaking(own, m.requirement.measurement) : [] }, source: name } satisfies ProposalMeta])) };
+      const words = own.map((t) => wordsOf(proseRegions(t).map((x) => x.text).join('\n\n')).length);
+      lengthClass[name] = contextClassOf(Math.round(quantile(words, 0.5)));
+      if (measured.length) console.log(`  ${measured.length} rule(s) counted from ${name}'s pieces alone: ${measured.map((m) => m.requirement.requirementId).join(', ')}.`);
+    }
+    const table = buildTraitTable(proposals, (id) => proposalMeta[id]?.source, (a) => lengthClass[a] ?? null);
+    writeAtomic(runFile('trait-table.json'), JSON.stringify(table, null, 1));
+    persist(heldOutPieces || null);
+    for (const f of ['signals.json', 'fidelity.json', 'retrieval.json', 'typicality.json']) rmSync(runFile(f), { force: true });
+    const n = (k: string): number => table.rows.filter((r) => r.kind === k).length;
+    console.log(`Read. ${proposals.length} rule(s) from ${authors.names.length} authors, each on its own: ${n('SHARED')} shared, ${n('UNIQUE')} unique to one, ${n('CONFLICTING')} conflicting, ${n('TASK_DEPENDENT')} task-dependent. Discovery cost $${budget.spentUsd.toFixed(2)}.`);
+    return;
+  }
+
+  const read0 = await readRules(openItems, openGoldens, 0, null);
+  ({ proposals, proposalMeta, heldOutChecked } = read0);
 
   // ── THE METHODOLOGY CHANNEL ────────────────────────────────────────────────────────────────
   //
@@ -381,7 +450,7 @@ export async function discover(): Promise<void> {
   // become proposed caps and floors, each checked on held-out pieces first; see core/observers/contrast.ts.
   // Saved BEFORE the optional comparison: whatever happens to it, the discovery already paid for is kept.
   // How many pieces the rules were checked against: what a move's "seen in N pieces" is counted over at build.
-  saveSession({ ...s, run: { ...(t as { run: Run }).run, heldOutChecked, ...('heldOutIds' in chain ? { heldOutPieces: chain.heldOutIds.length } : {}) }, proposals, proposalMeta });
+  persist(read0.heldOutIds ? read0.heldOutIds.length : null);
   // THE SIGNALS ARE THIS STEP'S OR NONE. Build installs whatever signals.json the run holds, so one left
   // by an earlier discovery would be installed after a comparison that failed, or never ran
   // (--no-contrast), as if this one had found them.

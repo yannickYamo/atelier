@@ -62,16 +62,26 @@ export const propositionOf = (m: Measurement): string => {
       + (options.length ? `, starting with one of ${options.map((o) => `"${o}"`).join(', ')} on a line of its own` : '');
   }
   if (m.observer === 'TABLE' && strings(m.params.columns).length) return `a table with the columns ${strings(m.params.columns).join(', ')}`;
-  if (m.observer === 'LINES') return 'every path:line cited is a line of the material with something on it';
+  if (m.observer === 'LINES') {
+    const sections = strings(m.params.sections);
+    return `every path:line cited is a line of the material with something on it${m.params.perItem ? `, and every finding${sections.length ? ` under ${sections.map((s) => `"${s}"`).join(', ')}` : ''} carries one` : ''}`;
+  }
   if (m.observer === 'CITED') return 'every figure is one the request or the material gives';
+  if (m.observer === 'NAMES_TEST') return 'the work names a test (a test file, or a test function or case in backticks)';
   // A check this version does not know (a store written by a later one) is said as that, and never stops a record.
   return (observerFor(m.observer) as ReturnType<typeof observerFor> | undefined)?.describe(m.params) ?? `a check this version does not know (${m.observer})`;
 };
 
-/** What a check against the material never reads, whatever the rule's words: said as it is, not in the owner's words. */
-const NEVER_READ: Record<string, string> = {
-  LINES: 'whether each item carries a citation, and whether the cited line is the right one',
-  CITED: 'whether each figure names its source, and whether it is used as the source means it',
+/**
+ * What a check never reads, whatever the rule's words: said as it is, not in the owner's words. A check that looks a
+ * citation up reads nothing of whether the line supports what is said of it; one that finds a test's name reads
+ * nothing of whether it is the right test. So each of these is read in part, always, and a pass alone never verifies.
+ */
+const neverRead = (m: Measurement): string | null => {
+  if (m.observer === 'LINES') return m.params.perItem ? 'whether the cited line supports the claim' : 'whether each item carries a citation, and whether the cited line is the right one';
+  if (m.observer === 'CITED') return 'whether each figure names its source, and whether it is used as the source means it';
+  if (m.observer === 'NAMES_TEST') return 'whether the named test is the right one';
+  return null;
 };
 
 /** The names a check looks for: its sections, columns, options and quoted words. */
@@ -85,7 +95,8 @@ const namedIn = (m: Measurement): Set<string> => new Set(Object.values(m.params)
 export function observesOf(statement: string, m: Measurement | null | undefined, fromCheck: boolean): Observes | null {
   if (!m) return null;
   const proposition = propositionOf(m);
-  if (NEVER_READ[m.observer]) return { proposition, coverage: 'PARTIAL', unchecked: NEVER_READ[m.observer] };
+  const never = neverRead(m);
+  if (never) return { proposition, coverage: 'PARTIAL', unchecked: never };
   if (fromCheck) return { proposition, coverage: 'FULL' };
   const kind = new Set(kindWords(m));
   if (!kind.size) return { proposition, coverage: 'PARTIAL', unchecked: 'how much of this rule the check reads is not known' };

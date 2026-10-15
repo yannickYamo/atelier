@@ -5,7 +5,8 @@
 // command file reads as one job rather than as a slice of everything.
 
 import type { StoredSignal } from '../../core/observers/selection.js';
-import { selectVoicePieces, selectWithinBudget, isExcerpt, usualLength, lengthSpan, PIECE_BUDGET_WORDS, COMPACT_PIECE_BUDGET_WORDS, COMPACT_PIECE_FORM, type PieceForm, type Voice } from '../../core/compiler/voice.js';
+import { compositeVoiceOf, type CompositeRecord } from '../../core/composite/selection.js';
+import { selectCompositePieces, selectVoicePieces, selectWithinBudget, isExcerpt, usualLength, lengthSpan, PIECE_BUDGET_WORDS, COMPACT_PIECE_BUDGET_WORDS, COMPACT_PIECE_FORM, type PieceForm, type Voice } from '../../core/compiler/voice.js';
 import { derivePersona, reconcilePersona, standardForbids } from '../../core/compiler/persona.js';
 import type { Budget } from '../../core/inference/client.js';
 import { sessionCorpus, sessionPairs, unsplitPairs } from '../corpus.js';
@@ -167,6 +168,19 @@ async function chooseVoice(L: store.StoreLayout, v: StandardVersion): Promise<Vo
   };
   const none = (): string => `none of the author's pieces is served${wordBudget === undefined ? '' : `: none fits within ${wordBudget} words`}; how they sound and how long they write are kept`;
   const prefs = { pieceForm: form === 'excerpts' ? form : undefined, pieceBudget: wordBudget };
+  // A COMPOSITE (core/composite): pieces by several authors, and the owner's choice from each. Its voice is one piece
+  // from every author something was taken from, within the budget, said as whose it is; no persona is derived, since
+  // one read over every author's pieces would describe their average, which nobody chose.
+  // This run's choice, or, rebuilt where the run is not at hand, the one kept with the skill.
+  const comp = loadSession().composite ?? store.getComposite(L);
+  if (comp && (!voice || (reselect && voice.composite))) {
+    const made = compositeVoice(comp, v, wordBudget ?? COMPACT_PIECE_BUDGET_WORDS, asked.form ?? (stored?.pieceForm ?? COMPACT_PIECE_FORM));
+    if (made) {
+      const by = made.composite?.pieceAuthors ?? [];
+      console.log(`Voice: a composite of ${made.composite?.authors.length ?? 0} writer(s); ${by.length ? `one piece each from ${by.join(', ')}` : 'none of their pieces fits the budget'}, served as theirs. Turn off with --voice none.`);
+      return made;
+    }
+  }
   if (!voice && readable.length >= 3) {
     const pieces = choose();
     voice = { passages: [], lengthWords: usualLength(readable), pieces, ...(prefs.pieceForm ? { pieceForm: prefs.pieceForm } : {}), ...(wordBudget === undefined ? {} : { pieceBudget: wordBudget }) };
@@ -249,7 +263,8 @@ async function chooseVoice(L: store.StoreLayout, v: StandardVersion): Promise<Vo
     }
   }
   if (personaFlag === 'none') return { ...voice, persona: undefined };
-  if (!derivesPersona || readable.length < 3 || (personaFlag !== 'auto' && voice.persona)) return voice;
+  // A composite has no persona: one read over several authors' pieces describes their average (see above).
+  if (!derivesPersona || voice.composite || readable.length < 3 || (personaFlag !== 'auto' && voice.persona)) return voice;
   const budget: Budget = { spentUsd: 0, capUsd: numericFlag('--cap', 1.5), maxCalls: 1 };
   try {
     const persona = reconcilePersona(await onCorpusReader((c) => derivePersona(c, budget, readable)), standardForbids(v));
@@ -262,6 +277,36 @@ async function chooseVoice(L: store.StoreLayout, v: StandardVersion): Promise<Vo
     console.log(`(the persona could not be derived: ${(e as Error).message.split('\n')[0]}; the skill is built without it.)`);
     return voice;
   }
+}
+
+/**
+ * THE VOICE OF A COMPOSITE: excerpts from every author the owner took something from, an equal share of the budget
+ * each, labelled with whose they are; the traits taken from each, for "how I sound"; and every piece of every author
+ * in the folder for the copying check alone (never served). Null when no author's pieces can be read here.
+ */
+function compositeVoice(c: CompositeRecord, v: StandardVersion, budget: number, form: PieceForm): Voice | null {
+  const pathsFile = runFile('corpus-paths.json');
+  if (!existsSync(pathsFile)) return null;
+  const reserved = new Set((loadSession().reservation?.reserved ?? []).map((u) => u.unitId));
+  const files = readJson<{ id: string; path: string }[]>(pathsFile, { kind: 'array', what: 'the sealed corpus path list' });
+  const textOf = (id: string): string | null => {
+    const f = files.find((x) => x.id === id);
+    if (!f || reserved.has(id) || !existsSync(f.path)) return null;
+    const r = extract(f.path);
+    return r.ok ? (r as { text: string }).text : null;
+  };
+  const statementOf = (id: string): string => v.requirements.find((r) => r.requirementId === id)?.statement ?? loadSession().proposals.find((p) => p.requirementId === id)?.statement ?? id;
+  const chosen = compositeVoiceOf(c, statementOf);
+  const textsOf = (name: string): string[] => (c.authors.find((a) => a.name === name)?.pieces ?? []).flatMap((id) => { const t = textOf(id); return t ? [t] : []; });
+  const every = c.authors.flatMap((a) => textsOf(a.name));
+  if (!every.length) return null;
+  const served = selectCompositePieces(chosen.map((a) => ({ author: a.name, pieces: textsOf(a.name) })), budget, form);
+  return {
+    passages: [], lengthWords: usualLength(every), pieces: served.map((x) => x.text),
+    ...(form === 'excerpts' ? { pieceForm: form } : {}), pieceBudget: budget,
+    composite: { authors: chosen, pieceAuthors: served.map((x) => x.author) },
+    guardPieces: every,
+  };
 }
 
 /**
@@ -506,6 +551,8 @@ export async function build(nameArg?: string, opts: { closing?: boolean } = {}):
   const among = everyPiece.length ? sharedAmong(everyPiece, standardWording) : voice?.sharedAmong ?? null;
   const { standardWording: _was, lengthSpan: _span, lengthPieces: _n, sharedAmong: _among, ...voiceWithout } = voice ?? {}; void _was; void _span; void _n; void _among;
   const storedVoice = voice ? { ...(voiceWithout as typeof voice), ...(standardWording.length ? { standardWording } : {}), ...(span ? { lengthSpan: span, lengthPieces } : {}), ...(among !== null ? { sharedAmong: among } : {}) } : voice;
+  // The composite the owner chose (core/composite), kept with the skill as data; null for a skill of one author.
+  if (s.evidence) store.setComposite(L, s.composite ?? null);
   store.setExemplar(L, exemplar?.text ?? null); store.setVoice(L, storedVoice); store.setDocClass(L, docClass); store.setContrast(L, { off: contrastOff, pairs: chosenPairs });
   // The author's signals, read off their pieces against the model's drafts at discovery (never a rule).
   if (existsSync(runFile('signals.json'))) store.setSignals(L, readJson<StoredSignal[]>(runFile('signals.json'), { what: 'the discovered signals', kind: 'array' }));

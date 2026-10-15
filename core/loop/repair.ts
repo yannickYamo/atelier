@@ -94,8 +94,9 @@ export function planRepair(text: string, report: VerifyReport,
     // which takes the figure out and claims nothing in its place. Held to keep every figure, the rewrite that cut it
     // was refused and the figure delivered; so that figure, and only it, is what the rewrite may lose.
     // Nor is a citation that is no line of the material: the right number is on the page the writer was given, not
-    // in the sentence, and a rewrite that only has the sentence can drop the citation or guess another.
-    if (c.obligation === 'DELIVERABLE' || c.observer === 'LINES') continue;
+    // in the sentence, and a rewrite that only has the sentence can drop the citation or guess another. Nor is a
+    // test the work never named: an omission has no span to rewrite.
+    if (c.obligation === 'DELIVERABLE' || c.observer === 'LINES' || c.observer === 'NAMES_TEST') continue;
     for (const sp of c.result.spans) {
       // A span that IS a paragraph (the paragraph-length rule) is rewritten as one; any other span
       // grows to whole sentences at BOTH ends. A span that ends inside the next sentence ("The fix is not
@@ -283,28 +284,33 @@ export function cutSpan(text: string, start: number, end: number): string {
 export interface RegressionVerdict { readonly ok: boolean; readonly why: string }
 
 /**
- * The least a check's |error| (in widths of its band) may move for the move to count: a fall of this much is progress
- * on a graded feature (`acceptRepair`), and a rise of this much is a regression on any feature (`regressions`).
+ * The least a GRADED check's |error| (in widths of its band) may move for the move to count: a fall of this much is
+ * progress on it (`acceptRepair`), and a rise of this much is a regression on it (`regressions`). Read on graded checks
+ * alone: without `--graded` no distance is read.
  */
 export const GRADED_STEP = 0.1;
 
 /**
  * What got worse between two reports: a rule that was not broken and now is (whatever it was before —
- * MET, or not measurable because the text was too short), a broken rule broken in more places, or a broken rule
- * whose value moved further from its band by GRADED_STEP or more (`ObserverResult.error`, the FEATURE observer's
- * signed distance). The third is read on every check that carries an error, enforced or not: a FEATURE miss is
- * pointed at three carriers at most, so the count of places could stay at three while the value drifted from one
- * band-width out to three, and the drift passed as "no worse".
+ * MET, or not measurable because the text was too short), or a broken rule broken in more places.
+ *
+ * A FEATURE check is the exception to "more places". Its spans are the CARRIERS of a rate (../observers/features.ts),
+ * where a rewrite starts, not how many places are wrong: the same value over a different text is covered by three
+ * carriers or by two. So a FEATURE check is read by its verdict, as it was before the carriers, and by its distance
+ * only when it is GRADED (`graded`, the ids `--graded` made targets): for those alone, |error| up by GRADED_STEP is
+ * worse, since their places are capped and a value could otherwise drift from one band-width out to three and pass.
  * Shared by the repair loop and by `fix`, so "worse" means one thing everywhere.
  */
-export function regressions(before: VerifyReport, after: VerifyReport): string[] {
+export function regressions(before: VerifyReport, after: VerifyReport, graded: ReadonlySet<string> = new Set()): string[] {
   const was = new Map(before.checked.map((c) => [c.requirementId, c.result]));
   return after.checked.filter((c) => {
     const b = was.get(c.requirementId);
     if (c.result.verdict !== 'VIOLATED') return false;
     if (b?.verdict !== 'VIOLATED') return true;
-    if (c.result.spans.length > b.spans.length) return true;
-    return typeof c.result.error === 'number' && typeof b.error === 'number' && Math.abs(c.result.error) - Math.abs(b.error) >= GRADED_STEP - 1e-9;
+    if (c.observer === 'FEATURE') {
+      return graded.has(c.requirementId) && typeof c.result.error === 'number' && typeof b.error === 'number' && Math.abs(c.result.error) - Math.abs(b.error) >= GRADED_STEP - 1e-9;
+    }
+    return c.result.spans.length > b.spans.length;
   }).map((c) => c.requirementId);
 }
 
@@ -330,18 +336,21 @@ export function acceptRepair(before: VerifyReport, after: VerifyReport,
   opts: { wordsAdded?: boolean;
     /** GRADED checks (run-repair.ts, `CheckOptions.graded`), never enforced rules: for these alone, progress is also a fall in |error| of GRADED_STEP or more */
     graded?: ReadonlySet<string> } = {}): RegressionVerdict {
-  const worse = regressions(before, after).filter((id) => opts.wordsAdded !== false || !id.startsWith('UNSOURCED'));
+  const worse = regressions(before, after, opts.graded).filter((id) => opts.wordsAdded !== false || !id.startsWith('UNSOURCED'));
   if (worse.length) return { ok: false, why: `the rewrite made ${worse.join(', ')} worse` };
   const broken = (r: VerifyReport) => r.checked.filter((c) => acts(c) && c.result.verdict === 'VIOLATED');
   const req = (r: VerifyReport): number => broken(r).length;
+  // Said as what was counted: a graded check reads as enforced on the copy it is counted on, and is no REQUIRED rule.
+  const gradedCount = broken(before).filter((c) => opts.graded?.has(c.requirementId)).length;
+  const label = gradedCount === 0 ? 'REQUIRED' : gradedCount === req(before) ? 'graded' : 'REQUIRED or graded';
   // Progress is fewer broken REQUIRED rules, or the same rules broken in fewer places: fixing one of two
   // invented figures is a step, and discarding it threw away a good placeholder and ended the loop.
   // A FEATURE miss counts its places as the carriers it is pointed at (../observers/features.ts), for every FEATURE
   // rule, enforced or not: a repair needs a target. So a REQUIRED feature rule's miss pointed at two carriers where it
   // was pointed at three is progress here, by design; one newly broken is refused above, as any rule is.
   const spans = (r: VerifyReport): number => broken(r).reduce((n, c) => n + Math.max(1, c.result.spans.length), 0);
-  if (req(after) < req(before)) return { ok: true, why: `REQUIRED rules broken: ${req(before)} → ${req(after)}` };
-  if (spans(after) < spans(before)) return { ok: true, why: `places breaking a REQUIRED rule: ${spans(before)} → ${spans(after)}` };
+  if (req(after) < req(before)) return { ok: true, why: `${label} rules broken: ${req(before)} → ${req(after)}` };
+  if (spans(after) < spans(before)) return { ok: true, why: `places breaking a ${label} rule: ${spans(before)} → ${spans(after)}` };
   // A GRADED feature's spans are capped, so a rewrite that moves it a good way toward the band and not into it shows
   // the same count of places. For graded checks only, a fall in |error| of GRADED_STEP (in band widths) is progress;
   // what is newly broken was refused above, as for any rewrite. An enforced rule's progress is the two counts above.
@@ -350,5 +359,5 @@ export function acceptRepair(before: VerifyReport, after: VerifyReport,
     const moved = [...opts.graded].map((id) => ({ id, from: errorOf(before, id), to: errorOf(after, id) })).filter((x) => x.from - x.to >= GRADED_STEP);
     if (moved.length) return { ok: true, why: `graded feature(s) nearer the band: ${moved.map((x) => `${x.id} ${x.from.toFixed(1)} → ${x.to.toFixed(1)}`).join(', ')}` };
   }
-  return { ok: false, why: 'the rewrite fixed no REQUIRED rule' };
+  return { ok: false, why: `the rewrite fixed no ${label} rule` };
 }

@@ -15,7 +15,7 @@
 import type { Measurement, ObserverId, Requirement } from '../state/canonical-state.js';
 import { sentencesOf, paragraphsOf, wordsOf, proseRegions, quantile, findTerms, DEFAULT_HEDGES, measure, validateMeasurement } from './registry.js';
 import { lengthMix, mixDistance } from './balance.js';
-import { allowed, CORPUS_RULE_SHARE, MIN_PIECES_TO_COUNT, thinEvidence } from '../ratification/suggest.js';
+import { allowed, CORPUS_RULE_SHARE, thinEvidence } from '../ratification/suggest.js';
 
 /**
  * Phrases that mark text as generic model output, proposed as banned ONLY where the author's own
@@ -311,9 +311,9 @@ export function deriveMeasuredRules(read: readonly Piece[], held: readonly Piece
   // computed as before and then set where these pieces are (`fitToCorpus`), allowing the pieces the review allows.
   const own = [...read, ...held.filter((h) => !read.some((r) => r.id === h.id))].map((p) => p.text);
   const mayBreak = allowed(own.length, CORPUS_RULE_SHARE);
-  // FLOORS BY EVIDENCE (../ratification/suggest.ts): thirty sentences pooled over three pieces of any length is a
-  // count; one long piece is not. Under five pieces what is read is thin, and never blocks.
-  if (own.length < MIN_PIECES_TO_COUNT) return [];
+  // FLOORS BY EVIDENCE (../ratification/suggest.ts): the floors below are pooled counts (thirty sentences, ten
+  // paragraphs), at any length. Under five pieces what is read is thin, and never blocks. One author's single piece
+  // in a composite (../composite) is read this way: a band of theirs, shown, never required on that evidence.
   const thin = thinEvidence(own.length);
   let n = 0;
   const push = (statement: (m: Measurement) => string, kind: Requirement['kind'], computed: Measurement, evidence: string): void => {

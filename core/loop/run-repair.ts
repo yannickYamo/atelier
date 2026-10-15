@@ -6,8 +6,8 @@
 
 import type { CheckContext } from '../observers/registry.js';
 import type { InferenceClient, Budget } from '../inference/client.js';
-import { spend, processSpendByPurpose, spendBetween, type SpendPurpose } from '../inference/client.js';
-import type { StandardVersion, RepairRecord, RepairEdits, GradedRecord } from '../state/canonical-state.js';
+import { spend, processSpendByPurpose, spendBetween, type SpendPurpose, type SpendLine } from '../inference/client.js';
+import type { StandardVersion, RepairRecord, RepairEdits, GradedRecord, ControllerDecisionRecord } from '../state/canonical-state.js';
 import { acts, verifyText, type VerifyReport, type RuleCheck } from '../observers/verify.js';
 import { planFor } from '../plan/execution-plan.js';
 import { unsourcedClaims, wordCountClaims, claimUnitsOf } from './claims.js';
@@ -18,6 +18,13 @@ import type { ContextJudge } from './context-judge.js';
 import type { ClaimSensor } from './claim-extract.js';
 import { checkFormat, type FormatProfile } from '../observers/formats.js';
 import { findTerms } from '../observers/text.js';
+import { errorAtLength, featureWordCount } from '../observers/features.js';
+import { signalRules, signalChecks, isSignal, displacement, type Displacement } from './graded.js';
+import type { FidelityProfile, ControllerSettings } from '../fidelity/types.js';
+import { decide, controllerRecord, ENFORCED_WEIGHT, SETTLED_ERROR, type ControllerInput, type Decision, type EnforcedMiss, type GradedMiss } from './controller.js';
+import { applyOperator, operatorsToward, sitesOf, keepsWords } from '../fidelity/operators.js';
+import { SITES_PER_OPERATOR } from '../fidelity/structural.js';
+import { spanIntegrity } from './integrity.js';
 import { planRepair, repairPrompt, applyRepair, acceptRepair, addsNoWords, cutSpan, REPAIR_SYSTEM, REPAIR_SYSTEM_WITH_PLACEHOLDERS, REPAIR_SCHEMA, type Reverted, type Applied } from './repair.js';
 import { keysOf, measurementId } from '../state/rule-key.js';
 import { mechanicalFixes } from './mechanical-repair.js';
@@ -57,12 +64,19 @@ export interface CheckOptions {
   /** the request and the named material this output was written from, for the rules that are about them (../observers/registry.ts, `CheckContext`) */
   readonly context?: CheckContext;
   /**
-   * GRADED FEATURES (`--graded`, a study arm): the counted features whose FEATURE rules a miss of is a REPAIR TARGET
-   * without being a failure. A PREFERRED rule naming one of them is planned and accepted as an enforced rule is, on
-   * copies of the report; the report that is recorded, and the evaluation, never see it as enforced. 'all' grades
-   * every FEATURE rule of the standard. Absent, nothing changes.
+   * GRADED FEATURES (on by default; `--graded none` turns them off): the counted features whose FEATURE rules a miss
+   * of is a REPAIR TARGET without being a failure. A PREFERRED rule naming one of them is planned and accepted as an
+   * enforced rule is, on copies of the report; the report that is recorded, and the evaluation, never see it as
+   * enforced. 'all' grades every FEATURE rule of the standard, and every SIGNAL feature of `gradedProfile`. Absent,
+   * nothing is graded.
    */
   readonly graded?: readonly string[] | 'all';
+  /**
+   * The author's fidelity profile (../fidelity/types.ts): its SIGNAL features, for the text's length class, are graded
+   * targets when far outside their band (./graded.ts, `signalChecks`), and its RULE and SIGNAL bands are what no
+   * rewrite may displace (`displacement`). Null or absent: only the standard's FEATURE rules are graded.
+   */
+  readonly gradedProfile?: FidelityProfile | null;
   /** what the person supplied: their notes, anecdotes, figures. Claims found here are theirs to make. */
   readonly material?: string;
   /** false turns off the invented-story and invented-figure check (`--allow-unsourced`) */
@@ -108,6 +122,13 @@ export interface CheckOptions {
    * no instrument may delete where nobody has measured how often its deletions are wrong.
    */
   readonly listsBecause?: string | null;
+  /**
+   * THE BOUNDED CONTROLLER (./controller.ts): the release's settings for it (absent: its defaults), whether a draft can
+   * be written again by the caller when it asks for one (`withRedraft` in cli/commands/invoke.ts; absent: it cannot,
+   * and a far miss is rewritten on its carriers instead), and the ledger as it stood when the run began, so the cost of
+   * a step is read from what this run has paid.
+   */
+  readonly controller?: { readonly settings?: ControllerSettings | null; readonly redraft?: boolean; readonly ledgerFrom?: readonly SpendLine[] };
 }
 
 
@@ -551,8 +572,11 @@ export function heavyCut(draft: string, cut: readonly string[]): string | null {
 /** At most this many graded features are targeted in one pass: the ones furthest outside their band first. */
 export const GRADED_PER_PASS = 3;
 
-/** The FEATURE rules a run grades (`CheckOptions.graded`): requirement id to the feature it counts. Empty without the option. */
-export function gradedRules(v: Pick<StandardVersion, 'requirements'>, graded: CheckOptions['graded']): Map<string, string> {
+/**
+ * The rules a run grades (`CheckOptions.graded`): requirement id to the feature it counts. The standard's FEATURE
+ * rules, and, with a profile, its SIGNAL features under their own ids (./graded.ts). Empty without the option.
+ */
+export function gradedRules(v: Pick<StandardVersion, 'requirements'>, graded: CheckOptions['graded'], profile?: FidelityProfile | null): Map<string, string> {
   const out = new Map<string, string>();
   if (graded === undefined) return out;
   for (const r of v.requirements) {
@@ -560,6 +584,7 @@ export function gradedRules(v: Pick<StandardVersion, 'requirements'>, graded: Ch
     const f = (r.measurement.params.feature as readonly string[] | undefined)?.[0];
     if (f && (graded === 'all' || graded.includes(f))) out.set(r.requirementId, f);
   }
+  for (const [id, f] of signalRules(profile)) if (graded === 'all' || graded.includes(f)) out.set(id, f);
   return out;
 }
 
@@ -592,13 +617,21 @@ export async function refineToStandard(
   opts: CheckOptions = {},
 ): Promise<Refined> {
   const memory = claimMemory();
-  const check = async (t: string): Promise<VerifyReport> => memory.apply(t, await checkDraftAsync(skill, v, t, opts));
-  let first = await check(draft);
   // GRADED FEATURES (`opts.graded`): repair targets that are never failures. Which rules, which checks a pass is
   // pointed at, and what the run did about them; `pending` is what keeps the loop going where `failed` would not.
-  const graded = gradedRules(v, opts.graded);
-  const gradedMiss = (r: VerifyReport): RuleCheck[] => gradedTargets(r, graded);
-  const pending = (r: VerifyReport): boolean => r.failed || gradedMiss(r).length > 0;
+  // The profile's SIGNAL features ride on the reports this loop holds as checks of their own (./graded.ts), and are
+  // taken off every report this function returns: the record and the evaluation never see them.
+  const graded = gradedRules(v, opts.graded, opts.gradedProfile);
+  const gradedOn = opts.graded !== undefined && graded.size > 0;
+  const profile = gradedOn ? opts.gradedProfile ?? null : null;
+  const withSignals = (t: string, r: VerifyReport): VerifyReport => (profile ? { ...r, checked: [...r.checked, ...signalChecks(t, profile)] } : r);
+  const recorded = (r: VerifyReport): VerifyReport => (profile ? { ...r, checked: r.checked.filter((c) => !isSignal(c.requirementId)) } : r);
+  const check = async (t: string): Promise<VerifyReport> => withSignals(t, memory.apply(t, await checkDraftAsync(skill, v, t, opts)));
+  let first = await check(draft);
+  // WHAT KEEPS THE LOOP GOING (./controller.ts): an enforced rule broken, or a graded miss over SETTLED_ERROR band widths.
+  // A graded miss nearer its band than that is delivered as it is: no pull to the median.
+  const gradedOff = (r: VerifyReport): RuleCheck[] => r.checked.filter((c) => graded.has(c.requirementId) && !acts(c) && c.result.verdict === 'VIOLATED');
+  const pending = (r: VerifyReport): boolean => r.failed || gradedOff(r).some((c) => Math.abs(c.result.error ?? 0) > SETTLED_ERROR);
   const gradedTargeted = new Set<string>(); const gradedRepaired = new Set<string>();
   // EVERY EDIT, COUNTED: span rewrites kept, and those refused by a guard or discarded with their pass, with the reasons.
   // The passes the flag alone caused (every span of them for a graded rule the standard does not enforce) are counted
@@ -606,23 +639,81 @@ export async function refineToStandard(
   const edits = { accepted: 0, rejected: 0, reasons: [] as string[] }; const gradedEdits = { accepted: 0, rejected: 0, reasons: [] as string[] };
   const ledgerBefore = processSpendByPurpose();
   const editsRecord = (): { edits: RepairEdits } | Record<string, never> => (edits.accepted + edits.rejected ? { edits: { ...edits, reasons: [...new Set(edits.reasons)] } } : {});
-  const gradedRecord = (final: VerifyReport): { graded: GradedRecord } | Record<string, never> => {
-    if (opts.graded === undefined) return {};
-    const values: Record<string, { before: number | null; after: number | null; lo: number | null; hi: number | null }> = {};
+  const displaced: string[] = [];
+  const gradedRecord = (final: VerifyReport, finalText: string): { graded: GradedRecord } | Record<string, never> => {
+    if (!gradedOn) return {};
+    const values: Record<string, GradedRecord['values'][string]> = {};
     const valueOf = (r: VerifyReport, id: string): number | null => { const x = r.checked.find((c) => c.requirementId === id)?.result.value; return typeof x === 'number' ? x : null; };
-    for (const [id, f] of graded) {
+    const paramsOf = (r: VerifyReport, id: string): Readonly<Record<string, unknown>> => (isSignal(id) ? (r.checked.find((c) => c.requirementId === id) as { params?: Record<string, unknown> } | undefined)?.params ?? {}
+      : v.requirements.find((x) => x.requirementId === id)?.measurement?.params ?? {});
+    // A feature the standard rules is recorded under its rule; the same feature as a signal only when no rule holds it.
+    for (const [id, f] of [...graded].sort((a, b) => Number(isSignal(a[0])) - Number(isSignal(b[0])))) {
       if (values[f]) continue;
-      const p = v.requirements.find((r) => r.requirementId === id)?.measurement?.params ?? {};
-      values[f] = { before: valueOf(first, id), after: valueOf(final, id), lo: typeof p.minValue === 'number' ? p.minValue : null, hi: typeof p.maxValue === 'number' ? p.maxValue : null };
+      const p = paramsOf(final, id); if (isSignal(id) && !Object.keys(p).length) continue;
+      values[f] = { before: valueOf(first, id), after: valueOf(final, id), lo: typeof p.minValue === 'number' ? p.minValue : null, hi: typeof p.maxValue === 'number' ? p.maxValue : null, source: isSignal(id) ? 'profile' : 'standard' };
     }
     const line = spendBetween(ledgerBefore, processSpendByPurpose()).find((l) => l.purpose === 'graded');
-    return { graded: { features: [...new Set(graded.values())].sort(), targeted: gradedTargeted.size, repaired: gradedRepaired.size, redrafts: 0, notes: [], values,
-      edits: { ...gradedEdits, reasons: [...new Set(gradedEdits.reasons)] }, calls: line?.calls ?? 0, costUsd: line?.usd ?? 0 } };
+    const disp = displacement(draft, finalText, profile, gradedTargeted);
+    return { graded: { features: [...new Set(graded.values())].sort(), targeted: gradedTargeted.size, repaired: gradedRepaired.size, steered: [...gradedTargeted].sort(), redrafts: 0, notes: [], values,
+      edits: { ...gradedEdits, reasons: [...new Set(gradedEdits.reasons)] }, calls: line?.calls ?? 0, costUsd: line?.usd ?? 0,
+      ...(disp ? { displacement: { before: disp.before, after: disp.after, refusedFor: [...displaced] } } : {}) } };
   };
+  // THE BOUNDED CONTROLLER (./controller.ts): each step chosen from the report as it stands, recorded with what it was
+  // expected to gain and cost, what it did, and what the ledger charged for it; and why the loop stopped.
+  const decisions: ControllerDecisionRecord[] = []; let stoppedBecause: string | null = null;
+  const unreachable = new Set<string>();
+  const STEP_PURPOSES: readonly SpendPurpose[] = ['repair', 'graded', 'steering'];
+  const costSince = (snap: readonly SpendLine[], purposes: readonly SpendPurpose[] = STEP_PURPOSES): { calls: number; usd: number } => {
+    const ls = spendBetween(snap, processSpendByPurpose()).filter((l) => purposes.includes(l.purpose));
+    return { calls: ls.reduce((n, l) => n + l.calls, 0), usd: Math.round(ls.reduce((n, l) => n + l.usd, 0) * 1e6) / 1e6 };
+  };
+  const record = (d: Pick<Decision, 'action' | 'targets' | 'why' | 'expectedGain' | 'expectedCostUsd'>, snap: readonly SpendLine[], outcome: ControllerDecisionRecord['outcome'], movement: number, note?: string): void => {
+    decisions.push({ action: d.action, targets: [...d.targets], why: d.why, expectedGain: d.expectedGain, expectedCostUsd: d.expectedCostUsd, outcome,
+      observed: { movement: Math.round(movement * 1000) / 1000, ...costSince(snap), ...(note ? { note } : {}) } });
+  };
+  const ledgerFrom = opts.controller?.ledgerFrom ?? ledgerBefore;
+  const perCall = (purposes: readonly SpendPurpose[]): number | undefined => {
+    const ls = spendBetween(ledgerFrom, processSpendByPurpose()).filter((l) => purposes.includes(l.purpose));
+    const calls = ls.reduce((n, l) => n + l.calls, 0);
+    return calls ? ls.reduce((n, l) => n + l.usd, 0) / calls : undefined;
+  };
+  const effects = gradedOn ? opts.gradedProfile?.effects ?? null : null;
+  const paramsFor = (c: RuleCheck): Readonly<Record<string, unknown>> => v.requirements.find((x) => x.requirementId === c.requirementId)?.measurement?.params ?? (c as { params?: Record<string, unknown> }).params ?? {};
+  /** What the best operator is expected to move this miss, in band widths, from the effect matrix; null when none moves it. */
+  const operatorEffect = (t: string, c: RuleCheck): number | null => {
+    const f = graded.get(c.requirementId);
+    if (!effects || !f) return null;
+    const op = operatorsToward(effects, f, (c.result.error ?? 0) > 0 ? 'high' : 'low')[0];
+    const sites = op ? Math.min(sitesOf(op, t), SITES_PER_OPERATOR) : 0;
+    if (!op || !sites) return null;
+    const p = paramsFor(c); const lo = typeof p.minValue === 'number' ? p.minValue : null; const hi = typeof p.maxValue === 'number' ? p.maxValue : null;
+    const width = lo !== null && hi !== null && hi > lo ? hi - lo : 1;
+    return Math.round((Math.abs(effects[op]?.[f]?.mean ?? 0) * sites / width) * 1000) / 1000;
+  };
+  const CLAIM_LINES = new Set(['UNSOURCED', INCONCLUSIVE, UNREAD]);
+  const controllerInput = (t: string, r: VerifyReport, canRewrite: boolean): ControllerInput => {
+    const enforced: EnforcedMiss[] = r.checked.filter((c) => acts(c) && c.result.verdict === 'VIOLATED' && !CLAIM_LINES.has(c.requirementId))
+      .map((c) => ({ id: c.requirementId, kind: c.obligation === 'DELIVERABLE' || c.observer === 'LINES' || !c.result.spans.length ? 'omission' as const : 'span' as const }));
+    // one miss per feature: a rule and a signal on the same feature are one target, the further out of the two
+    const byFeature = new Map<string, GradedMiss>();
+    for (const c of gradedOff(r)) {
+      const f = graded.get(c.requirementId) ?? c.requirementId; const e = c.result.error ?? 0; const was = byFeature.get(f);
+      if (!was || Math.abs(e) > Math.abs(was.error)) byFeature.set(f, { id: c.requirementId, error: e, operatorEffect: operatorEffect(t, c) });
+    }
+    const usdLeft = budget.capUsd - budget.spentUsd - (budget.inFlightUsd ?? 0);
+    const rewriteUsd = perCall(['repair', 'graded']); const draftUsd = perCall(['writing']);
+    return { enforced, claims: flaggedClaims(r).length, length: null, graded: [...byFeature.values()], grammar: null,
+      budget: { usdLeft, callsLeft: budget.maxCalls !== undefined ? budget.maxCalls - (budget.calls ?? 0) : null }, history: decisions,
+      observedUsdPerCall: { ...(rewriteUsd !== undefined ? { rewrite: rewriteUsd, 'carrier-rewrite': rewriteUsd } : {}), ...(draftUsd !== undefined ? { redraft: draftUsd } : {}) },
+      can: { redraft: opts.controller?.redraft ?? false, rewrite: canRewrite }, unreachable };
+  };
+  const controllerOf = (): { controller: ReturnType<typeof controllerRecord> } => ({ controller: controllerRecord(decisions, stoppedBecause ?? 'every enforced rule holds and nothing graded is off') });
   if (!pending(first)) {
     const toCheck = listedClaims(first);
-    return { output: draft, report: first, repair: toCheck.length || opts.graded !== undefined ? { passes: 0, violatedBefore: [], violatedAfter: [], originalOutputHash: sha(draft), draft,
-      ...(toCheck.length ? { claimsToCheck: toCheck } : {}), ...gradedRecord(first), why: 'every REQUIRED measured rule holds' } : null };
+    const settled = decide(controllerInput(draft, first, true), opts.controller?.settings ?? null);
+    stoppedBecause = settled.kind === 'stop' ? settled.why : `every enforced rule holds and no graded miss is over ${SETTLED_ERROR} band widths`;
+    return { output: draft, report: recorded(first), repair: toCheck.length || gradedOn ? { passes: 0, violatedBefore: [], violatedAfter: [], originalOutputHash: sha(draft), draft,
+      ...(toCheck.length ? { claimsToCheck: toCheck } : {}), ...gradedRecord(first, draft), ...(gradedOn ? controllerOf() : {}), why: 'every REQUIRED measured rule holds' } : null };
   }
   const cut: string[] = [];
   // Whether the claim reader had already failed before this run: read before the first cut, which may be
@@ -692,9 +783,13 @@ export async function refineToStandard(
       return typeof out === 'string' && out.trim() ? out.trim() : null;
     } catch { return null; }
   };
+  // (2) CLAIMS, in code, before any step the controller chooses: recorded as a step, with what the cut cost the ledger.
+  const flaggedFirst = flaggedClaims(first).length; const cutSnap = processSpendByPurpose();
   const enforced = await cutSafely(draft, first);
   let text = enforced.text; let report = enforced.report; let passes = 0;
   cut.push(...enforced.cut);
+  if (flaggedFirst) record({ action: 'cut', targets: ['UNSOURCED'], why: `${flaggedFirst} invented claim(s) flagged: cut in code before anything else`, expectedGain: flaggedFirst, expectedCostUsd: 0 },
+    cutSnap, enforced.cut.length ? 'kept' : 'no change', enforced.cut.length, enforced.cut.length ? undefined : 'nothing could be cut without breaking the text');
   let why = cut.length ? 'invented claims cut' : 'every REQUIRED measured rule now holds';
   // ONE INSTRUMENT ON BOTH SIDES OF EVERY COMPARISON. A claim reader that fails mid-loop degrades for
   // good (./claim-extract.ts, modelSensor), and from then on reads every text by the pattern check. The
@@ -704,8 +799,8 @@ export async function refineToStandard(
   const sameInstrument = (): void => {
     if (!sensor?.degraded || readDegraded) return;
     readDegraded = true; degradedMidLoop = true;
-    first = memory.apply(draft, checkDraft(skill, v, draft, opts));
-    report = memory.apply(text, checkDraft(skill, v, text, opts));
+    first = withSignals(draft, memory.apply(draft, checkDraft(skill, v, draft, opts)));
+    report = withSignals(text, memory.apply(text, checkDraft(skill, v, text, opts)));
   };
   sameInstrument();
   const kept: string[] = []; const revertedRules: string[] = [];
@@ -717,12 +812,15 @@ export async function refineToStandard(
   const fixMechanically = async (): Promise<void> => {
     const m = mechanicalFixes(v, report, text);
     if (m.text === text) return;
+    const snap = processSpendByPurpose();
     const after = await check(m.text);
     sameInstrument();
     // A FIX THAT NEEDS NO MODEL IS NEVER DROPPED IN SILENCE. When it cannot be kept (it would break another rule),
     // the record says which fix and why, so a refusal names the real conflict and not the rule the fix was for.
     const accepted = acceptRepair(report, after, { wordsAdded: !addsNoWords(text, m.text) });
-    if (!accepted.ok) { if (!notKept.length) notKept.push(`${m.fixed.join('; ')} not kept: ${accepted.why}`); return; }
+    const step = { action: 'mechanical' as const, targets: [...new Set(broken(report))], why: `fixed without a model: ${m.fixed.join('; ')}`, expectedGain: 0, expectedCostUsd: 0 };
+    if (!accepted.ok) { record(step, snap, 'not kept', 0, accepted.why); if (!notKept.length) notKept.push(`${m.fixed.join('; ')} not kept: ${accepted.why}`); return; }
+    record(step, snap, 'kept', ENFORCED_WEIGHT * (broken(report).length - broken(after).length));
     text = m.text; report = after; mechanical.push(...m.fixed);
   };
   if (report.failed) await fixMechanically();
@@ -733,16 +831,57 @@ export async function refineToStandard(
   const pairs: RepairPair[] = [];
   const keys = keysOf(v.requirements);
   const keyOf = new Map(v.requirements.map((r, i) => [r.requirementId, keys[i]]));
+  // LENGTH DRIFT, for the graded checks' distance. A rate per 1,000 words rises when a rewrite shortens the text with
+  // the count unchanged; the before-report the acceptance compares against reads each graded miss with its value
+  // scaled to the after-length (../observers/features.ts, `errorAtLength`), so only the count's own move is read.
+  const featureParams = new Map(v.requirements.flatMap((r) => (r.measurement?.observer === 'FEATURE' ? [[r.requirementId, r.measurement.params] as const] : [])));
+  const atLength = (r: VerifyReport, soft: ReadonlySet<string>, from: string, to: string): VerifyReport => {
+    if (!soft.size) return r;
+    const wb = featureWordCount(from); const wa = featureWordCount(to);
+    return { ...r, checked: r.checked.map((c) => { const p = soft.has(c.requirementId) ? featureParams.get(c.requirementId) ?? (c as { params?: Record<string, unknown> }).params : undefined;
+      return p && c.result.verdict === 'VIOLATED' && typeof c.result.value === 'number' ? { ...c, result: { ...c.result, error: errorAtLength(p, c.result.value, wb, wa) } } : c; }) };
+  };
   const checkOf = new Map(v.requirements.flatMap((r) => (r.measurement ? [[r.requirementId, measurementId(r.measurement)] as const] : [])));
-  while (pending(report) && stylePasses < maxPasses) {
-    // The graded checks this pass targets are read as enforced by the planner and by the acceptance, on copies.
-    const gradedIds = new Set(gradedMiss(report).map((c) => c.requirementId));
-    const plannable = withGraded(withoutClaims(report), gradedIds);
-    const accuracy = accuracyTried ? [] : planRepair(text, plannable, { phase: 'ACCURACY' });
+  /** What a step moved: rules held (weighted, a share for fewer places) for a rewrite; band widths nearer for a graded step. */
+  const movedBy = (ids: readonly string[], before: VerifyReport, after: VerifyReport, enforcedStep: boolean): number => {
+    const find = (r: VerifyReport, id: string): RuleCheck | undefined => r.checked.find((c) => c.requirementId === id);
+    return ids.reduce((n, id) => {
+      const b = find(before, id); const a = find(after, id);
+      if (b?.result.verdict !== 'VIOLATED') return n;
+      const off = (c: RuleCheck | undefined): number => (c?.result.verdict !== 'VIOLATED' ? 0 : enforcedStep ? c.result.spans.length || 1 : Math.abs(c.result.error ?? 0));
+      const was = off(b); const now = off(a);
+      return n + (enforcedStep ? ENFORCED_WEIGHT * Math.max(0, was - now) / Math.max(1, was) : Math.max(0, was - now));
+    }, 0);
+  };
+  /** The report the planner reads: only the step's targets are planned; every other check keeps its verdict for the acceptance. */
+  const focus = (r: VerifyReport, ids: ReadonlySet<string>): VerifyReport => ({ ...r, checked: r.checked.map((c) => (ids.has(c.requirementId) || !acts(c) ? c : { ...c, enforced: false })) });
+  /**
+   * A REWRITE STEP: the enforced rules' spans, or a graded feature's carrier sentences (at most `carriers` of each), through
+   * the span rewrite that was the whole loop before: one call, spliced in code, kept only if it breaks nothing that held,
+   * fixes something, and displaces nothing.
+   */
+  const rewriteStep = async (d: Decision): Promise<{ outcome: ControllerDecisionRecord['outcome']; movement: number; note?: string; stop?: string }> => {
+    const ids = new Set(d.targets);
+    const gradedIds = d.action === 'carrier-rewrite' ? ids : new Set<string>();
+    const plannable = focus(withGraded(withoutClaims(report), gradedIds), ids);
+    const accuracy = accuracyTried || d.action !== 'rewrite' ? [] : planRepair(text, plannable, { phase: 'ACCURACY' });
     const accuracyPass = accuracy.length > 0 && planRepair(text, plannable, { phase: 'STYLE' }).length > 0;
-    const targets = accuracyPass ? accuracy : planRepair(text, plannable);
-    accuracyTried = true;
-    if (!targets.length) { why = cut.length ? `invented claims cut; ${flaggedClaims(report).length ? 'some could not be located to cut' : 'nothing else the rules pointed at could be rewritten'}` : 'nothing the rules pointed at could be rewritten'; break; }
+    let targets = accuracyPass ? accuracy : planRepair(text, plannable);
+    if (d.action === 'rewrite') accuracyTried = true;
+    // SIZED TO THE MISS: k carrier sentences of each feature, k = ceil(|error|), at most three (./controller.ts, `carriersFor`).
+    if (d.carriers) {
+      const n = new Map<string, number>();
+      targets = targets.filter((t) => {
+        const ok = t.requirementIds.some((id) => (n.get(id) ?? 0) < (d.carriers ?? 0));
+        if (ok) for (const id of t.requirementIds) n.set(id, (n.get(id) ?? 0) + 1);
+        return ok;
+      }).map((t, i) => ({ ...t, id: i + 1 }));
+    }
+    if (!targets.length) {
+      for (const id of d.targets) unreachable.add(id);
+      why = cut.length ? `invented claims cut; ${flaggedClaims(report).length ? 'some could not be located to cut' : 'nothing else the rules pointed at could be rewritten'}` : 'nothing the rules pointed at could be rewritten';
+      return { outcome: 'no change', movement: 0, note: 'nothing in the text to rewrite for it' };
+    }
     // A rule graded but not enforced by the standard: its progress may be a fall in |error| (repair.ts, `acceptRepair`),
     // and its rewrites make no contrast pair below. An enforced rule that is also graded keeps the enforced rule's terms.
     const soft = new Set([...gradedIds].filter((id) => !report.checked.some((c) => c.requirementId === id && acts(c))));
@@ -764,7 +903,7 @@ export async function refineToStandard(
       }, purpose);
     } catch (e) {
       why = `the rewrite could not run (${(e as Error).message.split('\n')[0]}); the draft is delivered as it stands`;
-      break;
+      return { outcome: 'could not run', movement: 0, stop: why };
     }
     passes += 1;
     if (!accuracyPass) stylePasses += 1;
@@ -784,16 +923,23 @@ export async function refineToStandard(
     // A rewrite that adds an invented claim makes UNSOURCED worse, and `acceptRepair` refuses it.
     const verdict = next === text
       ? { ok: false, why: reverted.length ? `every rewrite was refused (${reverted.map((r) => r.lost[0]).slice(0, 2).join('; ')})` : 'the rewrite returned nothing usable' }
-      : acceptRepair(withGraded(report, gradedIds), withGraded(after, gradedIds), { graded: soft });
-    if (!verdict.ok) {
-      why = `a rewrite was discarded: ${verdict.why}`;
-      for (const e of tally) { e.rejected += applied.length; if (applied.length || !reverted.length) e.reasons.push(`discarded: ${verdict.why}`); }
-      continue;
+      : acceptRepair(atLength(withGraded(report, gradedIds), soft, text, next), withGraded(after, gradedIds), { graded: soft });
+    // THE DISPLACEMENT GUARD (./graded.ts): a rewrite that puts more of the author's features outside their bands, or
+    // pushes one it was not pointed at far out, is refused whatever it fixed. Enforced rules keep the acceptance above.
+    const pointedAt = new Set(targets.flatMap((t) => t.requirementIds.map((id) => graded.get(id)).filter((f): f is string => f !== undefined)));
+    const disp: Displacement | null = verdict.ok && next !== text ? displacement(text, next, profile, pointedAt) : null;
+    const displacedWhy = disp?.refusedFor.length ? `it displaced what your pieces hold: ${disp.refusedFor.join('; ')}` : null;
+    if (!verdict.ok || displacedWhy) {
+      why = `a rewrite was discarded: ${displacedWhy ?? verdict.why}`;
+      if (disp && displacedWhy) displaced.push(...disp.refusedFor);
+      for (const e of tally) { e.rejected += applied.length; if (applied.length || !reverted.length) e.reasons.push(`discarded: ${displacedWhy ?? verdict.why}`); }
+      return { outcome: 'not kept', movement: 0, note: displacedWhy ?? verdict.why };
     }
     for (const e of tally) e.accepted += applied.length;
     // A graded feature is repaired when a kept rewrite moved its value toward the band.
     const errorOf = (r: VerifyReport, id: string): number => Math.abs(r.checked.find((c) => c.requirementId === id)?.result.error ?? 0);
     for (const id of gradedIds) if (errorOf(after, id) < errorOf(report, id)) gradedRepaired.add(graded.get(id) ?? id);
+    const movement = movedBy(d.targets, atLength(withGraded(report, gradedIds), soft, text, next), after, d.action === 'rewrite');
     text = next; report = after;
     // An accepted pass's style rewrites are examples of this standard in action. One rule per pair.
     for (const a of applied) {
@@ -803,6 +949,78 @@ export async function refineToStandard(
       if (rid && key && a.before !== a.after && !soft.has(rid)) pairs.push({ key, check: checkOf.get(rid), before: a.before, after: a.after });
     }
     why = report.failed ? verdict.why : 'every REQUIRED measured rule now holds';
+    return { outcome: 'kept', movement };
+  };
+  /**
+   * AN OPERATOR STEP (../fidelity/operators.ts): re-punctuation of the words already there, only the operators whose
+   * measured effect moves the target the right way, site by site, no model. Screened on the deterministic checks (an
+   * operator keeps every word, so it adds no claim), kept on the acceptance's terms and the displacement guard's, and
+   * the kept text read again in full.
+   */
+  const operatorStep = async (ids: readonly string[]): Promise<{ kept: boolean; movement: number; note: string }> => {
+    if (!effects) return { kept: false, movement: 0, note: 'no effect matrix: this skill\'s profile predates the operators' };
+    const idSet = new Set(ids);
+    const soft = new Set(ids.filter((id) => !report.checked.some((c) => c.requirementId === id && acts(c))));
+    const offline = { ...opts, claimSensor: undefined };
+    const read = (t: string): VerifyReport => withSignals(t, checkDraft(skill, v, t, offline));
+    const before = read(text);
+    const features = new Set(ids.map((id) => graded.get(id)).filter((f): f is string => f !== undefined));
+    for (const id of ids) {
+      const c = report.checked.find((x) => x.requirementId === id); const f = graded.get(id);
+      if (!c || !f) continue;
+      for (const op of operatorsToward(effects, f, (c.result.error ?? 0) > 0 ? 'high' : 'low')) {
+        const n = Math.min(sitesOf(op, text), SITES_PER_OPERATOR);
+        for (let k = 0; k < n; k++) {
+          const next = applyOperator(op, text, k);
+          if (next === null || next === text) continue;
+          if (!keepsWords(text, next) || !spanIntegrity(text, next, new Set(['and']), false).ok) continue;
+          const after = read(next);
+          if (!acceptRepair(atLength(withGraded(before, idSet), soft, text, next), withGraded(after, idSet), { graded: soft }).ok) continue;
+          const disp = displacement(text, next, profile, features);
+          if (disp?.refusedFor.length) { displaced.push(...disp.refusedFor); continue; }
+          const movement = movedBy(ids, atLength(withGraded(before, idSet), soft, text, next), after, false);
+          for (const x of features) { gradedTargeted.add(x); gradedRepaired.add(x); }
+          text = next; report = await check(next);
+          sameInstrument();
+          return { kept: true, movement, note: `${op}, site ${k + 1}` };
+        }
+      }
+    }
+    return { kept: false, movement: 0, note: 'no operator moved a target without breaking or displacing something' };
+  };
+  const settings = opts.controller?.settings ?? null;
+  // THE STEPS. Each one chosen by the controller from the report as it stands (./controller.ts, `decide`), carried out
+  // through the paths that already existed (the span rewrite, the operators, a draft written again by the caller), and
+  // recorded with what it moved and what the ledger charged for it. The loop ends where the controller stops.
+  for (;;) {
+    const d = decide(controllerInput(text, report, stylePasses < maxPasses), settings);
+    if (d.kind === 'stop') {
+      stoppedBecause = d.why;
+      // A step the budget cannot hold is a repair that could not run: the draft is delivered as it stands, and said so.
+      if (d.why.startsWith('the budget')) why = `the rewrite could not run (${d.why}); the draft is delivered as it stands`;
+      break;
+    }
+    const snap = processSpendByPurpose();
+    if (d.action === 'redraft') {
+      // Written again by the caller (cli/commands/invoke.ts, `withRedraft`), told each miss's direction and distance.
+      record(d, snap, 'handed to a redraft', 0);
+      stoppedBecause = `handed to a redraft: ${d.why}`;
+      break;
+    }
+    if (d.action === 'grammar' || d.action === 'cut' || d.action === 'mechanical') {
+      // No grammar observer exists yet: the controller's input is the hook, and a step here reaches nothing.
+      record(d, snap, 'no change', 0, 'no step carries this out yet');
+      for (const id of d.targets) unreachable.add(id);
+      continue;
+    }
+    if (d.action === 'operators') {
+      const o = await operatorStep(d.targets);
+      record(d, snap, o.kept ? 'kept' : 'no change', o.movement, o.note);
+      continue;
+    }
+    const step = await rewriteStep(d);
+    record(d, snap, step.outcome, step.movement, step.note);
+    if (step.stop) { stoppedBecause = step.stop; break; }
   }
   if (report.failed) await fixMechanically();
   if (mechanical.length) {
@@ -812,9 +1030,13 @@ export async function refineToStandard(
   if (report.failed && notKept.length) why = `${why}; ${notKept.join('; ')}`;
   // AND AGAIN AT THE END, on the text that ships: whatever the passes did, no flagged claim survives them.
   // Once the flagged claims were kept uncut, cutting them again at the end would only repeat the attempt.
+  const lastSnap = processSpendByPurpose(); const flaggedLast = keptUncut ? 0 : flaggedClaims(report).length;
   const last = keptUncut ? { text, report, cut: [] as string[] } : await cutSafely(text, report);
   sameInstrument();
   if (last.cut.length) { text = last.text; report = last.report; cut.push(...last.cut); }
+  // A claim a rewrite put back is cut again: a step like the first cut, recorded with what it cost.
+  if (flaggedLast) record({ action: 'cut', targets: ['UNSOURCED'], why: `${flaggedLast} invented claim(s) flagged after the steps: cut in code`, expectedGain: flaggedLast, expectedCostUsd: 0 },
+    lastSnap, last.cut.length ? 'kept' : 'no change', last.cut.length);
   if (cut.length && !report.failed) why = 'every REQUIRED measured rule now holds (invented claims cut)';
   const heavy = heavyCut(draft, cut);
   if (heavy) why = `${heavy}; ${why}`;
@@ -825,8 +1047,8 @@ export async function refineToStandard(
     why = `${why} (the claim reader failed during the repair, so the draft and every rewrite were read again by the pattern check: `
       + 'each comparison used one instrument, and a claim only the reader could see is no longer checked)';
   }
-  return { output: text, report,
+  return { output: text, report: recorded(report),
     repair: { passes, violatedBefore: broken(first), violatedAfter: broken(report), originalOutputHash: sha(draft), draft,
       ...(kept.length ? { integrityReverted: kept, revertedRules } : {}), ...(pairs.length ? { pairs: pairs.slice(0, MAX_PAIRS_KEPT) } : {}),
-      ...(cut.length ? { storiesCut: cut } : {}), ...(toCheck.length ? { claimsToCheck: toCheck } : {}), ...editsRecord(), ...gradedRecord(report), why } };
+      ...(cut.length ? { storiesCut: cut } : {}), ...(toCheck.length ? { claimsToCheck: toCheck } : {}), ...editsRecord(), ...gradedRecord(report, text), ...controllerOf(), why } };
 }

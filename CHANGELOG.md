@@ -7,6 +7,146 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+### Changed: each repair step is chosen, sized to the miss, and the repair stops when it stops paying
+
+The repair loop ran a fixed number of passes at whatever was off: a correct draft a hair outside the author's range
+was rewritten as eagerly as one missing a required section, and a feature far outside its band got the same
+three-sentence rewrite as one just past its edge. A bounded controller (`core/loop/controller.ts`) now chooses every
+step. It changes how the standard is carried out, never the standard.
+
+- **What matters most first.** An enforced rule broken in place is rewritten; one that needs something the draft does
+  not have (a section, a table) is written again; invented claims are cut in code before any step; then a length out
+  of its band; then the author's counted features and far-out signals, furthest first, at most three a step.
+- **Sized to the miss.** A feature under 0.5 band widths out is moved by re-punctuation, with no model call, by the
+  operators whose measured effect moves it the right way. From 0.5 to 1.5, its carrier sentences are rewritten, one
+  per band width (at most three). Over 1.5, or three features out at once, the piece is written again with the
+  direction and distance of each miss named. A feature inside its band is never a target, and the displacement guard
+  still refuses any step that pushes another feature out.
+- **Stops when it stops paying.** Each step's expected movement is weighed against its expected cost, read from what
+  this run has already paid per call. A step is taken while it is expected to move at least two band widths per
+  dollar, the budget holds it, and fewer than four steps were taken. It stops when every enforced rule holds and no
+  feature is more than 0.5 band widths out (a correct draft with one harmless deviation is delivered as written);
+  when the same step has failed twice on the same target and the step it switched to failed too; when the budget is
+  spent; or when only what no step can reach is left. A draft is written again for the author's features alone only
+  when the controller asked for it.
+- **On the record.** `repair.controller` lists every step with what it was aimed at, why, what it was expected to move
+  and cost, what it moved, and what the ledger charged for it, and why the repair stopped; `invoke --json` carries it
+  and `atelier report` prints it. Movement is movement, never a probability of acceptance. `--no-repair` runs no repair
+  and records no steps.
+- **Settings in the release.** `controller.minGainPerUsd` (default 2), `controller.maxActions` (default 4),
+  `controller.extraDraft` (default off: one more draft when an enforced rule still fails and nothing else reaches it)
+  and `controller.effects`, the measured movement and cost of each step, which `summariseEffects`
+  (`core/fidelity/estimator.ts`) reads from past runs as an exponentially weighted mean (λ = 0.2). A run reads effects
+  only from its release; absent, the documented defaults apply, so existing releases keep their ids.
+
+### Added: a skill from pieces by several authors, combined as you choose
+
+"Here are five examples from different authors. I love different things about them." Read as one author, such a
+folder gave the average of five writers, which is the one voice nobody asked for. `atelier new` now tells the authors
+apart and builds the combination you choose.
+
+- **Who wrote which piece is declared, never guessed** (`core/composite/authors.ts`): `author:` in a piece's front
+  matter, a subfolder per author, or `--authors`. A folder with none of these is one author, exactly as before. The
+  build says "N pieces by K authors: each is read on its own first", and nothing is held back on its own, since an
+  author's one piece held back is an author unread.
+- **Each author is read on their own** (`cli/commands/discover.ts`): every proposal names its author, and every
+  counted band is read from that author's pieces alone. Suggestions are made per author too, so no count is held to
+  another writer's pieces.
+- **A trait table** (`core/composite/traits.ts`, stored with the run): every rule is classed as opening, structure,
+  evidence, pace, voice or method, and as shared (two or more authors, compatible), unique, conflicting, or
+  task-dependent (a conflict between authors who write pieces of different lengths). Deterministic, and free.
+- **One question per author, one screen** (`cli/commands/composite.ts`): "What do you like about this one?", asked in
+  the terminal or given as `--admire <file or author>=<what you like>`. One model call reads every line into the six
+  classes (by keyword when no model can). The screen says what is taken from whom, each conflict (A, B, both as one
+  range, or later), the recurring method moves offered as a proposal read from your examples (your own `--method`
+  note stays authoritative), and what is kept as a habit or set aside. Accepting rules on every proposal through the
+  normal ratification path, each ruling naming the author and pieces it came from. A conflict nobody answered is kept
+  as an open question and neither side instructs; nothing is guessed.
+- **A composite voice** (`core/compiler/voice.ts`, `renderers/agent-skill/render.ts`): one excerpt from every author
+  something was taken from, an equal share of the compact budget each, labelled with whose it is; "how I sound" is
+  written from the traits chosen, not from any one author; no persona is derived, since one read over every author's
+  pieces would describe their average. The copying check covers every piece of every author in the folder, served or
+  not.
+- **The choice is data** (`composite.json` with the skill): a rebuild, and a fresh run with the same answers, give the
+  same files.
+- Pinned in `tests/atelier-composite.test.ts` and `tests/atelier-composite-journey.test.ts`: five invented authors
+  with labelled traits, the classes on known pairs, no band pooled, the chosen openings, evidence and pacing, a unique
+  trait kept when admired, an unadmired author kept only as a shared habit, the paragraph conflict stored as a
+  question, the served excerpts and the copying check, byte-identical rebuild and re-run, and a single-author folder
+  unchanged.
+
+### Added: a review's citations and named tests are read by code
+
+A review method says "cite the file and line for every finding" and "name the test that would have caught it". Only a
+step that named the `path:line` form was checked; any other wording was left to judgement, and a review whose findings
+pointed at nothing passed with the step beside it unread.
+
+- **More wordings of a citation step are checked** (`core/method/step-readers.ts`). "Cite only lines in the diff",
+  "point to the line", "reference the changed line", "quote the line", "give the file and line" and "every finding
+  points at the code" are read as asking for citations, and each citation is looked up in the material as before. A
+  step that forbids the form or asks for it only sometimes ("do not cite…", "where there is one") stays a judgement,
+  and so does a line that is part of the writing or another noun ("the first line of the poem", "the bottom line",
+  "line manager", "line count").
+- **Every finding carries a citation** (LINES `perItem`, `core/observers/obligations.ts`). Where the step asks for one
+  on each finding, each list item or paragraph under the findings (the section the step names, else a heading that
+  calls them findings, issues or risks, else every list item) must hold a `path:line`; one that holds none fails with
+  its own span. "None." and "No issues found" are not findings. Read in part: whether the cited line supports the
+  claim is yours.
+- **The work names a test** (NAMES_TEST). "Name the test that would have caught it", "suggest a test for each fix" and
+  the like are held by looking for a test file (`client.test.ts`, `test_retry.py`) or a test name in backticks. A
+  draft that names none fails and is written again. Read in part: whether the named test is the right one is yours.
+  "Write tests in plain language", "add the test results" and a test coverage table are not this step.
+- **A pass of these never verifies on its own.** Each is PARTIAL, so a review that holds all of them is NEEDS REVIEW
+  with the unread part named, and a verdict step with no options named stays a judgement in your words.
+- **A `.diff` or `.patch` beside an example is read as its material** (`core/golden/case.ts`), as `.json` or `.csv`
+  already were.
+- A labelled set of 51 method steps (`tests/fixtures/readers/steps.jsonl`), wordings that ask and wordings that do not,
+  holds the reading: a change may gain an agreement, never lose one or give a step a check its words do not ask for.
+
+### Changed, for 2.0: a feature miss points at its carriers and says which way and how far
+
+A rule that holds a counted feature of the writing to a range (asides per 1,000 words, the share of one-sentence
+paragraphs) used to fail with no place to point at: a rate lives everywhere and nowhere, so the repair had nothing to
+rewrite and a later draft was told only the range it had missed.
+
+- **A FEATURE miss points at its carrier sentences.** The sentences whose removal moves the value most toward the
+  range are its spans, as many as cover the distance and never more than three, so a text nearer the range is pointed
+  at fewer places. Every FEATURE miss carries a signed distance, in widths of its range: positive above, negative
+  below. This holds for every FEATURE rule, whatever its materiality: a repair needs a target. The one thing it
+  changes for a REQUIRED feature rule is that a miss pointed at fewer carriers after a rewrite counts as progress.
+  Whether a rewrite made such a rule worse is still read by its verdict alone, as before: never by how many carriers
+  a miss happens to be pointed at, and never by its distance.
+- **Notes state direction and distance.** A draft written again, and each later shape round, is told every miss with
+  which way to move and about how far ("about 4.1 fewer parenthetical asides per 1,000 words", "about 51 words
+  shorter"), not only what was missed.
+- **A counted feature your pieces hold acts on every draft: it is repaired toward your range and never fails a
+  draft.** The standard's FEATURE rules are repair targets on every run, with no flag: a miss is rewritten on its
+  carriers and, if still outside after the rewrites, the piece is written once more with the move named, one draft
+  per round at most. The rules stay as the standard has them: a PREFERRED rule never fails the run, the evaluation
+  record never reads it as enforced, and no rule is promoted. The note for such a miss says what your pieces usually
+  do, in a block of its own, and never that the method requires it. `invoke --graded none` turns this off for a run;
+  it is the only value the switch takes.
+- **The features your pieces hold without a rule act when far out.** Selection keeps more counted features than
+  enter the standard (the profile's signal bands, per length class). On each run, for the output's length class, a
+  signal feature more than one width of its range outside it is a target for that run exactly like a FEATURE rule:
+  carrier sentences, a signed distance, direction and distance in the notes, at most three features a pass across
+  both sources, never a failure, never written into the standard or the record's verdicts. Monitored features never
+  act. Without a profile only the standard's rules act.
+- **Nothing is steered at the cost of the rest.** A rewrite or a draft written again is refused when, over the
+  features your pieces hold for that length class, more of them end outside their range than before, or one it was
+  not pointed at moves from inside its range to more than one width outside. A shorter text raises every rate per
+  1,000 words, so the comparison reads the earlier text at the later text's length. For a graded feature alone, a
+  rewrite that leaves its rule broken and moves the value further from the range by a tenth of a width or more is
+  discarded on the same reading. Enforced rules keep their own acceptance. The run's call and dollar bounds are
+  raised by exactly what the extra draft and its rewrites may spend, and the record states what they were raised by.
+- **Recorded, on the invocation record and in `--json` (`graded`):** the features graded; which were steered and
+  which way, said in one line on the run with the note that they never block; the drafts written again for them; the
+  note lines sent; each feature's value before and after, with its range and where the range came from (`standard`
+  or `profile`); the rewrites kept and refused, with reasons; how many features lay outside their range on the first
+  draft and on the delivered text, and every rewrite refused for displacing others; and the calls and dollars this
+  steering caused, taken from the run's ledger under their own purpose (`graded`), never estimated. Every repair now
+  also records its rewrites kept and refused, with the reasons (`repair.edits`).
+
 ### Added: short form (tweets, short posts, concise replies) is measured and held
 
 A skill built from five tweets learned two rules: every counted measure needed 150 words, so a folder of tweets
@@ -32,8 +172,8 @@ tweet. Short pieces are now read for what they carry.
   sentence mix, word count, rates) are recorded as not applying to that output, never as unverified; the output is
   held to the limit; and the writer is told that the essential argument has to survive the compression.
 - **Floors by evidence, not by length**, on the discovery path (`core/observers/derive.ts`, `contrast.ts`): a counted
-  rule needs three pieces of any length, and one read from fewer than five is suggested as a preference with how many
-  more pieces would let it block. A move the author never makes is a ban and is not affected.
+  rule's floor is a pooled count (thirty sentences, ten occurrences) at any length, and one read from fewer than five
+  pieces is suggested as a preference with how many more pieces would let it block. A move the author never makes is a ban and is not affected.
 - **Nothing unmeasurable reads as met**: a rate on a text too short for it says "too short to measure" and does not
   apply.
 - Measured on a fixture of 20 tweets by one invented author and 10 pieces that are not theirs, a skill built from 15:
