@@ -102,29 +102,36 @@ describe('a rule made required with --set goes through the same guard', () => {
 });
 
 // ── 2. WORDED NUMBERS AGAINST COUNTED BANDS ─────────────────────────────────────────────────────────
-describe('a worded quantity on a counted subject is compared with the band', () => {
+// A length in words against another author's count of it is asked, whether or not the band leaves room for it: the
+// words are never read to decide (tests/atelier-composite-length-asked.test.ts). Headings and lists still compare.
+describe('a worded quantity on a counted subject is asked', () => {
   const m1 = SL(6, 7); const m3 = SL(23, 49);
-  it('the reviewer\'s cases: non-overlap is a conflict, room for both is not', () => {
+  it('the reviewer\'s cases: non-overlap and room for both are both asked', () => {
     const p9 = worded('Write long, winding sentences of thirty words or more.');
     expect(relationOf(p9, counted(m1))).toBe('CONFLICT');
     expect(relationOf(p9, counted(m3))).toBe('CONFLICT'); // every sentence 30 or more puts the median at 30, over 23
     expect(relationOf(counted(m1), p9)).toBe('CONFLICT');
     for (const s of ['Write long sentences.', 'Write long, winding sentences.']) {
       expect(relationOf(worded(s), counted(m1))).toBe('CONFLICT');
-      expect(relationOf(worded(s), counted(m3))).not.toBe('CONFLICT');
+      expect(relationOf(worded(s), counted(m3))).toBe('CONFLICT');
     }
     expect(relationOf(worded('Prefer sentences of forty words.'), counted(m1))).toBe('CONFLICT');
     expect(relationOf(worded('Prefer sentences of forty words.'), counted(m3))).toBe('CONFLICT');
-    expect(relationOf(worded('Let sentences run to thirty words or more.'), counted(m3))).not.toBe('CONFLICT');
-    expect(relationOf(worded('Keep sentences under eight words.'), counted(m1))).toBe('SAME');
-    expect(relationOf(worded('Avoid long sentences.'), counted(m1))).not.toBe('CONFLICT');
+    expect(relationOf(worded('Let sentences run to thirty words or more.'), counted(m3))).toBe('CONFLICT');
+    expect(relationOf(worded('Keep sentences under eight words.'), counted(m1))).toBe('CONFLICT');
+    expect(relationOf(worded('Avoid long sentences.'), counted(m1))).toBe('CONFLICT');
+    // a rule that states no length on a sentence is not asked against a count of them
+    expect(relationOf(worded('Use British spelling.'), counted(m1))).toBe('UNRELATED');
+    expect(relationOf(worded('Avoid long paragraphs.'), counted(m1))).toBe('UNRELATED');
   });
   it('paragraph length, word count, headings and lists', () => {
     expect(relationOf(worded('Let a paragraph run long when the argument needs room.'), counted({ observer: 'PARAGRAPH_LENGTH', params: { maxSentences: 2 } }))).toBe('CONFLICT');
-    expect(relationOf(worded('Keep paragraphs short.'), counted({ observer: 'PARAGRAPH_LENGTH', params: { maxSentences: 2 } }))).not.toBe('CONFLICT');
+    expect(relationOf(worded('Keep paragraphs short.'), counted({ observer: 'PARAGRAPH_LENGTH', params: { maxSentences: 2 } }))).toBe('CONFLICT');
     expect(relationOf(worded('Keep it under 500 words.'), counted({ observer: 'LENGTH', params: { min: 800, max: 1200 } }))).toBe('CONFLICT');
     expect(relationOf(worded('Write at least 1,500 words.'), counted({ observer: 'LENGTH', params: { min: 800, max: 1200 } }))).toBe('CONFLICT');
-    expect(relationOf(worded('Write 900 to 1,000 words.'), counted({ observer: 'LENGTH', params: { min: 800, max: 1200 } }))).not.toBe('CONFLICT');
+    expect(relationOf(worded('Write 900 to 1,000 words.'), counted({ observer: 'LENGTH', params: { min: 800, max: 1200 } }))).toBe('CONFLICT');
+    // a count of one section is not the piece's length
+    expect(relationOf(worded('Write 900 to 1,000 words.'), counted({ observer: 'LENGTH', params: { min: 80, max: 120, in: ['Summary'] } }))).toBe('UNRELATED');
     expect(relationOf(worded('Use headings to break up the piece.'), counted({ observer: 'HEADINGS', params: { maxPer1000: 0 } }))).toBe('CONFLICT');
     expect(relationOf(worded('Never use headings.'), counted({ observer: 'HEADINGS', params: { minPer1000: 2 } }))).toBe('CONFLICT');
     const lists = counted({ observer: 'FEATURE', params: { feature: ['listItem'], minValue: 2, maxValue: 9 } });

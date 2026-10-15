@@ -10,8 +10,9 @@
 //             SHARED          two or more authors propose compatible rules (a limit within tolerance, or the same
 //                             statement in other words). Evidence that the trait recurs; not thereby a rule.
 //             UNIQUE          one author alone. Kept when admired, however many authors lack it.
-//             CONFLICTING     two authors propose incompatible values (paragraphs of two sentences against eight;
-//                             "never contractions" against "contractions throughout"). Surfaced, never averaged.
+//             CONFLICTING     two authors propose incompatible values ("never contractions" against "contractions
+//                             throughout"), or both state a length on one measure, in words on at least one side
+//                             (./length.ts): asked whatever the numbers say. Surfaced, never averaged.
 //             TASK_DEPENDENT  conflicting, but the two authors write pieces of different lengths (the length
 //                             classes of core/fidelity/types.ts): the difference may be the kind of work, not taste.
 //
@@ -20,7 +21,8 @@
 import type { Measurement, Requirement } from '../state/canonical-state.js';
 import type { ContextClass } from '../fidelity/types.js';
 import { NUMBER_WORDS } from '../loop/numbers.js';
-import { boundedNumber, quantitiesOf, quantityRelation, withinTolerance, type Quantity } from './quantity.js';
+import { boundedNumber, quantitiesOf, withinTolerance, type Quantity } from './quantity.js';
+import { sharedLengthMeasures } from './length.js';
 
 export type TraitClass = 'opening' | 'structure' | 'evidence' | 'pace' | 'voice' | 'method';
 export const TRAIT_CLASSES: readonly TraitClass[] = ['opening', 'structure', 'evidence', 'pace', 'voice', 'method'];
@@ -314,96 +316,34 @@ export function boundOf(said: string): Bound | null {
 }
 
 /**
- * A QUANTITY SAID IN WORDS ON A SUBJECT A COUNT MEASURES, compared with the count's band: "long, winding sentences of
- * thirty words or more" cannot be written under "a median under 6 words", nor under a range whose median is under 23;
- * "write long sentences" cannot be written where nine in ten sentences are under 7 words; "keep it under 500 words"
- * cannot be met by a piece that must run to 800; "use headings" cannot hold where the count allows none. Only a
- * plain non-overlap is a conflict: a band that leaves room for what the words ask is not.
- *
- *   sentence length   SENTENCE_LENGTH (median and nine-in-ten ceilings), LENGTH of one sentence (a ceiling on each)
- *   paragraph length  PARAGRAPH_LENGTH (a ceiling on each)
- *   word count        LENGTH in words, of the whole piece (a floor, a ceiling or both)
- *   headings, lists   HEADINGS and the list-item FEATURE, as a rate: none allowed, or some required
+ * HEADINGS AND LISTS, ASKED FOR OR BANNED OUTRIGHT, against a count of them or another rule's words: "use headings"
+ * cannot hold where the count allows none. A length is not compared here: two lengths on one measure from two
+ * authors are always asked (./length.ts), whatever their numbers say.
  */
-/** A sentence "long" in plain words runs past this many words; a paragraph "long", past this many sentences. */
-export const LONG_SENTENCE_WORDS = 20;
-export const LONG_PARAGRAPH_SENTENCES = 5;
-/** Every quantity a worded rule sets, by the one grammar, with "long" said in plain words as a floor of its own. */
-interface WordedReading {
-  readonly ranges: readonly Quantity[];
-  /** "long" in plain words, with no number */
-  readonly long: readonly ('sentence' | 'paragraph')[];
-  /** headings or lists asked for (true), or banned outright (false) */
-  readonly present: Readonly<Partial<Record<'heading' | 'list', boolean>>>;
-}
-function wordedReading(statement: string, ranges: readonly Quantity[] = quantitiesOf(statement)): WordedReading {
-  const t = statement;
-  const long: ('sentence' | 'paragraph')[] = [];
-  const r = readPolarity(t);
-  if (/\bsentences?\b/i.test(t) && r.values.get('length')?.pos.has('long') && r.subjects.get('sentence') === 'pos' && !NEGATION.test(t)) long.push('sentence');
-  if (/\bparagraphs?\b/i.test(t) && r.values.get('length')?.pos.has('long') && r.subjects.get('paragraph') !== 'neg') long.push('paragraph');
-  // Headings and lists, asked for or banned outright (a kind of either counts as the thing a count sees).
+type Presence = Readonly<Partial<Record<'heading' | 'list', boolean>>>;
+function presenceOf(statement: string): Presence {
+  const r = readPolarity(statement);
   const present: Partial<Record<'heading' | 'list', boolean>> = {};
   for (const [subject, keys] of [['heading', ['heading', 'subheading']], ['list', ['list', 'bullet', 'numbered list']]] as const) {
     const ps = keys.map((k) => r.subjects.get(k)).filter(Boolean);
     if (ps.includes('pos')) present[subject] = true;
     else if (r.subjects.get(keys[0]) === 'neg') present[subject] = false;
   }
-  return { ranges, long, present };
+  return present;
 }
-/** "Long" in plain words, as the floor it sets. */
-const longFloor = (k: 'sentence' | 'paragraph'): Quantity => (k === 'sentence'
-  ? { measure: 'sentence', unit: 'words', min: LONG_SENTENCE_WORDS, max: null } : { measure: 'paragraph', unit: 'sentences', min: LONG_PARAGRAPH_SENTENCES, max: null });
 
-/** How a worded reading stands to a counted band: a plain non-overlap conflicts; a ceiling close to the count's is the same trait. */
-function wordedAgainstCount(w: WordedReading, m: Measurement): Relation {
+/** Headings or lists said in words, against a count's rate of them: asked for where none is allowed, or banned where some are required. */
+function presenceAgainstCount(present: Presence, m: Measurement): Relation {
   const n = (k: string): number | null => (typeof m.params[k] === 'number' ? m.params[k] : null);
-  const unit = Array.isArray(m.params.unit) ? String(m.params.unit[0]).toLowerCase() : 'words';
-  const inSection = Array.isArray(m.params.in) && m.params.in.length > 0;
-  let same = false;
-  // Sentences: a floor on every sentence, or a typical sentence, sets the median at least that high; "long" asks for
-  // some sentences at least that long, so only the nine-in-ten ceiling can rule it out; a permission ("may run to
-  // forty words") opposes a ceiling well below it.
-  const median = m.observer === 'SENTENCE_LENGTH' ? n('medianMax') : m.observer === 'LENGTH' && unit === 'sentence' ? n('max') : null;
-  const tail = m.observer === 'SENTENCE_LENGTH' ? n('p90Max') : m.observer === 'LENGTH' && unit === 'sentence' ? n('max') : null;
-  for (const q of w.ranges) {
-    if (q.measure === 'sentence' && q.unit === 'words' && tail !== null && median !== null) {
-      if (q.allows) { if (quantityRelation(q, { measure: 'sentence', unit: 'words', min: null, max: tail }) === 'CONFLICT') return 'CONFLICT'; continue; }
-      if ((q.min ?? 0) > median) return 'CONFLICT';
-      if (q.min === null && q.max !== null && withinTolerance(q.max, tail)) same = true;
-    }
-    if (q.measure === 'paragraph' && q.unit === 'sentences' && m.observer === 'PARAGRAPH_LENGTH' && n('maxSentences') !== null) {
-      const rel = quantityRelation(q, { measure: 'paragraph', unit: 'sentences', min: null, max: n('maxSentences') });
-      if (rel === 'CONFLICT') return 'CONFLICT';
-      if (rel === 'SAME') same = true;
-    }
-    if (q.measure === 'piece' && q.unit === 'words' && m.observer === 'LENGTH' && unit === 'words' && !inSection) {
-      if (quantityRelation(q, { measure: 'piece', unit: 'words', min: n('min'), max: n('max') }) === 'CONFLICT') return 'CONFLICT';
-    }
-  }
-  if (w.long.includes('sentence') && tail !== null && tail < LONG_SENTENCE_WORDS) return 'CONFLICT';
-  if (w.long.includes('paragraph') && m.observer === 'PARAGRAPH_LENGTH' && (n('maxSentences') ?? Infinity) < LONG_PARAGRAPH_SENTENCES) return 'CONFLICT';
   for (const subject of ['heading', 'list'] as const) {
-    const p = w.present[subject];
+    const p = present[subject];
     if (p === undefined) continue;
     const rate = subject === 'heading'
       ? (m.observer === 'HEADINGS' ? { lo: n('minPer1000'), hi: n('maxPer1000') } : null)
       : (m.observer === 'FEATURE' && Array.isArray(m.params.feature) && m.params.feature.includes('listItem') ? { lo: n('minValue'), hi: n('maxValue') } : null);
     if (rate && (p ? rate.hi === 0 : (rate.lo ?? 0) > 0)) return 'CONFLICT';
   }
-  return same ? 'SAME' : 'UNRELATED';
-}
-
-/**
- * TWO WORDED READINGS, compared as ranges exactly as a worded rule is against a count: "under 300 words" against "at
- * least 800 words", "under ten words" against "sentences of about thirty words", "a single sentence" against "at least
- * six sentences". Ranges that do not meet conflict; ranges that overlap leave room for both; "long" in plain words is a
- * floor; headings or lists asked for against the same banned.
- */
-function readingsConflict(a: WordedReading, b: WordedReading): boolean {
-  const ra = [...a.ranges, ...a.long.map(longFloor)]; const rb = [...b.ranges, ...b.long.map(longFloor)];
-  if (ra.some((x) => rb.some((y) => quantityRelation(x, y) === 'CONFLICT'))) return true;
-  return (['heading', 'list'] as const).some((k) => a.present[k] !== undefined && b.present[k] !== undefined && a.present[k] !== b.present[k]);
+  return 'UNRELATED';
 }
 
 /**
@@ -436,13 +376,18 @@ function countedRelation(pa: Measurement['params'], pb: Measurement['params']): 
 export type ReadRule = Pick<Requirement, 'statement' | 'measurement' | 'kind'> & {
   /**
    * The readings of its quantities when more than one stands: the grammar's (./quantity.ts) and the model's, where the
-   * two disagree. Absent, the grammar's alone. It conflicts with a rule either reading conflicts with.
+   * two disagree. A reading can only add a measure the rule states a length on (./length.ts), never decide a pair.
    */
   readonly readings?: readonly (readonly Quantity[])[];
 };
-const readingsOf = (r: ReadRule): WordedReading[] => (r.readings?.length ? r.readings : [quantitiesOf(r.statement)]).map((q) => wordedReading(r.statement, q));
 
-/** How two rules of one class from two authors stand to each other. */
+/**
+ * How two rules of two authors stand to each other.
+ *
+ * TWO LENGTHS ON ONE MEASURE, either of them said in words, are a CONFLICT, always: the person is asked, whatever the
+ * numbers say (./length.ts). Only two counted bands are compared by their numbers, which were measured on the
+ * authors' own pieces, not read from words.
+ */
 export function relationOf(a: ReadRule, b: ReadRule): Relation {
   if (a.measurement && b.measurement) {
     if (a.measurement.observer !== b.measurement.observer) return 'UNRELATED';
@@ -453,17 +398,13 @@ export function relationOf(a: ReadRule, b: ReadRule): Relation {
     }
     return countedRelation(pa, pb);
   }
-  // A WORDED RULE AGAINST A COUNTED ONE, on a subject both put a number on: "let a paragraph run to eight sentences"
-  // against "3 sentences at most" is a conflict, whichever of the two is counted.
+  if (sharedLengthMeasures(a, b).length) return 'CONFLICT';
+  // A WORDED RULE AGAINST A COUNTED ONE: headings or lists asked for where the count allows none, or the reverse.
   const counted = a.measurement ?? b.measurement;
-  if (counted) {
-    const worded = a.measurement ? b : a;
-    const rels = readingsOf(worded).map((w) => wordedAgainstCount(w, counted));
-    return rels.includes('CONFLICT') ? 'CONFLICT' : rels.includes('SAME') ? 'SAME' : 'UNRELATED';
-  }
-  // TWO WORDED RULES on one quantity, as two ranges (a permission against a ceiling as two bounds), every reading of each.
-  const qa = readingsOf(a); const qb = readingsOf(b);
-  if (qa.some((x) => qb.some((y) => readingsConflict(x, y)))) return 'CONFLICT';
+  if (counted) return presenceAgainstCount(presenceOf((a.measurement ? b : a).statement), counted);
+  // TWO WORDED RULES: headings or lists asked for against the same banned; then their words.
+  const pa = presenceOf(a.statement); const pb = presenceOf(b.statement);
+  if ((['heading', 'list'] as const).some((k) => pa[k] !== undefined && pb[k] !== undefined && pa[k] !== pb[k])) return 'CONFLICT';
   if (plainlyOpposed(a.statement, b.statement)) return 'CONFLICT';
   const wa = contentWords(a.statement); const wb = contentWords(b.statement);
   if (jaccard(wa, wb) < SAME_SUBJECT) return 'UNRELATED';
@@ -507,11 +448,9 @@ export const labelOf = (a: Requirement, b: Requirement): string => {
     const names: Readonly<Record<string, string>> = { PARAGRAPH_LENGTH: 'paragraph length', SENTENCE_LENGTH: 'sentence length', HEDGE_RATE: 'hedging', FRAGMENT_SHARE: 'fragments', OPENING: 'opening length', HEADINGS: 'headings', RHYTHM: 'rhythm' };
     return names[m.observer] ?? m.observer.toLowerCase().replace(/_/g, ' ');
   }
-  // Two lengths said in words, on one measure: "piece length" whatever words each uses ("under 2,000 characters", "a
-  // five-minute read").
-  const measures = quantitiesOf(a.statement).map((q) => q.measure);
-  const common = quantitiesOf(b.statement).find((q) => measures.includes(q.measure));
-  if (common) return `${common.measure} length`;
+  // Two lengths on one measure: "piece length" whatever words each uses ("under 2,000 characters", "a five-minute read").
+  const common = sharedLengthMeasures(a, b)[0];
+  if (common) return `${common} length`;
   const shared = [...contentWords(a.statement)].filter((w) => contentWords(b.statement).has(w));
   // The subject the two share, named as a person would: "paragraph length", not "let, paragraph, run".
   const SUBJECTS: readonly (readonly [string, string])[] = [['paragraph', 'paragraph length'], ['sentence', 'sentence length'], ['contraction', 'contractions'],
@@ -547,7 +486,10 @@ export function buildTraitTable(proposals: readonly Requirement[], sourceOf: (id
   for (let i = 0; i < items.length; i++) {
     for (let j = i + 1; j < items.length; j++) {
       const a = items[i]; const b = items[j];
-      const common = a.classes.filter((c) => b.classes.includes(c));
+      // Two lengths on one measure are paired whatever else each rule is about (./length.ts): a length's class is the
+      // class a count of it has (a piece's length is structure; a sentence's or a paragraph's, pace).
+      const lengths = sharedLengthMeasures(a.p, b.p);
+      const common = [...a.classes.filter((c) => b.classes.includes(c)), ...lengths.map((m): TraitClass => (m === 'piece' ? 'structure' : 'pace'))];
       if (a.author === b.author || !common.length) continue;
       const rel = relationOf(a.p, b.p);
       if (rel === 'SAME') { push(same, a.p.requirementId, b.p.requirementId); push(same, b.p.requirementId, a.p.requirementId); }

@@ -132,7 +132,7 @@ describe('atelier new on five pieces by five authors', () => {
     expect(second).toMatch(/From Cal: pacing and paragraph construction/);
     expect(second).toMatch(/From Eli: openings/);
     expect(second).toMatch(/Dee: nothing said, so nothing is taken from this author alone/);
-    expect(second).toMatch(/\d\. paragraph length[^\n]*\n {6}A {2}Ada: Never let a paragraph run past two sentences\.\n {6}B {2}Bea: Let a paragraph run to eight sentences[^\n]*\n {6}→ open: neither instructs/);
+    expect(second).toMatch(/\d\. paragraph length[^\n]*\n {6}A {2}Ada: Never let a paragraph run past two sentences\. {3}\(reads as: at most 2 sentences in a paragraph\)\n {6}B {2}Bea: Let a paragraph run to eight sentences[^\n]*\n {6}→ open: neither instructs/);
     expect(second).toMatch(/Nothing was decided/);
     expect(builtAfter[1]).toBe(false);
   });
