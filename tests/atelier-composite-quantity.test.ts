@@ -9,6 +9,9 @@
 //   with a model, the numbers of a rule were read by the grammar alone, never checked against a second reading;
 //   a skill whose authors' piece lengths were left open still stated a length band from the authors' medians;
 //   "both (one range)" was offered on a conflict of two statements, which make no range.
+// Since then, two authors' lengths on one measure are always asked, whatever the numbers say: reading the ranges to
+// decide compatibility kept failing on wordings nobody tried (tests/atelier-composite-length-asked.test.ts). The pairs
+// and runs below are held to that: every pair on one measure is a question, and none ships both sides.
 import { describe, it, expect } from 'vitest';
 import type { Measurement, Requirement } from '../core/state/canonical-state.js';
 import { buildTraitTable, relationOf, type TraitClass } from '../core/composite/traits.js';
@@ -67,12 +70,13 @@ const PAIRS: readonly (readonly [string, string, 'CONFLICT' | 'OK'])[] = [
   ['Keep the piece over 1,500 words.', 'Keep the piece between 400 and 600 words.', 'CONFLICT'],
   ['Keep the piece over 1,500 words.', 'Keep it short.', 'OK'],
 ];
-describe('two worded quantities: a conflict exactly when no piece can follow both', () => {
+// The third column is what one piece could do by the words' ranges; it no longer decides anything: every pair is asked.
+describe('two worded quantities on one measure: always a question, whether or not one piece could follow both', () => {
   it('holds all 35 of the reviewer\'s pairs', () => { expect(PAIRS).toHaveLength(35); });
-  for (const [a, b, want] of PAIRS) {
-    it(`${want}: ${a} / ${b}`, () => {
-      expect(relationOf(W(a), W(b)) === 'CONFLICT').toBe(want === 'CONFLICT');
-      expect(relationOf(W(b), W(a)) === 'CONFLICT').toBe(want === 'CONFLICT');
+  for (const [a, b, could] of PAIRS) {
+    it(`asked (${could}): ${a} / ${b}`, () => {
+      expect(relationOf(W(a), W(b))).toBe('CONFLICT');
+      expect(relationOf(W(b), W(a))).toBe('CONFLICT');
     });
   }
 });
@@ -133,19 +137,22 @@ for (const [name, hand] of RUNS) {
       const bad = live.flatMap((x, i) => live.slice(i + 1).filter((y) => x.author !== y.author && !meet(x, y)).map((y) => `${x.id}/${y.id}`));
       expect(bad).toEqual([]);
     });
-    it('every pair of two authors\' rules out of each other\'s range is a conflict, and every conflict is such a pair', () => {
-      const want = hand.flatMap((x, i) => hand.slice(i + 1).filter((y) => x.author !== y.author && !meet(x, y)).map((y) => `${x.id}/${y.id}`)).sort();
+    it('every pair of two authors\' rules on one measure is a conflict, in range or not, and every conflict is such a pair', () => {
+      const want = hand.flatMap((x, i) => hand.slice(i + 1).filter((y) => x.author !== y.author && x.measure === y.measure).map((y) => `${x.id}/${y.id}`)).sort();
       const got = rec.conflicts.map((c) => `${c.sides[0].id}/${c.sides[1].id}`).sort();
       expect(got).toEqual(want);
     });
   });
 }
-it('G1m: "no more than 1,000 words" is a ceiling, so it and "over 900 words" leave room for both', () => {
+it('G1m: "no more than 1,000 words" and "over 900 words" leave room for both, and are asked all the same', () => {
   const rules = [rule('p10', 'Write no more than 1,000 words.'), rule('p17', 'Write over 900 words.')];
   const t = buildTraitTable(rules, (id) => (id === 'p10' ? 'rosa' : 'tam'));
-  expect(t.conflicts).toEqual([]);
+  expect(t.conflicts).toHaveLength(1);
   const rec = composeSelection(t, rules, [author('rosa'), author('tam')]);
-  expect(rec.decisions.every(instructs)).toBe(true);
+  expect(rec.decisions.map((d) => d.outcome)).toEqual(['OPEN', 'OPEN']);
+  // "both" keeps the two, shown and not instructed: never a range guessed from words
+  const both = composeSelection(t, rules, [author('rosa'), author('tam')], { 1: 'both' });
+  expect(both.decisions.map((d) => [d.outcome, d.shownOnly])).toEqual([['SELECTED', true], ['SELECTED', true]]);
 });
 
 // ── 3. COUNTED RULES: TWO CEILINGS, OR TWO FLOORS, NEVER CONFLICT ───────────────────────────────────
@@ -176,7 +183,8 @@ describe('two counted rules on one measure conflict only when their ranges do no
 
 // ── 4. THE MODEL'S READING OF A RULE'S NUMBERS ──────────────────────────────────────────────────────
 describe('a rule the model reads differently from its words is read both ways, and never silently resolved', () => {
-  const rules = [rule('a1', 'Write at least eight hundred words.'), rule('b1', 'Keep the piece under 900 words.'), rule('b2', 'Keep it to a quick read.')];
+  // b2 names no quantity cue, so by its words it states no length; b1 is not a length at all
+  const rules = [rule('a1', 'Write at least eight hundred words.'), rule('b1', 'Give two examples.'), rule('b2', 'Keep it to a quick read.')];
   const src: Record<string, string> = { a1: 'ada', b1: 'bram', b2: 'bram' };
   const table = buildTraitTable(rules, (id) => src[id]);
   const authors = [author('ada'), author('bram')];

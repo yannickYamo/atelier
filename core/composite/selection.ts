@@ -21,8 +21,8 @@
 // widened limits now contradict a third rule. So after every rule is decided, and before anything is compiled, one
 // guard (`guardInstructing`) takes every rule that will instruct (chosen by admiration or by an answer, a range's
 // carrier included, at the limits it will be checked against) and tests every pair from two authors with the same
-// detector the table uses (traits.ts, `relationOf`: worded against worded, worded against counted, counted bands and
-// ranges). For a pair that contradicts:
+// detector the table uses (traits.ts, `relationOf`: two authors' lengths on one measure, either said in words, are
+// always a pair (./length.ts); counted bands by their numbers; ranges; other words). For a pair that contradicts:
 //
 //   the person answered "both" for that pair       both stand, as they said, and the screen says so
 //   one side was chosen by an explicit answer      it stands; the other is set aside, naming that answer
@@ -34,8 +34,9 @@
 // A rule the person made required with `--set` is their latest word: it outranks an earlier answer, and the screen says
 // so in one line. A pair the model read as impossible to follow together (./contradictions.ts) is never settled by rank:
 // unless the person answered that pair, neither side instructs. Nor is a pair that conflicts only by the model's reading
-// of a rule's numbers, where it and the quantity grammar (./quantity.ts) read them two ways. An answer whose choice the guard had to open again is
-// said so, with why, and counted as open.
+// of a rule's numbers, where it names a length the rule's words do not. An answer whose choice the guard had to open
+// again is said so, with why, and counted as open. Every conflict nobody answered that holds a side open is asked
+// under its own number and counted, and no line names its own number.
 //
 // One author's own rules are not paired here: they are read from one body of work, as in a skill of one author.
 // The screen, the author lines and the count of open questions are all read from the outcome after the guard.
@@ -44,6 +45,7 @@ import type { Measurement, Requirement } from '../state/canonical-state.js';
 import { restateLimits } from '../observers/derive.js';
 import { TRAIT_LABEL, labelOf, mergedMeasurement, primaryClassOf, relationOf, type Conflict, type ConflictSide, type ReadRule, type TraitClass, type TraitKind, type TraitTable } from './traits.js';
 import { describeQuantity, quantitiesOf, sameReading, type Quantity } from './quantity.js';
+import { lengthMeasuresOf, readsAs, sharedLengthMeasures } from './length.js';
 
 export interface CompositeAuthor {
   readonly name: string;
@@ -118,8 +120,8 @@ export interface ComposeOptions {
 
 /**
  * A WORDED RULE READ TWO WAYS: the quantity grammar (./quantity.ts) and the model read its numbers differently. Both
- * readings stand: the rule is held against any rule either reading conflicts with, and the screen says so. Only the
- * rules the model gave a reading for are compared; a rule it read nothing in keeps the grammar's reading alone.
+ * readings stand: a measure either names is a length the rule states (./length.ts), so the rule is asked against any
+ * other author's length on it, and the screen says so. Only the rules the model gave a reading for are compared.
  */
 export function readTwoWays(proposals: readonly Requirement[], modelQuantities: readonly ModelQuantity[]): Map<string, { readonly grammar: Quantity[]; readonly model: Quantity[] }> {
   const out = new Map<string, { grammar: Quantity[]; model: Quantity[] }>();
@@ -538,8 +540,12 @@ export function describeComposite(c: CompositeRecord, statementOf: (id: string) 
       const [a, b] = x.sides;
       const stand = standOf(x, decided.get(a.id), decided.get(b.id), ranged);
       out.push(`  ${x.n}. ${x.label}${x.taskDependent ? ' (the two write pieces of different lengths: this may be the kind of work, not taste)' : ''}${x.provenance ? ` (read by the model at build: ${x.reason ?? 'the two cannot both be followed'})` : x.foundLast ? ' (found among the rules that would instruct: the two cannot both)' : ''}`);
-      out.push(`      A  ${a.author}: ${a.statement}`);
-      out.push(`      B  ${b.author}: ${b.statement}`);
+      // A length said in words is shown as the grammar reads it, for the person to judge: the reading decides nothing.
+      const rule = (side: ConflictSide): { statement: string; measurement: Measurement | null } => ({ statement: side.statement, measurement: measurementOf?.(side.id) ?? null });
+      const measures = measurementOf ? sharedLengthMeasures(rule(a), rule(b)) : [];
+      const reads = (side: ConflictSide): string => (measures.length && !measurementOf?.(side.id) ? `   (reads as: ${readsAs(side.statement, measures)})` : '');
+      out.push(`      A  ${a.author}: ${a.statement}${reads(a)}`);
+      out.push(`      B  ${b.author}: ${b.statement}${reads(b)}`);
       out.push(`      ${stand}`);
     }
   }
@@ -588,20 +594,26 @@ function standingOf(x: AnsweredConflict, da: CompositeDecision | undefined, db: 
   const sb = stands(db) || (db?.mergedInto !== undefined && db.settledBy !== undefined);
   const openAt = (d: CompositeDecision | undefined): number => d?.openIn ?? x.n;
   const askAt = (n: number): string => `answer with --conflict ${n}=A, ${n}=B or ${both(n)}, or leave it for later`;
-  const waits = (side: ConflictSide, d: CompositeDecision | undefined): string => (d?.outcome === 'OPEN'
-    ? `; ${side.author}'s does not instruct until you answer conflict ${openAt(d)}${openAt(d) === x.n ? `: ${ask}` : ''}` : '');
+  // An unanswered conflict is asked here, whatever else holds its sides open; a line never names its own number.
+  const unanswered = x.answer === null;
+  const waits = (side: ConflictSide, d: CompositeDecision | undefined): string => {
+    if (d?.outcome !== 'OPEN') return '';
+    const elsewhere = openAt(d) !== x.n ? ` and conflict ${openAt(d)}` : '';
+    return unanswered || openAt(d) === x.n ? `; ${side.author}'s does not instruct until you answer this one${elsewhere}: ${ask}` : `; ${side.author}'s does not instruct until you answer conflict ${openAt(d)}`;
+  };
   // A side merged into another rule's range stands through that rule, and is said so.
   const said = (side: ConflictSide, d: CompositeDecision | undefined): string => (d?.mergedInto ? `${side.author}, carried in one range by ${d.mergedInto}` : side.author);
   const by = (d: CompositeDecision | undefined): string => { const r = reason(d); return r ? ` (${r})` : ''; };
-  const waitsHere = (d: CompositeDecision | undefined): boolean => d?.outcome === 'OPEN' && openAt(d) === x.n;
+  const waitsHere = (d: CompositeDecision | undefined): boolean => d?.outcome === 'OPEN' && (unanswered || openAt(d) === x.n);
   if (sa && sb) return settled(`→ both stand: ${said(a, da)}${by(da)} and ${said(b, db)}${by(db)}`);
   if (sa) return { line: `→ ${said(a, da)}${by(da)}${waits(b, db)}`, asks: waitsHere(db) ? 'ONE_SIDE' : null };
   if (sb) return { line: `→ ${said(b, db)}${by(db)}${waits(a, da)}`, asks: waitsHere(da) ? 'ONE_SIDE' : null };
-  const why = (side: ConflictSide, d: CompositeDecision | undefined): string => `${side.author} ${d?.outcome === 'OPEN' ? `open in conflict ${openAt(d)}`
+  const why = (side: ConflictSide, d: CompositeDecision | undefined): string => `${side.author} ${d?.outcome === 'OPEN' ? (openAt(d) === x.n ? 'open' : `open in conflict ${openAt(d)}`)
     : d?.shownOnly ? `kept, shown and not instructed (${reason(d) || 'your answer'})` : `set aside (${reason(d) || 'not what you chose'})`}`;
   const firstOpen = da?.outcome === 'OPEN' ? openAt(da) : db?.outcome === 'OPEN' ? openAt(db) : null;
-  // Asked here when the side held open waits on this very conflict; else it is asked, and counted, where it waits.
-  return { line: `→ neither instructs: ${why(a, da)}, ${why(b, db)}${firstOpen !== null ? `. ${askAt(firstOpen)}` : ''}`, asks: firstOpen === x.n ? 'NEITHER' : null };
+  // Asked here when this conflict is unanswered, or a side held open waits on it; else it is asked, and counted, where it waits.
+  const here = firstOpen !== null && (unanswered || firstOpen === x.n);
+  return { line: `→ neither instructs: ${why(a, da)}, ${why(b, db)}${here ? `. ${ask}` : firstOpen !== null ? `. ${askAt(firstOpen)}` : ''}`, asks: here ? 'NEITHER' : null };
 }
 
 /**
@@ -615,7 +627,7 @@ export function pieceLengthOpen(c: CompositeRecord, ruleOf: (id: string) => Pick
     if (!r) return false;
     const m = r.measurement;
     if (m) return m.observer === 'LENGTH' && !(Array.isArray(m.params.in) && m.params.in.length > 0) && (!Array.isArray(m.params.unit) || String(m.params.unit[0]).toLowerCase() === 'words');
-    return quantitiesOf(r.statement).some((q) => q.measure === 'piece');
+    return lengthMeasuresOf(r).includes('piece');
   });
 }
 

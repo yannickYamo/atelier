@@ -7,6 +7,29 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+### Changed: two authors' lengths on one measure are always asked
+
+- **Whether two authors' lengths can both be followed is no longer read from their words.** Reading worded lengths
+  kept failing on wordings nobody had tried: "Paragraphs shouldn't run over four sentences" read as a floor, "Cite
+  three sources per 1,000 words" read as a length, "At least 500 and at most 800 words" read as its second bound only.
+  So contradictions shipped and conflicts were invented. Now a rule states a length on the piece, a sentence or a
+  paragraph when it names one of them (or words, characters, reading time, a page, a tweet) and carries a number or a
+  word such as short, long, brief, under, over, at most or at least. Any two rules from different authors that state
+  a length on one measure, either of them in words, are a conflict you answer, whatever the numbers say: neither
+  instructs until you choose A, B or both. Two counted bands from the authors' own pieces are still compared by
+  their numbers. One author's own rules are still not paired.
+- **Each worded side of a length conflict shows how it reads**: `(reads as: 500 to 800 words in the piece)`, or
+  `(reads as: unclear)`. The reading only informs your answer. "Both" on two worded lengths keeps both, shown and
+  not instructed; it never makes a range from words.
+- **The reading itself is better**: "shouldn't", "mustn't", "cut", "split" and "rewrite" before a bound read as a
+  ceiling; "25 words per sentence, max", "cap the piece at 500 words", "can be as long as 40 words", "2k words",
+  "a 5 min read" and "reading time of four minutes" are read; a unit said once for two bounds is shared; a rate
+  ("per 1,000 words", "every 300 words") and a length of something else ("a 50-word bio") are not read as lengths.
+- **The open count is every conflict shown open.** A conflict nobody answered was left out of the count when its
+  sides were also held open by another conflict, and a line could name its own number ("open in conflict 1"
+  under conflict 1). Every unanswered conflict that holds a side open now asks for its own answer and is counted, and
+  no line names its own number.
+
 ### Fixed: grammar findings said as listed, never as held
 
 - **`verify --repair` no longer says every rule holds when it left a grammar rule unverified.** On a text whose

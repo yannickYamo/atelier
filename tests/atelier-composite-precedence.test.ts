@@ -170,25 +170,31 @@ describe('what two worded rules are about, and whether they are opposed', () => 
     ['Use headings.', 'Avoid headings that are questions.'],
     ['Use bullet lists for steps.', 'Never pad a list; keep each bullet short.'],
     ['Give an example in every section.', 'Use examples, never hypotheticals.'],
-    ['Keep sentences short.', 'Keep sentences short, never more than twenty words.'],
     ['Use a warm, conversational tone.', 'Write in a casual, conversational tone.'],
     ['Use short headings.', 'Break the piece up with headings.'],
     ['Cite sources inline.', 'No source without a link.'],
     ['Use the first person.', 'Do not hedge in the first person.'],
     ['Use questions to pull the reader in.', 'Never end on a question.'],
-    ['Keep paragraphs short.', 'No paragraph should run past five sentences.'],
     ['Use contractions.', 'Avoid contractions in headings.'],
     ['Write short sentences.', 'Avoid long paragraphs.'],
     ['Use British spelling.', 'Avoid American spelling.'],
     ['Use lists only for steps.', 'Use lists for steps.'],
   ];
   for (const [a, b] of compatible) it(`not opposed: ${a} / ${b}`, () => { expect(compared(a, b)).not.toBe('CONFLICT'); expect(compared(b, a)).not.toBe('CONFLICT'); });
+  // Two lengths on one measure are asked, though one piece could follow both: compatibility is never read from words.
+  const lengths: [string, string][] = [
+    ['Keep sentences short.', 'Keep sentences short, never more than twenty words.'],
+    ['Keep paragraphs short.', 'No paragraph should run past five sentences.'],
+  ];
+  for (const [a, b] of lengths) it(`asked: ${a} / ${b}`, () => { expect(compared(a, b)).toBe('CONFLICT'); expect(compared(b, a)).toBe('CONFLICT'); });
   it('a worded rule against a counted one on the same subject, from another author', () => {
     const counted: Pick<Requirement, 'statement' | 'measurement' | 'kind'> = { statement: 'I keep paragraphs to 3 sentences at most.', kind: 'GENERATIVE', measurement: { observer: 'PARAGRAPH_LENGTH', params: { maxSentences: 3 } } };
     expect(relationOf(w('Let a paragraph run to eight sentences when the evidence needs room.'), counted)).toBe('CONFLICT');
     expect(relationOf(counted, w('Let a paragraph run to eight sentences when the evidence needs room.'))).toBe('CONFLICT');
-    expect(relationOf(w('Keep paragraphs to three sentences at most.'), counted)).toBe('SAME');
-    expect(relationOf(w('Keep paragraphs short.'), counted)).toBe('UNRELATED');
+    // a length in words against a count of it is asked, whatever its numbers
+    expect(relationOf(w('Keep paragraphs to three sentences at most.'), counted)).toBe('CONFLICT');
+    expect(relationOf(w('Keep paragraphs short.'), counted)).toBe('CONFLICT');
+    expect(relationOf(w('Use British spelling.'), counted)).toBe('UNRELATED');
     // and in the table, from two authors
     const t = buildTraitTable([rule('p1', 'Let a paragraph run to eight sentences when the evidence needs room.'), rule('m2', counted.statement, counted.measurement)], (id) => (id === 'p1' ? 'Piet' : 'Oona'));
     expect(t.conflicts.map((c) => c.label)).toEqual(['paragraph length']);
