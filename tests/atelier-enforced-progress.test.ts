@@ -9,6 +9,7 @@
 //
 // Expected values are worked out from the scenario's own counts and the documented threshold (GRADED_STEP, 0.1 band
 // widths), never read back from the code.
+import { stepLedger } from '../core/loop/controller.js';
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { spawn, execFileSync, type ChildProcess } from 'node:child_process';
 import { mkdtempSync, existsSync } from 'node:fs';
@@ -50,7 +51,7 @@ describe('a redraft for graded misses alone never undoes what a rule the owner r
   });
   it('not kept, the earlier draft delivered, and the record and the note say which rule it would have undone', async () => {
     const notes: string[] = [];
-    const d = await withRedraft(async (t) => delivered(t), { notes, unmet: (x) => (x.output === first ? [colons] : []), redraft: async () => second })(first);
+    const d = await withRedraft(async (t) => delivered(t), { notes, unmet: (x) => (x.output === first ? [colons] : []), redraft: async () => second })(first, stepLedger());
     expect(d.output).toBe(first);
     const step = d.repair?.controller?.decisions.find((x) => x.action === 'redraft');
     expect(step?.outcome).toBe('not kept');
@@ -59,7 +60,7 @@ describe('a redraft for graded misses alone never undoes what a rule the owner r
   });
   it('a redraft for what the work requires is held to the same rule: one that moves x1 further out is not kept, whatever it was for', async () => {
     const section: Unmet = { id: 'x2', statement: 'End with the timetable.', detail: 'missing' };
-    const d = await withRedraft(async (t) => delivered(t), { notes: [], unmet: (x) => (x.output === first ? [section] : []), redraft: async () => second })(first);
+    const d = await withRedraft(async (t) => delivered(t), { notes: [], unmet: (x) => (x.output === first ? [section] : []), redraft: async () => second })(first, stepLedger());
     expect(d.output).toBe(first);
     expect(d.repair?.controller?.decisions.find((x) => x.action === 'redraft')?.observed.note).toMatch(/further from holding \(x1: /);
   });
@@ -76,7 +77,7 @@ describe('a trim is said as a cut, never as a draft written again', () => {
   const writer = (n: number) => async (note: string): Promise<string> => (note.includes('Choose what to delete') ? '' : words(n));
   it('a cut that did no better: the note and the stop say "the cut"', async () => {
     const notes: string[] = [];
-    const d = await withRedraft(async (t) => noRepair(t), { notes, unmet: tooLong, redraft: writer(420) })(words(400));
+    const d = await withRedraft(async (t) => noRepair(t), { notes, unmet: tooLong, redraft: writer(420) })(words(400), stepLedger());
     expect(d.output).toBe(words(400));
     const said = notes.at(-1) ?? '';
     expect(said).toBe('The draft runs long (x2: "Write between 120 and 300 words."); the cut did not do better, so the draft before it is kept.');
@@ -87,7 +88,7 @@ describe('a trim is said as a cut, never as a draft written again', () => {
   });
   it('a cut that holds: "Cut for length", and the run card says a cut', async () => {
     const notes: string[] = [];
-    const d = await withRedraft(async (t) => noRepair(t), { notes, unmet: tooLong, redraft: writer(280) })(words(400));
+    const d = await withRedraft(async (t) => noRepair(t), { notes, unmet: tooLong, redraft: writer(280) })(words(400), stepLedger());
     expect(d.output).toBe(words(280));
     expect(notes.at(-1)).toBe('Cut for length: the draft ran long (x2: "Write between 120 and 300 words."); it now holds.');
     expect(doneOf({ report: notes, cut: [] })).toEqual(['cut to its length']);

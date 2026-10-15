@@ -8,6 +8,7 @@
 //
 // Expected values come from the documented contract (four steps a run, three graded targets a step, 0.5 band widths,
 // the stop wordings in docs/MEASURED-RULES.md) and from the scenario's own counts, never read back from the code.
+import { stepLedger } from '../core/loop/controller.js';
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { spawn, execFileSync, type ChildProcess } from 'node:child_process';
 import { mkdtempSync, existsSync, cpSync, readFileSync } from 'node:fs';
@@ -49,7 +50,7 @@ describe('a trim and a draft written again are steps on the one counter', () => 
 
   it('the run that took five steps under a limit of four: the third trim is not taken, and the stop says the limit stopped it', async () => {
     const w = writer(); const notes: string[] = [];
-    const d = await withRedraft(async (t) => (t === first ? handed(t) : noRepair(t)), { notes, unmet: tooLong, redraft: w.redraft, check: () => reportOf(), resume: async (t) => noRepair(t) })(first);
+    const d = await withRedraft(async (t) => (t === first ? handed(t) : noRepair(t)), { notes, unmet: tooLong, redraft: w.redraft, check: () => reportOf(), resume: async (t) => noRepair(t) })(first, stepLedger());
     const ctl = d.repair?.controller;
     // two rewrites were the scripted draft's own; every other call was a trim here
     expectOneCounter(ctl, 2 + w.calls);
@@ -67,7 +68,7 @@ describe('a trim and a draft written again are steps on the one counter', () => 
       controller: controllerRecord([step('rewrite', 'kept', ['x1']), step('rewrite', 'kept', ['x1'])], 'every action tried failed on what is left') } });
     let drafts = 0;
     const d = await withRedraft(async (t) => (t === 'first' ? two(t) : noRepair(t)), { notes: [], unmet: (x) => (x.output === 'first' ? [section] : []),
-      redraft: async () => { drafts += 1; return 'second'; }, steps: { settings: { maxActions: 2 }, budget: () => ({ usdLeft: 1, callsLeft: null }) } })('first');
+      redraft: async () => { drafts += 1; return 'second'; } })('first', stepLedger({ maxActions: 2 }, () => ({ usdLeft: 1, callsLeft: null })));
     expect(drafts).toBe(0);
     expect(d.output).toBe('first');
     expectOneCounter(d.repair?.controller, 2, [], 2);
@@ -75,7 +76,7 @@ describe('a trim and a draft written again are steps on the one counter', () => 
   });
   it('the budget: with no call left, no trim is taken, the stop says the budget, and the run says so', async () => {
     const w = writer(); const notes: string[] = [];
-    const d = await withRedraft(async (t) => noRepair(t), { notes, unmet: tooLong, redraft: w.redraft, steps: { settings: null, budget: () => ({ usdLeft: 1, callsLeft: 0 }) } })(first);
+    const d = await withRedraft(async (t) => noRepair(t), { notes, unmet: tooLong, redraft: w.redraft })(first, stepLedger(null, () => ({ usdLeft: 1, callsLeft: 0 })));
     expect(w.calls).toBe(0);
     expectOneCounter(d.repair?.controller, 0);
     expect(d.repair?.controller?.stoppedBecause).toBe('the budget: trim needs a model call, and no call is left; the trim was not taken');
@@ -83,11 +84,11 @@ describe('a trim and a draft written again are steps on the one counter', () => 
   });
   it('a trim is priced from the ledger when the run has paid for a draft, and from the documented $0.40 otherwise', async () => {
     const w = writer();
-    const d = await withRedraft(async (t) => noRepair(t), { notes: [], unmet: tooLong, redraft: w.redraft, steps: { settings: null, budget: () => ({ usdLeft: 0.3, callsLeft: null }) } })(first);
+    const d = await withRedraft(async (t) => noRepair(t), { notes: [], unmet: tooLong, redraft: w.redraft })(first, stepLedger(null, () => ({ usdLeft: 0.3, callsLeft: null })));
     expect(w.calls).toBe(0);
     expect(d.repair?.controller?.stoppedBecause).toBe('the budget: trim would cost about $0.40, and $0.30 are left; the trim was not taken');
     const paid = writer();
-    const e = await withRedraft(async (t) => noRepair(t), { notes: [], unmet: tooLong, redraft: paid.redraft, steps: { settings: null, budget: () => ({ usdLeft: 0.3, callsLeft: null }), usdPerCall: () => 0.02 } })(first);
+    const e = await withRedraft(async (t) => noRepair(t), { notes: [], unmet: tooLong, redraft: paid.redraft, steps: { usdPerCall: () => 0.02 } })(first, stepLedger(null, () => ({ usdLeft: 0.3, callsLeft: null })));
     const trims = e.repair?.controller?.decisions.filter((x) => x.action === 'trim') ?? [];
     expect(trims.length).toBe(paid.calls);
     expect(trims.every((x) => x.expectedCostUsd === 0.02)).toBe(true);

@@ -2,6 +2,7 @@
 // Found on ten explanations built from twelve examples of 202 to 217 words: the skill said "about 200 words",
 // nothing checked it, and three outputs ran 238 to 248. The run writes two drafts by default: where the author's
 // length applies, it now chooses between them by it, after every rule. No extra draft is written.
+import { stepLedger } from '../core/loop/controller.js';
 import { describe, it, expect } from 'vitest';
 import { ownLengthBand, againstBand } from '../core/intake/length.js';
 import { lengthSpan } from '../core/compiler/voice.js';
@@ -137,7 +138,7 @@ describe('the one more draft: what is kept, what is said, what is recorded', () 
         ...(n > 232 ? [{ id: LENGTH_ID, statement: 'length', detail: `${n} words`, off: n - 232 }] : [])];
     };
     const run = withRedraft(refine, { unmet: unmet as never, notes, redraft: async (note) => { asked.push(note); if (second instanceof Error) throw second; return second; } });
-    return { out: await run(first) as unknown as Out, notes, asked };
+    return { out: await run(first, stepLedger()) as unknown as Out, notes, asked };
   };
   it('nothing unmet: delivered as written, with no second call', async () => {
     const r = await drive(words(210), words(200));
@@ -199,7 +200,7 @@ describe('after a miss of length the writer is given something to aim for, and o
     const queue = [words(450), words(410), words(300)]; const asked: string[] = []; const notes: string[] = [];
     const made = (t: string) => ({ output: t, repair: null, report: { failed: false, checked: [] } }) as never;
     const unmet = (d: { output: string }) => { const n = d.output.split(/\s+/).length; return n > 420 ? [{ id: LENGTH_ID, statement: 'length', detail: `${n} words`, off: n - 420, aim: 'aim for 399 words or fewer' }] : []; };
-    const out = await withRedraft(async (t) => made(t), { unmet: unmet, notes, redraft: async (note) => { asked.push(note); return queue.shift() ?? ''; } })(words(480)) as unknown as { output: string };
+    const out = await withRedraft(async (t) => made(t), { unmet: unmet, notes, redraft: async (note) => { asked.push(note); return queue.shift() ?? ''; } })(words(480), stepLedger()) as unknown as { output: string };
     expect(asked).toHaveLength(2);
     expect(out.output).toBe(words(410));
     expect(notes).toHaveLength(2);
@@ -222,7 +223,7 @@ describe('a draft that only runs long is cut, not written again', () => {
     const d = (text: string) => ({ output: text, report: { failed: false, checked: [], unchecked: [] }, repair: null }) as never;
     const unmet = (x: { output: string }) => { const n = x.output.split(/\s+/).length; return n > 420 ? [{ id: LENGTH_ID, statement: 'length', detail: `${n} words`, off: n - 420, aim: 'aim for 400 words or fewer', whole: true as const }] : []; };
     const sizes = [450, 430, 418, 300]; const notes: string[] = [];
-    const out = await withRedraft(async (t: string) => d(t), { unmet, notes: [], redraft: async (note) => { notes.push(note); return words(sizes.shift()!); } })(words(469));
+    const out = await withRedraft(async (t: string) => d(t), { unmet, notes: [], redraft: async (note) => { notes.push(note); return words(sizes.shift()!); } })(words(469), stepLedger());
     expect(out.output.split(/\s+/).length).toBe(418);
     expect(notes).toHaveLength(3);
     for (const n of notes) expect(n).toMatch(/^The draft below holds what this work requires and runs too long/);
@@ -232,7 +233,7 @@ describe('a draft that only runs long is cut, not written again', () => {
     const d = (text: string) => ({ output: text, report: { failed: false, checked: [], unchecked: [] }, repair: null }) as never;
     const notes: string[] = [];
     await withRedraft(async (t: string) => d(t), { unmet: (x) => (x.output === 'first' ? [{ id: 'x1', statement: 'a section', detail: 'missing' }, { id: LENGTH_ID, statement: 'length', detail: '500 words', off: 80, aim: 'aim for 400 words or fewer' }] : []),
-      notes: [], redraft: async (note) => { notes.push(note); return 'second'; } })('first');
+      notes: [], redraft: async (note) => { notes.push(note); return 'second'; } })('first', stepLedger());
     expect(notes[0]).toMatch(/^An earlier draft did not hold what this work requires/);
   });
 });

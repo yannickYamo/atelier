@@ -12,7 +12,7 @@ import type { ControllerDecisionRecord, ControllerRecord } from '../core/state/c
 
 /** The documented default: at most four steps a run, across every draft. */
 export const MAX_STEPS = 4;
-const MODEL = new Set(['rewrite', 'carrier-rewrite', 'redraft', 'trim']);
+const MODEL = new Set(['rewrite', 'carrier-rewrite', 'redraft', 'trim', 'coverage', 'voice', 'taste', 'claim-redraft']);
 const NOT_A_STEP = new Set(['cut', 'mechanical']);
 const took = (d: ControllerDecisionRecord): boolean => d.outcome !== 'handed to a redraft' && d.outcome !== 'could not run' && d.outcome !== 'refused';
 

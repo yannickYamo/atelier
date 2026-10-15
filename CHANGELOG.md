@@ -7,6 +7,27 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+### Fixed: every change to the text is one counted step, held to the one acceptance rule
+
+- **Five parts of the repair changed the text or called the model beside the step record.** The reply written again
+  to give a part of the request it left out (`--strict`), the structural edits (`--edits`, `--fidelity`), the voice
+  pass, the rewrite the taste reader asks for, and the draft written again around an invented claim whose cut would
+  leave a fragment. A `--strict` run took eight steps under a limit of four, its record showed five and left out the
+  first draft's; a structural edit was kept after "the controller took its 4 steps". Each is now one step on the run's
+  one record: counted against the limit, entered before it runs, refused and recorded as refused when the limit or the
+  budget will not hold it, and kept only if no rule you require is newly broken or further out by its value (read
+  with each rule's own direction), besides its own checks. The reply written again under `--strict` is refined on the
+  same record, so its steps count with the first draft's. The calls a record shows are now the calls the model
+  answered for the repair.
+- **One way through.** Every step, whichever part of the repair proposes it, now goes through one helper that asks the
+  record, enters the step, runs it, judges it and settles it; the run alone makes the record, and no part of the repair
+  makes one of its own. A test composes the whole repair chain with every part proposing a change and checks the
+  record against the calls made and the text delivered; another fails if a model call or a new record appears in the
+  chain anywhere else.
+- **The record says what happened.** A step the budget refused when the controller chose is recorded as refused. A
+  step taken on a draft written again that was then not kept says which draft it was taken on. "After the smaller
+  steps that followed, …" is said only when a step followed.
+
 ### Fixed: a length said in words is read one way, and two rules are compared as ranges
 
 - **One reading for a quantity said in words.** A composite read the numbers in its authors' rules with a handful of

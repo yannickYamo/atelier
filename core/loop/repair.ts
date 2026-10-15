@@ -23,6 +23,8 @@ import type { StandardVersion } from '../state/canonical-state.js';
 import { displacedFamilies } from '../observers/style.js';
 import { spanIntegrity, namesIn, numbersIn } from './integrity.js';
 import { isGrammarNote } from '../observers/grammar.js';
+import { processSpendByPurpose, spendBetween, type SpendPurpose } from '../inference/client.js';
+import type { PlannedStep, StepLedger } from './controller.js';
 
 /** What a rewrite is told for a mechanical error no correction in place could fix: the error, and nothing else. */
 const GRAMMAR_HINT = 'Fix only the mechanical error named, in the fewest words; change no other word, and keep every figure, name and spelling the author chose';
@@ -522,4 +524,102 @@ export function acceptRepair(before: VerifyReport, after: VerifyReport,
   }
   if (closer?.length) return { ok: true, why: `nearer holding by their value: ${closer.join(', ')}` };
   return { ok: false, why: `the rewrite fixed no ${label} rule` };
+}
+
+/**
+ * ONE STEP, ON THE ONE LEDGER, HELD TO THE ONE ACCEPTANCE RULE (./controller.ts, rules A and B). Every replacement of the
+ * working text in a run is proposed through here, whichever loop proposes it: the controller's rewrites, carrier
+ * rewrites, operators and fixes without a model (./run-repair.ts), the draft written again around a claim cut, the trims
+ * and drafts written again, the draft written again for what the request asks, the structural edits, the voice pass
+ * (cli/commands/invoke.ts) and the taste reader's rewrite (../taste/repair.ts). In order, it:
+ *   1. asks the ledger whether the cap and the budget hold the step; one they refuse is entered as 'refused' and not run;
+ *   2. enters the step before it runs, so a step that throws is on the record as one that could not run;
+ *   3. calls `propose`, which makes the step's calls and returns the text it would put in place with the report counted
+ *      on it. A step that writes a whole draft and refines it on the same ledger calls `taken` once the draft is written:
+ *      the step is then counted while the draft is refined, and what it cost is read at that moment, so the steps on the
+ *      draft are not charged to it twice;
+ *   4. judges the result: no enforced rule newly broken or further from holding by its value (`enforcedNeverWorse`, with
+ *      the standard's params), and, for a step made for targets (`forEnforced`), at least one of them nearer holding
+ *      (`enforcedNearer`); then the step's own goal (`also`: what it was for, its own guards). Kept only when all hold;
+ *   5. settles the step as kept or not kept with why, what it moved and what the ledger charged for it. The steps taken
+ *      on a draft that is not kept are marked as taken on that draft, and the hand-offs it made are withdrawn.
+ * The caller keeps the text this returns; nothing else may replace the working text.
+ */
+export interface Proposed { readonly text: string; readonly report: VerifyReport }
+/** A step that proposed no change: why, and how the record says it ('no change', or 'not kept' when what came back was refused). */
+export interface NoChange { readonly unchanged: string; readonly outcome?: 'no change' | 'not kept' }
+/** What the step is, and the targets it is made for: one of them must be nearer holding after it. */
+export interface StepPlan extends PlannedStep { readonly forEnforced?: readonly string[] }
+/** The one rule's reading of a proposal: the enforced rules it made worse, and which of its targets it moved nearer (null: made for none). */
+export interface StepVerdict { readonly worse: readonly string[]; readonly nearer: readonly string[] | null }
+export interface StepRule<T extends Proposed> {
+  /** the rules the standard enforces; absent, every check acting in either report */
+  readonly enforced?: ReadonlySet<string>;
+  /** which way a rate is out (`ruleParamsOf`) */
+  readonly paramsOf?: ParamsOf;
+  /** false when the change adds no word: it cannot add an invented specific, so a claim reading is no evidence against it */
+  readonly wordsAdded?: (after: T) => boolean;
+  /** how a target the before-report does not hold as broken (the request's length, a miss read apart) is read as nearer */
+  readonly nearerOther?: (id: string, after: T) => boolean;
+  /** the step's own goal and guards, read after the one rule: why it may not be kept, or null */
+  readonly also?: (after: T, verdict: StepVerdict) => string | null | Promise<string | null>;
+  /** the spend purposes the step's calls are charged under */
+  readonly purposes: readonly SpendPurpose[];
+  /** what the step moved, in the units of its expected gain */
+  readonly movement?: (after: T, kept: boolean) => number;
+  /** the note the record carries; absent, why it was not kept */
+  readonly note?: (after: T, kept: boolean, why: string | null, verdict: StepVerdict & { readonly own: string | null }) => string | undefined;
+}
+export type StepResult<T> =
+  | { readonly kind: 'refused'; readonly why: string }
+  | { readonly kind: 'failed'; readonly why: string; readonly at: number }
+  | { readonly kind: 'unchanged'; readonly why: string; readonly at: number }
+  /** `why`: why it was not kept, the one rule first; `own`: the step's own goal's reason, read whatever the rule said */
+  | { readonly kind: 'judged'; readonly kept: boolean; readonly why: string | null; readonly own: string | null; readonly after: T; readonly verdict: StepVerdict; readonly at: number };
+
+const r3 = (x: number): number => Math.round(x * 1000) / 1000;
+
+export async function applyStep<T extends Proposed>(ledger: StepLedger, plan: StepPlan, before: Proposed | (() => Proposed),
+  propose: (taken: (movement?: number) => void) => Promise<T | NoChange>, rule: StepRule<T>): Promise<StepResult<T>> {
+  const refused = ledger.gate(plan);
+  if (refused) return { kind: 'refused', why: refused };
+  const snap = processSpendByPurpose();
+  const cost = (): { calls: number; usd: number } => {
+    const ls = spendBetween(snap, processSpendByPurpose()).filter((l) => rule.purposes.includes(l.purpose));
+    return { calls: ls.reduce((n, l) => n + l.calls, 0), usd: Math.round(ls.reduce((n, l) => n + l.usd, 0) * 1e6) / 1e6 };
+  };
+  const at = ledger.begin(plan);
+  const nested = at + 1;
+  let paid: { calls: number; usd: number } | null = null;
+  const taken = (movement = 0): void => { paid = cost(); ledger.settle(at, 'kept', { movement: r3(movement), ...paid }); };
+  /** the steps taken on a draft that is not delivered belong to that draft, and its hand-offs asked for nothing */
+  const discardNested = (): void => { if (ledger.entries.length > nested) { ledger.withdrawHandOffs(nested); ledger.markOnDraftNotKept(nested, at); } };
+  let after: T | NoChange;
+  try { after = await propose(taken); } catch (e) {
+    const why = (e as Error).message.split('\n')[0];
+    ledger.settle(at, 'could not run', { movement: 0, ...(paid ?? cost()), note: why });
+    discardNested();
+    return { kind: 'failed', why, at };
+  }
+  const spent = paid ?? cost();
+  if ('unchanged' in after) {
+    ledger.settle(at, after.outcome ?? 'no change', { movement: 0, ...spent, note: after.unchanged });
+    discardNested();
+    return { kind: 'unchanged', why: after.unchanged, at };
+  }
+  const b = typeof before === 'function' ? before() : before;
+  const enforced = rule.enforced ?? new Set([...b.report.checked, ...after.report.checked].filter((c) => acts(c)).map((c) => c.requirementId));
+  const quiet = rule.wordsAdded !== undefined && !rule.wordsAdded(after);
+  const worse = enforcedNeverWorse(b.report, after.report, enforced, rule.paramsOf).filter((id) => !quiet || !id.startsWith('UNSOURCED'));
+  const forE = plan.forEnforced ?? [];
+  const nearer = forE.length ? forE.filter((id) => (b.report.checked.some((c) => c.requirementId === id && c.result.verdict === 'VIOLATED')
+    ? enforcedNearer(b.report, after.report, [id], rule.paramsOf).length > 0 : rule.nearerOther?.(id, after) ?? false)) : null;
+  const verdict: StepVerdict = { worse, nearer };
+  const own = await rule.also?.(after, verdict) ?? null;
+  const why = worse.length ? `it made ${worse.join(', ')} worse` : nearer && !nearer.length ? `it moved none of ${forE.join(', ')} nearer holding` : own;
+  const kept = why === null;
+  const note = rule.note ? rule.note(after, kept, why, { ...verdict, own }) : why ?? undefined;
+  ledger.settle(at, kept ? 'kept' : 'not kept', { movement: r3(rule.movement?.(after, kept) ?? 0), ...spent, ...(note ? { note } : {}) });
+  if (!kept) discardNested();
+  return { kind: 'judged', kept, why, own, after, verdict, at };
 }
