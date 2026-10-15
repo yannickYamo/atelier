@@ -13,10 +13,10 @@
 import type { Measurement } from '../state/canonical-state.js';
 import type { Observer, ObserverResult, Span, CheckContext } from './registry.js';
 import { workedFromMaterial } from '../loop/derived.js';
-import { citedLines } from '../loop/locators.js';
+import { citedLines, citationSpans } from '../loop/locators.js';
 import { proseWords } from './style.js';
 import { sentencesOf } from './text.js';
-import { sectionBodyOf } from './structure.js';
+import { sectionBodyOf, sectionHeadsOf, headingsOf } from './structure.js';
 
 const list = (p: Measurement['params'], k: string): readonly string[] => { const v = p[k]; return Array.isArray(v) && v.every((x): x is string => typeof x === 'string') ? v : []; };
 const num = (p: Measurement['params'], k: string): number | null => (typeof p[k] === 'number' ? p[k] : null);
@@ -283,17 +283,77 @@ export const CITED: Observer = {
   },
 };
 
+// ── THE FINDINGS OF A REVIEW, EACH AS A SPAN ───────────────────────────────────────────────────────
+//
+// A review states its findings as the items of a list, or as the paragraphs under a heading that says what they are.
+// Which heading that is, the method says where it can ("each Blocking issue cites…" names the section); where it
+// does not, a heading that calls its contents findings, issues, risks, problems or a review is one. A review with no
+// such heading states its findings as list items wherever they stand. A paragraph is read as a finding only under a
+// findings heading that holds no list: elsewhere a paragraph is prose about the change, not a finding.
+
+/** A heading under which the paragraphs or items are findings, by the words of the heading itself. */
+const FINDINGS_HEAD = /\b(?:findings?|issues?|risks?|problems?|review|blocking|must[ -]fix|defects?|bugs?|nits?|suggestions?|concerns?)\b/i;
+/** An item that says there is nothing to find is not a finding: "None.", "n/a", "No issues found.", "Nothing blocks the merge." */
+const NO_FINDING = /^[\s*_`-]*(?:none\b|n\/a\b|nothing\s+(?:to\s+\w+|found|seen|here|further|else|blocks?)\b|no\s+(?:\w+\s+){0,3}(?:found|seen|issues?|findings?|problems?|risks?|defects?|concerns?|blockers?)\b)/i;
+const ITEM = /^(\s*)(?:[-*+]|\d{1,3}[.)])\s+/;
+const TABLE_ROW = /^\s*\|/;
+
+export interface FindingSpan { readonly start: number; readonly end: number; readonly text: string }
+
+/** Code is not where a finding is stated: fences are blanked, in place, so every offset is still into the text as written. */
+const blankFences = (text: string): string => text.replace(/```[\s\S]*?(?:```|$)|~~~[\s\S]*?(?:~~~|$)/g, (m) => m.replace(/[^\n]/g, ' '));
+
+/** The items of a region of the text: list items where it holds any, else (where `paragraphs` is set) its paragraphs. */
+function itemsIn(text: string, start: number, end: number, paragraphs: boolean): FindingSpan[] {
+  const lines = text.slice(start, end).split('\n');
+  const items: FindingSpan[] = []; const paras: FindingSpan[] = [];
+  let at = start; let open: { start: number; end: number; list: boolean } | null = null;
+  const close = (): void => { if (open) { (open.list ? items : paras).push({ start: open.start, end: open.end, text: text.slice(open.start, open.end) }); open = null; } };
+  for (const line of lines) {
+    const lineStart = at; at += line.length + 1;
+    const t = line.trim();
+    if (!t || /^#{1,6}\s/.test(t) || TABLE_ROW.test(line)) { close(); continue; }
+    const item = ITEM.exec(line);
+    // A nested item carries on its parent's finding: a sub-bullet is where the citation often sits.
+    if (item && (!open || !open.list || item[1].length < 2)) { close(); open = { start: lineStart + item[0].length, end: lineStart + line.trimEnd().length, list: true }; continue; }
+    if (!open) open = { start: lineStart + line.search(/\S/), end: lineStart + line.trimEnd().length, list: false };
+    else open.end = lineStart + line.trimEnd().length;
+  }
+  close();
+  return items.length ? items : paragraphs ? paras : [];
+}
+
+/**
+ * THE FINDINGS OF A TEXT, each with where it stands. Under the named sections, where the method names them; under
+ * the headings that call their contents findings, where the text has such headings; else every list item.
+ */
+export function findingsOf(raw: string, sections: readonly string[] = []): FindingSpan[] {
+  const text = blankFences(raw);
+  // Sections are read as the text marks them: by its headings where it has any, by its labels where it has none.
+  const labels = headingsOf(text).length === 0;
+  const heads = sectionHeadsOf(text, labels, sections.length ? [...sections] : undefined);
+  const wanted = sections.length ? heads.filter((h) => sections.some((s) => norm(h.text) === norm(s) || ` ${norm(h.text)} `.includes(` ${norm(s)} `)))
+    : heads.filter((h) => FINDINGS_HEAD.test(h.text));
+  const regions = wanted.map((h) => { const next = heads.slice(heads.indexOf(h) + 1).find((x) => x.level <= h.level); return { start: h.end, end: next ? next.start : text.length }; });
+  const found = regions.length ? regions.flatMap((r) => itemsIn(text, r.start, r.end, true)) : itemsIn(text, 0, text.length, false);
+  return found.filter((f) => !NO_FINDING.test(f.text) && f.text.trim().split(/\s+/).length > 3);
+}
+
 /**
  * EVERY PLACE THE WORK CITES IS A LINE OF WHAT IT WAS GIVEN (../loop/locators.ts). "Cite each item as path:line,
  * and only lines the diff adds" is a step code can hold: each citation is looked up, and one that names no file of
  * the material, no line of it, a line the change did not add, a blank line or a lone bracket fails, by name. `min`
  * citations must be there at all. Whether the cited line is the right one is the writer's judgement, never read
  * here. Looked up in the bound material and in the request.
+ *
+ * With `perItem`, EVERY FINDING CARRIES ONE: each finding of the text (`findingsOf`: the items under the `sections`
+ * the method names, else under a heading that calls them findings, else every list item) must hold a citation, and
+ * one that holds none fails with its own span. Whether the cited line supports the finding is still the writer's.
  */
 export const LINES: Observer = {
   id: 'LINES',
-  describe: (p) => `every path:line cited is a line of the material with something on it${num(p, 'min') ? ` (at least ${num(p, 'min')} cited)` : ''}`,
-  validate: (p) => (num(p, 'min') === null || (num(p, 'min') ?? 0) >= 0 ? null : 'min is a count, zero or more'),
+  describe: (p) => `every path:line cited is a line of the material with something on it${num(p, 'perItem') ? `, and every finding${list(p, 'sections').length ? ` under ${list(p, 'sections').map((s) => `"${s}"`).join(', ')}` : ''} carries one` : ''}${num(p, 'min') ? ` (at least ${num(p, 'min')} cited)` : ''}`,
+  validate: (p) => (num(p, 'min') !== null && (num(p, 'min') ?? 0) < 0 ? 'min is a count, zero or more' : list(p, 'sections').length && !num(p, 'perItem') ? 'sections are read only with perItem' : null),
   observe(text, p, context?: CheckContext): ObserverResult {
     // The request is somewhere a change can be given too (a diff pasted into the task). With nothing bound and
     // nothing pasted, a citation points at something nobody gave, and fails as one.
@@ -301,11 +361,39 @@ export const LINES: Observer = {
     const nothingBound = !(context?.material ?? []).length;
     const cited = citedLines(text, material).map((c) => (nothingBound && c.why === 'no such file in the material' ? { ...c, why: 'no material is bound to look it up in' } : c));
     const off = cited.filter((c) => c.why !== null); const min = num(p, 'min') ?? 0;
+    // Each finding, and whether a citation stands inside it.
+    const places = citationSpans(text, material);
+    const findings = num(p, 'perItem') ? findingsOf(text, list(p, 'sections')) : [];
+    const uncited = findings.filter((f) => !places.some((c) => c.start >= f.start && c.end <= f.end));
     const detail = `${cited.length - off.length} of ${cited.length} citation(s) point at a line of the material with something on it`
-      + (off.length ? `; not: ${off.slice(0, 6).map((c) => `${c.path}:${c.line} (${c.why})`).join(', ')}` : '') + (cited.length < min ? `; ${min} needed` : '');
-    if (!off.length && cited.length >= min) return { verdict: 'MET', spans: [], value: 0, detail };
-    return { verdict: 'VIOLATED', value: off.length + Math.max(0, min - cited.length), detail,
-      spans: off.map((c) => ({ start: c.start, end: c.end, text: text.slice(c.start, c.end), why: `${c.path}:${c.line} is ${c.why}` })) };
+      + (off.length ? `; not: ${off.slice(0, 6).map((c) => `${c.path}:${c.line} (${c.why})`).join(', ')}` : '') + (cited.length < min ? `; ${min} needed` : '')
+      + (num(p, 'perItem') ? `; ${findings.length - uncited.length} of ${findings.length} finding(s) point at a line${uncited.length ? ` (${uncited.length} at none)` : ''}` : '');
+    if (!off.length && !uncited.length && cited.length >= min) return { verdict: 'MET', spans: [], value: 0, detail };
+    return { verdict: 'VIOLATED', value: off.length + uncited.length + Math.max(0, min - cited.length), detail,
+      spans: [...off.map((c) => ({ start: c.start, end: c.end, text: text.slice(c.start, c.end), why: `${c.path}:${c.line} is ${c.why}` })),
+        ...uncited.map((f) => ({ start: f.start, end: f.end, text: f.text.slice(0, 160), why: 'this finding points at no line' }))].sort((a, b) => a.start - b.start) };
+  },
+};
+
+/**
+ * THE WORK NAMES A TEST. "Name the test that would have caught it" is held by looking for one: a test file
+ * (`client.test.ts`, `test_retry.py`), a test function or case in backticks (`test_zero_retries`, `shouldRetryOnce`),
+ * or the word "test" followed by a name in backticks (the test `retries_once`). A text that names none fails with
+ * no span: nothing in it is wrong, something is missing, and the piece is written again with that named
+ * (../plan/execution-plan.ts). Whether the named test is the right one is the writer's judgement, never read here.
+ */
+const TEST_FILE = /\b[\w./-]+\.(?:test|spec)\.[jt]sx?\b|\btest_\w+\.py\b|\b[\w./-]+_test\.(?:go|py|rb|ts|js)\b/;
+const TEST_IN_BACKTICKS = /`[^`\n]*\b(?:test|spec|should)\w*[^`\n]*`/i;
+const TEST_THEN_NAME = /\btests?\s+(?:case\s+|function\s+|named\s+|called\s+)?`[^`\n]+`/i;
+export const NAMES_TEST: Observer = {
+  id: 'NAMES_TEST',
+  describe: () => 'the work names a test (a test file, or a test function or case in backticks)',
+  validate: () => null,
+  observe(text): ObserverResult {
+    const prose = blankFences(text);
+    const named = TEST_FILE.exec(prose) ?? TEST_IN_BACKTICKS.exec(prose) ?? TEST_THEN_NAME.exec(prose);
+    if (named) return { verdict: 'MET', spans: [], value: 1, detail: `names a test: ${named[0].trim().slice(0, 80)}` };
+    return { verdict: 'VIOLATED', spans: [], value: 0, detail: 'no test is named' };
   },
 };
 
