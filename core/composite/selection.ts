@@ -88,7 +88,7 @@ export function composeSelection(table: TraitTable, proposals: readonly Requirem
     } else if (c.answer === 'both') {
       const range = mergedMeasurement(byId.get(a.id)?.measurement, byId.get(b.id)?.measurement);
       if (range) {
-        sideOutcome.set(a.id, { outcome: 'SELECTED', why: `conflict ${c.n} (${who}): both, as one range`, range });
+        sideOutcome.set(a.id, { outcome: 'SELECTED', why: `conflict ${c.n} (${who}): both, as one range`, range, byAdmiration: true as const });
         sideOutcome.set(b.id, { outcome: 'REJECTED', why: `conflict ${c.n} (${who}): merged into ${a.id} as one range`, mergedInto: a.id });
       } else {
         // Two worded rules make no range: both are kept, and neither instructs over the other.
@@ -97,7 +97,8 @@ export function composeSelection(table: TraitTable, proposals: readonly Requirem
     } else {
       const win = c.answer === 'A' ? a : b; const lose = c.answer === 'A' ? b : a;
       const how = c.resolvedBy === 'ADMIRATION' ? `you admired ${win.author}'s ${TRAIT_LABEL[clsOf(win.id) ?? c.cls]}` : `you answered ${c.answer}`;
-      sideOutcome.set(win.id, { outcome: 'SELECTED', why: `conflict ${c.n} (${who}): ${how}`, ...(c.resolvedBy === 'ADMIRATION' ? { byAdmiration: true as const } : {}) });
+      // The person's answer is their word as surely as their admiration: the side they chose instructs.
+      sideOutcome.set(win.id, { outcome: 'SELECTED', why: `conflict ${c.n} (${who}): ${how}`, byAdmiration: true as const });
       sideOutcome.set(lose.id, { outcome: 'REJECTED', why: `conflict ${c.n} (${who}): ${how}` });
     }
   }

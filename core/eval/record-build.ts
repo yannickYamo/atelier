@@ -61,7 +61,9 @@ function standardEntry(p: PlannedRule, f: RecordFacts): Entry {
   // WHETHER A CHECK MAY BLOCK IS THE PLAN'S TO SAY, and the record says the same: a check of the owner's rule that
   // is not enforced (their own work disputes the reading, or they never made the check required) is shown with what
   // it found and blocks nothing. A habit's check is believed as a count; it is not required, so it blocks nothing either.
-  const held = required && !p.enforced;
+  // A rule nobody confirmed is held too, whatever its fields say (a REQUIRED written onto it is no one's word): its
+  // check is shown with the reason it blocks nothing.
+  const held = (required && !p.enforced) || p.notEnforced === 'UNRATIFIED';
   const whyNot = p.notEnforced === 'UNRATIFIED' ? 'Nobody has confirmed this rule yet, so it blocks nothing'
     : p.notEnforced === 'DISPUTED_BY_EXAMPLES' ? 'Your own examples do not do this, so the rule blocks nothing until you confirm it'
     : p.notEnforced === 'RELATED_CHECK' ? 'This check reads something near your rule and not the rule itself, so it blocks nothing' : 'You have not made this check required, so it blocks nothing';

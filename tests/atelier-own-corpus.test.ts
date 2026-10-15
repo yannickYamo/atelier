@@ -141,7 +141,7 @@ describe('what a small corpus may be allowed, and what a fitted limit says of it
     expect(suggest(p, fitted, 'GENERATE').why).not.toMatch(/held-out/);
     // a fitted limit too many of the author's pieces break falls back to the held-out count, and says what that count is
     const broken: ProposalEvidence = { ...fitted, corpus: { pieces: 24, breaking: [0, 1, 2, 3, 4, 5] } };
-    expect(suggest(p, broken, 'GENERATE').why).toMatch(/held-out pieces, against the limit before it was moved/);
+    expect(suggest(p, broken, 'GENERATE').why).toMatch(/held-out pieces meet the limit as it stood before it was moved/);
     expect(suggest(p, plain, 'GENERATE').why).not.toMatch(/before it was moved/);
     expect(suggest(p, plain, 'GENERATE').why).toMatch(/held-out pieces/);
   });

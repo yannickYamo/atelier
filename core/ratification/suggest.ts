@@ -108,9 +108,10 @@ export function suggest(p: Requirement, e: ProposalEvidence | undefined, mode: S
     const independent = e.inSample.independent === true;
     const r = present / applicable;
     // A FITTED LIMIT SAYS SO: the held-out count is against the limit before it moved, never a check of the moved one.
-    const where = independent ? (e.inSample.fitted === true ? 'held-out pieces, against the limit before it was moved to where your pieces are' : 'held-out pieces')
-      : 'pieces it was counted from (nothing held out to check it on)';
-    const seen = `${present} of ${applicable} ${where} meet it; checked on every output`;
+    const fittedNote = independent && e.inSample.fitted === true;
+    const where = independent ? 'held-out pieces' : 'pieces it was counted from (nothing held out to check it on)';
+    const meets = fittedNote ? 'meet the limit as it stood before it was moved to where your pieces are' : 'meet it';
+    const seen = `${present} of ${applicable} ${where} ${meets}; checked on every output`;
     // A FITTED LIMIT IS JUDGED ON THE CORPUS, NOT ON THE HELD-OUT PIECES. Its limit was moved to where the author's
     // own pieces are (../observers/derive.ts, `fitToCorpus`), using the held-out pieces too, so they are no
     // independent check of it, and the counts above are against the limit before it moved. What stands for the
@@ -122,8 +123,8 @@ export function suggest(p: Requirement, e: ProposalEvidence | undefined, mode: S
     const fittedHolds = e.inSample.fitted === true && independent && own !== null && own.pieces > 0 && ownBreaking <= allowed(own.pieces, CORPUS_RULE_SHARE);
     if (r < 0.5 && !fittedHolds) {
       return applicable >= MIN_PIECES_TO_REJECT
-        ? { decision: 'REJECT', materiality: null, needs, strength: 0, why: `only ${present} of ${applicable} ${where} meet it` }
-        : { decision: 'APPROVE', materiality: 'PREFERRED', needs, strength: 0, why: `only ${present} of ${applicable} ${where} meet it; ${TOO_FEW_TO_REJECT}` };
+        ? { decision: 'REJECT', materiality: null, needs, strength: 0, why: `only ${present} of ${applicable} ${where} ${meets}` }
+        : { decision: 'APPROVE', materiality: 'PREFERRED', needs, strength: 0, why: `only ${present} of ${applicable} ${where} ${meets}; ${TOO_FEW_TO_REJECT}` };
     }
     // A style distance is a measure to pick drafts by, not a span anything can rewrite; a floor ("at
     // least so many bold phrases") has nothing to point a repair at either. Both are shown by default.

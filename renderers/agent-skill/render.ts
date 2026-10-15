@@ -487,7 +487,9 @@ would change it. When an action is destructive, name the risk, give the safe pat
 narrower command) and then the command. Ask instead of answering only when the request names no target and
 acting on the wrong one would do damage, and then say what you will do with each answer. Never describe a
 project, a file or a result you have not seen.`
-    : `Take who is speaking, the register, the hedging, the rhythm and the spelling. Never take my topics, facts,
+    : composite ? `Take from each writer only what is named for them above. Never take their topics, facts, names, figures,
+sentences, coined terms or stories: a story you were not given is not yours to tell.`
+      : `Take who is speaking, the register, the hedging, the rhythm and the spelling. Never take my topics, facts,
 names, figures, sentences, coined terms or stories: a story of mine you were not given is not yours to tell.`}
 ` : '';
   // ── MOVES I SOMETIMES MAKE ───────────────────────────────────────────────────────────────────────

@@ -116,31 +116,45 @@ const TIME_OR_AGE = /^(?:seconds?|minutes?|hours?|days?|nights?|weeks?|weekends?
 const FAMILY = /^(?:kids?|child|children|sons?|daughters?|brothers?|sisters?|siblings?|parents?|grandchild|grandchildren|grandparents?|cousins?|dogs?|cats?|pets?)$/;
 const STRUCTURE = /^(?:reasons?|things?|ways?|steps?|parts?|points?|questions?|kinds?|types?|options?|lessons?|rules?|principles?|ideas?|examples?|cases?|words?|sentences?|paragraphs?|sections?|chapters?|categor(?:y|ies)|approach(?:es)?|strateg(?:y|ies)|takeaways?|mistakes?|problems?|factors?|elements?|levels?|stages?|phases?|pieces?|items?|notes?|caveats?|habits?|signs?|decisions?|choices?|tips?|tricks?|patterns?|modes?|dimensions?|camps?|buckets?|answers?|objections?|assumptions?|conditions?|criteri(?:on|a)|paths?|scenarios?)$/;
 const MEASURED = /^(?:people|persons?|customers?|prospects?|users?|clients?|buyers?|readers?|subscribers?|employees?|engineers?|developers?|teams?|compan(?:y|ies)|firms?|vendors?|startups?|products?|tools?|calls?|tokens?|dollars?|euros?|pounds?|cents?|percent|requests?|tickets?|deals?|accounts?|seats?|licen[cs]es?|servers?|machines?|orders?|units?|rows?|records?)$/;
+const POSSESSIVE = /^(?:my|our|your|his|her|their)$/i;
 const FIRST_PERSON = /\b(?:I|[Ww]e|[Mm]y|[Oo]ur|me|us|I've|[Ww]e've|I'm)\b/;
 export function spelledCounts(s: string): string[] {
   const out: string[] = [];
-  const quoted = [...s.matchAll(/["“][^"”]*["”]/g)].map((m) => [m.index, m.index + m[0].length] as const);
-  for (const p of numberPhrases(s)) {
+  // Quoted in double quotes, or in single quotes that open after a space and close before a non-letter
+  // (an apostrophe inside a word, "it's", opens nothing).
+  const quoted = [...s.matchAll(/["“][^"”]*["”]|(?<![A-Za-z0-9])['‘][^'’\n]*?['’](?![A-Za-z])/g)].map((m) => [m.index, m.index + m[0].length] as const);
+  const phrases = numberPhrases(s);
+  phrases.forEach((p, k) => {
     const phrase = s.slice(p.index, p.index + p.length).toLowerCase();
-    if (/^\d/.test(phrase) || phrase === 'one' || quoted.some(([a, b]) => p.index > a && p.index < b)) continue;
+    if (/^\d/.test(phrase) || phrase === 'one' || quoted.some(([a, b]) => p.index > a && p.index < b)) return;
     const before = /([A-Za-z]+)[\s-]+$/.exec(s.slice(0, p.index));
-    if (before && ONE_AFTER_NOT_A_FIGURE.has(before[1].toLowerCase())) continue;
+    if (before && ONE_AFTER_NOT_A_FIGURE.has(before[1].toLowerCase())) return;
     const after = s.slice(p.index + p.length);
+    // "Fifty-fifty": a number doubled across a hyphen is an idiom of odds, not a count.
+    const twin = /^-([A-Za-z]+)\b/.exec(after)?.[1]?.toLowerCase() ?? (/([A-Za-z]+)-$/.exec(s.slice(0, p.index))?.[1]?.toLowerCase());
+    if (twin === phrase) return;
+    // "Three in ten developers", "seven out of ten readers": a ratio states both of its numbers.
+    const ratio = /^\s+(?:in|out\s+of)\s+$/i;
+    const nextP = phrases[k + 1];
+    if (nextP && ratio.test(s.slice(p.index + p.length, nextP.index))) { out.push(p.value); return; }
     const rest = after.replace(/^(?:[\s-]*plus\b|\s*\+)/i, '');
     const plus = rest.length < after.length;
-    if (/^\s*%/.test(rest)) { out.push(p.value); continue; }
+    if (/^\s*%/.test(rest)) { out.push(p.value); return; }
     const m = /^[\s-]+(?:of\s+(?:([A-Za-z]+)\s+)?)?([A-Za-z]+)(?:[\s-]+([A-Za-z]+))?/.exec(rest);
-    if (!m) continue;
+    if (!m) return;
     // "two of the": the determiner is consumed only when a word follows it; "two of the" at the end counts nothing.
     const ofDet = m[1] !== undefined && OF_DETERMINERS.test(m[1].toLowerCase());
     const words = (m[1] !== undefined && !ofDet ? [m[1], m[2]] : [m[2], m[3]]).filter((w): w is string => w !== undefined).map((w) => w.toLowerCase());
-    if (ONE_BEFORE_NOT_A_FIGURE.has(words[0])) continue;
+    if (ONE_BEFORE_NOT_A_FIGURE.has(words[0])) return;
+    // "Seven figures", "six figures": the size of a sum, said as an idiom.
+    if (/^figures?$/.test(words[0])) return;
     if (!plus) {
-      if (words.some((w) => TIME_OR_AGE.test(w) || STRUCTURE.test(w))) continue;
-      if (words.some((w) => FAMILY.test(w)) && FIRST_PERSON.test(s)) continue;
-      if (phrase.startsWith('a ') && Number(p.value) >= 100 && !words.some((w) => MEASURED.test(w))) continue;
+      if (words.some((w) => TIME_OR_AGE.test(w) || STRUCTURE.test(w))) return;
+      // Family is family whoever's it is: "I have two kids", "their two kids".
+      if (words.some((w) => FAMILY.test(w)) && (FIRST_PERSON.test(s) || (before && POSSESSIVE.test(before[1])))) return;
+      if (phrase.startsWith('a ') && Number(p.value) >= 100 && !words.some((w) => MEASURED.test(w))) return;
     }
     out.push(p.value);
-  }
+  });
   return out;
 }
