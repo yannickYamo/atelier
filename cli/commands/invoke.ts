@@ -10,8 +10,9 @@ import type { CheckContext } from '../../core/observers/registry.js';
 import { checksFor, claimInstrumentOf, contextJudgeFor, smallReaderFor, CLAIMS_MODEL_DEFAULT } from '../checks.js';
 import { regressions } from '../../core/loop/repair.js';
 import { refineToStandard, checkDraft, checkDraftAsync, enforceClaims, heavyCut, listedClaims, brokenByCut, gradedRules, PUBLIC_FACTS, INCONCLUSIVE, type CheckOptions } from '../../core/loop/run-repair.js';
+import { signalChecks, displacement } from '../../core/loop/graded.js';
 import { signalDistance } from '../../core/observers/selection.js';
-import { featureOf, featureMove, FEATURES } from '../../core/observers/features.js';
+import { featureOf, featureMove } from '../../core/observers/features.js';
 import { acts, verifyText, type VerifyReport } from '../../core/observers/verify.js';
 import { readFidelity } from '../../core/fidelity/profile.js';
 import { factLedger, factCoverage, type Fact } from '../../core/loop/fact-ledger.js';
@@ -165,18 +166,14 @@ export const ownLengthApplies = (c: { stated: boolean; asked: boolean; shape: bo
 export const lengthIsRuled = (std: Standard | null): boolean => (std ? planFor(std).rulesLength : false);
 
 /**
- * `--graded <ids>|all` (experimental, a study arm): the counted features whose FEATURE rules a miss of is a repair
- * target and never a failure (core/loop/run-repair.ts, `CheckOptions.graded`). Undefined without the flag; an
- * unknown feature id is refused before anything is spent.
+ * GRADED BY DEFAULT. A counted feature your pieces hold (a FEATURE rule of the standard, a SIGNAL band of the profile)
+ * acts on every draft: it is repaired toward your range and never fails a draft (core/loop/run-repair.ts,
+ * `CheckOptions.graded`). `--graded none` is the one switch, and turns it off for a run; anything else is refused.
  */
 export function gradedFeatures(spec: string | undefined): CheckOptions['graded'] | undefined {
-  if (spec === undefined) return undefined;
-  if (spec.trim() === 'all') return 'all';
-  const ids = spec.split(',').map((x) => x.trim()).filter(Boolean);
-  if (!ids.length) die('--graded takes a comma-separated list of feature ids, or all.');
-  const unknown = ids.filter((id) => !featureOf(id));
-  if (unknown.length) die(`--graded: unknown feature(s) ${unknown.join(', ')}. Features: ${FEATURES.map((f) => f.id).join(', ')}.`);
-  return ids;
+  if (spec === undefined) return 'all';
+  if (spec.trim() === 'none') return undefined;
+  return die(`--graded takes only none, which turns off the steering of your counted features for this run; it is on by default (got "${spec}").`);
 }
 /** How many words a count is outside a band; 0 inside it. */
 export const wordsOutside = (n: number, band: readonly [number, number]): number => (n < band[0] ? band[0] - n : n > band[1] ? n - band[1] : 0);
@@ -438,14 +435,14 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const taste = std && argv.includes('--taste') && !argv.includes('--no-taste') ? TasteSession.open(L, std, asked, waiting) : null;
   // The bounds grow with the drafts and the taste reader's calls, and a request the cap cannot cover is
   // refused before anything is spent rather than failing halfway with nothing delivered.
-  // GRADED FEATURES (a study arm, experimental): FEATURE rules on these features are repair targets, never failures.
+  // GRADED FEATURES, ON BY DEFAULT: the standard's FEATURE rules and the profile's far-out SIGNAL features are repair
+  // targets, never failures; --graded none turns it off, and --no-repair (no rewrite at all) turns it off with the rest.
   // A graded miss may have the piece written once more (`withRedraft`), one draft per round at most, and the loop may
   // rewrite that draft twice: the bounds below are raised by exactly that, GRADED_DRAFT_CALLS calls and
   // GRADED_DRAFT_USD per round, and the record states what they were raised by (`GradedRecord.allowance`).
-  const graded = gradedFeatures(flag('--graded'));
-  if (graded !== undefined && argv.includes('--no-repair')) die('--graded makes feature rules repair targets, and --no-repair turns the repair off: drop one of them.');
+  const graded = argv.includes('--no-repair') ? undefined : gradedFeatures(flag('--graded'));
   const gradedRounds = graded !== undefined ? 1 + shapeRounds : 0;
-  const gradedTrace: GradedTrace | null = graded === undefined ? null : { notes: [], redrafts: 0, edits: { accepted: 0, rejected: 0, reasons: [] }, first: null,
+  const gradedTrace: GradedTrace | null = graded === undefined ? null : { notes: [], redrafts: 0, edits: { accepted: 0, rejected: 0, reasons: [] }, first: null, displacedBefore: null, displaced: [],
     allowance: { calls: flag('--max-calls') === undefined ? gradedRounds * GRADED_DRAFT_CALLS : 0, usd: flag('--cap') === undefined ? gradedRounds * GRADED_DRAFT_USD : 0 } };
   const budget: Budget = { spentUsd: 0, capUsd: numericFlag('--cap', Math.max(1.0, 0.3 * nDrafts + 0.15 * editBudget + 0.4
       + (argv.includes('--sections') ? 0.1 * MAX_SECTIONS * nDrafts : 0)) + (voiceCould ? 0.03 * MAX_PARAGRAPHS : 0) + shapeRounds * (0.3 + 0.15 * editBudget + (voiceCould ? 0.03 * MAX_PARAGRAPHS : 0)) + (strict ? (shapeRounds + 1) * 0.4 : 0)
@@ -561,8 +558,10 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
     withheld.push(...p.prose.map((q) => q.statement));
     report.say(`The request states its own format ("${formatAsked}"): ${p.measured.length + p.prose.length} presentation rule(s) withheld for this run.`);
   }
+  // Out of register the author's range steers only on the features the policy carries; the rest are read, not steered by.
+  const carried = fid && policy && register?.status === 'out' ? carriedProfile(fid.profile, policy) : fid?.profile ?? null;
   const checks = { ...checksFor(L, { material: materialText, task: asked, context: { request: asked, material }, guardClaims: !argv.includes('--allow-unsourced'), placeholders: argv.includes('--placeholders'), ...(judge ? { judge } : {}) }),
-    ...(waived.size ? { waived } : {}), ...(graded !== undefined ? { graded } : {}) };
+    ...(waived.size ? { waived } : {}), ...(graded !== undefined ? { graded, gradedProfile: carried } : {}) };
   // DRAFTS THAT DIFFER (core/fidelity/types.ts, `diversity`): each draft its own temperature and its own slice of
   // the author's closest passages, so the shared block carries only the notes.
   const diverse = Boolean(runSettings?.diversity) && nDrafts > 1 && fid !== null;
@@ -579,8 +578,6 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
     || Boolean(ran.diversity) !== Boolean(rel.diversity) || voiceMode !== (rel.voice ?? 'off') || shapeTarget !== null || authorTarget !== null || sampling !== (rel.selection === 'sample' && Boolean(fid?.profile.detector)) || Boolean(structureFlag)
     || contextWanted !== (rel.context === 'local') || nearnessWanted !== (rel.nearness === 'reader') || strict !== (rel.delivery === 'strict');
   const trace: FidelityTrace = { drafts: [], edits: [], variants: [] };
-  // Out of register the author's range steers only on the features the policy carries; the rest are read, not steered by.
-  const carried = fid && policy && register?.status === 'out' ? carriedProfile(fid.profile, policy) : fid?.profile ?? null;
   const steerProfile = carried && local ? { ...carried, context: local } : carried;
   const editProfile = fid && local ? { ...fid.profile, context: local } : fid?.profile ?? null;
   // What each draft call was given, by the index it was asked for; the record keeps only the calls that came back
@@ -639,16 +636,17 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const notHeld = stated && contractFile === null ? notHeldBecause(asked, stated) : null;
   // A length in pages is held in words, at the number of words a page that it says (core/intake/length.ts, `inWords`).
   const askedWords = stated && contractFile === null && !notHeld ? inWords(stated) : null;
-  const unmet = std && !argv.includes('--no-redraft') ? unmetReader(std, ownBand && ownSpan && enough ? { band: ownBand, span: ownSpan } : null, askedWords, graded) : null;
+  const unmet = std && !argv.includes('--no-redraft') ? unmetReader(std, ownBand && ownSpan && enough ? { band: ownBand, span: ownSpan } : null, askedWords, graded, graded !== undefined ? carried : null) : null;
   let delivered: Delivered | null = null;
   const keepDelivered = (refine: (draft: string) => Promise<Delivered>) => async (draft: string): Promise<Delivered> => (delivered = await refine(draft));
   const rec = await runOnce(L, sv, servedForRun, servedHash, deliveryForRun, taskForRun, client, budget, binding,
     resolveProvenance(flag('--provenance'), process.env), contractFile,
     flag('--task') ? 'FLAG' : 'POSITIONAL',
-    std && !argv.includes('--no-repair') ? keepDelivered(withGradedRecord(withStructureRead(withShape(withCoverage(withVoice(withEdits(withRedraft(trackGraded(refineDraft({ client, budget, name, std, checks, taste }), gradedTrace), unmet ? { unmet, notes: completions, redraft: async (note, purpose) => (await spendOneWithResult(client, budget, servedForRun, taskForRun, null, note, {}, purpose)).piece, graded: gradedTrace } : null), fid && (editBudget > 0 || argv.includes('--fidelity')) ? { client, budget, name, std, checks, profile: editProfile ?? fid.profile, editBudget, trace, taste } : null),
+    std && !argv.includes('--no-repair') ? keepDelivered(withGradedRecord(withStructureRead(withShape(withCoverage(withVoice(withEdits(withRedraft(trackGraded(refineDraft({ client, budget, name, std, checks, taste }), gradedTrace), unmet ? { unmet, notes: completions, redraft: async (note, purpose) => (await spendOneWithResult(client, budget, servedForRun, taskForRun, null, note, {}, purpose)).piece, graded: gradedTrace,
+        displaced: (from: string, to: string) => displacement(from, to, graded !== undefined ? carried : null, new Set())?.refusedFor ?? [] } : null), fid && (editBudget > 0 || argv.includes('--fidelity')) ? { client, budget, name, std, checks, profile: editProfile ?? fid.profile, editBudget, trace, taste } : null),
       voiceRuns && bank && fid ? { client, budget, name, std, checks, bank, copied: fid.index ? overlapIndex(fid.index.passages.map((p) => p.text)) : null, trace, taste, reader: smallReaderFor()?.client ?? null, gate: runSettings?.voiceGate === 'reader' ? 'reader' as const : 'lists' as const } : null),
       strict && judge?.covers ? { client, budget, judge, asked, servedText: servedForRun, task: taskForRun, notes: completions } : null),
-      shapeRounds > 0 ? { client, budget, std, graded, gradedTrace, calibration: fid?.typicality ?? null, detector: fid?.profile.detector ?? null, target: shapeTarget, authorTarget, rounds: shapeRounds, servedText: servedForRun, task: taskForRun, trace, taste,
+      shapeRounds > 0 ? { client, budget, std, graded, gradedProfile: graded !== undefined ? carried : null, gradedTrace, calibration: fid?.typicality ?? null, detector: fid?.profile.detector ?? null, target: shapeTarget, authorTarget, rounds: shapeRounds, servedText: servedForRun, task: taskForRun, trace, taste,
         fresh: planState ? (round: number) => freshPlannedDraft(client, budget, servedForRun, taskForRun, planState, round) : null } : null),
       planState ? { budget, trace, state: planState } : null), gradedTrace, ledgerBefore)) : null,
     std && nDrafts > 1 ? withSections(selectDraft({ n: nDrafts, name, std, checks, taste, ownBand, signals: store.getSignals(L), profile: steerProfile, trace, ledger, sampling, ...(diverse ? { variant: variantOf, retrievedFor } : {}) }), sectionWriter)
@@ -997,7 +995,22 @@ export const GRADED_DRAFT_USD = 0.3 + 2 * 0.05;
  * the delivered record once, at the end (`withGradedRecord`), with the calls and dollars the ledger charged to the flag.
  */
 export interface GradedTrace { notes: string[]; redrafts: number; edits: { accepted: number; rejected: number; reasons: string[] };
-  first: GradedRecord['values'] | null; readonly allowance: { readonly calls: number; readonly usd: number } }
+  first: GradedRecord['values'] | null; readonly allowance: { readonly calls: number; readonly usd: number };
+  /** the displacement guard's count on the first draft, and every refusal it made across the run's rewrites and redrafts */
+  displacedBefore: number | null; displaced: string[] }
+
+/** Which features a run steered and which way, from the record: "parenthetical asides fewer (17.2 → 4.3 per 1,000 words)". */
+export function steeredLine(g: GradedRecord): string {
+  return g.steered.map((id) => {
+    const f = featureOf(id); const x = g.values[id];
+    if (!f || !x) return id;
+    const move = x.before !== null ? featureMove({ feature: [id], ...(x.lo !== null ? { minValue: x.lo } : {}), ...(x.hi !== null ? { maxValue: x.hi } : {}) }, x.before) : null;
+    const way = move ? (/\b(fewer|lower)\b/.test(move) ? (f.unit === 'value' ? 'lower' : 'fewer') : (f.unit === 'value' ? 'higher' : 'more')) : 'toward your range';
+    const unit = f.unit === 'per1000' ? ' per 1,000 words' : '';
+    const fmt = (v: number | null): string => (v === null ? '?' : f.unit === 'share' ? `${Math.round(v * 100)}%` : `${v}`);
+    return `${f.label} ${way} (${fmt(x.before)} → ${fmt(x.after)}${unit}${x.source === 'profile' ? ', from your pieces' : ''})`;
+  }).join('; ');
+}
 
 /** Every text the loop refines adds its graded rewrites to the trace; the first keeps its values as the run's "before". */
 function trackGraded(refine: (draft: string) => Promise<Delivered>, t: GradedTrace | null) {
@@ -1005,7 +1018,10 @@ function trackGraded(refine: (draft: string) => Promise<Delivered>, t: GradedTra
   return async (draft: string): Promise<Delivered> => {
     const d = await refine(draft);
     const g = d.repair?.graded;
-    if (g) { t.edits.accepted += g.edits.accepted; t.edits.rejected += g.edits.rejected; t.edits.reasons.push(...g.edits.reasons); t.first ??= g.values; }
+    if (g) {
+      t.edits.accepted += g.edits.accepted; t.edits.rejected += g.edits.rejected; t.edits.reasons.push(...g.edits.reasons); t.first ??= g.values;
+      if (g.displacement) { t.displacedBefore ??= g.displacement.before; t.displaced.push(...g.displacement.refusedFor); }
+    }
     return d;
   };
 }
@@ -1015,12 +1031,15 @@ function withGradedRecord(refine: (draft: string) => Promise<Delivered>, t: Grad
   if (!t) return refine;
   return async (draft: string): Promise<Delivered> => {
     const d = await refine(draft);
+    // Nothing graded on this skill (no FEATURE rule, no profile signal) and nothing done for one: the record is as it was.
+    if (!d.repair?.graded && !t.redrafts && !t.notes.length) return d;
     const line = spendBetween(ledgerBefore, processSpendByPurpose()).find((l) => l.purpose === 'graded');
     const base: RepairRecord = d.repair ?? { passes: 0, violatedBefore: [], violatedAfter: brokenIn(d.report), originalOutputHash: sha(d.output), why: 'every REQUIRED measured rule holds' };
-    const g: GradedRecord = base.graded ?? { features: [], targeted: 0, repaired: 0, redrafts: 0, notes: [], values: {}, edits: { accepted: 0, rejected: 0, reasons: [] }, calls: 0, costUsd: 0 };
+    const g: GradedRecord = base.graded ?? { features: [], targeted: 0, repaired: 0, steered: [], redrafts: 0, notes: [], values: {}, edits: { accepted: 0, rejected: 0, reasons: [] }, calls: 0, costUsd: 0 };
     const values = Object.fromEntries(Object.entries(g.values).map(([f, x]) => [f, { ...x, before: t.first?.[f]?.before ?? x.before }]));
     const edits: RepairEdits = { accepted: t.edits.accepted, rejected: t.edits.rejected, reasons: [...new Set(t.edits.reasons)] };
-    return { ...d, repair: { ...base, graded: { ...g, redrafts: t.redrafts, notes: [...t.notes], values, edits, calls: line?.calls ?? 0, costUsd: line?.usd ?? 0, allowance: t.allowance } } };
+    const displaced = g.displacement ? { displacement: { before: t.displacedBefore ?? g.displacement.before, after: g.displacement.after, refusedFor: [...new Set(t.displaced)] } } : {};
+    return { ...d, repair: { ...base, graded: { ...g, redrafts: t.redrafts, notes: [...t.notes], values, edits, calls: line?.calls ?? 0, costUsd: line?.usd ?? 0, allowance: t.allowance, ...displaced } } };
   };
 }
 
@@ -1168,13 +1187,14 @@ const lengthMove = (off: number, long: boolean): string | undefined => (off > 0 
 
 /** The reader of what a draft left unmet for this skill and this run, or null when there is nothing of the kind to read. */
 export function unmetReader(std: Standard, own: { band: readonly [number, number]; span: readonly [number, number] } | null, asked: StatedLength | null = null,
-  /** the graded features (`--graded`): a miss of a FEATURE rule on one of them is written again for, PREFERRED or not */ graded?: CheckOptions['graded']): ((d: { output: string; report: VerifyReport }) => Unmet[]) | null {
+  /** the graded features: a miss of a FEATURE rule on one of them is written again for, PREFERRED or not */ graded?: CheckOptions['graded'],
+  /** the profile whose far-out SIGNAL features are graded misses too (core/loop/graded.ts) */ profile?: FidelityProfile | null): ((d: { output: string; report: VerifyReport }) => Unmet[]) | null {
   // A missing section or table is not a sentence to rewrite (core/loop/repair.ts leaves such a rule alone); nor is a
   // citation that is no line of the material, since the right number is on the page the writer was given.
   // Which rules those are is the plan's to say (core/plan/execution-plan.ts): the ones a miss of is written again for.
   const must = new Map(planFor(std).rules.filter((p) => p.onMiss === 'REDRAFT').map((p) => [p.id, p.statement]));
   // A graded feature's rule: told with which way and how far (`featureMove`), and how far off in widths of its band.
-  const gradedOf = gradedRules(std, graded);
+  const gradedOf = gradedRules(std, graded, profile);
   const stated = new Map(planFor(std).rules.map((p) => [p.id, p.statement]));
   const params = new Map(std.requirements.flatMap((r) => (r.measurement ? [[r.requirementId, r.measurement] as const] : [])));
   if (!must.size && !own && !asked && !gradedOf.size) return null;
@@ -1190,15 +1210,17 @@ export function unmetReader(std: Standard, own: { band: readonly [number, number
     const move = lengthMove(off, long);
     return { ...base, off, ...(aim ? { aim } : {}), ...(lim.whole ? { whole: true as const } : {}), ...(move ? { move } : {}) };
   };
-  const gradedMiss = (x: VerifyReport['checked'][number]): Unmet => {
-    const m = params.get(x.requirementId); const e = x.result.error ?? 0;
+  const gradedMiss = (x: VerifyReport['checked'][number], signal?: Readonly<Record<string, unknown>>): Unmet => {
+    const m = signal ? { params: signal } : params.get(x.requirementId); const e = x.result.error ?? 0;
     const move = m && typeof x.result.value === 'number' ? featureMove(m.params, x.result.value) : null;
     // An enforced rule that is also graded is still the method's: only a rule the standard does not enforce is "usually".
     return { id: x.requirementId, statement: stated.get(x.requirementId) ?? x.statement, detail: x.result.detail, off: Math.abs(e), ...(move ? { move } : {}), ...(acts(x) ? {} : { graded: true as const }) };
   };
   return (d) => {
     const rules = [...d.report.checked.filter((x) => must.has(x.requirementId) && x.result.verdict === 'VIOLATED').map(ruleMiss),
-      ...d.report.checked.filter((x) => gradedOf.has(x.requirementId) && !must.has(x.requirementId) && x.result.verdict === 'VIOLATED').map(gradedMiss)];
+      ...d.report.checked.filter((x) => gradedOf.has(x.requirementId) && !must.has(x.requirementId) && x.result.verdict === 'VIOLATED').map((x) => gradedMiss(x)),
+      // the profile's far-out SIGNAL features, read on the text itself: they are no line of the recorded report
+      ...(gradedOf.size ? signalChecks(d.output, profile).filter((x) => x.result.verdict === 'VIOLATED' && gradedOf.has(x.requirementId)).map((x) => gradedMiss(x, x.params)) : [])];
     if (asked) {
       const written = wordsWritten(d.output); const [lo, hi] = statedBounds(asked);
       if (againstStated(written, asked) === 'met') return rules;
@@ -1245,8 +1267,8 @@ export function redraftNote(unmet: readonly Unmet[], draft: string): string {
  * start from nothing; told this, it starts from what the last round missed. A graded feature's rule (`--graded`) is
  * in it whatever its materiality: a repair target is a miss to be told of.
  */
-export function roundMisses(std: Standard, d: { output: string; report: VerifyReport }, graded?: CheckOptions['graded']): Unmet[] {
-  const named = unmetReader(std, null, null, graded)?.(d) ?? [];
+export function roundMisses(std: Standard, d: { output: string; report: VerifyReport }, graded?: CheckOptions['graded'], profile?: FidelityProfile | null): Unmet[] {
+  const named = unmetReader(std, null, null, graded, profile)?.(d) ?? [];
   const have = new Set(named.map((u) => u.id));
   const stated = new Map(planFor(std).rules.map((p) => [p.id, p.statement]));
   const params = new Map(std.requirements.flatMap((r) => (r.measurement ? [[r.requirementId, r.measurement] as const] : [])));
@@ -1409,8 +1431,10 @@ function redraftOutcome(before: readonly Unmet[], after: readonly Unmet[], kept:
  */
 export function withRedraft(refine: (draft: string) => Promise<Delivered>,
   c: { unmet: (d: Delivered) => Unmet[]; redraft: (note: string, purpose?: SpendPurpose) => Promise<string>; notes: string[];
-    /** under `--graded`: where the graded note lines sent and the drafts written for graded misses alone are counted */
-    graded?: GradedTrace | null } | null) {
+    /** where the graded note lines sent and the drafts written for graded misses alone are counted */
+    graded?: GradedTrace | null;
+    /** the displacement guard (core/loop/graded.ts) on a draft written again: why it may not be kept, or nothing */
+    displaced?: (before: string, after: string) => readonly string[] } | null) {
   if (!c) return refine;
   // Said in the owner's own words, with the id beside it: "x3" alone tells them nothing.
   const named = (us: readonly Unmet[]): string => us.map((u) => (u.id === LENGTH_ID ? `the length ${u.of === 'request' ? 'the request asks for' : 'your pieces run'} (the draft: ${u.detail})` : `${u.id}: "${u.statement.length > 70 ? `${u.statement.slice(0, 67)}...` : u.statement}"`)).join('; ');
@@ -1455,8 +1479,11 @@ export function withRedraft(refine: (draft: string) => Promise<Delivered>,
         }
         const d2 = await refine(piece);
         const missing2 = c.unmet(d2);
-        const better = nearer(missing2, missing) && others(d2, missing2) <= others(d, missing);
-        const outcome = redraftOutcome(missing, missing2, better, named, whose);
+        // A draft written again may not displace what the author's pieces hold, any more than a rewrite may.
+        const displaced = c.displaced?.(d.output, d2.output) ?? [];
+        if (displaced.length && c.graded) c.graded.displaced.push(...displaced);
+        const better = nearer(missing2, missing) && others(d2, missing2) <= others(d, missing) && !displaced.length;
+        const outcome = displaced.length ? `${redraftOutcome(missing, missing2, false, named, whose)} It displaced what your pieces hold: ${displaced.join('; ')}.` : redraftOutcome(missing, missing2, better, named, whose);
         // a cut the checks refuse leaves the draft as it was, and the next pass writes it shorter instead
         if (!better && cutting) { picking = false; c.notes.push(`${outcome} The cut was not kept; the next pass writes it shorter.`); continue; }
         if (!better) return say(d, outcome);
@@ -1502,7 +1529,7 @@ function withCoverage(refine: (draft: string) => Promise<Delivered>,
 }
 
 function withShape(refine: (draft: string) => Promise<Delivered>,
-  s: { client: InferenceClient; budget: Budget; std: Standard; graded?: CheckOptions['graded']; gradedTrace?: GradedTrace | null; calibration: TypicalityCalibration | null; detector: FidelityProfile['detector']; target: number | null; authorTarget: number | null;
+  s: { client: InferenceClient; budget: Budget; std: Standard; graded?: CheckOptions['graded']; gradedProfile?: FidelityProfile | null; gradedTrace?: GradedTrace | null; calibration: TypicalityCalibration | null; detector: FidelityProfile['detector']; target: number | null; authorTarget: number | null;
     rounds: number; servedText: string; task: string; trace: FidelityTrace; taste: TasteSession | null;
     /** how a later round's draft is written, when drafts are written against a plan; null for a plain draft */
     fresh?: ((round: number) => Promise<string>) | null } | null) {
@@ -1532,7 +1559,7 @@ function withShape(refine: (draft: string) => Promise<Delivered>,
         // THE NEXT ROUND LEARNS WHAT THE LAST ONES MISSED. Started from nothing, a round missed the same rule the round
         // before it did; it is told the best round's misses, each with which way and how far (`roundMisses`).
         const bestSoFar = tried.reduce((a, b) => (better(a, b) ? b : a));
-        const misses = roundMisses(s.std, bestSoFar.d, s.graded);
+        const misses = roundMisses(s.std, bestSoFar.d, s.graded, s.gradedProfile);
         if (s.gradedTrace && !s.fresh) s.gradedTrace.notes.push(...gradedLines(misses));
         const piece = s.fresh ? await s.fresh(round) : (await spendOneWithResult(s.client, s.budget, s.servedText, s.task, null, shapeNote(misses), {})).piece;
         tried.push(await run(piece));
@@ -1915,8 +1942,12 @@ function reportChecks(report: RunReport, rec: Invocation, std: Standard | null, 
   if (r) {
     report.detail(`checked against the standard: ${r.violatedBefore.length} REQUIRED rule(s) broken in the draft (${r.violatedBefore.join(', ')}); `
       + `${r.passes} rewrite pass(es) of only the spans that broke them; ${r.violatedAfter.length ? `still broken: ${r.violatedAfter.join(', ')}` : 'all now hold'}.`);
-    if (r.graded) report.detail(`graded features (a study arm, never a failure): ${r.graded.features.join(', ') || 'none in this standard'}; ${r.graded.targeted} targeted by a rewrite, ${r.graded.repaired} moved toward your range; `
-      + `${r.graded.redrafts} draft(s) written again for them; ${r.graded.edits.accepted} rewrite(s) kept, ${r.graded.edits.rejected} not; ${r.graded.calls} call(s), $${r.graded.costUsd.toFixed(4)}, on their account.`);
+    if (r.graded) {
+      report.detail(`graded features (never a failure): ${r.graded.features.join(', ') || 'none'}; ${r.graded.targeted} targeted by a rewrite, ${r.graded.repaired} moved toward your range; `
+        + `${r.graded.redrafts} draft(s) written again for them; ${r.graded.edits.accepted} rewrite(s) kept, ${r.graded.edits.rejected} not; ${r.graded.calls} call(s), $${r.graded.costUsd.toFixed(4)}, on their account`
+        + `${r.graded.displacement ? `; features outside your range: ${r.graded.displacement.before} on the first draft, ${r.graded.displacement.after} delivered${r.graded.displacement.refusedFor.length ? `; ${r.graded.displacement.refusedFor.length} rewrite(s) refused for displacing others` : ''}` : ''}.`);
+      if (r.graded.steered.length) report.say(`Steered toward your range, never a block: ${steeredLine(r.graded)}.`);
+    }
     const heavy = r.storiesCut ? heavyCut(r.draft ?? '', r.storiesCut) : null;
     if (heavy) report.say(`Warning: ${heavy}.`);
     const unconfirmed = r.violatedAfter.includes(INCONCLUSIVE);
