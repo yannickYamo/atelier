@@ -22,11 +22,13 @@
 //   intentional choices a fragment, an "And" or "But" opener, a one-word sentence, a lower-case styling, a word
 //                       repeated for emphasis, two spaces after a full stop, "!!": none of these is in the list, and the
 //                       repetition guard keeps "very very" and "no no".
-//   certain spelling    a spelling fix is made only where the slip is certain: a well-known misspelling with its
-//                       one correction ("recieve"), or one neighbouring key away from exactly one of the most common
-//                       English words (./grammar-words.ts). Any other word the checker does not know (a coinage,
-//                       slang, a word of one dialect, a closed compound it would split, a plural it would make a
-//                       possessive) is listed, never changed.
+//   known misspellings  a spelling is changed only where the word is on the curated list of well-known misspellings,
+//                       each with its one correction (./grammar-words.ts), found by this file's own pass over the
+//                       text: whole words, outside the protected regions, whatever the engine calls the word, in any
+//                       case at a sentence's start ("Untill" → "Until"). No guess at the word meant is ever made.
+//                       Every other word the checker does not know (a slip, a coinage, slang, a word of one dialect,
+//                       a closed compound it would split, a plural it would make a possessive) is listed, never
+//                       changed, and no spelling is ever converted between British and American English.
 //   the author's grammar  a pronoun agreement the author's own pieces use ("it don't") is their voice: not changed,
 //                       not listed. Without that evidence only the clear cases are corrected ("they was", "I has",
 //                       "he go"); vernacular ("it don't") and an error with no correction ("I is") are listed.
@@ -181,39 +183,43 @@ function distance(a: string, b: string): number {
 const namesOf = (s: string): string[] => (s.match(/\b[A-Z][\w'’-]*/g) ?? []).map((w) => w.replace(/['’]s$/, '')).filter((w) => w.length > 1 && !NOT_NAMES.has(w.toLowerCase()));
 const bare = (w: string): string => w.toLowerCase().replace(/['’]/g, '');
 
-// ── WHEN A SPELLING FIX IS CERTAIN ──────────────────────────────────────────────────────────────
+// ── THE ONE SOURCE OF A SPELLING FIX: THE LIST OF KNOWN MISSPELLINGS ─────────────────────────────
 
-/** Each letter's neighbours on a QWERTY keyboard: a slip of the finger lands on one of these. */
-const KEYS = ['qwertyuiop', 'asdfghjkl', 'zxcvbnm'];
-const NEIGHBOURS: ReadonlyMap<string, string> = new Map(KEYS.flatMap((row, r) => row.split('').map((ch, i): [string, string] => {
-  const near = [row[i - 1], row[i + 1], KEYS[r - 1]?.[i], KEYS[r - 1]?.[i + 1], KEYS[r + 1]?.[i], KEYS[r + 1]?.[i - 1]].filter((x): x is string => !!x);
-  return [ch, near.join('')];
-})));
-const adjacent = (a: string, b: string): boolean => b !== '' && (a === b || (NEIGHBOURS.get(a)?.includes(b) ?? false));
+/** The one correction of a well-known misspelling (./grammar-words.ts), in lower case; null for any other word. */
+export function knownMisspelling(word: string): string | null {
+  const w = word.toLowerCase().replace(/’/g, '\'');
+  return Object.hasOwn(MISSPELLINGS, w) ? MISSPELLINGS[w] : null;
+}
 
-/** The common words one slip away from `w`: a letter struck on a neighbouring key, or an extra letter struck beside the right one. */
-function slipsOf(w: string): string[] {
-  const out = new Set<string>();
-  for (let i = 0; i < w.length; i++) {
-    for (const k of (NEIGHBOURS.get(w[i]) ?? '').split('')) { const c = w.slice(0, i) + k + w.slice(i + 1); if (COMMON_WORDS.has(c)) out.add(c); }
-    const dropped = w.slice(0, i) + w.slice(i + 1);
-    // (A final "s" is never the extra letter: "learnings" is a plural the list lacks, not "learning" mistyped.)
-    if (!(i === w.length - 1 && w[i] === 's') && COMMON_WORDS.has(dropped) && (adjacent(w[i], w[i - 1] ?? '') || adjacent(w[i], w[i + 1] ?? ''))) out.add(dropped);
-  }
-  return [...out];
+/** Does the word at `at` open a sentence: the text's start, a line's start (past a heading or list marker), or after ". ! ?". */
+function opensSentence(text: string, at: number): boolean {
+  const line = text.slice(text.lastIndexOf('\n', at - 1) + 1, at);
+  if (/^[ \t]*(?:#{1,6}[ \t]+|[-*+>][ \t]+|\d+[.)][ \t]+)?["'“‘([*_]*$/u.test(line)) return true;
+  return /[.!?…]["'”’)\]*_]*\s+["'“‘([*_]*$/u.test(text.slice(Math.max(0, at - 40), at));
 }
 
 /**
- * The one correction of a word whose slip is certain, or null. Certain: a well-known misspelling with its one
- * correction, or a lower-case word of four letters or more, not itself common, one neighbouring key away from exactly
- * one of the most common English words. Everything else is the author's to judge.
+ * The known misspellings of a text, found by this file's own pass: whole words outside the protected regions. Each is
+ * corrected, its case kept (lower case, or a capital where it opens a sentence), unless it is the author's word (their
+ * vocabulary, the request or material, or used three times or more) or a capital in mid-sentence (a name, perhaps):
+ * those are listed. What the engine says about the word does not matter.
  */
-export function certainSpelling(word: string): string | null {
-  const w = word.toLowerCase().replace(/’/g, '\'');
-  if (Object.hasOwn(MISSPELLINGS, w)) return MISSPELLINGS[w];
-  if (!/^[a-z]{4,}$/.test(w) || COMMON_WORDS.has(w)) return null;
-  const slips = slipsOf(w);
-  return slips.length === 1 ? slips[0] : null;
+function misspellingsIn(text: string, protectedIn: readonly Range[], known: ReadonlySet<string>, counts: ReadonlyMap<string, number>): { confirmed: Span[]; uncertain: Span[] } {
+  const confirmed: Span[] = []; const uncertain: Span[] = [];
+  for (const m of text.matchAll(/(?<![\p{L}\p{N}_'’-])[\p{L}]+(?![\p{L}\p{N}_'’-])/gu)) {
+    const word = m[0]; const right = knownMisspelling(word);
+    const at = { start: m.index, end: m.index + word.length };
+    if (right === null || inside(protectedIn, at)) continue;
+    const lower = word.toLowerCase();
+    const span = (why: string, replacement?: string): Span => ({ ...at, text: word, why, ...(replacement !== undefined ? { replacement } : {}) });
+    if (known.has(lower)) { uncertain.push(span('a word of the author\'s own, or one the request or material carries (a known misspelling)')); continue; }
+    if ((counts.get(lower) ?? 0) >= 3) { uncertain.push(span('used three times or more: a spelling the author chooses (a known misspelling)')); continue; }
+    const capital = word === lower[0].toUpperCase() + lower.slice(1) && word !== lower;
+    if (word !== lower && !(capital && opensSentence(text, m.index))) { uncertain.push(span(`a capitalised word may be a name (a known misspelling of "${right}")`)); continue; }
+    const fix = capital ? right[0].toUpperCase() + right.slice(1) : right;
+    confirmed.push(span(`spelling: "${word}" → "${fix}"`, fix));
+  }
+  return { confirmed, uncertain };
 }
 
 // ── PRONOUN AGREEMENT: THE CLEAR CASES, AND THE AUTHOR'S OWN ────────────────────────────────────
@@ -314,7 +320,10 @@ export function readGrammar(text: string, params: Measurement['params'], context
   const known = new Set<string>([...vocabulary.flatMap(lowerWords), ...lowerWords(context?.request ?? ''), ...(context?.material ?? []).flatMap((m) => lowerWords(m.text))]);
   const counts = new Map<string, number>();
   for (const w of lowerWords(text)) counts.set(w, (counts.get(w) ?? 0) + 1);
-  const confirmed: Span[] = []; const uncertain: Span[] = [];
+  // The known misspellings first, by this file's own pass: the engine's lints on the same words are not read.
+  const own = misspellingsIn(text, protectedIn, known, counts);
+  const confirmed: Span[] = [...own.confirmed]; const uncertain: Span[] = [...own.uncertain];
+  const listWords: readonly Range[] = [...own.confirmed, ...own.uncertain];
   const seen = new Set<string>();
   for (const l of lintsFor(engine, text, dialectOf(params)).sort((a, b) => a.start - b.start || a.end - b.end || allowed(b) - allowed(a))) {
     if (l.end <= l.start || l.end > text.length) continue;
@@ -322,22 +331,21 @@ export function readGrammar(text: string, params: Measurement['params'], context
     if (seen.has(at)) continue;
     seen.add(at);
     if (inside(protectedIn, l)) continue;                                   // (a) never flagged
+    if (inside(listWords, l)) continue;                                     // a known misspelling: read by the pass above
     const problem = text.slice(l.start, l.end);
     const label = MECHANICAL_RULES[l.rule] ?? (MECHANICAL_KINDS.has(l.kind) ? 'a common typo' : null);
     const span = (why: string, replacement?: string): Span => ({ start: l.start, end: l.end, text: problem, why, ...(replacement !== undefined ? { replacement } : {}) });
     const note = (why: string): void => { uncertain.push(span(`${why} (${l.rule}: ${l.message.replace(/\s+/g, ' ').trim()})`)); };
     if (label === null) { note('the checker proposes a change this rule does not make'); continue; }   // (c) not in the list
-    let fix = l.replacement;
+    const fix = l.replacement;
     if (SPELLING(l)) {
       const word = problem.trim();
       if (/^[A-Z]/.test(word) || /[A-Z]/.test(word.slice(1)) || /\d/.test(word)) { note('a name, an acronym or a coined word is the author\'s'); continue; }
       if (known.has(bare(word).replace(/[’]/g, '\''))) { note('a word of the author\'s own, or one the request or material carries'); continue; }
       if ((counts.get(word.toLowerCase()) ?? 0) >= 3) { note('used three times or more: a spelling the author chooses'); continue; }
-      // Certain or listed: a coinage, slang, a word of one dialect, a split or an apostrophe the checker proposes is
-      // never the slip it takes it for often enough to change unasked.
-      const sure = certainSpelling(word);
-      if (sure === null) { note(`a word the checker does not know${fix && !/\s/.test(fix) && distance(bare(word), bare(fix)) <= 2 ? ` (it suggests "${fix}")` : ''}`); continue; }
-      fix = sure;
+      // Not a known misspelling (those are read above): a slip, a coinage, slang, a word of one dialect, a split or
+      // an apostrophe the checker proposes. A guess at the word meant is never certain: listed, never changed.
+      note(`a word the checker does not know${fix && !/\s/.test(fix) && distance(bare(word), bare(fix)) <= 2 ? ` (it suggests "${fix}")` : ''}`); continue;
     }
     if (AGREEMENT_RULES.has(l.rule)) {
       // The word before the verb is the subject the rule read: "they" in "they was".
@@ -365,7 +373,8 @@ export function readGrammar(text: string, params: Measurement['params'], context
     confirmed.push(span(fix === null ? `${label}: ${l.message.replace(/\s+/g, ' ').trim()}` : `${label}: "${problem.trim()}" → "${fix.trim() || '(removed)'}"`, fix ?? undefined));
   }
   // A finding the rule acts on is not also listed to check: the engine's own note on the same stretch goes.
-  const reading: GrammarReading = { confirmed, uncertain: uncertain.filter((u) => !inside(confirmed, u)) };
+  const byPlace = (a: Span, b: Span): number => a.start - b.start || a.end - b.end;
+  const reading: GrammarReading = { confirmed: confirmed.sort(byPlace), uncertain: uncertain.filter((u) => !inside(confirmed, u)).sort(byPlace) };
   if (READINGS.size >= READING_CACHE) { const oldest = READINGS.keys().next(); if (!oldest.done) READINGS.delete(oldest.value); }
   READINGS.set(cacheKey, reading);
   return reading;
@@ -389,8 +398,8 @@ export const GRAMMAR: Observer = {
   id: 'GRAMMAR',
   describe: (p) => {
     const d = dialectOf(p);
-    return `no mechanical error: spelling${d ? ` (${d === 'british' ? 'British' : 'American'} English)` : ''}, subject–verb agreement, a word repeated by accident, a/an, a missing apostrophe, a space before a comma; `
-      + 'code, quotations, addresses, figures and names are never touched, and anything else the checker proposes is only listed';
+    return `no mechanical error: a known misspelling, subject–verb agreement, a word repeated by accident, a/an, a missing apostrophe, a space before a comma; `
+      + `any other word the checker does not know${d ? ` in ${d === 'british' ? 'British' : 'American'} English` : ''}, and anything else it proposes, is only listed; code, quotations, addresses, figures and names are never touched`;
   },
   validate: (p) => {
     const d = list(p, 'dialect');
@@ -401,8 +410,10 @@ export const GRAMMAR: Observer = {
     const status = grammarStatus();
     if (!status.ready) return { verdict: 'NOT_APPLICABLE', spans: [], value: null, detail: `${GRAMMAR_NOT_RUN}: ${status.reason}` };
     const r = readGrammar(text, p, context);
-    const toCheck = r.uncertain.length ? `; ${r.uncertain.length} construction(s) the checker is unsure of, listed to check: ${toCheckList(r.uncertain)}` : '';
-    if (!r.confirmed.length) return { verdict: 'MET', spans: [], value: 0, error: 0, detail: `no mechanical error${toCheck}` };
+    const toCheck = r.uncertain.length ? `; ${r.uncertain.length} listed to check: ${toCheckList(r.uncertain)}` : '';
+    // "No mechanical error" is said only when nothing is listed either: with items to check, the rule held on what it
+    // acts on, and the person still has to read the rest.
+    if (!r.confirmed.length) return { verdict: 'MET', spans: [], value: 0, error: 0, detail: r.uncertain.length ? `held${toCheck}` : 'no mechanical error' };
     return { verdict: 'VIOLATED', spans: r.confirmed, value: r.confirmed.length, error: r.confirmed.length,
       detail: `${r.confirmed.length} mechanical error(s): ${kindsOf(r.confirmed)}${toCheck}` };
   },

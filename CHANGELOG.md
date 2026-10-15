@@ -46,12 +46,17 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ### Fixed: grammar correction keeps the author's words and grammar
 
-- **Spelling is changed only where the slip is certain.** A word is corrected in place when it is a well-known
-  misspelling with one correction (a documented list of 136, `core/observers/grammar-words.ts`), or one mistyped
-  neighbouring key away from exactly one of the 2,000 most common English words (both dialects). Every other word
-  the checker does not know is listed, never changed: coinages ("grokkable"), slang ("arvo"), a word of one dialect
-  ("grandad", "colour" under an American standard), a closed compound it would split ("timeboxed"), a plural it would
-  make possessive ("learnings"). A hyphenated compound is never split.
+- **Spelling is changed only for a known misspelling.** A word is corrected in place only when it is on a curated
+  list of well-known misspellings, each with its one correction (519 entries, `core/observers/grammar-words.ts`; each
+  is in neither the American nor the British word list, and its correction is in both). Atelier finds them itself,
+  whatever the checker calls the word ("untill"), and keeps their case at a sentence's start ("Thsi" becomes "This").
+  No guess at the word meant is ever made: every other word the checker does not know is listed with its suggestion,
+  never changed: a typo the list does not name ("tokwn"), coinages ("grokkable"), slang ("arvo", "yeet"), a tool's
+  name ("vite"), a word of either dialect ("grandad", "cosy", "storey", "colour" under an American standard), a closed
+  compound it would split ("timeboxed"), a plural it would make possessive ("learnings"). No spelling is converted
+  between British and American English. A hyphenated compound is never split.
+- **The rule's line says what is listed.** With items to check and nothing corrected, the grammar rule reads
+  "held; N listed to check", never "no mechanical error".
 - **More is never touched:** @mentions, #hashtags, $cashtags, emoji, email addresses, file names and ALL-CAPS tokens.
 - **Pronoun agreement.** A non-standard agreement the author's own pieces use ("it don't") is read at build and is
   theirs: not corrected, not listed. Without it, only the clear slips are corrected ("they was", "you was", "I has",
@@ -64,8 +69,18 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
   required rule holds when one was not checked.
 - **Short form.** A platform limit some of the author's own pieces run past (`--limit`) is stated as the platform's
   rule, with the pieces that exceed it named, and is no longer listed among what every example shows; the character
-  band stays the author's habit. A band whose minimum is 0 states only its maximum ("at most 6").
-- `verify --profile` reads the same range of the author's features that the skill card counts.
+  band stays the author's habit, and its line says the limit governs. A band whose minimum is 0 states only its
+  maximum ("at most 6"). One of anything is said in the singular ("1 sentence"), and a piece that opens on a markdown
+  heading is read from the heading's first word, not its "#".
+- **Short pieces build on the default path.** Twenty posts on X were refused by `atelier new` with a model set up
+  ("every candidate was too short"): the floor that drops a stub from a folder of long pieces now leaves out nothing
+  when the class is a short format (`--class x-post`) or the pieces are short as a set (median under 150 words). Their
+  shape bands are proposed with the rest, and a rate too rare to pool over the pieces read alone is pooled over the
+  held-out ones too, its check on them marked as not independent.
+- `verify --profile` reads the same range of the author's features that the skill card counts, and a pooled rate as
+  its rule states it ("your rate about 6.1 per 100 words"), never "n/a".
+- **`verify` names what blocked a text.** Under BLOCKED, each failing check is named with what was found, so a text
+  blocked by a check no rule line shows (a passage copied from an example) says so without `--json`.
 
 ### Fixed: several authors without a model, plain conflicts, and figures cut only for their digits
 
