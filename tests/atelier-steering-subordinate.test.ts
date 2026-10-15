@@ -5,6 +5,7 @@
 // steps, a hand-off to a redraft lost behind a later mechanical step, a one-sided band read across a width of a
 // billion, a redraft that added a figure, and the printed lines that said two contradictory things. Expected values are
 // worked out from the documented thresholds (GRADED_STEP 0.1 width, SETTLED_ERROR 0.5, four steps), not read back.
+import { stepLedger } from '../core/loop/controller.js';
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { spawn, execFileSync, type ChildProcess } from 'node:child_process';
 import { mkdtempSync, existsSync } from 'node:fs';
@@ -108,7 +109,7 @@ describe('the controller: one redraft is one step, the pass cap says so, a step-
   });
   it('a step the calls cannot hold says the calls ran out, not "$0.00"', () => {
     const d = decide(input({ graded: [{ id: 'g', error: 1.0, operatorEffect: null }], budget: { usdLeft: 1, callsLeft: 0 }, observedUsdPerCall: { 'carrier-rewrite': 0.0004 } }));
-    expect(d).toEqual({ kind: 'stop', why: 'the budget: carrier-rewrite needs a model call, and no call is left', refused: 'carrier-rewrite' });
+    expect(d).toMatchObject({ kind: 'stop', why: 'the budget: carrier-rewrite needs a model call, and no call is left', refused: 'carrier-rewrite' });
   });
 });
 
@@ -132,7 +133,7 @@ describe('withRedraft: the owner first, figures guarded, notes only what is far'
     const notes: string[] = []; const sent: string[] = [];
     const go = withRedraft(async (t) => noRepair(t), { unmet: (d) => o.misses(d.output), notes, redraft: async (note) => { sent.push(note); return o.second; },
       displaced: () => o.displaced ?? [], ...(o.figures ? { addedFigures: (a: string, b: string) => addedFigures(a, b, 'the request') } : {}) });
-    const d = await go('first draft');
+    const d = await go('first draft', stepLedger());
     return { d, notes, sent };
   };
   it('a redraft for an enforced miss tells only the graded misses over 0.5 widths', async () => {

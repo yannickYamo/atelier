@@ -2,6 +2,7 @@
 //
 // Teardowns asked "Quick mode: one to two pages." came back at 1,400 to 1,900 words. The request's length was not seen (a count spelled out after a label like "Quick mode:" was skipped), and a
 // length in pages, where it was seen, was never counted: the writer was not held to it and nothing was written again.
+import { stepLedger } from '../core/loop/controller.js';
 import { describe, it, expect } from 'vitest';
 import { statedLength, statedLengths, notHeldBecause, inWords, WORDS_PER_PAGE } from '../core/intake/length.js';
 
@@ -121,12 +122,12 @@ describe('a draft that only runs long is cut by what the writer picks and code r
     const unmet = (x: { output: string }) => { const n = wordsWrittenOf(x.output); return n > 20 ? [{ id: LENGTH_ID, whole: true as const, statement: 'length', detail: `${n} words`, off: n - 20, aim: 'aim for 18 words or fewer' }] : []; };
     const long = 'Keep this opening sentence here, as it is. Drop this whole sentence because it only repeats the opening one again. Keep the end of it.';
     const notes: string[] = [];
-    const out = await withRedraft(async (t: string) => d(t), { unmet, notes: [], redraft: async (note) => { notes.push(note); return 'Drop this whole sentence because it only repeats the opening one again.'; } })(long) as unknown as { output: string };
+    const out = await withRedraft(async (t: string) => d(t), { unmet, notes: [], redraft: async (note) => { notes.push(note); return 'Drop this whole sentence because it only repeats the opening one again.'; } })(long, stepLedger()) as unknown as { output: string };
     expect(out.output).toBe('Keep this opening sentence here, as it is. Keep the end of it.');
     expect(notes).toHaveLength(1);
     // nothing it picks is in the draft: that pass changes nothing, and the next is the rewrite
     const asked: string[] = [];
-    const out2 = await withRedraft(async (t: string) => d(t), { unmet, notes: [], redraft: async (note) => { asked.push(note); return asked.length === 1 ? 'not in the draft at all, this line' : 'Short now.'; } })(long) as unknown as { output: string };
+    const out2 = await withRedraft(async (t: string) => d(t), { unmet, notes: [], redraft: async (note) => { asked.push(note); return asked.length === 1 ? 'not in the draft at all, this line' : 'Short now.'; } })(long, stepLedger()) as unknown as { output: string };
     expect(asked[0]).toContain('copied exactly from the draft');
     expect(asked[1]).toContain('Return the same piece with words removed');
     expect(out2.output).toBe('Short now.');
@@ -186,7 +187,7 @@ describe('review: a cut removes whole sentences and never breaks the markup arou
     const d = (text: string) => ({ output: text, report: { failed: false, checked: [], unchecked: [] }, repair: null }) as never;
     const unmet = (x: { output: string }) => (x.output.length > 30 ? [{ id: LENGTH_ID, whole: true as const, statement: 'length', detail: 'long', off: 5, aim: 'aim for 3 words or fewer' }] : []);
     const notes: string[] = [];
-    await withRedraft(async (t: string) => d(t), { unmet, notes, redraft: async (n) => (n.includes('copied exactly') ? 'nothing here matches' : 'Short.') })('A long enough draft to be cut down.');
+    await withRedraft(async (t: string) => d(t), { unmet, notes, redraft: async (n) => (n.includes('copied exactly') ? 'nothing here matches' : 'Short.') })('A long enough draft to be cut down.', stepLedger());
     expect(notes.join(' ')).toMatch(/named nothing that could be removed as written/);
   });
 });
@@ -218,7 +219,7 @@ describe('correction after the blind read: the writer aims inside the length, an
     const d = (text: string) => ({ output: text, report: { failed: false, checked: [], unchecked: [] }, repair: null }) as never;
     const unmet = (x: { output: string }) => { const n = wordsWrittenOf(x.output); return n > 20 ? [{ id: LENGTH_ID, whole: true as const, statement: 'length', detail: `${n} words`, off: n - 20, aim: 'aim for 18 words or fewer' }] : []; };
     const long = 'Keep this opening sentence here, as it is. Drop this whole sentence because it only restates the opening again. Keep the end of it.';
-    const out = await withRedraft(async (t: string) => d(t), { unmet, notes: [], redraft: async () => 'Drop this whole sentence because it only restates the opening again.' })(long) as unknown as { output: string; repair: { draft: string } };
+    const out = await withRedraft(async (t: string) => d(t), { unmet, notes: [], redraft: async () => 'Drop this whole sentence because it only restates the opening again.' })(long, stepLedger()) as unknown as { output: string; repair: { draft: string } };
     expect(out.output).toBe('Keep this opening sentence here, as it is. Keep the end of it.');
     expect(out.repair.draft).toBe(long);
   });
@@ -235,7 +236,7 @@ describe('final review: the cut counts as the rule it serves counts, and falls b
     const prose0 = proseWords(draft); const max = prose0 - 20;
     const d = (text: string) => ({ output: text, report: { failed: false, checked: [], unchecked: [] }, repair: null }) as never;
     const unmet = (x: { output: string }) => { const n = proseWords(x.output); return n > max ? [{ id: 'x9', whole: true as const, statement: `At most ${max} words.`, detail: `${n} words (at most ${max}): long by ${n - max}`, off: n - max, aim: `aim for ${max - 5} words or fewer` }] : []; };
-    const out = await withRedraft(async (t: string) => d(t), { unmet, notes: [], redraft: async () => sentences.join('\n') })(draft) as unknown as { output: string };
+    const out = await withRedraft(async (t: string) => d(t), { unmet, notes: [], redraft: async () => sentences.join('\n') })(draft, stepLedger()) as unknown as { output: string };
     expect(proseWords(out.output)).toBeLessThanOrEqual(max);
     expect(proseWords(out.output)).toBeGreaterThan(max - 25);
   });
@@ -247,7 +248,7 @@ describe('final review: the cut counts as the rule it serves counts, and falls b
     const long = `Opening claim of this paragraph. ${sentences.slice(0, 7).join(' ')}`;
     const asked: string[] = [];
     // the cut lands short of the band (52 to 60), is refused, and the rewrite follows
-    await withRedraft(async (t: string) => d(t), { unmet, notes: [], redraft: async (note) => { asked.push(note); return asked.length === 1 ? sentences.slice(1, 7).join('\n') : Array.from({ length: 55 }, () => 'w').join(' '); } })(long);
+    await withRedraft(async (t: string) => d(t), { unmet, notes: [], redraft: async (note) => { asked.push(note); return asked.length === 1 ? sentences.slice(1, 7).join('\n') : Array.from({ length: 55 }, () => 'w').join(' '); } })(long, stepLedger());
     expect(asked.length).toBeGreaterThanOrEqual(2);
     expect(asked.at(-1)).toContain('Return the same piece with words removed');
   });
@@ -292,7 +293,7 @@ describe('final review: the record and the report say the same thing', () => {
     const d = (text: string) => ({ output: text, report: { failed: false, checked: [], unchecked: [] }, repair: null }) as never;
     const unmet = (x: { output: string }) => { const n = wordsWrittenOf(x.output); return n > 20 ? [{ id: LENGTH_ID, whole: true as const, of: 'request' as const, statement: 'length', detail: `${n} words`, off: n - 20, aim: 'aim for 18 words or fewer' }] : []; };
     const long = 'Keep this opening sentence here, as it is. Drop this whole sentence because it only restates the opening again. Keep the end of it.';
-    const out = await withRedraft(async (t: string) => d(t), { unmet, notes: [], redraft: async () => 'Drop this whole sentence because it only restates the opening again.' })(long) as unknown as { repair: { draft: string; originalOutputHash: string } };
+    const out = await withRedraft(async (t: string) => d(t), { unmet, notes: [], redraft: async () => 'Drop this whole sentence because it only restates the opening again.' })(long, stepLedger()) as unknown as { repair: { draft: string; originalOutputHash: string } };
     expect(out.repair.originalOutputHash).toBe(sha(out.repair.draft));
   });
 });

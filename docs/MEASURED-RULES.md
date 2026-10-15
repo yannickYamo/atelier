@@ -347,8 +347,10 @@ are judged apart:
 Three rules hold every step of a run, whichever part of the repair takes it:
 
 - **One acceptance rule.** Every replacement of the text (a span rewrite, a carrier rewrite, re-punctuation, a
-  fix without a model, a cut for length, a draft written again for a rule, for the features or for both, a shape
-  round) is kept only if no rule you require is newly broken and none already broken is further out by its
+  fix without a model, a cut for length, a draft written again for a rule, for the features or for both, a reply
+  written again to give a part of the request it left out (`--strict`), the structural edits (`--edits`,
+  `--fidelity`), the voice pass, a rewrite the taste reader asked for, a draft written again around an invented
+  claim whose cut would leave a fragment, a shape round) is kept only if no rule you require is newly broken and none already broken is further out by its
   value (point 1 above). A step made for rules you require must also bring at least one of them nearer holding:
   a rewrite for the hedge rate that only happened to remove a semicolon is not the hedge rate's repair. A fix
   without a model is recorded against the rules it changed, and only those.
@@ -356,8 +358,14 @@ Three rules hold every step of a run, whichever part of the repair takes it:
   step that cannot run is recorded as such; one the step limit or the budget would not hold is recorded as
   refused, and is no step). The step limit and the budget are read from it alone. When a draft written again is
   not kept and the earlier draft is refined again, that refinement continues the same record, the steps taken on
-  the draft not kept among them, so a run of four steps is four steps. Under `--until-typical` each shape round has
-  a record of its own.
+  the draft not kept among them, so a run of four steps is four steps. The same holds for every step listed above,
+  whichever part of the repair takes it: each is one step on the record, counted against the limit, with the calls
+  it made, and one the limit has run out for is recorded as refused and not taken. A reply written again for what the
+  request asks is refined on the same record, so its steps count with the first draft's. A step taken on a draft
+  that was then not kept says so on the record (the step that wrote that draft), and the line "After the smaller
+  steps that followed" is said only when a step did follow. Under `--until-typical` each shape round has a record of
+  its own. The cut of an invented claim is the claim check's own action, recorded and never counted; the draft
+  written again around one is a step.
 - **One hand-off.** When the repair hands a draft over to be written again, the new draft is told exactly the
   rules it was handed, each in your words with where the draft stands, including a rule no single sentence
   carries ("your pieces use at least 22.5 per 1,000 words; this draft has 17.4"). A draft is never written again

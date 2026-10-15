@@ -64,7 +64,7 @@ describe('A. one acceptance rule: an enforced rule is read by its value, never b
     const first = 'first'; const second = 'second';
     const notes: string[] = [];
     const d = await withRedraft(async (t) => ({ output: t, report: reportOf([ban(t === first ? 3 : 7.6)], true), repair: null }),
-      { notes, unmet: (x) => (x.output === first ? [length, habit] : []), redraft: async () => second })(first);
+      { notes, unmet: (x) => (x.output === first ? [length, habit] : []), redraft: async () => second })(first, stepLedger());
     expect(d.output).toBe(first);
     const redraft = d.repair?.controller?.decisions.find((x) => x.action === 'redraft');
     expect(redraft?.outcome).toBe('not kept');
@@ -85,7 +85,7 @@ describe('B. one ledger a run: the piece refined again after a redraft not kept 
         seen.push(ledger.entries.map((x) => `${x.action}|${x.outcome}`));
         if (t === 'second') { const at = ledger.begin({ action: 'carrier-rewrite', targets: ['c10'], why: 'w', expectedGain: 1, expectedCostUsd: 0.05 }); ledger.settle(at, 'not kept', { movement: 0, calls: 1, usd: 0 }); }
         return { output: t, report: reportOf(), repair: null };
-      } })('first');
+      } })('first', stepLedger());
     expect(seen).toHaveLength(2);
     // the second refinement (of the first draft) is handed the same ledger: the carrier rewrite taken on the redraft is on it
     expect(seen[1]).toEqual(['rewrite|not kept', 'redraft|handed to a redraft', 'redraft|not kept', 'carrier-rewrite|not kept']);
@@ -118,7 +118,7 @@ describe('C. the hand-off contract: exactly the targets handed, named, and never
       controller: controllerRecord([step('redraft', 'handed to a redraft', ['c4'], 0)], 'handed to a redraft', true) } });
     const sent: string[] = []; const notes: string[] = [];
     const d = await withRedraft(async (t) => (t === 'first' ? handed(t) : { output: t, report: reportOf([floor(30.3)]), repair: null }),
-      { notes, unmet, redraft: async (note) => { sent.push(note); return 'second'; } })('first');
+      { notes, unmet, redraft: async (note) => { sent.push(note); return 'second'; } })('first', stepLedger());
     expect(sent).toHaveLength(1);
     expect(sent[0]).toContain('your pieces use at least 22.5 per 1,000 words; this draft has 17.4');
     expect(sent[0]).not.toContain('parenthetical asides');

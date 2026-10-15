@@ -6,6 +6,7 @@
 // the code before this change. Modules are imported whole so a case that needs a new export fails on its own.
 // Expected values are worked out from the measurement (FEATURE.observe), the documented thresholds (0.5, 1.5 widths,
 // three targets a step, four steps a run) and the defaults ($0.05 a rewrite), never read back from the code under test.
+import { stepLedger } from '../core/loop/controller.js';
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { spawn, execFileSync, type ChildProcess } from 'node:child_process';
 import { mkdtempSync, existsSync } from 'node:fs';
@@ -108,7 +109,7 @@ describe('(c) (d) (e) one cap per run, no hand-off without a redraft, the real m
       unmet: (d) => (d.output === 'first' ? [far(14)] : [far(4.78)]),
       check: () => reportOf([]),
       resume: async (t, h) => { histories.push([...h.entries]); return noRepair(t); } });
-    const d = await go('first');
+    const d = await go('first', stepLedger());
     // the scripted first draft's own carrier rewrite, and the draft written here
     expectOneCounter(d.repair?.controller, 1 + drafts);
     expect(histories).toHaveLength(1);
@@ -127,12 +128,12 @@ describe('(c) (d) (e) one cap per run, no hand-off without a redraft, the real m
   it('B2: a hand-off with nothing written after it is impossible: the next smaller step follows, or the record says none could', async () => {
     let resumed = 0;
     const withResume = withRedraft(async (t) => handed(t), { notes: [], redraft: async () => 'x', unmet: () => [], resume: async (t) => { resumed += 1; return noRepair(t); } });
-    const a = await withResume('first');
+    const a = await withResume('first', stepLedger());
     expect(resumed).toBe(1);
     expectOneCounter(a.repair?.controller, 1);
     expect(askedForRedraft(a.repair?.controller)).toBe(false);
     expect(a.repair?.controller?.handedToRedraft).not.toBe(true);
-    const bare = await withRedraft(async (t) => handed(t), { notes: [], redraft: async () => 'x', unmet: () => [] })('first');
+    const bare = await withRedraft(async (t) => handed(t), { notes: [], redraft: async () => 'x', unmet: () => [] })('first', stepLedger());
     expect(askedForRedraft(bare.repair?.controller)).toBe(false);
     expectOneCounter(bare.repair?.controller, 1);
     expect(bare.repair?.controller?.stoppedBecause).toMatch(/no draft could be written again$/);
@@ -141,9 +142,10 @@ describe('(c) (d) (e) one cap per run, no hand-off without a redraft, the real m
     const notes: string[] = []; const refined: string[] = []; let drafts = 0;
     const go = withRedraft(async (t) => { refined.push(t); return t === 'first' ? handed(t) : noRepair(t); }, { notes, redraft: async () => { drafts += 1; return 'second'; },
       unmet: (d) => (d.output === 'resumed' ? [] : [far(3)]), check: () => reportOf([]),
-      resume: async () => noRepair('resumed') });
-    const d = await go('first');
-    expectOneCounter(d.repair?.controller, 1 + drafts);
+      // the smaller step that follows on the first draft: one carrier rewrite, kept, on the same ledger
+      resume: async (_t, ledger) => { ledger.settle(ledger.begin({ action: 'carrier-rewrite', targets: ['x1'], why: 'w', expectedGain: 1, expectedCostUsd: 0.05 }), 'kept', { movement: 3, calls: 1, usd: 0 }); return noRepair('resumed'); } });
+    const d = await go('first', stepLedger());
+    expectOneCounter(d.repair?.controller, 1 + drafts + 1);
     expect(refined).toEqual(['first']);
     expect(d.output).toBe('resumed');
     expect(notes.join(' ')).toMatch(/one more draft did not do better, so the first is kept\. After the smaller steps that followed, none of them is left\.$/);
@@ -152,7 +154,7 @@ describe('(c) (d) (e) one cap per run, no hand-off without a redraft, the real m
     const notes: string[] = [];
     const length: Unmet = { id: 'length', statement: 'Write it at the length my pieces run: 369 to 437 words', detail: '179 words, 122 too few', off: 122, whole: true };
     let drafts = 0;
-    const d = await withRedraft(async (t) => noRepair(t), { notes, redraft: async () => { drafts += 1; return 'second'; }, unmet: () => [length, far(2)] })('first');
+    const d = await withRedraft(async (t) => noRepair(t), { notes, redraft: async () => { drafts += 1; return 'second'; }, unmet: () => [length, far(2)] })('first', stepLedger());
     expectOneCounter(d.repair?.controller, drafts);
     expect(notes.join(' ')).toMatch(/2 thing\(s\) the work requires or your pieces usually do/);
   });

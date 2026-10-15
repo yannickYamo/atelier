@@ -20,11 +20,12 @@ import { checkFormat, type FormatProfile } from '../observers/formats.js';
 import { findTerms } from '../observers/text.js';
 import { signalRules, signalChecks, isSignal, displacement, ownerWords, type Displacement } from './graded.js';
 import type { FidelityProfile, ControllerSettings } from '../fidelity/types.js';
-import { decide, controllerRecord, recordTarget, stepWords, stepLedger, ENFORCED_WEIGHT, SETTLED_ERROR, type ControllerInput, type Decision, type EnforcedMiss, type GradedMiss, type PlannedStep, type StepLedger } from './controller.js';
+import { decide, controllerRecord, recordTarget, stepWords, stepLedger, DEFAULT_COST, ENFORCED_WEIGHT, SETTLED_ERROR, type ControllerInput, type Decision, type EnforcedMiss, type GradedMiss, type PlannedStep, type StepLedger } from './controller.js';
 import { applyOperator, operatorsToward, sitesOf, keepsWords } from '../fidelity/operators.js';
 import { SITES_PER_OPERATOR } from '../fidelity/structural.js';
 import { spanIntegrity } from './integrity.js';
-import { planRepair, repairPrompt, applyRepair, acceptRepair, addsNoWords, readAtLength, featureParamsOf, ruleParamsOf, cutSpan, REPAIR_SYSTEM, REPAIR_SYSTEM_WITH_PLACEHOLDERS, REPAIR_SCHEMA, type Reverted, type Applied } from './repair.js';
+import { planRepair, repairPrompt, applyRepair, acceptRepair, addsNoWords, readAtLength, featureParamsOf, ruleParamsOf, cutSpan, applyStep, REPAIR_SYSTEM, REPAIR_SYSTEM_WITH_PLACEHOLDERS, REPAIR_SCHEMA,
+  type Reverted, type Applied, type RepairTarget, type Proposed, type NoChange, type StepPlan, type StepRule, type StepResult } from './repair.js';
 import { keysOf, measurementId } from '../state/rule-key.js';
 import { mechanicalFixes, grammarFixes } from './mechanical-repair.js';
 import { ensureGrammar, readGrammar, isGrammarNote, grammarFixing, GRAMMAR_NOTE_SUFFIX } from '../observers/grammar.js';
@@ -703,10 +704,6 @@ export async function refineToStandard(
   let stoppedBecause: string | null = null; let handed = false;
   const unreachable = new Set<string>();
   const STEP_PURPOSES: readonly SpendPurpose[] = ['repair', 'graded', 'steering'];
-  const costSince = (snap: readonly SpendLine[], purposes: readonly SpendPurpose[] = STEP_PURPOSES): { calls: number; usd: number } => {
-    const ls = spendBetween(snap, processSpendByPurpose()).filter((l) => purposes.includes(l.purpose));
-    return { calls: ls.reduce((n, l) => n + l.calls, 0), usd: Math.round(ls.reduce((n, l) => n + l.usd, 0) * 1e6) / 1e6 };
-  };
   // THE RUN'S ONE LEDGER (./controller.ts, rule B): this refinement's steps are entered on it before each runs, and the
   // controller reads the whole run's steps from it. A caller with none to hand gets one of its own here.
   const settings = opts.controller?.settings ?? null;
@@ -715,12 +712,18 @@ export async function refineToStandard(
   const ledgerStart = ledger.entries.length;
   /** this refinement's own steps: the ledger's entries from where it began */
   const decisions = (): ControllerDecisionRecord[] => ledger.entries.slice(ledgerStart);
-  const begin = (d: PlannedStep): number => ledger.begin(d);
-  const settle = (at: number, snap: readonly SpendLine[], outcome: ControllerDecisionRecord['outcome'], movement: number, note?: string): void => {
-    ledger.settle(at, outcome, { movement: Math.round(movement * 1000) / 1000, ...costSince(snap), ...(note ? { note } : {}) });
+  /**
+   * A RECORD THAT CHANGES NO TEXT AND CALLS NO MODEL: a hand-off to a redraft, a step the controller named that is code
+   * that always runs, and the claim cut (the claim check's own action, with its own guards). Every replacement of the
+   * text is a step through `applyStep` (./repair.ts) instead.
+   */
+  const record = (d: PlannedStep, outcome: ControllerDecisionRecord['outcome'], movement: number, note?: string): void => {
+    ledger.add({ action: d.action, targets: [...d.targets], why: d.why, expectedGain: d.expectedGain, expectedCostUsd: d.expectedCostUsd, outcome,
+      observed: { movement: Math.round(movement * 1000) / 1000, calls: 0, usd: 0, ...(note ? { note } : {}) } });
   };
-  /** a step entered and settled at once: code that always runs, recorded where it ran */
-  const record = (d: PlannedStep, snap: readonly SpendLine[], outcome: ControllerDecisionRecord['outcome'], movement: number, note?: string): void => { settle(begin(d), snap, outcome, movement, note); };
+  /** ONE STEP (./repair.ts, `applyStep`): gated on the ledger, entered before it runs, held to the one acceptance rule with the standard's params */
+  const step = <T extends Proposed>(plan: StepPlan, propose: (taken: (movement?: number) => void) => Promise<T | NoChange>, rule: Omit<StepRule<T>, 'enforced' | 'paramsOf' | 'purposes'> & { purposes?: readonly SpendPurpose[] }): Promise<StepResult<T>> =>
+    applyStep(ledger, plan, () => ({ text, report }), propose, { purposes: STEP_PURPOSES, ...rule, enforced: enforcedIds, paramsOf });
   // THE ONE ACCEPTANCE RULE (./controller.ts, rule A) reads which way a rate is out from the standard's own params.
   const paramsOf = ruleParamsOf(v);
   const ledgerFrom = opts.controller?.ledgerFrom ?? ledgerBefore;
@@ -800,13 +803,19 @@ export async function refineToStandard(
     const dangling = [...new Set([...patternDangling, ...judgedDangling])];
     const broke = e.cut.length ? brokenByCut(t, e.text) ?? (dangling.length ? `${dangling.length} sentence(s) pointing at cut text` : null) : null;
     if (!broke) return e;
-    const redrafted = await redraft(t, e.cut, dangling);
-    if (redrafted !== null) {
-      const rr = await check(redrafted);
-      if (!flaggedClaims(rr).length && !brokenByCut(t, redrafted, { structureOnly: true }) && redraftPreserves(t, redrafted, [...e.cut, ...dangling])) {
-        notes.push(`cutting ${e.cut.length} flagged claim(s) left ${broke}, so the draft was rewritten once without them`);
-        return { text: redrafted, report: rr, cut: e.cut };
-      }
+    // THE DRAFT WRITTEN AGAIN AROUND THE CUT IS A STEP (rule B), held to the one acceptance rule (rule A) besides its own
+    // guards: nothing flagged left, nothing left a fragment, nothing it was not asked to change dropped.
+    const redrafted = await applyStep(ledger, { action: 'claim-redraft', targets: ['UNSOURCED'], why: `cutting ${e.cut.length} flagged claim(s) left ${broke}: written again once without them`,
+      expectedGain: e.cut.length, expectedCostUsd: DEFAULT_COST['claim-redraft'] }, { text: t, report: known }, async () => {
+      const out = await redraft(t, e.cut, dangling);
+      return out === null ? { unchanged: 'the draft written again around the cut came back empty', outcome: 'not kept' as const } : { text: out, report: await check(out) };
+    }, { enforced: enforcedIds, paramsOf, purposes: ['repair'],
+      also: (x) => (flaggedClaims(x.report).length ? 'it still holds a flagged claim' : brokenByCut(t, x.text, { structureOnly: true }) ? 'it left a fragment'
+        : !redraftPreserves(t, x.text, [...e.cut, ...dangling]) ? 'it dropped what it was not asked to change' : null),
+      movement: (_x, kept) => (kept ? e.cut.length : 0) });
+    if (redrafted.kind === 'judged' && redrafted.kept) {
+      notes.push(`cutting ${e.cut.length} flagged claim(s) left ${broke}, so the draft was rewritten once without them`);
+      return { text: redrafted.after.text, report: redrafted.after.report, cut: e.cut };
     }
     // Only sentences left pointing at nothing, and no redraft to be had: they go with their parent, when
     // that leaves the text whole. An invented claim is not shipped to spare a sentence that means nothing.
@@ -828,8 +837,9 @@ export async function refineToStandard(
     listedHere.push(...e.cut); keptUncut = true;
     return { text: t, report: known, cut: [] };
   };
+  /** the call `cutSafely` makes for its step: the draft written again without the flagged statements (a failed call throws) */
   const redraft = async (t: string, gone: readonly string[], pointing: readonly string[] = []): Promise<string | null> => {
-    try {
+    {
       const res = await spend(budget, 0.05, async () => {
         const x = await client.complete({ stableBlock: REDRAFT_SYSTEM, variableBlock: '',
           userMessage: `THE DRAFT\n"""\n${t}\n"""\n\nTHE STATEMENTS THAT MUST GO\n${gone.map((g, i) => `${i + 1}. ${g}`).join('\n')}`
@@ -839,15 +849,18 @@ export async function refineToStandard(
       }, 'repair');
       const out = (res.json as { text?: unknown } | null)?.text;
       return typeof out === 'string' && out.trim() ? out.trim() : null;
-    } catch { return null; }
+    }
   };
   // (2) CLAIMS, in code, before any step the controller chooses: recorded as a step, with what the cut cost the ledger.
-  const flaggedFirst = flaggedClaims(first).length; const cutSnap = processSpendByPurpose();
-  const cutAt = flaggedFirst ? begin({ action: 'cut', targets: ['UNSOURCED'], why: `${flaggedFirst} invented claim(s) flagged: cut in code before anything else`, expectedGain: flaggedFirst, expectedCostUsd: 0 }) : -1;
+  // The cut is code and costs nothing; a draft written again around it is a step of its own, entered after it.
+  const flaggedFirst = flaggedClaims(first).length;
+  let text = draft; let report = first;
+  const cutAt = flaggedFirst ? ledger.entries.length : -1;
+  if (flaggedFirst) record({ action: 'cut', targets: ['UNSOURCED'], why: `${flaggedFirst} invented claim(s) flagged: cut in code before anything else`, expectedGain: flaggedFirst, expectedCostUsd: 0 }, 'could not run', 0);
   const enforced = await cutSafely(draft, first);
-  let text = enforced.text; let report = enforced.report; let passes = 0;
+  text = enforced.text; report = enforced.report; let passes = 0;
   cut.push(...enforced.cut);
-  if (flaggedFirst) settle(cutAt, cutSnap, enforced.cut.length ? 'kept' : 'no change', enforced.cut.length, enforced.cut.length ? undefined : 'nothing could be cut without breaking the text');
+  if (flaggedFirst) ledger.settle(cutAt, enforced.cut.length ? 'kept' : 'no change', { movement: enforced.cut.length, calls: 0, usd: 0, ...(enforced.cut.length ? {} : { note: 'nothing could be cut without breaking the text' }) });
   let why = cut.length ? 'invented claims cut' : 'every REQUIRED measured rule now holds';
   // ONE INSTRUMENT ON BOTH SIDES OF EVERY COMPARISON. A claim reader that fails mid-loop degrades for
   // good (./claim-extract.ts, modelSensor), and from then on reads every text by the pattern check. The
@@ -870,18 +883,20 @@ export async function refineToStandard(
   const fixMechanically = async (last = false): Promise<void> => {
     const m = mechanicalFixes(v, report, text, { grammar: last });
     if (m.text === text) return;
-    const snap = processSpendByPurpose();
     // ONLY THE RULES IT CHANGED: each fix is said as "<rule>: <what>", and those rules are the step's targets.
     const changed = [...new Set(m.fixed.map((f) => f.split(':')[0].trim()))];
-    const at = begin({ action: 'mechanical', targets: changed, why: `fixed without a model: ${m.fixed.join('; ')}`, expectedGain: 0, expectedCostUsd: 0 });
-    const after = await check(m.text);
-    sameInstrument();
-    // A FIX THAT NEEDS NO MODEL IS NEVER DROPPED IN SILENCE. When it cannot be kept (it would break another rule),
-    // the record says which fix and why, so a refusal names the real conflict and not the rule the fix was for.
-    const accepted = acceptRepair(atLength(report, text, m.text), after, { wordsAdded: !addsNoWords(text, m.text), ignore: steering(report), targets: changed, enforced: enforcedIds, paramsOf });
-    if (!accepted.ok) { settle(at, snap, 'not kept', 0, accepted.why); if (!notKept.length) notKept.push(`${m.fixed.join('; ')} not kept: ${accepted.why}`); return; }
-    settle(at, snap, 'kept', ENFORCED_WEIGHT * (broken(report).length - broken(after).length));
-    text = m.text; report = after; mechanical.push(...m.fixed);
+    const from = text; const held = report;
+    const s = await step({ action: 'mechanical', targets: changed, why: `fixed without a model: ${m.fixed.join('; ')}`, expectedGain: 0, expectedCostUsd: 0, forEnforced: changed },
+      async () => { const after = await check(m.text); sameInstrument(); return { text: m.text, report: after }; }, {
+        wordsAdded: () => !addsNoWords(from, m.text),
+        // A FIX THAT NEEDS NO MODEL IS NEVER DROPPED IN SILENCE. When it cannot be kept (it would break another rule),
+        // the record says which fix and why, so a refusal names the real conflict and not the rule the fix was for.
+        also: (x) => { const a = acceptRepair(atLength(report, from, m.text), x.report, { wordsAdded: !addsNoWords(from, m.text), ignore: steering(report), targets: changed, enforced: enforcedIds, paramsOf }); return a.ok ? null : a.why; },
+        note: (_x, kept, why, x) => (kept ? undefined : x.own ?? why ?? undefined),
+        movement: (x, kept) => (kept ? ENFORCED_WEIGHT * (broken(held).length - broken(x.report).length) : 0) });
+    if (s.kind !== 'judged') return;
+    if (!s.kept) { if (!notKept.length) notKept.push(`${m.fixed.join('; ')} not kept: ${s.own ?? s.why}`); return; }
+    text = s.after.text; report = s.after.report; mechanical.push(...m.fixed);
   };
   if (report.failed) await fixMechanically();
   // ACCURACY BEFORE STYLE, for the owner's own accuracy rules (the invented-claim line is never planned:
@@ -912,41 +927,45 @@ export async function refineToStandard(
    * the span rewrite that was the whole loop before: one call, spliced in code, kept only if it breaks nothing that held,
    * fixes something, and displaces nothing.
    */
-  const rewriteStep = async (d: Decision): Promise<{ outcome: ControllerDecisionRecord['outcome']; movement: number; note?: string; stop?: string }> => {
+  const tallyOf = (gradedPass: boolean): (typeof edits)[] => (gradedPass ? [edits, gradedEdits] : [edits]);
+  const rewriteStep = async (d: Decision): Promise<{ stop?: string }> => {
     const ids = new Set(d.targets);
     const enforcedStep = d.action === 'rewrite';
     const gradedIds = d.action === 'carrier-rewrite' ? ids : new Set<string>();
-    const plannable = focus(withGraded(withoutClaims(report), gradedIds), ids);
-    const accuracy = accuracyTried || d.action !== 'rewrite' ? [] : planRepair(text, plannable, { phase: 'ACCURACY' });
-    const accuracyPass = accuracy.length > 0 && planRepair(text, plannable, { phase: 'STYLE' }).length > 0;
-    let targets = accuracyPass ? accuracy : planRepair(text, plannable);
-    if (d.action === 'rewrite') accuracyTried = true;
-    // SIZED TO THE MISS: k carrier sentences of each feature, k = ceil(|error|), at most three (./controller.ts, `carriersFor`).
-    if (d.carriers) {
-      const n = new Map<string, number>();
-      targets = targets.filter((t) => {
-        const ok = t.requirementIds.some((id) => (n.get(id) ?? 0) < (d.carriers ?? 0));
-        if (ok) for (const id of t.requirementIds) n.set(id, (n.get(id) ?? 0) + 1);
-        return ok;
-      }).map((t, i) => ({ ...t, id: i + 1 }));
-    }
-    if (!targets.length) {
-      for (const id of d.targets) unreachable.add(id);
-      why = cut.length ? `invented claims cut; ${flaggedClaims(report).length ? 'some could not be located to cut' : 'nothing else the rules pointed at could be rewritten'}` : 'nothing the rules pointed at could be rewritten';
-      return { outcome: 'no change', movement: 0, note: 'nothing in the text to rewrite for it' };
-    }
     // A rule graded but not enforced by the standard: its progress may be a fall in |error| (repair.ts, `acceptRepair`),
     // and its rewrites make no contrast pair below. An enforced rule that is also graded keeps the enforced rule's terms.
     const soft = new Set([...gradedIds].filter((id) => !report.checked.some((c) => c.requirementId === id && acts(c))));
-    // A pass that only the flag asked for (every span of it for a rule the standard does not enforce) is the flag's
-    // spend, under its own purpose; a pass an enforced rule asked for is the repair's, whatever else it carries.
-    const gradedPass = targets.every((t) => t.requirementIds.every((id) => soft.has(id)));
-    const purpose: SpendPurpose = gradedPass ? 'graded' : 'repair';
-    // A REPAIR THAT CANNOT RUN NEVER COSTS THE DRAFT. The draft is already paid for; a failed call (a
-    // refusal, a 500, an exhausted budget) delivers it as it stands and says why.
-    let res: Awaited<ReturnType<InferenceClient['complete']>>;
-    try {
-      res = await spend(budget, 0.05, async () => {
+    let targets: RepairTarget[] = []; let gradedPass = false; let applied: Applied[] = []; let reverted: Reverted[] = []; let called = false;
+    let observedNote: string | undefined; let acceptedWhy = '';
+    const from = text;
+    type Rewritten = Proposed & { readonly targets: readonly RepairTarget[] };
+    const s = await step<Rewritten>({ ...d, forEnforced: enforcedStep ? d.targets : [] }, async () => {
+      const plannable = focus(withGraded(withoutClaims(report), gradedIds), ids);
+      const accuracy = accuracyTried || d.action !== 'rewrite' ? [] : planRepair(text, plannable, { phase: 'ACCURACY' });
+      const accuracyPass = accuracy.length > 0 && planRepair(text, plannable, { phase: 'STYLE' }).length > 0;
+      targets = accuracyPass ? accuracy : planRepair(text, plannable);
+      if (d.action === 'rewrite') accuracyTried = true;
+      // SIZED TO THE MISS: k carrier sentences of each feature, k = ceil(|error|), at most three (./controller.ts, `carriersFor`).
+      if (d.carriers) {
+        const n = new Map<string, number>();
+        targets = targets.filter((t) => {
+          const ok = t.requirementIds.some((id) => (n.get(id) ?? 0) < (d.carriers ?? 0));
+          if (ok) for (const id of t.requirementIds) n.set(id, (n.get(id) ?? 0) + 1);
+          return ok;
+        }).map((t, i) => ({ ...t, id: i + 1 }));
+      }
+      if (!targets.length) {
+        for (const id of d.targets) unreachable.add(id);
+        why = cut.length ? `invented claims cut; ${flaggedClaims(report).length ? 'some could not be located to cut' : 'nothing else the rules pointed at could be rewritten'}` : 'nothing the rules pointed at could be rewritten';
+        return { unchanged: 'nothing in the text to rewrite for it' };
+      }
+      // A pass that only the flag asked for (every span of it for a rule the standard does not enforce) is the flag's
+      // spend, under its own purpose; a pass an enforced rule asked for is the repair's, whatever else it carries.
+      gradedPass = targets.every((t) => t.requirementIds.every((id) => soft.has(id)));
+      const purpose: SpendPurpose = gradedPass ? 'graded' : 'repair';
+      // A REPAIR THAT CANNOT RUN NEVER COSTS THE DRAFT. The draft is already paid for; a failed call (a refusal, a 500, an
+      // exhausted budget) throws here: the step could not run, and the draft is delivered as it stands, said so.
+      const res = await spend(budget, 0.05, async () => {
         const x = await client.complete({
           stableBlock: opts.placeholders ? REPAIR_SYSTEM_WITH_PLACEHOLDERS : REPAIR_SYSTEM, variableBlock: '', userMessage: repairPrompt(text, targets),
           toolName: 'emit_replacements', toolDescription: 'Return one replacement per numbered span.',
@@ -954,50 +973,58 @@ export async function refineToStandard(
         });
         return { value: x, cost: x.cost, usage: x };
       }, purpose);
-    } catch (e) {
-      why = `the rewrite could not run (${(e as Error).message.split('\n')[0]}); the draft is delivered as it stands`;
-      return { outcome: 'could not run', movement: 0, stop: why };
+      called = true;
+      passes += 1;
+      if (!accuracyPass) stylePasses += 1;
+      for (const t of targets) for (const id of t.requirementIds) { const f = graded.get(id); if (f) gradedTargeted.add(f); }
+      const reps = ((res.json as { replacements?: { id: number; text: string }[] } | null)?.replacements ?? []);
+      reverted = []; applied = [];
+      const next = applyRepair(text, targets, reps, reverted, applied, opts.placeholders ?? false);
+      for (const r of reverted) {
+        const t = targets.find((x) => x.id === r.id);
+        kept.push(`"${t?.text.slice(0, 80) ?? `span ${r.id}`}" kept: the rewrite ${r.kind === 'MOVE' || r.kind === 'SLOT' ? 'changed ' : r.lost.every((l) => l.startsWith('added ')) ? '' : r.lost.some((l) => /^added |^an added |, added$/.test(l)) ? 'changed ' : 'lost '}${r.lost.join(', ')}`);
+        for (const id of t?.requirementIds ?? []) if (!revertedRules.includes(id)) revertedRules.push(id);
+        for (const e of tallyOf(gradedPass)) { e.rejected += 1; e.reasons.push(`refused (${r.kind ?? 'MEANING'}): ${r.lost.join(', ')}`); }
+      }
+      if (next === text) return { unchanged: reverted.length ? `every rewrite was refused (${reverted.map((r) => r.lost[0]).slice(0, 2).join('; ')})` : 'the rewrite returned nothing usable', outcome: 'not kept' as const };
+      const after = await check(next);
+      sameInstrument();
+      return { text: next, report: after, targets };
+    }, {
+      // A rewrite that adds an invented claim makes UNSOURCED worse, and the acceptance refuses it.
+      also: (x) => {
+        const verdict = acceptRepair(atLength(withGraded(report, gradedIds), from, x.text), withGraded(x.report, gradedIds), { graded: soft, enforced: enforcedIds, paramsOf,
+          ...(enforcedStep ? { ignore: steering(report), targets: d.targets } : {}) });
+        if (!verdict.ok) return verdict.why;
+        acceptedWhy = verdict.why;
+        // THE DISPLACEMENT GUARD (./graded.ts): a steering rewrite that puts more of the author's features outside their
+        // bands, or pushes one it was not pointed at far out, is refused whatever it moved. A rewrite for an enforced rule
+        // is never refused by it: what it displaced is recorded as observed, and the owner's rule is kept.
+        const pointedAt = new Set(x.targets.flatMap((t) => t.requirementIds.map((id) => graded.get(id)).filter((f): f is string => f !== undefined)));
+        const disp: Displacement | null = displacement(from, x.text, profile, pointedAt);
+        if (disp?.refusedFor.length && !enforcedStep) { displaced.push(...disp.refusedFor); return `it displaced what your pieces hold: ${disp.refusedFor.join('; ')}`; }
+        if (disp?.refusedFor.length) observedNote = `displacement observed: ${disp.refusedFor.join('; ')}`;
+        return null;
+      },
+      note: (_x, kept, why, v) => (kept ? observedNote : v.own ?? why ?? undefined),
+      movement: (x, kept) => (kept ? movedBy(d.targets, atLength(withGraded(report, gradedIds), from, x.text), x.report, enforcedStep) : 0) });
+    if (s.kind === 'refused') return { stop: s.why };
+    if (s.kind === 'failed') {
+      why = `the rewrite could not run (${s.why}); the draft is delivered as it stands`;
+      return { stop: why };
     }
-    passes += 1;
-    if (!accuracyPass) stylePasses += 1;
-    for (const t of targets) for (const id of t.requirementIds) { const f = graded.get(id); if (f) gradedTargeted.add(f); }
-    const reps = ((res.json as { replacements?: { id: number; text: string }[] } | null)?.replacements ?? []);
-    const reverted: Reverted[] = []; const applied: Applied[] = [];
-    const next = applyRepair(text, targets, reps, reverted, applied, opts.placeholders ?? false);
-    const tally = gradedPass ? [edits, gradedEdits] : [edits];
-    for (const r of reverted) {
-      const t = targets.find((x) => x.id === r.id);
-      kept.push(`"${t?.text.slice(0, 80) ?? `span ${r.id}`}" kept: the rewrite ${r.kind === 'MOVE' || r.kind === 'SLOT' ? 'changed ' : r.lost.every((l) => l.startsWith('added ')) ? '' : r.lost.some((l) => /^added |^an added |, added$/.test(l)) ? 'changed ' : 'lost '}${r.lost.join(', ')}`);
-      for (const id of t?.requirementIds ?? []) if (!revertedRules.includes(id)) revertedRules.push(id);
-      for (const e of tally) { e.rejected += 1; e.reasons.push(`refused (${r.kind ?? 'MEANING'}): ${r.lost.join(', ')}`); }
-    }
-    const after = next === text ? report : await check(next);
-    sameInstrument();
-    // A rewrite that adds an invented claim makes UNSOURCED worse, and `acceptRepair` refuses it.
-    const verdict = next === text
-      ? { ok: false, why: reverted.length ? `every rewrite was refused (${reverted.map((r) => r.lost[0]).slice(0, 2).join('; ')})` : 'the rewrite returned nothing usable' }
-      : acceptRepair(atLength(withGraded(report, gradedIds), text, next), withGraded(after, gradedIds), { graded: soft, enforced: enforcedIds, paramsOf,
-        ...(enforcedStep ? { ignore: steering(report), targets: d.targets } : {}) });
-    // THE DISPLACEMENT GUARD (./graded.ts): a steering rewrite that puts more of the author's features outside their
-    // bands, or pushes one it was not pointed at far out, is refused whatever it moved. A rewrite for an enforced rule
-    // is never refused by it: what it displaced is recorded as observed, and the owner's rule is kept.
-    const pointedAt = new Set(targets.flatMap((t) => t.requirementIds.map((id) => graded.get(id)).filter((f): f is string => f !== undefined)));
-    const disp: Displacement | null = verdict.ok && next !== text ? displacement(text, next, profile, pointedAt) : null;
-    const displacedWhy = disp?.refusedFor.length && !enforcedStep ? `it displaced what your pieces hold: ${disp.refusedFor.join('; ')}` : null;
-    const observedNote = disp?.refusedFor.length && enforcedStep ? `displacement observed: ${disp.refusedFor.join('; ')}` : undefined;
-    if (!verdict.ok || displacedWhy) {
+    const discarded = (reason: string): void => {
       // A steering step not kept leaves a draft that holds every rule saying so: the discard is on the step's record.
-      if (enforcedStep || report.failed) why = `a rewrite was discarded: ${displacedWhy ?? verdict.why}`;
-      if (disp && displacedWhy) displaced.push(...disp.refusedFor);
-      for (const e of tally) { e.rejected += applied.length; if (applied.length || !reverted.length) e.reasons.push(`discarded: ${displacedWhy ?? verdict.why}`); }
-      return { outcome: 'not kept', movement: 0, note: displacedWhy ?? verdict.why };
-    }
-    for (const e of tally) e.accepted += applied.length;
+      if (enforcedStep || report.failed) why = `a rewrite was discarded: ${reason}`;
+      for (const e of tallyOf(gradedPass)) { e.rejected += applied.length; if (applied.length || !reverted.length) e.reasons.push(`discarded: ${reason}`); }
+    };
+    if (s.kind === 'unchanged') { if (called) discarded(s.why); return {}; }
+    if (!s.kept) { discarded(s.own ?? s.why ?? 'not kept'); return {}; }
+    for (const e of tallyOf(gradedPass)) e.accepted += applied.length;
     // A graded feature is repaired when a kept rewrite moved its value toward the band.
     const errorOf = (r: VerifyReport, id: string): number => Math.abs(r.checked.find((c) => c.requirementId === id)?.result.error ?? 0);
-    for (const id of gradedIds) if (errorOf(after, id) < errorOf(report, id)) gradedRepaired.add(graded.get(id) ?? id);
-    const movement = movedBy(d.targets, atLength(withGraded(report, gradedIds), text, next), after, enforcedStep);
-    text = next; report = after;
+    for (const id of gradedIds) if (errorOf(s.after.report, id) < errorOf(report, id)) gradedRepaired.add(graded.get(id) ?? id);
+    text = s.after.text; report = s.after.report;
     // An accepted pass's style rewrites are examples of this standard in action. One rule per pair.
     for (const a of applied) {
       const t = targets.find((x) => x.id === a.id);
@@ -1005,8 +1032,8 @@ export async function refineToStandard(
       const key = rid ? keyOf.get(rid) : undefined;
       if (rid && key && a.before !== a.after && !soft.has(rid)) pairs.push({ key, check: checkOf.get(rid), before: a.before, after: a.after });
     }
-    why = report.failed ? verdict.why : 'every REQUIRED measured rule now holds';
-    return { outcome: 'kept', movement, ...(observedNote ? { note: observedNote } : {}) };
+    why = report.failed ? acceptedWhy : 'every REQUIRED measured rule now holds';
+    return {};
   };
   /**
    * AN OPERATOR STEP (../fidelity/operators.ts): re-punctuation of the words already there, only the operators whose
@@ -1014,42 +1041,51 @@ export async function refineToStandard(
    * operator keeps every word, so it adds no claim), kept on the acceptance's terms and the displacement guard's, and
    * the kept text read again in full.
    */
-  const operatorStep = async (ids: readonly string[]): Promise<{ kept: boolean; movement: number; note: string }> => {
-    if (!effects) return { kept: false, movement: 0, note: 'no effect matrix: this skill\'s profile predates the operators' };
+  const operatorStep = async (d: Decision): Promise<void> => {
+    const ids = d.targets;
     const idSet = new Set(ids);
     const soft = new Set(ids.filter((id) => !report.checked.some((c) => c.requirementId === id && acts(c))));
     const offline = { ...opts, claimSensor: undefined };
     const read = (t: string): VerifyReport => withSignals(t, checkDraft(skill, v, t, offline));
-    const before = read(text);
     const features = new Set(ids.map((id) => graded.get(id)).filter((f): f is string => f !== undefined));
-    for (const id of ids) {
-      const c = report.checked.find((x) => x.requirementId === id); const f = graded.get(id);
-      if (!c || !f) continue;
-      for (const op of operatorsToward(effects, f, (c.result.error ?? 0) > 0 ? 'high' : 'low')) {
-        const n = Math.min(sitesOf(op, text), SITES_PER_OPERATOR);
-        for (let k = 0; k < n; k++) {
-          const next = applyOperator(op, text, k);
-          if (next === null || next === text) continue;
-          if (!keepsWords(text, next) || !spanIntegrity(text, next, new Set(['and']), false).ok) continue;
-          const after = read(next);
-          if (!acceptRepair(atLength(withGraded(before, idSet), text, next), withGraded(after, idSet), { graded: soft, enforced: enforcedIds, paramsOf }).ok) continue;
-          const disp = displacement(text, next, profile, features);
-          if (disp?.refusedFor.length) { displaced.push(...disp.refusedFor); continue; }
-          const movement = movedBy(ids, atLength(withGraded(before, idSet), text, next), after, false);
-          for (const x of features) { gradedTargeted.add(x); gradedRepaired.add(x); }
-          text = next; report = await check(next);
-          sameInstrument();
-          return { kept: true, movement, note: `${op}, site ${k + 1}` };
+    type Moved = Proposed & { readonly movement: number; readonly note: string };
+    // The search is free and screened on the deterministic checks; the one candidate it returns is the step, read in full.
+    const s = await step<Moved>(d, async () => {
+      if (!effects) return { unchanged: 'no effect matrix: this skill\'s profile predates the operators' };
+      const before = read(text);
+      for (const id of ids) {
+        const c = report.checked.find((x) => x.requirementId === id); const f = graded.get(id);
+        if (!c || !f) continue;
+        for (const op of operatorsToward(effects, f, (c.result.error ?? 0) > 0 ? 'high' : 'low')) {
+          const n = Math.min(sitesOf(op, text), SITES_PER_OPERATOR);
+          for (let k = 0; k < n; k++) {
+            const next = applyOperator(op, text, k);
+            if (next === null || next === text) continue;
+            if (!keepsWords(text, next) || !spanIntegrity(text, next, new Set(['and']), false).ok) continue;
+            const after = read(next);
+            if (!acceptRepair(atLength(withGraded(before, idSet), text, next), withGraded(after, idSet), { graded: soft, enforced: enforcedIds, paramsOf }).ok) continue;
+            const disp = displacement(text, next, profile, features);
+            if (disp?.refusedFor.length) { displaced.push(...disp.refusedFor); continue; }
+            const movement = movedBy(ids, atLength(withGraded(before, idSet), text, next), after, false);
+            const full = await check(next);
+            sameInstrument();
+            return { text: next, report: full, movement, note: `${op}, site ${k + 1}` };
+          }
         }
       }
-    }
-    return { kept: false, movement: 0, note: 'no operator moved a target without breaking or displacing something' };
+      return { unchanged: 'no operator moved a target without breaking or displacing something' };
+    }, { wordsAdded: () => false, movement: (x, kept) => (kept ? x.movement : 0), note: (x, kept, why) => (kept ? x.note : why ?? undefined) });
+    if (s.kind !== 'judged' || !s.kept) return;
+    for (const x of features) { gradedTargeted.add(x); gradedRepaired.add(x); }
+    text = s.after.text; report = s.after.report;
   };
   // THE STEPS. Each one chosen by the controller from the report as it stands (./controller.ts, `decide`), carried out
   // through the paths that already existed (the span rewrite, the operators, a draft written again by the caller), and
   // recorded with what it moved and what the ledger charged for it. The loop ends where the controller stops.
   for (;;) {
     const d = decide(controllerInput(text, report, stylePasses < maxPasses), settings);
+    // A STEP THE BUDGET REFUSED IS ON THE RECORD (rule B): entered as refused, and no step.
+    for (const r of d.refusals ?? []) ledger.refuse(r.step, r.why);
     if (d.kind === 'stop') {
       stoppedBecause = d.why;
       // A step the budget cannot hold is a repair that could not run: the draft is delivered as it stands, and said so.
@@ -1057,44 +1093,39 @@ export async function refineToStandard(
       if (d.why.startsWith('the budget')) why = `the ${stepWords(d.refused ?? 'rewrite')} could not run (${d.why}); the draft is delivered as it stands`;
       break;
     }
-    const snap = processSpendByPurpose();
     if (d.action === 'redraft') {
       // Written again by the caller (cli/commands/invoke.ts, `withRedraft`), told each miss's direction and distance:
       // the hand-off is no step; the draft written again is entered on the same ledger by the caller.
-      record(d, snap, 'handed to a redraft', 0); handed = true;
+      record(d, 'handed to a redraft', 0); handed = true;
       stoppedBecause = `handed to a redraft: ${d.why}`;
       break;
     }
     if (d.action === 'grammar') {
       // MECHANICAL ERRORS, in place (./mechanical-repair.ts): the checker's correction inside each confirmed span, kept only
       // on the never-worse terms every step has. One not kept leaves its rule to the end, listed, and never retried here.
-      const at = begin(d);
-      const g = grammarFixes(v, report, text, new Set(d.targets));
-      if (g.text === text) { settle(at, snap, 'no change', 0, 'no correction could be made in place'); for (const id of d.targets) unreachable.add(id); continue; }
-      const after = await check(g.text);
-      sameInstrument();
-      const accepted = acceptRepair(atLength(report, text, g.text), after, { wordsAdded: !addsNoWords(text, g.text), ignore: steering(report), targets: d.targets, enforced: enforcedIds, paramsOf });
-      if (!accepted.ok) { settle(at, snap, 'not kept', 0, accepted.why); for (const id of d.targets) unreachable.add(id); if (!notKept.length) notKept.push(`${g.fixed.join('; ')} not kept: ${accepted.why}`); continue; }
-      settle(at, snap, 'kept', movedBy(d.targets, report, after, true), g.fixed.join('; '));
-      text = g.text; report = after; mechanical.push(...g.fixed);
+      const from = text; const g = grammarFixes(v, report, text, new Set(d.targets));
+      const s = await step({ ...d, forEnforced: d.targets }, async () => {
+        if (g.text === from) return { unchanged: 'no correction could be made in place' };
+        const after = await check(g.text);
+        sameInstrument();
+        return { text: g.text, report: after };
+      }, { wordsAdded: () => !addsNoWords(from, g.text),
+        also: (x) => { const a = acceptRepair(atLength(report, from, g.text), x.report, { wordsAdded: !addsNoWords(from, g.text), ignore: steering(report), targets: d.targets, enforced: enforcedIds, paramsOf }); return a.ok ? null : a.why; },
+        movement: (x, kept) => (kept ? movedBy(d.targets, report, x.report, true) : 0), note: (_x, kept, why, v) => (kept ? g.fixed.join('; ') : v.own ?? why ?? undefined) });
+      if (s.kind === 'judged' && s.kept) { text = s.after.text; report = s.after.report; mechanical.push(...g.fixed); continue; }
+      for (const id of d.targets) unreachable.add(id);
+      if (s.kind === 'judged' && !notKept.length) notKept.push(`${g.fixed.join('; ')} not kept: ${s.own ?? s.why}`);
       continue;
     }
     if (d.action === 'cut' || d.action === 'mechanical') {
       // Code that always runs, never a step the controller chooses: nothing to carry out here.
-      record(d, snap, 'no change', 0, 'not a chosen step');
+      record(d, 'no change', 0, 'not a chosen step');
       for (const id of d.targets) unreachable.add(id);
       continue;
     }
-    if (d.action === 'operators') {
-      const at = begin(d);
-      const o = await operatorStep(d.targets);
-      settle(at, snap, o.kept ? 'kept' : 'no change', o.movement, o.note);
-      continue;
-    }
-    const at = begin(d);
-    const step = await rewriteStep(d);
-    settle(at, snap, step.outcome, step.movement, step.note);
-    if (step.stop) { stoppedBecause = step.stop; break; }
+    if (d.action === 'operators') { await operatorStep(d); continue; }
+    const r = await rewriteStep(d);
+    if (r.stop) { stoppedBecause = r.stop; break; }
   }
   // The last fixes include mechanical errors the controller's steps did not reach (its step limit, say).
   if (report.failed) await fixMechanically(true);
@@ -1105,13 +1136,14 @@ export async function refineToStandard(
   if (report.failed && notKept.length) why = `${why}; ${notKept.join('; ')}`;
   // AND AGAIN AT THE END, on the text that ships: whatever the passes did, no flagged claim survives them.
   // Once the flagged claims were kept uncut, cutting them again at the end would only repeat the attempt.
-  const lastSnap = processSpendByPurpose(); const flaggedLast = keptUncut ? 0 : flaggedClaims(report).length;
-  // A claim a rewrite put back is cut again: a step like the first cut, entered before it runs, recorded with what it cost.
-  const lastAt = flaggedLast ? begin({ action: 'cut', targets: ['UNSOURCED'], why: `${flaggedLast} invented claim(s) flagged after the steps: cut in code`, expectedGain: flaggedLast, expectedCostUsd: 0 }) : -1;
+  const flaggedLast = keptUncut ? 0 : flaggedClaims(report).length;
+  // A claim a rewrite put back is cut again: like the first cut, entered before it runs; a draft written again around it is a step of its own.
+  const lastAt = flaggedLast ? ledger.entries.length : -1;
+  if (flaggedLast) record({ action: 'cut', targets: ['UNSOURCED'], why: `${flaggedLast} invented claim(s) flagged after the steps: cut in code`, expectedGain: flaggedLast, expectedCostUsd: 0 }, 'could not run', 0);
   const last = keptUncut ? { text, report, cut: [] as string[] } : await cutSafely(text, report);
   sameInstrument();
   if (last.cut.length) { text = last.text; report = last.report; cut.push(...last.cut); }
-  if (flaggedLast) settle(lastAt, lastSnap, last.cut.length ? 'kept' : 'no change', last.cut.length);
+  if (flaggedLast) ledger.settle(lastAt, last.cut.length ? 'kept' : 'no change', { movement: last.cut.length, calls: 0, usd: 0 });
   if (cut.length && !report.failed) why = 'every REQUIRED measured rule now holds (invented claims cut)';
   const heavy = heavyCut(draft, cut);
   if (heavy) why = `${heavy}; ${why}`;
