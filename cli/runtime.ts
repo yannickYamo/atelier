@@ -19,6 +19,9 @@ import type { ExpertEvidence, Requirement, StandardVersion } from '../core/state
 import { contrastFor, type ContrastPair } from '../core/compiler/contrast-examples.js';
 import type { Reservation } from '../core/golden/reservation.js';
 import type { RatificationLedger } from '../core/ratification/decision-record.js';
+import type { AuthorMap } from '../core/composite/authors.js';
+import type { CompositeRecord } from '../core/composite/selection.js';
+import type { TraitClass } from '../core/composite/traits.js';
 import { processSpentUsd, type InferenceClient } from '../core/inference/client.js';
 import { AnthropicInferenceClient, accountRefusal } from '../providers/anthropic.js';
 import { ClaudeCodeAdapter } from '../adapters/claude-code/adapter.js';
@@ -85,6 +88,8 @@ export const VALUED_OPTIONS: readonly string[] = ['correcting',
   'corpus', 'tasks', 'fires', 'margin', 'enforce', 'observe', 'check', 'floor-cap',
   'finalists', 'screen-model', 'voice', 'persona', 'add', 'strike', 'probe', 'read', 'label', 'reader-model', 'runs',
   'questions', 'reason', 'required-n', 'reserve', 'role',
+  // `atelier new` with pieces by several authors (cli/commands/composite.ts): who wrote which, what is liked about each, and a conflict's answer
+  'authors', 'admire', 'conflict',
   'rule', 'set', 'skill', 'source-author', 'statement', 'strict-schema',
   'structured-output', 'supersedes', 'target-backend', 'target-base-url', 'target-model',
   'target-price-in', 'target-price-out', 'target-provider', 'target-strict-schema', 'target-structured-output',
@@ -121,7 +126,7 @@ const parsed = ((): Parsed => {
 export const cmd = argv[0] ?? '';
 
 /** Options that may be given more than once. Every value is kept, and a comma list counts the same. */
-export const REPEATABLE_OPTIONS: readonly string[] = ['reserve', 'exclude', 'set', 'margin', 'enforce', 'observe', 'label', 'add', 'strike'];
+export const REPEATABLE_OPTIONS: readonly string[] = ['reserve', 'exclude', 'set', 'margin', 'enforce', 'observe', 'label', 'add', 'strike', 'admire', 'conflict'];
 
 /** Values of an option, read as the parser reads: a value is consumed, so a value that happens to
  *  spell `--name` (a statement, a task) is never counted as the option itself. */
@@ -148,6 +153,9 @@ const occurrences = (name: string): string[] => {
  */
 export const flagAll = (f: string): string[] =>
   occurrences(f.replace(/^--/, '')).flatMap((v) => v.split(',')).map((x) => x.trim()).filter(Boolean);
+
+/** Every value of a repeatable option, kept whole: a free line of the person's (`--admire a.md=I like the openings, and the pace`) has commas in it. */
+export const flagEach = (f: string): string[] => occurrences(f.replace(/^--/, '')).map((x) => x.trim()).filter(Boolean);
 
 export const flag = (f: string): string | undefined => {
   const name = f.replace(/^--/, '');
@@ -640,6 +648,14 @@ export interface Session {
   cap?: string | null;
   /** when the corpus is someone else's public work: whose. Decided at intake, kept for the run. */
   publicSource?: string | null;
+  /** pieces by several authors (core/composite/authors.ts): who wrote which, read at intake. Absent for one author, which is every run before this. */
+  authors?: AuthorMap | null;
+  /** what the person said they like about each author's pieces, by author, kept so a continuation need not repeat it */
+  admire?: Readonly<Record<string, string>> | null;
+  /** how the admiration lines were read into trait classes, keyed by a hash of the lines: read once, kept for a continuation */
+  admireRead?: { readonly key: string; readonly classes: Readonly<Record<string, readonly TraitClass[]>>; readonly via: 'MODEL' | 'KEYWORDS' } | null;
+  /** the composite the person approved (core/composite/selection.ts): which proposals from which author, and the conflicts' answers */
+  composite?: CompositeRecord | null;
 }
 
 export interface ProposalMeta {
@@ -659,6 +675,8 @@ export interface ProposalMeta {
    * many there are and which break the rule. What `suggestAll` holds a REQUIRED suggestion to.
    */
   readonly corpus?: { readonly pieces: number; readonly breaking: readonly number[] } | null;
+  /** the author whose pieces alone this was read or counted from, when the pieces are by several (core/composite) */
+  readonly source?: string;
 }
 
 /**
