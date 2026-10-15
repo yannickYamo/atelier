@@ -18,7 +18,7 @@ import { acceptRepair, regressions, GRADED_STEP } from '../core/loop/repair.js';
 import { FEATURE, errorAtLength, LENGTH_DRIFT } from '../core/observers/features.js';
 import type { VerifyReport, RuleCheck } from '../core/observers/verify.js';
 import * as store from '../core/state/store.js';
-import type { GradedRecord } from '../core/state/canonical-state.js';
+import type { GradedRecord, ControllerRecord } from '../core/state/canonical-state.js';
 
 const rule = (id: string, feature: string, materiality = 'PREFERRED', extra: Record<string, unknown> = {}) => ({ requirementId: id, statement: `${feature} in range.`, materiality, authority: 'USER_ADOPTED', appliesWhen: 'GENERAL',
   measurement: { observer: 'FEATURE', params: { feature: [feature], minValue: 1, maxValue: 3 } }, ...extra });
@@ -338,8 +338,8 @@ describe('through the binary: a graded miss is repaired on its carriers and leav
   let backend: ChildProcess; let port = 0;
   const plain = 'The rule holds in this case and it holds elsewhere as well today, whatever the reader brings to it.';
   const aside = 'The rule holds here (as it did last year) and it holds there too (most of the time, at least).';
-  // Four sentences of eight parentheses in about 470 words: 17 per 1,000 against a cap of 5. Three carriers rewritten
-  // leave one aside, which is inside the band.
+  // Four sentences of eight parentheses in about 470 words: 17 per 1,000 against a band of 2 to 9, about 1.1 band widths
+  // out. The controller sizes that to a carrier rewrite of two sentences, which leaves about 8.5 per 1,000, inside the band.
   const draft = Array.from({ length: 8 }, (_, i) => Array.from({ length: 3 }, (_, k) => ((i * 3 + k) % 6 === 0 ? aside : plain)).join(' ')).join('\n\n');
   const rewritten = aside.replace(/[()]/g, '');
   const replacements = (n: number) => Array.from({ length: n }, (_, i) => ({ id: i + 1, text: rewritten }));
@@ -355,7 +355,7 @@ describe('through the binary: a graded miss is repaired on its carriers and leav
     await fetch(`http://127.0.0.1:${port}/__set`, { method: 'POST', body: JSON.stringify({ byTool: { emit_piece: { piece: draft }, emit_replacements: { replacements: replacements(3) } } }) });
     data = mkdtempSync(join(tmpdir(), 'atelier-graded-data-')); proj = mkdtempSync(join(tmpdir(), 'atelier-graded-proj-'));
     env = { ...process.env, ATELIER_DATA: data, ATELIER_PROJECT_DIR: proj, ATELIER_PRICE_IN: '1', ATELIER_PRICE_OUT: '1' };
-    run('add', '--statement', 'Few asides in parentheses.', '--kind', 'BOUNDARY', '--applies-when', 'GENERAL', '--materiality', 'PREFERRED', '--measure', 'FEATURE:feature=parenthesis,maxValue=5');
+    run('add', '--statement', 'Few asides in parentheses.', '--kind', 'BOUNDARY', '--applies-when', 'GENERAL', '--materiality', 'PREFERRED', '--measure', 'FEATURE:feature=parenthesis,minValue=2,maxValue=9');
     run('ratify-close', '--work-type', 'writing');
     run('build', '--name', 'asides');
   });
@@ -388,9 +388,14 @@ describe('through the binary: a graded miss is repaired on its carriers and leav
     expect(g.values.parenthesis.source).toBe('standard'); expect(g.displacement).toBeUndefined();
     expect(out.report.join('\n')).toMatch(/^Steered toward your range, never a block: parenthetical asides fewer \([\d.]+ → [\d.]+ per 1,000 words\)\.$/m);
     expect(g.redrafts).toBe(0); expect(g.notes).toEqual([]);
-    expect(g.values.parenthesis.before).toBeGreaterThan(5); expect(g.values.parenthesis.after).toBeLessThanOrEqual(5);
-    expect(g.values.parenthesis).toMatchObject({ lo: null, hi: 5 });
-    expect(g.edits.accepted).toBeGreaterThanOrEqual(3); expect(g.edits.rejected).toBe(0);
+    expect(g.values.parenthesis.before).toBeGreaterThan(9); expect(g.values.parenthesis.after).toBeLessThanOrEqual(9);
+    expect(g.values.parenthesis).toMatchObject({ lo: 2, hi: 9 });
+    // sized to the miss: two carrier sentences, k = ceil(1.1), and no more
+    expect(g.edits.accepted).toBe(2); expect(g.edits.rejected).toBe(0);
+    const ctl = (out as { controller?: ControllerRecord }).controller;
+    expect(ctl?.decisions.map((d) => [d.action, d.outcome])).toEqual([['carrier-rewrite', 'kept']]);
+    expect(ctl?.stoppedBecause).toBe('every enforced rule holds and nothing graded is off');
+    expect(ctl?.callsUsed).toBe(g.calls);
     const line = out.eval.spend?.find((l) => l.purpose === 'graded');
     expect(line?.calls).toBe(g.calls); expect(line?.usd).toBe(g.costUsd);
     // the scripted backend reports no token cost, so the dollars are checked against the ledger's line above, not against zero
@@ -411,22 +416,30 @@ describe('through the binary: a graded miss is repaired on its carriers and leav
     // every repair's edits are counted on the record, flag or not
     expect(graded?.repair?.edits).toMatchObject({ accepted: g.edits.accepted, rejected: 0 });
   });
-  it('a miss too far for one pass: the rewrite that lands closer but outside the band is kept, and counts as repaired', async () => {
-    // eight aside sentences: about 34 per 1,000 against a cap of 5; three carriers rewritten leave about 21, still out
+  it('a miss too far for a rewrite: the piece is written again first, told which way and how far; one that does no better leaves the first', async () => {
+    // eight aside sentences: about 34 per 1,000 against a band of 2 to 9, about 3.6 widths out: over 1.5, so a redraft
     const far = Array.from({ length: 8 }, (_, i) => Array.from({ length: 3 }, (_, k) => ((i * 3 + k) % 3 === 0 ? aside : plain)).join(' ')).join('\n\n');
     await fetch(`http://127.0.0.1:${port}/__set`, { method: 'POST', body: JSON.stringify({ byTool: { emit_piece: { piece: far }, emit_replacements: { replacements: replacements(3) } } }) });
+    const before = await rewritesSent();
     const out = invoke();
-    const parens = (t: string): number => (t.match(/\(/g) ?? []).length;
-    expect(parens(out.output)).toBeLessThan(parens(far));
-    expect(parens(out.output)).toBeGreaterThan(0);
-    expect(out.graded).toMatchObject({ features: ['parenthesis'], targeted: 1, repaired: 1 });
-    // Still outside after the rewrites, the piece was written once more for the graded miss alone: the redraft is the
-    // flag's (one draft, counted and charged to it), its directional line is recorded as sent, and it never said "requires".
+    // no carrier rewrite was spent on a miss this far out: the piece was written again instead
+    expect(await rewritesSent()).toBe(before);
+    // the scripted writer returns the same piece, which is no nearer: the first draft is delivered
+    expect(out.output).toBe(far);
+    expect(out.graded).toMatchObject({ features: ['parenthesis'], targeted: 0 });
+    // The redraft is the flag's (one draft, counted and charged to it), its directional line is recorded as sent, and it
+    // never said "requires".
     const g = out.graded!;
     expect(g.redrafts).toBe(1);
     expect(g.notes).toHaveLength(1); expect(g.notes[0]).toMatch(/^- Few asides in parentheses\. \(parenthetical asides [\d.]+ per 1,000 words; .*about [\d.]+ fewer parenthetical asides per 1,000 words\)$/);
-    expect(g.values.parenthesis.after).toBeLessThan(g.values.parenthesis.before ?? 0);
-    expect(g.calls).toBeGreaterThanOrEqual(3);
+    expect(g.calls).toBe(1);
+    // THE STEPS, RECONSTRUCTABLE: the first draft handed to a redraft, the redraft not kept and why, the second draft's own call
+    const ctl = (out as { controller?: ControllerRecord }).controller!;
+    expect(ctl.decisions.map((d) => [d.action, d.outcome])).toEqual([['redraft', 'handed to a redraft'], ['redraft', 'not kept'], ['redraft', 'handed to a redraft']]);
+    expect(ctl.decisions[1].observed.note).toMatch(/one more draft did not do better, so the first is kept/);
+    expect(ctl.decisions[1].observed.calls).toBe(1);
+    expect(ctl.stoppedBecause).toMatch(/did not do better/);
+    expect(ctl.callsUsed).toBe(g.calls);
     expect(out.eval.spend?.find((l) => l.purpose === 'graded')?.calls).toBe(g.calls);
     const said = out.report.join('\n');
     expect(said).toContain('your pieces usually do');

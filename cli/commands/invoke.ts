@@ -18,7 +18,8 @@ import { readFidelity } from '../../core/fidelity/profile.js';
 import { factLedger, factCoverage, type Fact } from '../../core/loop/fact-ledger.js';
 import { steerTowardRange, type Application } from '../../core/fidelity/structural.js';
 import { LOOP_SETTINGS, DIVERSITY_TEMPERATURES, type FidelityProfile, type FidelityReading, type FidelityRecord, type ImplementationSettings } from '../../core/fidelity/types.js';
-import type { RepairRecord, RepairEdits, GradedRecord, Requirement } from '../../core/state/canonical-state.js';
+import type { RepairRecord, RepairEdits, GradedRecord, Requirement, ControllerRecord, ControllerDecisionRecord } from '../../core/state/canonical-state.js';
+import { askedForRedraft, joinRecords, DEFAULT_COST, DEFAULT_EFFECT, ENFORCED_WEIGHT } from '../../core/loop/controller.js';
 import { releaseFor, implementationBlock } from '../fidelity.js';
 import { buildRunEval } from '../eval-run.js';
 import { needsReview } from '../../core/eval/record.js';
@@ -50,7 +51,7 @@ import { tastePermissions } from '../../core/taste/calibration.js';
 import { refineTaste } from '../../core/taste/repair.js';
 import { overlapIndex, sentencesKept, sentencesAdded } from '../../core/observers/overlap.js';
 import { recordTaste, readerModel, readerClient as readerClientFor } from './taste.js';
-import { processSpentUsd, processSpendByPurpose, spendBetween, type Budget, type InferenceClient, type SpendPurpose } from '../../core/inference/client.js';
+import { processSpentUsd, processSpendByPurpose, spendBetween, type Budget, type InferenceClient, type SpendPurpose, type SpendLine } from '../../core/inference/client.js';
 import { countWords, wordsWritten } from '../../core/eval/size.js';
 import { MATERIAL_NOT_BOUND, CONDITIONAL_NOT_BOUND } from '../../core/eval/record-build.js';
 import { statedLength, statedLengths, againstStated, statedBounds, notHeldBecause, inWords, ownLengthBand, againstBand, type StatedLength } from '../../core/intake/length.js';
@@ -642,7 +643,10 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const rec = await runOnce(L, sv, servedForRun, servedHash, deliveryForRun, taskForRun, client, budget, binding,
     resolveProvenance(flag('--provenance'), process.env), contractFile,
     flag('--task') ? 'FLAG' : 'POSITIONAL',
-    std && !argv.includes('--no-repair') ? keepDelivered(withGradedRecord(withStructureRead(withShape(withCoverage(withVoice(withEdits(withRedraft(trackGraded(refineDraft({ client, budget, name, std, checks, taste }), gradedTrace), unmet ? { unmet, notes: completions, redraft: async (note, purpose) => (await spendOneWithResult(client, budget, servedForRun, taskForRun, null, note, {}, purpose)).piece, graded: gradedTrace,
+    std && !argv.includes('--no-repair') ? keepDelivered(withGradedRecord(withStructureRead(withShape(withCoverage(withVoice(withEdits(withRedraft(trackGraded(refineDraft({ client, budget, name, std, taste,
+      // THE BOUNDED CONTROLLER (core/loop/controller.ts): the release's settings, whether a draft can be written again
+      // when it asks (only where `withRedraft` runs), and the run's ledger from its start, for what a step costs.
+      checks: { ...checks, controller: { settings: runSettings?.controller ?? null, redraft: unmet !== null, ledgerFrom: ledgerBefore } } }), gradedTrace), unmet ? { unmet, notes: completions, redraft: async (note, purpose) => (await spendOneWithResult(client, budget, servedForRun, taskForRun, null, note, {}, purpose)).piece, graded: gradedTrace,
         displaced: (from: string, to: string) => displacement(from, to, graded !== undefined ? carried : null, new Set())?.refusedFor ?? [] } : null), fid && (editBudget > 0 || argv.includes('--fidelity')) ? { client, budget, name, std, checks, profile: editProfile ?? fid.profile, editBudget, trace, taste } : null),
       voiceRuns && bank && fid ? { client, budget, name, std, checks, bank, copied: fid.index ? overlapIndex(fid.index.passages.map((p) => p.text)) : null, trace, taste, reader: smallReaderFor()?.client ?? null, gate: runSettings?.voiceGate === 'reader' ? 'reader' as const : 'lists' as const } : null),
       strict && judge?.covers ? { client, budget, judge, asked, servedText: servedForRun, task: taskForRun, notes: completions } : null),
@@ -745,6 +749,8 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
       output: refused ? null : rec.output, answer: refused ? null : shipped, ...(strict ? { delivered: !refused } : {}), invocationId: rec.invocationId, skillVersion: sv.skillVersionHash, costUsd: Number(spent.toFixed(4)),
       rulesBroken: rec.repair?.violatedAfter ?? [], cut: rec.repair?.storiesCut ?? [], toCheck: rec.repair?.claimsToCheck ?? [],
       ...(rec.repair?.graded ? { graded: rec.repair.graded } : {}),
+      // every repair step the controller chose, what it moved and cost, and why it stopped (core/loop/controller.ts)
+      ...(rec.repair?.controller ? { controller: rec.repair.controller } : {}),
       // Every rule of the standard as it fared on the text delivered, in the owner's words: what `atelier run` shows.
       rules: rulesFared((delivered as Delivered | null)?.report ?? null),
       withheld: rec.delivery.withheldRules ?? [], report: report.lines, eval: evaluation,
@@ -1462,14 +1468,26 @@ export function withRedraft(refine: (draft: string) => Promise<Delivered>,
     const another = (): boolean => (onlyTooLong(missing) ? trims < TRIMS : redrafts < REDRAFTS && (redrafts === 0 || missing.every((u) => u.aim)));
     while (missing.length && another()) {
       const trimming = onlyTooLong(missing);
+      // A DRAFT WRITTEN AGAIN FOR GRADED MISSES ALONE is the controller's call (core/loop/controller.ts): only where it
+      // handed the draft over, a miss far enough out to pay for a whole draft. A nearer one is left as it is, or was
+      // rewritten on its carriers.
+      if (!trimming && missing.every((u) => u.graded) && d.repair?.controller && !askedForRedraft(d.repair.controller)) break;
       if (trimming) trims += 1; else redrafts += 1;
       const cutting = trimming && picking;
+      const asked = askedForRedraft(d.repair?.controller) ? d.repair?.controller?.decisions[d.repair.controller.decisions.length - 1] : undefined;
+      const step = (outcome: ControllerDecisionRecord['outcome'], snap: readonly SpendLine[], movement: number, note?: string): ControllerDecisionRecord => {
+        const cost = spendBetween(snap, processSpendByPurpose()).filter((l) => l.purpose === 'writing' || l.purpose === 'graded');
+        return { action: 'redraft', targets: missing.map((u) => u.id), why: trimming ? 'the piece runs long: cut to its length' : asked?.why ?? `written again with ${missing.length} miss(es) named`,
+          expectedGain: asked?.expectedGain ?? redraftGain(missing), expectedCostUsd: asked?.expectedCostUsd ?? DEFAULT_COST.redraft, outcome,
+          observed: { movement: Math.round(movement * 1000) / 1000, calls: cost.reduce((n, l) => n + l.calls, 0), usd: Math.round(cost.reduce((n, l) => n + l.usd, 0) * 1e6) / 1e6, ...(note ? { note } : {}) } };
+      };
+      const stepSnap = processSpendByPurpose();
       try {
         let piece: string;
         if (cutting) {
           const named = await c.redraft(cutNote(missing, d.output)); const count = countFor(missing);
           const cut = applyCuts(d.output, named.split('\n'), cutTarget(missing, count(d.output)), count);
-          if (!cut.applied.length) { picking = false; c.notes.push('The draft runs long; the writer named nothing that could be removed as written, so the next pass writes it shorter.'); continue; }
+          if (!cut.applied.length) { picking = false; d = withController(d, joinRecords(d.repair?.controller, step('no change', stepSnap, 0, 'nothing named could be removed'), undefined)); c.notes.push('The draft runs long; the writer named nothing that could be removed as written, so the next pass writes it shorter.'); continue; }
           precut ??= d.output; piece = cut.text;
         } else {
           // A draft written for graded misses alone is the flag's: its own purpose on the ledger, and counted on the record.
@@ -1477,6 +1495,7 @@ export function withRedraft(refine: (draft: string) => Promise<Delivered>,
           if (c.graded && !trimming) { c.graded.notes.push(...gradedLines(missing)); if (gradedOnly) c.graded.redrafts += 1; }
           piece = await c.redraft(trimming ? trimNote(missing, d.output) : redraftNote(missing, d.output), gradedOnly ? 'graded' : 'writing');
         }
+        const drafted = step('kept', stepSnap, 0);
         const d2 = await refine(piece);
         const missing2 = c.unmet(d2);
         // A draft written again may not displace what the author's pieces hold, any more than a rewrite may.
@@ -1485,18 +1504,31 @@ export function withRedraft(refine: (draft: string) => Promise<Delivered>,
         const better = nearer(missing2, missing) && others(d2, missing2) <= others(d, missing) && !displaced.length;
         const outcome = displaced.length ? `${redraftOutcome(missing, missing2, false, named, whose)} It displaced what your pieces hold: ${displaced.join('; ')}.` : redraftOutcome(missing, missing2, better, named, whose);
         // a cut the checks refuse leaves the draft as it was, and the next pass writes it shorter instead
-        if (!better && cutting) { picking = false; c.notes.push(`${outcome} The cut was not kept; the next pass writes it shorter.`); continue; }
-        if (!better) return say(d, outcome);
-        const kept: Delivered = d2.repair ? d2 : { ...d2, repair: { passes: 0, violatedBefore: ids, violatedAfter: brokenIn(d2.report), originalOutputHash: sha(piece), draft: piece, why: `written again with what ${missing.every((u) => u.graded) ? 'your pieces usually do' : 'the work requires'} named` } };
+        // THE STEP ON THE RECORD: what the draft written again moved, what it cost, and the steps taken on it after.
+        const joined = joinRecords(d.repair?.controller, { ...drafted, outcome: better ? 'kept' : 'not kept', observed: { ...drafted.observed, movement: better ? Math.round(Math.max(0, redraftGain(missing) - redraftGain(missing2)) * 1000) / 1000 : 0, note: outcome } },
+          d2.repair?.controller, better ? undefined : `the draft written again did not do better: ${outcome}`);
+        if (!better && cutting) { picking = false; d = withController(d, joined); c.notes.push(`${outcome} The cut was not kept; the next pass writes it shorter.`); continue; }
+        if (!better) return say(withController(d, joined), outcome);
+        const kept: Delivered = withController(d2.repair ? d2 : { ...d2, repair: { passes: 0, violatedBefore: ids, violatedAfter: brokenIn(d2.report), originalOutputHash: sha(piece), draft: piece, why: `written again with what ${missing.every((u) => u.graded) ? 'your pieces usually do' : 'the work requires'} named` } }, joined);
         // A cut keeps the draft from before it, so what was taken out can be read (the record holds the draft cut from).
         d = say(precut !== null && kept.repair ? { ...kept, repair: { ...kept.repair, draft: precut, originalOutputHash: sha(precut) } } : kept, outcome);
         missing = missing2;
       } catch (err) {
-        return say(d, `The draft leaves out ${missing.length} thing(s) ${whose(missing)} (${named(missing)}); the draft to add them could not be written (${(err as Error).message.split('\n')[0]}).`);
+        const why = `the draft to add them could not be written (${(err as Error).message.split('\n')[0]})`;
+        return say(withController(d, joinRecords(d.repair?.controller, step('could not run', stepSnap, 0, why), undefined, why)), `The draft leaves out ${missing.length} thing(s) ${whose(missing)} (${named(missing)}); ${why}.`);
       }
     }
     return d;
   };
+}
+
+/** What a draft written again is expected to move: each rule (and a length) it misses held, and each graded miss's distance, up to one width. */
+const redraftGain = (unmet: readonly Unmet[]): number => unmet.reduce((n, u) => n + (u.graded ? Math.min(u.off ?? 0, DEFAULT_EFFECT.redraft) : ENFORCED_WEIGHT), 0);
+
+/** The delivered text with the controller's record of every step taken on the way to it. */
+function withController(d: Delivered, controller: ControllerRecord): Delivered {
+  const base = d.repair ?? { passes: 0, violatedBefore: [], violatedAfter: brokenIn(d.report), originalOutputHash: sha(d.output), why: 'every REQUIRED measured rule holds' };
+  return { ...d, repair: { ...base, controller } };
 }
 
 /** The delivered text with one more note in its repair record, so the record says what the printed line said. */

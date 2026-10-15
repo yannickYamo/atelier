@@ -24,7 +24,8 @@
 //
 // Pure: no I/O, no clock. The caller supplies the observations in any order; they are sorted by `at`.
 
-import type { ContextClass, FeatureBand } from './types.js';
+import type { ContextClass, ControllerEffects, FeatureBand } from './types.js';
+import type { ControllerDecisionRecord } from '../state/canonical-state.js';
 
 /** EWMA weight on the newest residual. 0.2 is the textbook choice for detecting shifts of about one spread. */
 export const EWMA_LAMBDA = 0.2;
@@ -168,4 +169,37 @@ export function describeEstimate(rows: readonly EstimateRow[]): string[] {
     ? `${features} feature(s) tracked across ${bindings} binding(s); the lines above are sustained, not single outputs.`
     : `${features} feature(s) tracked across ${bindings} binding(s); none drifting, none collapsed.`);
   return lines;
+}
+
+/** One past invocation as `summariseEffects` reads it: when it ran and its repair controller's steps. */
+export interface EffectSource {
+  readonly at: string;
+  readonly repair?: { readonly controller?: { readonly decisions: readonly ControllerDecisionRecord[] } } | null;
+}
+
+/**
+ * THE LEARNING CONTRACT FOR THE REPAIR CONTROLLER (../loop/controller.ts). Over past invocation records, in time order,
+ * the EWMA (λ = EWMA_LAMBDA) of what each action moved per target and what it cost per step: a step that was not kept
+ * moved nothing and still cost what it cost. A step handed on to a draft written again, or one that could not run, is
+ * no evidence of its action's effect and is left out. The result is what a release's `controller.effects` may hold; a
+ * run never reads it from here, only from its release. Pure: no I/O, no clock.
+ */
+export function summariseEffects(records: readonly EffectSource[]): ControllerEffects {
+  const ordered = records.map((r, i) => ({ r, i })).sort((a, b) => a.r.at.localeCompare(b.r.at) || a.i - b.i).map((x) => x.r);
+  const acc = new Map<'rewrite' | 'operators' | 'carrier-rewrite' | 'redraft', { movement: number; usd: number; n: number }>();
+  for (const r of ordered) {
+    for (const d of r.repair?.controller?.decisions ?? []) {
+      if (d.action !== 'rewrite' && d.action !== 'operators' && d.action !== 'carrier-rewrite' && d.action !== 'redraft') continue;
+      if (d.outcome === 'handed to a redraft' || d.outcome === 'could not run') continue;
+      const moved = d.outcome === 'kept' ? Math.max(0, d.observed.movement) / Math.max(1, d.targets.length) : 0;
+      const a = acc.get(d.action);
+      if (!a) { acc.set(d.action, { movement: moved, usd: d.observed.usd, n: 1 }); continue; }
+      a.movement = (1 - EWMA_LAMBDA) * a.movement + EWMA_LAMBDA * moved;
+      a.usd = (1 - EWMA_LAMBDA) * a.usd + EWMA_LAMBDA * d.observed.usd;
+      a.n += 1;
+    }
+  }
+  const r4 = (x: number): number => Math.round(x * 10000) / 10000;
+  return Object.fromEntries([...acc].sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([k, a]) => [k, { movement: r4(a.movement), usdPerAction: r4(a.usd), n: a.n }])) as ControllerEffects;
 }
