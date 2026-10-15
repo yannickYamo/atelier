@@ -108,7 +108,7 @@ describe('the controller: one redraft is one step, the pass cap says so, a step-
   });
   it('a step the calls cannot hold says the calls ran out, not "$0.00"', () => {
     const d = decide(input({ graded: [{ id: 'g', error: 1.0, operatorEffect: null }], budget: { usdLeft: 1, callsLeft: 0 }, observedUsdPerCall: { 'carrier-rewrite': 0.0004 } }));
-    expect(d).toEqual({ kind: 'stop', why: 'the budget: carrier-rewrite needs a model call, and no call is left' });
+    expect(d).toEqual({ kind: 'stop', why: 'the budget: carrier-rewrite needs a model call, and no call is left', refused: 'carrier-rewrite' });
   });
 });
 

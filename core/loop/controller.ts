@@ -93,6 +93,10 @@ const CHOSEN: ReadonlySet<ControllerAction> = new Set(['rewrite', 'operators', '
 export const stepsTaken = (history: readonly ControllerDecisionRecord[]): number =>
   history.filter((d) => CHOSEN.has(d.action) && d.outcome !== 'handed to a redraft' && d.outcome !== 'could not run').length;
 
+/** A step said in plain words, as a stop names the one that could not run. */
+export const stepWords = (a: ControllerAction): string => ({ cut: 'cut of invented claims', mechanical: 'fix without a model', rewrite: 'rewrite', operators: 're-punctuation',
+  'carrier-rewrite': 'carrier rewrite', redraft: 'redraft', grammar: 'grammar fix', trim: 'cut for length' } satisfies Record<ControllerAction, string>)[a];
+
 /** The stop said when the step limit is reached. */
 export const capStop = (maxActions: number): string => `the controller took its ${maxActions} steps`;
 
@@ -161,7 +165,9 @@ export interface Decision {
   /** carrier sentences per feature, for a carrier rewrite */
   readonly carriers?: number;
 }
-export interface Stop { readonly kind: 'stop'; readonly why: string }
+export interface Stop { readonly kind: 'stop'; readonly why: string;
+  /** the step the budget could not hold, where that is why the controller stopped: what the stop names as not run */
+  readonly refused?: ControllerAction }
 
 /** The release's settings with every absent field at its default. */
 export function controllerSettings(s?: ControllerSettings | null): Required<Omit<ControllerSettings, 'effects'>> & { effects: ControllerEffects } {
@@ -333,10 +339,11 @@ export function decide(input: ControllerInput, s: ControllerSettings | null = nu
     return { kind: 'stop', why: exhausted.length ? `every action tried failed on what is left: ${exhausted.map((x) => `${x.id} (${x.fails.join(', ')})`).join('; ')}`
       : 'only what no step here can reach is left (nothing to rewrite in it, or a region the guards protect)' };
   }
-  let refused: string | null = null; let budgetRefusedGraded = false;
+  let refused: string | null = null; let budgetRefusedGraded = false; let refusedAction: ControllerAction | null = null;
   for (const c of candidates) {
     const short = budgetRefusal(c.action, c.expectedCostUsd, input.budget);
     if (short) {
+      if (refused === null) refusedAction = c.action;
       refused ??= short;
       if (!forEnforced.has(c)) budgetRefusedGraded = true;
       continue;
@@ -357,7 +364,7 @@ export function decide(input: ControllerInput, s: ControllerSettings | null = nu
         expectedGain: r3(free.reduce((n, g) => n + Math.min(Math.abs(g.error), effectOf('operators', g.operatorEffect ?? prior('operators'), input.history)), 0)), expectedCostUsd: 0 };
     }
   }
-  return { kind: 'stop', why: refused ?? 'nothing to do' };
+  return { kind: 'stop', why: refused ?? 'nothing to do', ...(refused !== null && refusedAction !== null && refused.startsWith('the budget') ? { refused: refusedAction } : {}) };
 }
 
 /** The record of a draft's steps, with the calls and dollars summed from the steps themselves. */
