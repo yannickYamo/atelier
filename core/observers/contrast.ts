@@ -23,7 +23,7 @@ import { quantile, sentencesOf, paragraphsOf, wordsOf } from './text.js';
 import { TELL_FAMILIES, BAN_ONLY_FAMILIES } from './tells.js';
 import { headingsOf, headingCase, OPENING_TROPES, CLOSING_TROPES, HEADING_TROPES } from './structure.js';
 import { fitToCorpus, fitNote, type MeasuredProposal } from './derive.js';
-import { allowed, CORPUS_RULE_SHARE } from '../ratification/suggest.js';
+import { allowed, CORPUS_RULE_SHARE, MIN_PIECES_TO_COUNT, thinEvidence } from '../ratification/suggest.js';
 
 interface Piece { readonly id: string; readonly text: string }
 
@@ -117,7 +117,7 @@ export function machineTellRule(all: readonly string[], opts: { anyUse?: boolean
 export function deriveContrastRules(
   read: readonly Piece[], held: readonly Piece[], drafts: readonly string[], provenance: Requirement['provenance'],
 ): MeasuredProposal[] {
-  if (read.length < 3) return [];
+  if (read.length < MIN_PIECES_TO_COUNT) return [];
   // Without the model's drafts, only the rules measured on the author alone are proposed: the tell floor,
   // register, and the contrastive verdict. Every rule that claims a gap from the model needs its drafts.
   const compared = drafts.length >= 2;
@@ -130,6 +130,8 @@ export function deriveContrastRules(
   // THE AUTHOR'S OWN PIECES (read and held out, each once, never anything else): what a limit is fitted to.
   const own = [...read, ...held.filter((h) => !read.some((r) => r.id === h.id))].map((p) => p.text);
   const mayBreak = allowed(own.length, CORPUS_RULE_SHARE);
+  // Under five pieces, what is read is thin: shown, used to choose between drafts, and never blocking.
+  const thin = thinEvidence(own.length);
   const failingDrafts = (m: Measurement): { of: number; failing: number } => {
     const d = drafts.map((t) => measure(t, m)).filter((x) => x.verdict !== 'NOT_APPLICABLE');
     return { of: d.length, failing: d.filter((x) => x.verdict === 'VIOLATED').length };
@@ -178,7 +180,7 @@ export function deriveContrastRules(
     out.push({
       requirement: { requirementId: `c${n}`, statement: typeof said === 'function' ? said(measurement) : said, appliesWhen: 'GENERAL', kind, authority: 'DERIVED_UNRATIFIED', provenance,
         evidence, evidenceItemId: null, wouldBeAbsentIf: null, materiality: null, realizationTolerance: null, outputShape: null, wordedFromCheck: true, measurement },
-      conformance: { applicable, present, independent, ...(weak ? { weak: true } : {}), ...(fitted ? { fitted: true } : {}) },
+      conformance: { applicable, present, independent, ...(weak ? { weak: true } : {}), ...(fitted ? { fitted: true } : {}), ...(thin ? { thin } : {}) },
     });
   };
 
