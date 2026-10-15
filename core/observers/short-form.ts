@@ -276,6 +276,7 @@ export function shortFormTransfer(requirements: readonly Requirement[], limit: {
   const doesNotApply = new Map<string, string>();
   for (const r of requirements) {
     const m = r.measurement;
+    // GRAMMAR is never in LONG_FORM_COUNTED: a mechanical error is one in a tweet as in an essay, so it always holds.
     if (r.authority === 'EXPERT_REJECTED' || !m || !LONG_FORM_COUNTED.has(m.observer) || isBan(m) || stated(r)) continue;
     doesNotApply.set(r.requirementId, `a band counted off your longer pieces; this output is short form (at most ${limit.chars} characters, ${limit.from})`);
   }

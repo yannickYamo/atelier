@@ -167,14 +167,15 @@ const r3 = (x: number): number => Math.round(x * 1000) / 1000;
  */
 export function decide(input: ControllerInput, s: ControllerSettings | null = null): Decision | Stop {
   const set = controllerSettings(s);
-  const failedTwiceAt = (id: string): boolean => input.history.filter((d) => d.action === 'grammar' && d.targets.includes(id) && failed(d)).length >= 2;
+  // An in-place correction is deterministic: one that failed on a rule fails the same way again, so it is never repeated.
+  const grammarFailed = (id: string): boolean => input.history.some((d) => d.action === 'grammar' && d.targets.includes(id) && failed(d));
   const taken = input.history.filter((d) => CHOSEN.has(d.action)).length;
   const reachable = <T extends { id: string }>(xs: readonly T[]): T[] => xs.filter((x) => !input.unreachable.has(x.id));
   const enforced = reachable(input.enforced);
   const graded = reachable(input.graded).filter((g) => g.error !== 0)
     .sort((a, b) => Math.abs(b.error) - Math.abs(a.error) || a.id.localeCompare(b.id));
   // NOTHING MATERIAL LEFT: every enforced rule holds, no length is out, and no graded miss is over SETTLED_ERROR.
-  const grammar = (input.grammar ?? []).filter((id) => !input.unreachable.has(id) && !failedTwiceAt(id));
+  const grammar = (input.grammar ?? []).filter((id) => !input.unreachable.has(id) && !grammarFailed(id));
   if (!input.enforced.length && !input.length && !grammar.length && input.graded.every((g) => Math.abs(g.error) <= SETTLED_ERROR)) {
     return { kind: 'stop', why: input.graded.length ? `every enforced rule holds and no graded miss is over ${SETTLED_ERROR} band widths` : 'every enforced rule holds and nothing graded is off' };
   }
