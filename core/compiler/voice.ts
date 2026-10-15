@@ -18,6 +18,7 @@
 // Pieces reserved for blind testing never reach this module: callers pass readable pieces only.
 
 import type { ScopeProfile } from './scope.js';
+import type { TraitClass } from '../composite/traits.js';
 import { paragraphsOf, wordsOf, quantile } from '../observers/text.js';
 import { functionProfile, proseWords, patternRate, FUNCTION_WORDS, type PatternId } from '../observers/style.js';
 import type { Persona } from './persona.js';
@@ -55,6 +56,53 @@ export interface Voice {
   readonly pieceBudget?: number;
   /** how the author sounds, described with frequencies and proven by quotes (./persona.ts) */
   readonly persona?: Persona;
+  /**
+   * A COMPOSITE VOICE (core/composite): the skill was built from pieces by several authors, and the owner chose what
+   * to take from each. The "how I sound" section is written from these traits, never from one author's description;
+   * `pieceAuthors` names the writer of each served piece, so no piece is read as the whole voice.
+   */
+  readonly composite?: CompositeVoice;
+  /**
+   * EVERY PIECE OF EVERY CHOSEN AUTHOR, for the copying check alone (cli/eval-run.ts): a phrase lifted from any of them
+   * is copying, served or not. Kept with the stored voice, never in a package.
+   */
+  readonly guardPieces?: readonly string[];
+}
+
+/**
+ * WHAT AN OUTPUT IS CHECKED FOR COPYING AGAINST: the passages and pieces the skill serves and, for a composite, every
+ * piece of every author it was combined from, served or not. A sentence lifted from any of them is copying.
+ */
+export const copyGuardPieces = (voice: Pick<Voice, 'passages' | 'pieces' | 'guardPieces'> | null | undefined): string[] => {
+  const served = [...(voice?.passages ?? []), ...(voice?.pieces ?? [])];
+  return [...served, ...(voice?.guardPieces ?? []).filter((p) => !served.includes(p))];
+};
+
+export interface CompositeVoice {
+  readonly authors: readonly { readonly name: string; readonly classes: readonly TraitClass[]; readonly traits: readonly string[] }[];
+  /** the author of each entry of `pieces`, in order */
+  readonly pieceAuthors: readonly string[];
+}
+
+/**
+ * ONE PIECE FROM EACH CHOSEN AUTHOR, within a budget (core/composite). Not the spanning choice over the pool, which
+ * would take two of one writer and none of another: each author's most typical piece of their own (one, when they
+ * have one), in author order, as excerpts by default, while the budget allows. The budget is shared equally, and
+ * what one author's piece leaves is not given to the next, so no author is served more than another.
+ */
+export function selectCompositePieces(groups: readonly { readonly author: string; readonly pieces: readonly string[] }[], budgetWords: number, form: PieceForm = 'excerpts'): { author: string; text: string }[] {
+  const chosen = groups.filter((g) => g.pieces.length);
+  if (!chosen.length || budgetWords <= 0) return [];
+  const share = Math.floor(budgetWords / chosen.length);
+  return chosen.flatMap((g) => {
+    const score = g.pieces.length >= 3 ? typicality(g.pieces) : () => 0;
+    const ordered = g.pieces.map((t) => t).sort((a, b) => score(a) - score(b));
+    for (const piece of ordered) {
+      const shown = form === 'excerpts' ? excerptOf(piece) : piece;
+      if (shown.trim() && exportWords(shown) + exportWords(pieceLabel(1, form === 'excerpts' && isExcerpt(shown), g.author)) <= share) return [{ author: g.author, text: shown }];
+    }
+    return [];
+  });
 }
 
 /**
@@ -228,8 +276,9 @@ export const isExcerpt = (piece: string): boolean => piece.includes(EXCERPT_GAP)
  * file holds: a model told it holds a whole piece takes a cut for the ending, and one told it holds passages looks
  * for a cut that is not there.
  */
-export const pieceLabel = (n: number, cut: boolean): string =>
-  `[voice-${n}] ${cut ? `Passages from one piece of mine (its opening and a part from its middle; ${EXCERPT_GAP} marks what is left out)` : 'One whole piece of mine'}, for how I sound. Not content: never reuse its topic, facts, names, figures, sentences or coined terms.`;
+export const pieceLabel = (n: number, cut: boolean, author?: string): string => (author
+  ? `[voice-${n}] ${cut ? `Passages from one piece by ${author} (its opening and a part from its middle; ${EXCERPT_GAP} marks what is left out)` : `One whole piece by ${author}`}, one of the writers this voice is combined from. Take from it only the trait named for ${author} in SKILL.md. Not content, and not words: never reuse its topic, facts, names, figures, sentences, phrases or coined terms.`
+  : `[voice-${n}] ${cut ? `Passages from one piece of mine (its opening and a part from its middle; ${EXCERPT_GAP} marks what is left out)` : 'One whole piece of mine'}, for how I sound. Not content: never reuse its topic, facts, names, figures, sentences or coined terms.`);
 
 /**
  * WORDS, IN ANY SCRIPT. The counted checks read English and count Latin words (`wordsOf`); measured that way a
