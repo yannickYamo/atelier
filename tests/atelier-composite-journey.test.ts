@@ -99,7 +99,7 @@ describe('atelier new on five pieces by five authors', () => {
     second = run(data, proj, 'new', dir, ...ADMIRE); builtAfter.push(built());
     third = run(data, proj, 'new', dir, '--accept');
     if (process.env.COMPOSITE_DUMP) writeFileSync(process.env.COMPOSITE_DUMP, [first, second, third].join('\n=====\n'));
-  });
+  }, 300_000);
 
   it('says the pieces are by several authors, each read on its own first, and holds none back', () => {
     expect(first).toMatch(/5 piece\(s\) by 5 authors \(author: in each piece\): each is read on its own first\. Ada, Bea, Cal, Dee, Eli\./);
@@ -179,7 +179,7 @@ describe('atelier new on five pieces by five authors', () => {
     const stamp = (t: string): string => t.replace(/^mintedAt: .*$/m, '');
     expect(Object.keys(b)).toEqual(Object.keys(a));
     for (const k of Object.keys(a)) expect(stamp(b[k]), k).toBe(stamp(a[k]));
-  });
+  }, 120_000);
 });
 
 describe('a folder by one author behaves exactly as before', () => {

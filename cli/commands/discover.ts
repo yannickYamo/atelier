@@ -201,16 +201,17 @@ export async function discover(): Promise<void> {
   // the person named is not swapped behind their back: that stops with the setting to change.
   let usedModel = proposerModel();
   /**
-   * THE RULES READ FROM `items`, with the roles `goldens` gives them: the chain where the split allows it, one pass over
+   * THE RULES READ FROM `openItems`, with the roles `openGoldens` gives them: the chain where the split allows it, one pass over
    * every piece otherwise. Ids are numbered from `base`, so pieces by several authors, each read on their own
    * (core/composite), take one numbering. `who` names the author, and the step then reports in one line.
    */
-  const readRules = async (items: typeof openItems, goldens: typeof openGoldens, base: number, who: string | null):
+  // The parameters keep the names of what they are given: the open pieces (never the reserve), or one author's share of them.
+  const readRules = async (openItems: readonly { id: string; text: string }[], openGoldens: typeof importPlan.goldens, base: number, who: string | null):
   Promise<{ proposals: Requirement[]; proposalMeta: Record<string, ProposalMeta>; heldOutChecked: boolean; heldOutIds: readonly string[] | null }> => {
   let proposals: Requirement[]; let proposalMeta: Record<string, ProposalMeta>; let heldOutChecked = true;
   let chain: Awaited<ReturnType<typeof runDiscoveryChain>>;
   try {
-    chain = await runDiscoveryChain(client, budget, 'skill', items, goldens, { standardDimensions: [ev.workType] }, usedModel);
+    chain = await runDiscoveryChain(client, budget, 'skill', openItems, openGoldens, { standardDimensions: [ev.workType] }, usedModel);
   } catch (e) {
     const retry = discoveryRetry(e, proposerIsDefault());
     // THE NEXT MODEL THAT IS NOT THE ONE THAT DECLINED. With one model named for everything (ATELIER_MODEL, --model),
@@ -226,7 +227,7 @@ export async function discover(): Promise<void> {
       : `\n${usedModel}, the default reader, is not served by this backend; reading your work with ${fallbackModel} instead. The record names the model that read it.`);
     usedModel = fallbackModel;
     client = clientFor(fallbackModel);
-    chain = await runDiscoveryChain(client, budget, 'skill', items, goldens, { standardDimensions: [ev.workType] }, usedModel);
+    chain = await runDiscoveryChain(client, budget, 'skill', openItems, openGoldens, { standardDimensions: [ev.workType] }, usedModel);
   }
 
   if ('refused' in chain) {
@@ -237,11 +238,11 @@ export async function discover(): Promise<void> {
     //
     // When the corpus was too thin to assign roles at all, `goldens` is empty and there is nothing
     // to filter BY — every readable piece is a candidate, which is the honest reading of that state.
-    const goldenIds = new Set(goldens.map((g) => g.contextId));
+    const goldenIds = new Set(openGoldens.map((g) => g.contextId));
     const skillIds = new Set([importPlan.existingSkillId].filter((x): x is string => Boolean(x)));
     const forProposal = goldenIds.size
-      ? items.filter((i) => goldenIds.has(i.id))
-      : items.filter((i) => !skillIds.has(i.id));
+      ? openItems.filter((i) => goldenIds.has(i.id))
+      : openItems.filter((i) => !skillIds.has(i.id));
 
     if (who) console.log(`${who}: ${forProposal.length} piece(s), read in one pass; too few to check a rule on work the reader had not seen.`);
     else console.log(`\nNot enough to validate against: ${chain.detail}`);
@@ -315,7 +316,7 @@ export async function discover(): Promise<void> {
       // that is not in the named piece is a fabrication with a citation attached — exactly the shape
       // this system refuses elsewhere. A rule keeps its span or keeps none.
       ...(() => {
-        const a = anchoredQuote(h.hypothesis.quote, items);
+        const a = anchoredQuote(h.hypothesis.quote, openItems);
         return { evidence: a?.quote ?? null, evidenceItemId: a?.itemId ?? h.hypothesis.provenance.fromGoldens[0] ?? null };
       })(),
       // Collected and validated non-empty by the discovery contract since the chain was built, and
@@ -338,6 +339,11 @@ export async function discover(): Promise<void> {
   // (contrast), the fidelity profile and the signals are pooled measures, and are not made here. Then a free pass
   // sorts the proposals into shared, unique, conflicting and task-dependent (core/composite/traits.ts), for the
   // composite screen `atelier new` shows next.
+  // ONE PLACE THE PAID-FOR READING IS SAVED, whichever path made it: two call sites would let a later edit persist on
+  // one and not the other.
+  const persist = (heldOutPieces: number | null): void => {
+    saveSession({ ...s, run: { ...(t as { run: Run }).run, heldOutChecked, ...(heldOutPieces !== null ? { heldOutPieces } : {}) }, proposals, proposalMeta });
+  };
   if (s.authors) {
     const authors = s.authors;
     proposals = []; proposalMeta = {}; heldOutChecked = true; let heldOutPieces = 0; let mBase = 0; let pBase = 0;
@@ -368,7 +374,7 @@ export async function discover(): Promise<void> {
     }
     const table = buildTraitTable(proposals, (id) => proposalMeta[id]?.source, (a) => lengthClass[a] ?? null);
     writeAtomic(runFile('trait-table.json'), JSON.stringify(table, null, 1));
-    saveSession({ ...s, run: { ...(t as { run: Run }).run, heldOutChecked, ...(heldOutPieces ? { heldOutPieces } : {}) }, proposals, proposalMeta });
+    persist(heldOutPieces || null);
     for (const f of ['signals.json', 'fidelity.json', 'retrieval.json', 'typicality.json']) rmSync(runFile(f), { force: true });
     const n = (k: string): number => table.rows.filter((r) => r.kind === k).length;
     console.log(`Read. ${proposals.length} rule(s) from ${authors.names.length} authors, each on its own: ${n('SHARED')} shared, ${n('UNIQUE')} unique to one, ${n('CONFLICTING')} conflicting, ${n('TASK_DEPENDENT')} task-dependent. Discovery cost $${budget.spentUsd.toFixed(2)}.`);
@@ -427,7 +433,7 @@ export async function discover(): Promise<void> {
   // become proposed caps and floors, each checked on held-out pieces first; see core/observers/contrast.ts.
   // Saved BEFORE the optional comparison: whatever happens to it, the discovery already paid for is kept.
   // How many pieces the rules were checked against: what a move's "seen in N pieces" is counted over at build.
-  saveSession({ ...s, run: { ...(t as { run: Run }).run, heldOutChecked, ...(read0.heldOutIds ? { heldOutPieces: read0.heldOutIds.length } : {}) }, proposals, proposalMeta });
+  persist(read0.heldOutIds ? read0.heldOutIds.length : null);
   // THE SIGNALS ARE THIS STEP'S OR NONE. Build installs whatever signals.json the run holds, so one left
   // by an earlier discovery would be installed after a comparison that failed, or never ran
   // (--no-contrast), as if this one had found them.
