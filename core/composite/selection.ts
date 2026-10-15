@@ -595,11 +595,24 @@ export function describeComposite(c: CompositeRecord, statementOf: (id: string) 
     return d.range && m ? restateLimits(statementOf(d.id), m, d.range) ?? statementOf(d.id) : statementOf(d.id);
   };
   const selected = c.decisions.filter((d) => d.outcome === 'SELECTED' && !d.mergedInto);
-  out.push(`Your composite: ${selected.length} rule(s) chosen from ${new Set(selected.map((d) => d.author)).size} of ${c.authors.length} authors. It is your combination, not any one author and not their average.`);
-  out.push('What you chose from an author instructs the writer once you accept (a counted one steers the drafts and never fails one); everything else is shown or set aside.');
+  // INFERRED (./infer.ts): nothing was chosen by anyone, and the screen says what was taken, not what "you chose".
+  const inferred = Boolean(c.inference);
+  if (inferred) {
+    out.push(`The composite: ${selected.length} rule(s) taken from ${new Set(selected.map((d) => d.author)).size} of ${c.authors.length} voices, each voice's most characteristic. Not any one voice, and not their average.`);
+    out.push('What was taken instructs the writer (a counted one steers the drafts and never fails one); everything else is shown or set aside.');
+  } else {
+    out.push(`Your composite: ${selected.length} rule(s) chosen from ${new Set(selected.map((d) => d.author)).size} of ${c.authors.length} authors. It is your combination, not any one author and not their average.`);
+    out.push('What you chose from an author instructs the writer once you accept (a counted one steers the drafts and never fails one); everything else is shown or set aside.');
+  }
   for (const a of c.authors) {
     const mine = selected.filter((d) => d.author === a.name);
     const classes = [...new Set(mine.map((d) => d.cls))].map((k) => TRAIT_LABEL[k]);
+    if (inferred) {
+      if (!mine.length) { out.push(`  ${a.name}: nothing characteristic enough of this voice alone was taken.`); continue; }
+      out.push(`  From ${a.name}: ${classes.join('; ')}${a.admired ? `  ("${a.admired}")` : ''}`);
+      for (const d of mine) out.push(`      ${d.id.padEnd(4)} ${shownAs(d)}${d.kind === 'UNIQUE' ? '   (this voice alone)' : d.kind === 'SHARED' ? '   (shared with another voice)' : ''}${d.range ? '   (as one range with the other side)' : ''}${d.shownOnly ? '   (shown, not instructed)' : ''}`);
+      continue;
+    }
     if (!a.admired && !mine.length) { out.push(`  ${a.name}: nothing said, so nothing is taken from this author alone.`); continue; }
     if (!mine.length) {
       // What carries it may be there, and held in a conflict still open (said, with the conflicts to answer), or set
@@ -622,7 +635,7 @@ export function describeComposite(c: CompositeRecord, statementOf: (id: string) 
   }
   if (c.notes?.length) out.push('', ...c.notes);
   if (c.conflicts.length) {
-    out.push('', `Conflicts between authors (${c.conflicts.length}): never averaged, and never guessed.`);
+    out.push('', inferred ? `Clashes between voices (${c.conflicts.length}): never averaged; each settled one way.` : `Conflicts between authors (${c.conflicts.length}): never averaged, and never guessed.`);
     const decided = new Map(c.decisions.map((d) => [d.id, d]));
     // "both (one range)" is offered only where the two sides make one range: two counted bands on one observer.
     const byN = new Map(c.conflicts.map((x) => [x.n, x]));
@@ -641,13 +654,14 @@ export function describeComposite(c: CompositeRecord, statementOf: (id: string) 
     }
   }
   if (c.methodology) {
-    out.push('', `Method (a proposal, read from your examples; not your method until you say so): ${c.methodology.steps.length} recurring move(s)`);
+    out.push('', inferred ? `Method (what every voice does): ${c.methodology.steps.length} move(s)`
+      : `Method (a proposal, read from your examples; not your method until you say so): ${c.methodology.steps.length} recurring move(s)`);
     for (const s of c.methodology.steps) out.push(`  ${s.id.padEnd(4)} ${s.statement}   (${s.author})`);
     out.push('  Your own method note is authoritative instead: atelier new <folder> --method <how-you-do-it.md>');
   }
   const habits = c.decisions.filter((d) => d.outcome === 'HABIT'); const rejected = c.decisions.filter((d) => d.outcome === 'REJECTED' && !d.mergedInto);
   out.push('', `Kept as habits, shown and not instructed (${habits.length}): ${habits.map((d) => d.id).join(', ') || 'none'}.`);
-  out.push(`Set aside, not what you chose (${rejected.length}): ${rejected.map((d) => d.id).join(', ') || 'none'}.`);
+  out.push(`${inferred ? 'Set aside' : 'Set aside, not what you chose'} (${rejected.length}): ${rejected.map((d) => d.id).join(', ') || 'none'}.`);
   return out;
 }
 

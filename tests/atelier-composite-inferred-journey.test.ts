@@ -141,6 +141,10 @@ describe('atelier new on ten pieces by five unnamed voices, with a model', () =>
     expect(inf.effectReadings).toEqual([id(RUN_EFFECT)]);
     const report = viaModel(data, proj, 'report', '--skill', 'mix');
     expect(report).toContain('HOW THE VOICES WERE COMBINED (inferred from the pieces; nothing was asked)');
+    // what instructs from whom, and how the clash stands, in the composite's own words
+    expect(report).toMatch(/THE COMPOSITE\n {2}The composite: \d+ rule\(s\) taken from 5 of 5 voices, each voice's most characteristic\./);
+    expect(report).toMatch(/A {2}voice 1: Use contractions throughout, in a casual register\.\n {8}B {2}voice 4: Never use contractions; keep a formal register\.\n {8}→ voice 4 \(the more characteristic\)/);
+    expect(report).not.toMatch(/you chose|you admired|answer with --conflict/);
     expect(report).toMatch(new RegExp(`${id(RUN_EFFECT)} +0\\.\\d\\d = [^\\n]*${RUN_EFFECT.replace('.', '\\.')} +\\(effect reading, not yet measured\\)`));
     expect(report).toMatch(/Read from what the writing does to a reader \(the effect reading\): p\d+\. Not yet measured/);
     expect(report).toMatch(/\d\. [^\n]*: voice 4's p\d+ stands, voice 1's p\d+ set aside\. voice 4's was more characteristic \(weight 0\.80 against 0\.40\)\./);

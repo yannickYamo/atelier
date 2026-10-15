@@ -197,7 +197,10 @@ export async function compositeReview(_opts: ReviewOptions = {}): Promise<boolea
   const inferred = inferredChoice(weights, authors, { requestLength: length, pieceLength: new Set(pending.filter((p) => lengthMeasuresOf(p).includes('piece')).map((p) => p.requirementId)) });
   const compAuthors: CompositeAuthor[] = authors.names.map((name) => ({ name, pieces: piecesOf(authors, name), admired: admire[name] ?? null, classes: liked[name] ?? [] }));
   // What the person said explicitly outranks inference: a hidden expert's answer to a clash, a --set.
-  const answered = { ...(s.conflictAnswers ?? {}), ...parseConflictAnswers(flagAll('--conflict'), Math.max(table.conflicts.length, 99)) };
+  // The numbers an expert may answer are the clashes as composed: the table's, then any the final guard finds.
+  const storedAnswers = Object.fromEntries(Object.entries(s.conflictAnswers ?? {}).filter((e): e is [string, ConflictAnswer] => e[1] !== null).map(([k, v]) => [Number(k), v]));
+  const numbered = composeSelection(table, pending, compAuthors, storedAnswers, { inferred }).conflicts.length;
+  const answered = { ...(s.conflictAnswers ?? {}), ...parseConflictAnswers(flagAll('--conflict'), Math.max(table.conflicts.length, numbered)) };
   if (JSON.stringify(answered) !== JSON.stringify(s.conflictAnswers ?? {})) { saveSession({ ...s, conflictAnswers: answered }); s = loadSession(); }
   const answers = Object.fromEntries(Object.entries(answered).filter((e): e is [string, ConflictAnswer] => e[1] !== null).map(([k, v]) => [Number(k), v]));
   const ids = new Set(pending.map((p) => p.requirementId));

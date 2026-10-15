@@ -29,6 +29,8 @@ import type { EvalSummary } from '../../core/eval/summary.js';
 import { DATA, die, argv, flag, positional, positionals, runFile } from '../runtime.js';
 import { readJson } from '../../core/state/read-json.js';
 import { describeInference } from '../../core/composite/infer.js';
+import { describeComposite } from '../../core/composite/selection.js';
+import { openLine } from './composite.js';
 
 /** The skill a run belongs to: named, or found by its id across the store. */
 function locate(id: string): { L: store.StoreLayout; rec: InvocationRecord } {
@@ -59,6 +61,15 @@ export function report(): void {
     const inference = composite?.inference ?? null;
     if (argv.includes('--json')) { console.log(JSON.stringify({ ...card, ...(repro ? { reproduction: repro } : {}), ...(inference ? { composite: inference } : {}) }, null, 1)); return; }
     console.log(renderSkillCard(card, process.stdout.columns || 110));
+    // A SKILL OF SEVERAL VOICES: what instructs from whom and how each clash stands, then, when it was inferred, every
+    // weight and every reason. An older composite built with questions still open says so.
+    if (composite) {
+      const std = store.getStandard({ root: DATA, skillName: name }, card.standardVersion);
+      const req = new Map((std?.requirements ?? []).map((r) => [r.requirementId, r]));
+      console.log(`\nTHE COMPOSITE\n${describeComposite(composite, (id) => req.get(id)?.statement ?? id, (id) => req.get(id)?.measurement ?? undefined).map((l) => `  ${l}`).join('\n')}`);
+      const open = openLine(composite).trim();
+      if (open) console.log(`  ${open}`);
+    }
     if (inference) {
       const outcome = new Map((composite?.decisions ?? []).map((d) => [d.id, d.outcome === 'SELECTED' ? (d.mergedInto ? 'in range' : 'taken') : d.outcome === 'HABIT' ? 'habit' : d.outcome === 'REJECTED' ? 'aside' : 'open']));
       console.log(describeInference(inference, (id) => outcome.get(id)).join('\n'));

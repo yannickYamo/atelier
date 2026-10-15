@@ -672,14 +672,12 @@ export interface Session {
   publicSource?: string | null;
   /** pieces by several authors (core/composite/authors.ts): who wrote which, read at intake. Absent for one author, which is every run before this. */
   authors?: AuthorMap | null;
-  /** what the person said they like about each author's pieces, by author, kept so a continuation need not repeat it */
+  /** what the person said they like about each voice's pieces (`--admire`, never asked for), by voice */
   admire?: Readonly<Record<string, string>> | null;
   /** how the admiration lines were read into trait classes, keyed by a hash of the lines: read once, kept for a continuation */
   admireRead?: { readonly key: string; readonly classes: Readonly<Record<string, readonly TraitClass[]>>; readonly via: 'MODEL' | 'KEYWORDS' } | null;
-  /** the answers given to the conflicts between authors, by number (null: left for later), kept until the composite is accepted */
+  /** an expert's answers to clashes between voices (`--conflict`, a hidden override), by number (null: left for later) */
   conflictAnswers?: Readonly<Record<number, 'A' | 'B' | 'both' | null>> | null;
-  /** a hash of the composite screen last printed: a continuation that would show the same screen need not print it again */
-  compositeShown?: string | null;
   /** the composite built (core/composite/selection.ts): which proposals from which voice, how every clash was settled, and the inference behind it */
   composite?: CompositeRecord | null;
   /** how the pieces were grouped by how they are written, when no author was declared (core/composite/voices.ts) */
