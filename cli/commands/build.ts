@@ -190,6 +190,7 @@ async function chooseVoice(L: store.StoreLayout, v: StandardVersion): Promise<Vo
     voice = { passages: [], lengthWords: usualLength(readable), pieces, ...(prefs.pieceForm ? { pieceForm: prefs.pieceForm } : {}), ...(wordBudget === undefined ? {} : { pieceBudget: wordBudget }) };
     if (pieces.length) console.log(`Voice: ${said(pieces)}. Turn off with --voice none.`);
     else if (wordBudget !== undefined && !answers) console.log(`Voice: ${none()}.`);
+    if (!voice.lengthWords && !answers) console.log('Length: your pieces vary too much in length to hold one, so none is set; a request that names one sets it.');
     if (compact) console.log(`(pieces served compact by default: ${COMPACT_PIECE_BUDGET_WORDS.toLocaleString('en-US')} words of excerpts, kept by later builds; --pieces whole --piece-budget default serves them whole.)`);
   } else if (voice && reselect) {
     // A skill built before keeps its pieces until the owner asks for others, and then they are chosen again from

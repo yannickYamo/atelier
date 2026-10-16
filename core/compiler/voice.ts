@@ -17,6 +17,7 @@
 //
 // Pieces reserved for blind testing never reach this module: callers pass readable pieces only.
 
+import { oneLength } from '../intake/length.js';
 import type { ScopeProfile } from './scope.js';
 import type { TraitClass } from '../composite/traits.js';
 import { paragraphsOf, wordsOf, quantile } from '../observers/text.js';
@@ -113,13 +114,19 @@ export function selectCompositePieces(groups: readonly { readonly author: string
 export function usualLength(pieces: readonly string[]): readonly [number, number] | null {
   const lengths = pieces.map((t) => proseWords(t)).filter((n) => n > 0);
   const round = (n: number): number => (n < 200 ? Math.max(10, Math.round(n / 10) * 10) : Math.round(n / 100) * 100);
-  return lengths.length >= 3 ? [round(quantile(lengths, 0.25)), round(quantile(lengths, 0.75))] as const : null;
+  if (lengths.length < 3) return null;
+  const q1 = quantile(lengths, 0.25); const q3 = quantile(lengths, 0.75);
+  // Pieces of very different lengths have no usual length: none is said, and the request sets it (`oneLength`).
+  return oneLength(q1, q3) ? [round(q1), round(q3)] as const : null;
 }
 
 /** The shortest and the longest of the author's pieces in prose words; null under three pieces, where one odd piece is a third of the evidence. */
 export function lengthSpan(pieces: readonly string[]): readonly [number, number] | null {
   const lengths = pieces.map((t) => proseWords(t)).filter((n) => n > 0);
-  return lengths.length >= 3 ? [Math.min(...lengths), Math.max(...lengths)] as const : null;
+  if (lengths.length < 3) return null;
+  const lo = Math.min(...lengths); const hi = Math.max(...lengths);
+  // a span that is no length in common holds nothing: no draft is chosen or written again toward it
+  return oneLength(lo, hi) ? [lo, hi] as const : null;
 }
 
 export const VOICE_PASSAGES = 3;

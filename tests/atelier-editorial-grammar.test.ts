@@ -20,7 +20,7 @@ describe('the editorial check beside a verified standard', () => {
     expect(stateLine(r)).toBe('Every requirement was read in full and held (1 of 1).');
     const card = renderRunCard({ record: r, costUsd: 0.1, seconds: 3, drafts: 1, done: [], invocationId: 'i1' }).join('\n');
     expect(card).toContain('── Evaluation · VERIFIED');
-    expect(card).toMatch(/·  No mechanical errors[^\n]*\n\s+grammar not checked: could not load: no wasm here/);
+    expect(card).toMatch(/· {2}No mechanical errors[^\n]*\n\s+grammar not checked: could not load: no wasm here/);
   });
   it('possible slips listed: verified, with each slip shown, never counted as held', () => {
     const r = record(`${GRAMMAR_LISTED}: 1 possible slip: "are" (subject–verb agreement)`);

@@ -14,7 +14,7 @@ import { tellOffers, grammarOffer, countedOffers } from '../core/method/standard
 import { GOOD } from './fixtures/shortform.js';
 import { ESSAYS_AND_LISTS } from './fixtures/composite/mixed-format.js';
 
-type Case = { id: string; reference: string };
+interface Case { id: string; reference: string }
 const asCases = (texts: readonly string[]): Case[] => texts.map((reference, i) => ({ id: `p${i}`, reference }));
 const blog = (): Case[] => readdirSync('examples/blog/posts').sort().map((f) => ({ id: f, reference: readFileSync(join('examples/blog/posts', f), 'utf8') }));
 /** Everything a build with no method and no model offers, as it offers it. */

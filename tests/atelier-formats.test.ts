@@ -26,7 +26,7 @@ describe('format profiles', () => {
     expect(r.failed).toBe(true);
   });
   it('a post on X has no assumed limit: a 2,000-character post passes the format check', () => {
-    const r = checkDraft('d', v, `${'A long post on X. '.repeat(115)}`, { format: FORMATS['x-post'], guardClaims: false });
+    const r = checkDraft('d', v, 'A long post on X. '.repeat(115), { format: FORMATS['x-post'], guardClaims: false });
     expect(r.checked.find((c) => c.requirementId === 'FORMAT')?.result.verdict).not.toBe('VIOLATED');
   });
 

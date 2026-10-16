@@ -248,6 +248,17 @@ export const statedLengths = (request: string): StatedLength[] => located(reques
  *
  * It applies in one context only, and the caller decides that (cli/commands/invoke.ts, `ownLengthApplies`).
  */
+/**
+ * ONE LENGTH, OR NONE. Pieces whose longest runs more than this many times their shortest have no length in common: a
+ * band read off them ("1 to 3,343 words") constrains nothing and says something false about the author. Then no
+ * length is offered, and the request's own length, where it names one, sets it.
+ */
+export const LENGTH_SPREAD = 4;
+/** Pieces within this many words of each other always share a length: two words and twelve are both a short answer. */
+export const LENGTH_SLACK_WORDS = 40;
+/** Do lengths this far apart, in words, hold one band: the longest at most LENGTH_SPREAD times the shortest, or close in words. */
+export const oneLength = (lo: number, hi: number): boolean => lo > 0 && (hi <= lo * LENGTH_SPREAD || hi - lo <= LENGTH_SLACK_WORDS);
+
 export function ownLengthBand(span: readonly [number, number] | null | undefined): readonly [number, number] | null {
   if (!span) return null;
   const [lo, hi] = span; const width = Math.max(1, hi - lo);

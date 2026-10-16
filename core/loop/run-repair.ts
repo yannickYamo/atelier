@@ -750,7 +750,7 @@ async function refineOnLedger(client: InferenceClient, budget: Budget, skill: st
    */
   // The fewest words the request asks for, when it names a length in words: no step takes the text further below it.
   const asked = opts.context?.request ? statedLength(opts.context.request) : null;
-  const askedFloor = asked && asked.unit === 'words' ? statedBounds(asked)[0] : null;
+  const askedFloor = asked?.unit === 'words' ? statedBounds(asked)[0] : null;
   const record = (d: PlannedStep, outcome: ControllerDecisionRecord['outcome'], movement: number, note?: string): void => {
     ledger.add({ action: d.action, targets: [...d.targets], why: d.why, expectedGain: d.expectedGain, expectedCostUsd: d.expectedCostUsd, outcome,
       observed: { movement: Math.round(movement * 1000) / 1000, calls: 0, usd: 0, ...(note ? { note } : {}) } });

@@ -703,11 +703,10 @@ async function takeStep<T extends Proposed>(ledger: StepLedger, plan: StepPlan, 
     || [...b.report.checked, ...after.report.checked].some((c) => c.requirementId === id && (c.observer === 'LENGTH' || c.observer === 'SHAPE')));
   const lost = survivalLoss(b.text, after.text, lengthCut) ?? belowAsked(b.text, after.text, lengthCut ? null : rule.floorWords ?? null);
   const unreadable = enforced.size ? [...enforced].filter((id) => lostToLength(b.report.checked.find((c) => c.requirementId === id), after.report.checked.find((c) => c.requirementId === id))) : [];
-  const why = lost ? lost
-    : unreadable.length ? `it would leave the text too short to check ${unreadable.join(', ')}`
+  const why = lost ?? (unreadable.length ? `it would leave the text too short to check ${unreadable.join(', ')}`
     : worse.length ? `it made ${worse.join(', ')} worse`
     : invented.length ? `it added ${invented.length === 1 ? 'a figure' : 'figures'} that neither the text before it, the request nor your material holds (${invented.join(', ')})`
-      : nearer && !nearer.length ? `it moved none of ${forE.join(', ')} nearer holding` : own;
+      : nearer && !nearer.length ? `it moved none of ${forE.join(', ')} nearer holding` : own);
   const kept = why === null;
   const note = rule.note ? rule.note(after, kept, why, { ...verdict, own }) : why ?? undefined;
   ledger.settle(at, kept ? 'kept' : 'not kept', { movement: r3(rule.movement?.(after, kept) ?? 0), ...spent, ...(note ? { note } : {}) });

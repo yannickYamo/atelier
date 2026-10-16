@@ -7,6 +7,31 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+### Fixed: the work is never cut away, and the verdict tells the truth
+
+- **No repair delivers less than was asked for.** A repair step, the cut of a sentence that is only a machine-writing
+  move, and the cut of invented claims now keep the work when a removal would leave no text. A repair step that would
+  leave under a quarter of the words, take the text below the length the request asks for (or further below it when the
+  draft was already short), or leave a required rule too short to check is not kept. A cut aimed at the requested
+  length, and a redraft that drops invented claims, may shorten the text deeply, but never to nothing. A flagged claim
+  kept so the text survives stays flagged, and the run fails on it in plain view.
+- **Grammar is editorial unless you make it yours.** The grammar check every skill carries lists possible slips, or says
+  it was not checked when the checker cannot load, on its own line; it never lowers the run's state. A run that holds
+  every rule you set reads VERIFIED with the slips shown beside it. Grammar you wrote into your own method stays
+  binding: a check that could not run, or could only list, is never read as passed.
+- **Only you make a rule required.** What a skill reads off your examples is a learned preference: it steers drafts and
+  chooses between them, and never blocks. Short-form shape bands (no hashtags, one sentence, a length band) are now
+  preferences; twenty posts without a hashtag no longer forbid one. Required rules come from your method, your
+  confirmation or `--set`, a platform limit you give, and the product's standing rules (no added AI tells, the dash cap).
+- **No character limit is assumed for posts on X.** Posts can run from a line to thousands of characters. A limit
+  applies only when you give one with `--limit`.
+- **A short output keeps the rules that fit it.** Whether a rule read from long pieces applies to a short output is now
+  decided rule by rule: a band counted off long pieces does not apply, a shape or rate read from short pieces does,
+  and one shape rule no longer turns the reading off for the rest of the standard.
+- **No length band that means nothing.** When your pieces' longest runs more than four times their shortest, no length
+  is offered: the build says your pieces vary too much in length to hold one, and a request that names a length sets
+  it. Pieces that agree keep their band.
+
 ### Changed: several voices are combined by inference, and nothing is asked
 
 "Here are nine pieces I like." `atelier new` no longer needs to be told who wrote which piece, and no longer asks what

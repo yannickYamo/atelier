@@ -23,7 +23,7 @@ import { MIN_PIECES_TO_COUNT, thinEvidence } from '../ratification/suggest.js';
 import { FEATURES, type Feature } from './features.js';
 import { pooledRateOf, pooledParams, POOLED_MIN_EVENTS, sayPooled, isShortForm, type PooledRate } from './pooled.js';
 import { shapeOf, SHAPE_LABEL, sayKind, countOf, type Shape, type ShapeId, type NumericShape, type KindShape } from './shape.js';
-import { ownLengthBand } from '../intake/length.js';
+import { ownLengthBand, oneLength } from '../intake/length.js';
 import { proseWordsOf, quantile } from './text.js';
 
 /**
@@ -89,7 +89,12 @@ export function shapeBandRules(texts: readonly string[], opts: { readonly limit?
   const of = (id: NumericShape): number[] => shapes.map((s) => s[id]);
   for (const id of BANDED) {
     const xs = of(id); const lo = Math.min(...xs); const hi = Math.max(...xs);
-    const band = id === 'characters' || id === 'words' ? ownLengthBand([lo, hi]) : countBand(lo, hi);
+    const isLength = id === 'characters' || id === 'words';
+    // Pieces of very different lengths hold no length band (`oneLength`): none is offered, and the screen says so.
+    // decided on words for both length bands: a slack in words is not one in characters
+    const ws = of('words');
+    if (isLength && !oneLength(Math.min(...ws), Math.max(...ws))) continue;
+    const band = isLength ? ownLengthBand([lo, hi]) : countBand(lo, hi);
     if (!band) continue;
     // A LIMIT SOME OF THE AUTHOR'S OWN PIECES RUN PAST is not folded into their band: the band stays their habit, as
     // every piece shows it, and the limit is stated beside it as the platform's rule.
@@ -182,6 +187,8 @@ export function shortFormBrief(texts: readonly string[], shapes: readonly ShapeB
 export function shortFormLimits(texts: readonly string[], shapes: readonly ShapeBandRule[], rates: readonly PooledRateRule[], limit: { readonly chars: number; readonly from: string } | null, answers = false): string[] {
   const out = [shortFormSummary(texts)];
   if (answers) out.push('These answer requests: their length and shape follow the request, so no band of either is held.');
+  const lengths = texts.map((t) => shapeOf(t).words).filter((n) => n > 0);
+  if (!answers && lengths.length && !oneLength(Math.min(...lengths), Math.max(...lengths))) out.push('Your pieces vary too much in length to hold one band: no length is set, and a request that names one sets it.');
   const steered = shapes.filter((s) => !s.platform && !s.limited);
   if (steered.length) out.push(`${steered.length} shape band${steered.length === 1 ? '' : 's'} (${steered.map((s) => SHAPE_LABEL[s.shape]).join(', ')}) read from ${texts.length} examples: drafts are steered toward ${steered.length === 1 ? 'it' : 'them'} and chosen by ${steered.length === 1 ? 'it' : 'them'}, never failed. Make one required with --set <id>=required.`);
   if (rates.length) out.push(`${rates.length} rate${rates.length === 1 ? '' : 's'} pooled over ${rates[0].pooled.words.toLocaleString('en-US')} words (${rates.slice(0, 4).map((r) => r.feature.label).join(', ')}${rates.length > 4 ? ', …' : ''}): a new piece is held to the count its length expects; shown and used to choose between drafts, never blocking.`);
@@ -275,10 +282,6 @@ export function isBan(m: Measurement): boolean {
   if (m.observer === 'HEADINGS') return has('avoid');
   return false;
 }
-
-/** Does a standard already describe short pieces: it holds a band of their shape. */
-export const isShortFormStandard = (requirements: readonly Pick<Requirement, 'measurement' | 'authority'>[]): boolean =>
-  requirements.some((r) => r.authority !== 'EXPERT_REJECTED' && r.measurement?.observer === 'SHAPE');
 
 /** A rule read from short pieces: a shape band, or a rate pooled over short pieces with no band of its own. It holds on a short output. */
 const readFromShortPieces = (m: Measurement): boolean => m.observer === 'SHAPE'
