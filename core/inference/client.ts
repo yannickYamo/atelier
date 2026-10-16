@@ -199,12 +199,6 @@ export interface InferenceResult {
   /** the thinking setting this call was sent with: 'disabled', or null when the endpoint refused the field */
   readonly thinkingSent?: 'disabled' | null;
   /**
-   * How many thinking blocks the response held, as the provider returned them (Anthropic's thinking and redacted
-   * thinking blocks; an OpenAI-compatible backend's reasoning text). Every call is sent with thinking off, so a
-   * count above zero says the setting did not hold. Absent from a provider that does not say.
-   */
-  readonly thinkingBlocks?: number;
-  /**
    * The model the PROVIDER says answered, not the one we asked for. An alias resolves server-side,
    * and a binding that recorded the request would be recording our intent rather than what ran.
    */
@@ -235,6 +229,12 @@ export interface InferenceResult {
    * built on this works on some backends and has to say so rather than fail quietly on the others.
    */
   readonly logprobs?: readonly TokenLogprobs[] | null;
+  /**
+   * How many thinking blocks the response held, as the provider returned them (Anthropic's thinking and redacted
+   * thinking blocks; an OpenAI-compatible backend's reasoning text). Every call is sent with thinking off, so a
+   * count above zero says the setting did not hold. Absent from a provider that does not say.
+   */
+  readonly thinkingBlocks?: number;
 }
 
 /** One emitted token and the alternatives the model weighed against it at that position. */
