@@ -699,9 +699,14 @@ async function takeStep<T extends Proposed>(ledger: StepLedger, plan: StepPlan, 
   // read unreadable (the text now too short for it), is not kept. A cut aimed at a length is exempt from the share.
   // Exempt from the share, never from emptiness: a step aimed at a length (the request's, or the length a draft is cut
   // to), and a redraft whose purpose is to drop invented claims.
+  // EXEMPT FROM THE SHARE, NEVER FROM THE FLOOR THE REQUEST NAMES. A 1,300-word draft of a 1,000-word analysis may be cut
+  // down to the request's band, never through it: a length step aimed at the request is the step most likely to
+  // overshoot, so it is the last one to exempt. A claim redraft is held to the floor too: dropping an invented claim may
+  // shorten the piece, but not below what was asked; when it would, the redraft is not kept and the claim stays listed
+  // for the person, which is the truthful outcome (no repair delivers less than was asked).
   const lengthCut = plan.action === 'claim-redraft' || plan.targets.some((id) => id === 'request-length' || id === 'length'
     || [...b.report.checked, ...after.report.checked].some((c) => c.requirementId === id && (c.observer === 'LENGTH' || c.observer === 'SHAPE')));
-  const lost = survivalLoss(b.text, after.text, lengthCut) ?? belowAsked(b.text, after.text, lengthCut ? null : rule.floorWords ?? null);
+  const lost = survivalLoss(b.text, after.text, lengthCut) ?? belowAsked(b.text, after.text, rule.floorWords ?? null);
   const unreadable = enforced.size ? [...enforced].filter((id) => lostToLength(b.report.checked.find((c) => c.requirementId === id), after.report.checked.find((c) => c.requirementId === id))) : [];
   const why = lost ?? (unreadable.length ? `it would leave the text too short to check ${unreadable.join(', ')}`
     : worse.length ? `it made ${worse.join(', ')} worse`

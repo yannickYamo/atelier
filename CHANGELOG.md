@@ -43,8 +43,9 @@ The release Phase F tests. Each area below is detailed in the sections that foll
   move, and the cut of invented claims now keep the work when a removal would leave no text. A repair step that would
   leave under a quarter of the words, take the text below the length the request asks for (or further below it when the
   draft was already short), or leave a required rule too short to check is not kept. A cut aimed at the requested
-  length, and a redraft that drops invented claims, may shorten the text deeply, but never to nothing. A flagged claim
-  kept so the text survives stays flagged, and the run fails on it in plain view.
+  length, and a redraft that drops invented claims, may shorten the text deeply, but never to nothing and never below
+  the length the request asks for: a 1,300-word draft of a 1,000-word analysis may be cut to 1,050 words, not to 700.
+  A flagged claim kept so the text survives stays flagged, and the run fails on it in plain view.
 - **Grammar is editorial unless you make it yours.** The grammar check every skill carries lists possible slips, or says
   it was not checked when the checker cannot load, on its own line; it never lowers the run's state. A run that holds
   every rule you set reads VERIFIED with the slips shown beside it. Grammar you wrote into your own method stays

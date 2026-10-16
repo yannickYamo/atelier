@@ -38,6 +38,33 @@ describe('1. a 1,000-word analysis is shortened by a repair', () => {
   });
 });
 
+describe('1b. a 1,000-word analysis drafted at 1,300 words is cut to its length', () => {
+  // The request asks for 1,000 words, held to its ten-per-cent band: 900 to 1,100. A cut aimed at the request's length
+  // may cut down to the band, never through it: 700 words is less than was asked; 1,050 is inside it.
+  const asked = statedLength('Write a 1,000-word analysis');
+  const floor = asked ? statedBounds(asked)[0] : null;
+  const AIMED = { action: 'redraft' as const, targets: ['request-length'], why: 'the draft is longer than asked', expectedGain: 1, expectedCostUsd: 0 };
+  it('a length step that takes it to 700 words is not kept, and says it is below what was asked', async () => {
+    expect(floor).toBe(900);
+    const r = await applyStep(stepLedger(null, null, [], ''), AIMED, { text: words(1300), report: read(words(1300)) },
+      async () => ({ text: words(700), report: read(words(700)) }), { purposes: ['repair'], floorWords: floor });
+    expect(r.kind === 'judged' && r.kept).toBe(false);
+    expect(r.kind === 'judged' ? r.why : '').toMatch(/below the 900 the request asks for/);
+  });
+  it('a claim redraft that would drop it to 700 words is held to the same floor', async () => {
+    const r = await applyStep(stepLedger(null, null, [], ''), { ...AIMED, action: 'claim-redraft' as const, targets: ['UNSOURCED'] },
+      { text: words(1300), report: read(words(1300)) },
+      async () => ({ text: words(700), report: read(words(700)) }), { purposes: ['repair'], floorWords: floor });
+    expect(r.kind === 'judged' && r.kept).toBe(false);
+    expect(r.kind === 'judged' ? r.why : '').toMatch(/below the 900 the request asks for/);
+  });
+  it('a length step from 1,300 to 1,050 words is kept', async () => {
+    const r = await applyStep(stepLedger(null, null, [], ''), AIMED, { text: words(1300), report: read(words(1300)) },
+      async () => ({ text: words(1050), report: read(words(1050)) }), { purposes: ['repair'], floorWords: floor });
+    expect(r.kind === 'judged' && r.kept).toBe(true);
+  });
+});
+
 describe('2. the grammar checker is unavailable', () => {
   it('the standard reads VERIFIED, and grammar is said to be not checked, never claimed', () => {
     const rule = aRequirement({ requirementId: 'x1', statement: 'Between 100 and 400 words.', provenance: 'EXPERT_STATED', authority: 'EXPERT_AUTHORED', materiality: 'REQUIRED', obligation: 'DELIVERABLE', measurement: { observer: 'LENGTH', params: { unit: ['words'], min: 100, max: 400 } } });
