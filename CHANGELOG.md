@@ -42,6 +42,17 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 - **No length band that means nothing.** When your pieces' longest runs more than four times their shortest, no length
   is offered: the build says your pieces vary too much in length to hold one, and a request that names a length sets
   it. Pieces that agree keep their band.
+- **A grammar check never reuses another file's reading.** The kept reading of a text is now keyed on the contents of
+  the material bound to it, not on the file names, so new notes under an old name protect their own terms. Wiring or
+  reloading the grammar checker starts afresh.
+
+### Added: the build names what it steers
+
+- **The build screen lists the features your examples taught.** A new section, "Steered toward your range on every
+  draft, never required", names each counted feature that steers drafts, in plain words, with its band, how many of
+  your pieces the band was read from, and why it acts: whether you use more or less of it than the model's drafts,
+  and in how many of 100 pairs that holds. The build shows the strongest six; `atelier report --skill <name>` lists
+  every one. Steering stays on by default.
 
 ### Changed: several voices are combined by inference, and nothing is asked
 
