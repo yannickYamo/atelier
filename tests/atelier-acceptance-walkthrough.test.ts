@@ -14,6 +14,8 @@ import { statedLength, statedBounds } from '../core/intake/length.js';
 import { tellOffers, grammarOffer, countedOffers } from '../core/method/standard.js';
 import { shortFormTransfer } from '../core/observers/short-form.js';
 import { groupByStyle } from '../core/composite/voices.js';
+import { measure } from '../core/observers/registry.js';
+import { statedFigureClaims } from '../core/loop/claims.js';
 import type { ControllerDecisionRecord, Requirement, StandardVersion } from '../core/state/canonical-state.js';
 import { aRequirement } from './fixtures.js';
 import { GOOD } from './fixtures/shortform.js';
@@ -60,6 +62,17 @@ describe('3. five short examples carry no hashtags', () => {
   });
 });
 
+describe('4. twenty tweets establish an author\'s voice', () => {
+  it('a tell they never use fails at tweet length; every one of their own tweets passes', () => {
+    const cases = GOOD.map((reference, i) => ({ id: `t${i}`, reference }));
+    const tell = tellOffers(cases).find((p) => p.measurement?.params.role)?.measurement;
+    expect(tell).toBeDefined();
+    if (!tell) return;
+    expect(measure('Shipping beats planning. Every time. No exceptions.', tell).verdict).toBe('VIOLATED');
+    expect(GOOD.filter((t) => measure(t, tell).verdict === 'VIOLATED')).toEqual([]);
+  });
+});
+
 describe('5. one tweet-shape rule beside long-form rules', () => {
   it('each rule keeps its scope on a short post: the long-form band does not apply, the shape rule does', () => {
     const req = (id: string, measurement: Requirement['measurement']): Requirement => aRequirement({ requirementId: id, statement: id, materiality: 'PREFERRED', ...(measurement ? { measurement } : {}) });
@@ -85,6 +98,14 @@ describe('7. a style change that would invent a figure', () => {
       async () => ({ text: after, report: read(after) }), { purposes: ['steering'] });
     expect(r.kind === 'judged' && r.kept).toBe(false);
     expect(r.kind === 'judged' ? r.why : '').toMatch(/added a figure .*\(37\)/);
+  });
+});
+
+describe('8. a review states a figure the material does not hold', () => {
+  it('the figure is listed for the person, and a line reference is not', () => {
+    const diff = 'diff --git a/retry.ts b/retry.ts\n+  retry(3)';
+    expect(statedFigureClaims('The change is correct. One risk: 95% of callers hit the retry path on line 40.', diff)).toHaveLength(1);
+    expect(statedFigureClaims('Line 40 adds the loop.', diff)).toEqual([]);
   });
 });
 
