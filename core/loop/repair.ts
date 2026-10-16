@@ -305,6 +305,16 @@ export function survivalLoss(before: string, after: string, lengthCut = false): 
   return null;
 }
 
+/**
+ * THE LENGTH THE PERSON ASKED FOR IS PART OF THE WORK. A change that takes the text below the fewest words the request
+ * asks for, or further below it when it was already short, delivers less than was asked. Why, or null.
+ */
+export function belowAsked(before: string, after: string, floor: number | null): string | null {
+  if (!floor) return null;
+  const was = proseWordsOf(before); const now = proseWordsOf(after);
+  return now < floor && now < was ? `it would take the text to ${now} words, below the ${floor} the request asks for` : null;
+}
+
 export function cutSpan(text: string, start: number, end: number): string {
   const before = text.slice(0, start).replace(/[ \t]+$/, ''); const after = text.slice(end).replace(/^[ \t]+/, '');
   return `${before}${before && after && !before.endsWith('\n') && !after.startsWith('\n') ? ' ' : ''}${after}`;
@@ -624,6 +634,8 @@ export interface StepRule<T extends Proposed> {
   readonly also?: (after: T, verdict: StepVerdict) => string | null | Promise<string | null>;
   /** the spend purposes the step's calls are charged under */
   readonly purposes: readonly SpendPurpose[];
+  /** the fewest words the request asks for, when it names a length: no step takes the text further below it */
+  readonly floorWords?: number | null;
   /** what the step moved, in the units of its expected gain */
   readonly movement?: (after: T, kept: boolean) => number;
   /** the note the record carries; absent, why it was not kept */
@@ -686,7 +698,7 @@ async function takeStep<T extends Proposed>(ledger: StepLedger, plan: StepPlan, 
   // NEVER LESS THAN WAS ASKED FOR, ON ANY PATH: a change that takes the work away, or makes a required rule it could
   // read unreadable (the text now too short for it), is not kept. A cut aimed at a length is exempt from the share.
   const lengthCut = plan.targets.some((id) => id === 'request-length' || [...b.report.checked, ...after.report.checked].some((c) => c.requirementId === id && (c.observer === 'LENGTH' || c.observer === 'SHAPE')));
-  const lost = survivalLoss(b.text, after.text, lengthCut);
+  const lost = survivalLoss(b.text, after.text, lengthCut) ?? belowAsked(b.text, after.text, lengthCut ? null : rule.floorWords ?? null);
   const unreadable = enforced.size ? [...enforced].filter((id) => lostToLength(b.report.checked.find((c) => c.requirementId === id), after.report.checked.find((c) => c.requirementId === id))) : [];
   const why = lost ? lost
     : unreadable.length ? `it would leave the text too short to check ${unreadable.join(', ')}`

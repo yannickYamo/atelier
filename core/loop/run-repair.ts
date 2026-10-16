@@ -4,6 +4,7 @@
 // if it breaks nothing that held and fixes at least one thing that did not (`acceptRepair`). Every
 // call is metered through the caller's budget. The standard is read, never written.
 
+import { statedLength, statedBounds } from '../intake/length.js';
 import { inRepairChain } from '../inference/step-guard.js';
 import type { CheckContext } from '../observers/registry.js';
 import type { InferenceClient, Budget } from '../inference/client.js';
@@ -746,13 +747,16 @@ async function refineOnLedger(client: InferenceClient, budget: Budget, skill: st
    * that always runs, and the claim cut (the claim check's own action, with its own guards). Every replacement of the
    * text is a step through `applyStep` (./repair.ts) instead.
    */
+  // The fewest words the request asks for, when it names a length in words: no step takes the text further below it.
+  const asked = opts.context?.request ? statedLength(opts.context.request) : null;
+  const askedFloor = asked && asked.unit === 'words' ? statedBounds(asked)[0] : null;
   const record = (d: PlannedStep, outcome: ControllerDecisionRecord['outcome'], movement: number, note?: string): void => {
     ledger.add({ action: d.action, targets: [...d.targets], why: d.why, expectedGain: d.expectedGain, expectedCostUsd: d.expectedCostUsd, outcome,
       observed: { movement: Math.round(movement * 1000) / 1000, calls: 0, usd: 0, ...(note ? { note } : {}) } });
   };
   /** ONE STEP (./repair.ts, `applyStep`): gated on the ledger, entered before it runs, held to the one acceptance rule with the standard's params */
   const step = <T extends Proposed>(plan: StepPlan, propose: (taken: (movement?: number) => void) => Promise<T | NoChange>, rule: Omit<StepRule<T>, 'enforced' | 'paramsOf' | 'purposes'> & { purposes?: readonly SpendPurpose[] }): Promise<StepResult<T>> =>
-    applyStep(ledger, plan, () => ({ text, report }), propose, { purposes: STEP_PURPOSES, ...rule, enforced: enforcedIds, paramsOf });
+    applyStep(ledger, plan, () => ({ text, report }), propose, { purposes: STEP_PURPOSES, floorWords: askedFloor, ...rule, enforced: enforcedIds, paramsOf });
   // THE ONE ACCEPTANCE RULE (./controller.ts, rule A) reads which way a rate is out from the standard's own params.
   const paramsOf = ruleParamsOf(v);
   const ledgerFrom = opts.controller?.ledgerFrom ?? ledgerBefore;
