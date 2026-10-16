@@ -7,6 +7,25 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+### This release, by area
+
+The release Phase F tests. Each area below is detailed in the sections that follow.
+
+- **Honest results.** One evaluation record per run: VERIFIED, NEEDS REVIEW or BLOCKED, and a mark never says more
+  than was checked. Grammar is editorial help that never lowers the verdict; only you make a rule required.
+- **Never less than asked.** No repair empties a draft, cuts it below the length the request asks for, or removes what
+  a required rule needs; invented claims are cut, never reworded, and a guessed figure is listed for you.
+- **Your method and your examples.** A method note becomes rules checked by code where code can hold them; examples
+  are served as passages; steered features and their bands are shown on the build screen.
+- **Short form.** Tweets and short posts are measured and steered by shape and pooled rates; machine-writing moves the
+  author never makes are banned at any length; no tweet length is assumed.
+- **Several writers.** Voices are found from the writing, combined by inference, and never asked about; every inferred
+  trait steers and never blocks.
+- **The repair loop.** One bounded controller, one step record, one acceptance rule for every change to the text.
+- **Lengths.** Drafts follow the request's length; a band is kept only where your pieces share a length.
+- **The comparison harness.** Every arm on the same model and limits, refused when it would mix arms or overspend;
+  scoring counts what was not delivered.
+
 ### Fixed: the work is never cut away, and the verdict tells the truth
 
 - **A tweet keeps your voice.** In a skill built from short pieces, a machine-writing move that none of your pieces
