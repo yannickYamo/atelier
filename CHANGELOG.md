@@ -95,6 +95,9 @@ The release Phase F tests. Each area below is detailed in the sections that foll
 - **A runtime arm's file is one version of its skill.** The version `invoke --json` reports is written into the
   manifest and on every row (`skill_version`); a skill rebuilt in place between two sittings stops the resumed run with
   nothing written, where its rows used to be appended under the same arm.
+- **One runner writes one output file.** A runner claims its output file (`<out>.lock`) before reading it, so two runners
+  started together on one path no longer both pass the manifest check and interleave their rows: the second exits with
+  nothing written. A lock left by a killed runner is not taken over; the message names the file to delete.
 - **Steering and grammar are on every row.** Each row says whether feature steering was on, read from the run's own
   record, and how the grammar check ran. `--graded none` declares a runtime arm without steering, so its benefit can be
   measured against the default.

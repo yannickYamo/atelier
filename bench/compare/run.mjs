@@ -62,6 +62,10 @@
 // `skillVersion` is written into the manifest and on every row as `skill_version`, and a later record (or a resume)
 // that names another version, or none, stops the arm (exit 2) before its row is written.
 //
+// ONE WRITER PER FILE. A runner claims its --out by creating `<out>.lock` before it reads the file, and removes it on
+// every way out (done, refused, an error, SIGINT, SIGTERM). A second runner on the same file exits 2 with nothing
+// written. A lock left by a killed runner is never taken over: delete the file the message names, then run again.
+//
 // A RUNTIME ARM IS HELD TO THE HARNESS. Its "args" may not name --model, --target-model, --max-tokens, --cap or
 // --graded (exit 2): the harness gives those. After each run, the record's model and token limit must be the
 // harness's and its steering the declared one, or the run stops (exit 2) and no row is written. Every runtime backend
@@ -77,7 +81,7 @@
 // --preflight also stops (exit 2) when the answer held a thinking block, or when the call's output tokens are far
 // above what the answer's length accounts for (thinking that was billed and not shown).
 
-import { readFileSync, existsSync, appendFileSync, mkdirSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { readFileSync, existsSync, appendFileSync, mkdirSync, mkdtempSync, writeFileSync, rmSync, openSync, writeSync, closeSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
@@ -392,6 +396,27 @@ const manifestPath = `${out}.manifest.json`;
 /** Every field where `a` and `b` differ, as "field: was → now". */
 const differences = (was, now, keys) => keys.filter((k) => JSON.stringify(was?.[k] ?? null) !== JSON.stringify(now[k] ?? null))
   .map((k) => `${k}: ${JSON.stringify(was?.[k] ?? null)} -> ${JSON.stringify(now[k] ?? null)}`);
+// ONE WRITER PER FILE. The manifest check below reads the file once: two runners started together on one new path both
+// found it empty, both passed, and both appended, two arms' rows in one file. So a runner claims the file before it reads
+// it, by creating `<out>.lock` exclusively, and holds it until it exits by any route (done, refused, an error, SIGINT,
+// SIGTERM). A lock already there is another runner's, or one a killed runner left: it is never taken over, because
+// "stale" cannot be told from "slow" from here; the message names the file to delete. The preflight writes nothing and
+// takes no lock.
+const lockPath = `${out}.lock`;
+const lockMark = `pid ${process.pid}, started ${new Date().toISOString()}\n`;
+if (!args.includes('--preflight')) {
+  mkdirSync(dirname(resolve(out)), { recursive: true });
+  let fd;
+  try { fd = openSync(lockPath, 'wx'); } catch (e) {
+    if (e?.code !== 'EEXIST') throw e;
+    let held = ''; try { held = readFileSync(lockPath, 'utf8').trim(); } catch { /* removed meanwhile: still not ours */ }
+    die(`another runner holds this file: ${lockPath} exists${held ? ` (${held})` : ''}. Wait for it to finish, or write this arm to its own --out file. If no runner is writing ${out} (one was killed), delete ${lockPath} and run again. Nothing was written.`);
+  }
+  writeSync(fd, lockMark); closeSync(fd);
+  process.on('exit', () => { try { if (readFileSync(lockPath, 'utf8') === lockMark) rmSync(lockPath, { force: true }); } catch { /* already gone */ } });
+  // a signal ends the process through 'exit', so the lock goes with it (128 + the signal's number, as a shell reports it)
+  for (const [sig, n] of [['SIGINT', 2], ['SIGTERM', 15], ['SIGHUP', 1]]) process.on(sig, () => { process.exit(128 + n); });
+}
 const existing = existsSync(out) ? readJsonl(out) : [];
 {
   const found = [];
@@ -415,7 +440,17 @@ const existing = existsSync(out) ? readJsonl(out) : [];
 // first row that had no record to read it from.
 const sealedManifest = () => (kind === 'atelier-runtime' ? { ...manifest, skill_version: sealedVersion } : manifest);
 const writeRow = (row) => {
-  const was = existsSync(manifestPath) ? JSON.parse(readFileSync(manifestPath, 'utf8')) : null;
+  // RECHECKED INSIDE THE LOCK BEFORE EVERY APPEND: the lock is still this runner's (not deleted and taken by another),
+  // and the manifest beside the file is still this arm's.
+  let mine = false; try { mine = readFileSync(lockPath, 'utf8') === lockMark; } catch { /* gone */ }
+  if (!mine) die(`${lockPath} is no longer this runner's (it was deleted, or another runner took it), so ${out} may have another writer. The row for ${row.case_id} was not written.`);
+  let was = null;
+  if (existsSync(manifestPath)) {
+    try { was = JSON.parse(readFileSync(manifestPath, 'utf8')); } catch { die(`${manifestPath} is no longer readable JSON. The row for ${row.case_id} was not written.`); }
+    const changed = differences(was, manifest, Object.keys(manifest));
+    if (kind === 'atelier-runtime' && was.skill_version && was.skill_version !== sealedVersion) changed.push(`skill_version: ${JSON.stringify(was.skill_version)} -> ${JSON.stringify(sealedVersion)}`);
+    if (changed.length) die(`${manifestPath} changed while this runner held ${out} (${changed.join('; ')}). The row for ${row.case_id} was not written.`);
+  }
   if (!was || (kind === 'atelier-runtime' && !was.skill_version && sealedVersion)) writeFileSync(manifestPath, `${JSON.stringify(sealedManifest(), null, 1)}\n`);
   appendFileSync(out, `${JSON.stringify(row)}\n`);
 };
@@ -425,7 +460,6 @@ const prior = existing.filter((r) => r.condition === condition);
 let spent = prior.reduce((n, r) => n + (r.cost_usd ?? 0), 0);
 // a two-call arm's cell costs two calls
 let perCall = Math.max(Number(opt(args, 'per-call', '0.25')) * (kind === 'self-review' ? 2 : 1), ...prior.filter((r) => !r.cost_estimated).map((r) => r.cost_usd ?? 0));
-mkdirSync(dirname(resolve(out)), { recursive: true });
 const c = kind === 'atelier-runtime' ? null : await client();
 const answerOf = (t) => (kind === 'atelier-runtime' ? runtimeArm(t, cap - spent) : kind === 'self-review' ? selfReviewArm(c, t) : modelArm(c, t));
 
