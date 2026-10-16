@@ -74,6 +74,54 @@ describe('a runtime arm\'s file holds one version of the skill', () => {
     expect(readFileSync(`${out}.manifest.json`, 'utf8')).toBe(manifestBefore);
   }, 180_000);
 
+
+  it('a cell a filter stopped before its record still carries the version, so a resume after a rebuild is refused', async () => {
+    const BY_TOOL = { emit_piece: { piece: 'The change is correct. One risk: the cache is never cleared.' }, emit_observation: { applicable: true, present: true, why: 'seen' } };
+    await fetch(`http://127.0.0.1:${port}/__set`, { method: 'POST', body: JSON.stringify({ byTool: BY_TOOL, when: [{ contains: 'Review change a.', finish: 'content_filter' }] }) });
+    try {
+      const dir = mkdtempSync(join(tmpdir(), 'atelier-compare-version-filtered-'));
+      const data = join(dir, 'data'); const proj = join(dir, 'proj');
+      mkdirSync(data); mkdirSync(proj);
+      writeFileSync(join(dir, 'tasks.jsonl'), `${JSON.stringify({ id: 'a', prompt: 'Review change a.' })}\n`);
+      writeFileSync(join(proj, 'example.md'), '# Review\n\nThe change is correct. One risk: the retry loop has no limit.\n');
+      writeFileSync(join(proj, 'method.md'), '1. Name the one risk that matters most.\n2. Say whether the change is correct.\n');
+      const env = { ...ENV, ATELIER_DATA: data, ATELIER_PROJECT_DIR: proj, ATELIER_PRICE_IN: '1', ATELIER_PRICE_OUT: '1' };
+      const build = (): void => {
+        const b = spawnSync(process.execPath, [CLI, 'new', join(proj, 'example.md'), '--method', join(proj, 'method.md'), '--name', 'rev', '--yes'], { cwd: proj, env, encoding: 'utf8' });
+        expect(b.status, b.stdout + b.stderr).toBe(0);
+      };
+      const active = (): string => (JSON.parse(readFileSync(join(data, 'skills', 'rev', 'active.json'), 'utf8')) as { skillVersionHash: string }).skillVersionHash;
+      build(); const first = active();
+      writeFileSync(join(dir, 'runtimes.json'), JSON.stringify({ s: { cli: CLI, data, proj, skill: 'rev',
+        args: ['--provider', 'openai-compatible', '--base-url', `http://127.0.0.1:${port}`, '--claims', 'pattern'] } }));
+      const out = join(dir, 'rt.jsonl');
+      const runner = (trials: string): { status: number | null; err: string } => {
+        const r = spawnSync(process.execPath, [RUN, '--tasks', join(dir, 'tasks.jsonl'), '--arm', 'atelier-runtime:s', '--runtimes', join(dir, 'runtimes.json'), '--out', out,
+          '--condition', 'atelier', '--model', 'scripted', '--trials', trials], { encoding: 'utf8', env });
+        return { status: r.status, err: r.stderr };
+      };
+      const one = runner('1');
+      expect(one.status, one.err).toBe(0);
+      expect(rows(out)).toHaveLength(1);
+      expect(rows(out)[0].filtered).toBeTruthy();
+      expect(rows(out)[0].skill_version).toBe(first);
+      writeFileSync(join(proj, 'method.md'), '1. Name the one risk that matters most.\n2. Say whether the change is correct.\n3. End with what to test next.\n');
+      build();
+      expect(active()).not.toBe(first);
+      const before = readFileSync(out, 'utf8');
+      const resumed = runner('2');
+      expect(resumed.status, resumed.err).toBe(2);
+      expect(resumed.err).toContain(first);
+      expect(resumed.err).toContain(active());
+      expect(readFileSync(out, 'utf8')).toBe(before);
+      // on the version it began with, the same file resumes past its filtered cell
+      writeFileSync(join(proj, 'method.md'), '1. Name the one risk that matters most.\n2. Say whether the change is correct.\n');
+    } finally {
+      await fetch(`http://127.0.0.1:${port}/__set`, { method: 'POST', body: JSON.stringify({ byTool: BY_TOOL, when: [] }) });
+    }
+  }, 180_000);
+
+
   it('a resume on the same version adds its rows, each carrying that version', () => {
     const dir = mkdtempSync(join(tmpdir(), 'atelier-compare-version-same-'));
     const data = join(dir, 'data'); const proj = join(dir, 'proj');

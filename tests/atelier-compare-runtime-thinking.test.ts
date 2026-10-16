@@ -16,7 +16,7 @@ const ran = (record: object): { status: number | null; stderr: string; out: stri
   const dir = mkdtempSync(join(tmpdir(), 'atelier-rt-thinking-'));
   // A stand-in for `atelier invoke --json`: prints a run record and exits 0.
   const cli = join(dir, 'fake-atelier.mjs');
-  writeFileSync(cli, `process.stdout.write(${JSON.stringify(JSON.stringify(record))});\n`);
+  writeFileSync(cli, `const REC = ${JSON.stringify(record)};\nif (process.argv[2] === 'inspect') { process.stdout.write('active SkillVersion ' + (REC.skillVersion ?? 'v1') + '\\n'); process.exit(0); }\nprocess.stdout.write(${JSON.stringify(JSON.stringify(record))});\n`);
   writeFileSync(join(dir, 'tasks.jsonl'), `${JSON.stringify({ id: 't1', prompt: 'Review this.' })}\n`);
   writeFileSync(join(dir, 'runtimes.json'), JSON.stringify({ b: { cli, data: dir, proj: dir, skill: 's', args: ['--provider', 'openai-compatible', '--base-url', 'http://127.0.0.1:1', '--price-in', '1', '--price-out', '1'] } }));
   const out = join(dir, 'out.jsonl');

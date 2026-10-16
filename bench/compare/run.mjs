@@ -318,14 +318,33 @@ function heldToHarness(t, rec) {
 // record, written into the manifest and on every row as `skill_version`, and a record that names another version, or
 // none, stops the arm before its row is written. Set at startup from the manifest (or the rows) already there.
 let sealedVersion = null;
+// READ BEFORE THE CALL, NOT ONLY FROM ITS RECORD: a cell a filter stopped before Atelier wrote its record names no
+// version, and a row with none could be resumed under a rebuilt skill. `atelier inspect` names the active version with
+// no model call, so every cell, delivered or filtered, is held to the version that was active when it ran.
+function activeVersion(t) {
+  const r = spawnSync(process.execPath, [resolve(runtimeSpec.cli), 'inspect', '--skill', runtimeSpec.skill], { cwd: runtimeSpec.proj,
+    env: { ...process.env, ATELIER_DATA: runtimeSpec.data, ATELIER_PROJECT_DIR: runtimeSpec.proj }, encoding: 'utf8', timeout: 60_000 });
+  const v = /active SkillVersion (\S+)/.exec(r.stdout ?? '')?.[1] ?? null;
+  if (!v) die(`${t.id}: could not read the active version of the skill "${runtimeSpec.skill}" (atelier inspect: ${(r.stderr || r.stdout || '').trim().split('\n')[0] || 'no output'}). No row was written.`);
+  return v;
+}
 function sealVersion(t, rec) {
   const said = typeof rec?.skillVersion === 'string' && rec.skillVersion ? rec.skillVersion : null;
   if (!said) die(`${t.id}: the runtime run's record does not say which version of the skill answered (skillVersion), so this file could not be held to one version. No row was written. Build the CLI from a commit whose invoke --json records skillVersion.`);
+  checkVersion(t, said);
+}
+function checkVersion(t, said) {
   if (sealedVersion === null) { sealedVersion = said; return; }
   if (said !== sealedVersion) die(`${t.id}: the skill answered as version ${said}, and ${out} holds rows of version ${sealedVersion}: the skill "${runtimeSpec.skill}" was rebuilt since this file was begun. No row was written. Write the new version to its own --out file, or put the build back to ${sealedVersion} to resume.`);
 }
 
 function runtimeArm(t, remaining) {
+  const before = activeVersion(t); checkVersion(t, before);
+  const r = runtimeCell(t, remaining);
+  if (r.skillVersion && r.skillVersion !== before) die(`${t.id}: the skill was version ${before} when the cell began and answered as ${r.skillVersion}: it was rebuilt during the run. No row was written.`);
+  return { ...r, skillVersion: before };
+}
+function runtimeCell(t, remaining) {
   const tmp = mkdtempSync(join(tmpdir(), 'compare-material-'));
   try {
     const withArgs = t.material ? (writeFileSync(join(tmp, 'material.md'), t.material), ['--with', `material=${join(tmp, 'material.md')}`]) : [];
@@ -431,9 +450,11 @@ const existing = existsSync(out) ? readJsonl(out) : [];
   if (kind === 'atelier-runtime') sealedVersion = was?.skill_version ?? existing.find((r) => r.skill_version)?.skill_version ?? null;
   existing.forEach((r, i) => {
     const d = differences(r, rowFixed, Object.keys(rowFixed));
-    if (kind === 'atelier-runtime' ? !sameModel(r.model) : r.model !== model) d.push(`model: ${JSON.stringify(r.model ?? null)} -> ${JSON.stringify(model)}`);
+    // a cell a filter stopped before its record names no model; the version read before it ran still holds it to this arm
+    if (kind === 'atelier-runtime' ? !(sameModel(r.model) || (r.filtered && r.model === null)) : r.model !== model) d.push(`model: ${JSON.stringify(r.model ?? null)} -> ${JSON.stringify(model)}`);
     if (kind === 'atelier-runtime' && !Object.hasOwn(r, 'skill_version')) d.push('skill_version: not recorded (written before the skill\'s version was sealed)');
-    else if (kind === 'atelier-runtime' && r.skill_version !== null && r.skill_version !== sealedVersion) d.push(`skill_version: ${JSON.stringify(r.skill_version)}, not the file's ${JSON.stringify(sealedVersion)}`);
+    else if (kind === 'atelier-runtime' && r.skill_version === null) d.push('skill_version: none (a cell filtered before its record, from a runner that did not read the version first)');
+    else if (kind === 'atelier-runtime' && r.skill_version !== sealedVersion) d.push(`skill_version: ${JSON.stringify(r.skill_version)}, not the file's ${JSON.stringify(sealedVersion)}`);
     if (d.length) found.push(`row ${i + 1} (${r.case_id ?? '?'}): ${d.join('; ')}`);
   });
   if (found.length) die(`${out} was written by another arm or with other settings, so nothing is added to it:\n  ${found.slice(0, 12).join('\n  ')}${found.length > 12 ? `\n  … and ${found.length - 12} more` : ''}\nWrite this arm to its own --out file. Nothing was written.`);

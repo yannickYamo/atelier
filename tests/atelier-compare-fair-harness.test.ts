@@ -108,7 +108,8 @@ describe('F8: one output file is one arm, with a manifest checked on every rerun
 /** A stand-in for `atelier invoke --json`: records its argv and prints the record given (exit 0). */
 const fakeRuntime = (dir: string, record: object, args: string[] = ['--provider', 'openai-compatible', '--price-in', '1', '--price-out', '1']): string => {
   writeFileSync(join(dir, 'cli.mjs'), `import { appendFileSync } from 'node:fs';
-appendFileSync(${JSON.stringify(join(dir, 'argv.jsonl'))}, JSON.stringify(process.argv.slice(2)) + '\\n');
+const REC = ${JSON.stringify(record)};
+if (process.argv[2] === 'inspect') { process.stdout.write('active SkillVersion ' + (REC.skillVersion ?? 'v1') + '\\n'); process.exit(0); }\nappendFileSync(${JSON.stringify(join(dir, 'argv.jsonl'))}, JSON.stringify(process.argv.slice(2)) + '\\n');
 process.stdout.write(${JSON.stringify(JSON.stringify(record))});\n`);
   writeFileSync(join(dir, 'runtimes.json'), JSON.stringify({ s: { cli: join(dir, 'cli.mjs'), data: dir, proj: dir, skill: 's', args } }));
   return join(dir, 'runtimes.json');

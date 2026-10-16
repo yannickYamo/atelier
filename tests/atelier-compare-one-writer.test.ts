@@ -18,7 +18,7 @@ const REC = { output: 'A review.', toCheck: [], costUsd: 0.01, model: 'claude-op
 const work = (ms: number, record: object = REC): string => {
   const dir = mkdtempSync(join(tmpdir(), 'atelier-one-writer-'));
   writeFileSync(join(dir, 'tasks.jsonl'), ['a', 'b'].map((id) => JSON.stringify({ id, prompt: `Review change ${id}.` })).join('\n') + '\n');
-  writeFileSync(join(dir, 'cli.mjs'), `Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ${ms});\nprocess.stdout.write(${JSON.stringify(JSON.stringify(record))});\n`);
+  writeFileSync(join(dir, 'cli.mjs'), `const REC = ${JSON.stringify(record)};\nif (process.argv[2] === 'inspect') { process.stdout.write('active SkillVersion ' + (REC.skillVersion ?? 'v1') + '\\n'); process.exit(0); }\nAtomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ${ms});\nprocess.stdout.write(${JSON.stringify(JSON.stringify(record))});\n`);
   writeFileSync(join(dir, 'runtimes.json'), JSON.stringify({ s: { cli: join(dir, 'cli.mjs'), data: dir, proj: dir, skill: 's', args: ['--provider', 'openai-compatible', '--price-in', '1', '--price-out', '1'] } }));
   return dir;
 };
