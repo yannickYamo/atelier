@@ -788,6 +788,9 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
       // as the provider said: the model that answered the writer's calls, and the thinking setting the run's calls were sent with
       model: [...new Set(callsSeen().filter((c) => c.role === 'target').map((c) => c.modelId))].join(', ') || (rec.observedRuntime?.resolvedModel ?? binding.requestedModel),
       thinking: thinkingOfCalls(callsSeen()),
+      // the writer's token limit, and whether the counted features steered this run ('all', the default) or not ('none'):
+      // what a comparison holds every arm to
+      maxTokens: draftMaxTokens(), steering: graded === undefined ? 'none' : 'all',
       // what a short-form request set down as not applying, said once (core/observers/short-form.ts)
       ...(transfer ? { note: transfer.said } : {}),
       ...(rec.fidelity ? { fidelity: { release: rec.fidelity.release, inBand: rec.fidelity.reading?.inBand ?? null, measured: rec.fidelity.reading?.measured ?? null,
