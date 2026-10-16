@@ -9,6 +9,17 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ### Fixed: the work is never cut away, and the verdict tells the truth
 
+- **A tweet keeps your voice.** In a skill built from short pieces, a machine-writing move that none of your pieces
+  makes is never allowed, at any length: "Shipping beats planning. Every time. No exceptions." now fails a skill whose
+  author never writes a run of very short sentences, where before it passed as too short to measure. A run is three
+  whole sentences, so the end of a long sentence no longer counts as a short one, and a move you make in any of your
+  short pieces stays yours.
+- **A guess is never presented as a fact.** With material bound, on a kind of work the claim check was not measured
+  on (a code review, a design note), a sentence that states a figure your material does not hold is listed for you to
+  check, with or without a word like "according to": "One risk: 95% of callers hit the retry path on line 40" over a
+  diff is now listed. Years, line references ("line 40", "L40", "client.ts:12"), numbers inside names, examples and
+  suppositions ("if 10% of users...", "say 5 retries"), and figures worked from two of your own are not. Nothing is
+  cut.
 - **No repair delivers less than was asked for.** A repair step, the cut of a sentence that is only a machine-writing
   move, and the cut of invented claims now keep the work when a removal would leave no text. A repair step that would
   leave under a quarter of the words, take the text below the length the request asks for (or further below it when the
