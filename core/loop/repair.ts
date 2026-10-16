@@ -26,6 +26,7 @@ import { isGrammarNote } from '../observers/grammar.js';
 import { processSpendByPurpose, spendBetween, type SpendPurpose } from '../inference/client.js';
 import type { PlannedStep, StepLedger } from './controller.js';
 import { inStep } from '../inference/step-guard.js';
+import { proseWordsOf } from '../observers/text.js';
 
 /** What a rewrite is told for a mechanical error no correction in place could fix: the error, and nothing else. */
 const GRAMMAR_HINT = 'Fix only the mechanical error named, in the fewest words; change no other word, and keep every figure, name and spelling the author chose';
@@ -232,7 +233,10 @@ export function applyRepair(text: string, targets: readonly RepairTarget[], repl
       // "not" the meaning guard protects, but no claim a reader loses when it goes. A cut is allowed for a
       // machine-writing move whose sentence carries no figure and no name; anything else keeps its words.
       if (!t.cuttable || numbersIn(t.text).length || namesIn(t.text).length) { reverted.push({ id: t.id, kind: 'CUT', lost: ['the sentence: only a sentence that is nothing but the move, with no figure or name in it, may be cut'] }); continue; }
-      out = cutSpan(out, t.start, t.end);
+      const cutTo = cutSpan(out, t.start, t.end);
+      // A cut that would leave no text at all is not a repair: the sentence stays, and its move is still reported.
+      if (proseWordsOf(text) > 0 && proseWordsOf(cutTo) === 0) { reverted.push({ id: t.id, kind: 'CUT', lost: ['the whole text: cutting this sentence would leave nothing'] }); continue; }
+      out = cutTo;
       applied.push({ id: t.id, before: t.text, after: '' });
       continue;
     }
@@ -287,6 +291,20 @@ export function seamRepeat(before: string, replacement: string, after: string, o
 }
 
 /** Remove `text[start, end)` and close the gap: one space between the two sides, or none across a line break. */
+/** Below this share of the words a text had, a change has taken the work, not repaired it. */
+export const SURVIVAL_SHARE = 0.25;
+/**
+ * NEVER DELIVER LESS THAN WAS ASKED FOR. Why a change from `before` to `after` takes the work away, or null: it leaves
+ * no prose at all, or, unless `lengthCut` (a cut aimed at a length the person or the standard set), under a quarter of
+ * the prose words `before` had.
+ */
+export function survivalLoss(before: string, after: string, lengthCut = false): string | null {
+  const was = proseWordsOf(before); const now = proseWordsOf(after);
+  if (was > 0 && now === 0) return 'it would leave no text at all';
+  if (!lengthCut && was >= 8 && now < Math.ceil(was * SURVIVAL_SHARE)) return `it would leave ${now} of ${was} words`;
+  return null;
+}
+
 export function cutSpan(text: string, start: number, end: number): string {
   const before = text.slice(0, start).replace(/[ \t]+$/, ''); const after = text.slice(end).replace(/^[ \t]+/, '');
   return `${before}${before && after && !before.endsWith('\n') && !after.startsWith('\n') ? ' ' : ''}${after}`;
@@ -665,7 +683,14 @@ async function takeStep<T extends Proposed>(ledger: StepLedger, plan: StepPlan, 
     ? enforcedNearer(b.report, after.report, [id], rule.paramsOf).length > 0 : rule.nearerOther?.(id, after) ?? false)) : null;
   const verdict: StepVerdict = { worse, invented, nearer };
   const own = await rule.also?.(after, verdict) ?? null;
-  const why = worse.length ? `it made ${worse.join(', ')} worse`
+  // NEVER LESS THAN WAS ASKED FOR, ON ANY PATH: a change that takes the work away, or makes a required rule it could
+  // read unreadable (the text now too short for it), is not kept. A cut aimed at a length is exempt from the share.
+  const lengthCut = plan.targets.some((id) => id === 'request-length' || [...b.report.checked, ...after.report.checked].some((c) => c.requirementId === id && (c.observer === 'LENGTH' || c.observer === 'SHAPE')));
+  const lost = survivalLoss(b.text, after.text, lengthCut);
+  const unreadable = enforced.size ? [...enforced].filter((id) => lostToLength(b.report.checked.find((c) => c.requirementId === id), after.report.checked.find((c) => c.requirementId === id))) : [];
+  const why = lost ? lost
+    : unreadable.length ? `it would leave the text too short to check ${unreadable.join(', ')}`
+    : worse.length ? `it made ${worse.join(', ')} worse`
     : invented.length ? `it added ${invented.length === 1 ? 'a figure' : 'figures'} that neither the text before it, the request nor your material holds (${invented.join(', ')})`
       : nearer && !nearer.length ? `it moved none of ${forE.join(', ')} nearer holding` : own;
   const kept = why === null;

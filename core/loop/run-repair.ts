@@ -26,7 +26,7 @@ import { applyOperator, operatorsToward, sitesOf, keepsWords } from '../fidelity
 import { SITES_PER_OPERATOR } from '../fidelity/structural.js';
 import { spanIntegrity } from './integrity.js';
 import { planRepair, repairPrompt, applyRepair, acceptRepair, addsNoWords, readAtLength, featureParamsOf, ruleParamsOf, cutSpan, applyStep, lostToLength, tooShort, unmeasuredIn, REPAIR_SYSTEM, REPAIR_SYSTEM_WITH_PLACEHOLDERS, REPAIR_SCHEMA,
-  type Reverted, type Applied, type RepairTarget, type Proposed, type NoChange, type StepPlan, type StepRule, type StepResult } from './repair.js';
+  survivalLoss, type Reverted, type Applied, type RepairTarget, type Proposed, type NoChange, type StepPlan, type StepRule, type StepResult } from './repair.js';
 import { keysOf, measurementId } from '../state/rule-key.js';
 import { mechanicalFixes, grammarFixes } from './mechanical-repair.js';
 import { ensureGrammar, readGrammar, isGrammarNote, grammarFixing, GRAMMAR_NOTE_SUFFIX } from '../observers/grammar.js';
@@ -373,6 +373,7 @@ export async function enforceClaims(skill: string, v: StandardVersion, text: str
   known?: VerifyReport, memory: ClaimMemory = claimMemory()): Promise<{ text: string; report: VerifyReport; cut: string[]; listed: string[]; kept: string[] }> {
   let report = memory.apply(text, known ?? await checkDraftAsync(skill, v, text, opts));
   const cut: string[] = []; const kept = new Set<string>();
+  const original = text;
   if (opts.guardClaims === false) return { text, report, cut, listed: [], kept: [] };
   for (let round = 0; round < 3; round++) {
     let spans = [...flaggedClaims(report)].sort((a, b) => b.start - a.start);
@@ -421,6 +422,9 @@ export async function enforceClaims(skill: string, v: StandardVersion, text: str
       // NO CUT EMPTIES A SECTION. The last sentence under a heading stays, still flagged: the check fails on it
       // and names it, which a person can act on. A heading over nothing passed as a section that was there.
       if (emptyHeadings(without) > emptyHeadings(next)) { kept.add(sp.text.trim().slice(0, 160)); continue; }
+      // NO CUT TAKES THE WORK AWAY. A cut that would leave no text, or under a quarter of the words the draft had, is
+      // not made: the sentence stays, still flagged, so the run fails on it in plain view instead of delivering nothing.
+      if (survivalLoss(original, without)) { kept.add(sp.text.trim().slice(0, 160)); continue; }
       const now = readIn(without);
       const after = notHeld(now, reading);
       // a rule broken before the cut and unreadable after it stays not held
