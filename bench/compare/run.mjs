@@ -427,6 +427,9 @@ const lockPath = `${out}.lock`;
 const lockMark = `pid ${process.pid}, started ${new Date().toISOString()}\n`;
 if (!args.includes('--preflight')) {
   mkdirSync(dirname(resolve(out)), { recursive: true });
+  // a signal ends the process through 'exit', so the lock goes with it (128 + the signal's number, as a shell reports it).
+  // Caught before the lock exists: a signal that came between the lock and its handler took the default and left the lock.
+  for (const [sig, n] of [['SIGINT', 2], ['SIGTERM', 15], ['SIGHUP', 1]]) process.on(sig, () => { process.exit(128 + n); });
   let fd;
   try { fd = openSync(lockPath, 'wx'); } catch (e) {
     if (e?.code !== 'EEXIST') throw e;
@@ -435,8 +438,6 @@ if (!args.includes('--preflight')) {
   }
   writeSync(fd, lockMark); closeSync(fd);
   process.on('exit', () => { try { if (readFileSync(lockPath, 'utf8') === lockMark) rmSync(lockPath, { force: true }); } catch { /* already gone */ } });
-  // a signal ends the process through 'exit', so the lock goes with it (128 + the signal's number, as a shell reports it)
-  for (const [sig, n] of [['SIGINT', 2], ['SIGTERM', 15], ['SIGHUP', 1]]) process.on(sig, () => { process.exit(128 + n); });
 }
 const existing = existsSync(out) ? readJsonl(out) : [];
 {
