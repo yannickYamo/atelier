@@ -85,7 +85,8 @@ The release Phase F tests. Each area below is detailed in the sections that foll
 
 - **harper.js is an optional dependency.** npm still installs it by default; an install without it builds, runs and
   verifies, the grammar line reads "grammar not checked: harper.js is not installed" with the command that turns it
-  on, and the verdict is unchanged.
+  on, and the verdict is unchanged. The suite is green without it too: the tests that read text with the real
+  engine are skipped with that reason, and run in full wherever it is installed.
 
 ### Added: the build names what it steers
 

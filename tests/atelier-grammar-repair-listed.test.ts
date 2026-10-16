@@ -6,7 +6,8 @@
 // And a space before a comma or a full stop is shown with the words around it, never as `"" → "(removed)"`.
 //
 // The engine is real (harper.js, offline).
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { it, expect, beforeAll, afterAll } from 'vitest';
+import { describeWithEngine } from './harper-engine.js';
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, existsSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -14,7 +15,7 @@ import { join, resolve } from 'node:path';
 import { setGrammarProvider, ensureGrammar, resetGrammar, setGrammarFixing, GRAMMAR } from '../core/observers/grammar.js';
 import { harperGrammar } from '../providers/harper.js';
 
-describe('a space before a comma or a full stop, as shown (real engine)', () => {
+describeWithEngine('a space before a comma or a full stop, as shown (real engine)', () => {
   beforeAll(async () => { resetGrammar(); setGrammarProvider(harperGrammar); await ensureGrammar(); }, 60_000);
   afterAll(() => { setGrammarFixing(false); });
   const text = 'We waited , and then left. It was done . Then we went home.';
@@ -35,7 +36,7 @@ describe('a space before a comma or a full stop, as shown (real engine)', () => 
   });
 });
 
-describe('verify --repair with only listed grammar findings (through the binary)', () => {
+describeWithEngine('verify --repair with only listed grammar findings (through the binary)', () => {
   const CLI = resolve('dist/cli/atelier.mjs');
   const PIECES = [
     'The team shipped the fix on Monday, and the panel held. Nobody asked for more.\n\nThe plan was simple: ship, watch, write it down.',

@@ -6,7 +6,8 @@
 // path, a trailing-off), "Bonjour !" and "Q : Where" (French and typographic spacing), "stoped" and "posible" (a word
 // of a trade, a word of Spanish), "we was" and "they was" (the levelled past of most British dialects). What is still
 // corrected in place is pinned beside them.
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { it, expect, beforeAll, afterAll } from 'vitest';
+import { describeWithEngine } from './harper-engine.js';
 import { setGrammarProvider, ensureGrammar, resetGrammar, readGrammar, grammarStatus } from '../core/observers/grammar.js';
 import { MISSPELLINGS } from '../core/observers/grammar-words.js';
 import { harperGrammar } from '../providers/harper.js';
@@ -83,7 +84,7 @@ const AGREEMENT_FIXED: readonly (readonly [string, string])[] = [
   ['I are ready when you are.', 'I am ready when you are.'],
 ];
 
-describe('a code path, a dialect, a language mixed in: listed, never changed (real engine)', () => {
+describeWithEngine('a code path, a dialect, a language mixed in: listed, never changed (real engine)', () => {
   const was = process.env.ATELIER_GRAMMAR;
   beforeAll(async () => { process.env.ATELIER_GRAMMAR = 'on'; resetGrammar(); setGrammarProvider(harperGrammar); await ensureGrammar(); expect(grammarStatus().ready).toBe(true); }, 60_000);
   afterAll(() => { if (was === undefined) delete process.env.ATELIER_GRAMMAR; else process.env.ATELIER_GRAMMAR = was; resetGrammar(); setGrammarProvider(grammarProvider()); });

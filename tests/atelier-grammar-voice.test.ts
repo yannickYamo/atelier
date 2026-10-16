@@ -9,6 +9,7 @@
 //
 // The engine is real (harper.js) where a test reads text with it: the suite default is the stub (vitest.config.ts).
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describeWithEngine, itWithEngine } from './harper-engine.js';
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -64,7 +65,7 @@ const UNCHANGED: readonly string[] = [
   'I has a question about the API.', 'You was right about the migration.', 'I is the one who knocks.', 'Their roadmap is aspirational at best.', 'The colour of the programme was grey.', 'The organization realized its error.',
 ];
 
-describe('a spelling fix is made only for a known misspelling (real engine)', () => {
+describeWithEngine('a spelling fix is made only for a known misspelling (real engine)', () => {
   beforeAll(async () => { process.env.ATELIER_GRAMMAR = 'on'; resetGrammar(); setGrammarProvider(harperGrammar); await ensureGrammar(); expect(grammarStatus().ready).toBe(true); }, 60_000);
 
   it('a coinage, slang, a British word, a closed compound and a plural are listed and never changed', () => {
@@ -232,7 +233,7 @@ describe('through the binary', () => {
   }, 60_000);
   afterAll(() => { backend.kill(); });
 
-  it('what the checker is unsure of is listed item by item on the run, in its report and in the --json record, and the text is unchanged', async () => {
+  itWithEngine('what the checker is unsure of is listed item by item on the run, in its report and in the --json record, and the text is unchanged', async () => {
     const { data, both, run } = seed('list');
     const piece = 'It don\'t matter now. We spent the arvo fixing the build. The plan still holds.';
     await script(piece);

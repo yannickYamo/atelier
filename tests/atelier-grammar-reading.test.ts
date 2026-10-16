@@ -10,6 +10,7 @@
 //
 // The engine is real (harper.js) wherever a test reads text with it; the suite default is the stub (vitest.config.ts).
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describeWithEngine, itWithEngine } from './harper-engine.js';
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, existsSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -72,7 +73,7 @@ const NOW_LISTED: readonly (readonly [string, string])[] = [
   ['I has a question about the invoice.', 'has'], ['We was never told about the outage.', 'was'],
 ];
 
-describe('the one rule, with the real engine', () => {
+describeWithEngine('the one rule, with the real engine', () => {
   const was = process.env.ATELIER_GRAMMAR;
   beforeAll(async () => { process.env.ATELIER_GRAMMAR = 'on'; resetGrammar(); setGrammarProvider(harperGrammar); await ensureGrammar(); expect(grammarStatus().ready).toBe(true); }, 60_000);
   afterAll(() => { if (was === undefined) delete process.env.ATELIER_GRAMMAR; else process.env.ATELIER_GRAMMAR = was; resetGrammar(); setGrammarProvider(grammarProvider()); });
@@ -201,7 +202,7 @@ describe('through the binary, with no model key', () => {
     expect(r.out).not.toMatch(/Too short to read/);
     expect(r.out).toMatch(/4 examples from posts/);
   }, 120_000);
-  it('verify --repair leaves every grammar finding as written by default; with --fix-grammar it makes the mechanical fixes with no key', () => {
+  itWithEngine('verify --repair leaves every grammar finding as written by default; with --fix-grammar it makes the mechanical fixes with no key', () => {
     writeFileSync(join(proj, 'b4.md'), 'He are riding into the wind all morning and it dont stop, but the the views was worth it.\n');
     const kept = run('verify', '--skill', 'walks', 'b4.md', '--repair');
     expect(kept.code, kept.out).toBe(0);

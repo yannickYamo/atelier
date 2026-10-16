@@ -10,6 +10,7 @@
 //
 // The engine is real (harper.js) wherever a test reads text with it; the suite default is the stub (vitest.config.ts).
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describeWithEngine } from './harper-engine.js';
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -53,7 +54,7 @@ const DICTIONARY_WORDS = ['aline', 'ares', 'awhile', 'betted', 'bogy', 'cassino'
   'licenced', 'nighty', 'nite', 'nites', 'pled', 'revery', 'sera', 'shat', 'tike', 'tikes', 'defenced', 'nett', 'catalogued', 'cataloguer', 'cosy',
   'storey', 'arse', 'categorises', 'centred', 'organisations', 'organises', 'realises', 'rouble'];
 
-describe('spelling, with the real engine', () => {
+describeWithEngine('spelling, with the real engine', () => {
   beforeAll(async () => { process.env.ATELIER_GRAMMAR = 'on'; resetGrammar(); setGrammarProvider(harperGrammar); await ensureGrammar(); expect(grammarStatus().ready).toBe(true); }, 60_000);
 
   it('a correct word of slang, a tool, or either dialect is never changed, with or without a dialect recorded', () => {
@@ -136,7 +137,7 @@ describe('the list of known misspellings', () => {
   });
 });
 
-describe('through the binary: a run keeps the author\'s words, and its evaluation says what is listed', () => {
+describeWithEngine('through the binary: a run keeps the author\'s words, and its evaluation says what is listed', () => {
   const CLI = resolve('dist/cli/atelier.mjs');
   // An American author: ten and more American spellings, so the build records the dialect.
   const PIECES = [

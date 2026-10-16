@@ -13,6 +13,7 @@
 // The engine is real (harper.js, offline) and loaded once for this file: the suite sets it aside elsewhere
 // (vitest.config.ts) because its dictionary costs seconds a process. Nothing here calls a model.
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describeWithEngine, itWithEngine } from './harper-engine.js';
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -42,7 +43,7 @@ const standard = (...rules: Requirement[]): StandardVersion => ({ standardVersio
   authorityState: 'RATIFIED', mintedAt: '2026-10-14T00:00:00Z', supersedes: null, reason: null });
 const m = (params: Record<string, readonly string[]> = {}) => ({ observer: 'GRAMMAR' as const, params });
 
-describe('the grammar rule, with the real engine, under --fix-grammar', () => {
+describeWithEngine('the grammar rule, with the real engine, under --fix-grammar', () => {
   beforeAll(async () => { setGrammarFixing(true); resetGrammar(); setGrammarProvider(harperGrammar); await ensureGrammar(); expect(grammarStatus().ready).toBe(true); }, 60_000);
   afterAll(() => { setGrammarFixing(false); });
 
@@ -322,7 +323,7 @@ describe('through the binary', () => {
   }, 60_000);
   afterAll(() => { backend.kill(); });
 
-  it('a new build from pieces carries the rule REQUIRED and ratified; verify lists what it finds, and with --fix-grammar holds a draft to it', () => {
+  itWithEngine('a new build from pieces carries the rule REQUIRED and ratified; verify lists what it finds, and with --fix-grammar holds a draft to it', () => {
     const { data, proj, run, tryRun } = seed('new');
     mkdirSync(join(proj, 'posts'));
     PIECES.forEach((p, i) => { writeFileSync(join(proj, 'posts', `p${i + 1}.md`), p); });
@@ -369,7 +370,7 @@ describe('through the binary', () => {
     expect(first.toString()).not.toContain('No mechanical errors');
   }, 120_000);
 
-  it('with --fix-grammar a run corrects the error without a model, records the fix, and the delivered text carries it', async () => {
+  itWithEngine('with --fix-grammar a run corrects the error without a model, records the fix, and the delivered text carries it', async () => {
     const { data, proj, run } = seed('run');
     mkdirSync(join(proj, 'posts'));
     PIECES.forEach((p, i) => { writeFileSync(join(proj, 'posts', `p${i + 1}.md`), p); });

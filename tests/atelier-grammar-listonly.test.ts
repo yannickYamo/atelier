@@ -10,7 +10,8 @@
 // applies the in-place set as before and records each change.
 //
 // The engine is real (harper.js, offline): in process for the fixture, and through the binary for a run.
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { it, expect, beforeAll, afterAll } from 'vitest';
+import { describeWithEngine } from './harper-engine.js';
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -38,7 +39,7 @@ const ROWS = readFileSync(resolve('tests/fixtures/grammar-legitimate-readings.ts
 /** The text after every fix the loop makes without a model: what the default path would deliver. */
 const delivered = (text: string, p: Params): string => { const v = standard(p); return mechanicalFixes(v, verifyText('g', v, text), text).text; };
 
-describe('the default path, on 150 sentences with a legitimate reading and 10 real slips (real engine)', () => {
+describeWithEngine('the default path, on 150 sentences with a legitimate reading and 10 real slips (real engine)', () => {
   beforeAll(async () => { setGrammarFixing(false); resetGrammar(); setGrammarProvider(harperGrammar); await ensureGrammar(); expect(grammarStatus().ready).toBe(true); }, 60_000);
 
   it('the fixture is what it says: 150 correct sentences and 10 slips', () => {
@@ -99,7 +100,7 @@ describe('the default path, on 150 sentences with a legitimate reading and 10 re
   });
 });
 
-describe('under --fix-grammar (real engine)', () => {
+describeWithEngine('under --fix-grammar (real engine)', () => {
   beforeAll(async () => { setGrammarFixing(true); resetGrammar(); setGrammarProvider(harperGrammar); await ensureGrammar(); }, 60_000);
   afterAll(() => { setGrammarFixing(false); });
   it('the in-place set is applied as before, and each change is recorded by what it was and what it became', () => {
@@ -118,7 +119,7 @@ describe('under --fix-grammar (real engine)', () => {
   });
 });
 
-describe('through the binary', () => {
+describeWithEngine('through the binary', () => {
   const CLI = resolve('dist/cli/atelier.mjs');
   const PIECES = [
     'The team shipped the fix on Monday, and the panel held. Nobody asked for more.\n\nThe plan was simple: ship, watch, write it down.',
