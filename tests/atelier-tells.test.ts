@@ -161,7 +161,8 @@ describe('round 6 findings: a move the author never makes is never allowed, and 
 
 describe('held to the author\'s typical piece; their occasional move does not disqualify the rule', () => {
   it('a family used in fewer than half the author\'s pieces is banned in ours, and one occasional use in their unread work is tolerated', () => {
-    const plain = (i: number) => ({ id: `a${i}`, text: Array.from({ length: 16 }, (_, k) => `We ran check ${k + i} twice and kept the result.`).join('\n\n') });
+    // Long pieces (180 words each): with short ones, a move any piece makes is the author's (atelier-tweet-voice.test.ts).
+    const plain = (i: number) => ({ id: `a${i}`, text: Array.from({ length: 20 }, (_, k) => `We ran check ${k + i} twice and kept the result.`).join('\n\n') });
     const held = [{ id: 'h1', text: `${plain(9).text}\n\nIt is the single most useful habit I have.` }, plain(10)];
     const rules = deriveContrastRules([0, 1, 2, 3].map(plain), held, ['Plain text. '.repeat(300), 'Plain text. '.repeat(300)], 'MACHINE_DISCOVERED');
     const r = rules.find((x) => (x.requirement.measurement?.params.pattern as string[] | undefined)?.[0] === 'MACHINE_TELL');

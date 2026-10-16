@@ -55,7 +55,10 @@ export const TELL_FAMILIES: readonly TellFamily[] = [
   // from a plain model at discovery, so nothing learned held them: the catalogue holds them for everyone.
   { id: 'EM_DASH', label: 'an em dash', re: /—/g },
   { id: 'STACCATO_RUN', label: 'a run of three or more very short sentences ("The plan gets made. The drafts arrive.")',
-    re: /(?<![^\s])(?:[^\s.!?]+ ){0,4}[^\s.!?]+[.!?]["”’)]?(?:\s+(?:[^\s.!?]+ ){0,4}[^\s.!?]+[.!?]["”’)]?){2,}/g },
+    // Whole sentences only: a run starts where the text, a line or a sentence starts. Read from any word, the tail of
+    // a long sentence ("...was a shell script. It ran for eleven months. Nobody needed...") counted as a short one,
+    // and two tweets of an author who never writes such runs read as theirs.
+    re: /(?<=^|[.!?]["”’)]?\s+|\n\s*)(?:[^\s.!?]+ ){0,4}[^\s.!?]+[.!?]["”’)]?(?:\s+(?:[^\s.!?]+ ){0,4}[^\s.!?]+[.!?]["”’)]?){2,}/g },
   // THE OPENING VERDICT. A contrastive verdict as the piece's first line ("X isn't a meeting. It's a
   // written decision process.") is a model's opening, not a writer's; readers flagged it in four of five
   // pieces of one round. Found by position in ./style.ts, and held to how often the author opens that way.
