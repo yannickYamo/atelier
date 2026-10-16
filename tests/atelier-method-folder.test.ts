@@ -196,6 +196,9 @@ describe('atelier new <your-work>, with no method note and no model', () => {
     expect(r.out).toContain('No model is set up (ANTHROPIC_API_KEY), so the skill is built from what can be counted in your examples');
     expect(r.out).toContain('No method was given: the skill is your examples, served to the writer');
     expect(r.out).toContain('Your skill "posts" is ready.');
+    // grammar is editorial help, said apart from what is required, and never counted among the required rules
+    expect(r.out).toMatch(/Checked on every draft as editorial help, never lowering the verdict:\n {2}- No mechanical errors/);
+    expect(r.out).not.toMatch(/and required \(\d+\):\n(?: {2}- [^\n]*\n)*? {2}- No mechanical errors/);
     // the pieces themselves are what the writer is given, and the one rule is the owner's to judge
     const dir = join(proj, '.claude', 'skills', 'posts');
     expect(readFileSync(join(dir, 'SKILL.md'), 'utf8')).toContain('New work reads like the 3 examples given');

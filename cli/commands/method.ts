@@ -97,11 +97,14 @@ export function shortScreen(ps: readonly MethodProposal[]): string[] {
   };
   // A STATED RULE THE OWNER'S OWN WORK DOES NOT DO IS STILL THEIR RULE. Said once, here, with the piece and what it did.
   const disagrees = (p: MethodProposal): string => (p.conflict ? `\n      ! ${p.conflict}.\n        Checked and shown on every run; it blocks nothing until you confirm it.` : '');
+  const editorial = (p: MethodProposal): boolean => p.measurement?.observer === 'GRAMMAR';
   // With no method there is nothing of the owner's to list: what the examples show is all the skill is, so it is shown.
   if (!stated.length) return ['No method was given: the skill is your examples, served to the writer, and what can be counted in them. Whether new work reads like them is yours to judge.',
     // What every example meets, read from enough of them (a short piece's shape; the machine-tell ban), is required
     // and said to be; the rest is shown, with how many more examples would let it block where that is the reason.
-    ...(shown.some((p) => p.required && !p.platform) ? ['', `Seen in every one of your examples, and required (${shown.filter((p) => p.required && !p.platform).length}):`, ...shown.filter((p) => p.required && !p.platform).map((p) => `  - ${p.statement}`)] : []),
+    ...(shown.some((p) => p.required && !p.platform && !editorial(p)) ? ['', `Seen in every one of your examples, and required (${shown.filter((p) => p.required && !p.platform && !editorial(p)).length}):`, ...shown.filter((p) => p.required && !p.platform && !editorial(p)).map((p) => `  - ${p.statement}`)] : []),
+    // The editorial grammar check: listed on every run, and never lowering the verdict (core/eval/record-build.ts).
+    ...(shown.some(editorial) ? ['', 'Checked on every draft as editorial help, never lowering the verdict:', ...shown.filter(editorial).map((p) => `  - ${p.statement} Possible slips are listed for you; nothing is changed unless you pass --fix-grammar.`)] : []),
     // The platform's limit where some of the author's own pieces run past it: required as the platform's rule, said
     // apart from their habits, with the pieces that exceed it named.
     ...(shown.some((p) => p.platform) ? ['', 'The platform\'s limit, required, though some of your examples run past it:', ...shown.filter((p) => p.platform).map((p) => `  - ${p.statement}\n      ${p.onExample ?? ''}`)] : []),
