@@ -12,6 +12,7 @@ import { checksFor, claimInstrumentOf, contextJudgeFor, smallReaderFor, CLAIMS_M
 import { regressions, readAtLength, featureParamsOf, ruleParamsOf, enforcedNeverWorse, applyStep, unmeasuredIn, type ParamsOf, type Proposed } from '../../core/loop/repair.js';
 import { refineToStandard, checkDraft, checkDraftAsync, withWaivers, enforceClaims, heavyCut, listedClaims, brokenByCut, gradedRules, PUBLIC_FACTS, INCONCLUSIVE, type CheckOptions } from '../../core/loop/run-repair.js';
 import { signalChecks, displacement, isSignal, ownerWords } from '../../core/loop/graded.js';
+import { steeredShape, steersMiss, shapeLengthAim } from '../../core/loop/shape-steer.js';
 import { signalDistance } from '../../core/observers/selection.js';
 import { featureOf, featureMove } from '../../core/observers/features.js';
 import { acts, notRun, verifyText, type VerifyReport } from '../../core/observers/verify.js';
@@ -176,7 +177,7 @@ export const lengthIsRuled = (std: Standard | null): boolean => (std ? planFor(s
 export function gradedFeatures(spec: string | undefined): CheckOptions['graded'] | undefined {
   if (spec === undefined) return 'all';
   if (spec.trim() === 'none') return undefined;
-  return die(`--graded takes only none, which turns off the steering of your counted features for this run; it is on by default (got "${spec}").`);
+  return die(`--graded takes only none, which turns off the steering of your counted features and of your pieces' shape for this run; it is on by default (got "${spec}").`);
 }
 /** How many words a count is outside a band; 0 inside it. */
 export const wordsOutside = (n: number, band: readonly [number, number]): number => (n < band[0] ? band[0] - n : n > band[1] ? n - band[1] : 0);
@@ -1309,6 +1310,8 @@ export function unmetReader(std: Standard, own: { band: readonly [number, number
   const gradedOf = gradedRules(std, graded, profile);
   const stated = new Map(planFor(std).rules.map((p) => [p.id, p.statement]));
   const params = new Map(std.requirements.flatMap((r) => (r.measurement ? [[r.requirementId, r.measurement] as const] : [])));
+  // A request that names a length sets it: no learned length band is told against it (core/loop/run-repair.ts, `gradedRules`).
+  if (asked) for (const id of [...gradedOf.keys()]) if (steeredShape(params.get(id))?.how === 'length') gradedOf.delete(id);
   if (!must.size && !own && !asked && !gradedOf.size) return null;
   // A length the method states in words is a miss of length too: how far, and what to aim for.
   const limits = new Map(std.requirements.flatMap((r) => (r.measurement?.observer === 'LENGTH' && ((r.measurement.params.unit as readonly string[] | undefined)?.[0] ?? 'words').toLowerCase() === 'words'
@@ -1324,6 +1327,14 @@ export function unmetReader(std: Standard, own: { band: readonly [number, number
   };
   const gradedMiss = (x: VerifyReport['checked'][number], signal?: Readonly<Record<string, unknown>>): Unmet => {
     const m = signal ? { params: signal } : params.get(x.requirementId); const e = x.result.error ?? 0;
+    // A LEARNED LENGTH BAND (core/loop/shape-steer.ts) is told as a length is: how far, and what to aim for inside it.
+    const sh = signal ? null : steeredShape(params.get(x.requirementId));
+    if (sh?.how === 'length' && typeof x.result.value === 'number' && m) {
+      const lo = typeof m.params.min === 'number' ? m.params.min : null; const hi = typeof m.params.max === 'number' ? m.params.max : null;
+      const at = shapeLengthAim(x.result.value, lo, hi, sh.shape === 'characters' ? 'characters' : 'words');
+      return { id: x.requirementId, statement: stated.get(x.requirementId) ?? x.statement, detail: x.result.detail, off: Math.abs(e),
+        ...(at.aim ? { aim: at.aim } : {}), ...(at.move ? { move: at.move } : {}), ...(acts(x) ? {} : { graded: true as const }) };
+    }
     const move = m && typeof x.result.value === 'number' ? featureMove(m.params, x.result.value) : null;
     // An enforced rule that is also graded is still the method's: only a rule the standard does not enforce is "usually".
     return { id: x.requirementId, statement: stated.get(x.requirementId) ?? x.statement, detail: move ? withoutAmount(x.result.detail) : x.result.detail, off: Math.abs(e), ...(move ? { move } : {}), ...(acts(x) ? {} : { graded: true as const }) };
@@ -1348,7 +1359,9 @@ export function unmetReader(std: Standard, own: { band: readonly [number, number
       return [...rs, ...more];
     };
     const rules = named([...d.report.checked.filter((x) => must.has(x.requirementId) && x.result.verdict === 'VIOLATED').map(ruleMiss),
-      ...d.report.checked.filter((x) => gradedOf.has(x.requirementId) && !must.has(x.requirementId) && x.result.verdict === 'VIOLATED').map((x) => gradedMiss(x)),
+      ...d.report.checked.filter((x) => gradedOf.has(x.requirementId) && !must.has(x.requirementId) && x.result.verdict === 'VIOLATED'
+        // a learned shape band is told only past its ceiling (core/loop/shape-steer.ts, `steersMiss`)
+        && (steeredShape(params.get(x.requirementId)) === null || steersMiss(params.get(x.requirementId), x.result.error))).map((x) => gradedMiss(x)),
       // the profile's far-out SIGNAL features, read on the text itself: they are no line of the recorded report
       ...(gradedOf.size ? signalChecks(d.output, profile).filter((x) => x.result.verdict === 'VIOLATED' && gradedOf.has(x.requirementId)).map((x) => gradedMiss(x, x.params)) : [])]);
     if (asked) {

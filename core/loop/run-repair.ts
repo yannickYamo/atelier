@@ -29,6 +29,7 @@ import { spanIntegrity } from './integrity.js';
 import { planRepair, repairPrompt, applyRepair, acceptRepair, addsNoWords, readAtLength, featureParamsOf, ruleParamsOf, cutSpan, applyStep, lostToLength, tooShort, unmeasuredIn, REPAIR_SYSTEM, REPAIR_SYSTEM_WITH_PLACEHOLDERS, REPAIR_SCHEMA,
   survivalLoss, type Reverted, type Applied, type RepairTarget, type Proposed, type NoChange, type StepPlan, type StepRule, type StepResult } from './repair.js';
 import { keysOf, measurementId } from '../state/rule-key.js';
+import { learnedShape, steeredShape, removeShapeExtras } from './shape-steer.js';
 import { mechanicalFixes, grammarFixes } from './mechanical-repair.js';
 import { ensureGrammar, readGrammar, isGrammarNote, grammarFixing, GRAMMAR_NOTE_SUFFIX } from '../observers/grammar.js';
 import type { RepairPair } from '../state/canonical-state.js';
@@ -77,8 +78,9 @@ export interface CheckOptions {
    * GRADED FEATURES (on by default; `--graded none` turns them off): the counted features whose FEATURE rules a miss
    * of is a REPAIR TARGET without being a failure. A PREFERRED rule naming one of them is planned and accepted as an
    * enforced rule is, on copies of the report; the report that is recorded, and the evaluation, never see it as
-   * enforced. 'all' grades every FEATURE rule of the standard, and every SIGNAL feature of `gradedProfile`. Absent,
-   * nothing is graded.
+   * enforced. 'all' grades every FEATURE rule of the standard, every learned shape band it steers (./shape-steer.ts:
+   * a length, a count of hashtags, links or emoji; never a count of sentences or an opening), and every SIGNAL feature
+   * of `gradedProfile`. Absent, nothing is graded.
    */
   readonly graded?: readonly string[] | 'all';
   /**
@@ -633,13 +635,23 @@ export const GRADED_PER_PASS = 3;
  * A FEATURE rule the plan enforces (one the owner REQUIRED) is never graded: it is the owner's, enforced like any rule they require (its carriers
  * rewritten through the controller), and never steered as a habit or written again as one.
  */
-export function gradedRules(v: Pick<StandardVersion, 'requirements'>, graded: CheckOptions['graded'], profile?: FidelityProfile | null): Map<string, string> {
+export function gradedRules(v: Pick<StandardVersion, 'requirements'>, graded: CheckOptions['graded'], profile?: FidelityProfile | null,
+  /** the request: one that names a length sets it, and no learned length band is steered against it */ request?: string | null): Map<string, string> {
   const out = new Map<string, string>();
   if (graded === undefined) return out;
+  const lengthAsked = request ? statedLength(request) !== null : false;
   // which rules a run enforces is the plan's to say (../plan/execution-plan.ts), never the rule's own field
   const enforced = new Set(planFor(v).rules.filter((p) => p.enforced).map((p) => p.id));
   for (const r of v.requirements) {
-    if (r.authority === 'EXPERT_REJECTED' || enforced.has(r.requirementId) || r.measurement?.observer !== 'FEATURE') continue;
+    if (r.authority === 'EXPERT_REJECTED' || enforced.has(r.requirementId)) continue;
+    // A LEARNED SHAPE BAND IS A GRADED TARGET (./shape-steer.ts): a length out of its band, a hashtag, link or emoji the
+    // pieces never carry. Steered under the shape's own name; a band the owner stated is theirs, never a habit pulled at.
+    if (learnedShape(r)) {
+      const sh = steeredShape(r.measurement);
+      if (sh && !(lengthAsked && sh.how === 'length') && (graded === 'all' || graded.includes(sh.shape))) out.set(r.requirementId, sh.shape);
+      continue;
+    }
+    if (r.measurement?.observer !== 'FEATURE') continue;
     const f = (r.measurement.params.feature as readonly string[] | undefined)?.[0];
     if (f && (graded === 'all' || graded.includes(f))) out.set(r.requirementId, f);
   }
@@ -688,9 +700,14 @@ async function refineOnLedger(client: InferenceClient, budget: Budget, skill: st
   // pointed at, and what the run did about them; `pending` is what keeps the loop going where `failed` would not.
   // The profile's SIGNAL features ride on the reports this loop holds as checks of their own (./graded.ts), and are
   // taken off every report this function returns: the record and the evaluation never see them.
-  const graded = gradedRules(v, opts.graded, opts.gradedProfile);
+  const graded = gradedRules(v, opts.graded, opts.gradedProfile, opts.context?.request);
   const gradedOn = opts.graded !== undefined && graded.size > 0;
   const profile = gradedOn ? opts.gradedProfile ?? null : null;
+  // THE LEARNED SHAPE BANDS THIS RUN STEERS (./shape-steer.ts): a length, written again toward its band; a count of
+  // hashtags, links or emoji, removed in code (`removeExtras`, before the controller's steps).
+  const shapeOf = new Map([...graded.keys()].flatMap((id) => { const sh = steeredShape(v.requirements.find((r) => r.requirementId === id)?.measurement); return sh ? [[id, sh] as const] : []; }));
+  const lengthShapes = new Set([...shapeOf].filter(([, sh]) => sh.how === 'length').map(([id]) => id));
+
   const withSignals = (t: string, r: VerifyReport): VerifyReport => (profile ? { ...r, checked: [...r.checked, ...signalChecks(t, profile)] } : r);
   const recorded = (r: VerifyReport): VerifyReport => (profile ? { ...r, checked: r.checked.filter((c) => !isSignal(c.requirementId)) } : r);
   const check = async (t: string): Promise<VerifyReport> => withSignals(t, memory.apply(t, await checkDraftAsync(skill, v, t, opts)));
@@ -710,7 +727,9 @@ async function refineOnLedger(client: InferenceClient, budget: Budget, skill: st
   enforcedIds = new Set(first.checked.filter((c) => acts(c)).map((c) => c.requirementId));
   // WHAT KEEPS THE LOOP GOING (./controller.ts): an enforced rule broken, or a graded miss over SETTLED_ERROR band widths.
   // A graded miss nearer its band than that is delivered as it is: no pull to the median.
-  const gradedOff = (r: VerifyReport): RuleCheck[] => r.checked.filter((c) => graded.has(c.requirementId) && !acts(c) && c.result.verdict === 'VIOLATED');
+  // A learned shape band is acted on only past its ceiling (./shape-steer.ts, `steersMiss`): never a pull toward padding.
+  const gradedOff = (r: VerifyReport): RuleCheck[] => r.checked.filter((c) => graded.has(c.requirementId) && !acts(c) && c.result.verdict === 'VIOLATED'
+    && (!shapeOf.has(c.requirementId) || (c.result.error ?? 0) > 0));
   const pending = (r: VerifyReport): boolean => r.failed || gradedOff(r).some((c) => Math.abs(c.result.error ?? 0) > SETTLED_ERROR);
   const gradedTargeted = new Set<string>(); const gradedRepaired = new Set<string>();
   // EVERY EDIT, COUNTED: span rewrites kept, and those refused by a guard or discarded with their pass, with the reasons.
@@ -730,7 +749,9 @@ async function refineOnLedger(client: InferenceClient, budget: Budget, skill: st
     for (const [id, f] of [...graded].sort((a, b) => Number(isSignal(a[0])) - Number(isSignal(b[0])))) {
       if (values[f]) continue;
       const p = paramsOf(final, id); if (isSignal(id) && !Object.keys(p).length) continue;
-      values[f] = { before: valueOf(first, id), after: valueOf(final, id), lo: typeof p.minValue === 'number' ? p.minValue : null, hi: typeof p.maxValue === 'number' ? p.maxValue : null, source: isSignal(id) ? 'profile' : 'standard' };
+      // a learned shape band holds its edges as min and max
+      const lo = p.minValue ?? p.min; const hi = p.maxValue ?? p.max;
+      values[f] = { before: valueOf(first, id), after: valueOf(final, id), lo: typeof lo === 'number' ? lo : null, hi: typeof hi === 'number' ? hi : null, source: isSignal(id) ? 'profile' : 'standard' };
     }
     const line = spendBetween(ledgerBefore, processSpendByPurpose()).find((l) => l.purpose === 'graded');
     const disp = displacement(draft, finalText, profile, gradedTargeted);
@@ -800,7 +821,7 @@ async function refineOnLedger(client: InferenceClient, budget: Budget, skill: st
     const byFeature = new Map<string, GradedMiss>();
     for (const c of gradedOff(r)) {
       const f = graded.get(c.requirementId) ?? c.requirementId; const e = c.result.error ?? 0; const was = byFeature.get(f);
-      if (!was || Math.abs(e) > Math.abs(was.error)) byFeature.set(f, { id: c.requirementId, error: e, operatorEffect: operatorEffect(t, c) });
+      if (!was || Math.abs(e) > Math.abs(was.error)) byFeature.set(f, { id: c.requirementId, error: e, operatorEffect: operatorEffect(t, c), ...(lengthShapes.has(c.requirementId) ? { length: true as const } : {}) });
     }
     const rewriteUsd = perCall(['repair', 'graded']); const draftUsd = perCall(['writing']);
     return { enforced, claims: flaggedClaims(r).length, length: null, graded: [...byFeature.values()], grammar,
@@ -940,7 +961,33 @@ async function refineOnLedger(client: InferenceClient, budget: Budget, skill: st
     if (!s.kept) { if (!notKept.length) notKept.push(`${m.fixed.join('; ')} not kept: ${s.own ?? s.why}`); return; }
     text = s.after.text; report = s.after.report; mechanical.push(...m.fixed);
   };
+  /**
+   * A HASHTAG, LINK OR EMOJI THE AUTHOR'S PIECES NEVER CARRY, REMOVED IN CODE (./shape-steer.ts): no model call, a step on
+   * the one ledger like the fixes without a model, kept only on the one acceptance rule (no enforced rule newly broken or
+   * further from holding, nothing added). A removal not kept leaves its miss to the controller, which may rewrite its spans.
+   */
+  const removeExtras = async (): Promise<void> => {
+    const over = report.checked.filter((c) => shapeOf.get(c.requirementId)?.how === 'remove' && !acts(c) && c.result.verdict === 'VIOLATED');
+    if (!over.length) return;
+    let next = text;
+    for (const c of over) {
+      const sh = shapeOf.get(c.requirementId); const max = v.requirements.find((r) => r.requirementId === c.requirementId)?.measurement?.params.max;
+      if (sh && typeof max === 'number') next = removeShapeExtras(next, sh.shape as 'hashtags' | 'links' | 'emoji', max);
+    }
+    if (next === text) return;
+    const ids = over.map((c) => c.requirementId); const from = text; const held = report;
+    const said = over.map((c) => `${shapeOf.get(c.requirementId)?.shape ?? c.requirementId} (${c.result.detail})`).join('; ');
+    const s = await step({ action: 'mechanical', targets: ids, why: `removed without a model what runs past what your pieces carry: ${said}`, expectedGain: over.reduce((n, c) => n + Math.abs(c.result.error ?? 0), 0), expectedCostUsd: 0 },
+      async () => { const after = await check(next); sameInstrument(); return { text: next, report: after }; }, {
+        wordsAdded: () => !addsNoWords(from, next),
+        // band widths nearer, per target (`movedBy` is defined with the controller's steps, below)
+        movement: (x, kept) => (kept ? ids.reduce((n, id) => { const e = (r: VerifyReport): number => Math.abs(r.checked.find((c) => c.requirementId === id)?.result.error ?? 0); return n + Math.max(0, e(held) - e(x.report)); }, 0) : 0) });
+    if (s.kind !== 'judged' || !s.kept) return;
+    for (const id of ids) { const f = graded.get(id); if (f) { gradedTargeted.add(f); gradedRepaired.add(f); } }
+    text = s.after.text; report = s.after.report;
+  };
   if (report.failed) await fixMechanically();
+  await removeExtras();
   // ACCURACY BEFORE STYLE, for the owner's own accuracy rules (the invented-claim line is never planned:
   // it was cut above). When both kinds are broken, accuracy gets ONE pass of its own, not charged to the
   // `maxPasses` style passes; a pass that makes no progress is dropped and the loop moves on to style.

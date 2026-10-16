@@ -246,6 +246,11 @@ export interface GradedMiss {
   readonly error: number;
   /** expected movement of the best operator here, in band widths, from the effect matrix; null when no operator moves it */
   readonly operatorEffect: number | null;
+  /**
+   * a learned band on the piece's length (characters, words: ./shape-steer.ts): no sentence carries a length, so the
+   * only action for it is the length-aimed one, the piece written again toward its band, whatever the size of the miss
+   */
+  readonly length?: true;
 }
 
 export interface ControllerInput {
@@ -333,11 +338,18 @@ const failed = (d: ControllerDecisionRecord): boolean => d.outcome !== 'handed t
 const failuresOn = (id: string, history: readonly ControllerDecisionRecord[]): ControllerAction[] =>
   history.filter((d) => hits(d, id) && CHOSEN.has(d.action) && failed(d)).map((d) => d.action);
 
+/**
+ * A LENGTH IS WRITTEN AGAIN, NEVER REWRITTEN BY THE SENTENCE. A miss of a learned length band (`GradedMiss.length`) has
+ * one action, the length-aimed draft; when that has failed or cannot run, nothing is left for it, and the stop says so.
+ * A carrier rewrite of "the piece" or a re-punctuation would move a length by luck.
+ */
+const LENGTH_SEQUENCE: readonly ('operators' | 'carrier-rewrite' | 'redraft')[] = ['redraft'];
+
 /** The first action in the target's sequence that has not failed on it and that this caller can carry out; null when none is left. */
 function actionFor(base: 'operators' | 'carrier-rewrite' | 'redraft', id: string, history: readonly ControllerDecisionRecord[],
-  available: (a: 'operators' | 'carrier-rewrite' | 'redraft') => boolean): 'operators' | 'carrier-rewrite' | 'redraft' | null {
+  available: (a: 'operators' | 'carrier-rewrite' | 'redraft') => boolean, length = false): 'operators' | 'carrier-rewrite' | 'redraft' | null {
   const failedOn = new Set(failuresOn(id, history));
-  return SEQUENCE[base].find((a) => !failedOn.has(a) && available(a)) ?? null;
+  return (length ? LENGTH_SEQUENCE : SEQUENCE[base]).find((a) => !failedOn.has(a) && available(a)) ?? null;
 }
 
 /** What one action is expected to move per target: the measured prior, moved halfway toward this run's own observations. */
@@ -412,7 +424,7 @@ export function decide(input: ControllerInput, s: ControllerSettings | null = nu
   const available = (g: GradedMiss) => (a: 'operators' | 'carrier-rewrite' | 'redraft'): boolean =>
     a === 'operators' ? g.operatorEffect !== null && g.operatorEffect > 0 : a === 'redraft' ? input.can.redraft && !hadRedraft : input.can.rewrite;
   type Rung = 'operators' | 'carrier-rewrite' | 'redraft';
-  const planned = far.map((g) => ({ g, a: actionFor(sizedAction(g.error, out), g.id, input.history, available(g)) })).filter((x): x is { g: GradedMiss; a: Rung } => x.a !== null);
+  const planned = far.map((g) => ({ g, a: actionFor(sizedAction(g.error, out), g.id, input.history, available(g), g.length === true) })).filter((x): x is { g: GradedMiss; a: Rung } => x.a !== null);
   if (planned.length) {
     const action = planned[0].a;
     const group = planned.filter((x) => x.a === action).slice(0, TARGETS_PER_STEP).map((x) => x.g);
@@ -424,11 +436,13 @@ export function decide(input: ControllerInput, s: ControllerSettings | null = nu
     const named = group.map((g) => `${g.id} ${Math.abs(g.error).toFixed(2)}`).join(', ');
     // The range named is the one the action is sized for; a target stepped down to it from a larger action (a redraft
     // that did no better) is said at its own distance, never as inside a range it is not in.
-    const sized = group.every((g) => sizedAction(g.error, out) === action);
+    const sized = group.every((g) => (g.length ? 'redraft' : sizedAction(g.error, out)) === action);
     const how = action === 'operators' ? 'moved by re-punctuation, no model' : action === 'carrier-rewrite' ? `up to ${k} carrier sentence(s) each rewritten` : 'written again with each one\'s direction and distance';
     // The why names exactly the targets: where more features are out than one step takes, it says so.
     const furthest = out > group.length ? `, the furthest ${group.length} taken` : '';
-    const why = !sized ? `graded miss(es) at ${named} band widths: ${how}`
+    // A learned length is said as the length it is, at its own distance: it is written again whatever its size.
+    const why = group.every((g) => g.length) ? `a length past the band your pieces run (${named} band widths): written again toward it`
+      : !sized ? `graded miss(es) at ${named} band widths: ${how}`
       : action === 'operators' ? `graded miss(es) under ${SETTLED_ERROR} band widths (${named}): ${how}`
         : action === 'carrier-rewrite' ? `graded miss(es) of ${SETTLED_ERROR} to ${REDRAFT_ERROR} band widths (${named}): ${how}`
           : `graded miss(es) ${out >= REDRAFT_FEATURES ? `on ${out} features at once${furthest}` : `over ${REDRAFT_ERROR} band widths`} (${named}): ${how}`;
@@ -451,7 +465,7 @@ export function decide(input: ControllerInput, s: ControllerSettings | null = nu
   }
   if (!candidates.length) {
     // THE REWRITE PASSES ALLOWED WERE USED: something left that a rewrite would take, and no rewrite pass left to take it.
-    const wouldRewrite = !input.can.rewrite && (spans.length > 0 || graded.some((g) => actionFor(sizedAction(g.error, out), g.id, input.history, (a) => (a === 'operators' ? available(g)(a) : a === 'carrier-rewrite'))
+    const wouldRewrite = !input.can.rewrite && (spans.length > 0 || graded.some((g) => actionFor(sizedAction(g.error, out), g.id, input.history, (a) => (a === 'operators' ? available(g)(a) : a === 'carrier-rewrite'), g.length === true)
       === 'carrier-rewrite'));
     if (wouldRewrite) return { kind: 'stop', why: `the rewrite passes allowed were used, with ${[...spans.map((m) => m.id), ...graded.map((g) => g.id)].join(', ')} left` };
     // THE STOP NAMES THE FAILURES: every target left, with each action that failed on it.

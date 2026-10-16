@@ -54,6 +54,14 @@ The release Phase F tests. Each area below is detailed in the sections that foll
   chooses between them, and never blocks. Short-form shape bands (no hashtags, one sentence, a length band) are now
   preferences; twenty posts without a hashtag no longer forbid one. Required rules come from your method, your
   confirmation or `--set`, a platform limit you give, and the product's standing rules (no added AI tells, the dash cap).
+- **A learned shape band steers, and still never blocks.** Asked for a tweet, a skill built from five tweets that run
+  117 to 155 characters delivered a 384-character corporate paragraph as written: its shape bands were listed and did
+  nothing. A piece that runs past the band your pieces run now is written once more toward it, told how far and what
+  to aim for (one that runs short is never padded out), and a hashtag, link or emoji past what your pieces carry is
+  removed in code, with no model call. Each
+  step is on the run's one record under the steering it is, never makes a rule you require worse, never changes the
+  verdict, and is off with `--graded none`. The count of sentences, the longest sentence and what a piece opens or
+  closes on stay preferences that are listed, never steered.
 - **No character limit is assumed for posts on X.** Posts can run from a line to thousands of characters. A limit
   applies only when you give one with `--limit`.
 - **A short output keeps the rules that fit it.** Whether a rule read from long pieces applies to a short output is now
