@@ -331,7 +331,7 @@ describe('the benchmark runner refuses to start when it could not see what a cal
     writeFileSync(join(dir, 'runtimes.json'), JSON.stringify({ built: { cli: 'x', data: 'x', proj: 'x', skill: 'x' } }));
     const runtime = bare('bench/compare/run.mjs', ['--tasks', join(dir, 'tasks.jsonl'), '--arm', 'atelier-runtime:built', '--runtimes', join(dir, 'runtimes.json'), '--out', out]);
     expect(runtime.code).toBe(2);
-    expect(runtime.err).toMatch(/^compare: ANTHROPIC_API_KEY is not set, and the runtime arm "built" names no other backend\. Set it, or give the build its backend in the runtimes file: "args": \["--provider", "openai-compatible", "--base-url", "<url>", "--model", "<id>"\]\. Nothing was spent\.\n$/);
+    expect(runtime.err).toMatch(/^compare: ANTHROPIC_API_KEY is not set, and the runtime arm "built" names no other backend\. Set it, or give the build its backend in the runtimes file: "args": \["--provider", "openai-compatible", "--base-url", "<url>", "--price-in", "<usd>", "--price-out", "<usd>"\]\. Nothing was spent\.\n$/);
     expect(existsSync(out)).toBe(false);
   });
   it('--condition takes any label of lower-case letters, digits and hyphens, and the usage names every flag', () => {
@@ -347,7 +347,7 @@ describe('the benchmark runner refuses to start when it could not see what a cal
     }
     const usage = bare('bench/compare/run.mjs', []);
     expect(usage.code).toBe(2);
-    expect(usage.err).toBe('compare: usage: run.mjs --tasks <file> --arm none|skill:<file>|self-review:<file>|atelier-runtime:<build> --out <responses.jsonl> [--condition <label>] [--trials <n>] [--model <id>] [--max-tokens <n>] [--cap <usd>] [--per-call <usd>] [--placement system|harness] [--sealed <SEALED.json>] [--runtimes <file>] [--preflight] [--provider openai-compatible --base-url <url> --model <id> --price-in <usd per M> --price-out <usd per M>]\n');
+    expect(usage.err).toBe('compare: usage: run.mjs --tasks <file> --arm none|skill:<file>|self-review:<file>|atelier-runtime:<build> --out <responses.jsonl> [--condition <label>] [--trials <n>] [--model <id>] [--max-tokens <n>] [--cap <usd>] [--per-call <usd>] [--placement system|harness] [--sealed <SEALED.json>] [--runtimes <file>] [--graded none] [--preflight] [--provider openai-compatible --base-url <url> --model <id> --price-in <usd per M> --price-out <usd per M>]\n');
   });
   it('the smoke run makes no temporary directory when --work names one', () => {
     const temp = mkdtempSync(join(tmpdir(), 'atelier-smoke-tmp-')); const work = mkdtempSync(join(tmpdir(), 'atelier-smoke-work-'));

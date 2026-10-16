@@ -422,11 +422,12 @@ describe('the benchmark runner labels any number of arms, and a strict refusal i
     const r = run('bench/compare/run.mjs', '--tasks', join(work, 'tasks.jsonl'), '--arm', 'none', '--condition', 'gepa-tuned', '--out', out, '--provider', 'openai-compatible', '--base-url', url(), '--model', 'scripted', '--price-in', '1', '--price-out', '1');
     expect(r.code, r.all).toBe(0);
     expect(rowsOf<{ condition: string; response: string }>(out).map((x) => `${x.condition}: ${x.response}`)).toEqual([0, 1, 2].map(() => `gepa-tuned: ${CLEAN}`));
-    // a cap under --per-call never starts, and says which flag to change
-    const small = run('bench/compare/run.mjs', '--tasks', join(work, 'tasks.jsonl'), '--arm', 'none', '--condition', 'other', '--out', out, '--cap', '0.1', '--provider', 'openai-compatible', '--base-url', url(), '--model', 'scripted', '--price-in', '1', '--price-out', '1');
+    // a cap under --per-call never starts, and says which flag to change (another arm: its own output file)
+    const other = join(work, 'runner', 'other.jsonl');
+    const small = run('bench/compare/run.mjs', '--tasks', join(work, 'tasks.jsonl'), '--arm', 'none', '--condition', 'other', '--out', other, '--cap', '0.1', '--provider', 'openai-compatible', '--base-url', url(), '--model', 'scripted', '--price-in', '1', '--price-out', '1');
     expect(small.code).toBe(3);
     expect(small.err).toMatch(/pass a smaller --per-call with it/);
-    expect(run('bench/compare/run.mjs', '--tasks', join(work, 'tasks.jsonl'), '--arm', 'none', '--condition', 'other', '--out', out, '--cap', '0.1', '--per-call', '0.01', '--provider', 'openai-compatible', '--base-url', url(), '--model', 'scripted', '--price-in', '1', '--price-out', '1').code).toBe(0);
+    expect(run('bench/compare/run.mjs', '--tasks', join(work, 'tasks.jsonl'), '--arm', 'none', '--condition', 'other', '--out', other, '--cap', '0.1', '--per-call', '0.01', '--provider', 'openai-compatible', '--base-url', url(), '--model', 'scripted', '--price-in', '1', '--price-out', '1').code).toBe(0);
   }, 60_000);
 
   it('verify-rows.mjs writes one row an answer with every field both readers take, and a refusal as a row', () => {

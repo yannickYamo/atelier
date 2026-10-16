@@ -98,8 +98,11 @@ export OPENAI_COMPATIBLE_BASE_URL=https://api.anthropic.com/v1 OPENAI_COMPATIBLE
 export TASK_MODEL=claude-opus-5 REFLECTION_MODEL=<reflection model> JUDGE_MODEL=<judge model>
 ```
 
-The four fixed arms on the sealed test split (one file per arm, or one file with `--condition` set per arm
-for the harness's paired judge):
+The four fixed arms on the sealed test split, one file per arm. The first row written puts `<out>.manifest.json`
+beside the file (tasks, arm, skill, model, limit, placement, provider, steering, grammar), and a rerun with any of them
+changed exits 2 and writes nothing. A runtime build's `args` name its backend and prices only: the runner gives it the
+model, the token limit and the cap left, and checks its record against them. `--graded none` declares a runtime arm
+without feature steering:
 
 ```bash
 node bench/compare/run.mjs --tasks work/splits/test.jsonl --sealed work/splits/SEALED.json --max-tokens 4096 --trials 3 --arm none --out work/out/none.jsonl

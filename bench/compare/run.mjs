@@ -52,6 +52,28 @@
 // declined is a row with response null, delivered false and filtered (CONTENT_FILTER or REFUSAL; filtered_call 1 or 2
 // on the self-review arm), charged as an estimate (cost_estimated), and never retried. Completed lines are skipped on a rerun,
 // so a stopped run continues where it stopped. Run `npm run build` first: this imports ../../dist.
+//
+// ONE FILE, ONE ARM, ONE SET OF SETTINGS. The first row written also writes `<out>.manifest.json`: the tasks' hash,
+// the split, the arm and its label, the skill's hash (a runtime arm's: its build entry), the model, the max tokens,
+// the placement, the provider settings, the steering setting and the grammar setting. A rerun into the same file
+// compares the manifest and every row already there with what it would write, and exits 2, writing nothing, on any
+// difference: a result is never built on another arm's rows, another skill's, or another limit's. A file with rows
+// and no manifest is refused the same way.
+//
+// A RUNTIME ARM IS HELD TO THE HARNESS. Its "args" may not name --model, --target-model, --max-tokens, --cap or
+// --graded (exit 2): the harness gives those. After each run, the record's model and token limit must be the
+// harness's and its steering the declared one, or the run stops (exit 2) and no row is written. Every runtime backend
+// needs a price: the pricing table's for Anthropic, otherwise --price-in and --price-out (in the build's "args", given
+// to this runner, or ATELIER_PRICE_IN and ATELIER_PRICE_OUT). Each run is handed the cap still left as
+// `atelier invoke --cap`, after one cell's worst case (the dearest seen, or --per-call) is reserved; a cap that
+// cannot hold one cell stops before anything is spawned (exit 3).
+//
+// STEERING AND GRAMMAR ARE PINNED ON EVERY ROW. `graded` is the steering a runtime run had ('all', the default, or
+// 'none' when the arm is declared with --graded none, which is passed on to `atelier invoke`), read from its record;
+// null on a model arm, which has none. `grammar` is how the grammar check ran: ATELIER_GRAMMAR as set, or 'default'.
+//
+// --preflight also stops (exit 2) when the answer held a thinking block, or when the call's output tokens are far
+// above what the answer's length accounts for (thinking that was billed and not shown).
 
 import { readFileSync, existsSync, appendFileSync, mkdirSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
@@ -62,7 +84,7 @@ import { readJsonl, sha256, sha256File, validateTasks, opt, die, stripFrontmatte
 const RUNNER = 'atelier-compare';
 const args = process.argv.slice(2);
 const tasksPath = opt(args, 'tasks'); const arm = opt(args, 'arm'); const out = opt(args, 'out');
-const USAGE = 'usage: run.mjs --tasks <file> --arm none|skill:<file>|self-review:<file>|atelier-runtime:<build> --out <responses.jsonl> [--condition <label>] [--trials <n>] [--model <id>] [--max-tokens <n>] [--cap <usd>] [--per-call <usd>] [--placement system|harness] [--sealed <SEALED.json>] [--runtimes <file>] [--preflight] [--provider openai-compatible --base-url <url> --model <id> --price-in <usd per M> --price-out <usd per M>]';
+const USAGE = 'usage: run.mjs --tasks <file> --arm none|skill:<file>|self-review:<file>|atelier-runtime:<build> --out <responses.jsonl> [--condition <label>] [--trials <n>] [--model <id>] [--max-tokens <n>] [--cap <usd>] [--per-call <usd>] [--placement system|harness] [--sealed <SEALED.json>] [--runtimes <file>] [--graded none] [--preflight] [--provider openai-compatible --base-url <url> --model <id> --price-in <usd per M> --price-out <usd per M>]';
 if (!tasksPath || !arm || !out) die(USAGE);
 const model = opt(args, 'model', process.env.BENCH_MODEL ?? 'claude-opus-5');
 const maxTokens = Number(opt(args, 'max-tokens', '4096'));
@@ -70,6 +92,10 @@ const trials = Number(opt(args, 'trials', '1'));
 const cap = Number(opt(args, 'cap', '25'));
 const placement = opt(args, 'placement', 'system');
 const provider = opt(args, 'provider', 'anthropic');
+const gradedFlag = opt(args, 'graded');
+if (gradedFlag !== undefined && gradedFlag !== 'none') die(`--graded takes only none: steering is on by default, and --graded none declares an arm without it (got "${gradedFlag}").`);
+/** How the grammar check ran on this machine: the owner's switch, as set, or the default engine. */
+const grammar = process.env.ATELIER_GRAMMAR || 'default';
 if (!(Number.isInteger(maxTokens) && maxTokens > 0) || !(Number.isInteger(trials) && trials > 0)) die('--max-tokens and --trials must be positive integers');
 if (!['system', 'harness'].includes(placement)) die('--placement is system or harness');
 if (!['anthropic', 'openai-compatible'].includes(provider)) die('--provider is anthropic or openai-compatible');
@@ -77,6 +103,9 @@ if (!['anthropic', 'openai-compatible'].includes(provider)) die('--provider is a
 const [kind, ...rest] = arm.split(':');
 const armArg = rest.join(':');
 if (!['none', 'skill', 'self-review', 'atelier-runtime'].includes(kind) || (kind !== 'none' && !armArg)) die(`unknown arm ${arm}: none, skill:<file>, self-review:<file> or atelier-runtime:<build>`);
+if (gradedFlag !== undefined && kind !== 'atelier-runtime') die('--graded none is a setting of an atelier-runtime arm: a model arm has no steering.');
+/** The steering this arm is declared with: a runtime arm's ('all' unless --graded none), none for a model arm. */
+const graded = kind === 'atelier-runtime' ? (gradedFlag === 'none' ? 'none' : 'all') : null;
 const condition = opt(args, 'condition', kind === 'none' ? 'baseline' : 'candidate');
 if (!/^[a-z0-9][a-z0-9-]*$/.test(condition)) die(`--condition "${condition}" is not a label: lower-case letters, digits and hyphens, starting with a letter or digit (baseline, candidate, comparator, or a claim's own arm names such as handwritten or plug-in).`);
 
@@ -127,14 +156,35 @@ async function client() {
   const { OpenAICompatibleInferenceClient } = await import('../../dist/providers/openai-compatible.js');
   return new OpenAICompatibleInferenceClient({ modelId: model, baseUrl, apiKey: process.env.OPENAI_API_KEY, strictSchema: false, pricing: { inputPerM: priceIn, outputPerM: priceOut } });
 }
-// A runtime arm passes its own model to `atelier invoke`; an Anthropic one without a price is refused the same way.
+// THE HARNESS GIVES A RUNTIME ARM ITS MODEL, ITS LIMIT, ITS CAP AND ITS STEERING. Named again in the build's "args",
+// they would be passed after the harness's and could answer with another writer or spend past the cap.
+const HARNESS_FLAGS = ['--model', '--target-model', '--max-tokens', '--cap', '--graded'];
+const argNamed = (a, f) => a.some((x) => x === f || String(x).startsWith(`${f}=`));
+const argValue = (a, f) => { const i = a.indexOf(f); if (i >= 0) return a[i + 1]; const eq = a.find((x) => String(x).startsWith(`${f}=`)); return eq === undefined ? undefined : String(eq).slice(f.length + 1); };
+/** The backend a runtime arm's `atelier invoke` will call, and the prices it will be told, from its args and the environment. */
+function runtimeBackend(spec) {
+  const a = spec.args ?? [];
+  const named = argValue(a, '--target-provider') ?? argValue(a, '--provider') ?? process.env.ATELIER_TARGET_PROVIDER ?? process.env.ATELIER_PROVIDER ?? 'anthropic';
+  const pIn = argValue(a, '--price-in') ?? opt(args, 'price-in') ?? process.env.ATELIER_PRICE_IN;
+  const pOut = argValue(a, '--price-out') ?? opt(args, 'price-out') ?? process.env.ATELIER_PRICE_OUT;
+  return { provider: named, priceIn: pIn === undefined ? null : Number(pIn), priceOut: pOut === undefined ? null : Number(pOut),
+    // the runner's own prices are handed on when the build's args do not carry any
+    passPrices: !argNamed(a, '--price-in') && opt(args, 'price-in') !== undefined && opt(args, 'price-out') !== undefined };
+}
+// A runtime arm's backend needs a price, as every other arm's does: a run whose cost is unknown cannot be held by a cap.
 async function checkRuntimePrice(spec) {
-  const a = spec.args ?? []; const at = a.indexOf('--model'); const prov = a.indexOf('--provider');
-  const runtimeModel = at >= 0 ? a[at + 1] : model;
-  if (prov >= 0 && a[prov + 1] !== 'anthropic') return;
+  const a = spec.args ?? [];
+  const named = HARNESS_FLAGS.filter((f) => argNamed(a, f));
+  if (named.length) die(`the runtime arm "${armArg}" names ${named.join(', ')} in its "args". The harness gives every arm its model (--model), its token limit (--max-tokens), the cap left (--cap) and its steering (--graded none on this runner), so no arm answers with another writer or spends past the cap. Take ${named.length === 1 ? 'it' : 'them'} out of the runtimes file. Nothing was spent.`);
+  const b = runtimeBackend(spec);
+  if (b.provider !== 'anthropic') {
+    const priced = (x) => typeof x === 'number' && Number.isFinite(x) && x >= 0;
+    if (!priced(b.priceIn) || !priced(b.priceOut)) die(`the runtime arm "${armArg}" calls ${b.provider} with no price, so the cap could not hold. Give its prices in dollars per million tokens: "--price-in", "<usd>", "--price-out", "<usd>" in its "args", --price-in and --price-out on this runner, or ATELIER_PRICE_IN and ATELIER_PRICE_OUT. Nothing was spent.`);
+    return;
+  }
   const { ANTHROPIC_PRICING, priceFor } = await import('../../dist/providers/pricing.js');
-  if (!priceFor(ANTHROPIC_PRICING, runtimeModel)) die(`no price is known for the runtime arm's model "${runtimeModel}", so the cap could not hold. Nothing was spent.`);
-  if (!process.env.ANTHROPIC_API_KEY && !process.env.ANTHROPIC_AUTH_TOKEN) die(`ANTHROPIC_API_KEY is not set, and the runtime arm "${armArg}" names no other backend. Set it, or give the build its backend in the runtimes file: "args": ["--provider", "openai-compatible", "--base-url", "<url>", "--model", "<id>"]. Nothing was spent.`);
+  if (!priceFor(ANTHROPIC_PRICING, model)) die(`no price is known for the runtime arm's model "${model}", so the cap could not hold. Nothing was spent.`);
+  if (!process.env.ANTHROPIC_API_KEY && !process.env.ANTHROPIC_AUTH_TOKEN) die(`ANTHROPIC_API_KEY is not set, and the runtime arm "${armArg}" names no other backend. Set it, or give the build its backend in the runtimes file: "args": ["--provider", "openai-compatible", "--base-url", "<url>", "--price-in", "<usd>", "--price-out", "<usd>"]. Nothing was spent.`);
 }
 
 async function modelArm(c, t) {
@@ -146,7 +196,9 @@ async function modelArm(c, t) {
   const answer = r.json && typeof r.json === 'object' ? r.json.answer : undefined;
   if (typeof answer !== 'string') throw new Error(`the model returned no answer string for ${t.id}`);
   return { response: answer.trim(), usage: { input_tokens: r.inputTokens, cache_read_input_tokens: r.cacheReadTokens, cache_creation_input_tokens: r.cacheWriteTokens, output_tokens: r.outputTokens },
-    cost: typeof r.costUsd === 'number' ? r.costUsd : null, thinking: r.thinkingSent ?? null };
+    cost: typeof r.costUsd === 'number' ? r.costUsd : null, thinking: r.thinkingSent ?? null,
+    // what the preflight reads: thinking blocks in the response, and how much text the call wrote for its tokens
+    thinkingBlocks: r.thinkingBlocks ?? 0, written: JSON.stringify(r.json).length };
 }
 
 // THE SELF-REVIEW ARM: the skill as a prompt, then one call that checks the draft against the method and the material
@@ -168,6 +220,7 @@ async function selfReviewArm(c, t) {
   const cost = typeof first.cost === 'number' && typeof r.costUsd === 'number' ? first.cost + r.costUsd : null;
   const sum = (a, b) => (a ?? 0) + (b ?? 0);
   return { response: answer.trim(), review: typeof r.json.review === 'string' ? r.json.review : null, calls: 2, cost, thinking: r.thinkingSent ?? first.thinking ?? null,
+    thinkingBlocks: first.thinkingBlocks + (r.thinkingBlocks ?? 0), written: first.written + JSON.stringify(r.json).length,
     // the longest single call, which is what the token limit binds
     longestCall: Math.max(first.usage.output_tokens ?? 0, r.outputTokens ?? 0),
     usage: { input_tokens: sum(first.usage.input_tokens, r.inputTokens), cache_read_input_tokens: sum(first.usage.cache_read_input_tokens, r.cacheReadTokens),
@@ -239,15 +292,30 @@ function runtimeModelOf(rec) {
     : { model: null, modelReason: rec ? 'the run record does not say which model answered' : 'the run left no record' };
 }
 
-function runtimeArm(t) {
+// THE RUN MUST HAVE BEEN THE ONE THE HARNESS ASKED FOR. A model the provider resolved to a dated snapshot of the
+// harness's ("claude-opus-5-20261001") is the same model; anything else, an unrecorded model or limit, or another
+// steering, stops the arm before its row is written: a row from another writer would be compared as this arm's.
+const sameModel = (said) => said === model || (typeof said === 'string' && said.startsWith(`${model}-`) && /^\d{8}$/.test(said.slice(model.length + 1)));
+function heldToHarness(t, rec) {
+  const wrong = [];
+  if (!sameModel(rec?.model)) wrong.push(`its model was ${rec?.model ? `"${rec.model}"` : 'not recorded'}, not "${model}"`);
+  if (rec?.maxTokens !== maxTokens) wrong.push(`its token limit was ${rec?.maxTokens ?? 'not recorded'}, not ${maxTokens}`);
+  if (rec?.steering !== graded) wrong.push(`its steering was ${rec?.steering ? `"${rec.steering}"` : 'not recorded'}, not "${graded}"`);
+  if (wrong.length) die(`${t.id}: the runtime run did not run as the harness asked: ${wrong.join('; ')}. No row was written. Build the CLI from a commit whose invoke --json records model, maxTokens and steering, and keep the model, limit and steering out of the runtimes file.`);
+}
+
+function runtimeArm(t, remaining) {
   const tmp = mkdtempSync(join(tmpdir(), 'compare-material-'));
   try {
     const withArgs = t.material ? (writeFileSync(join(tmp, 'material.md'), t.material), ['--with', `material=${join(tmp, 'material.md')}`]) : [];
     // A benchmark's runs are tests: marked so a later rebuild never learns its "write this, not that" pairs from them.
     // --json, so the row keeps Atelier's own verdict on its work (VERIFIED, NEEDS_REVIEW, BLOCKED) beside the answer:
     // a study compares that verdict with the judge's.
+    // The cap still left is the run's own budget (`invoke --cap`), so no run can spend past the harness's cap.
+    const backend = runtimeBackend(runtimeSpec);
     const cmd = [resolve(runtimeSpec.cli), 'invoke', '--skill', runtimeSpec.skill, '--json', '--test-run', '--target-model', model,
-      '--max-tokens', String(maxTokens), ...withArgs, ...(runtimeSpec.args ?? []), t.prompt];
+      '--max-tokens', String(maxTokens), '--cap', String(Math.floor(remaining * 10_000) / 10_000), ...(graded === 'none' ? ['--graded', 'none'] : []),
+      ...(backend.passPrices ? ['--price-in', opt(args, 'price-in'), '--price-out', opt(args, 'price-out')] : []), ...withArgs, ...(runtimeSpec.args ?? []), t.prompt];
     const done = spawnSync(process.execPath, cmd, { cwd: runtimeSpec.proj, env: { ...process.env, ATELIER_DATA: runtimeSpec.data, ATELIER_PROJECT_DIR: runtimeSpec.proj },
       encoding: 'utf8', timeout: 900_000, maxBuffer: 64 * 1024 * 1024 });
     let rec = null; try { rec = JSON.parse(done.stdout); } catch { /* no record: the run failed before its end */ }
@@ -256,10 +324,12 @@ function runtimeArm(t) {
     // three runs and a refused task was never recorded. It is written as a row with no response and its reasons.
     if (done.status === 3 && /not delivered \(strict delivery\)/.test(done.stderr ?? '')) {
       const why = /not delivered \(strict delivery\): (.*?)\. The text is kept/s.exec(done.stderr ?? '')?.[1] ?? 'not conformant';
+      heldToHarness(t, rec);
       return { response: null, refused: why.split('; '), ...ledgerOf(rec), ...signalsOf(rec), ...thinkingOf(rec), ...runtimeModelOf(rec), cost: rec?.costUsd ?? null, state: rec?.eval?.record?.state ?? null };
     }
     // A model call inside the run that a provider filtered or the model declined: a FILTERED row, never retried.
     const blocked = done.status !== 0 ? filteredIn(done.stderr ?? '') : null;
+    if (blocked && rec) heldToHarness(t, rec);
     if (blocked) return { response: null, filtered: blocked, ...ledgerOf(rec), ...thinkingOf(rec), ...runtimeModelOf(rec), cost: rec?.costUsd ?? null };
     // A BLOCKED RUN IS A DELIVERED ANSWER WITH ITS VERDICT, NOT A FAILED CALL. `invoke --json` exits 1 when the work it
     // delivered is BLOCKED, as `run` does; the record is complete and is the row. Retrying it would pay for the same run
@@ -268,10 +338,11 @@ function runtimeArm(t) {
     if ((done.status !== 0 && !blockedButDelivered) || !rec) throw new Error((done.stderr || done.stdout || `exit ${done.status}`).trim().split('\n').slice(-5).join('\n'));
     // a setup error, not a failed call: retrying would pay for the same run again, so it stops here
     if (rec.output === undefined || rec.toCheck === undefined) die(`${runtimeSpec.cli} gives no "output" and "toCheck" in invoke --json: build it from a commit that has them`);
+    heldToHarness(t, rec);
     // THE REVIEW AS DELIVERED (`output`, after repair), NOT `answer`: `answer` adds a footer of specifics not found in the
     // material ("check before you use this"), which only this arm writes. Judged, it names the arm, and no one posts a
     // review that ends that way. The list is kept beside the response as to_check, for the study and never the judge.
-    return { response: String(rec.output ?? '').trim(), ...ledgerOf(rec), ...signalsOf(rec), ...thinkingOf(rec), ...runtimeModelOf(rec), cost: rec.costUsd ?? null, state: rec.eval?.record?.state ?? null };
+    return { response: String(rec.output ?? '').trim(), steering: rec.steering, ...ledgerOf(rec), ...signalsOf(rec), ...thinkingOf(rec), ...runtimeModelOf(rec), cost: rec.costUsd ?? null, state: rec.eval?.record?.state ?? null };
   } finally { rmSync(tmp, { recursive: true, force: true }); }
 }
 
@@ -279,20 +350,58 @@ function runtimeArm(t) {
 // setting the call was sent with (model arms; the runtime arm's calls go through the same provider), and wall time.
 const extraOf = (r) => ({ ...(r.review ? { review: r.review } : {}), ...(r.state ? { atelier_state: r.state } : {}), ...(r.signals ? r.signals : {}),
   ...(r.thinking !== undefined ? { thinking: r.thinking } : {}), ...(r.thinkingReason ? { thinking_reason: r.thinkingReason } : {}),
-  ...(r.modelReason ? { model_reason: r.modelReason } : {}), seconds: r.seconds });
+  ...(r.modelReason ? { model_reason: r.modelReason } : {}),
+  // a runtime row's steering is its record's (held equal to the declared one); a row with no record says so
+  ...(kind === 'atelier-runtime' && r.modelReason === 'the run left no record' ? { graded_reason: 'the run left no record; the arm\'s declared setting' } : {}), seconds: r.seconds });
 // The model on a row: a runtime row's from its own record; every other arm's is the harness's, which it was sent to.
 const modelOfRow = (r) => (kind === 'atelier-runtime' ? r.model ?? null : model);
 let filtered = 0;
 
-const done = new Set(existsSync(out) ? readJsonl(out).map((r) => `${r.case_id}\u0000${r.trial}\u0000${r.condition}\u0000${r.runner}`) : []);
-const prior = existsSync(out) ? readJsonl(out).filter((r) => r.condition === condition) : [];
+// THE MANIFEST: everything that makes this file one arm's, written beside it with the first row. What a row carries of
+// it (rowFixed) is compared row by row on a rerun; the rest (the provider settings) is in the manifest alone.
+const armLabel = kind === 'skill' ? `skill:${armArg}` : arm;
+const rowFixed = { runner: RUNNER, condition, arm: armLabel, max_tokens: maxTokens, placement: kind === 'skill' ? placement : null,
+  skill_sha256: skillSha, tasks_sha256: tasksSha, split, graded, grammar };
+const runtimeSha = runtimeSpec === null ? null
+  : sha256(JSON.stringify({ cli: resolve(runtimeSpec.cli), data: resolve(runtimeSpec.data), proj: resolve(runtimeSpec.proj), skill: runtimeSpec.skill, args: runtimeSpec.args ?? [] }));
+const providerSettings = () => {
+  if (kind === 'atelier-runtime') { const b = runtimeBackend(runtimeSpec); return { provider: b.provider, args: runtimeSpec.args ?? [], price_in: b.priceIn, price_out: b.priceOut }; }
+  if (provider === 'anthropic') return { provider, base_url: process.env.ANTHROPIC_BASE_URL ?? null };
+  return { provider, base_url: opt(args, 'base-url') ?? null, price_in: Number(opt(args, 'price-in', 'NaN')), price_out: Number(opt(args, 'price-out', 'NaN')) };
+};
+const manifest = { ...rowFixed, skill_sha256: kind === 'atelier-runtime' ? runtimeSha : skillSha, model, provider: providerSettings() };
+const manifestPath = `${out}.manifest.json`;
+/** Every field where `a` and `b` differ, as "field: was → now". */
+const differences = (was, now, keys) => keys.filter((k) => JSON.stringify(was?.[k] ?? null) !== JSON.stringify(now[k] ?? null))
+  .map((k) => `${k}: ${JSON.stringify(was?.[k] ?? null)} -> ${JSON.stringify(now[k] ?? null)}`);
+const existing = existsSync(out) ? readJsonl(out) : [];
+{
+  const found = [];
+  if (existsSync(manifestPath)) {
+    let was = null; try { was = JSON.parse(readFileSync(manifestPath, 'utf8')); } catch { found.push(`${manifestPath} is not readable JSON`); }
+    if (was) found.push(...differences(was, manifest, Object.keys(manifest)).map((d) => `the manifest's ${d}`));
+  } else if (existing.length) found.push(`${out} holds ${existing.length} row(s) and no ${manifestPath}, so what they were written with cannot be checked`);
+  existing.forEach((r, i) => {
+    const d = differences(r, rowFixed, Object.keys(rowFixed));
+    if (kind === 'atelier-runtime' ? !sameModel(r.model) : r.model !== model) d.push(`model: ${JSON.stringify(r.model ?? null)} -> ${JSON.stringify(model)}`);
+    if (d.length) found.push(`row ${i + 1} (${r.case_id ?? '?'}): ${d.join('; ')}`);
+  });
+  if (found.length) die(`${out} was written by another arm or with other settings, so nothing is added to it:\n  ${found.slice(0, 12).join('\n  ')}${found.length > 12 ? `\n  … and ${found.length - 12} more` : ''}\nWrite this arm to its own --out file. Nothing was written.`);
+}
+const writeRow = (row) => { if (!existsSync(manifestPath)) writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 1)}\n`); appendFileSync(out, `${JSON.stringify(row)}\n`); };
+
+const done = new Set(existing.map((r) => `${r.case_id}\u0000${r.trial}\u0000${r.condition}\u0000${r.runner}`));
+const prior = existing.filter((r) => r.condition === condition);
 let spent = prior.reduce((n, r) => n + (r.cost_usd ?? 0), 0);
 // a two-call arm's cell costs two calls
 let perCall = Math.max(Number(opt(args, 'per-call', '0.25')) * (kind === 'self-review' ? 2 : 1), ...prior.filter((r) => !r.cost_estimated).map((r) => r.cost_usd ?? 0));
 mkdirSync(dirname(resolve(out)), { recursive: true });
 const c = kind === 'atelier-runtime' ? null : await client();
-const answerOf = (t) => (kind === 'atelier-runtime' ? runtimeArm(t) : kind === 'self-review' ? selfReviewArm(c, t) : modelArm(c, t));
+const answerOf = (t) => (kind === 'atelier-runtime' ? runtimeArm(t, cap - spent) : kind === 'self-review' ? selfReviewArm(c, t) : modelArm(c, t));
 
+// The answer's text at about four characters a token; more than three times that, plus a margin for the call's own
+// framing, is far above what the answer accounts for.
+const CHARS_PER_TOKEN = 4; const FAR_ABOVE = 3; const SLACK_TOKENS = 64;
 // --preflight: ONE CALL ON THE FIRST TASK, BEFORE A PAID RUN, recording nothing. It says what one answer costs and how
 // many of the token limit it used: a study once lost 162 of 468 cells to answers cut off at the limit, found afterwards.
 // It exits 2 when it finds a reason not to run (answers near the limit, a cost not known), so `--preflight && run` holds.
@@ -311,6 +420,16 @@ if (args.includes('--preflight')) {
   console.log(`preflight: task ${t.id}, ${used ?? 'an unknown number of'} output token(s) of a limit of ${maxTokens}${r.calls > 1 ? ' in its longest call' : ''}; ${typeof r.cost === 'number' ? `$${r.cost.toFixed(4)}` : 'an unknown cost'} for the call${r.calls > 1 ? ` (${r.calls} calls)` : ''}`);
   if (used !== null && used >= maxTokens * 0.8) { stop = true; console.log(`preflight: the answer used ${Math.round((used / maxTokens) * 100)}% of the limit, so answers may be cut off: raise --max-tokens before the run.`); }
   if (typeof r.cost !== 'number') { stop = true; console.log('preflight: the call reported no cost, so --cap could not hold: fix the price before the run.'); }
+  // EVERY ARM IS SENT WITH THINKING OFF. A thinking block in the answer, or output tokens far beyond what the answer's
+  // text accounts for (thinking billed and not shown), means the setting did not hold: the arm would be paid and
+  // judged as another configuration than the one recorded.
+  if (kind === 'atelier-runtime' && r.thinking === 'enabled') { stop = true; console.log('preflight: the run record says its calls were sent with thinking on: every arm runs with thinking off.'); }
+  if (r.thinkingBlocks > 0) { stop = true; console.log(`preflight: the response held ${r.thinkingBlocks} thinking block(s), although every arm is sent with thinking off: check the model and the provider before the run.`); }
+  const accounted = r.written === undefined ? null : Math.ceil(r.written / CHARS_PER_TOKEN);
+  const billed = r.usage?.output_tokens ?? null;
+  if (accounted !== null && billed !== null && billed > FAR_ABOVE * accounted + SLACK_TOKENS) {
+    stop = true; console.log(`preflight: the call billed ${billed} output token(s) for an answer of about ${accounted}: tokens were spent on something not in the answer (thinking, most likely). Check the model and the provider before the run.`);
+  }
   process.exit(stop ? 2 : 0);
 }
 
@@ -344,7 +463,7 @@ for (let trial = 1; trial <= trials; trial++) {
     if (r.filtered) filtered += 1;
     // A CALL WHOSE COST IS NOT KNOWN STOPS THE RUN: adding 0 for it is how a cap stopped binding. The answer is kept.
     if (typeof r.cost !== 'number') {
-      appendFileSync(out, `${JSON.stringify({ case_id: t.id, trial, condition, runner: RUNNER, response: r.response, usage: r.usage, cost_usd: null, model: modelOfRow(r), arm: kind === 'skill' ? `skill:${armArg}` : arm, max_tokens: maxTokens, placement: kind === 'skill' ? placement : null, skill_sha256: skillSha, tasks_sha256: tasksSha, split, calls: r.calls === undefined ? 1 : r.calls, ...extraOf(r) })}\n`);
+      writeRow({ case_id: t.id, trial, condition, runner: RUNNER, response: r.response, usage: r.usage, cost_usd: null, model: modelOfRow(r), arm: armLabel, max_tokens: maxTokens, placement: rowFixed.placement, skill_sha256: skillSha, tasks_sha256: tasksSha, split, graded, grammar, calls: r.calls === undefined ? 1 : r.calls, ...extraOf(r) });
       console.error(`stopped: ${t.id} came back with no cost, so the cap could not hold. Its answer is recorded; fix the price and rerun.`); process.exit(4);
     }
     // an estimate is never evidence of what a call costs: it does not raise the allowance kept for the next one
@@ -352,9 +471,9 @@ for (let trial = 1; trial <= trials; trial++) {
     const row = { case_id: t.id, trial, condition, runner: RUNNER, response: r.response, ...(r.refused ? { delivered: false, reasons: r.refused } : {}),
       ...(r.filtered ? { delivered: false, filtered: r.filtered, ...(r.filteredCall ? { filtered_call: r.filteredCall } : {}) } : {}),
       usage: r.usage, cost_usd: r.cost, ...(r.costEstimated ? { cost_estimated: true } : {}), model: modelOfRow(r),
-      arm: kind === 'skill' ? `skill:${armArg}` : arm, max_tokens: maxTokens, placement: kind === 'skill' ? placement : null,
-      skill_sha256: skillSha, tasks_sha256: tasksSha, split, calls: r.calls === undefined ? 1 : r.calls, ...extraOf(r) };
-    appendFileSync(out, `${JSON.stringify(row)}\n`);
+      arm: armLabel, max_tokens: maxTokens, placement: rowFixed.placement,
+      skill_sha256: skillSha, tasks_sha256: tasksSha, split, graded, grammar, calls: r.calls === undefined ? 1 : r.calls, ...extraOf(r) };
+    writeRow(row);
     console.error(`${condition} trial ${trial}: ${t.id}${r.cost === null ? '' : `  $${r.cost.toFixed(4)}`}`);
   }
 }

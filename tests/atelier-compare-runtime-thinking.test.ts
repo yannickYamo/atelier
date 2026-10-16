@@ -9,18 +9,24 @@ import { mkdtempSync, writeFileSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
-const rowFrom = (record: object): Record<string, unknown> => {
+// What every runtime record carries for the harness to hold it to: the model and limit it was given, and its steering.
+const HELD = { model: 'claude-opus-5', maxTokens: 4096, steering: 'all' };
+const ran = (record: object): { status: number | null; stderr: string; out: string } => {
   const dir = mkdtempSync(join(tmpdir(), 'atelier-rt-thinking-'));
   // A stand-in for `atelier invoke --json`: prints a run record and exits 0.
   const cli = join(dir, 'fake-atelier.mjs');
   writeFileSync(cli, `process.stdout.write(${JSON.stringify(JSON.stringify(record))});\n`);
   writeFileSync(join(dir, 'tasks.jsonl'), `${JSON.stringify({ id: 't1', prompt: 'Review this.' })}\n`);
-  writeFileSync(join(dir, 'runtimes.json'), JSON.stringify({ b: { cli, data: dir, proj: dir, skill: 's', args: ['--provider', 'openai-compatible', '--base-url', 'http://127.0.0.1:1', '--model', 'm'] } }));
+  writeFileSync(join(dir, 'runtimes.json'), JSON.stringify({ b: { cli, data: dir, proj: dir, skill: 's', args: ['--provider', 'openai-compatible', '--base-url', 'http://127.0.0.1:1', '--price-in', '1', '--price-out', '1'] } }));
   const out = join(dir, 'out.jsonl');
   const r = spawnSync(process.execPath, [resolve('bench/compare/run.mjs'), '--tasks', join(dir, 'tasks.jsonl'), '--arm', 'atelier-runtime:b', '--runtimes', join(dir, 'runtimes.json'), '--out', out],
     { encoding: 'utf8', env: { ...process.env, ANTHROPIC_API_KEY: '' } });
+  return { status: r.status, stderr: r.stderr, out };
+};
+const rowFrom = (record: object): Record<string, unknown> => {
+  const r = ran({ ...HELD, ...record });
   expect(r.status, r.stderr).toBe(0);
-  return JSON.parse(readFileSync(out, 'utf8').trim().split('\n')[0]) as Record<string, unknown>;
+  return JSON.parse(readFileSync(r.out, 'utf8').trim().split('\n')[0]) as Record<string, unknown>;
 };
 
 describe('the atelier-runtime arm\'s rows', () => {
@@ -39,10 +45,13 @@ describe('the atelier-runtime arm\'s rows', () => {
     expect(row.thinking).toBeNull();
     expect(row.thinking_reason).toBe('the provider did not report sending a thinking setting on every call of the run');
   });
-  it('carry the model the run says answered, not the harness\'s --model', () => {
-    expect(rowFrom({ output: 'Looks fine.', toCheck: [], costUsd: 0, model: 'local-7b' }).model).toBe('local-7b');
-    const unsaid = rowFrom({ output: 'Looks fine.', toCheck: [], costUsd: 0 });
-    expect(unsaid.model).toBeNull();
-    expect(unsaid.model_reason).toBe('the run record does not say which model answered');
+  it('carry the model the run says answered, and refuse a run that names another model or none', () => {
+    expect(rowFrom({ output: 'Looks fine.', toCheck: [], costUsd: 0 }).model).toBe('claude-opus-5');
+    const other = ran({ ...HELD, output: 'Looks fine.', toCheck: [], costUsd: 0, model: 'local-7b' });
+    expect(other.status).toBe(2);
+    expect(other.stderr).toMatch(/its model was "local-7b", not "claude-opus-5"\. No row was written/);
+    const unsaid = ran({ ...HELD, output: 'Looks fine.', toCheck: [], costUsd: 0, model: undefined });
+    expect(unsaid.status).toBe(2);
+    expect(unsaid.stderr).toMatch(/its model was not recorded/);
   });
 });

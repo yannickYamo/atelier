@@ -75,7 +75,7 @@ describe('the runtime arm keeps Atelier\'s own verdict beside the answer', () =>
     await fetch(`http://127.0.0.1:${port}/__set`, { method: 'POST', body: JSON.stringify({ byTool: { emit_piece: { piece: 'The change is correct. One risk: the cache is never cleared.' }, emit_observation: { applicable: true, present: true, why: 'seen' } } }) });
     writeFileSync(join(dir, 'tasks.jsonl'), `${JSON.stringify({ id: 'a', prompt: 'Review this change.', material: 'diff --git a/x b/x\n+cache.set(k, v)\n' })}\n`);
     writeFileSync(join(dir, 'runtimes.json'), JSON.stringify({ rev: { cli: resolve('dist/cli/atelier.mjs'), data, proj, skill: 'rev',
-      args: ['--provider', 'openai-compatible', '--base-url', `http://127.0.0.1:${port}`, '--model', 'scripted', '--claims', 'pattern'] } }));
+      args: ['--provider', 'openai-compatible', '--base-url', `http://127.0.0.1:${port}`, '--claims', 'pattern'] } }));
     const out = join(dir, 'rt.jsonl');
     const r = spawnSync(process.execPath, [resolve('bench/compare/run.mjs'), '--tasks', join(dir, 'tasks.jsonl'), '--arm', 'atelier-runtime:rev', '--runtimes', join(dir, 'runtimes.json'), '--out', out, '--condition', 'atelier', '--model', 'scripted'],
       { encoding: 'utf8', env: { ...env, ANTHROPIC_API_KEY: '' } });
@@ -93,13 +93,13 @@ describe('review: a strict refusal on the runtime arm is a row with its verdict 
   // output, the refusal on stderr, exit 3. What is under test is how the runner records it.
   it('is written with no response, its reasons, atelier_state, the record\'s cost, its calls and seconds', () => {
     const dir = mkdtempSync(join(tmpdir(), 'atelier-rt-strict-'));
-    const record = { output: null, answer: null, delivered: false, costUsd: 0.0123,
+    const record = { output: null, answer: null, delivered: false, costUsd: 0.0123, model: 'scripted', maxTokens: 4096, steering: 'all',
       eval: { record: { state: 'BLOCKED' }, spend: [{ purpose: 'draft', usd: 0.01, calls: 3, inputTokens: 900, outputTokens: 300 }, { purpose: 'claims', usd: 0.0023, calls: 2, inputTokens: 400, outputTokens: 50 }] } };
     writeFileSync(join(dir, 'cli.mjs'), `process.stdout.write(${JSON.stringify(JSON.stringify(record))});
 process.stderr.write('atelier: not delivered (strict delivery): p1 is broken; p2 is broken. The text is kept with the record: atelier report x.\\n');
 process.exitCode = 3;\n`);
     writeFileSync(join(dir, 'tasks.jsonl'), `${JSON.stringify({ id: 'a', prompt: 'Review this change.' })}\n`);
-    writeFileSync(join(dir, 'runtimes.json'), JSON.stringify({ s: { cli: join(dir, 'cli.mjs'), data: dir, proj: dir, skill: 's', args: ['--provider', 'openai-compatible'] } }));
+    writeFileSync(join(dir, 'runtimes.json'), JSON.stringify({ s: { cli: join(dir, 'cli.mjs'), data: dir, proj: dir, skill: 's', args: ['--provider', 'openai-compatible', '--price-in', '1', '--price-out', '1'] } }));
     const out = join(dir, 'rt.jsonl');
     const r = spawnSync(process.execPath, [resolve('bench/compare/run.mjs'), '--tasks', join(dir, 'tasks.jsonl'), '--arm', 'atelier-runtime:s', '--runtimes', join(dir, 'runtimes.json'), '--out', out, '--condition', 'atelier', '--model', 'scripted'],
       { encoding: 'utf8', env: { ...process.env, ANTHROPIC_API_KEY: '' } });
@@ -114,7 +114,7 @@ process.exitCode = 3;\n`);
     writeFileSync(join(dir, 'cli.mjs'), `import { appendFileSync } from 'node:fs'; appendFileSync(${JSON.stringify(join(dir, 'calls'))}, 'x');
 process.stdout.write(${JSON.stringify(JSON.stringify({ output: 'Merge it.', costUsd: 0.01, eval: { record: { state: 'NEEDS_REVIEW' } } }))});\n`);
     writeFileSync(join(dir, 'tasks.jsonl'), `${JSON.stringify({ id: 'a', prompt: 'Review this change.' })}\n`);
-    writeFileSync(join(dir, 'runtimes.json'), JSON.stringify({ s: { cli: join(dir, 'cli.mjs'), data: dir, proj: dir, skill: 's', args: ['--provider', 'openai-compatible'] } }));
+    writeFileSync(join(dir, 'runtimes.json'), JSON.stringify({ s: { cli: join(dir, 'cli.mjs'), data: dir, proj: dir, skill: 's', args: ['--provider', 'openai-compatible', '--price-in', '1', '--price-out', '1'] } }));
     const r = spawnSync(process.execPath, [resolve('bench/compare/run.mjs'), '--tasks', join(dir, 'tasks.jsonl'), '--arm', 'atelier-runtime:s', '--runtimes', join(dir, 'runtimes.json'), '--out', join(dir, 'o.jsonl'), '--model', 'scripted'],
       { encoding: 'utf8', env: { ...process.env, ANTHROPIC_API_KEY: '' } });
     expect(r.status).not.toBe(0);
@@ -139,7 +139,7 @@ describe('the judge reads the review, never the footer only Atelier writes', () 
       emit_specifics: { specifics: [{ sentence: 2, text: '95% of callers', kind: 'FIGURE', attributed: false, source: 'NONE', support: '' }] } } }) });
     writeFileSync(join(dir, 'tasks.jsonl'), `${JSON.stringify({ id: 'a', prompt: 'Review this change.', material: 'diff --git a/r.ts b/r.ts\n+for (;;) retry()\n' })}\n`);
     writeFileSync(join(dir, 'runtimes.json'), JSON.stringify({ rev: { cli: resolve('dist/cli/atelier.mjs'), data, proj, skill: 'rev',
-      args: ['--provider', 'openai-compatible', '--base-url', `http://127.0.0.1:${port}`, '--model', 'scripted', '--claims', 'model', '--claims-model', 'scripted'] } }));
+      args: ['--provider', 'openai-compatible', '--base-url', `http://127.0.0.1:${port}`, '--claims', 'model', '--claims-model', 'scripted'] } }));
     const out = join(dir, 'rt.jsonl');
     const r = spawnSync(process.execPath, [resolve('bench/compare/run.mjs'), '--tasks', join(dir, 'tasks.jsonl'), '--arm', 'atelier-runtime:rev', '--runtimes', join(dir, 'runtimes.json'), '--out', out, '--condition', 'atelier', '--model', 'scripted'],
       { encoding: 'utf8', env: { ...env, ANTHROPIC_API_KEY: '' } });
@@ -194,7 +194,7 @@ describe('a filtered or declined task is a row, and the arm goes on', () => {
     const dir = mkdtempSync(join(tmpdir(), 'atelier-rt-filter-'));
     writeFileSync(join(dir, 'cli.mjs'), `process.stderr.write('atelier: openai-compatible filtered the response (finish_reason: content_filter). Nothing was recorded.\\n'); process.exitCode = 1;\n`);
     writeFileSync(join(dir, 'tasks.jsonl'), `${JSON.stringify({ id: 'a', prompt: 'Review this change.' })}\n`);
-    writeFileSync(join(dir, 'runtimes.json'), JSON.stringify({ s: { cli: join(dir, 'cli.mjs'), data: dir, proj: dir, skill: 's', args: ['--provider', 'openai-compatible'] } }));
+    writeFileSync(join(dir, 'runtimes.json'), JSON.stringify({ s: { cli: join(dir, 'cli.mjs'), data: dir, proj: dir, skill: 's', args: ['--provider', 'openai-compatible', '--price-in', '1', '--price-out', '1'] } }));
     const out = join(dir, 'o.jsonl');
     const r = spawnSync(process.execPath, [resolve('bench/compare/run.mjs'), '--tasks', join(dir, 'tasks.jsonl'), '--arm', 'atelier-runtime:s', '--runtimes', join(dir, 'runtimes.json'), '--out', out, '--model', 'scripted'],
       { encoding: 'utf8', env: { ...process.env, ANTHROPIC_API_KEY: '' } });
@@ -261,7 +261,7 @@ describe('review: a filter reported as an HTTP 400, and the cost of a filtered c
       const dir = mkdtempSync(join(tmpdir(), 'atelier-rt-400-'));
       writeFileSync(join(dir, 'cli.mjs'), `process.stderr.write(${JSON.stringify(msg + '\n')}); process.exitCode = 1;\n`);
       writeFileSync(join(dir, 'tasks.jsonl'), `${JSON.stringify({ id: 'a', prompt: 'Review this change.' })}\n`);
-      writeFileSync(join(dir, 'runtimes.json'), JSON.stringify({ s: { cli: join(dir, 'cli.mjs'), data: dir, proj: dir, skill: 's', args: ['--provider', 'openai-compatible'] } }));
+      writeFileSync(join(dir, 'runtimes.json'), JSON.stringify({ s: { cli: join(dir, 'cli.mjs'), data: dir, proj: dir, skill: 's', args: ['--provider', 'openai-compatible', '--price-in', '1', '--price-out', '1'] } }));
       const out = join(dir, 'o.jsonl');
       const r = spawnSync(process.execPath, [resolve('bench/compare/run.mjs'), '--tasks', join(dir, 'tasks.jsonl'), '--arm', 'atelier-runtime:s', '--runtimes', join(dir, 'runtimes.json'), '--out', out, '--model', 'scripted'],
         { encoding: 'utf8', env: { ...process.env, ANTHROPIC_API_KEY: '' } });
@@ -274,11 +274,11 @@ describe('review: a filter reported as an HTTP 400, and the cost of a filtered c
 describe('a blocked runtime run is a row, never a failed call', () => {
   it('exit 1 with a BLOCKED record is recorded once, with its state, and the arm goes on', () => {
     const dir = mkdtempSync(join(tmpdir(), 'atelier-rt-blocked-'));
-    const rec = { output: 'A review.', toCheck: [], costUsd: 0.01, invocationId: 'i1', eval: { record: { state: 'BLOCKED', entries: [] }, spend: [] } };
+    const rec = { output: 'A review.', toCheck: [], costUsd: 0.01, invocationId: 'i1', model: 'scripted', maxTokens: 4096, steering: 'all', eval: { record: { state: 'BLOCKED', entries: [] }, spend: [] } };
     writeFileSync(join(dir, 'calls'), '');
     writeFileSync(join(dir, 'cli.mjs'), `import { appendFileSync } from 'node:fs'; appendFileSync(${JSON.stringify(join(dir, 'calls'))}, 'x'); process.stdout.write(${JSON.stringify(JSON.stringify(rec))}); process.exitCode = 1;\n`);
     writeFileSync(join(dir, 'tasks.jsonl'), ['a', 'b'].map((id) => JSON.stringify({ id, prompt: `Review change ${id}.` })).join('\n') + '\n');
-    writeFileSync(join(dir, 'runtimes.json'), JSON.stringify({ s: { cli: join(dir, 'cli.mjs'), data: dir, proj: dir, skill: 's', args: ['--provider', 'openai-compatible'] } }));
+    writeFileSync(join(dir, 'runtimes.json'), JSON.stringify({ s: { cli: join(dir, 'cli.mjs'), data: dir, proj: dir, skill: 's', args: ['--provider', 'openai-compatible', '--price-in', '1', '--price-out', '1'] } }));
     const out = join(dir, 'o.jsonl');
     const r = spawnSync(process.execPath, [resolve('bench/compare/run.mjs'), '--tasks', join(dir, 'tasks.jsonl'), '--arm', 'atelier-runtime:s', '--runtimes', join(dir, 'runtimes.json'), '--out', out, '--model', 'scripted'],
       { encoding: 'utf8', env: { ...process.env, ANTHROPIC_API_KEY: '' } });

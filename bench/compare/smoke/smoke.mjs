@@ -89,20 +89,25 @@ try {
 
   // ── run.mjs: three arms on the sealed test split, in the benchmark's responses format ─────────
   const testSplit = join(splits, 'test.jsonl');
+  // one file per arm, as the runner holds (a manifest beside each); the benchmark's measure reads them as one file
   const resp = join(work, 'responses.jsonl');
-  const common = ['--tasks', testSplit, '--out', resp, '--model', 'fake-writer', '--max-tokens', '1024', '--sealed', join(splits, 'SEALED.json')];
+  const armOut = (name) => join(work, `responses-${name}.jsonl`);
+  const settings = ['--tasks', testSplit, '--model', 'fake-writer', '--max-tokens', '1024', '--sealed', join(splits, 'SEALED.json')];
+  const common = [...settings, '--out', armOut('none')];
   // A price is required before any call: with none, the runner refuses (exit 2) and nothing is written.
   const priced = ['--provider', 'openai-compatible', '--base-url', fake.url, '--price-in', '1', '--price-out', '1', '--per-call', '0.001'];
-  check('run.mjs: an unpriced model is refused before any call', run(process.execPath, [join(COMPARE, 'run.mjs'), ...common, '--arm', 'none', '--model', 'claude-not-a-model'], { expect: null }).status === 2 && !existsSync(resp));
-  check('run.mjs: another backend without --price-in and --price-out is refused', run(process.execPath, [join(COMPARE, 'run.mjs'), ...common, '--arm', 'none', '--provider', 'openai-compatible', '--base-url', fake.url], { expect: null }).status === 2 && !existsSync(resp));
-  check('run.mjs: a cap one call cannot fit under stops before that call', run(process.execPath, [join(COMPARE, 'run.mjs'), ...common, '--arm', 'none', ...priced, '--per-call', '5', '--cap', '1'], { expect: null }).status === 3 && !existsSync(resp));
+  check('run.mjs: an unpriced model is refused before any call', run(process.execPath, [join(COMPARE, 'run.mjs'), ...common, '--arm', 'none', '--model', 'claude-not-a-model'], { expect: null }).status === 2 && !existsSync(armOut('none')));
+  check('run.mjs: another backend without --price-in and --price-out is refused', run(process.execPath, [join(COMPARE, 'run.mjs'), ...common, '--arm', 'none', '--provider', 'openai-compatible', '--base-url', fake.url], { expect: null }).status === 2 && !existsSync(armOut('none')));
+  check('run.mjs: a cap one call cannot fit under stops before that call', run(process.execPath, [join(COMPARE, 'run.mjs'), ...common, '--arm', 'none', ...priced, '--per-call', '5', '--cap', '1'], { expect: null }).status === 3 && !existsSync(armOut('none')));
   run(process.execPath, [join(COMPARE, 'run.mjs'), ...common, '--arm', 'none', ...priced]);
-  run(process.execPath, [join(COMPARE, 'run.mjs'), ...common, '--arm', `skill:${join(HERE, 'seed-skill.md')}`, ...priced]);
+  run(process.execPath, [join(COMPARE, 'run.mjs'), ...settings, '--out', armOut('skill'), '--arm', `skill:${join(HERE, 'seed-skill.md')}`, ...priced]);
   const runtimes = join(work, 'runtimes.json');
   writeFileSync(runtimes, JSON.stringify({ smoke: { cli: CLI, data, proj, skill: 'smoke',
-    args: ['--provider', 'openai-compatible', '--base-url', scripted.url, '--model', 'scripted', '--no-taste'] } }));
+    args: ['--provider', 'openai-compatible', '--base-url', scripted.url, '--no-taste'] } }));
   await fetch(`${scripted.url}/__set`, { method: 'POST', body: JSON.stringify({ byTool: { emit_piece: { piece: 'Run the failing test first, then fix the header it names.' } } }) });
-  run(process.execPath, [join(COMPARE, 'run.mjs'), ...common, '--arm', 'atelier-runtime:smoke', '--runtimes', runtimes, '--condition', 'comparator', '--per-call', '0.001'], { env: { ATELIER_PRICE_IN: '1', ATELIER_PRICE_OUT: '1' } });
+  run(process.execPath, [join(COMPARE, 'run.mjs'), ...settings, '--out', armOut('runtime'), '--arm', 'atelier-runtime:smoke', '--runtimes', runtimes, '--condition', 'comparator', '--per-call', '0.001'], { env: { ATELIER_PRICE_IN: '1', ATELIER_PRICE_OUT: '1' } });
+  writeFileSync(resp, ['none', 'skill', 'runtime'].map((a) => readFileSync(armOut(a), 'utf8')).join(''));
+  check('run.mjs: each arm wrote its manifest beside its file', ['none', 'skill', 'runtime'].every((a) => existsSync(`${armOut(a)}.manifest.json`)));
   const rows = readJsonl(resp);
   check('run.mjs: 14 rows per arm, one runner, one model, one max_tokens', rows.length === 42
     && new Set(rows.map((r) => r.runner)).size === 1 && new Set(rows.map((r) => r.model)).size === 1 && new Set(rows.map((r) => r.max_tokens)).size === 1);
@@ -111,7 +116,9 @@ try {
     && rows.filter((r) => r.condition === 'baseline').every((r) => r.skill_sha256 === null));
   check('run.mjs: the runtime arm answered through atelier invoke', rows.filter((r) => r.condition === 'comparator').every((r) => r.response.includes('Run the failing test first')));
   const rerun = run(process.execPath, [join(COMPARE, 'run.mjs'), ...common, '--arm', 'none', ...priced]);
-  check('run.mjs: a rerun skips completed rows', readJsonl(resp).length === 42 && /skip/.test(rerun.stderr));
+  check('run.mjs: a rerun skips completed rows', readJsonl(armOut('none')).length === 14 && /skip/.test(rerun.stderr));
+  check('run.mjs: another arm into the same file is refused, and writes nothing', run(process.execPath, [join(COMPARE, 'run.mjs'), ...common, '--arm', `skill:${join(HERE, 'seed-skill.md')}`, ...priced], { expect: null }).status === 2
+    && readJsonl(armOut('none')).length === 14);
   const measured = run('python3', [join(IH, 'scripts', 'run_evals.py'), 'measure', resp], { expect: null });
   check('the benchmark\'s own run_evals.py measure accepts the responses file', measured.status === 0, measured.status === 0 ? '' : measured.stderr.trim().split('\n').pop());
   const scored = join(work, 'responses.atelier-scores.jsonl');
