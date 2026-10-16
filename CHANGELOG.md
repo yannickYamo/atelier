@@ -92,6 +92,9 @@ The release Phase F tests. Each area below is detailed in the sections that foll
   token limit, a cap or steering. After each run, the model and limit its record names must be the harness's, or the
   run stops and no row is written. Every runtime backend needs a price, an OpenAI-compatible one included, and each run
   is given the cap still left as its own budget; a cap that cannot hold one run stops before anything starts.
+- **A runtime arm's file is one version of its skill.** The version `invoke --json` reports is written into the
+  manifest and on every row (`skill_version`); a skill rebuilt in place between two sittings stops the resumed run with
+  nothing written, where its rows used to be appended under the same arm.
 - **Steering and grammar are on every row.** Each row says whether feature steering was on, read from the run's own
   record, and how the grammar check ran. `--graded none` declares a runtime arm without steering, so its benefit can be
   measured against the default.

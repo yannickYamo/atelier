@@ -5,12 +5,13 @@
 // says, else null with the reason.
 import { describe, it, expect } from 'vitest';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync, readFileSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
-// What every runtime record carries for the harness to hold it to: the model and limit it was given, and its steering.
-const HELD = { model: 'claude-opus-5', maxTokens: 4096, steering: 'all' };
+// What every runtime record carries for the harness to hold it to: the model and limit it was given, its steering, and the
+// version of the skill that answered.
+const HELD = { model: 'claude-opus-5', maxTokens: 4096, steering: 'all', skillVersion: 'v1' };
 const ran = (record: object): { status: number | null; stderr: string; out: string } => {
   const dir = mkdtempSync(join(tmpdir(), 'atelier-rt-thinking-'));
   // A stand-in for `atelier invoke --json`: prints a run record and exits 0.
@@ -53,5 +54,11 @@ describe('the atelier-runtime arm\'s rows', () => {
     const unsaid = ran({ ...HELD, output: 'Looks fine.', toCheck: [], costUsd: 0, model: undefined });
     expect(unsaid.status).toBe(2);
     expect(unsaid.stderr).toMatch(/its model was not recorded/);
+  });
+  it('refuse a run whose record does not say which version of the skill answered, writing nothing', () => {
+    const r = ran({ ...HELD, output: 'Looks fine.', toCheck: [], costUsd: 0, skillVersion: undefined });
+    expect(r.status).toBe(2);
+    expect(r.stderr).toMatch(/does not say which version of the skill answered \(skillVersion\)/);
+    expect(existsSync(r.out)).toBe(false);
   });
 });

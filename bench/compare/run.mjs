@@ -58,7 +58,9 @@
 // the placement, the provider settings, the steering setting and the grammar setting. A rerun into the same file
 // compares the manifest and every row already there with what it would write, and exits 2, writing nothing, on any
 // difference: a result is never built on another arm's rows, another skill's, or another limit's. A file with rows
-// and no manifest is refused the same way.
+// and no manifest is refused the same way. A runtime arm's file is also one version of its skill: the first record's
+// `skillVersion` is written into the manifest and on every row as `skill_version`, and a later record (or a resume)
+// that names another version, or none, stops the arm (exit 2) before its row is written.
 //
 // A RUNTIME ARM IS HELD TO THE HARNESS. Its "args" may not name --model, --target-model, --max-tokens, --cap or
 // --graded (exit 2): the harness gives those. After each run, the record's model and token limit must be the
@@ -302,6 +304,20 @@ function heldToHarness(t, rec) {
   if (rec?.maxTokens !== maxTokens) wrong.push(`its token limit was ${rec?.maxTokens ?? 'not recorded'}, not ${maxTokens}`);
   if (rec?.steering !== graded) wrong.push(`its steering was ${rec?.steering ? `"${rec.steering}"` : 'not recorded'}, not "${graded}"`);
   if (wrong.length) die(`${t.id}: the runtime run did not run as the harness asked: ${wrong.join('; ')}. No row was written. Build the CLI from a commit whose invoke --json records model, maxTokens and steering, and keep the model, limit and steering out of the runtimes file.`);
+  sealVersion(t, rec);
+}
+
+// ONE FILE, ONE VERSION OF THE SKILL. The manifest of a runtime arm hashes where its build lives (CLI, data, project),
+// and a skill rebuilt in place keeps every one of those paths: a resumed run appended rows another version of the skill
+// wrote, under the same arm. So the version `atelier invoke --json` reports (`skillVersion`) is read from the first
+// record, written into the manifest and on every row as `skill_version`, and a record that names another version, or
+// none, stops the arm before its row is written. Set at startup from the manifest (or the rows) already there.
+let sealedVersion = null;
+function sealVersion(t, rec) {
+  const said = typeof rec?.skillVersion === 'string' && rec.skillVersion ? rec.skillVersion : null;
+  if (!said) die(`${t.id}: the runtime run's record does not say which version of the skill answered (skillVersion), so this file could not be held to one version. No row was written. Build the CLI from a commit whose invoke --json records skillVersion.`);
+  if (sealedVersion === null) { sealedVersion = said; return; }
+  if (said !== sealedVersion) die(`${t.id}: the skill answered as version ${said}, and ${out} holds rows of version ${sealedVersion}: the skill "${runtimeSpec.skill}" was rebuilt since this file was begun. No row was written. Write the new version to its own --out file, or put the build back to ${sealedVersion} to resume.`);
 }
 
 function runtimeArm(t, remaining) {
@@ -325,12 +341,12 @@ function runtimeArm(t, remaining) {
     if (done.status === 3 && /not delivered \(strict delivery\)/.test(done.stderr ?? '')) {
       const why = /not delivered \(strict delivery\): (.*?)\. The text is kept/s.exec(done.stderr ?? '')?.[1] ?? 'not conformant';
       heldToHarness(t, rec);
-      return { response: null, refused: why.split('; '), ...ledgerOf(rec), ...signalsOf(rec), ...thinkingOf(rec), ...runtimeModelOf(rec), cost: rec?.costUsd ?? null, state: rec?.eval?.record?.state ?? null };
+      return { response: null, refused: why.split('; '), skillVersion: rec?.skillVersion ?? null, ...ledgerOf(rec), ...signalsOf(rec), ...thinkingOf(rec), ...runtimeModelOf(rec), cost: rec?.costUsd ?? null, state: rec?.eval?.record?.state ?? null };
     }
     // A model call inside the run that a provider filtered or the model declined: a FILTERED row, never retried.
     const blocked = done.status !== 0 ? filteredIn(done.stderr ?? '') : null;
     if (blocked && rec) heldToHarness(t, rec);
-    if (blocked) return { response: null, filtered: blocked, ...ledgerOf(rec), ...thinkingOf(rec), ...runtimeModelOf(rec), cost: rec?.costUsd ?? null };
+    if (blocked) return { response: null, filtered: blocked, skillVersion: rec?.skillVersion ?? null, ...ledgerOf(rec), ...thinkingOf(rec), ...runtimeModelOf(rec), cost: rec?.costUsd ?? null };
     // A BLOCKED RUN IS A DELIVERED ANSWER WITH ITS VERDICT, NOT A FAILED CALL. `invoke --json` exits 1 when the work it
     // delivered is BLOCKED, as `run` does; the record is complete and is the row. Retrying it would pay for the same run
     // three times and then end the arm.
@@ -342,7 +358,7 @@ function runtimeArm(t, remaining) {
     // THE REVIEW AS DELIVERED (`output`, after repair), NOT `answer`: `answer` adds a footer of specifics not found in the
     // material ("check before you use this"), which only this arm writes. Judged, it names the arm, and no one posts a
     // review that ends that way. The list is kept beside the response as to_check, for the study and never the judge.
-    return { response: String(rec.output ?? '').trim(), steering: rec.steering, ...ledgerOf(rec), ...signalsOf(rec), ...thinkingOf(rec), ...runtimeModelOf(rec), cost: rec.costUsd ?? null, state: rec.eval?.record?.state ?? null };
+    return { response: String(rec.output ?? '').trim(), steering: rec.steering, skillVersion: rec.skillVersion, ...ledgerOf(rec), ...signalsOf(rec), ...thinkingOf(rec), ...runtimeModelOf(rec), cost: rec.costUsd ?? null, state: rec.eval?.record?.state ?? null };
   } finally { rmSync(tmp, { recursive: true, force: true }); }
 }
 
@@ -351,6 +367,8 @@ function runtimeArm(t, remaining) {
 const extraOf = (r) => ({ ...(r.review ? { review: r.review } : {}), ...(r.state ? { atelier_state: r.state } : {}), ...(r.signals ? r.signals : {}),
   ...(r.thinking !== undefined ? { thinking: r.thinking } : {}), ...(r.thinkingReason ? { thinking_reason: r.thinkingReason } : {}),
   ...(r.modelReason ? { model_reason: r.modelReason } : {}),
+  // the version of the skill that answered (null only on a row whose run left no record), held to the manifest's
+  ...(kind === 'atelier-runtime' ? { skill_version: r.skillVersion ?? null } : {}),
   // a runtime row's steering is its record's (held equal to the declared one); a row with no record says so
   ...(kind === 'atelier-runtime' && r.modelReason === 'the run left no record' ? { graded_reason: 'the run left no record; the arm\'s declared setting' } : {}), seconds: r.seconds });
 // The model on a row: a runtime row's from its own record; every other arm's is the harness's, which it was sent to.
@@ -377,18 +395,30 @@ const differences = (was, now, keys) => keys.filter((k) => JSON.stringify(was?.[
 const existing = existsSync(out) ? readJsonl(out) : [];
 {
   const found = [];
+  let was = null;
   if (existsSync(manifestPath)) {
-    let was = null; try { was = JSON.parse(readFileSync(manifestPath, 'utf8')); } catch { found.push(`${manifestPath} is not readable JSON`); }
+    try { was = JSON.parse(readFileSync(manifestPath, 'utf8')); } catch { found.push(`${manifestPath} is not readable JSON`); }
     if (was) found.push(...differences(was, manifest, Object.keys(manifest)).map((d) => `the manifest's ${d}`));
   } else if (existing.length) found.push(`${out} holds ${existing.length} row(s) and no ${manifestPath}, so what they were written with cannot be checked`);
+  // the version this file is sealed to: the manifest's, else the first row's that names one (a row with no record names none)
+  if (kind === 'atelier-runtime') sealedVersion = was?.skill_version ?? existing.find((r) => r.skill_version)?.skill_version ?? null;
   existing.forEach((r, i) => {
     const d = differences(r, rowFixed, Object.keys(rowFixed));
     if (kind === 'atelier-runtime' ? !sameModel(r.model) : r.model !== model) d.push(`model: ${JSON.stringify(r.model ?? null)} -> ${JSON.stringify(model)}`);
+    if (kind === 'atelier-runtime' && !Object.hasOwn(r, 'skill_version')) d.push('skill_version: not recorded (written before the skill\'s version was sealed)');
+    else if (kind === 'atelier-runtime' && r.skill_version !== null && r.skill_version !== sealedVersion) d.push(`skill_version: ${JSON.stringify(r.skill_version)}, not the file's ${JSON.stringify(sealedVersion)}`);
     if (d.length) found.push(`row ${i + 1} (${r.case_id ?? '?'}): ${d.join('; ')}`);
   });
   if (found.length) die(`${out} was written by another arm or with other settings, so nothing is added to it:\n  ${found.slice(0, 12).join('\n  ')}${found.length > 12 ? `\n  … and ${found.length - 12} more` : ''}\nWrite this arm to its own --out file. Nothing was written.`);
 }
-const writeRow = (row) => { if (!existsSync(manifestPath)) writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 1)}\n`); appendFileSync(out, `${JSON.stringify(row)}\n`); };
+// The manifest is written with the first row, and once more when a runtime arm's version first becomes known after a
+// first row that had no record to read it from.
+const sealedManifest = () => (kind === 'atelier-runtime' ? { ...manifest, skill_version: sealedVersion } : manifest);
+const writeRow = (row) => {
+  const was = existsSync(manifestPath) ? JSON.parse(readFileSync(manifestPath, 'utf8')) : null;
+  if (!was || (kind === 'atelier-runtime' && !was.skill_version && sealedVersion)) writeFileSync(manifestPath, `${JSON.stringify(sealedManifest(), null, 1)}\n`);
+  appendFileSync(out, `${JSON.stringify(row)}\n`);
+};
 
 const done = new Set(existing.map((r) => `${r.case_id}\u0000${r.trial}\u0000${r.condition}\u0000${r.runner}`));
 const prior = existing.filter((r) => r.condition === condition);

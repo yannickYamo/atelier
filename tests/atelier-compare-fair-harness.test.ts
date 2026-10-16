@@ -114,7 +114,7 @@ process.stdout.write(${JSON.stringify(JSON.stringify(record))});\n`);
   return join(dir, 'runtimes.json');
 };
 const argvSeen = (dir: string): string[][] => (existsSync(join(dir, 'argv.jsonl')) ? rows(join(dir, 'argv.jsonl')) as unknown as string[][] : []);
-const REC = { output: 'A review.', toCheck: [], costUsd: 0.01, model: 'claude-opus-5', maxTokens: 4096, steering: 'all', thinking: 'disabled', eval: { record: { state: 'VERIFIED', entries: [] }, spend: [] } };
+const REC = { output: 'A review.', toCheck: [], costUsd: 0.01, model: 'claude-opus-5', maxTokens: 4096, steering: 'all', skillVersion: 'v1', thinking: 'disabled', eval: { record: { state: 'VERIFIED', entries: [] }, spend: [] } };
 const runtime = (dir: string, extra: string[] = [], env: NodeJS.ProcessEnv = {}): Ran =>
   runner(['--tasks', join(dir, 'tasks.jsonl'), '--arm', 'atelier-runtime:s', '--runtimes', join(dir, 'runtimes.json'), '--out', join(dir, 'rt.jsonl'), '--condition', 'atelier', ...extra], env);
 
