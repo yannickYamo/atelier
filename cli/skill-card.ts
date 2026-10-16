@@ -87,6 +87,12 @@ export function skillCardFor(L: store.StoreLayout, opts: { heldBack?: number; sk
       baseline: profile.baseline ?? null, operators: Boolean(profile.effects),
       detector: profile.detector ? { families: profile.detector.families ?? [], cvAuc: profile.detector.cvAuc,
         qualified: qual?.instruments.find((i) => i.kind === 'detector')?.result.passes ?? null } : null,
+      // WHAT STEERS EVERY DRAFT AND IS NEVER REQUIRED, by name: the features selection kept on the author's pieces.
+      steered: pooled.filter((b) => b.role === 'SIGNAL').flatMap((b) => {
+        const f = featureOf(b.id);
+        return f ? [{ id: b.id, label: f.label, unit: f.unit, band: b.band, n: b.n, auc: b.auc }] : [];
+      }),
+      ruled: pooled.filter((b) => b.role === 'RULE').length,
     } : null,
     release: active ? { id: active.id, drafts: active.settings.drafts, editBudget: active.settings.editBudget, retrievalK: active.settings.retrievalK,
       notesCap: active.settings.notesCap, loop: active.settings.editBudget > 0 || Boolean(active.settings.diversity) } : null,

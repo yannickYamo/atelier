@@ -720,10 +720,13 @@ function reportOwnPieces(v: StandardVersion, name: string, s: ReturnType<typeof 
  * trusted, printed now and stored with this version (atelier report --skill <name>; the MCP tool). On every
  * build path, the one that writes into the person's own skill included.
  */
+/** How many steered features the build screen names; the rest are behind `atelier report --skill`. */
+const BUILD_STEERED = 6;
 /** `next` false: the caller ends on its own list of what to do next (`atelier new`), so the card does not print a second. */
 function showSkillCard(L: store.StoreLayout, skillVersion: string, heldBack: number, next = true): void {
   const card = skillCardFor(L, { heldBack, skillVersion, persist: true });
-  if (card && !argv.includes('--quiet')) console.log(`\n${renderSkillCard(card, process.stdout.columns || 110, { next })}\n`);
+  // The strongest few steered features, by name; `atelier report --skill` lists every one.
+  if (card && !argv.includes('--quiet')) console.log(`\n${renderSkillCard(card, process.stdout.columns || 110, { next, steered: BUILD_STEERED })}\n`);
 }
 
 /**
