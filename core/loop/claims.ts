@@ -26,7 +26,7 @@
 import { sentencesOf, wordsOf, type Sentence } from '../observers/text.js';
 import type { Span } from '../observers/registry.js';
 import { visible } from '../observers/visible.js';
-import { numbersIn, spelledCounts } from './numbers.js';
+import { numbersIn, numberPhrases, spelledCounts } from './numbers.js';
 
 /**
  * WHAT THE CLAIM CHECK READS: every sentence of prose, AND every heading and table row. `sentencesOf`
@@ -206,6 +206,41 @@ export function wordCountClaims(text: string, material: string): Claim[] {
   for (const s of claimUnitsOf(text)) {
     const counts = spelledCounts(s.text);
     if (counts.length && !counts.every((n) => matNumbers.has(n))) out.push({ ...s, kind: 'FIGURE', why: WORD_COUNT_WHY });
+  }
+  return out;
+}
+
+/**
+ * A FIGURE STATED AS FACT, LISTED AND NEVER CUT. In a code review over a diff, "One risk: 95% of callers hit the retry
+ * path on line 40" is the sentence a reader most needs to check, and `unsourcedClaims` passed it: it reads a figure
+ * only beside a finding word. Where the claim check was not measured on the kind of work (./claim-extract.ts,
+ * `listsBecause`) and material is bound, every sentence whose figures are not all in the material is listed for the
+ * person (run-repair.ts, UNSOURCED·check), finding word or not. Left out, because none of them states a fact:
+ *
+ *   a year                       "dates from 2019"
+ *   a line reference             "line 40", "lines 40 to 43", "L40", "src/client.ts:40", "file.ts:12:5"
+ *   a number inside a name       "v2", "sha256", "x86", and anything in `inline code`
+ *   an example or a supposition  "if 10% of users…", "for example, 50 requests…", "say 5 retries…"
+ *   a calculation                a sentence `derived` finds worked from the material's own figures (./derived.ts)
+ */
+export const STATED_FIGURE_WHY = 'a figure stated as fact that is not in your material or your request: listed for you to check, never cut; if it is yours, add it to your material (atelier material)';
+const LINE_REF = /\blines?\s+\d+(?:\s*(?:-|–|to|and|through)\s*\d+)?|(?<=\S):\d+(?::\d+)?\b/gi;
+const IN_A_NAME = /`[^`]*`|\b[A-Za-z_][\w-]*?\d[\w.-]*/g;
+const SUPPOSED = /\b(?:if|suppose|supposing|assum(?:e|ing)|imagine|hypothetically|for (?:example|instance)|let['’]?s say|say,?\s+(?:about\s+|roughly\s+)?[$€£]?\d)\b|\be\.g\./i;
+export function statedFigureClaims(text: string, material: string, derived: (sentence: string) => boolean = () => false): Claim[] {
+  const known = new Set(numbersIn(material));
+  const out: Claim[] = [];
+  for (const s of claimUnitsOf(text)) {
+    if (SUPPOSED.test(s.text)) continue;
+    const plain = s.text.replace(LINE_REF, ' ').replace(IN_A_NAME, ' ');
+    // "3 million" is one figure, 3000000, as the material's figures are read (./numbers.ts); a count in words is not
+    // read here (`wordCountClaims` lists those).
+    const phrases = numberPhrases(plain).filter((p) => /\d/.test(plain.slice(p.index, p.index + p.length)));
+    const heads = new Set(phrases.map((p) => p.index));
+    const figures = [...[...plain.matchAll(/\d[\d,]*(?:\.\d+)?/g)].filter((m) => !heads.has(m.index)).map((m) => m[0].replace(/[.,]$/, '').replace(/,/g, ''))
+      .filter((n) => !/^(?:19|20)\d\d$/.test(n)), ...phrases.map((p) => p.value)];
+    if (!figures.length || figures.every((n) => known.has(n)) || derived(plain)) continue;
+    out.push({ ...s, kind: 'FIGURE', why: STATED_FIGURE_WHY });
   }
   return out;
 }

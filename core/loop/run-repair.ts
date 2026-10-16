@@ -12,7 +12,7 @@ import { spend, processSpendByPurpose, spendBetween, type SpendPurpose, type Spe
 import type { StandardVersion, RepairRecord, RepairEdits, GradedRecord, ControllerDecisionRecord } from '../state/canonical-state.js';
 import { acts, isOmission, verifyText, type VerifyReport, type RuleCheck } from '../observers/verify.js';
 import { planFor } from '../plan/execution-plan.js';
-import { unsourcedClaims, wordCountClaims, claimUnitsOf } from './claims.js';
+import { unsourcedClaims, wordCountClaims, claimUnitsOf, statedFigureClaims } from './claims.js';
 import { derivedFromKnown } from './derived.js';
 import { answerWorkClaims, answerSentences, judgedOnly } from './answer-claims.js';
 import { assertMayCut, type CutAuthority } from './cut-authority.js';
@@ -233,7 +233,15 @@ export function checkDraft(skill: string, v: StandardVersion, text: string, opts
   // and never fail the draft. A qualified reader's reading carries none: it types such counts itself.
   const words = (gating?.listed ?? (opts.claimSensor ? [] : wordCountClaims(text, opts.material ?? '')))
     .filter((w) => !toCut.some((c) => c.start === w.start) && !toList.some((c) => c.start === w.start));
-  const listed = [...toList, ...words].sort((x, y) => x.start - y.start);
+  // A FIGURE STATED AS FACT IS LISTED THERE TOO, finding word or not (./claims.ts, statedFigureClaims): where nobody
+  // measured the check on the kind of work and material is bound, "95% of callers hit the retry path" is what the
+  // person most needs to check. Never cut, and never a sentence already listed.
+  const overlaps = (a: { start: number; end: number }, b: { start: number; end: number }): boolean => a.start < b.end && b.start < a.end;
+  const stated = unmeasured && (opts.material ?? '').trim()
+    ? statedFigureClaims(text, opts.material ?? '', (s) => derivedFromKnown(s, opts.material ?? ''))
+      .filter((c) => ![...toList, ...words].some((x) => overlaps(x, c)))
+    : [];
+  const listed = [...toList, ...words, ...stated].sort((x, y) => x.start - y.start);
   const statement = 'Never invent a story, a quotation, an attribution or a specific the person did not supply.';
   // Which instrument found what may be cut: the patterns decide an answer's work claims; otherwise the
   // gating reading's instrument, qualified or not (./cut-authority.ts refuses the ones that may not cut).
