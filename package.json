@@ -23,7 +23,9 @@
     "node": ">=22"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.125.0",
+    "@anthropic-ai/sdk": "^0.125.0"
+  },
+  "optionalDependencies": {
     "harper.js": "2.10.0"
   },
   "license": "MIT",

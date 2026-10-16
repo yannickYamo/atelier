@@ -81,6 +81,12 @@ The release Phase F tests. Each area below is detailed in the sections that foll
   A file that cannot be read stops with its path and writes nothing. The ratify page and the plugin skill now say
   to pass the file.
 
+### Changed: the grammar engine is optional
+
+- **harper.js is an optional dependency.** npm still installs it by default; an install without it builds, runs and
+  verifies, the grammar line reads "grammar not checked: harper.js is not installed" with the command that turns it
+  on, and the verdict is unchanged.
+
 ### Added: the build names what it steers
 
 - **The build screen lists the features your examples taught.** A new section, "Steered toward your range on every

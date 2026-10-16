@@ -64,8 +64,10 @@ Every new build proposes one editorial rule, required by default and approved li
 errors: spelling, agreement, punctuation.* A skill built before it existed does not gain it. A build from pieces by several
 authors carries it too, as the editorial rule, not one author's trait. It holds for short-form output as for long:
 it is never one of the bands set down as not applying when a long-form standard writes a short piece. The checker is
-harper.js, which runs offline in the process; it loads on the first standard that carries the rule. If it cannot
-load, the check says so with the reason and the rule reads as unverified, never as met.
+harper.js, which runs offline in the process; it loads on the first standard that carries the rule. It is an optional
+dependency: npm installs it by default, and an install without it still builds, runs and verifies. If it cannot
+load, the check says so with the reason ("grammar not checked: harper.js is not installed" when it is absent) and the
+rule reads as unverified, never as met; the run's verdict is what your other rules make it.
 
 **Listed, never changed.** Atelier finds mechanical slips with the offline checker and lists them for you, each with
 its text and the checker's note. It never changes your text unless you pass `--fix-grammar`, and a finding never

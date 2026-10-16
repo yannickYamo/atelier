@@ -8,6 +8,9 @@
 // Spans come back in UTF-16 code units, as the JavaScript glue counts them, so they index the text directly.
 
 import type { GrammarEngine, GrammarLint, GrammarDialect, GrammarProvider } from '../core/observers/grammar.js';
+// Types only: erased from the build, so nothing here needs harper.js installed until `load` runs.
+import type * as Harper from 'harper.js';
+import type * as HarperBinary from 'harper.js/binary';
 
 /** The synchronous linter behind harper.js's promise-returning `LocalLinter`, once its binary is loaded. */
 interface InnerLinter {
@@ -24,8 +27,24 @@ const MARKDOWN = 1;
 /** harper.js's `SuggestionKind`: 0 replaces the span, 1 removes it, 2 inserts after it. */
 const REPLACE = 0; const REMOVE = 1;
 
-async function load(): Promise<GrammarEngine> {
-  const [{ LocalLinter, Dialect }, { binary }] = await Promise.all([import('harper.js'), import('harper.js/binary')]);
+/** The two modules the engine is built from, imported together. Injected so the suite can stand in for an install without it. */
+export type HarperImport = () => Promise<readonly [typeof Harper, typeof HarperBinary]>;
+const importHarper: HarperImport = () => Promise.all([import('harper.js'), import('harper.js/binary')]);
+
+// ── harper.js IS OPTIONAL ───────────────────────────────────────────────────────────────────────
+//
+// It is an optionalDependency: npm installs it by default, and an install without it (`--omit=optional`, a platform
+// npm could not fetch it for, a vendored tree) must still build, run and verify. Its absence is the one failure a
+// person can act on, so it is said as that, with the command that turns the check on; core then reads the check as
+// "grammar not checked" and the verdict stays what the person's own rules make it. Any other failure keeps its own
+// first line: calling a broken binary "not installed" would send someone to install what they already have.
+const NOT_INSTALLED = 'harper.js is not installed (it is optional: `npm install harper.js` turns the check on)';
+const missing = (e: unknown): boolean => (e as NodeJS.ErrnoException | null)?.code === 'ERR_MODULE_NOT_FOUND' && (e as Error).message.includes('harper.js');
+
+async function load(importEngine: HarperImport): Promise<GrammarEngine> {
+  const [{ LocalLinter, Dialect }, { binary }] = await importEngine().catch((e: unknown) => {
+    throw missing(e) ? new Error(NOT_INSTALLED, { cause: e }) : e;
+  });
   const inner = async (dialect: GrammarDialect): Promise<InnerLinter> => {
     const linter = new LocalLinter({ binary, dialect: dialect === 'british' ? Dialect.British : Dialect.American });
     await linter.setup();
@@ -50,5 +69,7 @@ async function load(): Promise<GrammarEngine> {
   };
 }
 
+/** A provider over a given import: the suite's seam for an install without the engine. */
+export const harperGrammarFrom = (importEngine: HarperImport): GrammarProvider => ({ load: () => load(importEngine) });
 /** The provider the dispatcher wires in: loads on the first standard that carries the rule, never before. */
-export const harperGrammar: GrammarProvider = { load };
+export const harperGrammar: GrammarProvider = harperGrammarFrom(importHarper);
