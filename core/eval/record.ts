@@ -20,7 +20,7 @@ export type Source = 'METHOD' | 'REQUEST' | 'EXAMPLE' | 'SYSTEM';
 export type Coverage = 'FULL' | 'PARTIAL' | 'NONE';
 export type Qualification = 'DETERMINISTIC' | 'QUALIFIED' | 'UNQUALIFIED' | 'UNAVAILABLE';
 export type Result = 'PASS' | 'FAIL' | 'UNVERIFIED' | 'NOT_APPLICABLE';
-export type Reason = 'MET' | 'NOT_MET' | 'PARTLY_CHECKED' | 'NOT_MACHINE_CHECKABLE' | 'OBSERVER_UNQUALIFIED' | 'SET_ASIDE' | 'REPLACED_BY_REQUEST' | 'DOES_NOT_APPLY';
+export type Reason = 'MET' | 'NOT_MET' | 'LISTED_FOR_YOU' | 'PARTLY_CHECKED' | 'NOT_MACHINE_CHECKABLE' | 'OBSERVER_UNQUALIFIED' | 'SET_ASIDE' | 'REPLACED_BY_REQUEST' | 'DOES_NOT_APPLY';
 export type RunState = 'VERIFIED' | 'NEEDS_REVIEW' | 'BLOCKED';
 
 export interface Observation {
@@ -37,6 +37,12 @@ export interface Observation {
    * being no check (a judgement that is the owner's): here the evaluation itself is incomplete.
    */
   readonly incomplete?: string;
+  /**
+   * LISTED FOR YOU, NEVER A VERDICT. What a check could only point at for the person to read (the grammar checker's
+   * possible slips), or a check that could not run where nothing it would hold is the person's own standard: shown on
+   * its own line, and it never moves the run's state either way.
+   */
+  readonly listed?: true;
 }
 
 export interface Entry {
@@ -64,6 +70,8 @@ export interface Observed {
   readonly verdict: 'MET' | 'VIOLATED' | null;
   readonly coverage: Coverage;
   readonly qualification: Qualification;
+  /** listed for the person to read (`Observation.listed`): never a pass, a failure or a review */
+  readonly listed?: boolean;
 }
 
 /**
@@ -74,6 +82,7 @@ export interface Observed {
  */
 export function judge(o: Observed): { readonly result: Result; readonly reason: Reason } {
   if (o.applies !== true) return { result: 'NOT_APPLICABLE', reason: o.applies === false ? 'DOES_NOT_APPLY' : 'replacedBy' in o.applies ? 'REPLACED_BY_REQUEST' : 'SET_ASIDE' };
+  if (o.listed) return { result: 'UNVERIFIED', reason: 'LISTED_FOR_YOU' };
   if (o.verdict === null || o.coverage === 'NONE') return { result: 'UNVERIFIED', reason: 'NOT_MACHINE_CHECKABLE' };
   if (o.qualification !== 'DETERMINISTIC' && o.qualification !== 'QUALIFIED') return { result: 'UNVERIFIED', reason: 'OBSERVER_UNQUALIFIED' };
   if (o.verdict === 'VIOLATED') return { result: 'FAIL', reason: 'NOT_MET' };
@@ -82,8 +91,8 @@ export function judge(o: Observed): { readonly result: Result; readonly reason: 
 
 /** Does this entry stop the work being used as it is: a required rule that a believable observer saw fail. */
 export const blocks = (e: Entry): boolean => e.required && e.result === 'FAIL';
-/** Is this entry left for a person: a required rule nothing believable read in full, or a rule set aside for the run. */
-export const needsReview = (e: Entry): boolean => e.required && (e.result === 'UNVERIFIED' || e.reason === 'SET_ASIDE');
+/** Is this entry left for a person: a required rule nothing believable read in full, or a rule set aside for the run. What is only listed for them is not. */
+export const needsReview = (e: Entry): boolean => e.required && e.reason !== 'LISTED_FOR_YOU' && (e.result === 'UNVERIFIED' || e.reason === 'SET_ASIDE');
 
 /**
  * The state of the whole output. BLOCKED: a required rule was seen to fail. VERIFIED: every required rule was read
@@ -136,7 +145,7 @@ export const partlyChecked = (r: EvaluationRecord): Map<string, string> => new M
 /** An entry, with its result decided here and nowhere else. */
 export function entry(e: Omit<Entry, 'result' | 'reason'> & { readonly applies?: Observed['applies']; readonly verdict: Observed['verdict'] }): Entry {
   const { applies, verdict, ...rest } = e;
-  return { ...rest, ...judge({ applies: applies ?? true, verdict, coverage: e.observation.coverage, qualification: e.observation.qualification }) };
+  return { ...rest, ...judge({ applies: applies ?? true, verdict, coverage: e.observation.coverage, qualification: e.observation.qualification, listed: e.observation.listed === true }) };
 }
 
 export const recordOf = (entries: readonly Entry[]): EvaluationRecord => ({ schema: 1, state: stateOf(entries), entries });

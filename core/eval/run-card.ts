@@ -37,7 +37,7 @@ function wrap(text: string, width: number, indent: string): string[] {
   return line ? [...out, indent + line] : out;
 }
 
-const mark = (e: Entry): string => (e.result === 'PASS' ? '✓' : e.result === 'FAIL' ? '✗' : e.result === 'NOT_APPLICABLE' ? '–' : e.reason === 'PARTLY_CHECKED' ? '~' : '?');
+const mark = (e: Entry): string => (e.result === 'PASS' ? '✓' : e.result === 'FAIL' ? '✗' : e.result === 'NOT_APPLICABLE' ? '–' : e.reason === 'LISTED_FOR_YOU' ? '·' : e.reason === 'PARTLY_CHECKED' ? '~' : '?');
 
 /** What is said under a rule: the whole of it where it failed or is left to the owner, a figure where it passed. */
 function under(e: Entry): string[] {
@@ -45,6 +45,7 @@ function under(e: Entry): string[] {
   if (e.result === 'FAIL') return [`found: ${o.evidence ?? 'not met'}`];
   if (e.reason === 'SET_ASIDE' || e.reason === 'REPLACED_BY_REQUEST') return [`not checked on this run: ${o.evidence ?? 'set aside'}`];
   if (e.reason === 'DOES_NOT_APPLY') return [`does not apply to this output${o.evidence ? `: ${o.evidence}` : ''}`];
+  if (e.reason === 'LISTED_FOR_YOU') return o.evidence ? [o.evidence] : [];
   if (e.reason === 'PARTLY_CHECKED') return [`checked, and held: ${o.proposition ?? ''}`, `not checked, yours to read: ${o.unchecked ?? 'the rest of it'}`];
   if (e.reason === 'OBSERVER_UNQUALIFIED') return [`${e.dimension === 'STANDARD' ? 'checked, and not enforced' : 'read, and not to be relied on'}: ${o.evidence ?? ''}`];
   // A rule no check reads is one line: a method of twelve judgement steps is not twelve explanations.
@@ -60,13 +61,13 @@ function rows(e: Entry, w: number): string[] {
   const head = whole ? wrap(e.statement, w, '       ').map((l, i) => (i === 0 ? `    ${mark(e)}  ${l.trimStart()}` : l)) : [`    ${mark(e)}  ${clip(e.statement.replace(/\s+/g, ' '), w - 8)}`];
   // A line that lists what to check (the grammar checker's uncertain constructions) is said in full: a count is never
   // shown without what it counts.
-  const full = whole || (e.observation.evidence ?? '').includes('listed to check: ') || (e.observation.evidence ?? '').startsWith(GRAMMAR_LISTED);
+  const full = whole || e.reason === 'LISTED_FOR_YOU' || (e.observation.evidence ?? '').includes('listed to check: ') || (e.observation.evidence ?? '').startsWith(GRAMMAR_LISTED);
   return [...head, ...under(e).flatMap((l) => (full ? wrap(l, w, '         ') : [`         ${clip(l, w - 10)}`]))];
 }
 
 /** Where the run stands, in one sentence that counts what was verified and what is left. */
 export function stateLine(r: EvaluationRecord): string {
-  const required = r.entries.filter((e) => e.required && e.result !== 'NOT_APPLICABLE');
+  const required = r.entries.filter((e) => e.required && e.result !== 'NOT_APPLICABLE' && e.reason !== 'LISTED_FOR_YOU');
   const passed = required.filter((e) => e.result === 'PASS').length; const failed = r.entries.filter(blocks);
   // THE COUNTS ADD UP: what is left to read is counted among the required rules the sentence counts; a check set aside
   // for this run (counted as not applying) is said apart, so "2 of 6 verified; 5 left" never happens.

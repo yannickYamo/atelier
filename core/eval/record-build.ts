@@ -82,13 +82,19 @@ function standardEntry(p: PlannedRule, f: RecordFacts): Entry {
     return entry({ ...base, observation: { ...seen(line?.detail ?? 'the check did not run'), coverage: 'NONE', ...(f.checked === null ? { incomplete: `not checked: ${p.id} (the check did not run)` } : {}) }, verdict: null });
   }
   // A check whose engine could not run did not read the text: unverified, with the reason, never "does not apply".
+  // THE EDITORIAL GRAMMAR CHECK NEVER MOVES THE VERDICT ON ITS OWN. A checker that could not load, or possible slips it lists for the person,
+  // are said on their own line and leave the run's state to the person's standard: a run that holds every rule they
+  // set reads VERIFIED with the slips shown beside it. A slip the checker is sure of, under --fix-grammar, still counts.
+  // Grammar the OWNER wrote into their own method is their standard: a check that could not run, or that could only
+  // list, is not a pass, and the run is left for them to read, as for any rule of theirs.
+  const editorial = !p.stated;
   if (line.verdict === 'NOT_APPLICABLE' && line.detail.startsWith(GRAMMAR_NOT_RUN)) {
-    return entry({ ...base, observation: { ...seen(line.detail), coverage: 'NONE', incomplete: `not checked: ${p.id} (${line.detail})` }, verdict: null });
+    return editorial
+      ? entry({ ...base, observation: { ...seen(`grammar not checked: ${line.detail.slice(GRAMMAR_NOT_RUN.length).replace(/^:\s*/, '')}`), coverage: 'NONE', listed: true }, verdict: null })
+      : entry({ ...base, observation: { ...seen(line.detail), coverage: 'NONE', incomplete: `not checked: ${p.id} (${line.detail})` }, verdict: null });
   }
-  // A grammar check that listed what it found: the findings are the person's to read, so the rule is unverified, never
-  // met. The check finished, so the run is still deliverable (a finding never blocks, under --strict either).
   if (line.verdict === 'NOT_APPLICABLE' && line.detail.startsWith(GRAMMAR_LISTED)) {
-    return entry({ ...base, observation: { ...seen(line.detail), coverage: 'NONE' }, verdict: null });
+    return entry({ ...base, observation: { ...seen(line.detail), coverage: 'NONE', ...(editorial ? { listed: true as const } : {}) }, verdict: null });
   }
   // UNMEASURABLE IS NOT HELD. A rule the draft was read on, broken or held, that the text delivered is too short to read
   // does apply: it was not measured on what ships, and the evaluation of it did not finish. Unverified, never a pass.

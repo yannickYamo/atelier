@@ -244,7 +244,7 @@ describe('a short output from a standard read from long pieces', () => {
 });
 
 describe('an engine that cannot load', () => {
-  it('leaves the check NOT_APPLICABLE with the reason, and the record unverified, never passed', async () => {
+  it('leaves the check NOT_APPLICABLE with the reason: never passed, said apart from the verdict, and binding only when the owner wrote it', async () => {
     resetGrammar();
     setGrammarProvider({ load: () => Promise.reject(new Error('no wasm here')) });
     await ensureGrammar();
@@ -255,15 +255,23 @@ describe('an engine that cannot load', () => {
     const record = buildRecord({ requirements: [g], checked: [{ id: 'g1', statement: g.statement, required: true, verdict: 'NOT_APPLICABLE', detail: r.detail }],
       waived: new Map(), request: null, claims: null, copying: null });
     const e = record.entries.find((x) => x.id === 'g1');
-    expect(e?.result).toBe('UNVERIFIED');
-    expect(e?.observation.incomplete).toMatch(/not checked: g1 \(the grammar check could not run: could not load: no wasm here\)/);
-    expect(record.state).toBe('NEEDS_REVIEW');
+    // the editorial check every build carries: said on its own line, never a pass, and it leaves the verdict alone
+    expect(e).toMatchObject({ result: 'UNVERIFIED', reason: 'LISTED_FOR_YOU' });
+    expect(e?.observation.evidence).toBe('grammar not checked: could not load: no wasm here');
+    expect(e?.observation.incomplete).toBeUndefined();
+    expect(record.state).toBe('VERIFIED');
+    // grammar the owner wrote into their own method: a check that could not run is not a pass, and needs review
+    const own = { ...g, provenance: 'EXPERT_STATED' as const };
+    const mine = buildRecord({ requirements: [own], checked: [{ id: 'g1', statement: g.statement, required: true, verdict: 'NOT_APPLICABLE', detail: r.detail }],
+      waived: new Map(), request: null, claims: null, copying: null });
+    expect(mine.entries.find((x) => x.id === 'g1')?.observation.incomplete).toMatch(/not checked: g1 \(the grammar check could not run: could not load: no wasm here\)/);
+    expect(mine.state).toBe('NEEDS_REVIEW');
     // With no engine wired in at all, the same: a reason, never a pass.
     resetGrammar(); setGrammarProvider(null); await ensureGrammar();
     expect(measure('They was late.', m()).detail).toMatch(/could not load: no grammar checker is wired into this process/);
     resetGrammar(); setGrammarProvider(harperGrammar);
   });
-  it('switched off by the owner, the check reads exactly like a load failure: unverified with the reason, a required rule needs review', () => {
+  it('switched off by the owner, the check reads exactly like a load failure: not checked, said on its own line', () => {
     process.env.ATELIER_GRAMMAR = 'off';
     try {
       const r = measure('They was late.', m());
@@ -274,9 +282,9 @@ describe('an engine that cannot load', () => {
       const record = buildRecord({ requirements: [g], checked: [{ id: 'g1', statement: g.statement, required: true, verdict: 'NOT_APPLICABLE', detail: r.detail }],
         waived: new Map(), request: null, claims: null, copying: null });
       const e = record.entries.find((x) => x.id === 'g1');
-      expect(e?.result).toBe('UNVERIFIED');
-      expect(e?.observation.incomplete).toMatch(/not checked: g1 \(the grammar check could not run: switched off/);
-      expect(record.state).toBe('NEEDS_REVIEW');
+      expect(e).toMatchObject({ result: 'UNVERIFIED', reason: 'LISTED_FOR_YOU' });
+      expect(e?.observation.evidence).toMatch(/^grammar not checked: switched off/);
+      expect(record.state).toBe('VERIFIED');
     } finally { process.env.ATELIER_GRAMMAR = 'on'; }
   });
 });

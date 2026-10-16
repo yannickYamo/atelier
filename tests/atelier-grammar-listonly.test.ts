@@ -74,7 +74,7 @@ describe('the default path, on 150 sentences with a legitimate reading and 10 re
       expect(unlisted, JSON.stringify(p)).toEqual(['He left early ,,and then came back.']);
     }
   });
-  it('a text with a real slip reads NEEDS REVIEW with the slip listed, unchanged; a text with no finding reads the rule met', () => {
+  it('a text with a real slip reads VERIFIED with the slip listed beside it, unchanged; a text with no finding reads the rule met', () => {
     const text = 'She are late again.';
     const v = standard();
     const report = verifyText('g', v, text);
@@ -84,12 +84,13 @@ describe('the default path, on 150 sentences with a legitimate reading and 10 re
     const record = buildRecord({ requirements: v.requirements, checked: [{ id: 'g1', statement: line.statement, required: true, verdict: line.result.verdict, detail: line.result.detail }],
       waived: new Map(), request: null, claims: null, copying: null });
     const e = record.entries.find((x) => x.id === 'g1')!;
-    expect(e.result).toBe('UNVERIFIED');
+    expect(e).toMatchObject({ result: 'UNVERIFIED', reason: 'LISTED_FOR_YOU' });
     expect(e.observation.incomplete).toBeUndefined();
     expect(e.observation.evidence).toMatch(/"are"/);
-    expect(record.state).toBe('NEEDS_REVIEW');
-    // Never a block: the record stays deliverable, under --strict too.
-    expect(standingOf(record)).toMatchObject({ verified: false, deliverable: true, reasons: [] });
+    // The editorial check lists and never moves the verdict: the run holds every rule the person set, so it is verified,
+    // with the slip shown beside it.
+    expect(record.state).toBe('VERIFIED');
+    expect(standingOf(record)).toMatchObject({ verified: true, deliverable: true, reasons: [] });
     expect(describeVerify(report)).toMatch(/^to check {2}g1 {2}No mechanical errors/m);
     expect(describeVerify(report)).toMatch(/No REQUIRED rule is broken; listed for you to check, and not changed: g1\./);
     expect(delivered(text, {})).toBe(text);
