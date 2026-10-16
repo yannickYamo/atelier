@@ -238,6 +238,8 @@ export class AnthropicInferenceClient implements InferenceClient {
     // per-token logprobs, so an instrument that reads a distribution cannot run on this adapter. It
     // must say which backend it needs instead of quietly producing a weaker reading here.
     const temperatureSent = noTemperature.has(this.modelId) ? null : req.temperature ?? this.defaultTemperature ?? null;
-    return { json: block.input, modelId: res.model, ...usage, cost, costUsd: budgetUsd(cost), logprobs: null, termination, temperatureSent };
+    // Sent with thinking off, a response should hold no thinking block; one that does is counted, never dropped silently.
+    const thinkingBlocks = res.content.filter((c) => c.type === 'thinking' || c.type === 'redacted_thinking').length;
+    return { json: block.input, modelId: res.model, ...usage, cost, costUsd: budgetUsd(cost), logprobs: null, termination, temperatureSent, thinkingBlocks };
   }
 }

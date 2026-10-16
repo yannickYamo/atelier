@@ -137,6 +137,9 @@ interface ChatResponse {
   choices?: { finish_reason?: string; logprobs?: WireLogprobs | null; message?: {
     content?: string | null;
     refusal?: string | null;
+    /** the reasoning a backend returns beside the answer, under either of the two names in use */
+    reasoning_content?: string | null;
+    reasoning?: string | null;
     tool_calls?: { function?: { name?: string; arguments?: string } }[];
   } }[];
   usage?: {
@@ -271,7 +274,10 @@ export class OpenAICompatibleInferenceClient implements InferenceClient {
       ? lp.map((t) => ({ token: t.token, logprob: t.logprob,
           top: (t.top_logprobs ?? []).map((a) => ({ token: a.token, logprob: a.logprob })) }))
       : null;
-    return { json, modelId: res.model ?? this.cfg.modelId, ...usage, cost, costUsd: budgetUsd(cost), logprobs, termination, temperatureSent: req.temperature ?? this.cfg.temperature ?? null };
+    // Reasoning text returned beside the answer is this protocol's thinking block: counted, so a caller can see it ran.
+    const reasoning = [choice.message?.reasoning_content, choice.message?.reasoning].filter((x) => typeof x === 'string' && x.trim()).length;
+    return { json, modelId: res.model ?? this.cfg.modelId, ...usage, cost, costUsd: budgetUsd(cost), logprobs, termination, temperatureSent: req.temperature ?? this.cfg.temperature ?? null,
+      thinkingBlocks: reasoning ? 1 : 0 };
   }
 
   private async post(body: unknown, maxTokens: number): Promise<ChatResponse> {

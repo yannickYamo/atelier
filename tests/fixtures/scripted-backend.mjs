@@ -63,6 +63,10 @@ const server = createServer((req, res) => {
     // provider's filter does.
     if (hit && hit.finish) { res.end(JSON.stringify({ choices: [{ finish_reason: hit.finish, message: {} }], usage: { prompt_tokens: 10, completion_tokens: 0 } })); return; }
     if (hit) answer = hit.answer;
+    // `{ contains, answer, reasoning, usage }` in `when`: that call also returns reasoning text beside the answer, and
+    // the usage given (a backend that thought, and billed for it).
+    const extra = hit && typeof hit.reasoning === 'string' ? { reasoning_content: hit.reasoning } : {};
+    const usage = hit && hit.usage ? hit.usage : { prompt_tokens: 10, completion_tokens: 10 };
     // THE COMPOSITE'S CONTRADICTION READING (core/composite/contradictions.ts) answers "no pair" unless a test scripts it
     // (`byTool: { emit_contradictions: { pairs: [...] } }`, or a `when`), so a backend scripted for other calls reads none.
     // `{ pairsByText: [[textA, textB, reason]] }` names a pair by the words of its two instructions, answered with the
@@ -82,8 +86,8 @@ const server = createServer((req, res) => {
       answer = { labels: Array.from({ length: n }, (_, i) => ({ n: i + 1, move: answer.labelAll[i % answer.labelAll.length] })) };
     }
     res.end(JSON.stringify({
-      choices: [{ finish_reason: 'stop', message: { tool_calls: [{ function: { arguments: JSON.stringify(answer) } }] } }],
-      usage: { prompt_tokens: 10, completion_tokens: 10 },
+      choices: [{ finish_reason: 'stop', message: { ...extra, tool_calls: [{ function: { arguments: JSON.stringify(answer) } }] } }],
+      usage,
     }));
   });
 });
