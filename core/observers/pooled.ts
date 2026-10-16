@@ -14,7 +14,6 @@
 
 import { quantile, proseWordsOf } from './text.js';
 import { contextClassOf } from '../fidelity/types.js';
-import { oneLength } from '../intake/length.js';
 
 /** Both tails together: an output is out when either tail is under half of this. */
 export const POOLED_ALPHA = 0.05;
@@ -58,9 +57,10 @@ export function pooledRateOf(texts: readonly string[], count: (text: string) => 
 /** Are these pieces short form: their median piece is under the 'short' class line (150 prose words). */
 export function isShortForm(texts: readonly string[]): boolean {
   const lengths = texts.map(proseWordsOf).filter((n) => n > 0);
-  // SHORT IN THE MIDDLE IS NOT SHORT FORM when the pieces do not hold one length (`oneLength`): a folder with a median
-  // of 108 words and a piece of 1,706 is a mix of lengths, and gets no shape band a tweet would.
-  return lengths.length > 0 && contextClassOf(quantile(lengths, 0.5)) === 'short' && oneLength(Math.min(...lengths), Math.max(...lengths));
+  // SHORT IN THE MIDDLE IS NOT SHORT FORM when a piece is long: a folder with a median of 108 words and a piece of 1,706
+  // is a mix of lengths, and gets no shape band a tweet would. Spread alone is not that: tweets run from 8 words to 60,
+  // and a long post on X to a few hundred, and are still posts.
+  return lengths.length > 0 && contextClassOf(quantile(lengths, 0.5)) === 'short' && ['short', 'medium'].includes(contextClassOf(Math.max(...lengths)));
 }
 
 const r4 = (x: number): number => Math.round(x * 10000) / 10000;
