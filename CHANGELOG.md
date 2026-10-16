@@ -54,6 +54,22 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
   and in how many of 100 pairs that holds. The build shows the strongest six; `atelier report --skill <name>` lists
   every one. Steering stays on by default.
 
+### Fixed: a comparison cannot mix arms, overspend, or hide thinking
+
+- **One output file is one arm.** The comparison runner writes a manifest beside its output with the first row: the
+  tasks, the arm, the skill, the model, the token limit, the placement, the provider settings, steering and grammar. A
+  rerun into the same file with any of them changed, a row edited by hand, or rows with no manifest, stop the run with
+  nothing written.
+- **The runtime arm answers with the harness's writer.** A built skill's runtime settings may not name a model, a
+  token limit, a cap or steering. After each run, the model and limit its record names must be the harness's, or the
+  run stops and no row is written. Every runtime backend needs a price, an OpenAI-compatible one included, and each run
+  is given the cap still left as its own budget; a cap that cannot hold one run stops before anything starts.
+- **Steering and grammar are on every row.** Each row says whether feature steering was on, read from the run's own
+  record, and how the grammar check ran. `--graded none` declares a runtime arm without steering, so its benefit can be
+  measured against the default.
+- **The preflight catches thinking.** It now stops when an answer held a thinking block, or when the call billed far
+  more output tokens than the answer accounts for. `invoke --json` records the token limit and the steering of the run.
+
 ### Changed: several voices are combined by inference, and nothing is asked
 
 "Here are nine pieces I like." `atelier new` no longer needs to be told who wrote which piece, and no longer asks what
