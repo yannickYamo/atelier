@@ -262,6 +262,51 @@ describe('F10: the preflight stops a run whose answers carried thinking', () => 
   });
 });
 
+describe('F10: the runtime preflight sees the thinking its run was returned, not only the setting it sent', () => {
+  // A runtime arm's preflight read only `thinking`, the setting its calls were sent with: a backend that thought anyway
+  // passed it. `invoke --json` now records `thinkingBlocks`, summed over every call of the run, and the preflight reads it.
+  const built = (): { dir: string; env: NodeJS.ProcessEnv } => {
+    const dir = work('rt-pf'); const data = join(dir, 'data'); const proj = join(dir, 'proj');
+    mkdirSync(data); mkdirSync(proj);
+    writeFileSync(join(proj, 'example.md'), '# Review\n\nThe change is correct. One risk: the retry loop has no limit.\n');
+    writeFileSync(join(proj, 'method.md'), '1. Name the one risk that matters most.\n2. Say whether the change is correct.\n');
+    const env = { ATELIER_DATA: data, ATELIER_PROJECT_DIR: proj, ATELIER_PRICE_IN: '1', ATELIER_PRICE_OUT: '1' };
+    const b = spawnSync(process.execPath, [resolve('dist/cli/atelier.mjs'), 'new', join(proj, 'example.md'), '--method', join(proj, 'method.md'), '--name', 'rev', '--yes'], { cwd: proj, env: { ...ENV, ...env }, encoding: 'utf8' });
+    expect(b.status, b.stdout + b.stderr).toBe(0);
+    writeFileSync(join(dir, 'runtimes.json'), JSON.stringify({ s: { cli: resolve('dist/cli/atelier.mjs'), data, proj, skill: 'rev',
+      args: ['--provider', 'openai-compatible', '--base-url', url(), '--claims', 'pattern'] } }));
+    return { dir, env };
+  };
+  const PIECE = { piece: 'The change is correct. One risk: the cache is never cleared.' };
+  it('a backend that returns a thinking block on the writer\'s call fails it (exit 2); a clean one passes', async () => {
+    const { dir, env } = built();
+    await set({ byTool: { emit_piece: PIECE, emit_observation: { applicable: true, present: true, why: 'seen' } },
+      when: [{ containsAll: ['Review change a', '"emit_piece"'], answer: PIECE, reasoning: 'Let me think about the change first.' }] });
+    const thought = runtime(dir, ['--preflight', '--model', 'scripted'], env);
+    expect(thought.status, thought.out + thought.err).toBe(2);
+    expect(thought.out).toMatch(/the response held 1 thinking block\(s\)/);
+    expect(existsSync(join(dir, 'rt.jsonl'))).toBe(false);
+    await set({ byTool: { emit_piece: PIECE, emit_observation: { applicable: true, present: true, why: 'seen' } } });
+    const clean = runtime(dir, ['--preflight', '--model', 'scripted'], env);
+    expect(clean.status, clean.out + clean.err).toBe(0);
+    expect(clean.out).not.toMatch(/thinking block/);
+    await set({ byTool: { emit_answer: { answer: 'A short review.' } } });
+  }, 120_000);
+  it('a record that does not count its thinking blocks is no pass; one that counts none passes', () => {
+    const unsaid = work('rt-pf-unsaid'); fakeRuntime(unsaid, REC);
+    const r = runtime(unsaid, ['--preflight']);
+    expect(r.status).toBe(2);
+    expect(r.out).toMatch(/does not say how many thinking blocks its calls returned/);
+    const said = work('rt-pf-said'); fakeRuntime(said, { ...REC, thinkingBlocks: 0 });
+    const ok = runtime(said, ['--preflight']);
+    expect(ok.status, ok.out + ok.err).toBe(0);
+    const two = work('rt-pf-two'); fakeRuntime(two, { ...REC, thinkingBlocks: 2 });
+    const bad = runtime(two, ['--preflight']);
+    expect(bad.status).toBe(2);
+    expect(bad.out).toMatch(/the response held 2 thinking block\(s\)/);
+  });
+});
+
 describe('F10: the Anthropic provider counts the thinking blocks of a response', () => {
   let server: Server; let base = ''; let thinking = true;
   beforeAll(async () => {

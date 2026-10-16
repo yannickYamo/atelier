@@ -102,7 +102,9 @@ The release Phase F tests. Each area below is detailed in the sections that foll
   record, and how the grammar check ran. `--graded none` declares a runtime arm without steering, so its benefit can be
   measured against the default.
 - **The preflight catches thinking.** It now stops when an answer held a thinking block, or when the call billed far
-  more output tokens than the answer accounts for. `invoke --json` records the token limit and the steering of the run.
+  more output tokens than the answer accounts for. `invoke --json` records the token limit and the steering of the run,
+  and the thinking blocks its calls were returned (`thinkingBlocks`): a runtime arm's preflight reads those, where it
+  used to see only the setting sent, so a backend that thought anyway passed.
 
 ### Changed: several voices are combined by inference, and nothing is asked
 

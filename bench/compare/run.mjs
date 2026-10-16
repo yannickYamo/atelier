@@ -79,7 +79,8 @@
 // null on a model arm, which has none. `grammar` is how the grammar check ran: ATELIER_GRAMMAR as set, or 'default'.
 //
 // --preflight also stops (exit 2) when the answer held a thinking block, or when the call's output tokens are far
-// above what the answer's length accounts for (thinking that was billed and not shown).
+// above what the answer's length accounts for (thinking that was billed and not shown). On a runtime arm the blocks are
+// the ones the run's calls were returned (`thinkingBlocks` in `invoke --json`, summed over the run), not the setting sent.
 
 import { readFileSync, existsSync, appendFileSync, mkdirSync, mkdtempSync, writeFileSync, rmSync, openSync, writeSync, closeSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
@@ -362,7 +363,8 @@ function runtimeArm(t, remaining) {
     // THE REVIEW AS DELIVERED (`output`, after repair), NOT `answer`: `answer` adds a footer of specifics not found in the
     // material ("check before you use this"), which only this arm writes. Judged, it names the arm, and no one posts a
     // review that ends that way. The list is kept beside the response as to_check, for the study and never the judge.
-    return { response: String(rec.output ?? '').trim(), steering: rec.steering, skillVersion: rec.skillVersion, ...ledgerOf(rec), ...signalsOf(rec), ...thinkingOf(rec), ...runtimeModelOf(rec), cost: rec.costUsd ?? null, state: rec.eval?.record?.state ?? null };
+    // thinkingBlocks: what the run's calls were returned (`invoke --json`), for the preflight; undefined from a build before it
+    return { response: String(rec.output ?? '').trim(), steering: rec.steering, skillVersion: rec.skillVersion, thinkingBlocks: rec.thinkingBlocks, ...ledgerOf(rec), ...signalsOf(rec), ...thinkingOf(rec), ...runtimeModelOf(rec), cost: rec.costUsd ?? null, state: rec.eval?.record?.state ?? null };
   } finally { rmSync(tmp, { recursive: true, force: true }); }
 }
 
@@ -488,6 +490,9 @@ if (args.includes('--preflight')) {
   // text accounts for (thinking billed and not shown), means the setting did not hold: the arm would be paid and
   // judged as another configuration than the one recorded.
   if (kind === 'atelier-runtime' && r.thinking === 'enabled') { stop = true; console.log('preflight: the run record says its calls were sent with thinking on: every arm runs with thinking off.'); }
+  // A RUNTIME ARM IS HELD TO WHAT ITS CALLS RETURNED, LIKE A MODEL ARM: the setting sent is not the thinking received.
+  // A record that does not count them could not show it, and is no pass.
+  if (kind === 'atelier-runtime' && typeof r.thinkingBlocks !== 'number') { stop = true; console.log('preflight: the run record does not say how many thinking blocks its calls returned (thinkingBlocks), so thinking the backend did anyway could not be seen: build the CLI from a commit whose invoke --json records it.'); }
   if (r.thinkingBlocks > 0) { stop = true; console.log(`preflight: the response held ${r.thinkingBlocks} thinking block(s), although every arm is sent with thinking off: check the model and the provider before the run.`); }
   const accounted = r.written === undefined ? null : Math.ceil(r.written / CHARS_PER_TOKEN);
   const billed = r.usage?.output_tokens ?? null;

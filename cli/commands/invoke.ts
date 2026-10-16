@@ -77,7 +77,7 @@ import { version } from '../help.js';
 import { writeAtomic } from '../../core/state/fs-atomic.js';
 import { compareBindings, describeMismatch, describeNewSurface, detectResolvedModelDrift, bindingHash } from '../../core/runtime/binding.js';
 import { resolve as resolvePath } from 'node:path';
-import { sha, DATA, VALUED_OPTIONS, die, argv, flag, clientAndBinding, describeBinding, numericFlag, positional, boundResources, boundMaterial, assertSkillName, runFile, clientFor, callsSeen, thinkingOfCalls } from '../runtime.js';
+import { sha, DATA, VALUED_OPTIONS, die, argv, flag, clientAndBinding, describeBinding, numericFlag, positional, boundResources, boundMaterial, assertSkillName, runFile, clientFor, callsSeen, thinkingOfCalls, thinkingBlocksOfCalls } from '../runtime.js';
 
 /**
  * What a skill serves, resolved once and shared.
@@ -789,6 +789,8 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
       // as the provider said: the model that answered the writer's calls, and the thinking setting the run's calls were sent with
       model: [...new Set(callsSeen().filter((c) => c.role === 'target').map((c) => c.modelId))].join(', ') || (rec.observedRuntime?.resolvedModel ?? binding.requestedModel),
       thinking: thinkingOfCalls(callsSeen()),
+      // and the thinking blocks the run's calls were returned, summed: a comparison's preflight stops above zero
+      thinkingBlocks: thinkingBlocksOfCalls(callsSeen()),
       // the writer's token limit, and whether the counted features steered this run ('all', the default) or not ('none'):
       // what a comparison holds every arm to
       maxTokens: draftMaxTokens(), steering: graded === undefined ? 'none' : 'all',

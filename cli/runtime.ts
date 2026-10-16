@@ -386,18 +386,24 @@ export const baseUrlFor = (role: Role): string =>
  * WHAT EVERY CALL THIS PROCESS MADE WAS SENT WITH, AS ITS PROVIDER SAID: the role, the model that answered, and the
  * thinking setting. A record that says what thinking its calls used reads it here, never from what was asked for.
  */
-export interface CallSeen { readonly role: Role; readonly modelId: string; readonly thinkingSent: 'disabled' | null | undefined }
+export interface CallSeen { readonly role: Role; readonly modelId: string; readonly thinkingSent: 'disabled' | null | undefined; readonly thinkingBlocks?: number }
 const seenCalls: CallSeen[] = [];
 export const callsSeen = (): readonly CallSeen[] => seenCalls;
 /** The thinking setting a run's calls were sent with: 'disabled' when every call that says said so; null otherwise. */
 export const thinkingOfCalls = (calls: readonly CallSeen[]): 'disabled' | null =>
   calls.length > 0 && calls.every((c) => c.thinkingSent === 'disabled') ? 'disabled' : null;
+/**
+ * THE THINKING A RUN WAS RETURNED, NOT ONLY THE SETTING IT SENT: the thinking blocks every call's provider counted on
+ * its result, summed. A backend that thinks with thinking sent off shows here and nowhere else; a provider that does
+ * not count them adds nothing.
+ */
+export const thinkingBlocksOfCalls = (calls: readonly CallSeen[]): number => calls.reduce((n, c) => n + (c.thinkingBlocks ?? 0), 0);
 // Every client the CLI makes carries the step guard (core/inference/step-guard.ts): while a repair chain runs, a call
 // outside a step and outside a registered reader is an error.
 const observed = (role: Role, client: InferenceClient): InferenceClient => stepGuarded({
   complete: async (req) => {
     const r = await client.complete(req);
-    seenCalls.push({ role, modelId: r.modelId, thinkingSent: r.thinkingSent });
+    seenCalls.push({ role, modelId: r.modelId, thinkingSent: r.thinkingSent, thinkingBlocks: r.thinkingBlocks ?? 0 });
     return r;
   },
 });
