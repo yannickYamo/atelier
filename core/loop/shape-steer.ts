@@ -40,7 +40,13 @@ export function steeredShape(m: Measurement | null | undefined): { readonly shap
  * request did not ask for, which is padding at best and invention at worst (as a specifics feature below its band is
  * never a miss, ./graded.ts). Such a miss stays a preference the run lists.
  */
-export const steersMiss = (m: Measurement | null | undefined, error: number | undefined): boolean => steeredShape(m) !== null && (error ?? 0) > 0;
+export function steersMiss(m: Measurement | null | undefined, error: number | undefined, value?: number | null): boolean {
+  const sh = steeredShape(m);
+  if (sh === null || (error ?? 0) <= 0) return false;
+  // a length is acted on only past the ceiling by more than the tolerance (LENGTH_TOLERANCE): length is held loosely
+  const max = m?.params.max;
+  return sh.how !== 'length' || typeof value !== 'number' || typeof max !== 'number' || value > max * (1 + LENGTH_TOLERANCE);
+}
 
 /**
  * IS THIS SHAPE RULE THE AUTHOR'S HABIT, LEARNED FROM THEIR PIECES? Only that is steered as a habit. A rule the owner
@@ -50,16 +56,19 @@ export const steersMiss = (m: Measurement | null | undefined, error: number | un
 export const learnedShape = (r: Pick<Requirement, 'provenance' | 'authority' | 'measurement'>): boolean =>
   steeredShape(r.measurement) !== null && r.provenance !== 'EXPERT_STATED' && r.provenance !== 'EXPERT_ADDED' && r.authority !== 'EXPERT_AUTHORED';
 
-const HASHTAG = /(?<![\w&])#[\p{L}\p{N}_]+/gu;
+// a hashtag holds a letter: "#42" is an issue number, "C#" a language
+const HASHTAG = /(?<![\w&])#(?=[\p{N}_]*\p{L})[\p{L}\p{N}_]+/gu;
 const LINK = /\bhttps?:\/\/\S+|\bwww\.\S+/g;
 // an emoji with what rides on it: a skin tone, a variation selector, a joiner and the emoji it joins
 const EMOJI = /\p{Extended_Pictographic}(?:\p{Emoji_Modifier}|️|‍\p{Extended_Pictographic})*/gu;
 const PATTERN: Readonly<Record<'hashtags' | 'links' | 'emoji', RegExp>> = { hashtags: HASHTAG, links: LINK, emoji: EMOJI };
 
 /**
- * The text with every `shape` (hashtags, links, emoji) past the first `max` removed, and the gaps closed. A hashtag with
- * words of the sentence after it on its line is part of the sentence: its `#` goes and its word stays. Anything else goes
- * whole, with the space before it; a line it empties goes with it. Nothing else in the text changes.
+ * The text with every `shape` (hashtags, links, emoji) past the first `max` removed, and the gaps closed. A HASHTAG IS A
+ * TAG ONLY WHERE IT STANDS OUTSIDE THE SENTENCE: on a line of tags, or after the sentence has ended (". #devops"). There
+ * it goes whole. Anywhere else it is a word of the sentence ("after #approval.", "#Python is"): its `#` goes and its word
+ * stays, so no removal takes a word away. Links and emoji go whole, with the space before them; a line a removal empties
+ * goes with it. Nothing else in the text changes.
  */
 export function removeShapeExtras(text: string, shape: 'hashtags' | 'links' | 'emoji', max: number): string {
   const re = new RegExp(PATTERN[shape].source, PATTERN[shape].flags);
@@ -67,9 +76,12 @@ export function removeShapeExtras(text: string, shape: 'hashtags' | 'links' | 'e
   let out = text;
   for (const m of found.reverse()) {
     const start = m.index; const end = start + m[0].length;
-    const rest = out.slice(end).split('\n')[0];
-    // a hashtag inside a sentence: the words after it on its line are not all hashtags, links or emoji
-    const inSentence = shape === 'hashtags' && /[\p{L}\p{N}]/u.test(rest.replace(new RegExp(HASHTAG.source, 'gu'), '').replace(new RegExp(LINK.source, 'g'), ''));
+    // what stands beside it on its line once the other tags, links and emoji are set aside
+    const bare = (t: string): string => t.replace(new RegExp(HASHTAG.source, 'gu'), '').replace(new RegExp(LINK.source, 'g'), '').replace(new RegExp(EMOJI.source, 'gu'), '').trim();
+    const lineBefore = bare(out.slice(0, start).split('\n').pop() ?? ''); const lineAfter = bare(out.slice(end).split('\n')[0]);
+    // a tag: nothing of the sentence after it, and before it either nothing or a sentence that has already ended
+    const isTag = !/[\p{L}\p{N}]/u.test(lineAfter) && (lineBefore === '' || /[.!?…]["'”’)\]]*$/u.test(lineBefore));
+    const inSentence = shape === 'hashtags' && !isTag;
     if (inSentence) { out = `${out.slice(0, start)}${m[0].slice(1)}${out.slice(end)}`; continue; }
     const before = out.slice(0, start).replace(/[ \t]+$/, ''); const after = out.slice(end).replace(/^[ \t]+/, '');
     out = `${before}${before && after && !before.endsWith('\n') && !after.startsWith('\n') && !/^[.,;:!?)]/.test(after) ? ' ' : ''}${after}`;
@@ -78,12 +90,15 @@ export function removeShapeExtras(text: string, shape: 'hashtags' | 'links' | 'e
 }
 
 /**
- * WHAT TO AIM FOR, AFTER A LENGTH MISSES ITS LEARNED BAND: inside the band by as much as the draft was outside it, and
- * by a tenth of the band's edge at most (as `lengthAim` sets a length in words, cli/commands/invoke.ts), so a writer who
- * overshoots lands in the range. With the move that mends it, in the band's own unit.
+ * HOW CLOSE A LENGTH NEEDS TO BE (owner, 16 Oct): length comes with pace and style, so it is held loosely. A draft within
+ * 15% of the author's band is left as it is; one further out is aimed at the band itself, never at a number under its
+ * floor, so the writer cannot be sent below the author's range.
  */
+export const LENGTH_TOLERANCE = 0.15;
+/** What to aim for once a length is past its learned band and the tolerance: the band, with the move that mends it. */
 export function shapeLengthAim(n: number, lo: number | null, hi: number | null, unit: 'characters' | 'words'): { readonly aim?: string; readonly move?: string; readonly off: number } {
-  if (hi !== null && n > hi) return { aim: `aim for ${Math.max(hi - (n - hi), Math.round(hi * 0.9))} ${unit} or fewer`, move: `about ${n - hi} ${unit} shorter`, off: n - hi };
-  if (lo !== null && n < lo) return { aim: `aim for ${Math.min(lo + (lo - n), Math.round(lo * 1.1))} ${unit} or more`, move: `about ${lo - n} ${unit} longer`, off: lo - n };
+  const band = lo !== null && hi !== null ? `${lo} to ${hi}` : hi !== null ? `${hi} or fewer` : `${lo} or more`;
+  if (hi !== null && n > hi * (1 + LENGTH_TOLERANCE)) return { aim: `aim for ${band} ${unit}`, move: `about ${n - hi} ${unit} shorter`, off: n - hi };
+  if (lo !== null && n < lo * (1 - LENGTH_TOLERANCE)) return { aim: `aim for ${band} ${unit}`, move: `about ${lo - n} ${unit} longer`, off: lo - n };
   return { off: 0 };
 }

@@ -29,7 +29,7 @@ import { spanIntegrity } from './integrity.js';
 import { planRepair, repairPrompt, applyRepair, acceptRepair, addsNoWords, readAtLength, featureParamsOf, ruleParamsOf, cutSpan, applyStep, lostToLength, tooShort, unmeasuredIn, REPAIR_SYSTEM, REPAIR_SYSTEM_WITH_PLACEHOLDERS, REPAIR_SCHEMA,
   survivalLoss, type Reverted, type Applied, type RepairTarget, type Proposed, type NoChange, type StepPlan, type StepRule, type StepResult } from './repair.js';
 import { keysOf, measurementId } from '../state/rule-key.js';
-import { learnedShape, steeredShape, removeShapeExtras } from './shape-steer.js';
+import { learnedShape, steeredShape, steersMiss, removeShapeExtras } from './shape-steer.js';
 import { mechanicalFixes, grammarFixes } from './mechanical-repair.js';
 import { ensureGrammar, readGrammar, isGrammarNote, grammarFixing, GRAMMAR_NOTE_SUFFIX } from '../observers/grammar.js';
 import type { RepairPair } from '../state/canonical-state.js';
@@ -729,7 +729,7 @@ async function refineOnLedger(client: InferenceClient, budget: Budget, skill: st
   // A graded miss nearer its band than that is delivered as it is: no pull to the median.
   // A learned shape band is acted on only past its ceiling (./shape-steer.ts, `steersMiss`): never a pull toward padding.
   const gradedOff = (r: VerifyReport): RuleCheck[] => r.checked.filter((c) => graded.has(c.requirementId) && !acts(c) && c.result.verdict === 'VIOLATED'
-    && (!shapeOf.has(c.requirementId) || (c.result.error ?? 0) > 0));
+    && (!shapeOf.has(c.requirementId) || steersMiss(v.requirements.find((r) => r.requirementId === c.requirementId)?.measurement, c.result.error, c.result.value)));
   const pending = (r: VerifyReport): boolean => r.failed || gradedOff(r).some((c) => Math.abs(c.result.error ?? 0) > SETTLED_ERROR);
   const gradedTargeted = new Set<string>(); const gradedRepaired = new Set<string>();
   // EVERY EDIT, COUNTED: span rewrites kept, and those refused by a guard or discarded with their pass, with the reasons.

@@ -1363,7 +1363,7 @@ export function unmetReader(std: Standard, own: { band: readonly [number, number
     const rules = named([...d.report.checked.filter((x) => must.has(x.requirementId) && x.result.verdict === 'VIOLATED').map(ruleMiss),
       ...d.report.checked.filter((x) => gradedOf.has(x.requirementId) && !must.has(x.requirementId) && x.result.verdict === 'VIOLATED'
         // a learned shape band is told only past its ceiling (core/loop/shape-steer.ts, `steersMiss`)
-        && (steeredShape(params.get(x.requirementId)) === null || steersMiss(params.get(x.requirementId), x.result.error))).map((x) => gradedMiss(x)),
+        && (steeredShape(params.get(x.requirementId)) === null || steersMiss(params.get(x.requirementId), x.result.error, x.result.value))).map((x) => gradedMiss(x)),
       // the profile's far-out SIGNAL features, read on the text itself: they are no line of the recorded report
       ...(gradedOf.size ? signalChecks(d.output, profile).filter((x) => x.result.verdict === 'VIOLATED' && gradedOf.has(x.requirementId)).map((x) => gradedMiss(x, x.params)) : [])]);
     if (asked) {

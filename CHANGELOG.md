@@ -56,9 +56,11 @@ The release Phase F tests. Each area below is detailed in the sections that foll
   confirmation or `--set`, a platform limit you give, and the product's standing rules (no added AI tells, the dash cap).
 - **A learned shape band steers, and still never blocks.** Asked for a tweet, a skill built from five tweets that run
   117 to 155 characters delivered a 384-character corporate paragraph as written: its shape bands were listed and did
-  nothing. A piece that runs past the band your pieces run now is written once more toward it, told how far and what
-  to aim for (one that runs short is never padded out), and a hashtag, link or emoji past what your pieces carry is
-  removed in code, with no model call. Each
+  nothing. A piece that runs more than 15% past the band your pieces run is now written once more toward the band
+  itself, never below its floor (length comes with pace and style, so it is held loosely; one that runs short is never
+  padded out), and a hashtag, link or emoji past what your pieces carry is removed in code, with no model call. A
+  hashtag that is a word of the sentence ("after #approval.") keeps its word; only tags after the sentence, or on a
+  line of their own, go whole, and "#42" or "C#" is no hashtag. Each
   step is on the run's one record under the steering it is, never makes a rule you require worse, never changes the
   verdict, and is off with `--graded none`. The count of sentences, the longest sentence and what a piece opens or
   closes on stay preferences that are listed, never steered.
