@@ -107,6 +107,9 @@ your work ──► proposed rules ──► YOU APPROVE (once) ──► Standa
   that will instruct the model and the ones with the thinnest evidence in full, the rest one line each
   (`atelier pending` shows every rule with its evidence). Press Enter to accept them all, or change any
   (`p3=reject`). Without a terminal, `atelier new <folder> --accept` accepts and builds in one step.
+  To rule on every proposal yourself, `atelier ratify --page rulings.html` writes a page to mark up; save
+  its rulings as a file and pass `atelier ratify --decisions @decisions.json` (the JSON inline also works,
+  but a long batch is one argument some agent hosts refuse).
   Rejection is suggested only when a rule failed in at least four pieces discovery never read; on fewer,
   the rule is shown as an example for you to judge. Accepting a suggestion is a ruling like any other, and
   the record keeps which you took and which you changed: `atelier status --skill <name>` shows both counts,

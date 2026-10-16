@@ -78,9 +78,10 @@ they did about it, and that is not reconstructable afterwards.
 before you rule, which is most cases once the corpus is real.
 
 ```bash
-atelier pending                      # every candidate, with its evidence and counterfactual
-atelier ratify --decisions '<json>'  # rule on all of them in one batch; nothing partial
-atelier ratify-close --reason "..."  # mint the StandardVersion from what you kept
+atelier pending                             # every candidate, with its evidence and counterfactual
+atelier ratify --decisions @decisions.json  # rule on all of them in one batch; nothing partial
+                                            # (or the JSON inline: --decisions '<json>')
+atelier ratify-close --reason "..."         # mint the StandardVersion from what you kept
 ```
 
 `ratify-close` after a build supersedes the previous version, and a supersession requires its

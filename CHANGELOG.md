@@ -74,6 +74,13 @@ The release Phase F tests. Each area below is detailed in the sections that foll
   the material bound to it, not on the file names, so new notes under an old name protect their own terms. Wiring or
   reloading the grammar checker starts afresh.
 
+### Added: rulings from a file
+
+- **`atelier ratify --decisions @decisions.json`** reads the rulings from a file. A batch soon runs past 1,024
+  characters, and some agent hosts kill a command whose single argument is that long. The JSON inline still works.
+  A file that cannot be read stops with its path and writes nothing. The ratify page and the plugin skill now say
+  to pass the file.
+
 ### Added: the build names what it steers
 
 - **The build screen lists the features your examples taught.** A new section, "Steered toward your range on every

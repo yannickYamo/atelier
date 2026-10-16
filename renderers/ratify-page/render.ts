@@ -180,8 +180,8 @@ ${cards}
 </div>
 <footer class="end wrap">
   ${meta.itemCount} item(s), work type "${esc(meta.workType)}", corpus ${esc(meta.corpusHash)}<br>
-  Marks are saved in this browser only. Nothing is sent anywhere — use Copy rulings, then:<br>
-  atelier ratify --decisions '&lt;paste&gt;'
+  Marks are saved in this browser only. Nothing is sent anywhere — use Copy rulings, save the paste as decisions.json, then:<br>
+  atelier ratify --decisions @decisions.json
 </footer>
 <script>
 var KEY='atelier-ratify-${esc(meta.corpusHash)}',TOTAL=${n};

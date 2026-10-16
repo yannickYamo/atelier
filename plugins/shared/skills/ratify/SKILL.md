@@ -20,17 +20,24 @@ evidence quote, and take one of four decisions per rule:
 | **CONTEXTUAL** | true only sometimes → capture *when*, in their words |
 | **REJECT** | not true of me |
 
-Gather every answer, then submit once:
+Gather every answer, write them to `decisions.json`, then submit once:
 
-```bash
-atelier ratify --decisions '[
+```json
+[
   {"id":"p1","decision":"APPROVE","materiality":"REQUIRED"},
   {"id":"p2","decision":"REWRITE","statement":"<their exact words>","materiality":"PREFERRED"},
   {"id":"p3","decision":"CONTEXTUAL","appliesWhen":"<their exact words>","materiality":"REQUIRED"},
   {"id":"p4","decision":"REJECT"},
   {"id":"new","decision":"ADD","statement":"<a boundary they named>","kind":"BOUNDARY"}
-]'
+]
 ```
+
+```bash
+atelier ratify --decisions @decisions.json
+```
+
+Pass the file, not the JSON inline: a batch of rulings soon runs past 1,024 characters, and some hosts
+kill a command whose single argument is that long. `--decisions '<json>'` still works for a short batch.
 
 **Ask how much each kept rule matters, in their words, and record it as `materiality`.** A discovered
 rule approved WITHOUT one is kept but only SHOWN to the model — it does not instruct until its owner

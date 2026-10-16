@@ -20,7 +20,7 @@ import type { StandardVersion, Requirement } from '../../core/state/canonical-st
 import { discoveryRecall, declaredGeneralShare, unconfirmedRate, authorityStateOf, isGeneralScope, sourceModeOf } from '../../core/state/canonical-state.js';
 import { writeAtomic } from '../../core/state/fs-atomic.js';
 import { sha, die, argv, flag, loadSession, saveSession, step, runFile, orchestrated, authoredIdAllocator, type Session } from '../runtime.js';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { readJson } from '../../core/state/read-json.js';
 import { decide, type DecisionVerb } from '../../core/ratification/authority.js';
 import { roleFor } from '../../core/architecture/compile.js';
@@ -38,7 +38,7 @@ export function pending(): void {
   const s = loadSession();
   const done = new Set(s.decided.map((d) => d.requirementId));
   const left = s.proposals.filter((p) => !done.has(p.requirementId));
-  if (!left.length) { console.log('Nothing pending. Run `atelier ratify --decisions <json>`.'); return; }
+  if (!left.length) { console.log('Nothing pending. Run `atelier ratify --decisions @decisions.json` (or the JSON inline).'); return; }
   if (argv.includes('--json')) { console.log(JSON.stringify(left, null, 1)); return; }
 
   console.log(`${left.length} proposed rule(s). None of them are yours until you say so.\n`);
@@ -215,18 +215,34 @@ export function ratifyBatch(): void {
       })),
     }));
     console.log(`${pending.length} proposal(s) written to ${pageOut}`);
-    console.log('Open it, rule on each one, then press Copy rulings and pass them back:');
-    console.log("  atelier ratify --decisions '<paste>'");
+    console.log('Open it, rule on each one, press Copy rulings, save the paste to a file and pass it back:');
+    console.log('  atelier ratify --decisions @decisions.json');
     return;
   }
 
-  const raw = flag('--decisions') ?? die('--decisions <json> required — array of '
+  const given = flag('--decisions') ?? die('--decisions @<file> (or the JSON inline) required — array of '
     + '{id, decision, materiality?, form?, shape?, statement?, appliesWhen?, kind?, needs?}'
     + '\n  Or write a page you can read and mark up:  atelier ratify --page rulings.html');
+  // ── `@<path>` READS THE RULINGS FROM A FILE ──────────────────────────────────────────────
+  //
+  // A real batch of rulings passes 1,024 characters after a handful of proposals, and at least one
+  // agent host kills the node process when a single argument is that long: the person's whole review
+  // was lost at the moment of submitting it. A file has no such ceiling. JSON cannot begin with `@`,
+  // so the prefix is unambiguous and the inline form is untouched. A path that cannot be read stops
+  // HERE, naming the path, before anything is parsed or written: "not valid JSON" about a file that
+  // does not exist would send the person to fix rulings that were never read.
+  const raw = given.startsWith('@') ? readDecisionsFile(given.slice(1)) : given;
   let list: RatificationDecision[];
   try { list = JSON.parse(raw) as RatificationDecision[]; } catch { return void die('--decisions is not valid JSON.'); }
   applyDecisions(list);
 }
+
+/** The rulings file named by `--decisions @<path>`, or a stop that names the path. */
+const readDecisionsFile = (path: string): string => {
+  if (!path) return die('--decisions @ needs a file name after the @, e.g. --decisions @decisions.json');
+  try { return readFileSync(path, 'utf8'); }
+  catch (e) { return die(`--decisions: cannot read ${path} (${(e as NodeJS.ErrnoException).code ?? 'unreadable'}). Nothing was written.`); }
+};
 
 /**
  * Every outstanding proposal, ruled on at once. The batch command, the review screen and the page all
