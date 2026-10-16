@@ -731,6 +731,18 @@ describe('a structural edit is held to the terms of a repair', () => {
   it('keeps an edit that changed nothing the standard counts', () => {
     expect(editKeepsStandard(rep(line('c1', 'VIOLATED', ['—'])), rep(line('c1', 'VIOLATED', ['—'])))).toBe(true);
   });
+  // The claim reader reads the whole text again after the edit, and one text read twice can be flagged once and passed
+  // once: a sentence the edit never touched, flagged on the second read only, is the reader disagreeing with itself.
+  const std = { requirements: [] };
+  const from = 'We moved the queue to its own service. The rollout took 4,000 hours. It was worth it.';
+  const to = 'We gave the queue a service of its own. The rollout took 4,000 hours. It was worth it.';
+  it('keeps an edit when the only new flag is on a sentence the edit did not touch', () => {
+    expect(editKeepsStandard(rep(line('UNSOURCED', 'MET')), rep(line('UNSOURCED·public', 'VIOLATED', ['The rollout took 4,000 hours.'], 'PREFERRED')), { from, to, std })).toBe(true);
+    expect(editKeepsStandard(rep(line('UNSOURCED', 'MET')), rep(line('UNSOURCED', 'VIOLATED', ['The rollout took 4,000 hours.'])), { from, to, std })).toBe(true);
+  });
+  it('still refuses a new flag on a sentence the edit wrote', () => {
+    expect(editKeepsStandard(rep(line('UNSOURCED', 'MET')), rep(line('UNSOURCED', 'VIOLATED', ['We gave the queue a service of its own.'])), { from, to, std })).toBe(false);
+  });
 });
 
 describe('a release line never crosses a standard', () => {

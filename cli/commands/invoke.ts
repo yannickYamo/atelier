@@ -10,7 +10,7 @@ import { methodReading, methodLine } from '../../core/eval/obligations.js';
 import type { CheckContext } from '../../core/observers/registry.js';
 import { checksFor, claimInstrumentOf, contextJudgeFor, smallReaderFor, CLAIMS_MODEL_DEFAULT, shortFormRequest } from '../checks.js';
 import { regressions, readAtLength, featureParamsOf, ruleParamsOf, enforcedNeverWorse, applyStep, unmeasuredIn, type ParamsOf, type Proposed } from '../../core/loop/repair.js';
-import { refineToStandard, checkDraft, checkDraftAsync, withWaivers, enforceClaims, heavyCut, listedClaims, brokenByCut, gradedRules, PUBLIC_FACTS, INCONCLUSIVE, type CheckOptions } from '../../core/loop/run-repair.js';
+import { refineToStandard, checkDraft, checkDraftAsync, withWaivers, enforceClaims, heavyCut, listedClaims, brokenByCut, gradedRules, PUBLIC_FACTS, INCONCLUSIVE, UNREAD, type CheckOptions } from '../../core/loop/run-repair.js';
 import { signalChecks, displacement, isSignal, ownerWords } from '../../core/loop/graded.js';
 import { steeredShape, steersMiss, shapeLengthAim } from '../../core/loop/shape-steer.js';
 import { signalDistance } from '../../core/observers/selection.js';
@@ -19,6 +19,7 @@ import { acts, notRun, verifyText, type VerifyReport } from '../../core/observer
 import { isGrammarNote, readGrammar, toCheckList, grammarListed } from '../../core/observers/grammar.js';
 import { readFidelity } from '../../core/fidelity/profile.js';
 import { factLedger, factCoverage, type Fact } from '../../core/loop/fact-ledger.js';
+import { claimUnitsOf } from '../../core/loop/claims.js';
 import { steerTowardRange, type Application } from '../../core/fidelity/structural.js';
 import { LOOP_SETTINGS, DIVERSITY_TEMPERATURES, type FidelityProfile, type FidelityReading, type FidelityRecord, type ImplementationSettings, type ControllerSettings } from '../../core/fidelity/types.js';
 import type { RepairRecord, RepairEdits, GradedRecord, Requirement, ControllerRecord, ShapeRoundSteps, StandardVersion } from '../../core/state/canonical-state.js';
@@ -2178,9 +2179,17 @@ export function editKeepsStandard(before: VerifyReport, after: VerifyReport,
   texts?: { readonly from: string; readonly to: string; readonly std: Pick<StandardVersion, 'requirements'> }): boolean {
   const flagged = (x: VerifyReport): Set<string> => new Set(x.checked.filter((c) => c.requirementId.startsWith('UNSOURCED')).flatMap((c) => c.result.spans.map((sp) => sp.text.trim())));
   const was = flagged(before);
+  // A FLAG ON A SENTENCE THE EDIT DID NOT TOUCH IS NOT THE EDIT'S. The claim reader reads the whole text again, and one
+  // text read twice can be passed once and flagged once: the sentence stands in the text before the edit as it does
+  // after, so refusing the edit removes nothing and only undoes the edit for the reader's disagreement with itself.
+  const flat = (t: string): string => t.replace(/\s+/g, ' ').trim();
+  const untouched = texts ? new Set(claimUnitsOf(texts.from).map((u) => flat(u.text))) : new Set<string>();
   // which way a rule's rate is out is read from the standard (core/loop/repair.ts, `ruleParamsOf`), as the one acceptance rule reads it
-  return regressions(texts ? readAtLength(before, texts.from, texts.to, featureParamsOf(texts.std)) : before, after, texts ? { paramsOf: ruleParamsOf(texts.std) } : {}).length === 0
-    && [...flagged(after)].every((t) => was.has(t));
+  // The claim lines are read sentence by sentence below, so they are left out of the rule-by-rule count, which would
+  // refuse the same untouched sentence by its line's count; the line that says the reader could not run stays in it.
+  const claimLines = texts ? new Set(after.checked.map((c) => c.requirementId).filter((id) => id.startsWith('UNSOURCED') && id !== UNREAD)) : undefined;
+  return regressions(texts ? readAtLength(before, texts.from, texts.to, featureParamsOf(texts.std)) : before, after, texts ? { paramsOf: ruleParamsOf(texts.std), ignore: claimLines } : {}).length === 0
+    && [...flagged(after)].every((t) => was.has(t) || untouched.has(flat(t)));
 }
 
 /**
