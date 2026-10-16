@@ -66,6 +66,7 @@
 // ones ("they was", "he go"), not every subject the English language offers. docs/MEASURED-RULES.md says so.
 
 import type { Measurement } from '../state/canonical-state.js';
+import { createHash } from 'node:crypto';
 import type { Observer, Span, CheckContext } from './registry.js';
 import { findPattern } from './style.js';
 import { numbersIn } from '../loop/integrity.js';
@@ -145,6 +146,12 @@ const NOT_NAMES: ReadonlySet<string> = new Set(['most', 'every', 'each', 'all', 
 
 // ── THE ENGINE, WIRED IN ONCE ────────────────────────────────────────────────────────────────────
 
+// The same text is read by the rule's line and by the list of what to check: read once. A reading is kept under a
+// hash of everything that shapes it (the text, the standard's settings, the request and the material's contents,
+// never its file names), and every kept reading is forgotten whenever the engine is wired or loaded again.
+const READINGS = new Map<string, GrammarReading>();
+const READING_CACHE = 16;
+
 let provider: GrammarProvider | null = null;
 let engine: GrammarEngine | null = null;
 let failure: string | null = null;
@@ -168,9 +175,9 @@ export const grammarListed = (c: { readonly result: { readonly verdict: string; 
   c.result.verdict === 'NOT_APPLICABLE' && c.result.detail.startsWith(GRAMMAR_LISTED);
 
 /** Wire the engine's loader in. Called once by the process (cli/atelier.mts); a test may wire a scripted one. */
-export function setGrammarProvider(p: GrammarProvider | null): void { provider = p; engine = null; failure = null; loading = null; }
-/** Forget the loaded engine and any failure: the next `ensureGrammar` loads again. For tests. */
-export function resetGrammar(): void { engine = null; failure = null; loading = null; }
+export function setGrammarProvider(p: GrammarProvider | null): void { provider = p; engine = null; failure = null; loading = null; READINGS.clear(); }
+/** Forget the loaded engine, any failure and every kept reading: the next `ensureGrammar` loads again. For tests. */
+export function resetGrammar(): void { engine = null; failure = null; loading = null; READINGS.clear(); }
 
 /**
  * Load the engine if a standard needs it and it is not loaded. Never throws: a loader that fails leaves its reason,
@@ -386,16 +393,15 @@ const articleIsCertainBefore = (next: string, unknownWord: boolean): boolean =>
 /** 1 for a lint of an allowed kind: on the same stretch, it is read before the engine's other notes, so it is the one kept. */
 const allowed = (l: GrammarLint): number => (l.rule in MECHANICAL_RULES || MECHANICAL_KINDS.has(l.kind) ? 1 : 0);
 
-// The same text is read by the rule's line and by the list of what to check: read once.
-const READINGS = new Map<string, GrammarReading>();
-const READING_CACHE = 16;
 
 /** Every lint of the text sorted into confirmed and uncertain, under the guards at the head of this file. */
 export function readGrammar(text: string, params: Measurement['params'], context?: CheckContext): GrammarReading {
   if (!engine) return { confirmed: [], uncertain: [] };
   const vocabulary = list(params, 'vocabulary');
   const constructions = new Set(list(params, 'constructions').map(norm));
-  const cacheKey = `${dialectOf(params) ?? '?'}|${vocabulary.join(',')}|${[...constructions].join(',')}|${context?.request ?? ''}|${(context?.material ?? []).map((m) => m.name).join(',')}|${text}`;
+  // Every part is JSON-encoded, so no two different inputs can join to the same string.
+  const cacheKey = createHash('sha256').update(JSON.stringify([dialectOf(params) ?? null, vocabulary, [...constructions],
+    context?.request ?? '', (context?.material ?? []).map((m) => m.text), text])).digest('hex');
   const had = READINGS.get(cacheKey);
   if (had) return had;
   const protectedIn = protectedRanges(text);
