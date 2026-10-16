@@ -69,6 +69,15 @@ The release Phase F tests. Each area below is detailed in the sections that foll
 - **A short output keeps the rules that fit it.** Whether a rule read from long pieces applies to a short output is now
   decided rule by rule: a band counted off long pieces does not apply, a shape or rate read from short pieces does,
   and one shape rule no longer turns the reading off for the rest of the standard.
+- **A folder of tweets keeps every tweet.** A folder is read as short form when its typical piece is short and none of
+  its pieces is long (600 words or more). Tweets from 8 to 60 words, or a long post of a few hundred words beside
+  them, are short form, and every one is an example, however short; a folder with a 1,706-word piece among short ones
+  is not, and gets no shape band a tweet would.
+- **A rewrite is never undone for a sentence it did not touch.** The voice pass and the steering toward your range are
+  undone when the text, read again in full, carries a claim flag it did not carry before. The claim reader reads the
+  whole text again, and one text read twice can be passed once and flagged once; a new flag now undoes the rewrite
+  only when it is on a sentence the rewrite wrote or changed. A flag on a sentence it left as it was is the same in
+  the text before the rewrite, so undoing it removed nothing.
 - **No length band that means nothing.** When your pieces' longest runs more than four times their shortest, no length
   is offered: the build says your pieces vary too much in length to hold one, and a request that names a length sets
   it. Pieces that agree keep their band.
