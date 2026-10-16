@@ -12,7 +12,7 @@
 //                 at least ten events: a short output is held to the count its length expects. Always PREFERRED, as a
 //                 counted feature's band is: a rate steers and chooses between drafts, and never blocks on its own.
 //
-// The platform's limit is never read off the pieces. It comes from the format (a post on X: 280) or from the owner
+// The platform's limit is never read off the pieces, and never assumed for a post on X. It comes from the owner
 // (`--limit`), and the character band is clipped to it.
 
 import type { Measurement, Requirement } from '../state/canonical-state.js';
@@ -26,8 +26,12 @@ import { shapeOf, SHAPE_LABEL, sayKind, countOf, type Shape, type ShapeId, type 
 import { ownLengthBand } from '../intake/length.js';
 import { proseWordsOf, quantile } from './text.js';
 
-/** A shape band every example meets is required from this many examples. */
-export const SHAPE_REQUIRED_FROM = 5;
+/**
+ * A SHAPE BAND IS A LEARNED PREFERENCE, NEVER REQUIRED BY DEFAULT. Twenty posts without a hashtag do not forbid one, and
+ * five one-sentence posts do not make every post one sentence: the band steers drafts toward the author's range and
+ * chooses between them, and binds only when the owner makes it required. Only the platform's limit is required.
+ */
+export const SHAPE_REQUIRED_FROM = Infinity;
 
 export interface PooledRateRule { readonly feature: Feature; readonly pooled: PooledRate; readonly measurement: Measurement; readonly statement: string; readonly evidence: string }
 
@@ -81,7 +85,7 @@ export function shapeBandRules(texts: readonly string[], opts: { readonly limit?
   if (n < 3) return [];
   const out: ShapeBandRule[] = [];
   const url: Record<string, number> = opts.urlChars !== undefined ? { urlChars: opts.urlChars } : {};
-  const requiredAt = (from: number): { required: boolean; more: number } => ({ required: n >= from, more: Math.max(0, from - n) });
+  const requiredAt = (_from: number): { required: boolean; more: number } => ({ required: false, more: 0 });
   const of = (id: NumericShape): number[] => shapes.map((s) => s[id]);
   for (const id of BANDED) {
     const xs = of(id); const lo = Math.min(...xs); const hi = Math.max(...xs);
@@ -90,6 +94,13 @@ export function shapeBandRules(texts: readonly string[], opts: { readonly limit?
     // A LIMIT SOME OF THE AUTHOR'S OWN PIECES RUN PAST is not folded into their band: the band stays their habit, as
     // every piece shows it, and the limit is stated beside it as the platform's rule.
     const past = id === 'characters' && opts.limit ? hi > opts.limit : false;
+    // THE PLATFORM'S LIMIT IS ALWAYS ITS OWN REQUIRED RULE, whatever the pieces do: a tweet skill fails a 486-character
+    // paragraph on the platform's word, not on a band read from the author's habits (which only steers).
+    if (id === 'characters' && opts.limit && !past) {
+      out.push({ shape: id, measurement: { observer: 'SHAPE', params: { shape: [id], max: opts.limit, ...url } },
+        statement: `At most ${opts.limit} characters: the platform's limit.`,
+        evidence: `the platform's limit; your ${xs.length} examples run ${lo} to ${hi} characters`, required: true, more: 0, limited: true, platform: true });
+    }
     if (past && opts.limit) {
       const n = xs.filter((x) => x > (opts.limit ?? Infinity)).length;
       out.push({ shape: id, measurement: { observer: 'SHAPE', params: { shape: [id], max: opts.limit, ...url } },
@@ -108,8 +119,9 @@ export function shapeBandRules(texts: readonly string[], opts: { readonly limit?
     const governs = past && opts.limit && max > opts.limit ? `; the platform's limit of ${opts.limit} characters governs` : '';
     out.push({ shape: id, measurement: { observer: 'SHAPE', params: { shape: [id], ...(min > 0 ? { min } : {}), max, ...(id === 'characters' ? url : {}) } },
       statement: `${said}${limit !== null && max === limit ? ` (${limit} is the platform's limit)` : ''}${governs}.`,
-      evidence: `${lo} to ${hi} ${id === 'longestSentence' ? 'words in the longest sentence' : SHAPE_LABEL[id]} over ${n} pieces`, ...requiredAt(SHAPE_REQUIRED_FROM),
-      ...(limit !== null && max === limit ? { limited: true as const } : {}) });
+      evidence: `${lo} to ${hi} ${id === 'longestSentence' ? 'words in the longest sentence' : SHAPE_LABEL[id]} over ${n} pieces`,
+      // a length capped at the platform's limit is the platform's rule, required; the author's own band is a preference
+      ...(limit !== null && max === limit ? { required: true, more: 0, limited: true as const } : requiredAt(SHAPE_REQUIRED_FROM)) });
   }
   for (const id of CAPPED) {
     const xs = of(id); const lo = Math.min(...xs); const hi = Math.max(...xs);
@@ -155,10 +167,9 @@ export function shortFormSummary(texts: readonly string[], shapes: readonly Shap
 
 /** The same limits in one line, for the short build screen; the lines of `shortFormLimits` are the long account. */
 export function shortFormBrief(texts: readonly string[], shapes: readonly ShapeBandRule[], rates: readonly PooledRateRule[], limit: { readonly chars: number; readonly from: string } | null, answers = false): string {
-  const blocking = shapes.filter((s) => s.required && !s.platform).length; const waiting = shapes.filter((s) => !s.required);
-  const more = waiting.length ? Math.max(...waiting.map((s) => s.more)) : 0;
+  const steered = shapes.filter((s) => !s.platform && !s.limited).length;
   const bands = answers ? 'no band of shape (answers take their length from the request)'
-    : `${blocking} shape band${blocking === 1 ? '' : 's'} required${waiting.length ? `, ${waiting.length} shown until ${more} more example${more === 1 ? '' : 's'}` : ''}`;
+    : `${steered} shape band${steered === 1 ? '' : 's'} steered (required only if you say so)`;
   const rateGap = rates.length ? null : piecesForARate(texts);
   const said = rates.length ? `${rates.length} rate${rates.length === 1 ? '' : 's'} pooled (never blocking)` : `no rate yet${rateGap !== null ? ` (about ${rateGap} more piece${rateGap === 1 ? '' : 's'})` : ''}`;
   return `${shortFormSummary(texts)}; ${bands}; ${said}; ${limit ? `limit ${limit.chars} characters (${limit.from})` : 'no platform limit (--limit <chars>)'}.`;
@@ -171,12 +182,8 @@ export function shortFormBrief(texts: readonly string[], shapes: readonly ShapeB
 export function shortFormLimits(texts: readonly string[], shapes: readonly ShapeBandRule[], rates: readonly PooledRateRule[], limit: { readonly chars: number; readonly from: string } | null, answers = false): string[] {
   const out = [shortFormSummary(texts)];
   if (answers) out.push('These answer requests: their length and shape follow the request, so no band of either is held.');
-  const blocking = shapes.filter((s) => s.required && !s.platform); const waiting = shapes.filter((s) => !s.required);
-  if (blocking.length) out.push(`${blocking.length} shape band${blocking.length === 1 ? '' : 's'} read from ${texts.length} examples, every example meets ${blocking.length === 1 ? 'it' : 'them'}: required.`);
-  for (const more of [...new Set(waiting.map((s) => s.more))].sort((a, b) => a - b)) {
-    const these = waiting.filter((s) => s.more === more);
-    out.push(`${these.length} shape band${these.length === 1 ? '' : 's'} (${these.map((s) => SHAPE_LABEL[s.shape]).join(', ')}) read from ${texts.length} examples; ${more} more would let ${these.length === 1 ? 'it' : 'them'} block. Until then: shown, and used to choose between drafts.`);
-  }
+  const steered = shapes.filter((s) => !s.platform && !s.limited);
+  if (steered.length) out.push(`${steered.length} shape band${steered.length === 1 ? '' : 's'} (${steered.map((s) => SHAPE_LABEL[s.shape]).join(', ')}) read from ${texts.length} examples: drafts are steered toward ${steered.length === 1 ? 'it' : 'them'} and chosen by ${steered.length === 1 ? 'it' : 'them'}, never failed. Make one required with --set <id>=required.`);
   if (rates.length) out.push(`${rates.length} rate${rates.length === 1 ? '' : 's'} pooled over ${rates[0].pooled.words.toLocaleString('en-US')} words (${rates.slice(0, 4).map((r) => r.feature.label).join(', ')}${rates.length > 4 ? ', …' : ''}): a new piece is held to the count its length expects; shown and used to choose between drafts, never blocking.`);
   else {
     const more = piecesForARate(texts);
@@ -184,7 +191,7 @@ export function shortFormLimits(texts: readonly string[], shapes: readonly Shape
   }
   const past = limit ? texts.filter((t) => shapeOf(t).characters > limit.chars).length : 0;
   out.push(limit ? `Platform limit: ${limit.chars} characters (${limit.from}); the length in characters is held under it${past ? `, though ${past} of your ${texts.length} examples run past it` : ''}.`
-    : 'No platform limit: none was given (--limit <chars>, or --class x-post for 280).');
+    : 'No platform limit: none was given (--limit <chars> sets one).');
   return out;
 }
 
@@ -231,7 +238,7 @@ export interface ShortFormOptions { readonly limit?: { readonly chars: number; r
   readonly answers?: boolean }
 
 /**
- * `--limit <chars>`, the owner's to state, or the limit of the format the class names (a post on X: 280); and how
+ * `--limit <chars>`, the owner's to state, or the limit of the format the class names (a LinkedIn post: 3,000); and how
  * that format counts a link. A limit that is not a whole number above zero is refused, never guessed at: the reason
  * comes back as a string.
  */
@@ -273,11 +280,15 @@ export function isBan(m: Measurement): boolean {
 export const isShortFormStandard = (requirements: readonly Pick<Requirement, 'measurement' | 'authority'>[]): boolean =>
   requirements.some((r) => r.authority !== 'EXPERT_REJECTED' && r.measurement?.observer === 'SHAPE');
 
+/** A rule read from short pieces: a shape band, or a rate pooled over short pieces with no band of its own. It holds on a short output. */
+const readFromShortPieces = (m: Measurement): boolean => m.observer === 'SHAPE'
+  || (typeof m.params.pooledPerWord === 'number' && m.params.minValue === undefined && m.params.maxValue === undefined);
+
 export interface ShortTransfer {
   /** the long-form counted bands, by id, each with why it does not apply to this output */
   readonly doesNotApply: ReadonlyMap<string, string>;
-  /** the limit the output is held to, and where it came from */
-  readonly limit: { readonly chars: number; readonly from: string };
+  /** the limit the output is held to, and where it came from; null for a short post with no limit given */
+  readonly limit: { readonly chars: number; readonly from: string } | null;
   /** said to the writer with the task */
   readonly note: string;
   /** said to the person */
@@ -290,8 +301,13 @@ export interface ShortTransfer {
  * owner stated (a step of their method) and a ban are kept; a band counted off the examples is set down as not
  * applying, with the reason.
  */
-export function shortFormTransfer(requirements: readonly Requirement[], limit: { readonly chars: number; readonly from: string } | null): ShortTransfer | null {
-  if (!limit || limit.chars > SHORT_REQUEST_CHARS || isShortFormStandard(requirements)) return null;
+export function shortFormTransfer(requirements: readonly Requirement[], limit: { readonly chars: number; readonly from: string } | null, shortFormat: string | null = null): ShortTransfer | null {
+  // SHORT FORM IS THE FORMAT OR AN EXPLICIT SHORT LIMIT, never an assumed character count: a post on X can run to
+  // thousands of characters. Read rule by rule: a rule read from short pieces (a shape band, a pooled rate) applies to a
+  // short output; one counted off longer pieces does not. One shape rule never turns the reading off for the rest.
+  const short = (limit !== null && limit.chars <= SHORT_REQUEST_CHARS) || shortFormat !== null;
+  if (!short) return null;
+  const where = limit ? `at most ${limit.chars} characters, ${limit.from}` : `${shortFormat}, no length limit`;
   const stated = (r: Requirement): boolean => r.provenance === 'EXPERT_STATED' || r.provenance === 'EXPERT_ADDED' || r.authority === 'EXPERT_AUTHORED';
   const doesNotApply = new Map<string, string>();
   // A LENGTH THE OWNER STATED THAT THE FORMAT CANNOT HOLD ("between 300 and 450 words" in a post of 280 characters) is
@@ -299,7 +315,7 @@ export function shortFormTransfer(requirements: readonly Requirement[], limit: {
   const conflicts: string[] = [];
   for (const r of requirements) {
     const m = r.measurement;
-    if (r.authority !== 'EXPERT_REJECTED' && m?.observer === 'LENGTH' && stated(r) && !m.params.in) {
+    if (limit && r.authority !== 'EXPERT_REJECTED' && m?.observer === 'LENGTH' && stated(r) && !m.params.in) {
       const min = typeof m.params.min === 'number' ? m.params.min : null;
       const unit = ((m.params.unit as readonly string[] | undefined)?.[0] ?? 'words').toLowerCase();
       // a word takes at least two characters with its space: a floor of words over half the limit cannot fit
@@ -310,14 +326,14 @@ export function shortFormTransfer(requirements: readonly Requirement[], limit: {
       }
     }
     // GRAMMAR is never in LONG_FORM_COUNTED: a mechanical error is one in a tweet as in an essay, so it always holds.
-    if (r.authority === 'EXPERT_REJECTED' || !m || !LONG_FORM_COUNTED.has(m.observer) || isBan(m) || stated(r)) continue;
-    doesNotApply.set(r.requirementId, `a band counted off your longer pieces; this output is short form (at most ${limit.chars} characters, ${limit.from})`);
+    if (r.authority === 'EXPERT_REJECTED' || !m || !LONG_FORM_COUNTED.has(m.observer) || isBan(m) || stated(r) || readFromShortPieces(m)) continue;
+    doesNotApply.set(r.requirementId, `a band counted off your longer pieces; this output is short form (${where})`);
   }
   const n = doesNotApply.size - conflicts.length;
-  const conflict = conflicts.length ? ` Your stated length (${conflicts.map((c) => `"${c}"`).join('; ')}) cannot fit at most ${limit.chars} characters, so it does not apply to this format.` : '';
+  const conflict = conflicts.length && limit ? ` Your stated length (${conflicts.map((c) => `"${c}"`).join('; ')}) cannot fit at most ${limit.chars} characters, so it does not apply to this format.` : '';
   return {
     doesNotApply, limit,
-    note: `\n\n(This is short form: at most ${limit.chars} characters (${limit.from}). The standard was read from longer pieces. Its method and its bans hold; its counts of length, paragraphs and sentence mix do not apply here.${conflicts.length ? ' Neither does the length stated for the longer pieces.' : ''} Compress the piece, and keep the essential argument: it must survive the compression.)`,
-    said: `Short form (at most ${limit.chars} characters, ${limit.from}) from a standard read from longer pieces: its method and bans hold; ${n === 0 ? 'none of its rules is a band counted off longer pieces' : `${n} band${n === 1 ? '' : 's'} counted off your longer pieces do${n === 1 ? 'es' : ''} not apply to this output`}.${conflict}`,
+    note: `\n\n(This is short form: ${where}. The standard was read from longer pieces. Its method and its bans hold; its counts of length, paragraphs and sentence mix do not apply here.${conflicts.length ? ' Neither does the length stated for the longer pieces.' : ''} Compress the piece, and keep the essential argument: it must survive the compression.)`,
+    said: `Short form (${where}) from a standard read from longer pieces: its method and bans hold; ${n === 0 ? 'none of its rules is a band counted off longer pieces' : `${n} band${n === 1 ? '' : 's'} counted off your longer pieces do${n === 1 ? 'es' : ''} not apply to this output`}.${conflict}`,
   };
 }

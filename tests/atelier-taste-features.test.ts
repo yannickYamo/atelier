@@ -323,8 +323,8 @@ describe('the contrast drafts are the author\'s kind of piece, at the author\'s 
     expect(checkClass('x-post', 'tweet')).toMatchObject({ ok: true });
     expect(checkClass('x-post', 'blog')).toMatchObject({ ok: false });
   });
-  it('a post on X counts every link as 23 characters, however long', () => {
-    const x = FORMATS['x-post'];
+  it('a post on X held to a limit counts every link as 23 characters, however long', () => {
+    const x = { ...FORMATS['x-post'], maxChars: 280 };
     const long = `Read this ${'https://example.com/'.padEnd(300, 'a')}`;
     expect(checkFormat(long, x).hard).toEqual([]);
     expect(checkFormat(`${'b'.repeat(270)} https://t.co/x`, x).hard).toHaveLength(1);

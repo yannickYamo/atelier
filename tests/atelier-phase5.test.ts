@@ -198,7 +198,7 @@ describe('through the binary: class and UNSOURCED on verify, invoke and the MCP 
     // does not apply (core/observers/short-form.ts).
     const short = run('verify', '--skill', 'nodrink', f, '--class', 'tweet');
     expect(short.code).toBe(0);
-    expect(short.out).toMatch(/Short form \(at most 280 characters, a post on X\)/);
+    expect(short.out).toMatch(/Short form \(a post on X, no length limit\)/);
     const ok = run('verify', '--skill', 'nodrink', f);
     expect(ok.code).toBe(0);
     expect(ok.out).toContain('checked as blog-post');

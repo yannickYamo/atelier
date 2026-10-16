@@ -697,7 +697,10 @@ async function takeStep<T extends Proposed>(ledger: StepLedger, plan: StepPlan, 
   const own = await rule.also?.(after, verdict) ?? null;
   // NEVER LESS THAN WAS ASKED FOR, ON ANY PATH: a change that takes the work away, or makes a required rule it could
   // read unreadable (the text now too short for it), is not kept. A cut aimed at a length is exempt from the share.
-  const lengthCut = plan.targets.some((id) => id === 'request-length' || [...b.report.checked, ...after.report.checked].some((c) => c.requirementId === id && (c.observer === 'LENGTH' || c.observer === 'SHAPE')));
+  // Exempt from the share, never from emptiness: a step aimed at a length (the request's, or the length a draft is cut
+  // to), and a redraft whose purpose is to drop invented claims.
+  const lengthCut = plan.action === 'claim-redraft' || plan.targets.some((id) => id === 'request-length' || id === 'length'
+    || [...b.report.checked, ...after.report.checked].some((c) => c.requirementId === id && (c.observer === 'LENGTH' || c.observer === 'SHAPE')));
   const lost = survivalLoss(b.text, after.text, lengthCut) ?? belowAsked(b.text, after.text, lengthCut ? null : rule.floorWords ?? null);
   const unreadable = enforced.size ? [...enforced].filter((id) => lostToLength(b.report.checked.find((c) => c.requirementId === id), after.report.checked.find((c) => c.requirementId === id))) : [];
   const why = lost ? lost

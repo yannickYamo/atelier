@@ -487,8 +487,8 @@ export const SHORT_FORM_OFFER_LIMIT = 20;
 
 /**
  * WHAT SHORT PIECES SHOW: their shape bands and their pooled rates, as offers beside the method, and the limits of the
- * corpus in lines for the build screen. A shape band is required where every example meets it and there are enough
- * examples (`ShapeBandRule.required`); a rate is always a preference. A band the author's own pieces break beyond
+ * corpus in lines for the build screen. A shape band is a learned preference: it steers and never blocks unless the
+ * owner makes it required; only the platform's limit is required. A rate is always a preference. A band the author's own pieces break beyond
  * what the review allows (../ratification/suggest.ts, `allowed`) is not offered: it would be a rule against them.
  */
 export function shortFormOffers(cases: readonly (Pick<GoldenCase, 'reference'> & { readonly id: string })[], opts: ShortFormOptions = {}): { proposals: MethodProposal[]; limits: string[]; brief: string | null; shapes: ShapeBandRule[]; rates: PooledRateRule[] } {
@@ -506,7 +506,7 @@ export function shortFormOffers(cases: readonly (Pick<GoldenCase, 'reference'> &
     ...shapes.filter((s) => s.platform).map((s): MethodProposal => ({ statement: s.statement, origin: 'SHOWN_BY_EXAMPLE', obligation: 'DELIVERABLE', measurement: s.measurement, conflict: null, counted: true,
       onExample: `${s.evidence}: ${piecesBreaking(texts, s.measurement).map((i) => cases[i].id).join(', ')}`, required: true, platform: true })),
     ...shapes.filter((s) => !s.platform).map((s): MethodProposal => ({ statement: s.statement, origin: 'SHOWN_BY_EXAMPLE', obligation: 'DELIVERABLE', measurement: s.measurement, conflict: null, counted: true,
-      onExample: `${s.evidence}; ${met(s.measurement)}${s.required ? '' : `; read from ${texts.length} examples, ${s.more} more would let it block`}`, ...(s.required ? { required: true as const } : {}) })),
+      onExample: `${s.evidence}; ${met(s.measurement)}${s.limited ? '; the platform\'s limit, required' : '; steered toward and never required unless you say so'}`, ...(s.limited ? { required: true as const, platform: true } : {}) })),
     ...rates.map((r): MethodProposal => ({ statement: r.statement, origin: 'SHOWN_BY_EXAMPLE', obligation: 'DELIVERABLE', measurement: r.measurement, conflict: null, counted: true,
       onExample: `${r.evidence}; ${met(r.measurement)}; a rate chooses between drafts and never blocks` })),
   ];

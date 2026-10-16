@@ -472,7 +472,7 @@ export async function discover(): Promise<void> {
   //
   // Every count above wants long pieces. Twenty tweets carry a length, a shape and a rate pooled over all their
   // words; read here from the same pieces, checked on the held-out ones, and weighed by the review like any count.
-  // The platform's limit is the format's (--class x-post: 280) or the owner's (--limit), never read off the pieces.
+  // The platform's limit is the format's (a format that has one, such as a LinkedIn post) or the owner's (--limit), never read off the pieces.
   const shortGiven = shortFormOptions(declaredClass(s), flag('--limit'));
   const shortOpts = typeof shortGiven === 'string' ? die(shortGiven) : shortGiven;
   const shortMeasured = shortFormMeasured(openItems.filter((i) => readIds.has(i.id)), openItems.filter((i) => heldIds.has(i.id)), sourceProvenance(),

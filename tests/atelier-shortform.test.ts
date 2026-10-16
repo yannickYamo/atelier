@@ -39,9 +39,11 @@ describe('a rate pooled over short pieces, checked by the count a short output e
 });
 
 describe('fifteen tweets build a skill with length, shape and pooled rates', () => {
-  it('length in characters and words and the shape bands are required; at least three rates are pooled', () => {
+  it('only the platform limit is required; the author\'s own shape bands steer; at least three rates are pooled', () => {
     const shapes = required.map((p) => (p.measurement!.params.shape as string[])[0]);
-    expect(shapes).toEqual(expect.arrayContaining(['characters', 'words', 'sentences', 'hashtags', 'opening', 'firstWord']));
+    expect(shapes).toEqual(['characters']);
+    const steered = preferred.filter((p) => p.measurement?.observer === 'SHAPE').map((p) => (p.measurement!.params.shape as string[])[0]);
+    expect(steered).toEqual(expect.arrayContaining(['words', 'sentences', 'hashtags', 'opening', 'firstWord']));
     const rates = preferred.filter((p) => p.measurement?.observer === 'FEATURE' && typeof p.measurement.params.pooledPerWord === 'number');
     expect(rates.length).toBeGreaterThanOrEqual(3);
     expect(built.limits.join('\n')).toMatch(/Platform limit: 280 characters \(a post on X\)/);
@@ -66,19 +68,20 @@ describe('fifteen tweets build a skill with length, shape and pooled rates', () 
 });
 
 describe('a small corpus is built, with its limits stated', () => {
-  it('five tweets: the bands may block, and the screen says no rate can be read yet and how many more pieces would', () => {
+  it('five tweets: the bands steer and never block, and the screen says no rate can be read yet and how many more pieces would', () => {
     const five = shortFormOffers(cases(GOOD.slice(0, 5)), {});
-    expect(five.proposals.filter((p) => p.required).length).toBeGreaterThan(0);
+    expect(five.proposals.filter((p) => p.required)).toEqual([]);
     const said = five.limits.join('\n');
     expect(said).toMatch(/5 short pieces/);
+    expect(said).toMatch(/shape bands \(.*\) read from 5 examples: drafts are steered toward/);
     expect(said).toMatch(/No rate has 10 occurrences.*more pieces? like these would let the first be read/);
     expect(said).toMatch(/No platform limit/);
   });
-  it('four tweets: every band is shown, none blocks, and each says one more example would let it block', () => {
+  it('four tweets: every band is shown, none blocks, and each says it steers and is required only if the owner says so', () => {
     const four = shortFormOffers(cases(GOOD.slice(0, 4)), {});
     expect(four.proposals.length).toBeGreaterThan(0);
     expect(four.proposals.some((p) => p.required)).toBe(false);
-    expect(four.proposals.filter((p) => p.measurement?.observer === 'SHAPE').every((p) => (p.onExample ?? '').includes('read from 4 examples, 1 more would let it block'))).toBe(true);
+    expect(four.proposals.filter((p) => p.measurement?.observer === 'SHAPE').every((p) => (p.onExample ?? '').includes('never required unless you say so'))).toBe(true);
   });
 });
 
@@ -96,7 +99,9 @@ describe('pieces that answer requests take their length from the request', () =>
 describe('the platform limit: from the format or from --limit, never read off the pieces', () => {
   it('--limit is a whole number of characters; anything else is refused', () => {
     expect(shortFormOptions(undefined, '280')).toEqual({ limit: { chars: 280, from: '--limit' } });
-    expect(shortFormOptions('x-post', undefined)).toEqual({ limit: { chars: 280, from: 'a post on X' }, urlChars: 23 });
+    // no limit is assumed for a post on X: posts run from a line to thousands of characters
+    expect(shortFormOptions('x-post', undefined)).toEqual({ limit: null, urlChars: 23 });
+    expect(shortFormOptions('x-post', '280')).toEqual({ limit: { chars: 280, from: '--limit' }, urlChars: 23 });
     expect(shortFormOptions(undefined, 'lots')).toMatch(/whole number/);
     expect(shortFormOptions(undefined, '0')).toMatch(/whole number/);
   });
@@ -175,10 +180,13 @@ describe('a long-form standard asked for a short piece', () => {
     expect(t.said).toMatch(/at most 280 characters, a post on X/);
     expect(t.note).toMatch(/essential argument.*must survive the compression/);
   });
-  it('a long request, or a standard read from short pieces, transfers nothing', () => {
+  it('a long request transfers nothing; one shape rule beside long-form rules never turns the reading off', () => {
     expect(shortFormTransfer(std, null)).toBeNull();
     expect(shortFormTransfer(std, { chars: 3000, from: 'a LinkedIn post' })).toBeNull();
-    expect(shortFormTransfer([...std, req('shape', { observer: 'SHAPE', params: { shape: ['characters'], max: 200 } })], { chars: 280, from: 'x' })).toBeNull();
+    // one shape rule beside long-form rules: each rule keeps its own scope, so the long-form bands still do not apply
+    // to a short output, and the shape rule, read from short pieces, does
+    const mixed = shortFormTransfer([...std, req('shape', { observer: 'SHAPE', params: { shape: ['characters'], max: 200 } })], { chars: 280, from: 'x' })!;
+    expect([...mixed.doesNotApply.keys()].sort()).toEqual(['length', 'mix', 'para']);
   });
 });
 
@@ -193,9 +201,9 @@ describe('end to end, offline', () => {
     const data = mkdtempSync(join(tmpdir(), 'atelier-sf-data-')); const proj = mkdtempSync(join(tmpdir(), 'atelier-sf-proj-'));
     mkdirSync(join(proj, 'tweets'));
     GOOD.slice(0, 15).forEach((t, i) => { writeFileSync(join(proj, 'tweets', `t${String(i).padStart(2, '0')}.md`), `${t}\n`); });
-    const b = cli(proj, data, 'new', 'tweets', '--class', 'x-post', '--name', 'tw');
+    const b = cli(proj, data, 'new', 'tweets', '--class', 'x-post', '--limit', '280', '--name', 'tw');
     expect(b.code).toBe(0);
-    expect(b.out).toMatch(/Short form: 15 short pieces.*13 shape bands required; 4 rates pooled.*limit 280 characters \(a post on X\)/);
+    expect(b.out).toMatch(/Short form: 15 short pieces.*13 shape bands steered \(required only if you say so\); 4 rates pooled.*limit 280 characters \(--limit\)/);
     writeFileSync(join(proj, 'corporate.md'), `${BAD[0].text}\n`);
     const v = cli(proj, data, 'verify', '--skill', 'tw', 'corporate.md', '--claims', 'pattern');
     expect(v.code).toBe(1);
@@ -213,7 +221,7 @@ describe('end to end, offline', () => {
     const para = r.record.entries.find((e) => e.statement.includes('paragraphs'))!;
     expect(para).toMatchObject({ result: 'NOT_APPLICABLE', reason: 'DOES_NOT_APPLY' });
     expect(r.record.entries.filter((e) => e.result === 'UNVERIFIED' && e.statement.includes('paragraphs'))).toEqual([]);
-    expect(r.note).toMatch(/at most 280 characters, a post on X/);
+    expect(r.note).toMatch(/Short form \(a post on X, no length limit\)/);
     // The same skill on a piece of its own kind: the band applies as before.
     const own = cli(proj, data, 'verify', '--skill', 'blog', 'posts/post-1.md', '--claims', 'pattern', '--json');
     const ownPara = (JSON.parse(own.out) as { record: { entries: { statement: string; result: string }[] } }).record.entries.find((e) => e.statement.includes('paragraphs'))!;

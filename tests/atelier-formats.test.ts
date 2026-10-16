@@ -19,11 +19,15 @@ describe('format profiles', () => {
   });
 
   it('a hard limit is the product\'s floor: an over-long post fails the check', () => {
-    const r = checkDraft('d', v, 'x'.repeat(300), { format: FORMATS['x-post'], guardClaims: false });
+    const r = checkDraft('d', v, 'x'.repeat(3100), { format: FORMATS['linkedin-post'], guardClaims: false });
     const line = r.checked.find((c) => c.requirementId === 'FORMAT')!;
     expect(line.result.verdict).toBe('VIOLATED');
-    expect(line.result.detail).toMatch(/300 characters; a post on X holds at most 280/);
+    expect(line.result.detail).toMatch(/3100 characters; a LinkedIn post holds at most 3000/);
     expect(r.failed).toBe(true);
+  });
+  it('a post on X has no assumed limit: a 2,000-character post passes the format check', () => {
+    const r = checkDraft('d', v, `${'A long post on X. '.repeat(115)}`, { format: FORMATS['x-post'], guardClaims: false });
+    expect(r.checked.find((c) => c.requirementId === 'FORMAT')?.result.verdict).not.toBe('VIOLATED');
   });
 
   it('the usual length and the fold only warn', () => {
@@ -48,7 +52,7 @@ describe('format profiles', () => {
   });
 });
 
-describe('through the binary: a skill built for X holds its posts to 280 characters', () => {
+describe('through the binary: a skill built for X holds its posts to the limit the owner gives', () => {
   it('verify fails an over-long post, and says why', () => {
     const CLI = resolve('dist/cli/atelier.mjs');
     if (!existsSync(CLI)) throw new Error('build first');
@@ -64,7 +68,9 @@ describe('through the binary: a skill built for X holds its posts to 280 charact
     run('build', '--name', 'posts', '--class', 'x-post');
     const file = join(proj, 'p.md');
     writeFileSync(file, 'This post runs on and on. '.repeat(14));
-    const r = run('verify', '--skill', 'posts', file);
+    // no limit assumed: the same post passes the format check
+    expect(run('verify', '--skill', 'posts', file).out).not.toMatch(/holds at most/);
+    const r = run('verify', '--skill', 'posts', file, '--class', 'x-post', '--limit', '280');
     expect(r.code).toBe(1);
     expect(r.out).toMatch(/FORMAT/);
     expect(r.out).toMatch(/a post on X holds at most 280/);

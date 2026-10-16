@@ -133,7 +133,7 @@ export function shortScreen(ps: readonly MethodProposal[]): string[] {
 export function kindOfWork(note: string, name: string, declared: string | undefined = flag('--class')): string {
   if (declared?.trim()) return normalizeClass(declared);
   // Read, not declared, so never by a short name: a note titled "X" or a skill called "blog" is not thereby a post
-  // on X with its 280 characters. Only `--class` takes the short names (../../core/observers/doc-class.ts).
+  // on X, which carries no character limit unless the owner gives one. Only `--class` takes the short names (../../core/observers/doc-class.ts).
   const slug = (t: string): string => t.trim().toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-+|-+$/g, '');
   // (A comment is no title: a template that opens with <!-- QUICK_MODE --> is not work of the kind "quick-mode".)
   const body = note.replace(/^\uFEFF?---\r?\n[\s\S]*?\r?\n---\r?\n?/, '').replace(/<!--[\s\S]*?-->/g, '');
@@ -282,7 +282,7 @@ export async function method(): Promise<void> {
   const likeThese: MethodProposal[] = notePath === null ? [{ statement: `New work reads like the ${cases.length === 1 ? 'example' : `${cases.length} examples`} given: the same kind of piece, at their length, in their manner.`,
     origin: 'SHOWN_BY_EXAMPLE', obligation: 'JUDGEMENT', measurement: null, onExample: null, conflict: null }] : [];
   // THE PLATFORM'S FACTS FOR SHORT PIECES, never assumed: a character limit from `--limit`, or from the format the class
-  // names (a post on X: 280), and how that format counts a link. Said on the screen, with what a small corpus can and
+  // names (a LinkedIn post: 3,000), and how that format counts a link. Said on the screen, with what a small corpus can and
   // cannot yet require (core/observers/short-form.ts).
   const shortForm = shortFormFlags(flag('--class'));
   const short = shortFormOffers(cases, shortForm);

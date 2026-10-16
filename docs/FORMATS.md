@@ -63,7 +63,7 @@ the facts no author's taste decides:
 
 | format (`--class`) | a hard limit (fails the check) | usual length (warns) | specifics |
 |---|---|---|---|
-| `x-post` | 280 characters | 5 to 60 words | the person's, or public |
+| `x-post` | none assumed (posts run from a line to thousands of characters; give one with `--limit`) | 5 to 400 words | the person's, or public |
 | `linkedin-post` | 3,000 characters; the hook should land before the fold (about 210 characters, warns) | 60 to 600 words | the person's, or public |
 | `blog-post` | none | 500 to 5,000 words | the person's, or public |
 | `book-chapter` | none | 1,500 to 12,000 words | the person's, or public |

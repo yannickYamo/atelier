@@ -423,9 +423,10 @@ export async function enforceClaims(skill: string, v: StandardVersion, text: str
       // NO CUT EMPTIES A SECTION. The last sentence under a heading stays, still flagged: the check fails on it
       // and names it, which a person can act on. A heading over nothing passed as a section that was there.
       if (emptyHeadings(without) > emptyHeadings(next)) { kept.add(sp.text.trim().slice(0, 160)); continue; }
-      // NO CUT TAKES THE WORK AWAY. A cut that would leave no text, or under a quarter of the words the draft had, is
-      // not made: the sentence stays, still flagged, so the run fails on it in plain view instead of delivering nothing.
-      if (survivalLoss(original, without)) { kept.add(sp.text.trim().slice(0, 160)); continue; }
+      // NO CUT LEAVES NOTHING. Removing what was invented is this cut's whole purpose, however much of the draft it was
+      // (the heavy-cut note tells the person); but a cut that would leave no text at all is not made: the sentence stays,
+      // still flagged, so the run fails on it in plain view instead of delivering nothing.
+      if (survivalLoss(original, without, true)) { kept.add(sp.text.trim().slice(0, 160)); continue; }
       const now = readIn(without);
       const after = notHeld(now, reading);
       // a rule broken before the cut and unreadable after it stays not held

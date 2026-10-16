@@ -28,7 +28,7 @@ export function shortFormRequest(requirements: readonly Requirement[] | null, de
   if (typeof o === 'string') return o;
   const f = formatOf(declared);
   const format = given === undefined ? f : { ...(f ?? { id: 'limit', label: `a piece of at most ${given} characters`, strictSpecifics: false }), maxChars: Number(given) };
-  return { format, transfer: requirements ? shortFormTransfer(requirements, o.limit ?? null) : null };
+  return { format, transfer: requirements ? shortFormTransfer(requirements, o.limit ?? null, f?.short ? f.label : null) : null };
 }
 
 /** The claim reader's default on Anthropic: small, fast, and it only has to type and quote. */

@@ -2,8 +2,8 @@
 //
 // A standard measures one class of document (./doc-class.ts): its thresholds were read off the owner's
 // pieces of that class, which is how taste is conditioned on genre. One standard per format, built from
-// pieces of that format. Some classes also carry facts no author's taste decides: a post on X holds 280
-// characters; a LinkedIn post folds after its first couple of lines; a white paper or a financial report
+// pieces of that format. Some classes also carry facts no author's taste decides: a LinkedIn post holds 3,000
+// characters and folds after its first couple of lines; a white paper or a financial report
 // may state no figure its author did not supply, public or not.
 //
 // A FORMAT PROFILE is those facts, as data. When a skill's class (or a text's declared --class) names a
@@ -27,6 +27,8 @@ export interface FormatProfile {
   readonly label: string;
   /** characters the platform accepts; over it the post is broken */
   readonly maxChars?: number;
+  /** a short post (a post on X): a standard read from longer pieces keeps its method and bans here, and its long-form counts do not apply */
+  readonly short?: true;
   /** what the platform counts one URL as, whatever its length (X shortens every link to 23 characters) */
   readonly urlChars?: number;
   /** characters shown before a "see more" fold: the opening line should land within it */
@@ -45,7 +47,9 @@ export interface FormatProfile {
 }
 
 export const FORMATS: Readonly<Record<string, FormatProfile>> = {
-  'x-post': { id: 'x-post', label: 'a post on X', maxChars: 280, urlChars: 23, words: [5, 60], strictSpecifics: false },
+  // No character limit is assumed: posts on X now run from a line to thousands of characters. The owner states one with
+  // --limit when their account has it.
+  'x-post': { id: 'x-post', label: 'a post on X', short: true, urlChars: 23, words: [5, 400], strictSpecifics: false },
   'linkedin-post': { id: 'linkedin-post', label: 'a LinkedIn post', maxChars: 3000, foldChars: 210, words: [60, 600], strictSpecifics: false },
   'blog-post': { id: 'blog-post', label: 'a blog post', words: [500, 5000], strictSpecifics: false },
   'book-chapter': { id: 'book-chapter', label: 'a book chapter', words: [1500, 12000], strictSpecifics: false },
