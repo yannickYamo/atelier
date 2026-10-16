@@ -142,8 +142,32 @@ only if the whole text's figures and names are unchanged and no other rule is ne
 would change a figure or a name is refused and listed. A slip whose correction another of your rules refuses (it
 would newly break that rule) stays in the text, and the grammar rule then reads broken: under `--fix-grammar` that
 can block a run. Without the flag nothing is corrected and nothing blocks. `ATELIER_GRAMMAR=off` switches the check off for a process; the rule then reads as not
-checked, with that reason, exactly as when the checker cannot load, so a required grammar rule leaves the run at
+checked, with that reason, exactly as when the checker cannot load, and never as met.
+
+**The editorial check never moves the verdict.** The grammar rule every skill carries is editorial: its listed slips,
+or "grammar not checked" when the checker cannot load or is switched off, appear on their own line, and the run's
+state is decided by the rules you set. A run that holds them all reads VERIFIED with the slips beside it. Grammar you
+write into your own method is your rule: there, a check that could not run, or could only list, leaves the run at
 NEEDS REVIEW and never reads as met.
+
+### Who makes a rule required
+
+Three kinds of rule, one policy. **Yours**: a step of your method, a rule you confirm, or `--set <id>=required`.
+**The product's standing rules**: no added machine-writing moves, the em-dash cap read from your pieces, and a platform
+limit you give (`--limit`). **Learned from your examples**: everything else a build reads off your pieces, including the
+shape of short pieces (no hashtags, one sentence, how a post opens) and the counted features of your style. A learned
+rule steers drafts toward your range and chooses between them; it never blocks a draft until you make it required.
+Twenty posts without a hashtag do not forbid one. A skill combining several writers follows the same policy: every
+trait inferred from their pieces steers and never blocks.
+
+### Short pieces, and pieces of very different lengths
+
+A post on X carries no assumed character limit: posts run from a line to thousands of characters, so a limit applies
+only when you give one. When a standard read from longer pieces is asked for a short post, each rule is read on its
+own: a band counted off the long pieces does not apply, while a shape or rate read from short pieces, a ban and every
+step of your method do. When your pieces' longest runs more than four times their shortest (and more than forty words
+apart), no length band is offered: the build says your pieces vary too much in length to hold one, and a request that
+names a length sets it.
 
 ## Counted features, and which of them are your taste
 

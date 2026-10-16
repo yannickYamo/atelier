@@ -380,6 +380,18 @@ for one run) then has it grade each request against those cards: same subject, r
 every answer, the grades are recorded with the run, and with no model the words decide as before. It is opt-in
 until its sealed qualification is run ([pre-registration](../studies/SUBJECT_READER_PREREGISTRATION.md)).
 
+### Several writers in one skill
+
+Point `atelier new` at a folder with pieces by several writers, labelled or not. The voices are told apart by how
+they are written (function words, phrasing, punctuation), never by format or length, so one writer's essays, lists and
+posts stay one voice. Each voice is read on its own, its most characteristic traits are taken, what every voice shares
+is kept as method, and every clash is settled by which side is more characteristic, with the reason. Nothing is asked;
+the build says one line ("Combined 2 voices: openings from the first, tone from the second…"). Every inferred trait
+steers and never blocks. `atelier report --skill <name>` shows the grouping, every weight and every settled clash;
+`atelier fix "<what was wrong>"` changes any of it, and `--admire "<what you like>"` weighs the traits you name up.
+Two writers with three or more pieces each are told apart reliably; three or more may be read as two, and a folder too
+small to tell stays one voice.
+
 ### Voice, and other registers (opt-in)
 
 A skill built from blog posts is evidence about blog posts. Ask it for a contract and nothing in the corpus
