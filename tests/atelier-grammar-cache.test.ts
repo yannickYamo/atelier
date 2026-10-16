@@ -34,7 +34,7 @@ describe('the grammar reading cache', () => {
   });
 
   it('starts afresh when another engine is wired in', async () => {
-    const lint: GrammarLint = { rule: 'SentenceCapitalization', kind: 'Capitalization', message: 'capitalise', start: 0, end: 2, replacement: 'WE' } as GrammarLint;
+    const lint: GrammarLint = { rule: 'SentenceCapitalization', kind: 'Capitalization', message: 'capitalise', start: 0, end: 2, replacement: 'WE' };
     await wire(silent);
     const first = readGrammar('We met on Friday.', {});
     expect(first.uncertain).toEqual([]);
@@ -45,7 +45,7 @@ describe('the grammar reading cache', () => {
 
   it('starts afresh when the loaded engine is forgotten', async () => {
     let loads = 0;
-    const lint: GrammarLint = { rule: 'SentenceCapitalization', kind: 'Capitalization', message: 'capitalise', start: 0, end: 2, replacement: 'WE' } as GrammarLint;
+    const lint: GrammarLint = { rule: 'SentenceCapitalization', kind: 'Capitalization', message: 'capitalise', start: 0, end: 2, replacement: 'WE' };
     setGrammarProvider({ load: async () => { loads += 1; return loads === 1 ? silent : { lint: () => [lint] }; } });
     await ensureGrammar();
     expect(readGrammar('We met on Friday.', {}).uncertain).toEqual([]);
