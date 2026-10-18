@@ -314,7 +314,7 @@ describe('where a run\'s cost went', () => {
     await spend(budget, 0.1, call(0.01));
     const lines = spendBetween(before, processSpendByPurpose());
     expect(lines.map((l) => l.purpose)).toEqual(['writing', 'claim reader', 'other']);
-    expect(lines[0]).toEqual({ purpose: 'writing', usd: 0.4, calls: 2, inputTokens: 2000, outputTokens: 110 });
+    expect(lines[0]).toEqual({ purpose: 'writing', usd: 0.4, calls: 2, inputTokens: 2000, outputTokens: 110, cacheReadTokens: 900 });
     expect(lines.reduce((n, l) => n + l.usd, 0)).toBeCloseTo(processSpentUsd() - spentBefore, 10);
     expect(budget.spentUsd).toBeCloseTo(0.44, 10);
   });
