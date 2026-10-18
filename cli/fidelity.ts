@@ -106,9 +106,20 @@ export function firstSettings(_profile: FidelityProfile, hasIndex: boolean): Imp
  * child release when the skill has moved since (a `fix` or a promotion), never across a change of standard.
  * Null when the skill has no profile.
  */
-export function releaseFor(L: store.StoreLayout, sv: { skillVersionHash: string; standardVersionHash: string }): { release: ImplementationRelease; profile: FidelityProfile; index: RetrievalIndex | null; typicality: TypicalityCalibration | null } | null {
-  let active = fstore.getActiveRelease(L)?.release ?? null;
+export function releaseFor(L: store.StoreLayout, sv: { skillVersionHash: string; standardVersionHash: string },
+  /** a stored release to run instead of the active one (`invoke --try-release`): it is run, never made active */
+  tryRelease: string | null = null): { release: ImplementationRelease; profile: FidelityProfile; index: RetrievalIndex | null; typicality: TypicalityCalibration | null } | null {
+  let active = (tryRelease ? fstore.getRelease(L, tryRelease) : null) ?? fstore.getActiveRelease(L)?.release ?? null;
+  if (tryRelease && active?.id !== tryRelease) throw new Error(`no release ${tryRelease} in this skill: atelier fidelity --skill ${L.skillName} lists them`);
   if (!active) return null;
+  if (tryRelease) {
+    // TRIED, NOT ADOPTED: run as stored, under the standard it was made for; nothing here moves the active release.
+    assertSameStandard(active, sv.standardVersionHash);
+    const p = active.profileHash ? fstore.getProfile(L, active.profileHash) : fstore.getProfile(L);
+    if (!p) return null;
+    const ix = active.retrievalHash ? fstore.getRetrievalIndex(L, active.retrievalHash) : null;
+    return { release: active, profile: p, index: ix?.hash === active.retrievalHash ? ix : null, typicality: fstore.getTypicality(L, p.hash) };
+  }
   // A NEW STANDARD STARTS A NEW LINE; IT DOES NOT LOSE THE AUTHOR. What the loop learned under one standard (settings,
   // notes) says nothing about another, so none of it carries. The author's pieces do: the profile, re-ratified against
   // the new rules, the retrieval index, the typicality calibration and the structure read. Returning nothing here, as
@@ -153,8 +164,9 @@ function wasLoopByDefault(L: store.StoreLayout, r: ImplementationRelease): boole
   return !fstore.releaseChain(L, r.id).some((x) => /^(settings set by hand|the settings search)/.test(x.why));
 }
 
-const withoutId = (r: ImplementationRelease): Omit<ImplementationRelease, 'id'> => {
-  const { id: _id, ...rest } = r;
+/** A release's fields to make a child from: never its id, and never its candidate mark (a child is its own proposal). */
+const withoutId = (r: ImplementationRelease): Omit<ImplementationRelease, 'id' | 'candidate'> => {
+  const { id: _id, candidate: _c, ...rest } = r;
   return rest;
 };
 
@@ -185,10 +197,12 @@ export function withMeasuredEffects(settings: ImplementationSettings, runs: read
 }
 
 /** A new release under `from` with changed settings: the only way settings change. */
-export function releaseWithSettings(L: store.StoreLayout, from: ImplementationRelease, settings: ImplementationSettings, why: string): ImplementationRelease {
+export function releaseWithSettings(L: store.StoreLayout, from: ImplementationRelease, settings: ImplementationSettings, why: string,
+  /** stored as a candidate and left inactive: a proposal of the settings search or of distilled notes */
+  opts: { readonly candidate?: boolean } = {}): ImplementationRelease {
   const measured = withMeasuredEffects(settings, store.listLearningInvocations(L), from.standardVersionHash);
-  const r = fstore.putRelease(L, makeRelease({ ...withoutId(from), parent: from.id, settings: measured, createdAt: new Date().toISOString(), why }));
-  fstore.setActiveRelease(L, r.id);
+  const r = fstore.putRelease(L, makeRelease({ ...withoutId(from), parent: from.id, settings: measured, createdAt: new Date().toISOString(), why, ...(opts.candidate ? { candidate: true as const } : {}) }));
+  if (!opts.candidate) fstore.setActiveRelease(L, r.id);
   return r;
 }
 

@@ -4,8 +4,10 @@
 //   atelier fidelity --skill <name> --read <file>         where one text sits against the author's range (offline)
 //   atelier fidelity --skill <name> --set drafts=4,editBudget=1,retrievalK=3,notesCap=6
 //                                                         a new implementation release with these settings
-//   atelier fidelity --skill <name> --next                a new release with the settings the search proposes
-//   atelier fidelity --skill <name> --distill [--cap 0.5] experience notes from compared drafts (one model call)
+//   atelier fidelity --skill <name> --next                a CANDIDATE release with the settings the search proposes (inactive)
+//   atelier fidelity --skill <name> --distill [--cap 0.5] experience notes from compared drafts, as a CANDIDATE (one model call)
+//   atelier fidelity --skill <name> --promote-release <id> --margin <points>
+//                                                         make a candidate active, only on your paired ratings (core/fidelity/promotion.ts)
 //   atelier fidelity --skill <name> --rollback            the active release back to its parent
 //   atelier fidelity --skill <name> --read-subjects [--cap 0.5]
 //                                                         a subject card per piece, read by a small model (for nearness=reader)
@@ -24,10 +26,12 @@ import { comparisonPairs, distillNotes } from '../../core/fidelity/experience.js
 import { readFidelity, inBandShare } from '../../core/fidelity/profile.js';
 import { topWeights } from '../../core/fidelity/stylometry.js';
 import { featureOf, LAYER_LABEL } from '../../core/observers/features.js';
-import { DEFAULT_SETTINGS, type ImplementationSettings } from '../../core/fidelity/types.js';
+import { DEFAULT_SETTINGS, type ImplementationSettings, type ImplementationRelease } from '../../core/fidelity/types.js';
 import type { Budget } from '../../core/inference/client.js';
 import type { InvocationRecord } from '../../core/state/canonical-state.js';
 import { releaseWithSettings } from '../fidelity.js';
+import { promotionVerdict, MIN_PAIRS, type PairedOutcome } from '../../core/fidelity/promotion.js';
+import { latestRatings } from '../../core/state/eval-store.js';
 import { bandWords, openEdge } from '../../core/observers/selection.js';
 import { controllerSettings } from '../../core/loop/controller.js';
 import { calibrateTypicality, standardise, typicalityOf, MAX_UNMEASURED, type TypicalityCalibration } from '../../core/fidelity/typicality.js';
@@ -62,6 +66,8 @@ export async function fidelity(): Promise<void> {
     return;
   }
   const from = active?.release ?? die(`"${name}" has a profile but no implementation release: rebuild it (atelier build).`);
+  const promote = flag('--promote-release');
+  if (promote) { promoteRelease(L, from, promote); return; }
   const set = flag('--set');
   if (set) {
     const r = releaseWithSettings(L, from, parseSettings(set, from.settings), `settings set by hand: ${set}`);
@@ -77,8 +83,9 @@ export async function fidelity(): Promise<void> {
   const outcomes = outcomesOf(records, (id) => fstore.getRelease(L, id)?.settings ?? null);
   if (argv.includes('--next')) {
     const p = nextSettings(from.settings, outcomes) ?? die('nothing to propose: every neighbouring setting has enough outputs measured, or none can be compared yet (each needs 20).');
-    const r = releaseWithSettings(L, from, p.settings, `the settings search: ${p.why}`);
-    console.log(`New implementation release ${r.id} (parent ${from.id}): ${describeSettings(r.settings)}. ${p.why}`);
+    const r = releaseWithSettings(L, from, p.settings, `the settings search: ${p.why}`, { candidate: true });
+    console.log(`Candidate release ${r.id} (parent ${from.id}), not active: ${describeSettings(r.settings)}. ${p.why}`);
+    console.log(candidateHow(L, r.id));
     return;
   }
   report(L, profile, from, records, outcomes);
@@ -147,7 +154,13 @@ function report(L: store.StoreLayout, profile: NonNullable<ReturnType<typeof fst
     for (const r of worth) console.log(`  ${r.invocationId}  ${r.reading.outside.length} feature(s) outside${r.reading.detector ? `, detector ${r.reading.detector.p}` : ''}  "${r.input.split('\n')[0].slice(0, 60)}"`);
   }
   const next = nextSettings(active.settings, outcomes);
-  console.log(next ? `\nNext to try: ${describeSettings(next.settings)} (${next.why}). Apply with: atelier fidelity --skill ${L.skillName} --next`
+  const live = new Set(fstore.releaseChain(L, active.id).map((r) => r.id));
+  const cands = fstore.listReleases(L).filter((r) => r.candidate && !live.has(r.id) && r.standardVersionHash === active.standardVersionHash);
+  if (cands.length) {
+    console.log('\nCandidates (not active; each needs your paired ratings to be promoted):');
+    for (const r of cands) console.log(`  ${r.id}: ${describeSettings(r.settings)}; ${r.notes.length} note(s); ${r.why}`);
+  }
+  console.log(next ? `\nNext to try: ${describeSettings(next.settings)} (${next.why}). Propose it as a candidate with: atelier fidelity --skill ${L.skillName} --next`
     : '\nNo settings change to propose yet: each setting needs 20 outputs before it can be compared.');
 }
 
@@ -180,10 +193,55 @@ async function distill(L: store.StoreLayout, from: NonNullable<ReturnType<typeof
   const budget: Budget = { spentUsd: 0, capUsd: numericFlag('--cap', 0.5), maxCalls: 2 };
   const notes = await distillNotes(client, budget, pairs);
   if (!notes.length) die(`the model's notes did not pass the checks (no figures, no names, no rules, at most 32 words each). $${budget.spentUsd.toFixed(3)} spent, nothing changed.`);
-  const r = releaseWithSettings(L, { ...from, notes }, from.settings, `${notes.length} experience note(s) from ${pairs.length} compared draft pair(s)`);
-  console.log(`New implementation release ${r.id} (parent ${from.id}) with ${notes.length} note(s), $${budget.spentUsd.toFixed(3)}:`);
+  const r = releaseWithSettings(L, { ...from, notes }, from.settings, `${notes.length} experience note(s) from ${pairs.length} compared draft pair(s)`, { candidate: true });
+  console.log(`Candidate release ${r.id} (parent ${from.id}), not active, with ${notes.length} note(s), $${budget.spentUsd.toFixed(3)}:`);
   for (const n of notes) console.log(`  - ${n.text}`);
-  console.log(`Measure it before keeping it: run the skill on held-out requests and compare releases with atelier fidelity --skill ${L.skillName}; undo with --rollback.`);
+  console.log(candidateHow(L, r.id));
+}
+
+/** How a candidate is tried and, on the owner's ratings, made active. */
+function candidateHow(L: store.StoreLayout, id: string): string {
+  return `It moved what the counts measure, which is not evidence the answers are better. To decide: run requests under it with atelier invoke --skill ${L.skillName} --try-release ${id} "<request>" and the same requests under the active release, rate each answer (atelier rate <run> yes|no), then: atelier fidelity --skill ${L.skillName} --promote-release ${id} --margin <points you would accept worse, e.g. 5>.`;
+}
+
+/**
+ * A CANDIDATE MADE ACTIVE ONLY ON THE OWNER'S PAIRED RATINGS (core/fidelity/promotion.ts). Typing the command is the
+ * owner's authorisation; the ratings are the evidence; the margin is theirs to state. Anything short of "promote" leaves
+ * the candidate inactive and says why.
+ */
+function promoteRelease(L: store.StoreLayout, active: ImplementationRelease, id: string): void {
+  const cand = fstore.getRelease(L, id) ?? die(`no release ${id} in "${L.skillName}".`);
+  if (cand.id === active.id) die(`${id} is already the active release.`);
+  if (!cand.candidate) die(`${id} is not a candidate: only a release --next or --distill proposed is promoted this way (an earlier release comes back with --rollback).`);
+  // compared against the release it was proposed from, so that a rollback after promotion returns to it
+  if (cand.parent !== active.id) die(`${id} was proposed from ${cand.parent ?? 'no release'}, and ${active.id} is active now: propose it again from the active release (atelier fidelity --skill ${L.skillName} --next).`);
+  if (cand.standardVersionHash !== active.standardVersionHash) die(`${id} was made under another standard than the active release; it cannot be compared with it.`);
+  const m = flag('--margin') ?? die('state the margin: how many points of "would send" you accept the candidate being worse, e.g. --margin 5. It is your call, not the tool\'s.');
+  const margin = Number(m) / 100;
+  if (!Number.isFinite(margin) || margin < 0 || margin > 0.2) die(`--margin is in points between 0 and 20 (got "${m}").`);
+  const rated = new Map(latestRatings(L).map((r) => [r.invocationId, r]));
+  // only runs it may learn from: a test run (a benchmark's, --test-run) never decides what the skill does next
+  const runs = store.listLearningInvocations(L).filter((r) => rated.has(r.invocationId) && r.fidelity?.release);
+  // the same request with the same material: the input and the hash of everything the run was given
+  const key = (r: InvocationRecord): string => `${r.input.replace(/\s+/g, ' ').trim().toLowerCase()}\u0000${r.inputHash}`;
+  const latest = (rel: string): Map<string, InvocationRecord> => {
+    const out = new Map<string, InvocationRecord>();
+    for (const r of [...runs].filter((x) => x.fidelity?.release === rel).sort((a, b) => a.at.localeCompare(b.at))) out.set(key(r), r);
+    return out;
+  };
+  const a = latest(active.id); const c = latest(cand.id);
+  const outcome = (r: InvocationRecord): PairedOutcome['active'] => ({ ship: rated.get(r.invocationId)?.ship ?? false,
+    broken: (r.repair?.violatedAfter ?? []).filter((v) => !v.startsWith('UNSOURCED')).length,
+    invented: (r.repair?.storiesCut?.length ?? 0) + (r.repair?.violatedAfter ?? []).filter((v) => v.startsWith('UNSOURCED') && v !== 'UNSOURCED·unread').length });
+  const pairs: PairedOutcome[] = [...c.entries()].flatMap(([k, rc]) => { const ra = a.get(k); return ra ? [{ request: k, candidate: outcome(rc), active: outcome(ra) }] : []; });
+  const v = promotionVerdict(pairs, margin);
+  console.log(`${v.n} request(s) rated under both ${cand.id} and the active ${active.id}: sent ${v.candidateOnly} only under the candidate, ${v.activeOnly} only under the active release.`);
+  if (v.verdict !== 'promote') {
+    console.log(`Not promoted (${v.verdict}): ${v.why}. ${cand.id} stays a candidate; ${active.id} stays active.${v.n < MIN_PAIRS ? ` ${candidateHow(L, cand.id)}` : ''}`);
+    return;
+  }
+  fstore.setActiveRelease(L, cand.id);
+  console.log(`Promoted: ${cand.id} is now active, ${v.why}. Undo with: atelier fidelity --skill ${L.skillName} --rollback.`);
 }
 
 function parseSettings(spec: string, base: ImplementationSettings): ImplementationSettings {

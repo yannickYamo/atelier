@@ -148,7 +148,7 @@ describe('a part held back on purpose is the method\'s call, never a reason to w
     const judge = { covers: () => Promise.resolve({ parts: [{ words: 'Delete every untracked file', covered: false, deferred: true as const }] }) } as unknown as ContextJudge;
     const report = { checked: [], failed: false } as never;
     const refine = (t: string) => Promise.resolve({ output: t, repair: null, report });
-    const out = await withCoverage(refine, { client: writer, budget: budget(), judge, asked: REQ, servedText: '# s', task: REQ, notes })(OUT, {} as never);
+    const out = await withCoverage(refine, { client: writer, budget: budget(), judge, asked: REQ, servedText: '# s', task: REQ, notes, redraft: true })(OUT, {} as never);
     expect(out.output).toBe(OUT);
     expect(writer.seen).toHaveLength(0);
     expect(notes.join(' ')).toMatch(/Held back on purpose, to ask or to confirm first: "Delete every untracked file"/);
@@ -247,7 +247,7 @@ describe('the coverage step reads the reply once, and that reading serves the si
     const judge = modelJudge(c, budget());
     const ok = { checked: [], failed: false } as never;
     const refine = (t: string) => Promise.resolve({ output: t, repair: null, report: ok });
-    const cov = withCoverage(refine, { client: scripted({ piece: 'x' }), budget: budget(), judge, asked: REQ, servedText: '# s', task: REQ, notes: [], readsWith: { material: '' } });
+    const cov = withCoverage(refine, { client: scripted({ piece: 'x' }), budget: budget(), judge, asked: REQ, servedText: '# s', task: REQ, notes: [], readsWith: { material: '' }, redraft: true });
     const delivered = withSituations((t: string) => cov(t, {} as never), { judge, request: REQ, material: '' });
     await delivered(OUT);
     expect(c.seen.map((r) => r.toolName)).toEqual(['emit_reading']);
@@ -256,7 +256,7 @@ describe('the coverage step reads the reply once, and that reading serves the si
     const c = scripted({ parts: [{ words: 'with rollback points', covered: true, held: 'none', where: 'Backfill it in batches' }] });
     const judge = modelJudge(c, budget());
     const refine = (t: string) => Promise.resolve({ output: t, repair: null, report: { checked: [], failed: false } as never });
-    await withCoverage(refine, { client: scripted({ piece: 'x' }), budget: budget(), judge, asked: REQ, servedText: '# s', task: REQ, notes: [] })(OUT, {} as never);
+    await withCoverage(refine, { client: scripted({ piece: 'x' }), budget: budget(), judge, asked: REQ, servedText: '# s', task: REQ, notes: [], redraft: true })(OUT, {} as never);
     expect(c.seen.map((r) => r.toolName)).toEqual(['emit_coverage']);
   });
 });
@@ -336,7 +336,7 @@ describe('the reviewer\'s findings, held', async () => {
         ? { words: 'with rollback points', covered: false } : secondPart] }) } as unknown as ContextJudge;
       const notes: string[] = [];
       const refine = (t: string) => Promise.resolve({ output: t, report: verifyText('d', NONE, t), repair: null });
-      const d = await withCoverage(refine, { client: scripted({ piece: second }), budget: budget(), judge, asked: R, servedText: '# s', task: R, notes })('Add a uuid column beside the integer one.', stepLedger());
+      const d = await withCoverage(refine, { client: scripted({ piece: second }), budget: budget(), judge, asked: R, servedText: '# s', task: R, notes, redraft: true })('Add a uuid column beside the integer one.', stepLedger());
       return { out: d.output, notes };
     };
     const traded = await run('Add a uuid column. Want me to add rollback points?', { words: 'with rollback points', covered: false, deferred: true });

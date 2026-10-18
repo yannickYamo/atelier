@@ -268,6 +268,13 @@ export interface ImplementationRelease {
   readonly profileHash: string | null;
   /** the retrieval index over the author's passages */
   readonly retrievalHash: string | null;
+  /**
+   * A CANDIDATE, NEVER ACTIVE ON ITS OWN. A release the settings search or distilled notes proposed is stored inactive:
+   * what moved a sensor (in-range share, inventions found) is a diagnostic, not evidence the answers got better. It runs
+   * only when asked for (`invoke --try-release`), and becomes active only through `fidelity --promote-release`, on the owner's
+   * ratings (core/fidelity/promotion.ts).
+   */
+  readonly candidate?: true;
   readonly createdAt: string;
   readonly why: string;
 }

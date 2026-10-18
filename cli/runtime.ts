@@ -95,7 +95,7 @@ export const VALUED_OPTIONS: readonly string[] = ['correcting',
   'rule', 'set', 'skill', 'source-author', 'statement', 'strict-schema',
   'structured-output', 'supersedes', 'target-backend', 'target-base-url', 'target-model',
   'target-price-in', 'target-price-out', 'target-provider', 'target-strict-schema', 'target-structured-output',
-  'task', 'material', 'temperature', 'want', 'to', 'token-limit-param', 'verdict',
+  'task', 'material', 'temperature', 'want', 'to', 'token-limit-param', 'verdict', 'try-release', 'promote-release',
   'why', 'work-type', 'override', 'edits', 'contrast-drafts', 'settings', 'contrast-models', 'topics', 'resamples', 'register', 'until-typical', 'shape-rounds', 'calibrate-from', 'until-author', 'select', 'structure', 'read-structure-from', 'context', 'nearness', 'redraws', 'graded', 'limit',
 ];
 

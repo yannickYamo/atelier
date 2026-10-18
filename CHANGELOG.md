@@ -37,15 +37,47 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
   your pieces and is never removed. No repair step empties a code block or removes a URL from code, and a step that
   edits sentences leaves code as it was. A link that is a word of its sentence is left for the rewrite instead of cut
   out of it.
-- **Every part of a request is read.** A request of more than a line is read for each thing it asks, on every run, and
-  a reply that leaves one out is written once more to give it, following the method on when to act, confirm first or
-  state an assumption (`--no-coverage` turns this off). A part the reply holds back for one of the method's two reasons, to
+- **What a request needs is read before the first draft.** In the same small call that reads a request's format: what
+  it asks for, what the answer turns on that it does not say, something named the assistant could act on itself, and
+  an action that cannot be undone, each tied to the request's own words. The writer is told, after the skill and
+  uncached and in the request's own words, each line deferring to your method: assume and say so what reasoning can
+  settle; for what only a check can settle, give what can be given and name the check; act on what could be found
+  directly; confirm before what cannot be undone. Nothing else is required: an example, an alternative or background is
+  not a need. No call is added and the cached skill is unchanged.
+- **Every part of a request is read after writing too.** A request of more than a line is read for each thing it asks;
+  a part left out is listed for you, and under `--strict` the reply is written once more to give it, following the
+  method on when to act, confirm first or state an assumption (`--no-coverage` turns this off). A part the reply holds back for one of the method's two reasons, to
   have an action that cannot be undone confirmed first or to ask which target when the request names none, is the
   method's call: it is said, and never written again for. Asking for what it could find itself, or handing the work
   back, is a part left out, and the reply is written again to act. Saying "one" of something ("in one edit") is not a
   figure a draft written again is refused for. Each extra draft is recorded as kept or not, with why.
 - **Habits are said as a record.** What your examples never did is said as "in none of my examples (0 of 3)", not as
   a rule never to do it.
+
+### A change to how the skill runs is a candidate until your ratings say otherwise
+
+- `atelier fidelity --next` and `--distill` make a candidate release and leave the active one running: features in
+  your range and inventions found are diagnostics, not evidence the answers are better. `atelier invoke --try-release
+  <id>` runs a candidate without adopting it.
+- `atelier fidelity --promote-release <id> --margin <points>` makes it active only on your own ratings, paired by
+  request against the active release it was proposed from: no worse beyond the margin you state (at most 20 points) at
+  the lower end of a 95% interval, with no more rules broken or claims invented, and at least ten paired requests.
+  Anything short of that leaves it a candidate. `--set` is your own choice and takes effect at once.
+- `atelier rate` takes optional reasons from a closed list (necessary part missing, unnecessary extra, wrong, unsafe,
+  unsupported claim, asks instead of acting, too long, too short, voice off).
+
+### Studies: twenty-four fresh requests, where the unusable answers went wrong (development evidence)
+
+Twenty-four requests generated fresh and frozen before any arm answered them, six arms, one answer each, each answer
+judged alone by three judges, on the 18 requests judged for every arm. Atelier held the method best (88% of checks) and
+the author's traits best (88%), but was judged usable on 5 of 18 against 8 or 9 for the other arms; a build from before
+this release scored 8 of 18 on the same requests, and no step of either build accounts for the difference: each wrote a
+different first draft. Every one of the 13 unusable answers was already so in its first draft: no step of the loop
+touched them (20 of 24 runs took no step at all; the only text any step changed was punctuation). Nine were marked
+down for something the request never asked for (a usage example, an alternative), four needed tools no arm had, six
+held a writer's factual error, and one stated a fact of the person's setup the request did not give (listed, and
+delivered as written). What a reply needs is now read before it is written. Whether the judges' extras are what a person
+would want is a question for people's ratings, not the judges'.
 
 ### Studies: why unchanged answers scored differently between two judgings (development evidence, $0)
 

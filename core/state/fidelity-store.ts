@@ -21,7 +21,7 @@
 // recomputed hash means someone edited a file that names itself by its content, and serving it would
 // steer outputs with something no release recorded.
 
-import { existsSync } from 'node:fs';
+import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { writeAtomic } from './fs-atomic.js';
 import { readJson } from './read-json.js';
@@ -85,6 +85,13 @@ export function getRelease(l: StoreLayout, id: string): ImplementationRelease | 
   const r = checked(readJson<ImplementationRelease>(p, { what: `release ${id}`, requireKeys: ['id', 'settings', 'standardVersionHash'] }), `${id}.json`);
   if (r.id !== id) throw new Error(`STORE: release file ${id}.json holds release ${r.id}.`);
   return r;
+}
+
+/** Every stored release, oldest first: the active one, its history, and the candidates beside it. */
+export function listReleases(l: StoreLayout): ImplementationRelease[] {
+  if (!existsSync(releasesDir(l))) return [];
+  return readdirSync(releasesDir(l)).filter((f) => /^[0-9a-f]+\.json$/.test(f)).flatMap((f) => { const r = getRelease(l, f.slice(0, -5)); return r ? [r] : []; })
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
 }
 
 /**

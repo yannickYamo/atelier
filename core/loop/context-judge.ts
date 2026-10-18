@@ -19,6 +19,7 @@ import { readingAs } from '../inference/step-guard.js';
 import type { InferenceClient, Budget } from '../inference/client.js';
 import { spend } from '../inference/client.js';
 import { createHash } from 'node:crypto';
+import { needsOf, NEEDS_INSTRUCTIONS, NEEDS_SCHEMA, type TaskNeeds } from './task-needs.js';
 
 export interface RequestIntent {
   /** the request's own words that state its output format, verbatim, or null */
@@ -29,6 +30,8 @@ export interface RequestIntent {
    * when it names none. Undefined when the judge did not say: the word table decides then (../voice/register.ts).
    */
   readonly document?: string | null;
+  /** What this request needs to be answered well (./task-needs.ts), read in the same call; absent when not read. */
+  readonly needs?: TaskNeeds;
 }
 
 /**
@@ -74,10 +77,13 @@ const INTENT_SYSTEM = `You read a request someone made to a writing or coding as
 
 - document: if the request names the KIND OF DOCUMENT to be written (for example "blog post", "white paper", "memo", "speech", "contract", "email", "press release"), copy those exact words from the request; otherwise null. Only the document being asked for: not one the request mentions as its subject or its source ("a post about our quarterly report" asks for a post), and not a verb ("report the bug" names no document).
 
-Judge only what the request says in so many words. Do not infer a format or a document from the topic.`;
+Judge only what the request says in so many words. Do not infer a format or a document from the topic.
+
+${NEEDS_INSTRUCTIONS}`;
 const INTENT_SCHEMA = { type: 'object', properties: {
-  format: { type: ['string', 'null'] }, length: { type: ['string', 'null'], enum: ['LONG', 'SHORT', null] }, document: { type: ['string', 'null'] } },
-  required: ['format', 'length', 'document'], additionalProperties: false };
+  format: { type: ['string', 'null'] }, length: { type: ['string', 'null'], enum: ['LONG', 'SHORT', null] }, document: { type: ['string', 'null'] },
+  ...NEEDS_SCHEMA },
+  required: ['format', 'length', 'document', ...Object.keys(NEEDS_SCHEMA)], additionalProperties: false };
 
 const ALONE_SYSTEM = `A sentence is being removed from a text. For each numbered pair you get the removed sentence and the sentence that followed it. Say whether the following sentence still makes sense on its own once the removed one is gone: false when it points back at the removed one (a pronoun, "this", "either", "if it can't", a reply to it) so a reader would be lost; true when it stands alone.`;
 const ALONE_SCHEMA = { type: 'object', properties: { verdicts: { type: 'array', items: { type: 'object',
@@ -167,7 +173,7 @@ export function modelJudge(client: InferenceClient, budget: Budget): ContextJudg
     async requestIntent(task) {
       const k = sha(task);
       if (intents.has(k)) return intents.get(k) ?? null;
-      const raw = await ask(INTENT_SYSTEM, `<request>\n${task}\n</request>`, 'emit_intent', INTENT_SCHEMA) as { format?: unknown; length?: unknown; document?: unknown } | null;
+      const raw = await ask(INTENT_SYSTEM, `<request>\n${task}\n</request>`, 'emit_intent', INTENT_SCHEMA, 1000) as { format?: unknown; length?: unknown; document?: unknown } | null;
       // Validated: a format must be the request's own words; a length must be one of the two labels.
       const format = typeof raw?.format === 'string' && raw.format.trim() && task.toLowerCase().includes(raw.format.trim().toLowerCase()) ? raw.format.trim() : null;
       const length: RequestIntent['length'] = raw?.length === 'LONG' ? 'LONG' : raw?.length === 'SHORT' ? 'SHORT' : null;
@@ -176,7 +182,8 @@ export function modelJudge(client: InferenceClient, budget: Budget): ContextJudg
       const said = raw?.document;
       const document = said === null ? null
         : typeof said === 'string' && said.trim() && task.toLowerCase().includes(said.trim().toLowerCase()) ? said.trim() : undefined;
-      const out: RequestIntent | null = raw ? { format, length, ...(document === undefined ? {} : { document }) } : null;
+      const needs = raw ? needsOf(task, raw) : null;
+      const out: RequestIntent | null = raw ? { format, length, ...(document === undefined ? {} : { document }), ...(needs ? { needs } : {}) } : null;
       intents.set(k, out);
       return out;
     },

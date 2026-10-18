@@ -16,7 +16,7 @@ import { describeController } from '../../core/loop/controller.js';
 import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import * as store from '../../core/state/store.js';
-import { getEval, putRating } from '../../core/state/eval-store.js';
+import { getEval, putRating, REASON_CODES, type ReasonCode } from '../../core/state/eval-store.js';
 import { renderPanel } from '../../core/eval/summary.js';
 import { renderRunCard } from '../../core/eval/run-card.js';
 import { renderSkillCard } from '../../core/eval/skill-card.js';
@@ -147,6 +147,11 @@ export function rate(): void {
   if (!id || !answer) die('usage: atelier rate <invocation> yes|no ["why"]');
   const ship = /^(y|yes|ship|1|true)$/i.test(answer) ? true : /^(n|no|0|false)$/i.test(answer) ? false : die(`answer yes or no: would you ship this as is? (got "${answer}")`);
   const { L, rec } = locate(id);
-  putRating(L, { invocationId: rec.invocationId, ship, why: why.join(' ').trim() || null, at: new Date().toISOString(), release: rec.fidelity?.release ?? null });
+  // optional reasons from the closed list: --reason missing-necessary,too-long
+  const said = (flag('--reason') ?? '').split(',').map((x) => x.trim()).filter(Boolean);
+  const bad = said.filter((x) => !(REASON_CODES as readonly string[]).includes(x));
+  if (bad.length) die(`unknown reason ${bad.join(', ')}: use any of ${REASON_CODES.join(', ')}`);
+  const reasons = said as ReasonCode[];
+  putRating(L, { invocationId: rec.invocationId, ship, why: why.join(' ').trim() || null, at: new Date().toISOString(), release: rec.fidelity?.release ?? null, ...(reasons.length ? { reasons } : {}) });
   console.log(`Recorded: ${ship ? 'yes, you would ship' : 'no, you would not ship'} ${rec.invocationId} as is.${ship ? '' : ' To have it written again: atelier fix "<what was wrong>" (add --always to change the skill for every run)'}`);
 }

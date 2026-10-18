@@ -12,6 +12,7 @@ import { checksFor, claimInstrumentOf, contextJudgeFor, smallReaderFor, CLAIMS_M
 import { regressions, readAtLength, featureParamsOf, ruleParamsOf, enforcedNeverWorse, applyStep, unmeasuredIn, type ParamsOf, type Proposed } from '../../core/loop/repair.js';
 import { answerSentences, judgedSituations } from '../../core/loop/answer-claims.js';
 import { groundCarried } from '../../core/loop/grounding.js';
+import { needsNote, needsNothing } from '../../core/loop/task-needs.js';
 import { refineToStandard, checkDraft, checkDraftAsync, withWaivers, enforceClaims, heavyCut, listedClaims, brokenByCut, gradedRules, PUBLIC_FACTS, INCONCLUSIVE, UNREAD, type CheckOptions } from '../../core/loop/run-repair.js';
 import { signalChecks, displacement, isSignal, ownerWords } from '../../core/loop/graded.js';
 import { steeredShape, steersMiss, shapeLengthAim } from '../../core/loop/shape-steer.js';
@@ -354,7 +355,10 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   // `--drafts 1` turns this off.
   // THE IMPLEMENTATION RELEASE (cli/fidelity.ts): how many drafts, how many structural edits, which of the
   // author's passages and which experience notes are served. Below the standard, recorded with the output.
-  const fid = std && !argv.includes('--no-fidelity') ? releaseFor(L, sv) : null;
+  const tryRelease = flag('--try-release') ?? null;
+  if (tryRelease && (!std || argv.includes('--no-fidelity'))) die(`--try-release runs a stored release, and this run has none to run${argv.includes('--no-fidelity') ? ' (--no-fidelity)' : ': the skill has no standard'}.`);
+  const fid = std && !argv.includes('--no-fidelity') ? releaseFor(L, sv, tryRelease) : null;
+  if (tryRelease && fid?.release.id !== tryRelease) die(`release ${tryRelease} could not be served (its profile is not stored); nothing was run.`);
   // `--fidelity` runs the full loop for this run (LOOP_SETTINGS), over whatever the release says.
   const runSettings = fid ? (argv.includes('--fidelity') ? { ...fid.release.settings, ...LOOP_SETTINGS } : fid.release.settings) : null;
   // THE VOICE LAYER (core/voice), only for a skill whose owner declared the corpus's register under this
@@ -630,7 +634,10 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const carryBlock = carryNote && contractFile === null ? `\n\n## From earlier runs of this skill (not a rule of the standard)\n\n${carryNote}` : '';
   // THE SKILL WHOLE AND THE SAME ON EVERY REQUEST, THEN THIS REQUEST'S NOTES (cli/served.ts, `forThisRequest`): rules set
   // aside for it are named there, never cut out of the skill, so the skill is cached once and read from the cache after.
-  const requestNotes = forThisRequest(withheld.filter((w) => !needMaterial.includes(w)), impl.passages, lengthNote);
+  // WHAT THIS REQUEST NEEDS (core/loop/task-needs.ts), read in the call that read its form: said after the skill, uncached.
+  const needs = intent?.needs;
+  if (needs && !needsNothing(needs)) report.say(`Read before writing: ${[needs.deliver.length ? `${needs.deliver.length} thing(s) asked for` : '', needs.unknowns.length ? `turns on ${needs.unknowns.map((u) => u.what).join('; ')}` : '', needs.actOn ? `could act on "${needs.actOn}"` : '', needs.irreversible ? `cannot be undone: "${needs.irreversible}"` : ''].filter(Boolean).join(' · ')}.`);
+  const requestNotes = forThisRequest(withheld.filter((w) => !needMaterial.includes(w)), impl.passages, lengthNote, needsNote(needs));
   const servedForRun = `${needMaterial.length ? withoutRules(servedText, needMaterial) : servedText}${impl.notes ? `\n\n${impl.notes}` : ''}${carryBlock}${requestNotes}`;
   const deliveryForRun = withheld.length ? { ...delivery, withheldRules: withheld } : delivery;
   // What the person said was wrong with an earlier version (`atelier fix`) goes to the writer whatever shape was asked for.
@@ -687,7 +694,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
         displaced: (from: string, to: string) => displacement(from, to, graded !== undefined ? carried : null, new Set())?.refusedFor ?? [] } : null,
       fid && (editBudget > 0 || argv.includes('--fidelity')) ? { client, budget, name, std, checks, profile: editProfile ?? fid.profile, editBudget, trace, taste } : null,
       voiceRuns && bank && fid ? { client, budget, name, std, checks, bank, copied: fid.index ? overlapIndex(fid.index.passages.map((p) => p.text)) : null, trace, taste, reader: smallReaderFor()?.client ?? null, gate: runSettings?.voiceGate === 'reader' ? 'reader' as const : 'lists' as const } : null,
-      coverageOn && judge?.covers ? { client, budget, judge, asked, servedText: servedForRun, task: taskForRun, notes: completions, paramsOf: ruleParamsOf(std),
+      coverageOn && judge?.covers ? { client, budget, judge, asked, servedText: servedForRun, task: taskForRun, notes: completions, paramsOf: ruleParamsOf(std), redraft: strict,
         ...(checks.guardClaims !== false ? { readsWith: { material: checks.evidence ?? '' } } : {}) } : null,
       shapeRounds > 0 ? { client, budget, std, round: shapeRoundNow, graded, gradedProfile: graded !== undefined ? carried : null, gradedTrace, calibration: fid?.typicality ?? null, detector: fid?.profile.detector ?? null, target: shapeTarget, authorTarget, rounds: shapeRounds, servedText: servedForRun, task: taskForRun, trace, taste, notes: completions,
         fresh: planState ? (round: number) => freshPlannedDraft(client, budget, servedForRun, taskForRun, planState, round) : null } : null,
@@ -1978,7 +1985,13 @@ export const asksParts = (task: string): boolean => (task.match(/[\p{L}\p{N}][\p
 export function withCoverage(refine: Refine,
   c: { client: InferenceClient; budget: Budget; judge: ContextJudge; asked: string; servedText: string; task: string; notes: string[]; paramsOf?: ParamsOf;
     /** the request's material, when the run also reads the situations the reply states: then one call reads both (context-judge.ts, `readAnswer`) */
-    readsWith?: { readonly material: string } } | null): Refine {
+    readsWith?: { readonly material: string };
+    /**
+     * Whether a reply that leaves a part out is written again (`--strict`). Otherwise the reading is made and said, and the
+     * reply stands: on twenty-four fresh requests one such draft in six was kept (the rest were refused or did no better),
+     * and what a reply needs is now said to the writer before it writes (core/loop/task-needs.ts).
+     */
+    redraft: boolean } | null): Refine {
   if (!c?.judge.covers) return refine;
   const covers = c.judge.covers.bind(c.judge);
   // ONE READING OF A REPLY: its sentences (the situations it states) and, against the whole reply, what the request asks.
@@ -2008,6 +2021,10 @@ export function withCoverage(refine: Refine,
     if (held.length) c.notes.push(`Held back on purpose, to ask or to confirm first: ${held.map((m) => `"${m}"`).join('; ')}; not written again for it (the method decides when to ask or confirm).`);
     if (!missing.length) return d;
     const named = missing.map((m) => `"${m}"`).join('; ');
+    if (!c.redraft) {
+      c.notes.push(`Read after writing: the reply may leave out ${missing.length} part(s) of the request (${named}); listed for you, not written again (--strict writes it again).`);
+      return d;
+    }
     // The method decides how each part is given (act, confirm first, state an assumption): the note only names what is missing.
     const note = `An earlier reply left out parts of what the request asks for: ${named}. Write the reply so that it gives each of them in full, at the length that takes, `
       + 'following the skill\'s method on when to act, when to confirm first and when to state an assumption. Never invent a file, a project, a figure or a result.';
