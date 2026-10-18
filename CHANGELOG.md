@@ -66,6 +66,30 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 - `atelier rate` takes optional reasons from a closed list (necessary part missing, unnecessary extra, wrong, unsafe,
   unsupported claim, asks instead of acting, too long, too short, voice off).
 
+### Studies: the twenty-four fresh requests, all judged, with this release (development evidence)
+
+All 24 requests judged for every arm, each answer alone by three judges. Usable as written: the hand-written method
+skill 9 of 24, a skill creator's skill 9, an optimised prompt 11, one example 10, a bare model 9; Atelier 9 with this
+release (8 and 9 with the two builds before it). No arm differs from another beyond chance at this size. Atelier still
+holds the method (86% of checks) and the author's traits (88%) best, and its cost per usable answer fell to the lowest
+of its three builds. What a request needs, read before writing, turned three answers usable (it now says what it would
+check first) and two unusable; with it the writer more often assumed a specific (a config key, a database) without
+saying it was an assumption, and the judges counted those as invented (.56 per answer against .43).
+
+### Studies: reproducing one technical article's style on a new subject, from that article alone (development evidence)
+
+One published technical article by an engineer, a first-person write-up of the author's own capacity model, as the
+only example; no method. Each arm wrote "a technical paper" on another satellite subject five times; each paper was
+judged alone, blind, against the example. Style and form closeness (0-100): a skill made with a skill creator 73 and
+77, the example pasted into the prompt 53 and 55, Atelier 37 and 35, a bare model 11 and 19. Judged a plausible new
+piece by the same author: 80%, 60%, 0% and 0%. Atelier wrote the most accurate papers (technical soundness 4.0 of 5,
+the highest) and invented the least: 2.1 fabricated specifics per paper against 4.9 to 7.9, and 0.9 invented
+first-hand facts against 3.3 and 4.9 for the two arms that read as the author. Most of the gap is the example's form:
+a personal project write-up cannot be reproduced on a new subject without inventing the author's projects, and the
+arms judged closest did exactly that. Part is Atelier's own: built from one piece without a model, it had no measured
+range to steer toward; it carried none of the example's figures or its walk-through of a model; and what a request
+needs, said to the writer, came out in three of five papers as an out-of-voice note on its assumptions.
+
 ### Studies: twenty-four fresh requests, where the unusable answers went wrong (development evidence)
 
 Twenty-four requests generated fresh and frozen before any arm answered them, six arms, one answer each, each answer
