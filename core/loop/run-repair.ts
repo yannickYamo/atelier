@@ -636,11 +636,9 @@ export const GRADED_PER_PASS = 3;
  * A FEATURE rule the plan enforces (one the owner REQUIRED) is never graded: it is the owner's, enforced like any rule they require (its carriers
  * rewritten through the controller), and never steered as a habit or written again as one.
  */
-export function gradedRules(v: Pick<StandardVersion, 'requirements'>, graded: CheckOptions['graded'], profile?: FidelityProfile | null,
-  /** the request: one that names a length sets it, and no learned length band is steered against it */ request?: string | null): Map<string, string> {
+export function gradedRules(v: Pick<StandardVersion, 'requirements'>, graded: CheckOptions['graded'], profile?: FidelityProfile | null): Map<string, string> {
   const out = new Map<string, string>();
   if (graded === undefined) return out;
-  const lengthAsked = request ? statedLength(request) !== null : false;
   // which rules a run enforces is the plan's to say (../plan/execution-plan.ts), never the rule's own field
   const enforced = new Set(planFor(v).rules.filter((p) => p.enforced).map((p) => p.id));
   for (const r of v.requirements) {
@@ -649,7 +647,8 @@ export function gradedRules(v: Pick<StandardVersion, 'requirements'>, graded: Ch
     // pieces never carry. Steered under the shape's own name; a band the owner stated is theirs, never a habit pulled at.
     if (learnedShape(r)) {
       const sh = steeredShape(r.measurement);
-      if (sh && !(lengthAsked && sh.how === 'length') && (graded === 'all' || graded.includes(sh.shape))) out.set(r.requirementId, sh.shape);
+      // A learned length is never a target (owner's ruling): the task sets how much is needed. It is reported, not steered.
+      if (sh && sh.how !== 'length' && (graded === 'all' || graded.includes(sh.shape))) out.set(r.requirementId, sh.shape);
       continue;
     }
     if (r.measurement?.observer !== 'FEATURE') continue;
@@ -701,7 +700,7 @@ async function refineOnLedger(client: InferenceClient, budget: Budget, skill: st
   // pointed at, and what the run did about them; `pending` is what keeps the loop going where `failed` would not.
   // The profile's SIGNAL features ride on the reports this loop holds as checks of their own (./graded.ts), and are
   // taken off every report this function returns: the record and the evaluation never see them.
-  const graded = gradedRules(v, opts.graded, opts.gradedProfile, opts.context?.request);
+  const graded = gradedRules(v, opts.graded, opts.gradedProfile);
   const gradedOn = opts.graded !== undefined && graded.size > 0;
   const profile = gradedOn ? opts.gradedProfile ?? null : null;
   // THE LEARNED SHAPE BANDS THIS RUN STEERS (./shape-steer.ts): a length, written again toward its band; a count of

@@ -182,12 +182,12 @@ describe('a graded miss reaches the notes', () => {
   const report = { failed: false, unchecked: [], conditional: [], checked: [{ requirementId: 'p1', statement: r.statement, materiality: 'PREFERRED', enforced: false, observer: 'FEATURE', result: missed }] } as never;
   it('unmetReader reads nothing of a PREFERRED feature rule without the option, and its miss with the move when graded', async () => {
     const { unmetReader, redraftNote } = await import('../cli/commands/invoke.js');
-    expect(unmetReader(std, null)).toBeNull();
-    const [miss] = unmetReader(std, null, null, ['parenthesis'])?.({ output: text, report }) ?? [];
+    expect(unmetReader(std)).toBeNull();
+    const [miss] = unmetReader(std, null, ['parenthesis'])?.({ output: text, report }) ?? [];
     expect(miss).toMatchObject({ id: 'p1', statement: 'parenthesis in range.', off: missed.error });
     expect(miss.move).toMatch(/^about [\d.]+ fewer parenthetical asides per 1,000 words$/);
     expect(redraftNote([miss], text)).toContain(miss.move ?? 'x');
-    expect(unmetReader(std, null, null, ['colon'])).toBeNull();
+    expect(unmetReader(std, null, ['colon'])).toBeNull();
   });
   it('roundMisses carries it too, and the shape note is written from it', async () => {
     const { roundMisses, shapeNote } = await import('../cli/commands/invoke.js');
@@ -198,7 +198,7 @@ describe('a graded miss reaches the notes', () => {
   });
   it('a graded miss is marked, and never told as something the method requires: its block says what your pieces usually do', async () => {
     const { unmetReader, redraftNote, shapeNote, gradedLines } = await import('../cli/commands/invoke.js');
-    const [miss] = unmetReader(std, null, null, ['parenthesis'])?.({ output: text, report }) ?? [];
+    const [miss] = unmetReader(std, null, ['parenthesis'])?.({ output: text, report }) ?? [];
     expect(miss.graded).toBe(true);
     for (const note of [redraftNote([miss], text), shapeNote([miss])]) {
       expect(note).toContain('did not do what your pieces usually do (each line says which way and about how far):');
@@ -214,7 +214,7 @@ describe('a graded miss reaches the notes', () => {
     // an enforced FEATURE rule that is also graded is still the method's
     const r0 = report as unknown as { checked: Record<string, unknown>[] };
     const required = { ...r0, checked: [{ ...r0.checked[0], materiality: 'REQUIRED', enforced: true }] } as never;
-    const [hard] = unmetReader(std, null, null, ['parenthesis'])?.({ output: text, report: required }) ?? [];
+    const [hard] = unmetReader(std, null, ['parenthesis'])?.({ output: text, report: required }) ?? [];
     expect(hard.graded).toBeUndefined();
   });
   it('the switch: on by default, and only none turns it off', async () => {

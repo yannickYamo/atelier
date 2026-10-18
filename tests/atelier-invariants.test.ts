@@ -223,7 +223,7 @@ describe('5 · what the request asks is not replaced by what the examples tend t
     const short = Array.from({ length: 187 }, () => 'word').join(' ');
     expect(requestLength(short, asked!)).toMatchObject({ asked: '400 words', met: false });
     // and a draft that misses it is one more thing to write again for: said as the request's, never as the examples'
-    const unmet = unmetReader(std, null, asked)?.({ output: short, report: { checked: [], unchecked: [], failed: false } as never });
+    const unmet = unmetReader(std, asked)?.({ output: short, report: { checked: [], unchecked: [], failed: false } as never });
     expect(unmet).toEqual([expect.objectContaining({ id: LENGTH_ID, of: 'request', statement: 'Write it at the length the request asks for: 400 words' })]);
   });
   it('a length is held only where the request can be read one way; otherwise it is shown as not counted, never guessed', () => {

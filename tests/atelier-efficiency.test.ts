@@ -14,7 +14,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { skillSizeOf, countWords, describeParts, describeSize } from '../core/eval/size.js';
 import { spend, spendBetween, processSpendByPurpose, processSpentUsd, metered, type Budget, type SpendLine } from '../core/inference/client.js';
-import { selectVoicePieces, selectWithinBudget, excerptOf, isExcerpt, pieceLabel, EXCERPT_GAP, EXCERPT_WORDS, PIECE_BUDGET_WORDS, COMPACT_PIECE_BUDGET_WORDS, COMPACT_PIECE_FORM } from '../core/compiler/voice.js';
+import { selectVoicePieces, selectWithinBudget, excerptOf, isExcerpt, pieceLabel, EXCERPT_GAP, EXCERPT_WORDS, PIECE_BUDGET_WORDS, WRITING_PIECE_BUDGET_WORDS } from '../core/compiler/voice.js';
 import { composeServed, withoutReferenceIndex } from '../cli/served.js';
 import { costOf } from '../cli/commands/report.js';
 import { renderSkillCard, type SkillCard } from '../core/eval/skill-card.js';
@@ -750,18 +750,19 @@ describe('through the binary: a writing skill is served compact by default, the 
     // at least nine of the author's own pieces in ten meet every rule that will fail an output
     for (const m of [shown, built]) expect(Number(m?.[1]) / Number(m?.[2])).toBeGreaterThanOrEqual(0.9);
   });
-  it('a writing skill\'s first build serves passages within 3,000 words, says so beside the size, and stores the choice as a flag would', () => {
+  // The owner's ruling after the essays pasted whole beat compact excerpts on voice: whole pieces, within 8,000 words.
+  it('a writing skill\'s first build serves whole pieces within 8,000 words, says so beside the size, and stores the choice as a flag would', () => {
     expect(r.built).not.toMatch(/EXIT:/);
-    expect(r.built).toMatch(/Voice: passages from \d+ piece\(s\)(?: and \d+ short one\(s\) whole)? of the author's own served with the skill, within 3000 words, chosen to span how they write/);
-    expect(r.built).toMatch(/\(pieces served compact by default: 3,000 words of excerpts, kept by later builds; --pieces whole --piece-budget default serves them whole\.\)/);
+    expect(r.built).toMatch(/Voice: \d+ whole piece\(s\) of the author's own served with the skill, within 8000 words, chosen to span how they write/);
+    expect(r.built).toMatch(/\(whole pieces served by default, within 8,000 words, kept by later builds; --pieces excerpts --piece-budget 3000 serves passages from more of them in less\.\)/);
     expect(r.built).toMatch(/SIZE {2}stored [\d,]+ words in \d+ files · exported [\d,]+ words/);
     expect(r.built).toMatch(/the export\s+your pieces [\d,]+ \(\d+ files?\)/);
-    // stored exactly as `--piece-budget 3000 --pieces excerpts` would store it, so a rebuild reads the skill, not the default
-    expect(r.compact.stored.pieceBudget).toBe(COMPACT_PIECE_BUDGET_WORDS);
-    expect(r.compact.stored.pieceForm).toBe(COMPACT_PIECE_FORM);
-    expect(r.compact.text).toContain(EXCERPT_GAP);
+    // stored exactly as `--piece-budget 8000 --pieces whole` would store it, so a rebuild reads the skill, not the default
+    expect(r.compact.stored.pieceBudget).toBe(WRITING_PIECE_BUDGET_WORDS);
+    expect(r.compact.stored.pieceForm).toBeUndefined();
+    expect(r.compact.text).not.toContain(EXCERPT_GAP);
     expect(pieceWords(r.compact.text)).toBeGreaterThan(0);
-    expect(pieceWords(r.compact.text)).toBeLessThanOrEqual(3000);
+    expect(pieceWords(r.compact.text)).toBeLessThanOrEqual(8000);
     // and a rebuild that asks for nothing is the same bytes
     expect(r.compact.again).not.toMatch(/EXIT:|STORE:|pieces served compact/);
     expect(r.compact.againText).toBe(r.compact.text);
@@ -1102,8 +1103,8 @@ describe('through the binary: a project that moved keeps its skill', () => {
     // the folder of pieces came with the project, so the pieces can be chosen again from the new place
     expect(run(data, moved, 'build', '--name', 'voice', '--piece-budget', '1500')).toMatch(/within 1500 words/);
     expect(run(data, moved, 'build', '--name', 'voice', '--piece-budget', 'default', '--pieces', 'whole')).not.toMatch(/EXIT:/);
-    // the first build's compact default, given as the flags it stands for, is the first build again
-    expect(run(data, moved, 'build', '--name', 'voice', '--piece-budget', '3000', '--pieces', 'excerpts')).not.toMatch(/EXIT:|pieces served compact/);
+    // the first build's default (whole pieces within 8,000 words), given as the flags it stands for, is the first build again
+    expect(run(data, moved, 'build', '--name', 'voice', '--piece-budget', '8000', '--pieces', 'whole')).not.toMatch(/EXIT:|pieces served compact/);
     // MOVED, NOT COPIED: no second session is left behind, so a second rename is carried on like the first
     const again = join(root, 'renamed-again');
     renameSync(moved, again);

@@ -507,7 +507,7 @@ export function renderAgentSkill(
       // For writing, the length the author's pieces run is theirs, and still only a default: it is what a piece runs
       // when the request names no length. (The line keeps its opening words: `invoke` finds it by them to withhold it
       // from a run whose request states a length.)
-      : voice?.lengthWords ? `My pieces of this kind run about ${voice.lengthWords[0] === voice.lengthWords[1] ? voice.lengthWords[0] : `${voice.lengthWords[0]} to ${voice.lengthWords[1]}`} words when the request names no length. A request that names one, or asks for more or less, sets it.` : '',
+      : voice?.lengthWords ? `My pieces of this kind run about ${voice.lengthWords[0] === voice.lengthWords[1] ? voice.lengthWords[0] : `${voice.lengthWords[0]} to ${voice.lengthWords[1]}`} words when a request asks for a piece like mine and names no length. That is how my pieces ran, not how long an answer must be: the task sets how much is needed, so a request that needs less (a short reply, a direct answer) gets less, and one that needs more gets more.` : '',
   ].filter(Boolean);
   const voiceSection = voiceParts.length ? `
 ## How I sound

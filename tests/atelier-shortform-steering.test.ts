@@ -39,8 +39,8 @@ describe('which learned shape bands a run steers', () => {
     rule('mine', shape('characters', { max: 150 }), { provenance: 'EXPERT_ADDED' }),
     rule('req', shape('hashtags', { max: 2 }), { materiality: 'REQUIRED' }),
   ] } as unknown as StandardVersion;
-  it('length and the counts of hashtags, links and emoji: steered; sentence counts, the longest sentence, openings and closings: listed only', () => {
-    expect([...gradedRules(v, 'all').keys()].sort()).toEqual(['chars', 'emoji', 'links', 'tags', 'words']);
+  it('the counts of hashtags, links and emoji: steered; length, sentence counts, the longest sentence, openings and closings: listed only', () => {
+    expect([...gradedRules(v, 'all').keys()].sort()).toEqual(['emoji', 'links', 'tags']);
   });
   it('a band the owner stated or required is theirs, never steered as a habit; --graded none steers nothing', () => {
     const ids = [...gradedRules(v, 'all').keys()];
@@ -48,9 +48,8 @@ describe('which learned shape bands a run steers', () => {
     expect(ids).not.toContain('req');
     expect(gradedRules(v, undefined).size).toBe(0);
   });
-  it('a request that names a length sets it: the learned length bands are not steered against it, the counts still are', () => {
-    expect([...gradedRules(v, 'all', null, 'Write a 300-word post about the release.').keys()].sort()).toEqual(['emoji', 'links', 'tags']);
-    expect([...gradedRules(v, 'all', null, 'write a tweet').keys()].sort()).toEqual(['chars', 'emoji', 'links', 'tags', 'words']);
+  it('a learned length band is never steered, whatever the request; the counts the pieces never carry still are', () => {
+    expect([...gradedRules(v, 'all', null).keys()].sort()).toEqual(['emoji', 'links', 'tags']);
   });
 });
 
@@ -70,21 +69,21 @@ describe('a length out of its learned band is written again, whatever the size o
   });
 });
 
-describe('a draft short of the learned band is not steered up toward it', () => {
-  // 48 characters against a band of 100 to 120 is 2.6 band widths short: making it longer asks for words the request
-  // did not ask for. 384 characters is 13.2 widths long.
+describe('a draft outside the learned length band is not steered toward it, short or long', () => {
+  // 48 characters against a band of 100 to 120 is 2.6 band widths short, and 384 is 13.2 widths long: neither is written
+  // again for its length alone. The task sets how much is needed (owner's ruling); a limit the owner states is held.
   const v = { standardVersionHash: 's', requirements: [rule('chars', shape('characters', { min: 100, max: 120 }))] } as unknown as StandardVersion;
   const client = (): InferenceClient & { calls: number } => { const c = { calls: 0, complete: () => { c.calls += 1; return Promise.resolve({ json: { replacements: [] }, cost: { basis: 'API_METERED', billingUsd: 0.001 }, termination: 'COMPLETE', modelId: 'm' } as never); } }; return c; };
-  it('no step is taken for it and no call made; one past the ceiling is handed to a draft written again', async () => {
+  it('no step is taken for it and no call made, either way', async () => {
     const short = 'He is late to the meeting. The plan still holds.';
     expect(short.length).toBe(48);
-    const c = client();
-    const r = await refineToStandard(c, { spentUsd: 0, capUsd: 1 }, 'd', v, short, 2, { graded: 'all', guardClaims: false, controller: { redraft: true } });
-    expect(r.output).toBe(short);
-    expect(c.calls).toBe(0);
-    expect(r.repair?.controller?.decisions ?? []).toEqual([]);
-    const long = await refineToStandard(client(), { spentUsd: 0, capUsd: 1 }, 'd', v, CORPORATE, 2, { graded: 'all', guardClaims: false, controller: { redraft: true } });
-    expect(long.repair?.controller?.decisions[0]).toMatchObject({ action: 'redraft', targets: ['chars'], outcome: 'handed to a redraft' });
+    for (const text of [short, CORPORATE]) {
+      const c = client();
+      const r = await refineToStandard(c, { spentUsd: 0, capUsd: 1 }, 'd', v, text, 2, { graded: 'all', guardClaims: false, controller: { redraft: true } });
+      expect(r.output).toBe(text);
+      expect(c.calls).toBe(0);
+      expect(r.repair?.controller?.decisions ?? []).toEqual([]);
+    }
   });
 });
 
@@ -128,20 +127,19 @@ describe.skipIf(!existsSync(CLI))('five tweets, through the binary, on the scrip
     controller?: { decisions: { action: string; outcome: string; targets: string[] }[] } }
   const invoke = (...extra: string[]): { code: number; j: Invoked } => { const r = run('invoke', '--skill', 'tw', 'write a tweet', '--json', '--allow-unsourced', ...extra, ...model()); return { code: r.code, j: JSON.parse(r.out) as Invoked }; };
 
-  it('the 384-character paragraph is written again into the author\'s range, and the run never reads BLOCKED for it', async () => {
+  // The owner's ruling: being outside the length the author's pieces run is not, alone, a reason to write a draft again,
+  // for any kind of work. A limit the owner states (--limit) is held; a length learned from five pieces is guidance.
+  it('the 384-character paragraph is not written again for its length alone, and the run never reads BLOCKED for it', async () => {
     expect(CORPORATE.length).toBe(384);
     // the five pieces run 117 to 155 characters: the paragraph is more than twice the longest of them
     expect(Math.max(...GOOD.slice(0, 5).map((t) => t.length))).toBe(155);
     await script(CORPORATE);
     const { code, j } = invoke();
-    expect(j.output).toBe(HELD);
-    expect(j.output.length).toBeLessThanOrEqual(155);
+    expect(j.output).toBe(CORPORATE);
     expect(j.eval.record.state).not.toBe('BLOCKED');
     expect(code).toBe(0);
-    // on the one ledger, under the flag's own purpose: one draft written again for a graded miss alone
-    expect(j.graded?.redrafts).toBe(1);
-    expect(j.graded?.values.characters).toMatchObject({ before: 384, after: HELD.length });
-    expect(j.controller?.decisions.some((d) => d.action === 'redraft' && d.outcome === 'kept')).toBe(true);
+    expect(j.graded?.redrafts ?? 0).toBe(0);
+    expect(j.controller?.decisions.some((d) => d.action === 'redraft') ?? false).toBe(false);
   }, 120_000);
 
   it('with --graded none the paragraph is delivered as written, and nothing is graded', async () => {

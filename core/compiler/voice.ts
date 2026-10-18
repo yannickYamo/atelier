@@ -221,6 +221,15 @@ export const PIECE_BUDGET_WORDS = 9000;
 export const COMPACT_PIECE_BUDGET_WORDS = 3000;
 export const COMPACT_PIECE_FORM: PieceForm = 'excerpts';
 
+/**
+ * THE DEFAULT FOR A SKILL THAT WRITES FROM THE AUTHOR'S PIECES, at its first build: whole pieces, chosen to span how
+ * they write, within 8,000 words (owner's ruling after an outside test in which the author's essays pasted whole beat
+ * the compact excerpts on voice). Whole pieces carry what excerpts cut: how an argument is built, opened and closed.
+ * Stored on the skill as if asked for, so a rebuild keeps it; `--pieces excerpts --piece-budget 3000` is the compact
+ * serving, one flag away. Provisional: the next comparison on fresh tasks says whether it closes the gap.
+ */
+export const WRITING_PIECE_BUDGET_WORDS = 8000;
+
 /** What distinguishes one mode of an author's writing from another: point of view, layout, pace, length. */
 const MODE_FEATURES: readonly PatternId[] = ['FIRST_PERSON', 'ONE_LINE_PARAGRAPH', 'BOLD_SPAN', 'DASH_ASIDE', 'RHETORICAL_QUESTION', 'CONTRACTION'];
 function modeVector(t: string): number[] {

@@ -92,7 +92,7 @@ describe('the notes a draft is written again from carry direction and distance',
 
   it('redraftNote says how far and which way for a LENGTH miss and for a FEATURE miss', async () => {
     const { unmetReader, redraftNote } = await import('../cli/commands/invoke.js');
-    const [length] = unmetReader(std, null)?.({ output: text, report }) ?? [];
+    const [length] = unmetReader(std)?.({ output: text, report }) ?? [];
     expect(length).toMatchObject({ id: 'x7', off: 51, move: 'about 51 words shorter' });
     const note = redraftNote([length, { id: 'f1', statement: featureRule.statement, detail: missed.detail, off: Math.abs(missed.error ?? 0), move: featureMove(featureRule.measurement.params, missed.value ?? 0) ?? '' }], 'd');
     expect(note).toContain('- Between 220 and 420 words. (471 words (220 to 420): long by 51; aim for 378 words or fewer; about 51 words shorter)');
@@ -102,7 +102,7 @@ describe('the notes a draft is written again from carry direction and distance',
     const { unmetReader, LENGTH_ID } = await import('../cli/commands/invoke.js');
     const short = Array.from({ length: 100 }, () => 'word').join(' ');
     const asked = statedLength('Explain caching in 300 words.')!;
-    const miss = unmetReader({ requirements: [] } as never, null, asked)?.({ output: short, report: { checked: [], unchecked: [], failed: false } as never })?.find((u) => u.id === LENGTH_ID);
+    const miss = unmetReader({ requirements: [] } as never, asked)?.({ output: short, report: { checked: [], unchecked: [], failed: false } as never })?.find((u) => u.id === LENGTH_ID);
     expect(miss?.move).toMatch(/^about \d+ words longer$/);
   });
   it('the shape-round note is non-empty after a round that missed, names each miss with its move, and is empty when nothing was missed', async () => {

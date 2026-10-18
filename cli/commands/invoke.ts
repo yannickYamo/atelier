@@ -643,20 +643,15 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const ownBand = ownLengthApplies({ shortForm: Boolean(transfer), stated: Boolean(stated), asked: Boolean(lengthAsked), shape: shape === 'SHAPE', contract: contractFile !== null,
     answers: checks.format?.claims === 'list' || (std ? isReplyWork(std.workType) : false), outOfRegister: register?.status === 'out', sections: argv.includes('--sections'), ruled: lengthIsRuled(std) })
     ? ownLengthBand(store.getVoice(L)?.lengthSpan) : null;
-  // What one more draft would be told, when a draft leaves it unmet (`withRedraft`).
-  const ownSpan = store.getVoice(L)?.lengthSpan;
-  // A draft is written again for its length only on evidence that a piece of the author's runs inside the span: with
-  // n pieces the next one falls between the shortest and the longest (n - 1) times in (n + 1), which is four in
-  // five from nine pieces. On fewer the drafts are still chosen by length, which costs nothing. --no-redraft turns
-  // the step off whole.
-  const enough = (store.getVoice(L)?.lengthPieces ?? 0) >= LENGTH_REDRAFT_PIECES;
-  // A short piece from a long-form standard (`transfer`) is never written again toward the length of the longer pieces.
+  // THE AUTHOR'S LENGTH IS NEVER A REASON TO WRITE A DRAFT AGAIN (owner's ruling): the task decides how much is
+  // needed, and the method how it is done. Their usual length is said to the writer as guidance and reported against
+  // the output; a draft is written again only for what the request, the method or the evidence requires.
   // A length the request states in words is held as the request's own: a draft that misses it is written again.
   // Only where it can be read one way (core/intake/length.ts, `notHeldBecause`); otherwise it is shown as not counted.
   const notHeld = stated && contractFile === null ? notHeldBecause(asked, stated) : null;
   // A length in pages is held in words, at the number of words a page that it says (core/intake/length.ts, `inWords`).
   const askedWords = stated && contractFile === null && !notHeld ? inWords(stated) : null;
-  const unmet = std && !argv.includes('--no-redraft') ? unmetReader(std, ownBand && ownSpan && enough && !transfer ? { band: ownBand, span: ownSpan } : null, askedWords, graded, graded !== undefined ? carried : null, formatAsked ?? null) : null;
+  const unmet = std && !argv.includes('--no-redraft') ? unmetReader(std, askedWords, graded, graded !== undefined ? carried : null, formatAsked ?? null) : null;
   let delivered: Delivered | null = null;
   const keepDelivered = (refine: (draft: string) => Promise<Delivered>) => async (draft: string): Promise<Delivered> => (delivered = await refine(draft));
   // THE BOUNDED CONTROLLER (core/loop/controller.ts): the release's settings, whether a draft can be written again when it
@@ -1288,8 +1283,6 @@ export interface Unmet { readonly id: string; readonly statement: string; readon
   /** which way and how far, in plain words ("about 120 words shorter", "about 4 fewer parenthetical asides per 1,000 words"), where the miss is a number */ readonly move?: string;
   /** a graded feature's miss (`--graded`) of a rule the standard does not enforce: what the author's pieces usually do, never what the work requires */ readonly graded?: true }
 export const LENGTH_ID = 'length';
-/** The fewest pieces from which a draft is written again for its length: (n - 1) / (n + 1) is 0.8 at nine. */
-export const LENGTH_REDRAFT_PIECES = 9;
 /** How many times a draft is written again: once, and once more for a length alone. */
 const REDRAFTS = 2;
 /** A draft that only runs long is cut up to this many times: each pass removes words from the last. */
@@ -1310,7 +1303,7 @@ export function lengthAim(n: number, lo: number | null, hi: number | null): stri
 const lengthMove = (off: number, long: boolean): string | undefined => (off > 0 ? `about ${off} words ${long ? 'shorter' : 'longer'}` : undefined);
 
 /** The reader of what a draft left unmet for this skill and this run, or null when there is nothing of the kind to read. */
-export function unmetReader(std: Standard, own: { band: readonly [number, number]; span: readonly [number, number] } | null, asked: StatedLength | null = null,
+export function unmetReader(std: Standard, asked: StatedLength | null = null,
   /** the graded features: a miss of a FEATURE rule on one of them is written again for, PREFERRED or not */ graded?: CheckOptions['graded'],
   /** the profile whose far-out SIGNAL features are graded misses too (core/loop/graded.ts) */ profile?: FidelityProfile | null,
   /** the shape the request itself asks for, in its own words ("one line, please"), when it states one */ format: string | null = null):
@@ -1323,10 +1316,11 @@ export function unmetReader(std: Standard, own: { band: readonly [number, number
   const gradedOf = gradedRules(std, graded, profile);
   const stated = new Map(planFor(std).rules.map((p) => [p.id, p.statement]));
   const params = new Map(std.requirements.flatMap((r) => (r.measurement ? [[r.requirementId, r.measurement] as const] : [])));
-  // A request that names a length sets it: no learned length band is told against it (core/loop/run-repair.ts, `gradedRules`).
-  if (asked) for (const id of [...gradedOf.keys()]) if (steeredShape(params.get(id))?.how === 'length') gradedOf.delete(id);
+  // A LEARNED LENGTH BAND IS NO MISS. Outside the length the author's pieces run, a draft is not written again for it, in
+  // either direction, whatever the kind of work: the request sets how much is needed (owner's ruling).
+  for (const id of [...gradedOf.keys()]) if (steeredShape(params.get(id))?.how === 'length') gradedOf.delete(id);
   const shape = format ? statedShape(format) : null;
-  if (!must.size && !own && !asked && !gradedOf.size && !shape) return null;
+  if (!must.size && !asked && !gradedOf.size && !shape) return null;
   // A length the method states in words is a miss of length too: how far, and what to aim for.
   const limits = new Map(std.requirements.flatMap((r) => (r.measurement?.observer === 'LENGTH' && ((r.measurement.params.unit as readonly string[] | undefined)?.[0] ?? 'words').toLowerCase() === 'words'
     ? [[r.requirementId, { lo: typeof r.measurement.params.min === 'number' ? r.measurement.params.min : null, hi: typeof r.measurement.params.max === 'number' ? r.measurement.params.max : null, whole: !r.measurement.params.in }] as const] : [])));
@@ -1389,11 +1383,7 @@ export function unmetReader(std: Standard, own: { band: readonly [number, number
       const move = lengthMove(off, long);
       return [...rules, { id: LENGTH_ID, whole: true as const, of: 'request' as const, statement: `Write it at the length the request asks for: ${asked.raw}`, detail: `${written} words, ${off} ${long ? 'too many' : 'too few'}`, off, ...(aim ? { aim } : {}), ...(move ? { move } : {}) }];
     }
-    const n = own ? proseWords(d.output) : 0;
-    if (!own || againstBand(n, own.band) === 'met') return rules;
-    const aim = lengthAim(n, own.band[0], own.band[1]); const move = lengthMove(wordsOutside(n, own.band), n > own.band[1]);
-    return [...rules, { id: LENGTH_ID, whole: true as const, statement: `Write it at the length my pieces run: ${own.span[0]} to ${own.span[1]} words`,
-      detail: `${n} words, ${wordsOutside(n, own.band)} ${n > own.band[1] ? 'too many' : 'too few'}`, off: wordsOutside(n, own.band), ...(aim ? { aim } : {}), ...(move ? { move } : {}) }];
+    return rules;
   };
 }
 
@@ -1438,7 +1428,7 @@ export function redraftNote(unmet: readonly Unmet[], draft: string): string {
  * at most TARGETS_PER_STEP of them; every rule the work requires is told.
  */
 export function roundMisses(std: Standard, d: { output: string; report: VerifyReport }, graded?: CheckOptions['graded'], profile?: FidelityProfile | null): Unmet[] {
-  const named = unmetReader(std, null, null, graded, profile)?.(d) ?? [];
+  const named = unmetReader(std, null, graded, profile)?.(d) ?? [];
   const have = new Set(named.map((u) => u.id));
   const stated = new Map(planFor(std).rules.map((p) => [p.id, p.statement]));
   const params = new Map(std.requirements.flatMap((r) => (r.measurement ? [[r.requirementId, r.measurement] as const] : [])));

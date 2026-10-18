@@ -77,7 +77,7 @@ describe('the runtime and the evaluation read the plan, and so agree', () => {
     const { unmetReader } = await import('../cli/commands/invoke.js');
     const violated = (id: string) => ({ requirementId: id, materiality: 'REQUIRED', result: { verdict: 'VIOLATED', detail: 'd', spans: [], value: null } });
     const report = { failed: true, unchecked: [], checked: ['x1', 'x2', 'x3', 'x4', 'x6', 'h1'].map(violated) } as never;
-    expect(unmetReader(std, null)?.({ output: 'x', report }).map((u) => u.id)).toEqual(plan.rules.filter((p) => p.onMiss === 'REDRAFT').map((p) => p.id));
+    expect(unmetReader(std)?.({ output: 'x', report }).map((u) => u.id)).toEqual(plan.rules.filter((p) => p.onMiss === 'REDRAFT').map((p) => p.id));
   });
   it('what blocks in the record is exactly what the plan enforces', () => {
     const checked = plan.rules.filter((p) => p.check).map((p) => ({ id: p.id, required: p.enforced, verdict: 'VIOLATED' as const, detail: 'found' }));

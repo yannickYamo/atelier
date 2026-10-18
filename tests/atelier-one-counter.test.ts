@@ -136,7 +136,7 @@ describe('an owner\'s REQUIRED feature rule is enforced, never graded', () => {
     result: { verdict: 'VIOLATED', value: 16, error: 2.2, detail: 'parenthetical asides 16 per 1,000 words', spans: [{ start: 0, end: 5, text: 'aside', why: '' }] } } as unknown as RuleCheck;
   it('not among the graded rules, so never a redraft item said as "leaves out … the method requires"', () => {
     expect(gradedRules(std, 'all').size).toBe(0);
-    expect(invoke.unmetReader(std, null, null, 'all')?.({ output: 'x', report: reportOf([miss]) }) ?? []).toEqual([]);
+    expect(invoke.unmetReader(std, null, 'all')?.({ output: 'x', report: reportOf([miss]) }) ?? []).toEqual([]);
   });
   it('the controller rewrites its carriers as an enforced span rule', () => {
     const input: ControllerInput = { enforced: [{ id: 'q1', kind: 'span' }], claims: 0, length: null, graded: [], grammar: null, budget: { usdLeft: 1, callsLeft: null }, history: [],

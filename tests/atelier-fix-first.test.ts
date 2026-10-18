@@ -202,7 +202,7 @@ describe('P1-4: a skill for answers is compiled in the words of answers', () => 
   });
   it('polarity: writing keeps the essay wording', async () => {
     const m = await md('writing');
-    expect(m).toContain('My pieces of this kind run about 100 words when the request names no length. A request that names one, or asks for more or less, sets it.');
+    expect(m).toContain('My pieces of this kind run about 100 words when a request asks for a piece like mine and names no length. That is how my pieces ran, not how long an answer must be');
     expect(m).toContain('a story of mine you were not given is not yours to tell');
   });
 });

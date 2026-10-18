@@ -167,7 +167,7 @@ describe('a method\'s ban is a span rule: rewritten in place, never "left out"',
   it('the plan rewrites its sentence; the redraft reader does not list it', () => {
     expect(planFor(v).rules[0].onMiss).toBe('REWRITE');
     const text = 'The harbour opens at nine. We simply walk down to the pier and wait for the ferry to come in.';
-    const unmet = invoke.unmetReader(v, null);
+    const unmet = invoke.unmetReader(v);
     expect(unmet === null || unmet({ output: text, report: verifyText('s', v, text) }).length === 0).toBe(true);
   });
   it('through the loop: the first step is a rewrite of its span, and the ban holds', async () => {

@@ -7,7 +7,7 @@
 import type { StoredSignal } from '../../core/observers/selection.js';
 import { compositeVoiceOf, pieceLengthOpen, type CompositeRecord } from '../../core/composite/selection.js';
 import { withoutFrontMatter } from '../../core/composite/authors.js';
-import { selectCompositePieces, selectVoicePieces, selectWithinBudget, isExcerpt, usualLength, lengthSpan, compositeLength, PIECE_BUDGET_WORDS, COMPACT_PIECE_BUDGET_WORDS, COMPACT_PIECE_FORM, type PieceForm, type Voice } from '../../core/compiler/voice.js';
+import { selectCompositePieces, selectVoicePieces, selectWithinBudget, isExcerpt, usualLength, lengthSpan, compositeLength, PIECE_BUDGET_WORDS, COMPACT_PIECE_BUDGET_WORDS, COMPACT_PIECE_FORM, WRITING_PIECE_BUDGET_WORDS, type PieceForm, type Voice } from '../../core/compiler/voice.js';
 import { derivePersona, reconcilePersona, standardForbids } from '../../core/compiler/persona.js';
 import type { Budget } from '../../core/inference/client.js';
 import { sessionCorpus, sessionPairs, unsplitPairs } from '../corpus.js';
@@ -146,8 +146,8 @@ async function chooseVoice(L: store.StoreLayout, v: StandardVersion): Promise<Vo
   // The compact default applies to a first build alone, of a skill that writes, with no flag given about the pieces
   // (a build from a method calls no model and keeps the whole serving); what it chooses is stored as a flag would be.
   const compact = !stored && !answers && !reselect && !NO_MODEL();
-  const wordBudget = asked.budget === undefined ? (compact ? COMPACT_PIECE_BUDGET_WORDS : stored?.pieceBudget) : asked.budget ?? undefined;
-  const form: PieceForm = asked.form ?? (compact ? COMPACT_PIECE_FORM : stored?.pieceForm ?? 'whole');
+  const wordBudget = asked.budget === undefined ? (compact ? WRITING_PIECE_BUDGET_WORDS : stored?.pieceBudget) : asked.budget ?? undefined;
+  const form: PieceForm = asked.form ?? (compact ? 'whole' : stored?.pieceForm ?? 'whole');
   // A persona is derived (one model call) only for a voice chosen in this run, or when asked for: choosing the
   // pieces again must never spend, nor bring back a persona the owner turned off.
   const derivesPersona = !voice || personaFlag === 'auto';
@@ -179,7 +179,8 @@ async function chooseVoice(L: store.StoreLayout, v: StandardVersion): Promise<Vo
   if (comp && (!voice || (reselect && voice.composite))) {
     // `--piece-budget default` gives the budget up: one whole piece from each writer, as for a single author.
     const whole = asked.budget === null;
-    const made = compositeVoice(comp, v, whole ? null : wordBudget ?? COMPACT_PIECE_BUDGET_WORDS, asked.form ?? (whole ? 'whole' : stored?.pieceForm ?? COMPACT_PIECE_FORM));
+    // A composite keeps its own serving (one piece from each writer, compact): the larger default is for one author's writing.
+    const made = compositeVoice(comp, v, whole ? null : asked.budget ?? stored?.pieceBudget ?? COMPACT_PIECE_BUDGET_WORDS, asked.form ?? (whole ? 'whole' : stored?.pieceForm ?? COMPACT_PIECE_FORM));
     if (made) {
       const by = made.composite?.pieceAuthors ?? [];
       console.log(`Voice: a composite of ${made.composite?.authors.length ?? 0} writer(s); ${by.length ? `one piece each from ${by.join(', ')}` : 'none of their pieces fits the budget'}, served as theirs. Turn off with --voice none.`);
@@ -192,7 +193,7 @@ async function chooseVoice(L: store.StoreLayout, v: StandardVersion): Promise<Vo
     if (pieces.length) console.log(`Voice: ${said(pieces)}. Turn off with --voice none.`);
     else if (wordBudget !== undefined && !answers) console.log(`Voice: ${none()}.`);
     if (!voice.lengthWords && !answers) console.log('Length: your pieces vary too much in length to hold one, so none is set; a request that names one sets it.');
-    if (compact) console.log(`(pieces served compact by default: ${COMPACT_PIECE_BUDGET_WORDS.toLocaleString('en-US')} words of excerpts, kept by later builds; --pieces whole --piece-budget default serves them whole.)`);
+    if (compact) console.log(`(whole pieces served by default, within ${WRITING_PIECE_BUDGET_WORDS.toLocaleString('en-US')} words, kept by later builds; --pieces excerpts --piece-budget ${COMPACT_PIECE_BUDGET_WORDS} serves passages from more of them in less.)`);
   } else if (voice && reselect) {
     // A skill built before keeps its pieces until the owner asks for others, and then they are chosen again from
     // the pieces it was built from: a budget cannot be met by cutting the ones already stored.

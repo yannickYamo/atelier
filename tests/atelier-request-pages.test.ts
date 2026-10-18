@@ -48,7 +48,7 @@ describe('what the run does with it', () => {
     expect(r).toMatchObject({ asked: 'one to two pages', met: false });
     expect(r.detail).toBe(`1,717 words written: too long, it allows ${WORDS_PER_PAGE} to ${(2 * WORDS_PER_PAGE).toLocaleString('en-US')} (at ${WORDS_PER_PAGE} words a page)`);
     expect(requestLength(words(800), asked).met).toBe(true);
-    const unmet = unmetReader({ requirements: [] } as never, null, asked)?.({ output: long, report: { checked: [], unchecked: [], failed: false } as never });
+    const unmet = unmetReader({ requirements: [] } as never, asked)?.({ output: long, report: { checked: [], unchecked: [], failed: false } as never });
     expect(unmet).toEqual([expect.objectContaining({ id: LENGTH_ID, of: 'request', statement: 'Write it at the length the request asks for: one to two pages' })]);
   });
   it('a request in pages sets aside the method\'s length in words for that run', async () => {
@@ -72,7 +72,7 @@ describe('the length asked is counted in words, never in the marks that draw a t
     const { requestLength, unmetReader } = await import('../cli/commands/invoke.js');
     const asked = statedLength('Write it in 7 words.')!;
     expect(requestLength(table, asked)).toMatchObject({ met: true, detail: '7 words written' });
-    expect(unmetReader({ requirements: [] } as never, null, asked)?.({ output: table, report: { checked: [], unchecked: [], failed: false } as never })).toEqual([]);
+    expect(unmetReader({ requirements: [] } as never, asked)?.({ output: table, report: { checked: [], unchecked: [], failed: false } as never })).toEqual([]);
   });
 });
 

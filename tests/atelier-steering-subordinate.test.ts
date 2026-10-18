@@ -216,7 +216,7 @@ describe('what the run prints says one thing at a time', () => {
     const params = { feature: ['parenthesis'], minValue: 1, maxValue: 3 };
     const std = { requirements: [{ requirementId: 'p1', statement: 'Few asides.', materiality: 'PREFERRED', authority: 'USER_ADOPTED', appliesWhen: 'GENERAL', measurement: { observer: 'FEATURE', params } }] } as never;
     const report = reportOf([{ requirementId: 'p1', statement: 'Few asides.', materiality: 'PREFERRED', enforced: false, observer: 'FEATURE', result: FEATURE.observe(text, params) }]);
-    const [miss] = unmetReader(std, null, null, ['parenthesis'])?.({ output: text, report }) ?? [];
+    const [miss] = unmetReader(std, null, ['parenthesis'])?.({ output: text, report }) ?? [];
     expect(miss.move).toMatch(/^about [\d.]+ fewer parenthetical asides per 1,000 words$/);
     expect(miss.detail).not.toMatch(/to remove/);
   });
