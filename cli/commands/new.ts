@@ -14,7 +14,9 @@
 
 import { existsSync, statSync } from 'node:fs';
 import { basename, relative, resolve } from 'node:path';
-import { die, argv, flag, flagAll, positional, loadSession, saveSession, assertReachable, canReach, sourceProvenance, runFile, DATA } from '../runtime.js';
+import { die, argv, flag, flagAll, positional, loadSession, saveSession, assertReachable, canReach, sourceProvenance, runFile, DATA, contextReaderClient, contextReaderModel } from '../runtime.js';
+import { readContext } from '../../core/inference/reading.js';
+import { INTENT_MODE } from '../../core/observers/intent-mode.js';
 import { readJson } from '../../core/state/read-json.js';
 import { modeFromIntent, type SkillMode } from '../../core/ratification/suggest.js';
 import * as store from '../../core/state/store.js';
@@ -80,8 +82,11 @@ export async function newSkill(): Promise<void> {
   const intent = typed ?? s.intent?.text ?? null;
   const declared = flag('--mode')?.toUpperCase();
   if (declared && !MODES.includes(declared as SkillMode)) die(`--mode must be one of ${MODES.map((m) => m.toLowerCase()).join(', ')}.`);
-  const read = modeFromIntent(intent ?? '');
-  const mode: SkillMode = (declared as SkillMode | undefined) ?? s.intent?.mode ?? read.mode;
+  // WHAT THE SKILL IS FOR, READ FROM THE WORDS (core/observers/intent-mode.ts): once, kept with the run's intent; the
+  // person's --mode first, then what an earlier call read, then the reading. No model, or --no-model: the word lists.
+  const noModelHere = !canReach('discovery') || argv.includes('--no-model');
+  const read = (declared || s.intent?.mode) ? null : await readContext(INTENT_MODE, { intent: intent ?? '' }, noModelHere ? null : contextReaderClient(), noModelHere ? null : contextReaderModel(), { spentUsd: 0, capUsd: 0.05, maxCalls: 1 });
+  const mode: SkillMode = (declared as SkillMode | undefined) ?? s.intent?.mode ?? read?.value.mode ?? 'GENERATE';
   if (s.intent && typed && typed !== s.intent.text) {
     console.log(`(this run is for "${s.intent.text}"; the new wording is ignored — start over with atelier abort to change it)`);
   }
@@ -138,7 +143,7 @@ export async function newSkill(): Promise<void> {
   if (s.run.state === 'EMPTY' || !s.evidence) {
     if (!composite) assertReachable('discovery');
     if (!intent) console.log('No purpose given, so rules are weighed for producing new work. Say what it is for as a second argument.\n');
-    else console.log(`For: "${intent}" — ${declared ? `${mode.toLowerCase()}, as you declared` : read.why}.\n`);
+    else console.log(`For: "${intent}" — ${declared ? `${mode.toLowerCase()}, as you declared` : read ? read.value.why : modeFromIntent(intent ?? '').why}.\n`);
     // A held-out check without having to know what one is: some of the work is set aside before
     // anything reads it (when there are six or more pieces), unless the person named their own.
     if (!argv.includes('--reserve')) argv.push('--auto-reserve');

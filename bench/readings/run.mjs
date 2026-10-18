@@ -14,18 +14,11 @@ import { readFileSync, readdirSync, writeFileSync, existsSync, statSync } from '
 import { join, resolve } from 'node:path';
 import { readContext } from '../../dist/core/inference/reading.js';
 import { WORK_FORM } from '../../dist/core/observers/work-form.js';
+import { RULE_POLARITY } from '../../dist/core/observers/rule-polarity.js';
+import { INTENT_MODE } from '../../dist/core/observers/intent-mode.js';
 import { AnthropicInferenceClient } from '../../dist/providers/anthropic.js';
 import { OpenAICompatibleInferenceClient } from '../../dist/providers/openai-compatible.js';
 
-const READINGS = { 'work-form': WORK_FORM };
-const args = process.argv.slice(2);
-const id = args[0]; const opt = (k, d) => { const i = args.indexOf(k); return i >= 0 ? args[i + 1] : d; };
-const reading = READINGS[id]; if (!reading) { console.error(`unknown reading ${id}; known: ${Object.keys(READINGS).join(', ')}`); process.exit(2); }
-const spec = JSON.parse(readFileSync(resolve(`bench/readings/cases/${id}.json`), 'utf8'));
-const runs = Number(opt('--runs', spec.pass.runs)); const offline = opt('--offline', null);
-const model = opt('--model', offline ? 'scripted' : 'claude-haiku-5-5');
-const client = offline ? new OpenAICompatibleInferenceClient({ modelId: model, baseUrl: offline, structuredOutput: 'FORCED_TOOL_CALL', pricing: { inputPerM: 0, outputPerM: 0 } }) : new AnthropicInferenceClient(model);
-const budget = { spentUsd: 0, capUsd: 2, maxCalls: 10000 };
 
 const strip = (t) => t.replace(/^﻿?---\r?\n[\s\S]*?\r?\n---\r?\n/, '');
 const requestOf = (t) => (/^﻿?---\r?\n([\s\S]*?)\r?\n---/.exec(t)?.[1].match(/^request:\s*(.*)$/m) ?? [null, null])[1];
@@ -33,6 +26,21 @@ const pieces = (c) => {
   const files = c.folder ? readdirSync(resolve(c.folder)).filter((f) => /\.(md|txt)$/.test(f) && !/\.material/.test(f)).sort().map((f) => join(c.folder, f)) : (c.files ?? []);
   return files.filter((f) => existsSync(resolve(f)) && statSync(resolve(f)).isFile()).map((f) => { const t = readFileSync(resolve(f), 'utf8'); return { text: strip(t), request: requestOf(t) }; });
 };
+// Each reading: its definition, how a case becomes its input, and how its value is compared with the case's label.
+const READINGS = {
+  'work-form': { reading: WORK_FORM, input: (c) => ({ workType: c.workType, examples: pieces(c), method: c.method ? readFileSync(resolve(c.method), 'utf8') : null }), answer: (v) => v },
+  'rule-polarity': { reading: RULE_POLARITY, input: (c) => ({ statements: [{ id: 'r1', text: c.statement }] }), answer: (v) => v.r1 ?? null },
+  'intent-mode': { reading: INTENT_MODE, input: (c) => ({ intent: c.intent }), answer: (v) => v.mode },
+};
+const args = process.argv.slice(2);
+const id = args[0]; const opt = (k, d) => { const i = args.indexOf(k); return i >= 0 ? args[i + 1] : d; };
+const entry = READINGS[id]; const reading = entry?.reading; if (!reading) { console.error(`unknown reading ${id}; known: ${Object.keys(READINGS).join(', ')}`); process.exit(2); }
+const spec = JSON.parse(readFileSync(resolve(`bench/readings/cases/${id}.json`), 'utf8'));
+const runs = Number(opt('--runs', spec.pass.runs)); const offline = opt('--offline', null);
+const model = opt('--model', offline ? 'scripted' : 'claude-haiku-5-5');
+const client = offline ? new OpenAICompatibleInferenceClient({ modelId: model, baseUrl: offline, structuredOutput: 'FORCED_TOOL_CALL', pricing: { inputPerM: 0, outputPerM: 0 } }) : new AnthropicInferenceClient(model);
+const budget = { spentUsd: 0, capUsd: 2, maxCalls: 10000 };
+
 // exact Clopper-Pearson interval
 const lg = (n) => { let s = 0; for (let i = 2; i <= n; i++) s += Math.log(i); return s; };
 const pmf = (k, n, p) => (p <= 0 ? (k === 0 ? 1 : 0) : p >= 1 ? (k === n ? 1 : 0) : Math.exp(lg(n) - lg(k) - lg(n - k) + k * Math.log(p) + (n - k) * Math.log(1 - p)));
@@ -42,17 +50,17 @@ const ci = (x, n) => (n === 0 ? [0, 1] : [x === 0 ? 0 : bisect((p) => upper(x, n
 
 const rows = [];
 for (const c of spec.cases) {
-  const input = { workType: c.workType, examples: pieces(c), method: c.method ? readFileSync(resolve(c.method), 'utf8') : null };
+  const input = entry.input(c);
   const got = [];
   for (let r = 0; r < runs; r++) {
     const d = await readContext(reading, input, client, model, budget);
-    got.push({ value: d.value, by: d.by, why: d.why ?? null });
+    got.push({ value: entry.answer(d.value), by: d.by, why: d.why ?? null });
     if (d.by === 'code') break; // deterministic: one run is every run
   }
   const agree = got.filter((g) => g.value === c.label).length;
   const by = got[0].by;
   const ok = by === 'code' ? (spec.pass.codeDecidedExact ? agree === got.length : true) : agree >= Math.min(spec.pass.perCaseAtLeast, got.length);
-  rows.push({ id: c.id, label: c.label, examples: input.examples.length, by, runs: got.length, agree, got: got.map((g) => g.value), floorWhy: got.find((g) => g.why)?.why ?? null, ok, soft: Boolean(c.soft) });
+  rows.push({ id: c.id, label: c.label, examples: input.examples?.length ?? null, by, runs: got.length, agree, got: got.map((g) => g.value), floorWhy: got.find((g) => g.why)?.why ?? null, ok, soft: Boolean(c.soft) });
   process.stderr.write(`${c.id}: ${by} ${agree}/${got.length}${ok ? '' : ' FAIL'}${c.soft ? ' (soft)' : ''}\n`);
 }
 const modelRuns = rows.filter((r) => r.by === 'model');
