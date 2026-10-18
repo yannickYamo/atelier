@@ -292,22 +292,116 @@ const PARKED_VALUES: Readonly<Record<string, string>> = {
   'core/measurement/longitudinal.ts:evidenceAcross':
     'Every requirement worst-evidenced first. The controller reads evidence one requirement at a '
     + 'time; the whole-standard view has no caller.',
+  'core/contract/analysis.ts:seededShuffle':
+    'Blinding permutation for study rounds, used by studies/harness/voice-round.mjs against dist/, never by a command.',
+  'core/contract/arm.ts:CONTRACT_ARMS':
+    'Study contract code (core/contract): the controlled comparison an arm study runs; no command runs a study.',
+  'core/contract/arm.ts:MAY_INFORM_REPAIR':
+    'Study contract code (core/contract): the controlled comparison an arm study runs; no command runs a study.',
+  'core/contract/arm.ts:requestDiff':
+    'Study contract code (core/contract): the controlled comparison an arm study runs; no command runs a study.',
+  'core/contract/headroom.ts:isDegenerateInterval':
+    'Study contract code (core/contract): the controlled comparison an arm study runs; no command runs a study.',
+  'core/contract/mechanism-exposure.ts:EXPOSURE_CONDITIONS':
+    'Study contract code (core/contract): the controlled comparison an arm study runs; no command runs a study.',
+  'core/contract/study-identity.ts:diffArms':
+    'Study contract code (core/contract): the controlled comparison an arm study runs; no command runs a study.',
+  'core/contract/study.ts:runStudyGeneration':
+    'One study generation, run by studies/harness/run-study.mjs against dist/, never by a command.',
+  'core/contract/suite.ts:roleOf':
+    'Study contract code (core/contract): the controlled comparison an arm study runs; no command runs a study.',
+  'core/convergence/probe.ts:applyToHypotheses':
+    'What a development probe may do to failure hypotheses. No probe runs from a command yet.',
+  'core/convergence/probe.ts:assertNotCertification':
+    'Refuses a probe result entering a certification set. No certification set is assembled by a command yet.',
+  'core/coverage/blind-spot.ts:BLIND_SPOT_AUTHORITY':
+    'What the blind-spot signal may support, stated as data. The CLI asks the question; nothing yet reads the limits.',
+  'core/coverage/candidate-support.ts:MATERIALITY_QUESTION':
+    'Candidate support (core/coverage/candidate-support.ts): what recurrence across discovery cells may claim. Discovery reports counts; this fuller reading has no command yet.',
+  'core/coverage/candidate-support.ts:TOLERANCE_QUESTION':
+    'Candidate support (core/coverage/candidate-support.ts): what recurrence across discovery cells may claim. Discovery reports counts; this fuller reading has no command yet.',
+  'core/coverage/candidate-support.ts:assertNotSampleSize':
+    'Candidate support (core/coverage/candidate-support.ts): what recurrence across discovery cells may claim. Discovery reports counts; this fuller reading has no command yet.',
+  'core/coverage/candidate-support.ts:compilesAsExemplar':
+    'Candidate support (core/coverage/candidate-support.ts): what recurrence across discovery cells may claim. Discovery reports counts; this fuller reading has no command yet.',
+  'core/coverage/candidate-support.ts:compilesAsRequirement':
+    'Candidate support (core/coverage/candidate-support.ts): what recurrence across discovery cells may claim. Discovery reports counts; this fuller reading has no command yet.',
+  'core/coverage/candidate-support.ts:describeSupport':
+    'Candidate support (core/coverage/candidate-support.ts): what recurrence across discovery cells may claim. Discovery reports counts; this fuller reading has no command yet.',
+  'core/coverage/candidate-support.ts:protectsRatherThanGenerates':
+    'Candidate support (core/coverage/candidate-support.ts): what recurrence across discovery cells may claim. Discovery reports counts; this fuller reading has no command yet.',
+  'core/coverage/candidate-support.ts:readSiteEvidence':
+    'Candidate support (core/coverage/candidate-support.ts): what recurrence across discovery cells may claim. Discovery reports counts; this fuller reading has no command yet.',
+  'core/coverage/candidate-support.ts:summariseCounterEvidence':
+    'Candidate support (core/coverage/candidate-support.ts): what recurrence across discovery cells may claim. Discovery reports counts; this fuller reading has no command yet.',
+  'core/coverage/observation.ts:autonomousPromotionAllowed':
+    'Whether a promotion may run without the owner. Promotion is always the owner\'s today, so nothing asks.',
+  'core/coverage/standard-coverage.ts:assertCoverageIsNotAuthority':
+    'Refuses an authority claim built on coverage. No claim path consumes coverage yet.',
+  'core/coverage/standard-coverage.ts:signalsFromObservations':
+    'Coverage signals from held-out chain observations. Coverage is computed from what discovery records; this wiring has no caller yet.',
+  'core/delivery/carrier-delivery.ts:assertMatrix':
+    'Checks a whole carrier-delivery matrix. Single claims are checked where they are made; no command builds a matrix.',
+  'core/discovery/chain/discovery-contract.ts:discoverySummary':
+    'The user-facing headline for a discovery run. The CLI prints its own summary; this one has no command.',
+  'core/distinctiveness/contract.ts:MARGIN_SEMANTICS':
+    'The distinctiveness floor contract. Parked with evaluatePairedQualityFloor: no contract dimension has reached ENFORCE, so nothing approves, converts or checks one.',
+  'core/distinctiveness/contract.ts:approveFloor':
+    'The distinctiveness floor contract. Parked with evaluatePairedQualityFloor: no contract dimension has reached ENFORCE, so nothing approves, converts or checks one.',
+  'core/distinctiveness/contract.ts:revalidate':
+    'The distinctiveness floor contract. Parked with evaluatePairedQualityFloor: no contract dimension has reached ENFORCE, so nothing approves, converts or checks one.',
+  'core/distinctiveness/contract.ts:toQualityFloorContract':
+    'The distinctiveness floor contract. Parked with evaluatePairedQualityFloor: no contract dimension has reached ENFORCE, so nothing approves, converts or checks one.',
+  'core/distinctiveness/floor.ts:evaluateQualityFloor':
+    'The distinctiveness floor contract. Parked with evaluatePairedQualityFloor: no contract dimension has reached ENFORCE, so nothing approves, converts or checks one.',
+  'core/distinctiveness/floor.ts:requireFloorContract':
+    'The distinctiveness floor contract. Parked with evaluatePairedQualityFloor: no contract dimension has reached ENFORCE, so nothing approves, converts or checks one.',
+  'core/fidelity/rule-observer.ts:NO_PROXY':
+    'The explicit no-proxy observer for a rule. No rule proxy is authored by a command yet, so nothing names the empty one.',
+  'core/golden/golden-unit.ts:clusterCertainty':
+    'Golden-unit governance (core/golden): reached through reserve() at intake; this part of the reserve\'s bookkeeping has no call site yet.',
+  'core/golden/golden-unit.ts:isRegisteredKind':
+    'Golden-unit governance (core/golden): reached through reserve() at intake; this part of the reserve\'s bookkeeping has no call site yet.',
+  'core/golden/golden-unit.ts:usableAsReference':
+    'Golden-unit governance (core/golden): reached through reserve() at intake; this part of the reserve\'s bookkeeping has no call site yet.',
+  'core/golden/reservation.ts:markConsumed':
+    'Golden-unit governance (core/golden): reached through reserve() at intake; this part of the reserve\'s bookkeeping has no call site yet.',
+  'core/golden/reservation.ts:reserveFromUse':
+    'Golden-unit governance (core/golden): reached through reserve() at intake; this part of the reserve\'s bookkeeping has no call site yet.',
+  'core/inference/capability.ts:assertSemanticQualification':
+    'Refuses SEMANTIC_DISCOVERY_QUALIFIED without a human label set. No command sets that state yet.',
+  'core/measurement/observation.ts:authorityOf':
+    'Maps an instrument\'s earned permission to observation authority. No instrument has earned one through a command yet.',
+  'core/observers/grammar.ts:resetGrammar':
+    'Test hook: forgets the loaded grammar engine between tests. The process loads it once and never resets.',
+  'core/ratification/decision-record.ts:HISTORICAL_SURVIVAL_INFERRED':
+    'The historical 12 -> 8 survival figure, inferred from id gaps and typed apart so it is never pooled with recorded decisions; nothing reads it.',
+  'core/reference/arms.ts:ALL_ARMS':
+    'The reference arms of the baseline study (core/reference/arms.ts). No command runs the comparison.',
+  'core/reference/arms.ts:NEEDS_HUMAN_INPUT':
+    'The reference arms of the baseline study (core/reference/arms.ts). No command runs the comparison.',
+  'core/reference/arms.ts:TREATMENT':
+    'The reference arms of the baseline study (core/reference/arms.ts). No command runs the comparison.',
+  'core/stats/sign-test.ts:clopperPearson':
+    'Exact binomial interval named by the study preregistrations (studies/*_PREREGISTRATION.md); no command reports it.',
 };
 
 describe('an exported value nothing calls is wired, deleted, or listed with a reason', () => {
+  // Line comments first: a line comment that names a glob (`examples/*.md`) would otherwise open a block comment that
+  // runs to the next `*/` and hide every real use between them.
   const strip = (s: string): string =>
-    s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+    s.replace(/^\s*\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
 
   const srcFiles = ['core', 'cli', 'renderers', 'adapters', 'providers']
     .flatMap((d) => walkTree(d)).filter((f) => /\.m?ts$/.test(f));
   // This file names every parked value in PARKED_VALUES. Counting those as uses would make each
   // entry immediately "referenced" and flip the whole census to stale — the list would erase its own
   // subject. A census must not read itself.
-  const SELF = join('tests', 'atelier-reachability.test.ts');
-  const testFiles = walkTree('tests').filter((f) => /\.m?ts$/.test(f) && f !== SELF);
-  const bodies = new Map([...srcFiles, ...testFiles].map((f) => [f, strip(readFileSync(f, 'utf8'))]));
+  // Tests are not read at all. A value only a test calls is still dark: the test proves it works, not
+  // that a user command reaches it. Test hooks and study code are parked above with that reason.
+  const bodies = new Map(srcFiles.map((f) => [f, strip(readFileSync(f, 'utf8'))]));
 
-  /** Values (not types) exported from src and referenced by no file, including their own. */
+  /** Values (not types) exported from src and referenced by no other src file, nor inside their own. */
   const darkValues = (): string[] => {
     const out: string[] = [];
     for (const f of srcFiles) {

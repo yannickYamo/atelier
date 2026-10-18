@@ -10,9 +10,9 @@
 import { describe, it, expect } from 'vitest';
 import type { Measurement, Requirement } from '../core/state/canonical-state.js';
 import { detectAuthors, frontMatterAuthor } from '../core/composite/authors.js';
-import { buildTraitTable, traitClassOf, traitClassesOf, relationOf, mergedMeasurement } from '../core/composite/traits.js';
+import { buildTraitTable, traitClassesOf, relationOf, mergedMeasurement } from '../core/composite/traits.js';
 import { keywordClasses, readAdmiration } from '../core/composite/admire.js';
-import { composeSelection, openQuestions, describeComposite, compositeVoiceOf, type CompositeAuthor } from '../core/composite/selection.js';
+import { composeSelection, openStanding, describeComposite, compositeVoiceOf, type CompositeAuthor } from '../core/composite/selection.js';
 import { selectCompositePieces, copyGuardPieces, pieceLabel } from '../core/compiler/voice.js';
 import { overlapIndex } from '../core/observers/overlap.js';
 import { COPY_LIMIT } from '../cli/eval-run.js';
@@ -65,13 +65,13 @@ describe('who wrote which piece is declared, never guessed', () => {
 
 describe('the trait table: classes and kinds, per author, never pooled', () => {
   it('classes the known pairs right', () => {
-    expect(traitClassOf(rule('x', 'Open with a question the reader is already asking.'))).toBe('opening');
-    expect(traitClassOf(rule('x', 'Back every claim with a cited figure and its source.'))).toBe('evidence');
-    expect(traitClassOf(rule('x', 'Keep the pace fast with sentence fragments.'))).toBe('pace');
-    expect(traitClassOf(rule('x', 'Never use contractions; keep a formal register.'))).toBe('voice');
-    expect(traitClassOf(rule('x', 'Open on a short scene from a story, then turn to the point.'))).toBe('opening');
-    expect(traitClassOf(rule('x', 'x', { observer: 'PARAGRAPH_LENGTH', params: { maxSentences: 2 } }))).toBe('pace');
-    expect(traitClassOf(rule('x', 'Decide what to cut before drafting anything.'))).toBe('method');
+    expect(traitClassesOf(rule('x', 'Open with a question the reader is already asking.'))[0]).toBe('opening');
+    expect(traitClassesOf(rule('x', 'Back every claim with a cited figure and its source.'))[0]).toBe('evidence');
+    expect(traitClassesOf(rule('x', 'Keep the pace fast with sentence fragments.'))[0]).toBe('pace');
+    expect(traitClassesOf(rule('x', 'Never use contractions; keep a formal register.'))[0]).toBe('voice');
+    expect(traitClassesOf(rule('x', 'Open on a short scene from a story, then turn to the point.'))[0]).toBe('opening');
+    expect(traitClassesOf(rule('x', 'x', { observer: 'PARAGRAPH_LENGTH', params: { maxSentences: 2 } }))[0]).toBe('pace');
+    expect(traitClassesOf(rule('x', 'Decide what to cut before drafting anything.'))[0]).toBe('method');
     // a rule about two things carries both, whatever order its words come in
     const one = traitClassesOf(rule('x', 'Let a paragraph run long when the evidence needs it.'));
     const other = traitClassesOf(rule('x', 'When the evidence needs it, let a paragraph run long.'));
@@ -149,7 +149,7 @@ describe('the composite: what the person chose, not the average and not any one 
   it('surfaces the A-against-B rhythm conflict and stores it as a question when nobody answers', () => {
     expect(outcome('m1')).toBe('OPEN');
     expect(outcome('m2')).toBe('OPEN');
-    expect(openQuestions(c)).toHaveLength(1);
+    expect(openStanding(c).neither).toHaveLength(1);
     expect(c.conflicts[0]).toMatchObject({ answer: null, resolvedBy: null });
     const screen = describeComposite(c, (id) => proposals.find((p) => p.requirementId === id)?.statement ?? id).join('\n');
     expect(screen).toMatch(/1\. rhythm/);

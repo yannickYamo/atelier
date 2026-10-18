@@ -581,9 +581,6 @@ export function openStanding(c: CompositeRecord): { readonly neither: AnsweredCo
   return { neither: asked('NEITHER'), oneSide: asked('ONE_SIDE') };
 }
 
-/** The conflicts the screen shows open, or open again: the build and the skill's record show them and never answer. */
-export const openQuestions = (c: CompositeRecord): AnsweredConflict[] => openStanding(c).neither;
-
 /**
  * THE COMPOSITE SCREEN, as lines. One screen, not one per rule: what comes from whom, by class; the conflicts and
  * how each stands; the method read from the examples, marked a proposal; and what is left as a habit or set aside.

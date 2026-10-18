@@ -265,7 +265,7 @@ describe('the fidelity store', () => {
     fstore.putRelease(l, child);
     expect(fstore.putRelease(l, { ...root, why: 'restated' }).why).toBe('first');        // first write kept
     expect(() => fstore.putRelease(l, { ...root, settings: { ...DEFAULT_SETTINGS, drafts: 2 } })).toThrow(/hashes to/);
-    expect(fstore.listReleases(l).map((r) => r.id)).toEqual([root.id, child.id]);
+    expect(fstore.releaseChain(l, child.id).map((r) => r.id)).toEqual([child.id, root.id]);
     expect(fstore.getRelease(l, child.id)).toEqual(child);
 
     expect(() => { fstore.setActiveRelease(l, 'abcdef'); }).toThrow(/not stored/);
@@ -276,6 +276,6 @@ describe('the fidelity store', () => {
     expect(fstore.rollbackRelease(l)?.id).toBe(root.id);
     expect(fstore.getActiveRelease(l)?.release.id).toBe(root.id);
     expect(fstore.rollbackRelease(l)).toBeNull();
-    expect(fstore.listReleases(l)).toHaveLength(2);                                      // rollback deletes nothing
+    expect(fstore.releaseChain(l, child.id)).toHaveLength(2);                            // rollback deletes nothing
   });
 });

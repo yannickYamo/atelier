@@ -59,14 +59,6 @@ number of sentences or paragraphs), give its number and the range it allows:
            said plainly: 0.8N to 1.2N. "N to M", "between N and M": N to M.
 Give one entry per quantity; an instruction with none gets no entry.`;
 
-/**
- * The pairs that cannot both be followed, by rule id. Throws when the model gives nothing usable: the caller then says
- * the instructions were checked by keyword only.
- */
-export async function readContradictions(client: InferenceClient, budget: Budget, lines: readonly InstructionLine[]): Promise<ModelPair[]> {
-  return (await readInstructionLines(client, budget, lines)).pairs;
-}
-
 /** The pairs that cannot both be followed, and every quantity the model read, by rule id: one call. */
 export async function readInstructionLines(client: InferenceClient, budget: Budget, lines: readonly InstructionLine[]): Promise<{ pairs: ModelPair[]; quantities: ModelQuantity[] }> {
   if (lines.length < 2) return { pairs: [], quantities: [] };

@@ -86,9 +86,6 @@ export function traitClassesOf(r: Pick<Requirement, 'statement' | 'measurement'>
   return ordered.length ? ordered : ['method'];
 }
 
-/** The first of a rule's classes, in the fixed order: how it is listed when nothing chooses between its classes. */
-export const traitClassOf = (r: Pick<Requirement, 'statement' | 'measurement'>): TraitClass => traitClassesOf(r)[0];
-
 /**
  * WHAT A RULE IS MAINLY ABOUT: the class of its observer, or of the first class word it says. "Never use bullet lists;
  * carry items in sentences" is about lists, and only mentions sentences; "Let a paragraph run long when the argument
@@ -307,24 +304,6 @@ const bansOutright = (statement: string): boolean => {
   if ([...r.subjects.values()].includes('scoped') || r.narrowed) return false;
   return NEGATION.test(statement) && !boundedNumber(statement);
 };
-
-/**
- * A NUMBER A WORDED RULE SETS ON A COUNTED SUBJECT, as the bound it is: a ceiling ("two sentences at most", "no more
- * than twenty words"), a floor ("at least six sentences") or an allowance ("let a paragraph run to eight sentences": it
- * may go that far). Read by the one quantity grammar (./quantity.ts); null when the rule sets no single bound on
- * the words of a sentence or the sentences of a paragraph (a range, a size said "about", or no number).
- */
-interface Bound { readonly subject: 'paragraph' | 'sentence'; readonly kind: 'ceiling' | 'allowance' | 'floor'; readonly n: number }
-export function boundOf(said: string): Bound | null {
-  for (const q of quantitiesOf(said)) {
-    if (!((q.measure === 'paragraph' && q.unit === 'sentences') || (q.measure === 'sentence' && q.unit === 'words'))) continue;
-    const subject = q.measure;
-    if (q.allows && q.max !== null) return { subject, kind: 'allowance', n: q.max };
-    if (q.min === null && q.max !== null) return { subject, kind: 'ceiling', n: q.max };
-    if (q.max === null && q.min !== null) return { subject, kind: 'floor', n: q.min };
-  }
-  return null;
-}
 
 /**
  * HEADINGS AND LISTS, ASKED FOR OR BANNED OUTRIGHT, against a count of them or another rule's words: "use headings"

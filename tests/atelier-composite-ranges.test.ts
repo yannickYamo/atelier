@@ -18,7 +18,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import type { Measurement, Requirement } from '../core/state/canonical-state.js';
 import { buildTraitTable, relationOf, type TraitClass, TRAIT_CLASSES } from '../core/composite/traits.js';
-import { composeSelection, describeComposite, instructs, openQuestions, standOf, type CompositeAuthor, type CompositeRecord, type ConflictAnswer, type ModelPair } from '../core/composite/selection.js';
+import { composeSelection, describeComposite, instructs, openStanding, standOf, type CompositeAuthor, type CompositeRecord, type ConflictAnswer, type ModelPair } from '../core/composite/selection.js';
 import { openLine, KEYWORD_ONLY_NOTE } from '../cli/commands/composite.js';
 
 const rule = (id: string, statement: string, measurement: Measurement | null = null): Requirement => ({
@@ -146,7 +146,7 @@ describe('two counted ceilings on one length are compatible; said in words, they
     expect(chosen.filter((d) => !instructs(d)).map((d) => d.id)).toEqual([]);
     const held = rec.decisions.filter((d) => d.outcome === 'OPEN').map((d) => statementOf(b)(d.id));
     expect(held.every((st) => LENGTHS[st] !== undefined)).toBe(true);
-    expect(openQuestions(rec).length).toBeGreaterThan(0);
+    expect(openStanding(rec).neither.length).toBeGreaterThan(0);
   });
 });
 
@@ -185,7 +185,7 @@ describe('a pair the model named, one side held open by another pair', () => {
     // the answer that chose cleo's subheadings is said to be open again, and counted
     const cleo = rec.conflicts.find((k) => k.n === nOf('r3', 'r5'));
     expect(cleo?.reopened?.in).toBeGreaterThan(t.conflicts.length);
-    expect(openQuestions(rec).map((k) => k.n)).toContain(cleo?.n);
+    expect(openStanding(rec).neither.map((k) => k.n)).toContain(cleo?.n);
     expect(describeComposite(rec, statementOf(c)).join('\n')).not.toMatch(/\(\)/);
   });
 });
@@ -208,7 +208,7 @@ describe('the count of open questions is the number the screen shows open', () =
     expect(k.table.conflicts).toEqual([]);
     const rec = composeSelection(k.table, k.rules, k.authors, k.answers);
     expect(asked(rec).filter((x) => x.open)).toEqual([]);
-    expect(openQuestions(rec)).toEqual([]);
+    expect(openStanding(rec).neither).toEqual([]);
     expect(openLine(rec)).toBe('');
   });
   it('three authors with --set: one shown open, one counted, and nothing "more unanswered"', () => {

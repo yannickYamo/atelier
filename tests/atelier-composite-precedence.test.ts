@@ -12,7 +12,8 @@
 //   you" of rules nobody ruled on; a bound of 0.304 printed as "at most 30 in 100".
 import { describe, it, expect } from 'vitest';
 import type { Measurement, Requirement } from '../core/state/canonical-state.js';
-import { buildTraitTable, relationOf, traitClassesOf, singular, mergedMeasurement, boundOf } from '../core/composite/traits.js';
+import { buildTraitTable, relationOf, traitClassesOf, singular, mergedMeasurement } from '../core/composite/traits.js';
+import { quantitiesOf } from '../core/composite/quantity.js';
 import { composeSelection, describeComposite, standOf, type CompositeAuthor } from '../core/composite/selection.js';
 import { decisionsFor } from '../cli/commands/composite.js';
 import { deriveMeasuredRules } from '../core/observers/derive.js';
@@ -200,10 +201,11 @@ describe('what two worded rules are about, and whether they are opposed', () => 
     expect(t.conflicts.map((c) => c.label)).toEqual(['paragraph length']);
   });
   it('reads the numbers a rule puts on a subject', () => {
-    expect(boundOf('Keep each paragraph to a single short idea, two sentences at most.')).toEqual({ subject: 'paragraph', kind: 'ceiling', n: 2 });
-    expect(boundOf('Let a paragraph run to eight sentences when the evidence needs room.')).toEqual({ subject: 'paragraph', kind: 'allowance', n: 8 });
-    expect(boundOf('Keep sentences short, never more than twenty words.')).toEqual({ subject: 'sentence', kind: 'ceiling', n: 20 });
-    expect(boundOf('Keep paragraphs to two to four sentences.')).toBeNull();
+    // a ceiling, an allowance (it may go that far), and a range, as the one quantity grammar reads them
+    expect(quantitiesOf('Keep each paragraph to a single short idea, two sentences at most.')[0]).toMatchObject({ measure: 'paragraph', unit: 'sentences', min: null, max: 2 });
+    expect(quantitiesOf('Let a paragraph run to eight sentences when the evidence needs room.')[0]).toMatchObject({ measure: 'paragraph', unit: 'sentences', max: 8, allows: true });
+    expect(quantitiesOf('Keep sentences short, never more than twenty words.')[0]).toMatchObject({ measure: 'sentence', unit: 'words', min: null, max: 20 });
+    expect(quantitiesOf('Keep paragraphs to two to four sentences.')[0]).toMatchObject({ measure: 'paragraph', unit: 'sentences', min: 2, max: 4 });
   });
   it('singular forms', () => {
     expect(['sources', 'examples', 'sentences', 'figures', 'dashes', 'headings', 'bullet points', 'hedging', 'questions'].map(singular))

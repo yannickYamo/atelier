@@ -190,10 +190,6 @@ interface Distances {
   readonly alike: boolean[][];
 }
 
-export function distancesOf(texts: readonly string[]): Distances {
-  return distancesFrom(readingsOf(texts.map(withoutFrontMatter)));
-}
-
 function distancesFrom(rs: readonly Reading[]): Distances {
   const fl = {
     fw: floorsOf(rs.map((r) => r.fw), 5), tg: floorsOf(rs.map((r) => r.tg), 2),
@@ -243,11 +239,6 @@ function shuffled(rs: readonly Reading[], next: () => number): Reading[] {
   };
   const fw = block((r) => r.fw); const tg = block((r) => r.tg); const vc = block((r) => r.vc); const sc = block((r) => r.sc); const sh = block((r) => r.sh);
   return rs.map((r, i) => ({ ...r, fw: fw[i], tg: tg[i] ?? r.tg, vc: vc[i] ?? r.vc, sc: sc[i] ?? r.sc, sh: sh[i] ?? r.sh }));
-}
-
-/** The distance matrix the pieces are grouped by (see `distancesOf`). */
-export function styleDistances(texts: readonly string[]): number[][] {
-  return distancesOf(texts).style;
 }
 
 /** Average linkage: the clusters at every number from n down to 1, as lists of piece indexes. */

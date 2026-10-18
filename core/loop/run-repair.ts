@@ -627,9 +627,6 @@ export function heavyCut(draft: string, cut: readonly string[]): string | null {
     + '--allow-unsourced; if they are yours, bind them with --with or atelier material';
 }
 
-/** At most this many graded features are targeted in one pass: the ones furthest outside their band first. */
-export const GRADED_PER_PASS = 3;
-
 /**
  * The rules a run grades (`CheckOptions.graded`): requirement id to the feature it counts. The standard's FEATURE
  * rules, and, with a profile, its SIGNAL features under their own ids (./graded.ts). Empty without the option.
@@ -656,22 +653,6 @@ export function gradedRules(v: Pick<StandardVersion, 'requirements'>, graded: Ch
     if (f && (graded === 'all' || graded.includes(f))) out.set(r.requirementId, f);
   }
   for (const [id, f] of signalRules(profile)) if (graded === 'all' || graded.includes(f)) out.set(id, f);
-  return out;
-}
-
-/**
- * The graded checks one pass is pointed at: the broken ones, the largest |error| first (../observers/registry.ts,
- * `ObserverResult.error`), at most GRADED_PER_PASS features. Two rules on one feature count as one feature.
- */
-export function gradedTargets(report: VerifyReport, rules: ReadonlyMap<string, string>): RuleCheck[] {
-  const broken = report.checked.filter((c) => rules.has(c.requirementId) && c.result.verdict === 'VIOLATED')
-    .sort((a, b) => Math.abs(b.result.error ?? 0) - Math.abs(a.result.error ?? 0) || a.requirementId.localeCompare(b.requirementId));
-  const features = new Set<string>(); const out: RuleCheck[] = [];
-  for (const c of broken) {
-    const f = rules.get(c.requirementId) ?? c.requirementId;
-    if (!features.has(f) && features.size >= GRADED_PER_PASS) continue;
-    features.add(f); out.push(c);
-  }
   return out;
 }
 

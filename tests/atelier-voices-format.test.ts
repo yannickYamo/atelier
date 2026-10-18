@@ -5,7 +5,7 @@
 // writer, never by format. The expected groupings are fixed by how the fixtures were written
 // (tests/fixtures/composite/mixed-format.ts and five-voices.ts), not read off the code.
 import { describe, it, expect } from 'vitest';
-import { groupByStyle, authorship, styleDistances, splitDecision } from '../core/composite/voices.js';
+import { groupByStyle, authorship, splitDecision } from '../core/composite/voices.js';
 import { FIVE_VOICES, FIVE_GROUPS } from './fixtures/composite/five-voices.js';
 import { ONE_WRITER_MANY_TOPICS, TWO_NATURAL_WRITERS, TWO_NATURAL_GROUPS, MINORITY_WRITER, ONE_WRITER_TWO_SUBJECTS } from './fixtures/composite/natural-writers.js';
 import { ESSAYS_AND_LISTS, ESSAYS_AND_POSTS, TWEETS_AND_ONE_LONG, POSTS_THREADS_LISTS, TWO_ESSAYISTS, TWO_ESSAYISTS_GROUPS, TWO_POSTERS }
@@ -44,17 +44,14 @@ describe('one writer in several formats is one voice', () => {
 describe('what two pieces are grouped by', () => {
   const said = ['We keep the page short, and we say why.', 'Nobody owns it alone; we check it every month.', 'It changes when we learn something, which is often.',
     'The page is where we start, not where we stop.', 'We would rather have one page people read than ten nobody opens.', 'That is most of it.'];
-  const dense = Array.from({ length: 5 }, () => said.join(' ')).join('\n\n');
-  const airy = Array.from({ length: 5 }, () => said.join('\n\n')).join('\n\n');
-  const listed = `# Notes\n\n${Array.from({ length: 5 }, () => said.map((s) => `- **${s}**`).join('\n')).join('\n')}`;
-  it('the same sentences in long paragraphs and in one-line paragraphs: their shape differs, their voice does not, so they sit together', () => {
-    expect(styleDistances([dense, airy])[0][1]).toBeLessThan(0.02);
-  });
-  it('the same sentences as prose, as a bulleted list and as a numbered thread: bullets, bold and numbers are format, not words', () => {
-    const thread = Array.from({ length: 5 }, (_, k) => said.map((s, i) => `${k * 6 + i + 1}/ ${s}`).join('\n\n')).join('\n\n');
-    const d = styleDistances([dense, listed, thread]);
-    expect(d[0][1]).toBeLessThan(0.02);
-    expect(d[0][2]).toBeLessThan(0.02);
+  const turn = (n: number): string[] => said.map((_s, i) => said[(i + n) % said.length]);
+  const dense = (n: number): string => Array.from({ length: 5 }, () => turn(n).join(' ')).join('\n\n');
+  const airy = (n: number): string => Array.from({ length: 5 }, () => turn(n).join('\n\n')).join('\n\n');
+  const listed = (n: number): string => `# Notes\n\n${Array.from({ length: 5 }, () => turn(n).map((s) => `- **${s}**`).join('\n')).join('\n')}`;
+  const thread = (n: number): string => Array.from({ length: 5 }, (_, k) => turn(n).map((s, i) => `${k * 6 + i + 1}/ ${s}`).join('\n\n')).join('\n\n');
+  it('the same sentences in long paragraphs, one-line paragraphs, a bold bulleted list and a numbered thread: shape and format are not voice, so they sit together', () => {
+    const folder = Object.fromEntries([0, 1].flatMap((n) => [[`dense-${n}.md`, dense(n)], [`airy-${n}.md`, airy(n)], [`listed-${n}.md`, listed(n)], [`thread-${n}.md`, thread(n)]]));
+    expect(groupByStyle(pieces(folder)).groups).toHaveLength(1);
   });
 });
 
