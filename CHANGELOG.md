@@ -14,18 +14,54 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
   the writer states of the request only what it and its material show, and gives anything else as an assumption or a
   check. The skill's own rules are instructions to the claim check, never evidence: a figure in a rule may be repeated
   as written, and nothing about the request in hand rests on them.
-- **A term borrowed from an example's case is listed.** A distinctive term (an acronym, an identifier, a header, a line
-  of code) that your examples hold and the request never names is listed for you to check, on every kind of work, and
-  never cut. With a claim reader set up, the delivered text is read once beside the request and its material, and a
-  cause, a setting or a state of your system it states without their support is listed the same way.
+- **A fact borrowed from an example's case is corrected where it stands.** A sentence that states, of your case, a
+  distinctive term (an acronym, an identifier, a header, a line of code) that your examples hold and the request never
+  names is rewritten to state only what the request gives, or to say it as an assumption. Never deleted: the rewrite is
+  kept only when code accepts it (no borrowed fact still stated as fact, nothing new borrowed, its code and links
+  unchanged) and the whole text, checked again, breaks no rule that held. Otherwise the sentence stays as written,
+  listed for you to check and marked unresolved, and the run says which. A line of code the request names by its first
+  word (`Authorization: …` when the request names the Authorization header) is the request's. With a claim reader set
+  up, the delivered text is read beside the request and its material, and a cause, a setting or a state of your system
+  it states without their support is listed: that reading is not measured, so it never rewrites.
+- **Your examples are other conversations.** The served examples are said once to be separate, earlier conversations
+  with someone else: nothing in them was said by the person you are answering or is true of their case, and whether an
+  example asked first, acted or confirmed first was decided by its own request; for the one in hand, the method and
+  that request decide.
+- **The skill is sent the same on every request.** It is cached once and read from the cache after. A rule a request
+  sets aside (its own length or format) is named after the request instead of cut out of the skill, so one request's
+  exceptions no longer cost every other request a fresh cache write. A rule that needs material nobody supplied is
+  still left out of the skill, as measured.
+- **One reading of a reply.** The situations a reply states and what the request asks for are read in one small-model
+  call where they were two, and the text delivered is not read again when it is the one already read.
 - **Code is never taken apart.** A link, a hashtag or an emoji inside code is the code's: it is not counted against
   your pieces and is never removed. No repair step empties a code block or removes a URL from code, and a step that
   edits sentences leaves code as it was. A link that is a word of its sentence is left for the rewrite instead of cut
   out of it.
 - **Every part of a request is read.** A request of more than a line is read for each thing it asks, on every run, and
-  a reply that leaves one out is written once more to give it (`--no-coverage` turns this off).
+  a reply that leaves one out is written once more to give it, following the method on when to act, confirm first or
+  state an assumption (`--no-coverage` turns this off). A part the reply holds back on purpose, to ask a question or to
+  have it confirmed before something that cannot be undone, is the method's call: it is said, and never written again
+  for. Each extra draft is recorded as kept or not, with why.
 - **Habits are said as a record.** What your examples never did is said as "in none of my examples (0 of 3)", not as
   a rule never to do it.
+
+### Studies: why unchanged answers scored differently between two judgings (development evidence, $0)
+
+The five arms whose answers did not change were judged twice, in sessions identical but for Atelier's answer (the same
+letters in the same order). On those identical answers the three judges changed their "usable" verdict 16% (the
+smallest judge), 14% and 4% (the largest) of the time, most often toward unusable; across the three, an arm's majority
+verdict changed on 0 to 4 of its 28 answers. The changes do not follow Atelier's: per session, the change in Atelier's
+verdict and the mean change in the others' correlate at r = +.13 (permutation p = .27). The drift is the judges'
+sampling at their default temperature, mostly the two smaller ones, not the answers being read against each other. Both
+readouts are kept; the next comparison judges each answer on its own and takes people's acceptance as its outcome.
+
+### Studies: the carry-over signal, re-measured after the code-span rule (development evidence, $0)
+
+The 2,135 hand-labelled sentences read again with a line of code named by its first word counted as the request's:
+the same 7 of 53 unsupported sentences found, the same 7 of the 15 carried from an example, and none of the 2,082
+sound ones flagged. In a scripted run the rule removed one false finding (a request naming the Authorization header,
+answered with the header line). A capitalised word that is not a name of code or an acronym ("Redis") is not a
+distinctive term, so a fact carried in such words is left to the unmeasured reading, which lists it.
 
 ### Studies: the fourteen-request comparison, before and after grounding (development evidence)
 

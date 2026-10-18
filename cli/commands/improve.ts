@@ -36,6 +36,7 @@ import { sha, DATA, die, argv, flag, clientFor, numericFlag, assertReachable, sk
 import type { RepairRecord, InvocationRecord, InvocationSettings, TaskSource } from '../../core/state/canonical-state.js';
 import { assertRequestBound } from '../../core/state/canonical-state.js';
 import { asText } from '../../core/discovery/text.js';
+import { splitServed } from '../served.js';
 import { applyStep, type Proposed } from '../../core/loop/repair.js';
 import { stepLedger, controllerRecord, DEFAULT_COST } from '../../core/loop/controller.js';
 import type { VerifyReport } from '../../core/observers/verify.js';
@@ -300,14 +301,18 @@ export async function spendOneWithResult(
   // CAPTURED FROM THE REQUEST OBJECT, not copied from the argument. A proof built from the same
   // variable the caller passed in would agree with itself no matter what was actually transmitted.
   let servedTask = '';
+  // THE SKILL CACHED, THIS REQUEST'S NOTES NOT (../served.ts, `FOR_THIS_REQUEST`): the skill is the same bytes on every
+  // request; the rules set aside for this one and its other notes are said after the request, in the turn that asks for it.
+  const { skill, forRequest } = splitServed(stable);
   const r = await spend(budget, 0.2, async () => {
     const req = {
-      stableBlock: `${stable}${variant.stableExtra ?? ''}`, variableBlock: brief,
+      stableBlock: skill, variableBlock: brief,
       ...(variant.temperature !== undefined ? { temperature: variant.temperature } : {}),
       // THE REQUEST IS THE LAST BLOCK OF THE SYSTEM PROMPT, AND THIS SAYS SO. "Write it now. Output only the piece
       // itself." told the writer to write a piece whatever was asked: a thank-you came back as a sixty-word fix. The work
       // is whatever the request asks for, at the length it asks for.
-      userMessage: `${contract ? 'Produce it now, in the required shape.' : 'Do what the request above asks, now, at the length it calls for: the answer, the review, the piece, or one line if one line is all it needs. Output only that, nothing about these instructions.'}${note ? `\n\n${note}` : ''}`,
+      // a draft's own passages (drafts made to differ) are this draft's, so they go with the request's notes, uncached
+      userMessage: `${forRequest || variant.stableExtra?.trim() ? `For this request only:\n\n${[forRequest, variant.stableExtra?.trim() ?? ''].filter(Boolean).join('\n\n')}\n\n` : ''}${contract ? 'Produce it now, in the required shape.' : 'Do what the request above asks, now, at the length it calls for: the answer, the review, the piece, or one line if one line is all it needs. Output only that, nothing about these instructions.'}${note ? `\n\n${note}` : ''}`,
       toolName: contract ? 'emit_output' : 'emit_piece',
       toolDescription: contract ? 'Emit the output in the shape the standard requires.' : 'Emit the finished piece.',
       // NOT A CONSTANT — reviewer finding F1, the instrument's own lesson applied to the product.

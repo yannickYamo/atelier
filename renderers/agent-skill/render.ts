@@ -750,7 +750,7 @@ mintedAt:        ${v.mintedAt}
   // What the piece was written from, said with it: the request, and that the request was all there was. Its facts are
   // that case's (the source roles): a writer who sees what the author had can tell what was read from the request.
   const withRequest = (request: string | null, text: string): string => (request
-    ? `The request it answered: ${request.trim().replace(/\s+/g, ' ')}\n\nWhat I had: the request above; anything else I drew on is not shown, so its facts are not yours to use.\n\nWhat I wrote:\n\n${text}` : text);
+    ? `From another conversation, with someone else.\n\nThe request it answered: ${request.trim().replace(/\s+/g, ' ')}\n\nWhat I had: the request above; anything else I drew on is not shown, so its facts are not yours to use.\n\nWhat I wrote:\n\n${text}` : text);
   const runtime: Record<string, string> = { 'SKILL.md': skillMd, ...exampleFiles, ...contractFiles, ...contextMap,
     ...(exemplar ? { 'examples/exemplar.md': withRequest(exemplar.request ?? null, exemplar.text) } : {}),
     ...Object.fromEntries((voice?.pieces ?? []).map((t, i) => [`examples/voice-${i + 1}.md`,

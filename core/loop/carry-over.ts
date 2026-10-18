@@ -6,10 +6,10 @@
 //
 // THE SIGNAL, IN CODE. A distinctive term (an acronym, an identifier, a host or a header name, an inline code
 // span) that the examples hold and the current request and its material do not, in any sentence.
-// It is a signal, never a cut: what it finds is listed for the person in the run's evaluation, because a term the
-// examples hold can also be the right general knowledge.
-// Its precision is measured (tests/carry-over.test.ts, and the labelled study in the closure report) before it
-// may ever do more than list.
+// It never cuts: what it finds is rewritten where it stands to state only what the request gives (./grounding.ts), and
+// kept only when code accepts the rewrite; otherwise it stays as written, listed for the person, because a term the
+// examples hold can also be the right general knowledge. Its precision is measured (tests/carry-over.test.ts, and the
+// labelled study in the CHANGELOG): 7 of 7, under the bound a deletion would need.
 
 import { claimUnitsOf, type Claim } from './claims.js';
 
@@ -38,7 +38,8 @@ export function distinctTerms(text: string): Set<string> {
  * CORS list", in reply to "Thanks, that solved it.", carries the example's case as surely as "CORS is fixed" does.
  * MEASURED on 2,135 hand-labelled sentences of fourteen requests answered by six arms (the closure report): 7 of 53
  * unsupported found, 7 of the 15 carried from an example, no false flag in 2,082 sound sentences (precision 7/7, whose
- * 95% lower bound, .65, is under the .9 a cut needs). So it lists. In the claim check's shape.
+ * 95% lower bound, .65, is under the .9 a cut needs). So it never cuts: what it finds is rewritten where code accepts the
+ * rewrite (./grounding.ts), and listed otherwise. In the claim check's shape.
  */
 export function carryOverClaims(text: string, examples: string, evidence: string): Claim[] {
   if (!examples.trim()) return [];
@@ -46,12 +47,23 @@ export function carryOverClaims(text: string, examples: string, evidence: string
   if (!theirs.size) return [];
   // the request names a term when it holds it as a word of its own, not inside a longer one
   const known = new Set([...distinctTerms(evidence), ...(evidence.toLowerCase().match(/[\w][\w:./-]*[\w]|\w/g) ?? [])]);
+  // A STRUCTURED SPAN THE REQUEST NAMES BY ITS HEAD. `Authorization: Bearer ${token}`, `git clean -fdx`: inline code with
+  // a space, a colon or a call in it is the thing its first word names, and a request that names that word ("the request
+  // has no Authorization header") gave it. A bare term (`CORS`, `orders_legacy`) is known only as itself.
+  // Only when the rest of the span names nothing of its own: `SELECT * FROM orders_legacy` is not given by "select", since
+  // `orders_legacy` is a term the request never names.
+  const head = (w: string): string | null => (/[\s:(=]/.test(w) ? /^[a-z][\w-]*/i.exec(w)?.[0].toLowerCase() ?? null : null);
+  const named = (w: string): boolean => {
+    if (known.has(w)) return true;
+    const h = head(w);
+    return h !== null && known.has(h) && [...distinctTerms(w.slice(h.length))].every((t) => known.has(t));
+  };
   const out: Claim[] = [];
   for (const u of claimUnitsOf(text)) {
     // the unit as written: the claim reader sees inline code blanked, and a borrowed `Authorization` header is in it
     const t = text.slice(u.start, u.end).trim();
     if (!t) continue;
-    const borrowed = [...distinctTerms(t)].filter((w) => theirs.has(w) && !known.has(w));
+    const borrowed = [...distinctTerms(t)].filter((w) => theirs.has(w) && !named(w));
     if (!borrowed.length) continue;
     out.push({ start: u.start, end: u.end, text: t, kind: 'FIGURE',
       why: `states ${borrowed.slice(0, 3).join(', ')} of your case, which your request does not name; it comes from an example's case: check it, or say it as an assumption` });

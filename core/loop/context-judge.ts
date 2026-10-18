@@ -31,8 +31,13 @@ export interface RequestIntent {
   readonly document?: string | null;
 }
 
-/** One thing a request explicitly asks for, and whether the reply gives it. `covered` is null when the reader said yes without a real quote. */
-export interface AskedPart { readonly words: string; readonly covered: boolean | null; readonly where?: string }
+/**
+ * One thing a request explicitly asks for, and whether the reply gives it. `covered` is null when the reader said yes
+ * without a real quote. `deferred`: not given because the reply holds it back on purpose, to ask a question or to have it
+ * confirmed first. That is the method's call (confirm before a destructive action; ask when the target is unknown), so a
+ * part held back is never a reason to write the reply again.
+ */
+export interface AskedPart { readonly words: string; readonly covered: boolean | null; readonly where?: string; readonly deferred?: true }
 export interface RequestCoverage { readonly parts: readonly AskedPart[] }
 
 export interface ContextJudge {
@@ -50,9 +55,11 @@ export interface ContextJudge {
   standsAlone(pairs: readonly { removed: string; next: string }[]): Promise<boolean[] | null>;
   /**
    * Read an answer once: which of its sentences claim work the assistant did or a result it saw, and, given the request
-   * and its material (`about`), which state as fact something of the person's situation that neither shows.
+   * and its material (`about`), which state as fact something of the person's situation that neither shows. Given the
+   * whole reply too (`about.reply`), the same call reads what the request asks for against it, and `covers` answers
+   * from that reading for the same request and reply: one call where there were two.
    */
-  readAnswer(sentences: readonly string[], about?: { readonly request: string; readonly material: string }): Promise<void>;
+  readAnswer(sentences: readonly string[], about?: { readonly request: string; readonly material: string; readonly reply?: { readonly task: string; readonly output: string } }): Promise<void>;
   /** The indexes `readAnswer` found stating a situation the request and its material do not show; null when not read with them. */
   situations?(sentences: readonly string[]): ReadonlySet<number> | null;
   /** The indexes `readAnswer` found, or null when it was not read or could not answer. */
@@ -94,10 +101,23 @@ For each part say whether the reply gives it:
 - covered true, with a short quote copied exactly from the reply where it does;
 - covered false, when the reply does not give it, gives it only in passing where the request asked for detail, or hands it back to the person.
 
+For a part not given, say also whether the reply holds it back ON PURPOSE (deferred true): it asks the person a question it needs answered first, or asks them to confirm before it is done (for example before something that cannot be undone). Deferred false when the reply simply leaves it out.
+
 Giving it means the content is there, not that the word appears. Judge only what the request asks for in so many words.`;
-const COVER_SCHEMA = { type: 'object', properties: { parts: { type: 'array', items: { type: 'object',
-  properties: { words: { type: 'string' }, covered: { type: 'boolean' }, where: { type: ['string', 'null'] } }, required: ['words', 'covered', 'where'], additionalProperties: false } } },
-  required: ['parts'], additionalProperties: false };
+const PART = { type: 'object', properties: { words: { type: 'string' }, covered: { type: 'boolean' }, deferred: { type: 'boolean' }, where: { type: ['string', 'null'] } },
+  required: ['words', 'covered', 'deferred', 'where'], additionalProperties: false };
+const COVER_SCHEMA = { type: 'object', properties: { parts: { type: 'array', items: PART } }, required: ['parts'], additionalProperties: false };
+
+// ONE READING OF A REPLY, WHERE THERE WERE TWO CALLS: its sentences (work claims, situations) and, against the whole reply,
+// what the request asks for. Two questions, answered separately in one call: the instructions are the two readings'
+// own, joined; each answer is validated in code exactly as it is when asked alone.
+export const READ_ALL_SYSTEM = `${SITUATION_SYSTEM}
+
+Separately, read the whole reply (<reply>) against the request.
+
+${COVER_SYSTEM}`;
+const READ_ALL_SCHEMA = { type: 'object', properties: { claims: { type: 'array', items: { type: 'number' } }, situations: { type: 'array', items: { type: 'number' } },
+  parts: { type: 'array', items: PART } }, required: ['claims', 'situations', 'parts'], additionalProperties: false };
 
 const squash = (s: string): string => s.replace(/[‘’]/g, "'").replace(/[“”]/g, '"').replace(/\s+/g, ' ').trim().toLowerCase();
 /** The parts of a model's answer that quote the request; a "covered" with no real quote from the reply is unclear, never covered. */
@@ -106,11 +126,12 @@ export function coverageOf(task: string, output: string, raw: unknown): RequestC
   if (!Array.isArray(list)) return null;
   const t = squash(task); const o = squash(output);
   const parts: AskedPart[] = [];
-  for (const x of list as { words?: unknown; covered?: unknown; where?: unknown }[]) {
+  for (const x of list as { words?: unknown; covered?: unknown; where?: unknown; deferred?: unknown }[]) {
     const words = typeof x.words === 'string' ? x.words.trim() : '';
     if (words.length < 3 || !t.includes(squash(words)) || typeof x.covered !== 'boolean' || parts.some((p) => squash(p.words) === squash(words))) continue;
     const where = typeof x.where === 'string' && x.where.trim().length >= 3 && o.includes(squash(x.where)) ? x.where.trim() : null;
-    parts.push(x.covered ? (where ? { words, covered: true, where } : { words, covered: null }) : { words, covered: false });
+    parts.push(x.covered ? (where ? { words, covered: true, where } : { words, covered: null })
+      : x.deferred === true ? { words, covered: false, deferred: true } : { words, covered: false });
     if (parts.length === 8) break;
   }
   return { parts };
@@ -124,11 +145,11 @@ export function modelJudge(client: InferenceClient, budget: Budget): ContextJudg
   const situated = new Map<string, ReadonlySet<number> | null>();
   const answers = new Map<string, ReadonlySet<number> | null>();
   const covered = new Map<string, RequestCoverage | null>();
-  const ask = async (system: string, user: string, tool: string, schema: Record<string, unknown>): Promise<unknown> => {
+  const ask = async (system: string, user: string, tool: string, schema: Record<string, unknown>, maxTokens = 800): Promise<unknown> => {
     try {
       const res = await spend(budget, 0.005, async () => {
         const x = await readingAs('context judge', client).complete({ stableBlock: system, variableBlock: '', userMessage: user, toolName: tool,
-          toolDescription: 'Return the judgement.', schema, maxTokens: 800, temperature: 0 });
+          toolDescription: 'Return the judgement.', schema, maxTokens, temperature: 0 });
         return { value: x, cost: x.cost, usage: x };
       }, 'context judge');
       return res.json;
@@ -171,10 +192,19 @@ export function modelJudge(client: InferenceClient, budget: Budget): ContextJudg
         ? new Set((xs as unknown[]).filter((n): n is number => typeof n === 'number' && Number.isInteger(n) && n >= 1 && n <= sentences.length).map((n) => n - 1)) : null);
       if (about) {
         const user = `<request>\n${about.request.trim() || '(none)'}\n</request>\n\n<material>\n${about.material.trim() || '(none)'}\n</material>\n\n<answer>\n${numbered}\n</answer>`;
-        const raw = await ask(SITUATION_SYSTEM, user, 'emit_claims', SITUATION_SCHEMA) as { claims?: unknown; situations?: unknown } | null;
+        const r = about.reply; const ck = r?.task.trim() && r.output.trim() ? sha(`${r.task}\u0000${r.output}`) : null;
+        // the reply's coverage read in the same call, unless it is already read (and never for a request it does not quote)
+        const both = r && ck && !covered.has(ck) && r.task === about.request;
+        const raw = (both
+          ? await ask(READ_ALL_SYSTEM, `${user}\n\n<reply>\n${r.output}\n</reply>`, 'emit_reading', READ_ALL_SCHEMA, 1600)
+          : await ask(SITUATION_SYSTEM, user, 'emit_claims', SITUATION_SCHEMA)) as { claims?: unknown; situations?: unknown; parts?: unknown } | null;
+        // A READING THAT FAILED IS NOT A READING: nothing is kept from it, so a later read (the delivered text's) asks again.
+        if (!raw) return;
+        // a combined reading that came back without its coverage leaves coverage unread: `covers` asks for it alone
+        if (both && ck && Array.isArray(raw.parts)) covered.set(ck, coverageOf(r.task, r.output, raw));
         // the work claims the loop already read (and acted on) stay as they were read: one text, one reading of them
-        if (!answers.has(k)) answers.set(k, indexes(raw?.claims));
-        situated.set(k, indexes(raw?.situations));
+        if (!answers.has(k)) answers.set(k, indexes(raw.claims));
+        situated.set(k, indexes(raw.situations));
         return;
       }
       const raw = await ask(WORK_SYSTEM, numbered, 'emit_claims', WORK_SCHEMA) as { claims?: unknown } | null;

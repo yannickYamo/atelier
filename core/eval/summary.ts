@@ -108,7 +108,7 @@ export interface EvalSummary {
     readonly taste: { readonly followed: number; readonly missed: number; readonly unclear: number; readonly waiting: number;
       readonly labelled: { readonly right: number; readonly of: number } | null; readonly acts: boolean } | null;
     /** what the request explicitly asks for, and how much of it the delivered text gives (read under strict delivery) */
-    readonly coverage?: { readonly asked: number; readonly given: number; readonly missing: readonly string[]; readonly unclear: number };
+    readonly coverage?: { readonly asked: number; readonly given: number; readonly missing: readonly string[]; readonly unclear: number; readonly heldBack?: readonly string[] };
   };
   /** strict delivery: an output is delivered only when it conforms, or when the person let it through by flag */
   readonly delivery?: { readonly mode: 'strict'; readonly delivered: boolean; readonly redraws: number };
@@ -254,7 +254,7 @@ export function renderPanel(e: EvalSummary, opts: { width?: number; color?: bool
   }
   if (m.coverage) {
     const cv = m.coverage;
-    out.push(`    ${pad('request coverage', 18)}${cv.given} of ${cv.asked} thing(s) the request asks for are given${cv.missing.length ? ` · not found: ${cv.missing.map((w) => `"${w}"`).join(', ')}` : ''}${cv.unclear ? ` · ${cv.unclear} unclear` : ''} · not qualified yet`);
+    out.push(`    ${pad('request coverage', 18)}${cv.given} of ${cv.asked} thing(s) the request asks for are given${cv.missing.length ? ` · not found: ${cv.missing.map((w) => `"${w}"`).join(', ')}` : ''}${cv.heldBack?.length ? ` · held back to ask or confirm first: ${cv.heldBack.map((w) => `"${w}"`).join(', ')}` : ''}${cv.unclear ? ` · ${cv.unclear} unclear` : ''} · not qualified yet`);
   }
   out.push('');
   out.push(`  not measured: ${e.notMeasured.join('; ')}`);

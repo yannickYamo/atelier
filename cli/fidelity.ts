@@ -162,13 +162,15 @@ const withoutId = (r: ImplementationRelease): Omit<ImplementationRelease, 'id'> 
  * What a release adds to the served skill for one request: the author's passages closest to it, and the
  * experience notes. Both are implementation, fenced and named as such, and both are recorded with the run.
  */
-export function implementationBlock(release: ImplementationRelease, index: RetrievalIndex | null, task: string, near: Nearness | null = null): { text: string; retrieved: number[] } {
+export function implementationBlock(release: ImplementationRelease, index: RetrievalIndex | null, task: string, near: Nearness | null = null): { retrieved: number[]; notes: string; passages: string } {
   const retrieved = index && release.settings.retrievalK > 0 ? retrieveNear(index, task, release.settings.retrievalK, near) : [];
-  const parts = [retrieved.length && index ? renderRetrieved(index, retrieved) : '',
-    // Every stored note is held to today's grammar before it is served: a note distilled under 0.8 that the
-    // grammar now refuses is never served (core/fidelity/experience.ts, noteProblem).
-    release.settings.notesCap > 0 && release.notes.length ? renderNotes(release.notes.filter((n) => noteProblem(n.text) === null).slice(0, release.settings.notesCap)) : ''].filter(Boolean);
-  return { text: parts.length ? `\n\n${parts.join('\n\n')}` : '', retrieved };
+  const passages = retrieved.length && index ? renderRetrieved(index, retrieved) : '';
+  // Every stored note is held to today's grammar before it is served: a note distilled under 0.8 that the
+  // grammar now refuses is never served (core/fidelity/experience.ts, noteProblem).
+  const notes = release.settings.notesCap > 0 && release.notes.length ? renderNotes(release.notes.filter((n) => noteProblem(n.text) === null).slice(0, release.settings.notesCap)) : '';
+  // The notes are the release's, the same on every request; the passages are chosen for this one (`passages`, said
+  // after the skill: ./served.ts, `forThisRequest`).
+  return { retrieved, notes, passages };
 }
 
 /**

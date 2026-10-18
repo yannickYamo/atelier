@@ -11,6 +11,7 @@ import type { CheckContext } from '../../core/observers/registry.js';
 import { checksFor, claimInstrumentOf, contextJudgeFor, smallReaderFor, CLAIMS_MODEL_DEFAULT, shortFormRequest } from '../checks.js';
 import { regressions, readAtLength, featureParamsOf, ruleParamsOf, enforcedNeverWorse, applyStep, unmeasuredIn, type ParamsOf, type Proposed } from '../../core/loop/repair.js';
 import { answerSentences, judgedSituations } from '../../core/loop/answer-claims.js';
+import { groundCarried } from '../../core/loop/grounding.js';
 import { refineToStandard, checkDraft, checkDraftAsync, withWaivers, enforceClaims, heavyCut, listedClaims, brokenByCut, gradedRules, PUBLIC_FACTS, INCONCLUSIVE, UNREAD, type CheckOptions } from '../../core/loop/run-repair.js';
 import { signalChecks, displacement, isSignal, ownerWords } from '../../core/loop/graded.js';
 import { steeredShape, steersMiss, shapeLengthAim } from '../../core/loop/shape-steer.js';
@@ -63,7 +64,7 @@ import { statedLength, statedLengths, againstStated, statedBounds, notHeldBecaus
 import { proseWords } from '../../core/observers/style.js';
 import { isReplyWork } from '../../core/observers/formats.js';
 import { citesLines, numbered, citedLines } from '../../core/loop/locators.js';
-import { composeServed } from '../served.js';
+import { composeServed, forThisRequest } from '../served.js';
 import { findOwnershipBreaches, describeBreaches } from '../../core/state/output-ownership.js';
 import { assertHistoryNotServed, foldRepairs } from '../../core/architecture/repair-memory.js';
 import type { SkillVersion, InvocationSettings } from '../../core/state/canonical-state.js';
@@ -528,6 +529,11 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   // in the record; the compiled skill is untouched. A REQUIRED one applies only under a condition (a
   // general one refused the run above), so it is also not counted against this output.
   const withheld = std ? std.requirements.filter((q) => waiting.has(q.requirementId)).map((q) => q.statement) : [];
+  // These stay CUT out of the skill, as measured: told to set them aside, a writer still shown "name the design
+  // alternative we rejected" was the one that invented. They turn on whether material is bound, not on the request, so
+  // the skill stays the same bytes across a run's requests. Every rule set aside below because of what one request
+  // says is named after the skill instead (cli/served.ts, `forThisRequest`), and the skill stays whole for the cache.
+  const needMaterial = [...withheld];
   const waived = new Map<string, string>();
   for (const [id, why] of heldBackReasons(satisfiable)) waived.set(id, why);
   // OUT OF REGISTER, ONLY WHAT THE OWNER'S POLICY CARRIES (core/voice/transfer.ts). A rule learned from blog
@@ -588,7 +594,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   // DRAFTS THAT DIFFER (core/fidelity/types.ts, `diversity`): each draft its own temperature and its own slice of
   // the author's closest passages, so the shared block carries only the notes.
   const diverse = Boolean(runSettings?.diversity) && nDrafts > 1 && fid !== null;
-  const impl = fid && runSettings ? implementationBlock({ ...fid.release, settings: diverse ? { ...runSettings, retrievalK: 0 } : runSettings }, fid.index, asked, readNear) : { text: '', retrieved: [] };
+  const impl = fid && runSettings ? implementationBlock({ ...fid.release, settings: diverse ? { ...runSettings, retrievalK: 0 } : runSettings }, fid.index, asked, readNear) : { retrieved: [], notes: '', passages: '' };
   const pool = diverse && fid?.index && runSettings && runSettings.retrievalK > 0 ? retrieveNear(fid.index, asked, runSettings.retrievalK * nDrafts, readNear) : [];
   // A run whose flags changed what the release would have done is recorded with the settings that ran and
   // no release: credited to the release, it would make the settings search compare arms that never ran.
@@ -622,7 +628,10 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const lengthNote = stated && contractFile === null ? lengthToWriteTo(asked, stated) : '';
   // Served under its own heading, as what it is: what earlier runs showed, not a rule of the standard.
   const carryBlock = carryNote && contractFile === null ? `\n\n## From earlier runs of this skill (not a rule of the standard)\n\n${carryNote}` : '';
-  const servedForRun = `${withheld.length ? withoutRules(servedText, withheld) : servedText}${impl.text}${carryBlock}${lengthNote}`;
+  // THE SKILL WHOLE AND THE SAME ON EVERY REQUEST, THEN THIS REQUEST'S NOTES (cli/served.ts, `forThisRequest`): rules set
+  // aside for it are named there, never cut out of the skill, so the skill is cached once and read from the cache after.
+  const requestNotes = forThisRequest(withheld.filter((w) => !needMaterial.includes(w)), impl.passages, lengthNote);
+  const servedForRun = `${needMaterial.length ? withoutRules(servedText, needMaterial) : servedText}${impl.notes ? `\n\n${impl.notes}` : ''}${carryBlock}${requestNotes}`;
   const deliveryForRun = withheld.length ? { ...delivery, withheldRules: withheld } : delivery;
   // What the person said was wrong with an earlier version (`atelier fix`) goes to the writer whatever shape was asked for.
   const corrected = `${task}${correctionFor(flag('--correcting'))}${transfer?.note ?? ''}`;
@@ -672,17 +681,20 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const rec = await runOnce(L, sv, servedForRun, servedHash, deliveryForRun, taskForRun, client, budget, binding,
     resolveProvenance(flag('--provenance'), process.env), contractFile,
     flag('--task') ? 'FLAG' : 'POSITIONAL',
-    std && !argv.includes('--no-repair') ? keepDelivered(withSituations(withGradedRecord(withStructureRead(repairChain(refineFor(),
+    std && !argv.includes('--no-repair') ? keepDelivered(withSituations(withGrounding(withGradedRecord(withStructureRead(repairChain(refineFor(),
       unmet ? { unmet, notes: completions, resume: refineFor(), paramsOf: ruleParamsOf(std), round: shapeRoundNow, check: (text: string) => checkDraft(name, std, text, { ...checks, claimSensor: undefined }), redraft: async (note, purpose) => (await spendOneWithResult(client, budget, servedForRun, taskForRun, null, note, {}, purpose)).piece, graded: gradedTrace,
         steps: { usdPerCall: () => { const ls = spendBetween(ledgerBefore, processSpendByPurpose()).filter((l) => l.purpose === 'writing' || l.purpose === 'graded'); const n = ls.reduce((k, l) => k + l.calls, 0); return n ? ls.reduce((k, l) => k + l.usd, 0) / n : undefined; } },
         displaced: (from: string, to: string) => displacement(from, to, graded !== undefined ? carried : null, new Set())?.refusedFor ?? [] } : null,
       fid && (editBudget > 0 || argv.includes('--fidelity')) ? { client, budget, name, std, checks, profile: editProfile ?? fid.profile, editBudget, trace, taste } : null,
       voiceRuns && bank && fid ? { client, budget, name, std, checks, bank, copied: fid.index ? overlapIndex(fid.index.passages.map((p) => p.text)) : null, trace, taste, reader: smallReaderFor()?.client ?? null, gate: runSettings?.voiceGate === 'reader' ? 'reader' as const : 'lists' as const } : null,
-      coverageOn && judge?.covers ? { client, budget, judge, asked, servedText: servedForRun, task: taskForRun, notes: completions, paramsOf: ruleParamsOf(std) } : null,
+      coverageOn && judge?.covers ? { client, budget, judge, asked, servedText: servedForRun, task: taskForRun, notes: completions, paramsOf: ruleParamsOf(std),
+        ...(checks.guardClaims !== false ? { readsWith: { material: checks.evidence ?? '' } } : {}) } : null,
       shapeRounds > 0 ? { client, budget, std, round: shapeRoundNow, graded, gradedProfile: graded !== undefined ? carried : null, gradedTrace, calibration: fid?.typicality ?? null, detector: fid?.profile.detector ?? null, target: shapeTarget, authorTarget, rounds: shapeRounds, servedText: servedForRun, task: taskForRun, trace, taste, notes: completions,
         fresh: planState ? (round: number) => freshPlannedDraft(client, budget, servedForRun, taskForRun, planState, round) : null } : null,
       runSteps),
       planState ? { budget, trace, state: planState } : null), gradedTrace, ledgerBefore),
+      checks.guardClaims !== false && checks.examples ? { client, budget, request: asked, evidence: checks.evidence ?? '', examples: checks.examples, notes: completions,
+        recheck: (text: string) => checkDraftAsync(name, std, text, checks) } : null),
       judge && checks.guardClaims !== false ? { judge, request: asked, material: checks.evidence ?? '' } : null)) : null,
     std && nDrafts > 1 ? withSections(selectDraft({ n: nDrafts, name, std, checks, taste, ownBand, signals: store.getSignals(L), profile: steerProfile, trace, ledger, sampling, ...(diverse ? { variant: variantOf, retrievedFor } : {}) }), sectionWriter)
       : sectionWriter ? { n: 1, write: sectionWriter, choose: () => ({ index: 0, why: '' }) } : null,
@@ -753,7 +765,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
       format: { words: formatAsked ?? null, shape, withheld: presentationWithheld }, taste: tasteMonitor, costUsd: spent,
       // Where the cost went (core/inference/client.ts, `SpendPurpose`) and what the writer was sent, in words.
       spend: spentBy,
-      sent: { skill: countWords(servedForRun) - countWords(impl.text) - countWords(carryBlock), added: countWords(impl.text) + countWords(carryBlock) + perDraftWords, request: countWords(taskForRun) },
+      sent: { skill: countWords(needMaterial.length ? withoutRules(servedText, needMaterial) : servedText), added: countWords(impl.notes) + countWords(carryBlock) + countWords(requestNotes) + perDraftWords, request: countWords(taskForRun) },
       durationMs: Date.now() - started, drafts: nDrafts, report: finalReport, contract: contractFile !== null,
       request: askedWords ? requestLength(rec.output, askedWords) : stated && notHeld ? { asked: stated.raw, met: null, detail: notHeld } : null,
       applicability: rec.fidelity?.applicability ?? (std ? applicability(name, std, rec.output, waived, withheld, checks.context, transfer?.doesNotApply) : []),
@@ -1922,6 +1934,38 @@ export function withSituations(refine: (draft: string) => Promise<Delivered>, c:
   };
 }
 
+/**
+ * A FACT OF AN EXAMPLE'S CASE, CORRECTED WHERE IT STANDS (core/loop/grounding.ts). On the text the repair chain delivers:
+ * each sentence the carry-over signal finds is rewritten to state only what the request gives, and kept only when code
+ * accepts the rewrite and the whole text, checked again, breaks no rule that held. What is not kept stays as written,
+ * listed for the person, and the record says it is unresolved. Never a deletion.
+ */
+export function withGrounding(refine: (draft: string) => Promise<Delivered>,
+  c: { client: InferenceClient; budget: Budget; request: string; evidence: string; examples: string; notes?: string[]; recheck: (text: string) => Promise<VerifyReport> } | null): (draft: string) => Promise<Delivered> {
+  if (!c) return refine;
+  return async (draft: string) => {
+    const d = await refine(draft);
+    let after: VerifyReport | null = null;
+    const held = new Set(brokenIn(d.report));
+    const g = await groundCarried(d.output, { ...c, breaksNothing: async (next) => {
+      after = await c.recheck(next);
+      return brokenIn(after).every((id) => held.has(id));
+    } });
+    if (!g.note) return d;
+    // said where the person reads the run, and in its record
+    c.notes?.push(g.note);
+    if (g.text === d.output || !after) return noted(d, g.note, brokenIn(d.report));
+    // a sentence rewritten is no longer one to check; what the new text lists is listed (an unresolved one among them)
+    const rewritten = g.found.filter((f) => f.kept).map((f) => f.sentence.slice(0, 60));
+    // THE MODEL'S OWN TEXT STAYS ON RECORD. A draft nothing else changed has no repair record yet: it is made from the text
+    // before the rewrite, so the record never says the delivered text is what the model wrote.
+    const base: Delivered = d.repair ? d : { ...d, repair: { passes: 0, violatedBefore: brokenIn(d.report), violatedAfter: brokenIn(d.report), originalOutputHash: sha(d.output), draft: d.output, why: 'grounded: a fact only an example\'s case held, rewritten where it stood' } };
+    const done = noted({ ...base, output: g.text, report: after }, g.note, brokenIn(d.report));
+    const toCheck = (done.repair?.claimsToCheck ?? []).filter((t) => !rewritten.some((r) => t.slice(0, 60) === r));
+    return done.repair ? { ...done, repair: { ...done.repair, claimsToCheck: [...new Set([...toCheck, ...listedClaims(after)])] } } : done;
+  };
+}
+
 /** A request that can ask for more than one thing: more than a line of words. "Thanks, that solved it." is one ask. */
 export const asksParts = (task: string): boolean => (task.match(/[\p{L}\p{N}][\p{L}\p{N}'’-]*/gu) ?? []).length >= 8;
 
@@ -1932,22 +1976,41 @@ export const asksParts = (task: string): boolean => (task.match(/[\p{L}\p{N}][\p
  * (core/loop/controller.ts, rule A) and when it leaves out fewer parts.
  */
 export function withCoverage(refine: Refine,
-  c: { client: InferenceClient; budget: Budget; judge: ContextJudge; asked: string; servedText: string; task: string; notes: string[]; paramsOf?: ParamsOf } | null): Refine {
+  c: { client: InferenceClient; budget: Budget; judge: ContextJudge; asked: string; servedText: string; task: string; notes: string[]; paramsOf?: ParamsOf;
+    /** the request's material, when the run also reads the situations the reply states: then one call reads both (context-judge.ts, `readAnswer`) */
+    readsWith?: { readonly material: string } } | null): Refine {
   if (!c?.judge.covers) return refine;
   const covers = c.judge.covers.bind(c.judge);
+  // ONE READING OF A REPLY: its sentences (the situations it states) and, against the whole reply, what the request asks.
+  // `covers` then answers from it, and `withSituations` too when the reply is the one delivered. A reading that fails
+  // leaves `covers` to read alone, as before.
+  const readAll = async (output: string): Promise<void> => {
+    if (!c.readsWith || !c.judge.situations) return;
+    await c.judge.readAnswer(answerSentences(output), { request: c.asked, material: c.readsWith.material, reply: { task: c.asked, output } }).catch(() => undefined);
+  };
   return async (draft: string, ledger: StepLedger) => {
     const d = await refine(draft, ledger);
+    await readAll(d.output);
     let missing: string[];
-    try { missing = ((await covers(c.asked, d.output))?.parts ?? []).filter((p) => p.covered === false).map((p) => p.words); } catch (e) {
+    // A PART HELD BACK ON PURPOSE (to ask, or to have it confirmed first) is the method's call, never a reason to write again:
+    // "delete every untracked file" answered with "confirm first" was written again and the second draft rightly not kept.
+    let held: string[];
+    try {
+      const parts = (await covers(c.asked, d.output))?.parts ?? [];
+      missing = parts.filter((p) => p.covered === false && !p.deferred).map((p) => p.words);
+      held = parts.filter((p) => p.covered === false && p.deferred).map((p) => p.words);
+    } catch (e) {
       // A reading that could not be made is said, in one line: the reply was not read against the request.
       const why = (e as Error).message.split('\n')[0];
       c.notes.push(`The reply was not read against what the request asks${/budget exhausted|call budget/.test(why) ? ': the budget ran out before the reading' : ` (${why})`}; nothing was written again for it.`);
       return d;
     }
+    if (held.length) c.notes.push(`Held back on purpose, to ask or to confirm first: ${held.map((m) => `"${m}"`).join('; ')}; not written again for it (the method decides when to ask or confirm).`);
     if (!missing.length) return d;
     const named = missing.map((m) => `"${m}"`).join('; ');
-    const note = `An earlier reply left out parts of what the request asks for: ${named}. Write the reply so that it gives each of them in full, at the length that takes. `
-      + 'If you cannot give one because you were not shown what it needs, say so plainly and ask for it. Never invent a file, a project, a figure or a result.';
+    // The method decides how each part is given (act, confirm first, state an assumption): the note only names what is missing.
+    const note = `An earlier reply left out parts of what the request asks for: ${named}. Write the reply so that it gives each of them in full, at the length that takes, `
+      + 'following the skill\'s method on when to act, when to confirm first and when to state an assumption. Never invent a file, a project, a figure or a result.';
     type Covered = Proposed & { readonly d2: Delivered; readonly piece: string; readonly missing2: number };
     const s = await applyStep<Covered>(ledger, { action: 'coverage', targets: ['coverage'], why: `the reply leaves out ${missing.length} part(s) of the request (${named}): written again to give each`,
       expectedGain: missing.length, expectedCostUsd: DEFAULT_COST.coverage }, { text: d.output, report: d.report }, async (taken) => {
@@ -1955,7 +2018,10 @@ export function withCoverage(refine: Refine,
       // counted as taken before the draft is refined on the same ledger, so the steps on it are within the one cap
       taken();
       const d2 = await refine(piece, ledger);
-      const missing2 = ((await covers(c.asked, d2.output))?.parts ?? []).filter((p) => p.covered === false).length;
+      await readAll(d2.output);
+      // only a part the first reply already held back is excused: one the new draft newly holds back ("want me to add the
+      // rollback points?") is still not given, so a draft that only trades a missing part for a question is not kept
+      const missing2 = ((await covers(c.asked, d2.output))?.parts ?? []).filter((p) => p.covered === false && (!p.deferred || !held.includes(p.words))).length;
       return { text: d2.output, report: d2.report, d2, piece, missing2 };
     }, { paramsOf: c.paramsOf, purposes: ['writing'],
       also: (x) => (x.missing2 < missing.length ? null : `it leaves out ${x.missing2} part(s), no fewer`),
@@ -2307,7 +2373,7 @@ export function applicability(name: string, std: Standard, output: string, waive
     // Not a rule set aside: one that does not apply to an output of this kind (a long-form band on a short piece).
     const off = doesNotApply?.get(q.requirementId);
     if (off) return { requirementId: q.requirementId, status: 'NOT_APPLICABLE' as const, why: off };
-    const why = waived.get(q.requirementId) ?? (withheld.includes(q.statement) ? 'withheld from this run\'s prompt' : null);
+    const why = waived.get(q.requirementId) ?? (withheld.includes(q.statement) ? 'withheld for this run (left out of the prompt, or named there as set aside)' : null);
     if (why) return { requirementId: q.requirementId, status: 'WAIVED' as const, why };
     if (verdict.get(q.requirementId) === 'NOT_APPLICABLE') return { requirementId: q.requirementId, status: 'NOT_APPLICABLE' as const, why: 'outside what its measurement can judge in this text' };
     const cond = conditional.get(q.requirementId);

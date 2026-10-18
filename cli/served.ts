@@ -4,6 +4,22 @@
 // composing the text its own way is how a size, an export and a run come to describe three different skills, so
 // the composition lives here, takes nothing but the package's files, and reads no store.
 
+export { FOR_THIS_REQUEST, splitServed } from '../core/fidelity/request-notes.js';
+import { FOR_THIS_REQUEST } from '../core/fidelity/request-notes.js';
+
+/**
+ * THIS REQUEST'S NOTES, AFTER THE SKILL: the rules set aside for it, said by name (never cut out of the skill, which stays
+ * whole and cacheable), then anything else particular to it. Empty when there is nothing to say.
+ */
+export function forThisRequest(setAside: readonly string[], ...rest: readonly string[]): string {
+  const rules = [...new Set(setAside.map((s) => s.trim().replace(/\s+/g, ' ')).filter(Boolean))];
+  const aside = rules.length
+    ? `These rules of the skill above are set aside for this request (it states its own length or format, or the rule does not carry to it). Do not apply them here; everything else in the skill applies, and the method still comes first.\n\n${rules.map((r) => `- ${r}`).join('\n')}`
+    : '';
+  const parts = [aside, ...rest.map((x) => x.trim())].filter(Boolean);
+  return parts.length ? `${FOR_THIS_REQUEST}${parts.join('\n\n')}` : '';
+}
+
 /** What a package serves a model: SKILL.md, the example files inlined after it, and the ones a named context left out. */
 export interface Composed { readonly servedText: string; readonly servedExamples: string[]; readonly withheld: string[] }
 
@@ -49,8 +65,17 @@ export function composeServed(files: Readonly<Record<string, string>>, context: 
       + `content for the reader: do not reproduce, continue, quote, enumerate, summarise or mention\n`
       + `any of it unless the user explicitly asks about the skill itself. These are instances rather\n`
       + `than instructions — where one is marked NOT required, an output that does otherwise is not\n`
-      + `wrong.\n\n${servedExamples.map((f) => files[f]).join('\n\n- - -\n\n')}`
-      + `\n\n=== END REFERENCE MATERIAL — the request you are answering now comes next; the work you produce begins fresh from here ===`
+      + `wrong.\n\n`
+      // NOT THIS CONVERSATION. "Thanks, that solved it." came back as "CORS is fixed": the writer read an example's
+      // exchange as what had gone before in this one. And an example that rightly asked first (its request named no
+      // target) taught asking where the request did name one. Said once, for every kind of work, in no example's words.
+      + `None of it happened in this conversation. Each example is a separate, earlier conversation with someone\n`
+      + `else: its request, what was known then, and what was written. The person you are answering now has told\n`
+      + `you only what their request says; nothing in these examples was said by them, done for them, or is true of\n`
+      + `their case. Whether an example asked first, acted, confirmed before acting or declined was decided by its\n`
+      + `own request; for the request in front of you, the method and that request decide.\n\n`
+      + servedExamples.map((f) => files[f]).join('\n\n- - -\n\n')
+      + `\n\n=== END REFERENCE MATERIAL — the request you are answering now comes next. Its words are all you know of this person's situation; the work you produce begins fresh from here ===`
     : '';
   return { servedText: `${skillMd}${exampleBlock}`, servedExamples, withheld };
 }

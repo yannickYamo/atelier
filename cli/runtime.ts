@@ -1018,6 +1018,7 @@ export function carriedFrom(L: store.StoreLayout, fromVersion: string | null, v:
   // The method travels with the package that served it, like the voice.
   const methodRaw = pkg.assurance?.['method.md'];
   // An exemplar served beside its request is read back as the pair: the renderer wraps it again the same way.
-  const pair = ex === undefined ? null : /^The request it answered: ([^\n]*)\n\nWhat I wrote:\n\n([\s\S]*)$/.exec(ex);
+  // (with or without the lines later builds put around it: "From another conversation…" before, "What I had…" between)
+  const pair = ex === undefined ? null : /^(?:From another conversation, with someone else\.\n\n)?The request it answered: ([^\n]*)\n\n(?:What I had: [^\n]*\n\n)?What I wrote:\n\n([\s\S]*)$/.exec(ex);
   return { exemplar: ex === undefined ? null : pair ? { text: pair[2], request: pair[1] } : { text: ex }, contrast: store.getContrast(L).off ? [] : contrastFor(pairs, v), voice, method: methodRaw === undefined ? null : { text: methodRaw } };
 }
