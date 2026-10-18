@@ -26,6 +26,9 @@ const PERSONA = { points: [
   { aspect: 'invented', description: 'Quotes nobody.', frequency: 'OFTEN', quote: 'this sentence is in no piece' },
 ] };
 const SCOPE = (n: number) => ({ examples: Array.from({ length: n }, (_, i) => ({ example: i + 1, asked: 'NEITHER', kind: 'status', beyond: [] })) });
+// Replies: short answers to a request, no sections. The work-form reader is scripted to read them as replies, with real quotes.
+const reply = (n: number): string => `---\nrequest: Why does the deploy hang on step ${n}?\n---\nI would start with the riskiest line. Step ${n} waits on a lock that the previous job never released; clear it and run the step again. Tests first, then the rest.\n`;
+const REPLY_FORM = { examples: [1, 2, 3, 4].map((n) => ({ example: n, form: 'REPLY', quote: 'clear it and run the step again' })), form: 'REPLY' };
 
 let backend: ChildProcess; let port = 0;
 const url = (): string => `http://127.0.0.1:${port}`;
@@ -36,7 +39,7 @@ const toolsCalled = async (): Promise<string[]> => {
 };
 
 interface Seed { data: string; proj: string; run: (...a: string[]) => { code: number; out: string } }
-interface VoiceFile { persona?: { points: { description: string }[]; dropped: number }; scope?: { reader: string | null; examples: number }; pieces?: string[] }
+interface VoiceFile { persona?: { points: { description: string }[]; dropped: number }; scope?: { reader: string | null; examples: number }; pieces?: string[]; form?: string }
 const seed = (files: Readonly<Record<string, string>>, withKey: boolean): Seed => {
   const data = mkdtempSync(join(tmpdir(), 'atelier-mp-data-')); const proj = mkdtempSync(join(tmpdir(), 'atelier-mp-proj-'));
   mkdirSync(join(proj, 'examples'));
@@ -59,7 +62,8 @@ describe('the persona on the method path and the thin path', () => {
     if (!existsSync(CLI)) throw new Error('build first');
     backend = spawn(process.execPath, [resolve('tests/fixtures/scripted-backend.mjs')], { stdio: ['ignore', 'pipe', 'inherit'] });
     port = await new Promise<number>((ok) => { backend.stdout!.on('data', (d: Buffer) => { const m = /PORT (\d+)/.exec(d.toString()); if (m) ok(Number(m[1])); }); });
-    await fetch(`${url()}/__set`, { method: 'POST', body: JSON.stringify({ byTool: { emit_persona: PERSONA, emit_scope: SCOPE(4), emit_holds_back: { ids: [] } } }) });
+    await fetch(`${url()}/__set`, { method: 'POST', body: JSON.stringify({ byTool: { emit_persona: PERSONA, emit_scope: SCOPE(4), emit_holds_back: { ids: [] } },
+      when: [{ contains: 'The work is described as: answers', answer: REPLY_FORM }] }) });
   }, 60_000);
   afterAll(() => { backend.kill(); });
 
@@ -68,21 +72,26 @@ describe('the persona on the method path and the thin path', () => {
     const r = run('method', 'method.md', '--golden', 'examples', '--name', 'code-review', '--yes', ...BACKEND());
     expect(r.code, r.out).toBe(0);
     expect(r.out).toMatch(/Persona: 2 point\(s\) on how the author sounds, each with how often and a quote from their pieces \(1 dropped: their quote was not in the pieces\)/);
-    // the work answers requests: how much the author adds beyond what was asked is read too, so no false "too few" is stated
-    expect(r.out).toMatch(/Scope: what 4 example\(s\) add beyond what was asked, 4 of them read with the request they answer/);
+    // the name says "code review", the pieces are sectioned review documents: code decides the form, no model is asked,
+    // and the skill is compiled as documents (no chat assistant's voice, no scope reading, no "never shorten")
+    expect(r.out).not.toMatch(/Scope: |Work form: /);
+    // (read once and kept; --persona auto asks for every reading again, and the whole account says who decided)
+    expect(run('method', 'method.md', '--golden', 'examples', '--name', 'code-review', '--yes', '--report', '--persona', 'auto', ...BACKEND()).out).toContain('(work form: documents, every example is written under sections;');
     const v = voiceOf(data, 'code-review');
     expect(v.persona?.points.map((p) => p.description)).toEqual(['Opens from a position of my own, not a summary.', 'Closes on a short plain instruction.']);
-    expect(v.scope?.reader).toMatch(/^scope-1:/);
+    expect(v.form).toBe('DOCUMENT');
+    expect(readFileSync(join(data, 'skills', 'code-review', 'form.txt'), 'utf8')).toBe('DOCUMENT');
     // served to the writer, with how thin the evidence is said in pieces, not as "always"
     const skill = readFileSync(join(proj, '.claude', 'skills', 'code-review', 'SKILL.md'), 'utf8');
     expect(skill).toContain('How I sound (each point is quoted from my own pieces and holds in most or all of them):');
     expect(skill).toContain('- (always) Opens from a position of my own, not a summary. e.g. "I would start with the riskiest line."');
     expect(skill).not.toContain('too few of any one kind');
+    expect(skill).not.toMatch(/handing it back|Never shorten it to match my shorter examples|How much I write follows the request/);
     // a method build still serves its pieces whole, as before (2,000 words of them, past the 1,200 a skill that answers
     // would spread over its kinds): the model reads them, it does not choose them
     expect(v.pieces).toHaveLength(4);
     const tools = await toolsCalled();
-    expect(tools).toContain('emit_persona'); expect(tools).toContain('emit_scope');
+    expect(tools).toContain('emit_persona'); expect(tools).not.toContain('emit_scope'); expect(tools).not.toContain('emit_work_form');
     // built again later with --persona auto (how a skill built before this gets its persona), the pieces stay whole:
     // the whole serving is kept with the voice, not with the command that first chose it
     // (and a plain rebuild that serves the same files is the same package, whatever order its record's keys come in)
@@ -93,6 +102,21 @@ describe('the persona on the method path and the thin path', () => {
     expect(again.out).toMatch(/Persona: 2 point\(s\)/);
     expect(voiceOf(data, 'code-review').pieces).toHaveLength(4);
     expect(voiceOf(data, 'code-review').persona?.points).toHaveLength(2);
+  }, 120_000);
+
+  it('replies with their requests, with a model: the form is read from the pieces, the scope is read, and the skill is compiled as answers', async () => {
+    const before = (await toolsCalled()).length;
+    const files = Object.fromEntries([['method.md', NOTE], ...[1, 2, 3, 4].map((n): [string, string] => [`examples/a${n}.md`, reply(n)])]);
+    const { data, proj, run } = seed(files, true);
+    const r = run('method', 'method.md', '--golden', 'examples', '--name', 'answers', '--yes', ...BACKEND());
+    expect(r.code, r.out).toBe(0);
+    expect(r.out).toContain('Work form: replies in a conversation; read from 4 of your examples by scripted.');
+    expect(r.out).toMatch(/Scope: what 4 example\(s\) add beyond what was asked, 4 of them read with the request they answer/);
+    expect(voiceOf(data, 'answers').form).toBe('REPLY');
+    expect(voiceOf(data, 'answers').scope?.reader).toMatch(/^scope-1:/);
+    expect(readFileSync(join(proj, '.claude', 'skills', 'answers', 'SKILL.md'), 'utf8')).toContain('How much I write follows the request');
+    const tools = (await toolsCalled()).slice(before);
+    expect(tools).toContain('emit_work_form'); expect(tools).toContain('emit_scope');
   }, 120_000);
 
   it('three pieces and no method, with a model: the pieces are served whole and the author is described', async () => {

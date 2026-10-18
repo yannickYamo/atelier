@@ -32,7 +32,9 @@
 
 import { existsSync } from 'node:fs';
 import { basename, resolve } from 'node:path';
-import { sha, die, flag, argv, positional, clientFor, proposerModel, loadSession, saveSession, authoredIdAllocator, type ProposalSet, type ProposedRule } from '../runtime.js';
+import { sha, die, flag, argv, positional, clientFor, proposerModel, loadSession, saveSession, authoredIdAllocator, DATA, type ProposalSet, type ProposedRule } from '../runtime.js';
+import * as store from '../../core/state/store.js';
+import { skillNameFrom } from '../../renderers/agent-skill/render.js';
 import { groundedInUserText, uncarriedSections } from '../../core/ratification/grounding.js';
 import { draftHash, appendDecision, type RatificationLedger } from '../../core/ratification/decision-record.js';
 import { decide } from '../../core/ratification/authority.js';
@@ -96,6 +98,10 @@ Also report workType: two or three words for the kind of work this governs, as a
 it — "writing", "code review", "customer email". This is DESCRIPTIVE, not part of the standard: it
 becomes the skill's description, which is how a host decides whether to load the skill at all.
 
+Also report form: "REPLY" when the work is turns in a conversation (answers to someone who asked: chat,
+support, review comments), "DOCUMENT" when it is self-standing pieces (articles, posts, reports, memos,
+contracts, reviews written up under their own sections). Judge from what they said, not from the name.
+
 THE FAITHFUL FIELD IS THE IMPORTANT ONE, and getting it right matters more than being helpful.
 "lead with the action" separates faithfully. "make it sound less like AI" does not: any concrete rule
 you write for it is your invention, so mark those false. Do not refuse to propose them — mark them.
@@ -123,6 +129,7 @@ const PROPOSER_SCHEMA: Record<string, unknown> = {
       },
     },
     workType: { type: 'string' },
+    form: { type: ['string', 'null'], enum: ['REPLY', 'DOCUMENT', null] },
   },
   required: ['rules', 'workType'], additionalProperties: false,
 };
@@ -175,7 +182,7 @@ export async function skill(): Promise<void> {
       return { value: x, cost: x.cost };
     });
 
-    const payload = r.json as { rules?: Proposed[]; workType?: string };
+    const payload = r.json as { rules?: Proposed[]; workType?: string; form?: unknown };
     // An EMPTY string must fall through, not be accepted — a work type of "" would become a skill
     // description of "". The person's flag beats the model's guess: the flag is a decision, the
     // guess is a reading, and the old order let the reading win.
@@ -192,7 +199,10 @@ export async function skill(): Promise<void> {
       return { statement: p.statement.trim(), kind: p.kind, appliesWhen: p.appliesWhen.trim() || 'GENERAL',
         sourceSpan: p.sourceSpan ?? '', faithful: p.faithful, grounded: g.grounded, groundingWhy: g.why };
     });
-    pset = { proposalSetHash: sha(JSON.stringify(rules)), promptHash, workType, rules };
+    // THE FORM OF THE WORK, read in the same call (no examples exist here: what they said is the whole evidence). Kept
+    // with the proposal, so `--yes` asks nothing more; the name of the work is the floor when the reader said none.
+    const form = payload.form === 'REPLY' || payload.form === 'DOCUMENT' ? payload.form : undefined;
+    pset = { proposalSetHash: sha(JSON.stringify(rules)), promptHash, workType, rules, ...(form ? { form } : {}) };
     s = { ...s, proposalSet: pset };
     saveSession(s);
   } else {
@@ -266,7 +276,9 @@ export async function skill(): Promise<void> {
   // REPLIES ARE CHECKED AS REPLIES. A skill for answers (a coding assistant, support, review comments)
   // names versions, costs and estimates the person never supplied; cutting each as invented took a
   // technical answer apart. Its specifics are listed for the reader to check (formats.ts, assistant-reply).
-  if (!flag('--class') && isReplyWork(workType)) {
+  const form = pset.form ?? (isReplyWork(workType) ? 'REPLY' : 'DOCUMENT');
+  store.setWorkForm({ root: DATA, skillName: skillNameFrom(flag('--name') ?? basename(process.cwd())) }, form);
+  if (!flag('--class') && form === 'REPLY') {
     argv.push('--class', 'assistant-reply');
     console.log(`Checked as assistant replies: specifics not in your material are listed for you to check, not cut. `
       + '(`--class none` to cut them instead.)');

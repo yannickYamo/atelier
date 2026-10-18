@@ -24,7 +24,8 @@ import { deriveScope, groundScope, spreadByKind, type ScopeProfile } from '../..
 
 /** The words of example answers a skill that answers shows by default: enough for one of each kind of request and a few more. */
 const ANSWER_EXAMPLE_WORDS = 1200;
-import { isReplyWork } from '../../core/observers/formats.js';
+import { WORK_FORM, type WorkForm } from '../../core/observers/work-form.js';
+import { readContext } from '../../core/inference/reading.js';
 import { isGeneralScope } from '../../core/state/canonical-state.js';
 import { moveEvidence, readHoldsBack, ownerWrote, HOLDS_BACK } from '../../core/compiler/applicability.js';
 import { normalizeClass } from '../../core/observers/doc-class.js';
@@ -57,7 +58,7 @@ import { extract } from '../../core/intake/extract.js';
 
 import { describeMatrix, type Carrier } from '../../core/delivery/carrier-delivery.js';
 import { sha, DATA, die, argv, flag, projectDir, pickHost,
-  loadSession, saveSession, step, runFile, numericFlag, orchestrated, proposerModel, adoptMovedRun } from '../runtime.js';
+  loadSession, saveSession, step, runFile, numericFlag, orchestrated, proposerModel, adoptMovedRun, contextReaderModel, contextReaderClient } from '../runtime.js';
 
 // ── build ────────────────────────────────────────────────────────────────────────────────────
 /** Host is detected or forced. Atelier runs the same either way; only install location differs. */
@@ -124,7 +125,7 @@ export function pieceFlags(): { readonly budget: number | null | undefined; read
   return { budget: b === undefined ? undefined : b === 'default' ? null : Number(b), form: f as PieceForm | undefined };
 }
 
-async function chooseVoice(L: store.StoreLayout, v: StandardVersion): Promise<Voice | null> {
+async function chooseVoice(L: store.StoreLayout, v: StandardVersion, workForm: WorkForm): Promise<Voice | null> {
   const choice = (name: string): 'none' | 'auto' | undefined => {
     const x = flag(name)?.trim().toLowerCase();
     if (x !== undefined && x !== 'none' && x !== 'auto') die(`${name} takes none or auto`);
@@ -133,7 +134,7 @@ async function chooseVoice(L: store.StoreLayout, v: StandardVersion): Promise<Vo
   const voiceFlag = choice('--voice'); const personaFlag = choice('--persona');
   const asked = pieceFlags();
   const reselect = asked.budget !== undefined || asked.form !== undefined;
-  const answers = isReplyWork(v.workType);
+  const answers = workForm === 'REPLY';
   // Answers are short and are shown whole: an opening and a middle passage of a forty-word answer is the answer.
   if (answers && asked.form === 'excerpts') die('--pieces excerpts applies to a skill that writes: the answers this skill shows are short, and are shown whole. Use --piece-budget to show fewer of them.');
   if (voiceFlag === 'none') {
@@ -258,7 +259,7 @@ async function chooseVoice(L: store.StoreLayout, v: StandardVersion): Promise<Vo
   // reader (the word pattern is its floor) and stay examples until the owner rules on them. Said at build, move by
   // move, so the owner sees what was stated, what was shown, and the one question that is theirs.
   const moves = v.requirements.filter((r) => !r.measurement && !r.realizes && r.materiality !== 'REQUIRED' && r.kind === 'GENERATIVE' && r.authority !== 'EXPERT_REJECTED');
-  if (moves.length && isReplyWork(v.workType)) {
+  if (moves.length && answers) {
     const pieces = loadSession().run?.heldOutPieces ?? voice.corpusPieces ?? null;
     const moveBudget: Budget = { spentUsd: 0, capUsd: 0.2, maxCalls: 1 };
     // READ ONCE, THEN KEPT. Which moves hold back what was asked used to be read by a model on every build, so a
@@ -270,10 +271,12 @@ async function chooseVoice(L: store.StoreLayout, v: StandardVersion): Promise<Vo
     const reuse = voice.holdsBack !== undefined && personaFlag !== 'auto' && moves.every((r) => covered.has(r.requirementId));
     const read = reuse ? voice.holdsBack ?? [] : NO_MODEL() ? null : await onCorpusReader((c) => readHoldsBack(c, moveBudget, moves.map((r) => ({ id: r.requirementId, statement: r.statement })))).catch(() => null);
     if (!reuse && read === null && !NO_MODEL()) console.log('(which moves hold back what was asked could not be read by a model: the word pattern decided, and the next build will read again.)');
-    const holdsBack = moves.filter((r) => (read ? read.includes(r.requirementId) : false) || (!reuse && HOLDS_BACK.test(r.statement))).map((r) => r.requirementId);
+    // THE READING DECIDES WHERE IT READ. This was `read || pattern`: a move the model had read as giving what was asked
+    // was still marked as holding back because a word in it matched. The pattern decides only when nothing read it.
+    const holdsBack = moves.filter((r) => (read ? read.includes(r.requirementId) : HOLDS_BACK.test(r.statement))).map((r) => r.requirementId);
     // A reading that could not be made is not recorded as one: the pattern's answer is used for this build only.
     voice = { ...voice, ...(pieces ? { corpusPieces: pieces } : {}), holdsBack, holdsBackOf: reuse || read !== null ? moves.map((r) => r.requirementId) : [] };
-    const carried = moves.map((r) => ({ r, e: moveEvidence(r.observedRate, pieces, { answers: isReplyWork(v.workType), general: isGeneralScope(r.appliesWhen), holdsBack: holdsBack.includes(r.requirementId), ownerRuled: ownerWrote(r) }) }));
+    const carried = moves.map((r) => ({ r, e: moveEvidence(r.observedRate, pieces, { answers, general: isGeneralScope(r.appliesWhen), holdsBack: holdsBack.includes(r.requirementId), ownerRuled: ownerWrote(r) }) }));
     const n = (c: string): number => carried.filter((x) => x.e.carrier === c).length;
     // One line, not one per move: what the owner needs is the count and the question below. `atelier plan` lists every rule.
     console.log(`Moves: ${n('general')} stated as something I do, ${n('conditional')} stated only with their condition, ${n('exemplar')} shown as an example and never stated.`);
@@ -532,8 +535,6 @@ export async function build(nameArg?: string, opts: { closing?: boolean } = {}):
   const contrast = { off: contrastOff, pairs: contrastOff ? [] : contrastFor(chosenPairs, v) };
   const shipped = contrast.pairs;
   if (shipped.length) console.log(`Contrast examples: ${shipped.length} "write this, not that" pair(s) from past repairs (examples/contrast.md). Turn off with --contrast none.`);
-  const voice = await chooseVoice(L, v);
-  if (!argv.includes('--review')) reportOwnPieces(v, name, s);
   // THE OWNER'S METHOD, served whole (`--method-text <file>` from `atelier new --method`; kept through every rebuild).
   const mt = flag('--method-text');
   let methodText = store.getMethod(L);
@@ -541,6 +542,12 @@ export async function build(nameArg?: string, opts: { closing?: boolean } = {}):
     if (mt.trim().toLowerCase() === 'none') methodText = null;
     else { if (!existsSync(mt)) die(`--method-text: there is no file at ${mt}.`); methodText = { text: readFileSync(mt, 'utf8') }; }
   }
+  // WHAT FORM THE WORK TAKES decides how it is compiled (replies or documents): read from the examples, before the voice
+  // is chosen, and carried with it (core/observers/work-form.ts).
+  const form = await workFormFor(L, v, methodText, exemplar);
+  const voice0 = await chooseVoice(L, v, form);
+  const voice = voice0 ? { ...voice0, form } : null;
+  if (!argv.includes('--review')) reportOwnPieces(v, name, s);
   const pkg0 = renderAgentSkill(v, arch, name, desc, exemplar, shipped, voice, methodText);
   const skill = { skillVersionHash: sha(`${arch.architectureHash}|${pkg0.packageHash}`), skillName: name,
     standardVersionHash: v.standardVersionHash, architectureHash: arch.architectureHash, materializedHash: pkg0.packageHash, builtAt: new Date().toISOString(), description: desc };
@@ -840,4 +847,45 @@ function reportObservedBoundaries(arch: SkillArchitecture, v: StandardVersion, n
     console.log(`\nIf one is right: atelier confirm --skill ${name} --rule <id>   (it starts shaping the writing)`);
     console.log(`If one is wrong: atelier confirm --skill ${name} --rule <id> --drop`);
   }
+}
+
+/**
+ * THE FORM OF THE WORK, READ ONCE AND KEPT. The owner's word (`--work-form reply|document`) first; then what was read
+ * before, unless `--persona auto` asks for every reading again; else the reading: code where the examples are decisive,
+ * the context reader otherwise, the name of the work as the floor with no model. Said in one line, with who decided.
+ */
+async function workFormFor(L: store.StoreLayout, v: StandardVersion, method: { text: string } | null, exemplar: { text: string; request?: string } | null): Promise<WorkForm> {
+  const asked = flag('--work-form')?.trim().toUpperCase();
+  if (asked !== undefined) {
+    if (asked !== 'REPLY' && asked !== 'DOCUMENT') die('--work-form takes reply or document.');
+    const chosen: WorkForm = asked === 'REPLY' ? 'REPLY' : 'DOCUMENT';
+    store.setWorkForm(L, chosen);
+    console.log(`Work form: ${chosen === 'REPLY' ? 'replies in a conversation' : 'documents'}, as you said.`);
+    return chosen;
+  }
+  const stored = store.getWorkForm(L);
+  if (stored && flag('--persona')?.trim().toLowerCase() !== 'auto') return stored;
+  const fromSession = sessionPairs().map((p) => ({ text: withoutFrontMatter(p.text), request: p.request }));
+  const storedPieces = store.getVoice(L)?.pieces ?? [];
+  // The one worked example counts as evidence too: a single sectioned piece is a document.
+  const examples = fromSession.length ? fromSession : storedPieces.length ? storedPieces.map((t) => ({ text: withoutFrontMatter(t), request: null })) : exemplar ? [{ text: exemplar.text, request: exemplar.request ?? null }] : [];
+  const input = { workType: v.workType, examples, method: method?.text ?? null };
+  const model = NO_MODEL() ? null : contextReaderModel();
+  const d = await readContext(WORK_FORM, input, NO_MODEL() ? null : contextReaderClient(), model, { spentUsd: 0, capUsd: 0.2, maxCalls: 1 });
+  // `--review` writes nothing: the reading is made and said, and kept only by a build that commits.
+  if (!argv.includes('--review')) store.setWorkForm(L, d.value);
+  // A READER THAT CANNOT BE REACHED IS NOT ASKED AGAIN THIS BUILD. A key set for a backend that answers nothing made every
+  // reading after this one wait its own retries out (a minute, for a build that needs none of them): the first failure
+  // turns the rest of the build's readings off, said once, and the build finishes as a build with no model does.
+  if (d.by === 'floor' && d.why?.startsWith('the reader could not be asked')) {
+    process.env.ATELIER_BUILD_NO_MODEL = '1';
+    console.log(`(${d.why}; nothing else in this build asks a model.)`);
+  }
+  const how = d.by === 'code' ? 'every example is written under sections'
+    : d.by === 'model' ? `read from ${examples.length ? `${Math.min(examples.length, 8)} of your examples` : 'how the work is described'} by ${model}`
+      : `from the name of the work alone (${d.why})`;
+  // What a model read is said on the short screen; what code saw or the name decided is in the whole account.
+  console.log(d.by === 'model' ? `Work form: ${d.value === 'REPLY' ? 'replies in a conversation' : 'documents'}; ${how}. Say otherwise with --work-form reply|document.`
+    : `(work form: ${d.value === 'REPLY' ? 'replies in a conversation' : 'documents'}, ${how}; --work-form reply|document says otherwise.)`);
+  return d.value;
 }

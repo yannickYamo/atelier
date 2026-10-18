@@ -58,6 +58,7 @@ export const ANTHROPIC_PRICING: Readonly<Record<string, Pricing>> = {
   'claude-opus-4-7': { inputPerM: 5, outputPerM: 25, cacheWriteMultiplier: 1.25, cacheReadMultiplier: 0.1 },
   'claude-sonnet-5': { inputPerM: 2, outputPerM: 10, cacheWriteMultiplier: 1.25, cacheReadMultiplier: 0.1 },
   'claude-sonnet-4-5-20250929': { inputPerM: 3, outputPerM: 15, cacheWriteMultiplier: 1.25, cacheReadMultiplier: 0.1 },
+  'claude-haiku-5-5': { inputPerM: 0.1, outputPerM: 0.5, cacheWriteMultiplier: 1.25, cacheReadMultiplier: 0.1 },
   'claude-haiku-4-5': { inputPerM: 1, outputPerM: 5, cacheWriteMultiplier: 1.25, cacheReadMultiplier: 0.1 },
 };
 

@@ -88,7 +88,7 @@ export const VALUED_OPTIONS: readonly string[] = ['correcting',
   'cap', 'cases', 'development', 'expert-consistency', 'key', 'observation', 'observer-kappa', 'out', 'page', 'probe-cap', 'prose', 'standard', 'target',
   'results', 'sealed-at', 'seed', 'suite', 'phase', 'class', 'contrast', 'piece-budget', 'pieces',
   'corpus', 'tasks', 'fires', 'margin', 'enforce', 'observe', 'check', 'floor-cap',
-  'finalists', 'screen-model', 'voice', 'persona', 'add', 'strike', 'probe', 'read', 'label', 'reader-model', 'runs',
+  'finalists', 'screen-model', 'voice', 'persona', 'add', 'strike', 'probe', 'read', 'label', 'reader-model', 'runs', 'context-reader', 'work-form',
   'questions', 'reason', 'required-n', 'reserve', 'role',
   // `atelier new` with pieces by several authors (cli/commands/composite.ts): who wrote which, what is liked about each, and a conflict's answer
   'authors', 'admire', 'conflict',
@@ -474,6 +474,20 @@ export const describeBinding = (b: RuntimeBinding): string =>
 /** Is there a model to ask for this step at all? False only where the default provider has no key: nothing is sent to find out. */
 export const canReach = (role: Role): boolean => providerFor(role) !== 'anthropic' || Boolean(process.env.ANTHROPIC_API_KEY ?? process.env.ANTHROPIC_AUTH_TOKEN);
 
+/**
+ * WHO READS FOR CONTEXT (core/inference/reading.ts): the small model that reads what words mean, where a word pattern
+ * used to decide (what form the work takes, what a request asks for). Haiku 5.5 on Anthropic; on another backend the
+ * model named for the run, or none, in which case code and the floor decide and the record says so.
+ */
+export const CONTEXT_READER_DEFAULT = 'claude-haiku-5-5';
+export const contextReaderModel = (): string | null =>
+  flag('--context-reader') ?? process.env.ATELIER_CONTEXT_READER
+  ?? (providerFor('discovery') === 'anthropic' ? CONTEXT_READER_DEFAULT : flag('--model') ?? process.env.ATELIER_MODEL ?? null);
+export const contextReaderClient = (): InferenceClient | null => {
+  const m = contextReaderModel();
+  return m && canReach('discovery') ? clientFor(m) : null;
+};
+
 export const assertReachable = (role: Role): void => {
   const provider = providerFor(role);
   if (provider === 'anthropic') {
@@ -626,6 +640,8 @@ export interface ProposalSet {
   readonly promptHash: string;
   readonly workType: string;
   readonly rules: readonly ProposedRule[];
+  /** the form of the work as the proposer read it from what was said (core/observers/work-form.ts); absent when it said none */
+  readonly form?: 'REPLY' | 'DOCUMENT';
 }
 
 // ── session (one active run per PROJECT; a run is a study, not a session) ─────────────────────

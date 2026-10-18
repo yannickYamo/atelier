@@ -7,6 +7,29 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+### What kind of work it is, read from your pieces, not off its name
+
+- **Whether a skill writes replies or documents is read from the examples.** It was read off the skill's name by a word
+  pattern: "code review" matched the pattern for replies, and a skill for review documents written under sections was
+  served the voice of a chat assistant (state your assumptions, name the check, never shorten) that no example of the
+  author's carried. Now code decides where the examples are decisive (every one written under sections is a document),
+  a small model reads the examples otherwise and quotes what shows the form in each, code keeps only quotes that are in
+  the pieces and takes the majority, and the name decides only when no model is set up. Read once at build, kept with
+  the skill, said on the screen with who decided; `--work-form reply|document` says otherwise. A skill from rules you
+  state (`atelier skill`) has no examples: its one proposal call reads the form from what you said, and `--yes` asks
+  nothing more.
+- **One way to read context, evaluated before it decides anything.** Every decision that turns on what words mean (not
+  on what can be counted) goes through one mechanism: code where the evidence is decisive, a reader (`claude-haiku-5-5`
+  by default; `--context-reader <model>` or `ATELIER_CONTEXT_READER` names another) otherwise, the old word pattern as
+  the floor, and the record says which. Each reading has labelled cases in `bench/readings/` run several times each,
+  with the pass line stated before the run (`node bench/readings/run.mjs work-form`).
+- **A reading that the model had made is no longer overruled by the word pattern.** Which moves hold back what was asked
+  was `the reading OR the pattern`, so a move the model had read as giving what was asked could still be carried as one
+  that holds back. Likewise the request's length and format: a judge that read the request and found none asked was
+  overruled by the pattern. The reading decides where it read; the pattern where nothing did.
+- **A reader that cannot be reached is asked once.** With a key set for a backend that answers nothing, a build waited
+  out the retries of every reading in turn; the first failure now turns the rest of that build's readings off, said once.
+
 ### How you sound is read on every path that has your pieces
 
 - **A skill built from your method and examples, or from two or three pieces, now carries how you sound.** Those builds

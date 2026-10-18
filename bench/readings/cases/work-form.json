@@ -1,0 +1,76 @@
+{
+  "reading": "work-form",
+  "pass": {
+    "runs": 5,
+    "perCaseAtLeast": 4,
+    "codeDecidedExact": true
+  },
+  "cases": [
+    {
+      "id": "answers-12",
+      "label": "REPLY",
+      "workType": "coding assistant answers",
+      "folder": "bench/data/answers-12",
+      "note": "short answers with their requests; no headings"
+    },
+    {
+      "id": "answers-2",
+      "label": "REPLY",
+      "workType": "answers",
+      "files": [
+        "bench/data/answers-12/01-direct.md",
+        "bench/data/answers-12/02-clarify.md"
+      ],
+      "note": "two answers: the thin-corpus size, below the three the persona needs"
+    },
+    {
+      "id": "contract",
+      "label": "DOCUMENT",
+      "workType": "contract",
+      "folder": "bench/standing/domains/contract/examples",
+      "note": "every example sectioned: code decides"
+    },
+    {
+      "id": "code-review",
+      "label": "DOCUMENT",
+      "workType": "code review",
+      "folder": "bench/standing/domains/code-review/examples",
+      "note": "the name matched the reply pattern; the pieces are sectioned review documents: code decides"
+    },
+    {
+      "id": "explainer",
+      "label": "DOCUMENT",
+      "workType": "explainer",
+      "folder": "bench/standing/domains/explainer/examples",
+      "note": "prose pieces answering a request, self-standing"
+    },
+    {
+      "id": "analysis",
+      "label": "DOCUMENT",
+      "workType": "analysis",
+      "folder": "bench/standing/domains/analysis/examples"
+    },
+    {
+      "id": "blog",
+      "label": "DOCUMENT",
+      "workType": "blog posts",
+      "folder": "examples/blog/posts"
+    },
+    {
+      "id": "code-review-by-name-only",
+      "label": "DOCUMENT",
+      "workType": "code review",
+      "files": [],
+      "note": "no examples, no method: the floor by name says REPLY; the reader must say DOCUMENT from the description alone \u2014 a hard case, allowed to fail (soft)",
+      "soft": true
+    },
+    {
+      "id": "support-replies-by-name-only",
+      "label": "REPLY",
+      "workType": "customer support replies",
+      "files": [],
+      "note": "no examples: description alone",
+      "soft": true
+    }
+  ]
+}

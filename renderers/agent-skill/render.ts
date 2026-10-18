@@ -255,7 +255,7 @@ export function renderAgentSkill(
   }
   // A skill that answers people is compiled in the words of answers, not essays (the length is a default the
   // request overrides; the line against invention names results, files and commands, not stories).
-  const answers = isReplyWork(v.workType);
+  const answers = voice?.form ? voice.form === 'REPLY' : isReplyWork(v.workType);
   // SECTION ROUTING IS BY AUTHORITY AND KIND, NEVER BY COMPONENT ID.
   //
   // The first version keyed on an id prefix (`do:` / `avoid:` / `observe:`). That made the safety of
@@ -470,7 +470,8 @@ export function renderAgentSkill(
   // was asked stays an instance until the owner rules on it. The standard is untouched: this is how a rule is carried.
   const sometimes = exampleCarried.map((x) => x.r).filter((r) => !r.measurement && !r.realizes && r.materiality !== 'REQUIRED' && r.kind === 'GENERATIVE');
   const moveCarriers = new Map(sometimes.map((r) => [r.requirementId, moveEvidence(r.observedRate, voice?.corpusPieces ?? null, {
-    answers, general: always(r), holdsBack: Boolean(voice?.holdsBack?.includes(r.requirementId)) || HOLDS_BACK.test(r.statement), ownerRuled: ownerWrote(r) })]));
+    // The reading kept with the voice decides for every move it covered; the word pattern only for a move none read.
+    answers, general: always(r), holdsBack: voice?.holdsBackOf?.includes(r.requirementId) || (voice?.holdsBack && !voice.holdsBackOf) ? Boolean(voice.holdsBack?.includes(r.requirementId)) : HOLDS_BACK.test(r.statement), ownerRuled: ownerWrote(r) })]));
   const isExemplarOnly = (id: string): boolean => moveCarriers.get(id)?.carrier === 'exemplar';
   const stated = sometimes.filter((r) => !isExemplarOnly(r.requirementId));
   // The index names a file only when the file shows something: a stated move, or an instance in the author's own words.

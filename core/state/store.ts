@@ -335,6 +335,18 @@ export function setComposite(l: StoreLayout, c: CompositeRecord | null): void {
  * threshold was read off pieces of one kind, and a fragment cap calibrated on essays says nothing true
  * about a tweet. Declared by the owner; null when they never said.
  */
+/** The form the work takes, as read at build (core/observers/work-form.ts): a reply in a conversation, or a document. */
+export function getWorkForm(l: StoreLayout): 'REPLY' | 'DOCUMENT' | null {
+  const p = join(dirs(l).base, 'form.txt');
+  const x = existsSync(p) ? readFileSync(p, 'utf8').trim() : '';
+  return x === 'REPLY' || x === 'DOCUMENT' ? x : null;
+}
+export function setWorkForm(l: StoreLayout, form: 'REPLY' | 'DOCUMENT' | null): void {
+  const p = join(dirs(l).base, 'form.txt');
+  if (form === null) { if (existsSync(p)) rmSync(p); return; }
+  mkdirSync(dirs(l).base, { recursive: true });
+  writeAtomic(p, form);
+}
 export function getDocClass(l: StoreLayout): string | null {
   const p = join(dirs(l).base, 'class.txt');
   return existsSync(p) ? readFileSync(p, 'utf8').trim() || null : null;

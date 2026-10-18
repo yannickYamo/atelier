@@ -64,6 +64,8 @@ export interface Voice {
   readonly pieceBudget?: number;
   /** how the author sounds, described with frequencies and proven by quotes (./persona.ts) */
   readonly persona?: Persona;
+  /** the form of the work as read at build (core/observers/work-form.ts): how the skill is compiled; null when nothing read it */
+  readonly form?: 'REPLY' | 'DOCUMENT';
   /** every piece served whole, as a build from a method serves them: no later build spreads or budgets them unless asked to (cli/commands/build.ts) */
   readonly servedWhole?: true;
   /**

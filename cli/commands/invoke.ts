@@ -560,7 +560,8 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   // A NUMBER IN THE REQUEST IS A LENGTH TOO (core/intake/length.ts). "About 2,000 words" was not seen: only words
   // like "detailed" were, so the usual length stayed in the prompt and the chapter came back short.
   const stated = statedLength(asked);
-  const lengthAsked = intent?.length ?? requestedLength(asked);
+  // The judge's reading is decisive when it ran, a null included: `??` let the word pattern overrule a judge that had read the request and found no length asked.
+  const lengthAsked = intent ? intent.length : requestedLength(asked);
   for (const q of lengthRulesTheRequestSets(std, stated, stated !== null && contractFile === null && !notHeldBecause(asked, stated))) {
     waived.set(q.requirementId, `the request states its own length (${stated?.raw})`);
     withheld.push(q.statement);
@@ -575,7 +576,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   // A BARE request is not a shape. "Return only the post" asks for no preamble, not for a post without the
   // author's paragraphs: read as a shape, it switched off every pace and rhythm rule on exactly the long
   // pieces those rules exist for. Then the standard stays whole and only the wrapping is dropped.
-  const formatAsked = intent?.format ?? requestedFormat(asked);
+  const formatAsked = intent ? intent.format : requestedFormat(asked);
   const shape = formatAsked ? formatShape(formatAsked) : null;
   let presentationWithheld = 0;
   if (formatAsked && shape === 'SHAPE' && std) {
@@ -665,7 +666,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const completions: string[] = [];
   // THE AUTHOR'S OWN LENGTH, WHERE IT APPLIES (`ownLengthApplies`): one more thing the drafts are chosen by.
   const ownBand = ownLengthApplies({ shortForm: Boolean(transfer), stated: Boolean(stated), asked: Boolean(lengthAsked), shape: shape === 'SHAPE', contract: contractFile !== null,
-    answers: checks.format?.claims === 'list' || (std ? isReplyWork(std.workType) : false), outOfRegister: register?.status === 'out', sections: argv.includes('--sections'), ruled: lengthIsRuled(std) })
+    answers: checks.format?.claims === 'list' || (std ? (store.getWorkForm(L) ?? (isReplyWork(std.workType) ? 'REPLY' : 'DOCUMENT')) === 'REPLY' : false), outOfRegister: register?.status === 'out', sections: argv.includes('--sections'), ruled: lengthIsRuled(std) })
     ? ownLengthBand(store.getVoice(L)?.lengthSpan) : null;
   // THE AUTHOR'S LENGTH IS NEVER A REASON TO WRITE A DRAFT AGAIN (owner's ruling): the task decides how much is
   // needed, and the method how it is done. Their usual length is said to the writer as guidance and reported against
