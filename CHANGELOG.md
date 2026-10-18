@@ -43,7 +43,8 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
   uncached and in the request's own words, each line deferring to your method: assume and say so what reasoning can
   settle; for what only a check can settle, give what can be given and name the check; act on what could be found
   directly; confirm before what cannot be undone. Nothing else is required: an example, an alternative or background is
-  not a need. No call is added and the cached skill is unchanged.
+  not a need. Never for a request that names a document to write ("a technical paper", "a post"): a piece of writing
+  has no asker to answer, and its form is the author's. No call is added and the cached skill is unchanged.
 - **Every part of a request is read after writing too.** A request of more than a line is read for each thing it asks;
   a part left out is listed for you, and under `--strict` the reply is written once more to give it, following the
   method on when to act, confirm first or state an assumption (`--no-coverage` turns this off). A part the reply holds back for one of the method's two reasons, to

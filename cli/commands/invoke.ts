@@ -635,7 +635,11 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   // THE SKILL WHOLE AND THE SAME ON EVERY REQUEST, THEN THIS REQUEST'S NOTES (cli/served.ts, `forThisRequest`): rules set
   // aside for it are named there, never cut out of the skill, so the skill is cached once and read from the cache after.
   // WHAT THIS REQUEST NEEDS (core/loop/task-needs.ts), read in the call that read its form: said after the skill, uncached.
-  const needs = intent?.needs;
+  // NEVER FOR A REQUEST THAT ASKS FOR A DOCUMENT. Said to the writer of an article, "assume it and say the assumption" came
+  // back as an out-of-voice note on the article's assumptions in three papers of five. A request that names the kind of
+  // document it wants ("a technical paper", "a post": the same reading's `document`, in the request's own words) is a
+  // piece to write, not someone to answer, and its form is the author's.
+  const needs = intent?.document ? undefined : intent?.needs;
   if (needs && !needsNothing(needs)) report.say(`Read before writing: ${[needs.deliver.length ? `${needs.deliver.length} thing(s) asked for` : '', needs.unknowns.length ? `turns on ${needs.unknowns.map((u) => u.what).join('; ')}` : '', needs.actOn ? `could act on "${needs.actOn}"` : '', needs.irreversible ? `cannot be undone: "${needs.irreversible}"` : ''].filter(Boolean).join(' · ')}.`);
   const requestNotes = forThisRequest(withheld.filter((w) => !needMaterial.includes(w)), impl.passages, lengthNote, needsNote(needs));
   const servedForRun = `${needMaterial.length ? withoutRules(servedText, needMaterial) : servedText}${impl.notes ? `\n\n${impl.notes}` : ''}${carryBlock}${requestNotes}`;
