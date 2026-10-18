@@ -33,9 +33,10 @@ export interface RequestIntent {
 
 /**
  * One thing a request explicitly asks for, and whether the reply gives it. `covered` is null when the reader said yes
- * without a real quote. `deferred`: not given because the reply holds it back on purpose, to ask a question or to have it
- * confirmed first. That is the method's call (confirm before a destructive action; ask when the target is unknown), so a
- * part held back is never a reason to write the reply again.
+ * without a real quote. `deferred`: not given because the reply holds it back for one of the method's two reasons: to
+ * have an action that cannot be undone confirmed first, or to ask which target when the request names none. Then it is
+ * the method's call and never a reason to write the reply again. Any other part not given (asked back, handed back,
+ * left out) is missing.
  */
 export interface AskedPart { readonly words: string; readonly covered: boolean | null; readonly where?: string; readonly deferred?: true }
 export interface RequestCoverage { readonly parts: readonly AskedPart[] }
@@ -101,11 +102,15 @@ For each part say whether the reply gives it:
 - covered true, with a short quote copied exactly from the reply where it does;
 - covered false, when the reply does not give it, gives it only in passing where the request asked for detail, or hands it back to the person.
 
-For a part not given, say also whether the reply holds it back ON PURPOSE (deferred true): it asks the person a question it needs answered first, or asks them to confirm before it is done (for example before something that cannot be undone). Deferred false when the reply simply leaves it out.
+For a part not given, say also why (held):
+- "irreversible": the part is an action that cannot be undone (deleting data or files, dropping a table, force-pushing, publishing a secret, a production change), and the reply asks the person to confirm before it is done;
+- "no-target": the request does not say what to act on (which server, which records, which of several), acting on the wrong one would do damage, and the reply asks which;
+- "none": any other case. Asking for something the assistant could find or check itself (the contents of a file it was pointed to, the failing line, the current value), asking permission for an ordinary change that can be undone, handing the work back to the person, or simply leaving the part out are all "none".
+For a part that is given, held is "none".
 
 Giving it means the content is there, not that the word appears. Judge only what the request asks for in so many words.`;
-const PART = { type: 'object', properties: { words: { type: 'string' }, covered: { type: 'boolean' }, deferred: { type: 'boolean' }, where: { type: ['string', 'null'] } },
-  required: ['words', 'covered', 'deferred', 'where'], additionalProperties: false };
+const PART = { type: 'object', properties: { words: { type: 'string' }, covered: { type: 'boolean' }, held: { type: 'string', enum: ['irreversible', 'no-target', 'none'] }, where: { type: ['string', 'null'] } },
+  required: ['words', 'covered', 'held', 'where'], additionalProperties: false };
 const COVER_SCHEMA = { type: 'object', properties: { parts: { type: 'array', items: PART } }, required: ['parts'], additionalProperties: false };
 
 // ONE READING OF A REPLY, WHERE THERE WERE TWO CALLS: its sentences (work claims, situations) and, against the whole reply,
@@ -126,12 +131,15 @@ export function coverageOf(task: string, output: string, raw: unknown): RequestC
   if (!Array.isArray(list)) return null;
   const t = squash(task); const o = squash(output);
   const parts: AskedPart[] = [];
-  for (const x of list as { words?: unknown; covered?: unknown; where?: unknown; deferred?: unknown }[]) {
+  for (const x of list as { words?: unknown; covered?: unknown; where?: unknown; held?: unknown }[]) {
     const words = typeof x.words === 'string' ? x.words.trim() : '';
     if (words.length < 3 || !t.includes(squash(words)) || typeof x.covered !== 'boolean' || parts.some((p) => squash(p.words) === squash(words))) continue;
     const where = typeof x.where === 'string' && x.where.trim().length >= 3 && o.includes(squash(x.where)) ? x.where.trim() : null;
     parts.push(x.covered ? (where ? { words, covered: true, where } : { words, covered: null })
-      : x.deferred === true ? { words, covered: false, deferred: true } : { words, covered: false });
+      // HELD BACK, ONLY FOR THE TWO REASONS THE METHOD GIVES (confirm before what cannot be undone; ask when no target is
+      // named). "Change the timeout in config/app.yaml" answered with "paste me the line" was excused as held back, and
+      // never written again: asking for what it could find itself is a part not given.
+      : x.held === 'irreversible' || x.held === 'no-target' ? { words, covered: false, deferred: true } : { words, covered: false });
     if (parts.length === 8) break;
   }
   return { parts };

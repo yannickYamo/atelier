@@ -107,7 +107,11 @@ export function figuresIn(t: string): string[] {
  */
 export function addedFigures(before: string, after: string, source: string): string[] {
   const had = new Set([...figuresIn(before), ...figuresIn(source)]);
-  return figuresIn(after).filter((n) => !had.has(n));
+  // "ONE" OF SOMETHING IS NO INVENTED FIGURE. "Fixing it in one edit", "check one request": a draft written again to act
+  // where the first asked was refused for adding the figure 1. A lone "one" (not "one hundred", not "twenty-one") is
+  // read out of the text a step added; every figure in digits, and every other number word, is held as before.
+  const loneOne = /(?<![\p{L}\p{N}-])one(?![\p{L}-])(?!\s+(?:hundred|thousand|million|billion|trillion|dozen)\b)/giu;
+  return figuresIn(after.replace(loneOne, 'a')).filter((n) => !had.has(n));
 }
 /** How many times each item occurs: "most cases and most teams" carries "most" twice. */
 const tally = (xs: readonly string[]): Map<string, number> => { const m = new Map<string, number>(); for (const x of xs) m.set(x, (m.get(x) ?? 0) + 1); return m; };

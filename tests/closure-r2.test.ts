@@ -72,7 +72,7 @@ describe('one reading of a reply: its sentences and what the request asks, in on
   const OUT = 'Add a uuid column beside the integer one. Backfill it in batches.';
   const ss = ['Add a uuid column beside the integer one.', 'Backfill it in batches.'];
   it('reads work claims, situations and coverage together; `covers` then answers without a call', async () => {
-    const c = scripted({ claims: [], situations: [2], parts: [{ words: 'with rollback points', covered: false, deferred: false, where: null }] });
+    const c = scripted({ claims: [], situations: [2], parts: [{ words: 'with rollback points', covered: false, held: 'none', where: null }] });
     const j = modelJudge(c, budget());
     await j.readAnswer(ss, { request: REQ, material: '', reply: { task: REQ, output: OUT } });
     expect(c.seen).toHaveLength(1);
@@ -87,7 +87,7 @@ describe('one reading of a reply: its sentences and what the request asks, in on
     expect(c.seen).toHaveLength(1);
   });
   it('a combined reading that comes back without its coverage leaves `covers` to ask alone', async () => {
-    const c = scripted({ claims: [], situations: [] }, { parts: [{ words: 'with rollback points', covered: true, deferred: false, where: 'Backfill it in batches' }] });
+    const c = scripted({ claims: [], situations: [] }, { parts: [{ words: 'with rollback points', covered: true, held: 'none', where: 'Backfill it in batches' }] });
     const j = modelJudge(c, budget());
     await j.readAnswer(ss, { request: REQ, material: '', reply: { task: REQ, output: OUT } });
     const cov = await j.covers?.(REQ, OUT);
@@ -123,10 +123,23 @@ describe('a part held back on purpose is the method\'s call, never a reason to w
   const REQ = 'Delete every untracked file in my repository right now, including ignored ones.';
   const OUT = 'Confirm first: `git clean -fdx` cannot be undone. Run `git clean -ndx` to see what would go.';
   it('the reading marks a part held back to confirm first; one simply left out stays missing', () => {
-    expect(coverageOf(REQ, OUT, { parts: [{ words: 'Delete every untracked file', covered: false, deferred: true, where: null }] })?.parts)
+    expect(coverageOf(REQ, OUT, { parts: [{ words: 'Delete every untracked file', covered: false, held: 'irreversible', where: null }] })?.parts)
       .toEqual([{ words: 'Delete every untracked file', covered: false, deferred: true }]);
-    expect(coverageOf(REQ, OUT, { parts: [{ words: 'including ignored ones', covered: false, deferred: false, where: null }] })?.parts)
+    expect(coverageOf(REQ, OUT, { parts: [{ words: 'including ignored ones', covered: false, held: 'none', where: null }] })?.parts)
       .toEqual([{ words: 'including ignored ones', covered: false }]);
+  });
+  it('only the method\'s two reasons excuse a part: asking for what it could find itself is missing', () => {
+    const R2 = 'Change the request timeout in config/app.yaml to 30 seconds.';
+    const O2 = 'Paste me the timeout line from config/app.yaml and I will give you the edit.';
+    expect(coverageOf(R2, O2, { parts: [{ words: 'Change the request timeout', covered: false, held: 'none', where: null }] })?.parts)
+      .toEqual([{ words: 'Change the request timeout', covered: false }]);
+    expect(coverageOf('Deploy it to production.', 'Which service: api or worker?', { parts: [{ words: 'Deploy it to production', covered: false, held: 'no-target', where: null }] })?.parts)
+      .toEqual([{ words: 'Deploy it to production', covered: false, deferred: true }]);
+    // a reading in the old shape, or an unknown reason, excuses nothing
+    expect(coverageOf(R2, O2, { parts: [{ words: 'Change the request timeout', covered: false, deferred: true, where: null }] })?.parts)
+      .toEqual([{ words: 'Change the request timeout', covered: false }]);
+    expect(coverageOf(R2, O2, { parts: [{ words: 'Change the request timeout', covered: false, held: 'politeness', where: null }] })?.parts)
+      .toEqual([{ words: 'Change the request timeout', covered: false }]);
   });
   it('withCoverage writes nothing again for a held-back part, and says so', async () => {
     const { withCoverage } = await import('../cli/commands/invoke.js');
@@ -230,7 +243,7 @@ describe('the coverage step reads the reply once, and that reading serves the si
   const REQ = 'Plan a safe migration from integer user IDs to UUIDs, with rollback points.';
   const OUT = 'Add a uuid column beside the integer one. Backfill it in batches.';
   it('one call reads the sentences and the coverage; the delivered text\'s situations come from it', async () => {
-    const c = scripted({ claims: [], situations: [], parts: [{ words: 'with rollback points', covered: true, deferred: false, where: 'Backfill it in batches' }] });
+    const c = scripted({ claims: [], situations: [], parts: [{ words: 'with rollback points', covered: true, held: 'none', where: 'Backfill it in batches' }] });
     const judge = modelJudge(c, budget());
     const ok = { checked: [], failed: false } as never;
     const refine = (t: string) => Promise.resolve({ output: t, repair: null, report: ok });
@@ -240,7 +253,7 @@ describe('the coverage step reads the reply once, and that reading serves the si
     expect(c.seen.map((r) => r.toolName)).toEqual(['emit_reading']);
   });
   it('polarity: with no situations to read, coverage is read alone, as before', async () => {
-    const c = scripted({ parts: [{ words: 'with rollback points', covered: true, deferred: false, where: 'Backfill it in batches' }] });
+    const c = scripted({ parts: [{ words: 'with rollback points', covered: true, held: 'none', where: 'Backfill it in batches' }] });
     const judge = modelJudge(c, budget());
     const refine = (t: string) => Promise.resolve({ output: t, repair: null, report: { checked: [], failed: false } as never });
     await withCoverage(refine, { client: scripted({ piece: 'x' }), budget: budget(), judge, asked: REQ, servedText: '# s', task: REQ, notes: [] })(OUT, {} as never);
@@ -339,5 +352,16 @@ describe('the reviewer\'s findings, held', async () => {
     await planSections(c, budget(), '# skill', 'Write another.').catch(() => undefined);
     expect(c.seen[0].stableBlock).toBe(c.seen[1].stableBlock);
     expect(c.seen[0].userMessage).toMatch(/- Rule A here\.[\s\S]*Plan the piece now\./);
+  });
+});
+
+describe('a redraft that says "one" of something adds no figure', async () => {
+  const { addedFigures } = await import('../core/loop/integrity.js');
+  it('a lone "one" is no invented figure; digits and other number words still are', () => {
+    expect(addedFigures('Which typo?', 'Fixing it in one edit, then showing the diff.', 'Fix the typo.')).toEqual([]);
+    expect(addedFigures('x', 'Check one request after the restart.', 'x')).toEqual([]);
+    expect(addedFigures('x', 'It took one hundred retries.', 'x')).toEqual(['100']);
+    expect(addedFigures('x', 'It failed twenty-one times.', 'x')).toContain('21');
+    expect(addedFigures('x', 'It failed 1 time and three more.', 'x')).toEqual(['1', '3']);
   });
 });

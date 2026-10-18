@@ -39,9 +39,11 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
   out of it.
 - **Every part of a request is read.** A request of more than a line is read for each thing it asks, on every run, and
   a reply that leaves one out is written once more to give it, following the method on when to act, confirm first or
-  state an assumption (`--no-coverage` turns this off). A part the reply holds back on purpose, to ask a question or to
-  have it confirmed before something that cannot be undone, is the method's call: it is said, and never written again
-  for. Each extra draft is recorded as kept or not, with why.
+  state an assumption (`--no-coverage` turns this off). A part the reply holds back for one of the method's two reasons, to
+  have an action that cannot be undone confirmed first or to ask which target when the request names none, is the
+  method's call: it is said, and never written again for. Asking for what it could find itself, or handing the work
+  back, is a part left out, and the reply is written again to act. Saying "one" of something ("in one edit") is not a
+  figure a draft written again is refused for. Each extra draft is recorded as kept or not, with why.
 - **Habits are said as a record.** What your examples never did is said as "in none of my examples (0 of 3)", not as
   a rule never to do it.
 
