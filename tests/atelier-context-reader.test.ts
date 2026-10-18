@@ -137,6 +137,14 @@ describe('the register a request names is read, and must be the request\'s own w
     expect((await ask({ format: null, length: null, document: 'memo' }).requestIntent('Write a white paper'))?.document).toBeUndefined();
     expect((await ask({ format: null, length: null }).requestIntent('Write a white paper'))?.document).toBeUndefined();
   });
+  it('the judge says whether a stated format is a shape or only the wrapping removed; without a format there is no shape', async () => {
+    const ask = (json: unknown): ReturnType<typeof modelJudge> => modelJudge(scripted(() => json), budget());
+    expect((await ask({ format: 'return only the code block', shape: 'SHAPE', length: null, document: null }).requestIntent('Fix it and return only the code block'))?.shape).toBe('SHAPE');
+    expect((await ask({ format: 'return only the post', shape: 'BARE', length: null, document: null }).requestIntent('Write it and return only the post'))?.shape).toBe('BARE');
+    // a shape with no format the request holds is nothing; an answer outside the two is nothing
+    expect((await ask({ format: null, shape: 'SHAPE', length: null, document: null }).requestIntent('Write the post'))?.shape).toBeUndefined();
+    expect((await ask({ format: 'return only the post', shape: 'PROSE', length: null, document: null }).requestIntent('Write it and return only the post'))?.shape).toBeUndefined();
+  });
 });
 
 describe('the voice gate\'s second read can only refuse', () => {

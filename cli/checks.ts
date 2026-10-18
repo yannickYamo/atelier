@@ -11,7 +11,7 @@ import type { CheckOptions } from '../core/loop/run-repair.js';
 import { modelSensor, patternSensor, listsBecause, withRules, type ClaimSensor } from '../core/loop/claim-extract.js';
 import { modelJudge, type ContextJudge } from '../core/loop/context-judge.js';
 import type { Budget, InferenceClient } from '../core/inference/client.js';
-import { argv, flag, providerFor, clientAndBinding, boundMaterial, DATA } from './runtime.js';
+import { argv, flag, providerFor, clientAndBinding, boundMaterial, DATA, CONTEXT_READER_DEFAULT } from './runtime.js';
 import { join } from 'node:path';
 import { formatOf, type FormatProfile } from '../core/observers/formats.js';
 import { shortFormOptions, shortFormTransfer, type ShortTransfer } from '../core/observers/short-form.js';
@@ -86,13 +86,23 @@ export function claimSensorFor(evidence: string, task: string, placeholders: boo
 export function contextJudgeFor(budget?: Budget): ContextJudge | undefined {
   const mode = flag('--claims') ?? process.env.ATELIER_CLAIMS ?? 'model';
   if (mode === 'pattern') return undefined;
-  const named = flag('--claims-model') ?? process.env.ATELIER_CLAIMS_MODEL;
-  const provider = providerFor('discovery');
-  if (!named && provider !== 'anthropic') return undefined;
-  if (provider === 'anthropic' && !process.env.ANTHROPIC_API_KEY && !process.env.ANTHROPIC_AUTH_TOKEN) return undefined;
-  const model = named ?? CLAIMS_MODEL_DEFAULT;
+  const model = contextJudgeModel();
+  if (!model) return undefined;
+  if (providerFor('discovery') === 'anthropic' && !process.env.ANTHROPIC_API_KEY && !process.env.ANTHROPIC_AUTH_TOKEN) return undefined;
   // The run's budget when there is one (invoke); a check with no run of its own gets a small cap of its own.
   return modelJudge(clientAndBinding('discovery', model).client, budget ?? { spentUsd: 0, capUsd: 0.2, maxCalls: 40 });
+}
+
+/**
+ * WHO JUDGES CONTEXT: the context reader (`--context-reader`, `ATELIER_CONTEXT_READER`; claude-haiku-5-5 on Anthropic),
+ * apart from the claim reader, which stays on the model it was qualified on (core/loop/claim-extract.ts). A claims model
+ * named by hand still serves as the judge where no reader is named: on another backend it is the one model that is there.
+ * Null when nothing can judge (no model named on a non-Anthropic backend), and the word patterns decide.
+ */
+export function contextJudgeModel(): string | null {
+  const named = flag('--context-reader') ?? process.env.ATELIER_CONTEXT_READER ?? flag('--claims-model') ?? process.env.ATELIER_CLAIMS_MODEL;
+  if (named) return named;
+  return providerFor('discovery') === 'anthropic' ? CONTEXT_READER_DEFAULT : null;
 }
 
 /**

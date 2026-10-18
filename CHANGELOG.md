@@ -23,6 +23,21 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
   by default; `--context-reader <model>` or `ATELIER_CONTEXT_READER` names another) otherwise, the old word pattern as
   the floor, and the record says which. Each reading has labelled cases in `bench/readings/` run several times each,
   with the pass line stated before the run (`node bench/readings/run.mjs work-form`).
+- **Whether a rule forbids or asks is read, not matched.** A rule's kind (a prohibition, repaired by cutting and served
+  under what not to do; or a thing to do) was decided by three different word patterns in three places, and a negative
+  word inside a positive step ("improvements that do not block the merge") could file it under what not to do. The
+  steps you write for a method are read in one call, and a rule added by `fix --always` or `mine` in one; a step the
+  reading skipped, or any rule with no model set up, falls to the anchored word pattern. Rules Atelier words from a
+  count keep the pattern. Cases: `bench/readings/cases/rule-polarity.json`.
+- **What you want the skill for is read from your sentence.** Producing new work, guarding work to a standard, or
+  answering people inside a policy (which moves only the default weight of a rule) was read by four word lists and
+  their order. The sentence is read once at intake and kept with the run; `--mode` still says it outright; the word
+  lists are the floor without a model. Cases: `bench/readings/cases/intent-mode.json`.
+- **The context judge reads the request's shape too, on the current small model.** Whether a stated format is a shape
+  (code, JSON, a number, one line, a list: the author's presentation rules are withheld) or only strips the wrapping
+  ("return only the post": the piece keeps its standard) was a word list on the judge's own answer. The judge says it
+  in the same reading; the list stands in only where it did not. The judge runs on the context reader's model
+  (`claude-haiku-5-5`), apart from the claim reader, which stays on the model it was qualified on.
 - **A reading that the model had made is no longer overruled by the word pattern.** Which moves hold back what was asked
   was `the reading OR the pattern`, so a move the model had read as giving what was asked could still be carried as one
   that holds back. Likewise the request's length and format: a judge that read the request and found none asked was

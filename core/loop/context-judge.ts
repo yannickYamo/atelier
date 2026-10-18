@@ -24,6 +24,8 @@ import { needsOf, NEEDS_INSTRUCTIONS, NEEDS_SCHEMA, type TaskNeeds } from './tas
 export interface RequestIntent {
   /** the request's own words that state its output format, verbatim, or null */
   readonly format: string | null;
+  /** when a format is stated: SHAPE, an output that is not prose in the author's presentation (code, JSON, a number, one line, a list); BARE, only the wrapping removed. null when none stated or the judge did not say */
+  readonly shape?: 'SHAPE' | 'BARE' | null;
   readonly length: 'LONG' | 'SHORT' | null;
   /**
    * The request's own words naming the KIND OF DOCUMENT it asks for ("white paper", "blog post"), verbatim; null
@@ -73,6 +75,7 @@ export interface ContextJudge {
 const INTENT_SYSTEM = `You read a request someone made to a writing or coding assistant, and say only whether the request itself dictates the FORM of the reply.
 
 - format: if the request explicitly constrains the reply's shape or content type (for example "return only the code block", "just the number", "answer yes or no", "JSON only", "no explanation", "one line"), copy those exact words from the request. Otherwise null.
+- shape: only when format is given. "SHAPE" when the format asked for is not a piece of prose in the writer's own presentation: code, a code block, JSON, SQL, YAML, CSV, a command, a diff, a function, a number, a figure, yes or no, one line, one sentence, a list, bullets, a table, a regex. "BARE" when the words only remove what wraps a piece and the piece itself stays prose: "return only the post", "no preamble", "just the text", "no explanation around it". null when no format is given.
 - length: "LONG" if it explicitly asks for detail or depth, "SHORT" if it explicitly asks for brevity, otherwise null.
 
 - document: if the request names the KIND OF DOCUMENT to be written (for example "blog post", "white paper", "memo", "speech", "contract", "email", "press release"), copy those exact words from the request; otherwise null. Only the document being asked for: not one the request mentions as its subject or its source ("a post about our quarterly report" asks for a post), and not a verb ("report the bug" names no document).
@@ -81,7 +84,7 @@ Judge only what the request says in so many words. Do not infer a format or a do
 
 ${NEEDS_INSTRUCTIONS}`;
 const INTENT_SCHEMA = { type: 'object', properties: {
-  format: { type: ['string', 'null'] }, length: { type: ['string', 'null'], enum: ['LONG', 'SHORT', null] }, document: { type: ['string', 'null'] },
+  format: { type: ['string', 'null'] }, shape: { type: ['string', 'null'], enum: ['SHAPE', 'BARE', null] }, length: { type: ['string', 'null'], enum: ['LONG', 'SHORT', null] }, document: { type: ['string', 'null'] },
   ...NEEDS_SCHEMA },
   required: ['format', 'length', 'document', ...Object.keys(NEEDS_SCHEMA)], additionalProperties: false };
 
@@ -173,17 +176,20 @@ export function modelJudge(client: InferenceClient, budget: Budget): ContextJudg
     async requestIntent(task) {
       const k = sha(task);
       if (intents.has(k)) return intents.get(k) ?? null;
-      const raw = await ask(INTENT_SYSTEM, `<request>\n${task}\n</request>`, 'emit_intent', INTENT_SCHEMA, 1000) as { format?: unknown; length?: unknown; document?: unknown } | null;
+      const raw = await ask(INTENT_SYSTEM, `<request>\n${task}\n</request>`, 'emit_intent', INTENT_SCHEMA, 1000) as { format?: unknown; shape?: unknown; length?: unknown; document?: unknown } | null;
       // Validated: a format must be the request's own words; a length must be one of the two labels.
       const format = typeof raw?.format === 'string' && raw.format.trim() && task.toLowerCase().includes(raw.format.trim().toLowerCase()) ? raw.format.trim() : null;
       const length: RequestIntent['length'] = raw?.length === 'LONG' ? 'LONG' : raw?.length === 'SHORT' ? 'SHORT' : null;
+      // A shape goes with a format the request stated; without one it is nothing.
+      const shape: RequestIntent['shape'] = format && (raw?.shape === 'SHAPE' || raw?.shape === 'BARE') ? raw.shape : null;
       // A document type must be the request's own words too: the reading is of what was declared, never a guess.
       // Absent from the answer, or words the request does not hold, it stays undefined and the word table decides.
       const said = raw?.document;
       const document = said === null ? null
         : typeof said === 'string' && said.trim() && task.toLowerCase().includes(said.trim().toLowerCase()) ? said.trim() : undefined;
       const needs = raw ? needsOf(task, raw) : null;
-      const out: RequestIntent | null = raw ? { format, length, ...(document === undefined ? {} : { document }), ...(needs ? { needs } : {}) } : null;
+      // The shape is in the record only when one was said: a reading of a request with no format has no shape to record.
+      const out: RequestIntent | null = raw ? { format, ...(shape ? { shape } : {}), length, ...(document === undefined ? {} : { document }), ...(needs ? { needs } : {}) } : null;
       intents.set(k, out);
       return out;
     },

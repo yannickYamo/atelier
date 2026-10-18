@@ -8,7 +8,7 @@ import { inRepairChain, stepGuarded, outOfStepCalls } from '../../core/inference
 import { existsSync, readFileSync } from 'node:fs';
 import { methodReading, methodLine } from '../../core/eval/obligations.js';
 import type { CheckContext } from '../../core/observers/registry.js';
-import { checksFor, claimInstrumentOf, contextJudgeFor, smallReaderFor, CLAIMS_MODEL_DEFAULT, shortFormRequest } from '../checks.js';
+import { checksFor, claimInstrumentOf, contextJudgeFor, contextJudgeModel, smallReaderFor, CLAIMS_MODEL_DEFAULT, shortFormRequest } from '../checks.js';
 import { regressions, readAtLength, featureParamsOf, ruleParamsOf, enforcedNeverWorse, applyStep, unmeasuredIn, type ParamsOf, type Proposed } from '../../core/loop/repair.js';
 import { answerSentences, judgedSituations } from '../../core/loop/answer-claims.js';
 import { groundCarried } from '../../core/loop/grounding.js';
@@ -577,7 +577,8 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   // author's paragraphs: read as a shape, it switched off every pace and rhythm rule on exactly the long
   // pieces those rules exist for. Then the standard stays whole and only the wrapping is dropped.
   const formatAsked = intent ? intent.format : requestedFormat(asked);
-  const shape = formatAsked ? formatShape(formatAsked) : null;
+  // The judge's shape where it said one (it read the words); the word list only where no judge did.
+  const shape = formatAsked ? (intent?.shape ?? formatShape(formatAsked)) : null;
   let presentationWithheld = 0;
   if (formatAsked && shape === 'SHAPE' && std) {
     const p = presentationRules(std.requirements);
@@ -2440,7 +2441,7 @@ function settingsFor(checks: Checks, taste: TasteSession | null, nDrafts: number
     tasteVeto: [...(taste?.veto ?? [])].sort(),
     learnedTellsHash: sha(JSON.stringify(checks.learnedTells ?? [])),
     formatProfile: checks.format?.id ?? null,
-    contextJudge: checks.judge ? `${process.env.ATELIER_CLAIMS_MODEL ?? CLAIMS_MODEL_DEFAULT} (context judge, report-only)` : null,
+    contextJudge: checks.judge ? `${contextJudgeModel() ?? CLAIMS_MODEL_DEFAULT} (context judge, report-only)` : null,
     maxTokens: draftMaxTokens(),
     ...(temperature === undefined ? {} : { temperature }),
     flags: { drafts: nDrafts, noTaste: !argv.includes('--taste') || argv.includes('--no-taste'), allowUnsourced: argv.includes('--allow-unsourced'), placeholders: argv.includes('--placeholders'), ...(argv.includes('--test-run') ? { testRun: true } : {}), ...(carryNote ? { carryNoteHash: sha(carryNote) } : {}) },
