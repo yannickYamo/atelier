@@ -334,7 +334,10 @@ export async function method(): Promise<void> {
   if (!argv.includes('--exemplar')) argv.push('--exemplar', exampleFile);
   // HOW A HOST KNOWS WHEN TO LOAD IT: the owner's own description when their method carries one, else what the skill is
   // for and the method's first line. "Applies a compiled standard" told a host nothing, and the skill was rarely loaded.
-  if (!argv.includes('--description')) { const d = describeFrom(note, flag('--for') ?? null, name); if (d) argv.push('--description', d); }
+  // The owner's own always; one made from the purpose only on a first build, never over a description set since.
+  if (!argv.includes('--description') && (/^description:/m.test(/^\uFEFF?---\r?\n([\s\S]*?)\r?\n---/.exec(note)?.[1] ?? '') || !activeNow)) {
+    const d = describeFrom(note, flag('--for') ?? null, name); if (d) argv.push('--description', d);
+  }
   // The method itself is served whole with the skill: what the steps above decide is what is checked, never what the
   // writer is told.
   if (notePath !== null && !argv.includes('--method-text')) {
@@ -372,11 +375,15 @@ export async function method(): Promise<void> {
  */
 export function describeFrom(note: string, purpose: string | null, name: string): string | null {
   const fm = /^\uFEFF?---\r?\n([\s\S]*?)\r?\n---/.exec(note);
-  const own = fm ? /^description:\s*(.+)$/m.exec(fm[1])?.[1]?.trim().replace(/^(['"])([\s\S]*)\1$/, '$2') : undefined;
+  // A block scalar (`description: >` or `|`) runs over the indented lines under it.
+  const block = fm ? /^description:\s*[|>][+-]?\s*\n((?:[ \t]+\S[^\n]*\n?)+)/m.exec(fm[1])?.[1] : undefined;
+  const line = fm ? /^description:\s*(.+)$/m.exec(fm[1])?.[1]?.trim() : undefined;
+  const own = block ? block.split('\n').map((l) => l.trim()).join(' ').trim()
+    : line && !/^[|>][+-]?$/.test(line) ? (/^"[\s\S]*"$/.test(line) ? line.slice(1, -1).replace(/\\(["\\])/g, '$1') : line.replace(/^'([\s\S]*)'$/, '$1')) : undefined;
   if (own) return own.replace(/\s+/g, ' ').slice(0, 1000);
   const body = note.replace(/^\uFEFF?---\r?\n[\s\S]*?\r?\n---\r?\n?/, '');
   const first = body.split(/\r?\n\s*\r?\n/).map((p) => p.trim()).find((p) => p && !/^(?:#|[-*+]\s|\d+[.)]\s|\||```|>)/.test(p));
   const sentence = first ? (/^[\s\S]*?[.!?](?=\s|$)/.exec(first.replace(/\s+/g, ' '))?.[0] ?? first.replace(/\s+/g, ' ')).slice(0, 300) : '';
-  const what = purpose?.trim() || name.replace(/-/g, ' ');
+  const what = purpose?.trim() ? purpose.trim() : name.replace(/-/g, ' ');
   return `Use when asked to ${what.replace(/[.\s]+$/, '')}.${sentence ? ` ${sentence}` : ''}`;
 }

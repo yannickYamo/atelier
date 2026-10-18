@@ -154,9 +154,9 @@ async function chooseVoice(L: store.StoreLayout, v: StandardVersion): Promise<Vo
   // This run's pieces: the run being built is this skill's, whatever name it is built under.
   const readable = derivesPersona || reselect ? sessionCorpus().map(withoutFrontMatter) : [];
   // A budget or a form with no pieces to apply it to is refused, with or without a stored voice: never ignored.
-  if (reselect && readable.length < 3) {
+  if (reselect && readable.length < 2) {
     die(loadSession().source
-      ? '--piece-budget and --pieces choose from the pieces this skill was built from, and fewer than three can be read here. Run it from the project the skill was built in, with its folder of pieces in place.'
+      ? '--piece-budget and --pieces choose from the pieces this skill was built from, and fewer than two can be read here. Run it from the project the skill was built in, with its folder of pieces in place.'
       : '--piece-budget and --pieces choose among your own pieces, and this skill was built from rules you stated, with no pieces to choose from.');
   }
   // A skill that answers shows examples spread over the kinds of request (`spreadExamples`), so no whole pieces are
@@ -202,7 +202,9 @@ async function chooseVoice(L: store.StoreLayout, v: StandardVersion): Promise<Vo
       // your pieces" over them would be false, and removing them could not be undone by `--piece-budget default`.
       if (wordBudget === 0 && voice.passages.length) die('this skill was built by an early version and serves passages of yours inline, which --piece-budget does not reach. Choose its voice again first: atelier build --name <name> --voice auto, then set the budget.');
       const pieces = choose();
-      voice = { ...voice, pieces, ...prefs };
+      // Chosen again: the requests of the pieces before are not these pieces' (read again below).
+      const { pieceRequests: _stale, ...kept } = voice; void _stale;
+      voice = { ...kept, pieces, ...prefs };
       console.log(`Voice: ${pieces.length ? said(pieces) : none()}.`);
     }
   }
@@ -212,8 +214,11 @@ async function chooseVoice(L: store.StoreLayout, v: StandardVersion): Promise<Vo
   if (voice.pieces?.length) {
     const flatText = (t: string): string => withoutFrontMatter(t).replace(/\s+/g, ' ').trim();
     const asked = new Map(sessionPairs().filter((p) => p.request).map((p) => [flatText(p.text), p.request ?? ""]));
-    const pieceRequests = asked.size ? voice.pieces.map((t) => asked.get(flatText(t)) ?? null) : voice.pieceRequests;
-    voice = { ...voice, ...(pieceRequests?.some(Boolean) ? { pieceRequests } : {}) };
+    // Kept from before only while it still lines up with the pieces (one entry each); read again where the pieces are at hand.
+    const pieceRequests = asked.size ? voice.pieces.map((t) => asked.get(flatText(t)) ?? null)
+      : voice.pieceRequests?.length === voice.pieces.length ? voice.pieceRequests : undefined;
+    const { pieceRequests: _was, ...rest } = voice; void _was;
+    voice = { ...rest, ...(pieceRequests?.some(Boolean) ? { pieceRequests } : {}) };
   }
   // HOW MUCH THE AUTHOR WRITES FOR WHAT WAS ASKED (core/compiler/scope.ts), for a skill that answers requests: read
   // once from the examples, with the request each one answers when its file carries it. A failure costs the reading,
@@ -577,7 +582,7 @@ export async function build(nameArg?: string, opts: { closing?: boolean } = {}):
   const storedVoice = voice ? { ...(voiceWithout as typeof voice), ...(standardWording.length ? { standardWording } : {}), ...(span ? { lengthSpan: span, lengthPieces } : {}), ...(among !== null ? { sharedAmong: among } : {}) } : voice;
   // The composite the owner chose (core/composite), kept with the skill as data; null for a skill of one author.
   if (s.evidence) store.setComposite(L, s.composite ?? null);
-  store.setExemplar(L, exemplar?.text ?? null); store.setMethod(L, methodText?.text ?? null); store.setVoice(L, storedVoice); store.setDocClass(L, docClass); store.setContrast(L, { off: contrastOff, pairs: chosenPairs });
+  store.setExemplar(L, exemplar?.text ?? null, exemplar?.request ?? null); store.setMethod(L, methodText?.text ?? null); store.setVoice(L, storedVoice); store.setDocClass(L, docClass); store.setContrast(L, { off: contrastOff, pairs: chosenPairs });
   // The author's signals, read off their pieces against the model's drafts at discovery (never a rule).
   if (existsSync(runFile('signals.json'))) store.setSignals(L, readJson<StoredSignal[]>(runFile('signals.json'), { what: 'the discovered signals', kind: 'array' }));
   // The fidelity profile and the first implementation release (cli/fidelity.ts): what steers drafts toward

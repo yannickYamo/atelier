@@ -181,16 +181,27 @@ export function derivedFromKnown(sentence: string, material: string): boolean {
   return known.length <= MAX_WORKED && worked(text, prose, open);
 }
 
-/** The material less its code: fenced blocks, and the lines of a diff (headers, hunks, added, removed and context lines). */
+/**
+ * The material less its code: fenced blocks, and diffs (headers, and each hunk's lines as its header counts them).
+ * Counted, so prose written after a diff is prose again, a "- " list item included.
+ */
 export function proseOf(material: string): string {
-  const out: string[] = []; let fenced = false; let inDiff = false;
+  const out: string[] = []; let fenced = false; let header = false; let oldLeft = 0; let newLeft = 0;
   for (const line of material.split('\n')) {
     if (/^\s*(```|~~~)/.test(line)) { fenced = !fenced; continue; }
     if (fenced) continue;
-    if (/^(diff --git |index [0-9a-f]|--- |\+\+\+ |@@ )/.test(line)) { inDiff = true; continue; }
-    if (inDiff && /^[+\- \\]/.test(line)) continue;
-    if (inDiff && line.trim() === '') continue;
-    inDiff = false; out.push(line);
+    const hunk = /^@@ -\d+(?:,(\d+))? \+\d+(?:,(\d+))? @@/.exec(line);
+    if (hunk) { oldLeft = hunk[1] === undefined ? 1 : Number(hunk[1]); newLeft = hunk[2] === undefined ? 1 : Number(hunk[2]); header = false; continue; }
+    if (/^(diff --git |index [0-9a-f]|--- |\+\+\+ |new file mode|deleted file mode|similarity index|rename (from|to) )/.test(line)) { header = true; continue; }
+    if (oldLeft > 0 || newLeft > 0) {
+      if (line.startsWith('+')) { newLeft -= 1; continue; }
+      if (line.startsWith('-')) { oldLeft -= 1; continue; }
+      if (line.startsWith(' ') || line === '') { oldLeft -= 1; newLeft -= 1; continue; }
+      if (line.startsWith('\\')) continue;
+      oldLeft = 0; newLeft = 0;
+    }
+    if (header && /^(old|new) mode /.test(line)) continue;
+    header = false; out.push(line);
   }
   return out.join('\n');
 }

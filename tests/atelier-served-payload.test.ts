@@ -70,7 +70,7 @@ const seed = (n: number, withMethod: boolean, key = false) => {
   const data = mkdtempSync(join(tmpdir(), 'atelier-sp-data-')); const proj = mkdtempSync(join(tmpdir(), 'atelier-sp-proj-'));
   mkdirSync(join(proj, 'work'));
   if (withMethod) writeFileSync(join(proj, 'how.md'), METHOD);
-  PIECES.slice(0, n).forEach((p, i) => writeFileSync(join(proj, 'work', `a${i + 1}.md`), `---\nrequest: ${JSON.stringify(p.request)}\n---\n${p.body}\n`));
+  PIECES.slice(0, n).forEach((p, i) => { writeFileSync(join(proj, 'work', `a${i + 1}.md`), `---\nrequest: ${JSON.stringify(p.request)}\n---\n${p.body}\n`); });
   const env: NodeJS.ProcessEnv = { ...process.env, ATELIER_DATA: data, ATELIER_PROJECT_DIR: proj };
   delete env.ANTHROPIC_API_KEY; delete env.ANTHROPIC_AUTH_TOKEN;
   // A key that reaches nothing: whatever the build does with a model set up, no call can succeed or be paid for.
@@ -124,7 +124,8 @@ describe('the owner\'s method reaches the writer whole', () => {
   it('the host is told when to load it in the owner\'s words', () => {
     const { run, skill } = seed(4, true);
     expect(run('new', 'work', '--method', 'how.md', '--name', 'plain').code).toBe(0);
-    expect(skill('plain')['SKILL.md']).toMatch(/^---\nname: plain\ndescription: Answer a support question so the reader can act at once/);
+    // quoted: it holds ": ", which a plain YAML value cannot
+    expect(skill('plain')['SKILL.md']).toMatch(/^---\nname: plain\ndescription: "Answer a support question so the reader can act at once: the action first/);
   }, 120_000);
 });
 
@@ -196,5 +197,48 @@ describe('the description a host reads', () => {
   it('the owner\'s own, else the purpose and the method\'s first line', () => {
     expect(describeFrom(METHOD, null, 'x')).toBe('Answer a support question so the reader can act at once: the action first, numbered steps, one next action.');
     expect(describeFrom('# Review\n\nWe review for risk before style.\n\n1. Open with the verdict.', 'review pull requests', 'r')).toBe('Use when asked to review pull requests. We review for risk before style.');
+  });
+});
+
+describe('what an independent review found in the first round', () => {
+  it('a rebuild serves the same bytes: the exemplar keeps its request, and a note changed only in its front matter is the same package', () => {
+    const { proj, run, skill } = seed(4, true);
+    expect(run('new', 'work', '--method', 'how.md', '--name', 'plain').code).toBe(0);
+    const first = skill('plain');
+    expect(first['examples/exemplar.md']).toContain('The request it answered:');
+    writeFileSync(join(proj, 'how.md'), METHOD.replace('name: plain-answers', 'name: plain-answers\ntitle: Plain answers') + '\n\n');
+    const again = run('new', 'work', '--method', 'how.md', '--name', 'plain', '--yes');
+    expect(again.code, again.out).toBe(0);
+    expect(again.out).not.toMatch(/already exists with different content/);
+    const rebuilt = run('build', '--name', 'plain');
+    expect(rebuilt.code, rebuilt.out).toBe(0);
+    expect(skill('plain')).toEqual(first);
+  }, 180_000);
+
+  it('marking is linear in the text and never lands on a word inside another word', () => {
+    const line = `${'the alpha beta gamma delta '.repeat(80)}end.`;
+    const t0 = Date.now();
+    expect(markUnsupported(line, ['the  alpha  beta  gamma  zeta'])).toContain('Not found in what you supplied');
+    expect(Date.now() - t0).toBeLessThan(500);
+    const out = markUnsupported('The string is wrong. The `x` in `y` is wrong.', ['The  in  is wrong.']);
+    expect(out).toBe('The string is wrong. The `x` in `y` is wrong. [needs verification: not shown in what you supplied]');
+    // a full stop inside code is no sentence end
+    expect(markUnsupported('2. `a.py:9`: Written before `meta.json`, so 2.3M rows are lost.', [': Written before            , so 2.3M rows are lost.']))
+      .toBe('2. `a.py:9`: Written before `meta.json`, so 2.3M rows are lost. [needs verification: not shown in what you supplied]');
+  });
+
+  it('a block-scalar description is read whole, and one holding ": " is written as YAML that parses', async () => {
+    expect(describeFrom('---\ndescription: >\n  Answer briefly,\n  action first.\n---\n# x\n\nBody.', null, 'x')).toBe('Answer briefly, action first.');
+    const { yamlScalar } = await import('../renderers/agent-skill/render.js');
+    expect(yamlScalar('Use when asked to review. Note: risk first.')).toBe('"Use when asked to review. Note: risk first."');
+    expect(yamlScalar('Use when asked to review.')).toBe('Use when asked to review.');
+  });
+
+  it('prose after a diff is prose again, a "- " list item included', () => {
+    const diff = 'diff --git a/a.py b/a.py\n--- a/a.py\n+++ b/a.py\n@@ -1,2 +1,2 @@\n-x = 1\n+x = 2\n y = 3\n';
+    const prose = proseOf(`${diff}\n- The orders table holds 40 rows per user and 1000 users.`);
+    expect(prose).toContain('40 rows per user');
+    expect(prose).not.toContain('x = 2');
+    expect(derivedFromKnown('That is 40000 rows.', `${diff}\n- The orders table holds 40 rows per user and 1000 users.`)).toBe(true);
   });
 });

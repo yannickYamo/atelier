@@ -783,7 +783,7 @@ describe('through the binary: a writing skill is served compact by default, the 
   it('a rebuild that asks for nothing changes nothing: the description is kept, and runs made since add nothing', () => {
     // the skill holds the whole serving with no budget stored, as every skill built before the compact default does
     expect(r.back.text).toBe(r.full);
-    expect(r.kept.text).toContain('description: Use when asked to: write me a blog post in the voice and style of these.');
+    expect(r.kept.text).toContain('description: "Use when asked to: write me a blog post in the voice and style of these."');
     // an invoke ran in between (below, in `beforeAll`): a plain rebuild after it exports the same bytes
     expect(r.afterRunRebuilt).toBe(r.afterRun);
   });
@@ -851,7 +851,7 @@ describe('through the binary: a writing skill is served compact by default, the 
   });
   it('a budget with no pieces to choose from is refused, never ignored', () => {
     // The folder the skill was built from is gone: there is nothing to choose again from, and the build says so.
-    expect(r.moved).toMatch(/--piece-budget and --pieces choose from the pieces this skill was built from, and fewer than three can be read here/);
+    expect(r.moved).toMatch(/--piece-budget and --pieces choose from the pieces this skill was built from, and fewer than two can be read here/);
     expect(body(r.afterMoved)).toBe(body(r.full));
   });
   it('from each arm\'s answers to a selection: the rows are built by a sealed script, not by hand', () => {

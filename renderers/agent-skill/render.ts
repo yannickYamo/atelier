@@ -366,10 +366,15 @@ export function renderAgentSkill(
   // and under their headings; restated below as numbered items they were cut loose from the heading that governed
   // them ("Before sending, delete:" lost, so the things to delete read as things to do). Such a step keeps its check,
   // listed under "How your method is checked". A step the method does not contain verbatim is served as before.
+  // The method as it is served: front matter off, whole otherwise. What travels with the package is this, so two notes
+  // that serve the same words are one package (a changed front-matter key or a trailing newline is not a new skill).
+  const methodPlain = method ? method.text.replace(/^\uFEFF/, '').replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, '').trim() : '';
   const flat = (t: string): string => t.toLowerCase().replace(/[*_`>#]/g, '').replace(/\s+/g, ' ').trim();
-  const methodFlat = method ? flat(method.text) : '';
+  const methodFlat = flat(methodPlain);
+  // Only a step as the method states it: one the owner later scoped (`amend --applies-when`) carries a condition the
+  // method does not, and is served with it below.
   const inMethod = (r: typeof v.requirements[number]): boolean => Boolean(methodFlat) && r.provenance === 'EXPERT_STATED'
-    && methodFlat.includes(flat(r.statement).replace(/[.\s]+$/, ''));
+    && isGeneralScope(r.appliesWhen) && methodFlat.includes(flat(r.statement).replace(/[.\s]+$/, ''));
   const line = (r: typeof v.requirements[number], i: number): string => {
     const prov = provenanceLabel(r.provenance);
     const text = isGeneralScope(r.appliesWhen)
@@ -549,8 +554,11 @@ ${stated.map((r) => `- ${moveCarriers.get(r.requirementId)?.carrier === 'general
 ` : '';
 
   // THE METHOD, WHOLE. Its headings move down two levels so they sit under this one; nothing else is touched.
-  const methodBody = method ? method.text.replace(/^\uFEFF/, '').replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, '').trim()
-    .split('\n').map((l) => l.replace(/^(#{1,4})(\s)/, (_m, h: string, sp: string) => `${h}##${sp}`)).join('\n') : '';
+  // Shifted outside code fences only (a "# run tests" in a bash block is code), and never past level six.
+  const methodBody = methodPlain ? ((): string => { let fenced = false; return methodPlain.split('\n').map((l) => {
+    if (/^\s*(```|~~~)/.test(l)) { fenced = !fenced; return l; }
+    return fenced ? l : l.replace(/^(#{1,6})(\s)/, (_m, h: string, sp: string) => `${'#'.repeat(Math.min(6, h.length + 2))}${sp}`);
+  }).join('\n'); })() : '';
   const methodSection = method ? `
 ## My method
 
@@ -570,7 +578,7 @@ ${checkedSteps.map((r) => `- ${r.measurement ? observerFor(r.measurement.observe
 ` : '';
   const skillMd = `---
 name: ${skillId}
-description: ${description}
+description: ${yamlScalar(description)}
 ---
 
 # ${skillId}
@@ -787,7 +795,7 @@ mintedAt:        ${v.mintedAt}
   })() : null;
   const withPairs = { ...(contrast.length ? { ...assurance, 'contrast-pairs.json': `${JSON.stringify(contrast, null, 1)}\n` } : assurance),
     ...(travelling ? { 'voice.json': `${JSON.stringify(travelling, null, 1)}\n` } : {}),
-    ...(method ? { 'method.md': method.text } : {}) };
+    ...(methodPlain ? { 'method.md': methodPlain } : {}) };
   return { skillId, standardVersionHash: v.standardVersionHash, architectureHash: arch.architectureHash,
     runtime, assurance: withPairs, files: runtime, packageHash: sha(JSON.stringify(runtime)) };
 }
@@ -808,4 +816,14 @@ export function assertPortable(pkg: PortableSkillPackage): void {
   if (/\$\{[A-Z_]+\}/.test(md)) {
     throw new Error('PORTABILITY: SKILL.md contains a host template variable. It would expand on one host and remain literal on another.');
   }
+}
+
+/**
+ * A front-matter value as YAML reads it: plain when plain is safe, double-quoted when it holds what YAML would read as
+ * structure (": ", " #", a leading indicator). A description taken from a method ("Note: this is how I review") was
+ * written plain and broke a host's front-matter parser.
+ */
+export function yamlScalar(v: string): string {
+  const t = v.replace(/\s+/g, ' ').trim();
+  return /: |\s#|^[-?:,[\]{}#&*!|>'"%@`]|:$/.test(t) ? JSON.stringify(t) : t;
 }

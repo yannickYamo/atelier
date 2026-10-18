@@ -11,7 +11,7 @@ import type { CheckOptions } from '../core/loop/run-repair.js';
 import { modelSensor, patternSensor, listsBecause, type ClaimSensor } from '../core/loop/claim-extract.js';
 import { modelJudge, type ContextJudge } from '../core/loop/context-judge.js';
 import type { Budget, InferenceClient } from '../core/inference/client.js';
-import { flag, providerFor, clientAndBinding, boundMaterial, DATA } from './runtime.js';
+import { argv, flag, providerFor, clientAndBinding, boundMaterial, DATA } from './runtime.js';
 import { join } from 'node:path';
 import { formatOf, type FormatProfile } from '../core/observers/formats.js';
 import { shortFormOptions, shortFormTransfer, type ShortTransfer } from '../core/observers/short-form.js';
@@ -59,7 +59,7 @@ export function claimSensorFor(material: string, task: string, placeholders: boo
   // two model reads per text bought a list the pattern check also makes: four of a short answer's seven calls. The
   // reader is asked where its reading can act: material bound, or strict delivery, or the person naming a reader.
   // (Not when the person chose a reader, or asked for slots: a slot is the reader acting with nothing bound.)
-  if (!bound && !strict && !placeholders && flag('--claims') === undefined && process.env.ATELIER_CLAIMS === undefined) return patternSensor(material, placeholders, 'pattern check (no material bound: a model reading of specifics could only list them)');
+  if (!bound && !strict && !argv.includes('--strict') && !placeholders && flag('--claims') === undefined && process.env.ATELIER_CLAIMS === undefined) return patternSensor(material, placeholders, 'pattern check (no material bound: a model reading of specifics could only list them)');
   const named = flag('--claims-model') ?? process.env.ATELIER_CLAIMS_MODEL;
   const provider = providerFor('discovery');
   if (!named && provider !== 'anthropic') {

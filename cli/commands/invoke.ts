@@ -68,7 +68,8 @@ import { assertHistoryNotServed, foldRepairs } from '../../core/architecture/rep
 import type { SkillVersion, InvocationSettings } from '../../core/state/canonical-state.js';
 import * as store from '../../core/state/store.js';
 import { copyGuardPieces } from '../../core/compiler/voice.js';
-import { unmeasuredKind } from '../../core/loop/claim-extract.js';
+import { listsBecause, unmeasuredKind } from '../../core/loop/claim-extract.js';
+import { formatOf } from '../../core/observers/formats.js';
 import { planFor } from '../../core/plan/execution-plan.js';
 import { checkSatisfiable, describeSatisfiability, type SatisfiabilityVerdict } from '../../core/state/prerequisite.js';
 import { resolveProvenance } from '../../core/fidelity/provenance.js';
@@ -710,7 +711,11 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   // person reading the review or the answer sees which claims rest on what they gave and which do not; a list after
   // the text left the unsupported finding reading as fact where it stood. Any kind of work, once material is bound.
   // A sentence that cannot be found as written is listed after the text, as before.
-  const listed = materialBound && !argv.includes('--no-unsourced-note') ? rec.repair?.claimsToCheck ?? [] : [];
+  // Only where the claim check lists and does not cut (a kind nobody measured, or one that lists by design): where it
+  // cuts, what it leaves is what a qualified reading kept, and marks in finished prose are noise.
+  const lists = Boolean(listsBecause({ cls: flag('--class') ?? store.getDocClass(L), bound: materialBound, slots: argv.includes('--placeholders') }))
+    || formatOf(flag('--class') ?? store.getDocClass(L))?.claims === 'list';
+  const listed = lists && materialBound && !argv.includes('--no-unsourced-note') ? rec.repair?.claimsToCheck ?? [] : [];
   const shipped = markUnsupported(rec.output, listed);
   if (!machine && !strict) console.log(`\n${shipped}\n`);
   if (adoptedCarry && !methodCarry) report.say(store.CARRY_RETIRED);
@@ -2682,19 +2687,42 @@ export function presentationRules(requirements: readonly { requirementId: string
   };
 }
 
-/** Each listed sentence labelled where it stands; one that cannot be found as written is listed after the text. */
+/**
+ * Each listed sentence labelled where it stands; one that cannot be found as written is listed after the text.
+ * Found in the text as delivered, before any label is added: as written, or (where its code spans were blanked for the
+ * reader) by its words in order inside one line, each word whole. Linear in the text: no pattern is built from it.
+ */
 export function markUnsupported(text: string, listed: readonly string[]): string {
-  let out = text; const rest: string[] = [];
+  const MARK = ' [needs verification: not shown in what you supplied]';
+  const ends: number[] = []; const rest: string[] = [];
+  // Line bounds of the delivered text: a match never runs past one. (Not sentences: a full stop inside code, as in
+  // `meta.json`, is no sentence end, and a claim read with its code blanked spans it.)
+  const bounds: [number, number][] = [];
+  for (const m of text.matchAll(/[^\n]+/g)) bounds.push([m.index, m.index + m[0].length]);
+  const isWord = (c: string | undefined): boolean => c !== undefined && /[\p{L}\p{N}_]/u.test(c);
+  const wholeAt = (hay: string, needle: string, from: number, until: number): number => {
+    for (let i = hay.indexOf(needle, from); i !== -1 && i + needle.length <= until; i = hay.indexOf(needle, i + 1)) {
+      if (!isWord(hay[i - 1]) || !isWord(needle[0])) if (!isWord(hay[i + needle.length]) || !isWord(needle[needle.length - 1])) return i;
+    }
+    return -1;
+  };
   for (const c of listed) {
-    // A finding is read with its code spans blanked, so where it is not found as written, each blank run stands for
-    // what was there (code, a path): found by its words, in order, within one sentence.
-    const words = c.trim().split(/\s{2,}/).map((w) => w.trim()).filter(Boolean);
-    const exact = c.trim() ? out.indexOf(c.trim()) : -1;
-    const loose = exact === -1 && words.length > 1 ? new RegExp(words.map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('[^\\n]*?')).exec(out) : null;
-    const at = exact !== -1 ? exact : loose ? loose.index : -1;
-    if (at === -1) { rest.push(c); continue; }
-    const end = exact !== -1 ? at + c.trim().length : at + (loose?.[0].length ?? 0);
-    out = `${out.slice(0, end)} [needs verification: not shown in what you supplied]${out.slice(end)}`;
+    const claim = c.trim();
+    if (!claim) continue;
+    const exact = text.indexOf(claim);
+    if (exact !== -1) { ends.push(exact + claim.length); continue; }
+    const parts = claim.split(/\s{2,}/).map((w) => w.trim()).filter(Boolean);
+    let found = -1;
+    if (parts.length > 1) {
+      for (const [a, b] of bounds) {
+        let at = a; let ok = true;
+        for (const part of parts) { const i = wholeAt(text, part, at, b); if (i === -1) { ok = false; break; } at = i + part.length; }
+        if (ok) { found = at; break; }
+      }
+    }
+    if (found === -1) rest.push(c); else ends.push(found);
   }
+  let out = text;
+  for (const e of [...new Set(ends)].sort((x, y) => y - x)) out = `${out.slice(0, e)}${MARK}${out.slice(e)}`;
   return rest.length ? `${out.trimEnd()}\n\n---\nNot found in what you supplied (check before you use this):\n${rest.map((c) => `- "${c}"`).join('\n')}` : out;
 }

@@ -238,7 +238,9 @@ describe('round 5 design: describe the voice, guard the edges, never displace', 
     const chosen = selectVoicePieces([essay(1), essay(2), essay(3), list(1), list(2)], 5000);
     expect(chosen.some((t) => t.startsWith('# List'))).toBe(true);
     expect(chosen.some((t) => !t.startsWith('# List'))).toBe(true);
-    expect(selectVoicePieces([essay(1), essay(2)], 5000)).toEqual([]);
+    expect(selectVoicePieces([essay(1)], 5000)).toEqual([]);
+    // two pieces are what pasting them would show: both are served
+    expect(selectVoicePieces([essay(1), essay(2)], 5000)).toHaveLength(2);
   });
   it('the persona and whole pieces are served, and the pieces are reference files that never ask to be reused', () => {
     const r = aRequirement({ requirementId: 'p1', statement: 'I split the answer by situation.', materiality: 'REQUIRED' });

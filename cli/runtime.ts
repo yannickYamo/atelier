@@ -1001,7 +1001,7 @@ export const authoredIdAllocator = (s: Session): (() => string) => {
  * where they still teach the standard being rendered.
  */
 export function carriedFrom(L: store.StoreLayout, fromVersion: string | null, v: StandardVersion): {
-  exemplar: { text: string } | null; contrast: ContrastPair[]; voice: Voice | null; method: { text: string } | null;
+  exemplar: { text: string; request?: string } | null; contrast: ContrastPair[]; voice: Voice | null; method: { text: string } | null;
 } {
   const sv = fromVersion ? store.getSkillVersion(L, fromVersion) : null;
   const pkg = sv ? store.getPackage(L, sv.materializedHash) : null;
@@ -1017,5 +1017,7 @@ export function carriedFrom(L: store.StoreLayout, fromVersion: string | null, v:
   const pairs = ((): ContrastPair[] => { try { return raw ? JSON.parse(raw) as ContrastPair[] : []; } catch { return []; } })();
   // The method travels with the package that served it, like the voice.
   const methodRaw = pkg.assurance?.['method.md'];
-  return { exemplar: ex === undefined ? null : { text: ex }, contrast: store.getContrast(L).off ? [] : contrastFor(pairs, v), voice, method: methodRaw === undefined ? null : { text: methodRaw } };
+  // An exemplar served beside its request is read back as the pair: the renderer wraps it again the same way.
+  const pair = ex === undefined ? null : /^The request it answered: ([^\n]*)\n\nWhat I wrote:\n\n([\s\S]*)$/.exec(ex);
+  return { exemplar: ex === undefined ? null : pair ? { text: pair[2], request: pair[1] } : { text: ex }, contrast: store.getContrast(L).off ? [] : contrastFor(pairs, v), voice, method: methodRaw === undefined ? null : { text: methodRaw } };
 }

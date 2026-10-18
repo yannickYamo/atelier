@@ -122,15 +122,20 @@ export function getLedger(l: StoreLayout, standardVersionHash: string): Ratifica
  * Kept beside the skill rather than in a SkillVersion, so every re-render (amend, confirm, fix) carries
  * the same one until the owner changes it.
  */
-export function getExemplar(l: StoreLayout): { text: string } | null {
+export function getExemplar(l: StoreLayout): { text: string; request?: string } | null {
   const p = join(dirs(l).base, 'exemplar.md');
-  return existsSync(p) ? { text: readFileSync(p, 'utf8') } : null;
+  if (!existsSync(p)) return null;
+  const q = join(dirs(l).base, 'exemplar-request.txt');
+  return { text: readFileSync(p, 'utf8'), ...(existsSync(q) ? { request: readFileSync(q, 'utf8') } : {}) };
 }
-export function setExemplar(l: StoreLayout, text: string | null): void {
-  const p = join(dirs(l).base, 'exemplar.md');
+/** The exemplar, and the request it answered when it carried one: kept apart, so a rebuild serves the same pair. */
+export function setExemplar(l: StoreLayout, text: string | null, request: string | null = null): void {
+  const p = join(dirs(l).base, 'exemplar.md'); const q = join(dirs(l).base, 'exemplar-request.txt');
+  if (text === null || request === null) { if (existsSync(q)) rmSync(q); }
   if (text === null) { if (existsSync(p)) rmSync(p); return; }
   mkdirSync(dirs(l).base, { recursive: true });
   writeAtomic(p, text);
+  if (request !== null) writeAtomic(q, request);
 }
 
 /**
