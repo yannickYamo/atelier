@@ -11,6 +11,7 @@ import { selectCompositePieces, selectVoicePieces, selectWithinBudget, isExcerpt
 import { derivePersona, reconcilePersona, standardForbids } from '../../core/compiler/persona.js';
 import type { Budget } from '../../core/inference/client.js';
 import { sessionCorpus, sessionPairs, unsplitPairs } from '../corpus.js';
+import { splitRequest } from '../../core/intake/extract.js';
 import { standardWordingOf, sharedAmong } from '../../core/observers/overlap.js';
 import { targetOf } from '../../core/observers/obligations.js';
 
@@ -185,7 +186,7 @@ async function chooseVoice(L: store.StoreLayout, v: StandardVersion): Promise<Vo
       return made;
     }
   }
-  if (!voice && readable.length >= 3) {
+  if (!voice && readable.length >= 2) {
     const pieces = choose();
     voice = { passages: [], lengthWords: usualLength(readable), pieces, ...(prefs.pieceForm ? { pieceForm: prefs.pieceForm } : {}), ...(wordBudget === undefined ? {} : { pieceBudget: wordBudget }) };
     if (pieces.length) console.log(`Voice: ${said(pieces)}. Turn off with --voice none.`);
@@ -206,6 +207,14 @@ async function chooseVoice(L: store.StoreLayout, v: StandardVersion): Promise<Vo
     }
   }
   if (!voice) return null;
+  // EACH PIECE WITH THE REQUEST IT ANSWERED, where its file carried one: matched by text, so a piece shown as passages
+  // (an excerpt) carries none. Read again on every build from the pieces at hand; kept from the stored voice otherwise.
+  if (voice.pieces?.length) {
+    const flatText = (t: string): string => withoutFrontMatter(t).replace(/\s+/g, ' ').trim();
+    const asked = new Map(sessionPairs().filter((p) => p.request).map((p) => [flatText(p.text), p.request ?? ""]));
+    const pieceRequests = asked.size ? voice.pieces.map((t) => asked.get(flatText(t)) ?? null) : voice.pieceRequests;
+    voice = { ...voice, ...(pieceRequests?.some(Boolean) ? { pieceRequests } : {}) };
+  }
   // HOW MUCH THE AUTHOR WRITES FOR WHAT WAS ASKED (core/compiler/scope.ts), for a skill that answers requests: read
   // once from the examples, with the request each one answers when its file carries it. A failure costs the reading,
   // never the build: the profile is then counts alone, and states no habit nobody read.
@@ -457,7 +466,7 @@ export async function build(nameArg?: string, opts: { closing?: boolean } = {}):
     if (ex.trim().toLowerCase() === 'none') exemplar = null;
     else {
       if (!existsSync(ex)) die(`--exemplar: there is no file at ${ex}.`);
-      const text = readFileSync(ex, 'utf8');
+      const { text, request: exRequest } = splitRequest(readFileSync(ex, 'utf8'));
       // Compared as text, not bytes: a copy with a BOM, Windows line ends or other whitespace is the same piece.
       const norm = (t: string): string => t.replace(/^\uFEFF/, '').normalize('NFC').replace(/\r\n?/g, '\n').replace(/\s+/g, ' ').trim();
       if (s.reservation?.reserved.some((u) => norm(u.artifact) === norm(text))) {
@@ -472,7 +481,7 @@ export async function build(nameArg?: string, opts: { closing?: boolean } = {}):
         console.log(`Note: the exemplar breaks ${broken.map((c) => `${c.requirementId} (${c.result.detail})`).join(', ')}. `
           + 'The model will imitate it as it is.');
       }
-      exemplar = { text };
+      exemplar = { text, ...(exRequest ? { request: exRequest } : {}) };
       console.log('The exemplar is installed with the skill (examples/exemplar.md). If the skill directory is committed, so is the piece.');
     }
   }
@@ -506,7 +515,14 @@ export async function build(nameArg?: string, opts: { closing?: boolean } = {}):
   if (shipped.length) console.log(`Contrast examples: ${shipped.length} "write this, not that" pair(s) from past repairs (examples/contrast.md). Turn off with --contrast none.`);
   const voice = await chooseVoice(L, v);
   if (!argv.includes('--review')) reportOwnPieces(v, name, s);
-  const pkg0 = renderAgentSkill(v, arch, name, desc, exemplar, shipped, voice);
+  // THE OWNER'S METHOD, served whole (`--method-text <file>` from `atelier new --method`; kept through every rebuild).
+  const mt = flag('--method-text');
+  let methodText = store.getMethod(L);
+  if (mt !== undefined) {
+    if (mt.trim().toLowerCase() === 'none') methodText = null;
+    else { if (!existsSync(mt)) die(`--method-text: there is no file at ${mt}.`); methodText = { text: readFileSync(mt, 'utf8') }; }
+  }
+  const pkg0 = renderAgentSkill(v, arch, name, desc, exemplar, shipped, voice, methodText);
   const skill = { skillVersionHash: sha(`${arch.architectureHash}|${pkg0.packageHash}`), skillName: name,
     standardVersionHash: v.standardVersionHash, architectureHash: arch.architectureHash, materializedHash: pkg0.packageHash, builtAt: new Date().toISOString(), description: desc };
 
@@ -561,7 +577,7 @@ export async function build(nameArg?: string, opts: { closing?: boolean } = {}):
   const storedVoice = voice ? { ...(voiceWithout as typeof voice), ...(standardWording.length ? { standardWording } : {}), ...(span ? { lengthSpan: span, lengthPieces } : {}), ...(among !== null ? { sharedAmong: among } : {}) } : voice;
   // The composite the owner chose (core/composite), kept with the skill as data; null for a skill of one author.
   if (s.evidence) store.setComposite(L, s.composite ?? null);
-  store.setExemplar(L, exemplar?.text ?? null); store.setVoice(L, storedVoice); store.setDocClass(L, docClass); store.setContrast(L, { off: contrastOff, pairs: chosenPairs });
+  store.setExemplar(L, exemplar?.text ?? null); store.setMethod(L, methodText?.text ?? null); store.setVoice(L, storedVoice); store.setDocClass(L, docClass); store.setContrast(L, { off: contrastOff, pairs: chosenPairs });
   // The author's signals, read off their pieces against the model's drafts at discovery (never a rule).
   if (existsSync(runFile('signals.json'))) store.setSignals(L, readJson<StoredSignal[]>(runFile('signals.json'), { what: 'the discovered signals', kind: 'array' }));
   // The fidelity profile and the first implementation release (cli/fidelity.ts): what steers drafts toward

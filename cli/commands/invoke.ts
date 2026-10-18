@@ -68,7 +68,7 @@ import { assertHistoryNotServed, foldRepairs } from '../../core/architecture/rep
 import type { SkillVersion, InvocationSettings } from '../../core/state/canonical-state.js';
 import * as store from '../../core/state/store.js';
 import { copyGuardPieces } from '../../core/compiler/voice.js';
-import { listsBecause, unmeasuredKind } from '../../core/loop/claim-extract.js';
+import { unmeasuredKind } from '../../core/loop/claim-extract.js';
 import { planFor } from '../../core/plan/execution-plan.js';
 import { checkSatisfiable, describeSatisfiability, type SatisfiabilityVerdict } from '../../core/state/prerequisite.js';
 import { resolveProvenance } from '../../core/fidelity/provenance.js';
@@ -288,8 +288,9 @@ export const draftOrder = (a: DraftScore, b: DraftScore): number =>
   // pieces span, then by how much: never a pull toward their average (core/fidelity/types.ts).
   // THE LENGTH THEIR PIECES RUN, when the request names none: how many words a draft is outside it. After every
   // rule, before the finer features: a draft at the author's length that breaks a rule does not win on length.
-  || (a.lengthOff ?? 0) - (b.lengthOff ?? 0)
-  || (a.outside ?? 0) - (b.outside ?? 0) || (a.outsideBy ?? 0) - (b.outsideBy ?? 0)
+  // (Words outside the span of the author's pieces, and features outside their range, no longer rank drafts: they
+  // measure closeness to the examples, not the work asked for, and ranking on them chose a sixty-word fix over "Glad
+  // it works" for a thank-you. They are still recorded, and still steered after the draft by graded notes.)
   // THE PERSON'S FACTS USED. Real writing carries more specifics than an imitation written from the same
   // facts; the way to that density is using what was supplied, so only ledger facts count. Specific-looking
   // text that was not supplied earns nothing here and is the claim floor's to cut.
@@ -394,7 +395,6 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   // bound, has no claim check to wait for: strict holds the rest of the standard, and the verdict says the
   // specifics were listed and why. --allow-unsourced turns the claim check off, and with it this stop.
   const materialBound = store.getMaterial(L).length > 0 || boundMaterial().length > 0;
-  const unmeasuredWork = listsBecause({ cls: flag('--class') ?? store.getDocClass(L), bound: materialBound, slots: argv.includes('--placeholders') });
   const unmeasuredNamed = unmeasuredKind(flag('--class') ?? store.getDocClass(L));
   if (strict && unmeasuredNamed && !argv.includes('--allow-unsourced')) {
     die(`Strict delivery needs a claim check that decides, and here the claim check is not measured on ${unmeasuredNamed}. Nothing was written. Run without --strict to get a draft with unsourced sentences listed.`);
@@ -440,7 +440,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const adoptedCarry = store.getCarry(L); const methodCarry = adoptedCarry?.standardVersion === sv.standardVersionHash ? adoptedCarry : null;
   const carryNoteFile = flag('--carry-note');
   const carryNote = (carryNoteFile !== undefined ? (existsSync(carryNoteFile) ? readFileSync(carryNoteFile, 'utf8') : die(`--carry-note ${carryNoteFile}: there is no such file.`)) : methodCarry?.note ?? '').trim();
-  const nDrafts = Math.max(1, Math.floor(numericFlag('--drafts', runSettings ? runSettings.drafts : methodCarry?.drafts ?? (store.getVoice(L)?.pieces?.length ? 2 : 1))));
+  const nDrafts = Math.max(1, Math.floor(numericFlag('--drafts', runSettings ? runSettings.drafts : methodCarry?.drafts ?? 1)));
   const editBudget = runSettings && !argv.includes('--no-repair') ? Math.max(0, Math.floor(numericFlag('--edits', runSettings.editBudget))) : 0;
   // THE TASTE READER IS A MODEL'S OPINION OF THE OWNER'S RULES, and has not earned a say (docs/TASTE.md): it runs
   // only when asked for (--taste). A run is held to what code can read and what the owner judges.
@@ -706,8 +706,12 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   // cuts, the sentences it could not find in the material close the delivered text, after everything the checks
   // read; the record keeps the text without them. With nothing bound the list is every specific the writer chose,
   // which tells a reader nothing: it stays in the report. --no-unsourced-note leaves it there in every case.
-  const listed = unmeasuredWork && materialBound && !argv.includes('--no-unsourced-note') ? rec.repair?.claimsToCheck ?? [] : [];
-  const shipped = listed.length ? `${rec.output.trimEnd()}\n\n---\nNot found in what you supplied (check before you use this):\n${listed.map((c) => `- "${c}"`).join('\n')}` : rec.output;
+  // MARKED WHERE IT STANDS. A finding the material does not support is labelled in place as one to verify, so the
+  // person reading the review or the answer sees which claims rest on what they gave and which do not; a list after
+  // the text left the unsupported finding reading as fact where it stood. Any kind of work, once material is bound.
+  // A sentence that cannot be found as written is listed after the text, as before.
+  const listed = materialBound && !argv.includes('--no-unsourced-note') ? rec.repair?.claimsToCheck ?? [] : [];
+  const shipped = markUnsupported(rec.output, listed);
   if (!machine && !strict) console.log(`\n${shipped}\n`);
   if (adoptedCarry && !methodCarry) report.say(store.CARRY_RETIRED);
   for (const c of completions) report.say(c);
@@ -2676,4 +2680,21 @@ export function presentationRules(requirements: readonly { requirementId: string
     measured: requirements.filter((q) => q.measurement && PRESENTATION.has(q.measurement.observer)),
     prose: requirements.filter((q) => !q.measurement && PRESENTATION_WORDS.test(q.statement)),
   };
+}
+
+/** Each listed sentence labelled where it stands; one that cannot be found as written is listed after the text. */
+export function markUnsupported(text: string, listed: readonly string[]): string {
+  let out = text; const rest: string[] = [];
+  for (const c of listed) {
+    // A finding is read with its code spans blanked, so where it is not found as written, each blank run stands for
+    // what was there (code, a path): found by its words, in order, within one sentence.
+    const words = c.trim().split(/\s{2,}/).map((w) => w.trim()).filter(Boolean);
+    const exact = c.trim() ? out.indexOf(c.trim()) : -1;
+    const loose = exact === -1 && words.length > 1 ? new RegExp(words.map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('[^\\n]*?')).exec(out) : null;
+    const at = exact !== -1 ? exact : loose ? loose.index : -1;
+    if (at === -1) { rest.push(c); continue; }
+    const end = exact !== -1 ? at + c.trim().length : at + (loose?.[0].length ?? 0);
+    out = `${out.slice(0, end)} [needs verification: not shown in what you supplied]${out.slice(end)}`;
+  }
+  return rest.length ? `${out.trimEnd()}\n\n---\nNot found in what you supplied (check before you use this):\n${rest.map((c) => `- "${c}"`).join('\n')}` : out;
 }

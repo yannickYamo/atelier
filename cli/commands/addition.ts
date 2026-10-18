@@ -51,7 +51,7 @@ export function addRuleToActive(L: store.StoreLayout, name: string, statement: s
   const arch = compileArchitecture(next);
   const desc = activeSv?.description ?? defaultDescription(next.workType);
   const carried = carriedFrom(L, activeSv?.skillVersionHash ?? null, next);
-  const pkg = renderAgentSkill(next, arch, name, desc, carried.exemplar, carried.contrast, carried.voice);
+  const pkg = renderAgentSkill(next, arch, name, desc, carried.exemplar, carried.contrast, carried.voice, carried.method);
   assertPortable(pkg);
   const skill = { skillVersionHash: sha(`${arch.architectureHash}|${pkg.packageHash}`), skillName: name,
     standardVersionHash: next.standardVersionHash, architectureHash: arch.architectureHash,

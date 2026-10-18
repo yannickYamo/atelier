@@ -2,7 +2,7 @@
 // rules, each held against every example; the examples are served with the skill and their lengths recorded.
 import { describe, it, expect } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
@@ -202,7 +202,10 @@ describe('atelier new <your-work>, with no method note and no model', () => {
     // the pieces themselves are what the writer is given, and the one rule is the owner's to judge
     const dir = join(proj, '.claude', 'skills', 'posts');
     expect(readFileSync(join(dir, 'SKILL.md'), 'utf8')).toContain('New work reads like the 3 examples given');
-    expect(['voice-1.md', 'voice-2.md', 'voice-3.md'].map((f) => readFileSync(join(dir, 'examples', f), 'utf8')).join('\n')).toContain('Boring deploys are a feature.');
+    // each piece once: the worked example is not also a voice piece
+    const served = readdirSync(join(dir, 'examples')).filter((f) => /^(?:exemplar|voice-\d+)\.md$/.test(f)).map((f) => readFileSync(join(dir, 'examples', f), 'utf8')).join('\n');
+    expect(served).toContain('Boring deploys are a feature.');
+    expect(served.split('Boring deploys are a feature.').length - 1).toBe(1);
   }, 120_000);
   it('--no-model chooses the same build on purpose, and one example is enough', () => {
     const { proj, run } = seedPosts();

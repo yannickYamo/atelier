@@ -81,7 +81,7 @@ export const VALUED_OPTIONS: readonly string[] = ['correcting',
   'candidate', 'cap', 'complaint', 'context', 'decision',
   'declare-viewed', 'decisions', 'description', 'drafts', 'discovery-backend', 'discovery-base-url', 'discovery-model',
   'discovery-price-in', 'discovery-price-out', 'discovery-provider', 'discovery-strict-schema', 'discovery-structured-output',
-  'exclude', 'exemplar', 'from', 'from-hook', 'held-out', 'host', 'id', 'intent', 'invocation', 'kind', 'mode',
+  'exclude', 'exemplar', 'method-text', 'from', 'from-hook', 'held-out', 'host', 'id', 'intent', 'invocation', 'kind', 'mode',
   'add', 'labels', 'materiality', 'measure', 'form', 'max-calls', 'model', 'name', 'note', 'pick',
   'one-pager', 'pick', 'price-in', 'price-out', 'provenance', 'provider', 'claims', 'claims-model',
   'candidates', 'compiled', 'contexts', 'contrast-cap', 'contexts-exercising', 'control', 'frozen-at', 'max-tokens',
@@ -1001,11 +1001,11 @@ export const authoredIdAllocator = (s: Session): (() => string) => {
  * where they still teach the standard being rendered.
  */
 export function carriedFrom(L: store.StoreLayout, fromVersion: string | null, v: StandardVersion): {
-  exemplar: { text: string } | null; contrast: ContrastPair[]; voice: Voice | null;
+  exemplar: { text: string } | null; contrast: ContrastPair[]; voice: Voice | null; method: { text: string } | null;
 } {
   const sv = fromVersion ? store.getSkillVersion(L, fromVersion) : null;
   const pkg = sv ? store.getPackage(L, sv.materializedHash) : null;
-  if (!pkg) return { exemplar: store.getExemplar(L), contrast: [], voice: store.getVoice(L) };
+  if (!pkg) return { exemplar: store.getExemplar(L), contrast: [], voice: store.getVoice(L), method: store.getMethod(L) };
   // The author's passages travel with the package that served them, like the contrast pairs.
   const voiceRaw = pkg.assurance?.['voice.json'];
   const voice = ((): Voice | null => { try { return voiceRaw ? JSON.parse(voiceRaw) as Voice : null; } catch { return null; } })();
@@ -1015,5 +1015,7 @@ export function carriedFrom(L: store.StoreLayout, fromVersion: string | null, v:
   const raw = pkg.assurance?.['contrast-pairs.json']
     ?? ('examples/contrast.md' in pkg.files ? JSON.stringify(store.getContrast(L).pairs) : undefined);
   const pairs = ((): ContrastPair[] => { try { return raw ? JSON.parse(raw) as ContrastPair[] : []; } catch { return []; } })();
-  return { exemplar: ex === undefined ? null : { text: ex }, contrast: store.getContrast(L).off ? [] : contrastFor(pairs, v), voice };
+  // The method travels with the package that served it, like the voice.
+  const methodRaw = pkg.assurance?.['method.md'];
+  return { exemplar: ex === undefined ? null : { text: ex }, contrast: store.getContrast(L).off ? [] : contrastFor(pairs, v), voice, method: methodRaw === undefined ? null : { text: methodRaw } };
 }

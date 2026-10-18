@@ -239,7 +239,8 @@ export function checkDraft(skill: string, v: StandardVersion, text: string, opts
   // measured the check on the kind of work and material is bound, "95% of callers hit the retry path" is what the
   // person most needs to check. Never cut, and never a sentence already listed.
   const overlaps = (a: { start: number; end: number }, b: { start: number; end: number }): boolean => a.start < b.end && b.start < a.end;
-  const stated = unmeasured && (opts.material ?? '').trim()
+  // On any kind of work once material is bound: listing, never cutting, so no kind needs to have been measured for it.
+  const stated = (unmeasured || listOnly) && (opts.material ?? '').trim()
     ? statedFigureClaims(text, opts.material ?? '', (s) => derivedFromKnown(s, opts.material ?? ''))
       .filter((c) => ![...toList, ...words].some((x) => overlaps(x, c)))
     : [];

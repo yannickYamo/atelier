@@ -325,15 +325,26 @@ export async function method(): Promise<void> {
   // The finished example is installed with the skill as the one worked example: what good looks like, for a writer
   // that has the method beside it. Its own task and material are not part of it.
   const exampleFile = runFile(`method-example-${sha(example.reference)}.md`);
-  writeAtomic(exampleFile, withoutFrontMatter(example.reference));
+  // With the request it answered, when the example carried one: served beside it (renderers/agent-skill/render.ts).
+  writeAtomic(exampleFile, `${example.task ? `---\nrequest: |\n${example.task.split('\n').map((l) => `  ${l}`).join('\n')}\n---\n` : ''}${withoutFrontMatter(example.reference)}`);
   process.env.ATELIER_ORCHESTRATED = '1';
   // Every step is the owner's and every check is code: the build asks no model for a reading of the examples.
   process.env.ATELIER_BUILD_NO_MODEL = '1';
   if (!argv.includes('--work-type')) argv.push('--work-type', flag('--for') ?? name.replace(/-/g, ' '));
   if (!argv.includes('--exemplar')) argv.push('--exemplar', exampleFile);
+  // HOW A HOST KNOWS WHEN TO LOAD IT: the owner's own description when their method carries one, else what the skill is
+  // for and the method's first line. "Applies a compiled standard" told a host nothing, and the skill was rarely loaded.
+  if (!argv.includes('--description')) { const d = describeFrom(note, flag('--for') ?? null, name); if (d) argv.push('--description', d); }
+  // The method itself is served whole with the skill: what the steps above decide is what is checked, never what the
+  // writer is told.
+  if (notePath !== null && !argv.includes('--method-text')) {
+    const methodFile = runFile(`method-note-${sha(note)}.md`);
+    writeAtomic(methodFile, note);
+    argv.push('--method-text', methodFile);
+  }
   // Three pieces or more are served with the skill, as its own way of writing, and their lengths recorded; with
   // fewer there is no telling a usual piece from an odd one, and the one worked example stands alone.
-  if (!argv.includes('--voice') && !(folder && cases.length >= 3)) argv.push('--voice', 'none');
+  if (!argv.includes('--voice') && !(folder && cases.length >= 2)) argv.push('--voice', 'none');
   if (!argv.includes('--persona')) argv.push('--persona', 'none');
   // (With no method note nothing names the kind of work: a folder called "posts" or "contract" is not thereby held
   // as a post or a contract. --class says it.)
@@ -352,4 +363,20 @@ export async function method(): Promise<void> {
   console.log(`\nYour skill "${name}" is ready.`);
   if (disputed.length && !confirmed) console.log(`  ${disputed.length} of your steps ${disputed.length === 1 ? 'is' : 'are'} not what your own examples do (marked ! above). ${disputed.length === 1 ? 'It is' : 'They are'} checked and shown on every run, and block${disputed.length === 1 ? 's' : ''} nothing until you say so:\n    keep ${disputed.length === 1 ? 'it' : 'them'} as written: atelier ${typedWithout(['--yes'])} --name ${name} --yes   ·   or change the method and build again`);
   console.log(`  Use it: atelier run "<the task>"${against ? ' --with <file>' : ''}   (or /${name} in Claude Code)`);
+}
+
+/**
+ * THE DESCRIPTION A HOST READS TO DECIDE WHEN TO LOAD THE SKILL. The owner's own (`description:` in the method's front
+ * matter) when there is one; else "Use when asked to <purpose>." with the method's first sentence of prose, which is
+ * the method saying what it is for. Null when there is neither.
+ */
+export function describeFrom(note: string, purpose: string | null, name: string): string | null {
+  const fm = /^\uFEFF?---\r?\n([\s\S]*?)\r?\n---/.exec(note);
+  const own = fm ? /^description:\s*(.+)$/m.exec(fm[1])?.[1]?.trim().replace(/^(['"])([\s\S]*)\1$/, '$2') : undefined;
+  if (own) return own.replace(/\s+/g, ' ').slice(0, 1000);
+  const body = note.replace(/^\uFEFF?---\r?\n[\s\S]*?\r?\n---\r?\n?/, '');
+  const first = body.split(/\r?\n\s*\r?\n/).map((p) => p.trim()).find((p) => p && !/^(?:#|[-*+]\s|\d+[.)]\s|\||```|>)/.test(p));
+  const sentence = first ? (/^[\s\S]*?[.!?](?=\s|$)/.exec(first.replace(/\s+/g, ' '))?.[0] ?? first.replace(/\s+/g, ' ')).slice(0, 300) : '';
+  const what = purpose?.trim() || name.replace(/-/g, ' ');
+  return `Use when asked to ${what.replace(/[.\s]+$/, '')}.${sentence ? ` ${sentence}` : ''}`;
 }

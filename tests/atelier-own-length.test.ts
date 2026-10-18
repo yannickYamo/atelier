@@ -40,21 +40,22 @@ describe('it applies in one context, and is said to', () => {
   });
 });
 
-describe('drafts are chosen by it after every rule, and before the finer features', () => {
+describe('the length of the author\'s pieces is recorded and chooses no draft', () => {
   const base: DraftScore = { req: 0, taste: 0, tells: 0, all: 0, signal: null, style: 0 };
   it('how far outside the band a count is', () => {
     expect([150, 187, 232, 248].map((n) => wordsOutside(n, [187, 232]))).toEqual([37, 0, 0, 16]);
   });
-  it('of two drafts that break the same rules, the one at the author\'s length is chosen', () => {
-    expect(draftOrder({ ...base, lengthOff: 0, outside: 3 }, { ...base, lengthOff: 16, outside: 0 })).toBeLessThan(0);
-    expect(draftOrder({ ...base, lengthOff: 6 }, { ...base, lengthOff: 16 })).toBeLessThan(0);
+  // A request sets the length of what answers it; the author's usual length chose a sixty-word fix for a thank-you.
+  it('of two drafts that break the same rules, neither wins on the author\'s length', () => {
+    expect(draftOrder({ ...base, lengthOff: 0 }, { ...base, lengthOff: 16 })).toBe(0);
+    expect(draftOrder({ ...base, lengthOff: 6 }, { ...base, lengthOff: 16 })).toBe(0);
   });
   it('a draft at the right length that breaks a rule does not win on length', () => {
     expect(draftOrder({ ...base, req: 1, lengthOff: 0 }, { ...base, req: 0, lengthOff: 40 })).toBeGreaterThan(0);
     expect(draftOrder({ ...base, all: 1, lengthOff: 0 }, { ...base, all: 0, lengthOff: 40 })).toBeGreaterThan(0);
   });
-  it('where it does not apply, nothing changes: no length is counted', () => {
-    expect(draftOrder({ ...base, outside: 1 }, { ...base, outside: 2 })).toBeLessThan(0);
+  it('nor on the author\'s range', () => {
+    expect(draftOrder({ ...base, outside: 1 }, { ...base, outside: 2 })).toBe(0);
   });
 });
 

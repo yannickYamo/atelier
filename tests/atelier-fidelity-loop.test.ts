@@ -118,10 +118,13 @@ describe('a length class steers only on its own evidence', () => {
   });
 });
 
-describe('the draft order: rules first, then the author\'s range, then the supplied facts, the detector last', () => {
+describe('the draft order: rules first, then the supplied facts, the author\'s signals and style, the detector last', () => {
   const base: DraftScore = { req: 0, taste: 0, tells: 0, all: 0, signal: null, style: 0 };
-  it('a draft with fewer features outside the range wins, whatever its signal distance', () => {
-    expect(draftOrder({ ...base, outside: 1, signal: 9 }, { ...base, outside: 3, signal: 0 })).toBeLessThan(0);
+  // Closeness to the author's range measures the examples, not the work asked for: ranked on it, a thank-you was
+  // answered with a sixty-word fix. It is recorded and steered after the draft, and chooses no draft.
+  it('features outside the author\'s range choose no draft', () => {
+    expect(draftOrder({ ...base, outside: 1, signal: 9 }, { ...base, outside: 3, signal: 0 })).toBeGreaterThan(0);
+    expect(draftOrder({ ...base, outside: 1 }, { ...base, outside: 3 })).toBe(0);
   });
   it('a REQUIRED rule still outranks the range', () => {
     expect(draftOrder({ ...base, req: 1, outside: 0 }, { ...base, req: 0, outside: 5 })).toBeGreaterThan(0);
@@ -132,7 +135,7 @@ describe('the draft order: rules first, then the author\'s range, then the suppl
   it('the detector breaks only what is left, and only on a clear difference', () => {
     expect(draftOrder({ ...base, detector: 0.2 }, { ...base, detector: 0.8 })).toBeLessThan(0);
     expect(draftOrder({ ...base, detector: 0.51 }, { ...base, detector: 0.54 })).toBe(0);
-    expect(draftOrder({ ...base, outside: 0, detector: 0.9 }, { ...base, outside: 1, detector: 0.1 })).toBeLessThan(0);
+    expect(draftOrder({ ...base, outside: 0, detector: 0.9 }, { ...base, outside: 1, detector: 0.1 })).toBeGreaterThan(0);
   });
 });
 
@@ -528,7 +531,9 @@ describe('through the binary: discovery builds the profile, invoke steers and re
     expect(skill).not.toMatch(/My answers usually run about/);
     expect(skill).toMatch(/a preamble before the answer .*: never \(0 of (\d\d)\)/);
     expect(skill).not.toMatch(/\(\d+ of 2\)/);
-    expect(skill).not.toContain('What is 2 to the power of 10?');
+    // a request is served only beside the answer it asked for, as the pair it is: never as a rule, band or habit
+    expect(skill).toContain('The request it answered: What is 2 to the power of 10?');
+    expect(skill.split('What is 2 to the power of 10?').length - 1).toBe(1);
     // a file the skill names is a file the export carries: a move is never served without its example
     for (const m of skill.matchAll(/`examples\/([\w-]+)\.md`/g)) expect(skill, `examples/${m[1]}.md is named and not inlined`).toContain(`[${m[1]}]`);
     expect(skill).toMatch(/Give what was asked first\./);

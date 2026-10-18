@@ -52,9 +52,14 @@ export const CLAIMS_MODEL_DEFAULT = 'claude-haiku-4-5';
  * gate anyway: an escape hatch for someone who has measured it on their own writing, and the sensor's
  * notes say so every time it is used.
  */
-export function claimSensorFor(material: string, task: string, placeholders: boolean, strict = false): ClaimSensor {
+export function claimSensorFor(material: string, task: string, placeholders: boolean, strict = false, bound = true): ClaimSensor {
   const mode = flag('--claims') ?? process.env.ATELIER_CLAIMS ?? 'model';
   if (mode === 'pattern') return patternSensor(material, placeholders, 'pattern check (--claims pattern)');
+  // WITH NOTHING BOUND, A READING CAN ONLY LIST. Nothing is cut without material (claim-extract.ts, `listsBecause`), so
+  // two model reads per text bought a list the pattern check also makes: four of a short answer's seven calls. The
+  // reader is asked where its reading can act: material bound, or strict delivery, or the person naming a reader.
+  // (Not when the person chose a reader, or asked for slots: a slot is the reader acting with nothing bound.)
+  if (!bound && !strict && !placeholders && flag('--claims') === undefined && process.env.ATELIER_CLAIMS === undefined) return patternSensor(material, placeholders, 'pattern check (no material bound: a model reading of specifics could only list them)');
   const named = flag('--claims-model') ?? process.env.ATELIER_CLAIMS_MODEL;
   const provider = providerFor('discovery');
   if (!named && provider !== 'anthropic') {
@@ -141,14 +146,17 @@ export function checksFor(L: store.StoreLayout, opts: {
   // THE SKILL'S OWN WORDS ARE KNOWN. A rule the person approved ("end with one thing the reader can do in
   // under two minutes") puts its wording in every draft, and the claim check, reading only the material,
   // cut that sentence as an invented figure. What the approved standard says is theirs to repeat.
-  const material = [opts.material, ...standardStatements(L)].filter(Boolean).join('\n\n');
+  // Fenced, so a figure in the rules counts only as written: "23" and "10" in a rule's wording worked out "2.3M rows"
+  // as derived from what was supplied (core/loop/derived.ts reads no arithmetic out of a fenced block).
+  const own = standardStatements(L);
+  const material = [opts.material, ...(own.length ? [`\`\`\`\n${own.join('\n\n')}\n\`\`\``] : [])].filter(Boolean).join('\n\n');
   // The format the text is: the one declared for it, or the class the standard was built from.
   const format = formatOf(flag('--class') ?? store.getDocClass(L));
   const judge = opts.offline ? undefined : opts.judge ?? (guardClaims ? contextJudgeFor() : undefined);
-  const sensor = (): ClaimSensor => (opts.offline ? patternSensor(material, placeholders, 'pattern check (offline)')
-    : claimSensorFor(material, opts.task ?? '', placeholders, format?.strictSpecifics ?? false));
   // Where a deletion is not earned (no material bound, or a kind of work nobody measured), findings are listed.
   const bound = opts.bound ?? (store.getMaterial(L).length > 0 || boundMaterial().length > 0);
+  const sensor = (): ClaimSensor => (opts.offline ? patternSensor(material, placeholders, 'pattern check (offline)')
+    : claimSensorFor(material, opts.task ?? '', placeholders, format?.strictSpecifics ?? false, bound));
   const unmeasured = listsBecause({ cls: opts.cls ?? flag('--class') ?? store.getDocClass(L), bound, slots: placeholders });
   return { material, guardClaims, placeholders, format, ...(unmeasured ? { listsBecause: unmeasured } : {}), ...(opts.context ? { context: opts.context } : {}), ...(judge ? { judge } : {}),
     learnedTells: store.activeTells(store.getTells(L)),

@@ -92,7 +92,9 @@ export function splitRequest(raw: string): { text: string; request: string | nul
       // A block scalar (`request: |` or `>`) runs over the indented lines that follow; else the value is the line.
       let end = at + 1;
       if (/^[|>][+-]?\s*$/.test(first) || first === '') while (end < lines.length && (/^\s+\S/.test(lines[end]) || lines[end].trim() === '')) end += 1;
-      const value = (/^[|>][+-]?\s*$/.test(first) || first === '' ? lines.slice(at + 1, end).map((l) => l.trim()).join('\n') : first.replace(/^(["'])([\s\S]*)\1$/, '$2')).trim();
+      // A double-quoted value is YAML's: its escapes (\" and \\) are read as the characters they stand for.
+      const scalar = (v: string): string => (/^"[\s\S]*"$/.test(v) ? v.slice(1, -1).replace(/\\(["\\])/g, '$1') : v.replace(/^'([\s\S]*)'$/, '$1'));
+      const value = (/^[|>][+-]?\s*$/.test(first) || first === '' ? lines.slice(at + 1, end).map((l) => l.trim()).join('\n') : scalar(first.trim())).trim();
       if (value) {
         const rest = [...lines.slice(0, at), ...lines.slice(end)].filter((l) => l.trim() !== '');
         const answer = body.slice(fm[0].length);

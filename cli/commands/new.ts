@@ -100,8 +100,11 @@ export async function newSkill(): Promise<void> {
   if (keyless) process.env.ATELIER_BUILD_NO_MODEL = '1';
   if (composite) {
     console.log('No model is set up (ANTHROPIC_API_KEY), so each voice is read for what can be counted in its pieces alone.\n  To have a model read them too, set the key and run this again in a folder of its own.\n');
-  } else if (fresh && keyless) {
-    console.log('No model is set up (ANTHROPIC_API_KEY), so the skill is built from what can be counted in your examples, with no rules read by a model and none for you to approve.\n  To have a model read them too, set the key and run this again in a folder of its own.\n');
+  } else if (fresh && (keyless || thinCorpus(path))) {
+    console.log(keyless ? 'No model is set up (ANTHROPIC_API_KEY), so the skill is built from what can be counted in your examples, with no rules read by a model and none for you to approve.\n  To have a model read them too, set the key and run this again in a folder of its own.\n'
+      // NEVER A REFUSAL FOR FEW EXAMPLES. Two or three pieces cannot have rules read off some and checked on the others,
+      // so none is proposed as if checked: the pieces themselves are served, with what can be counted in them.
+      : `With ${examplePieces(corpusFiles(path).map((f) => ({ id: f, text: readCorpusText(f) }))).length} example(s), rules read by a model could not be checked on pieces it had not read, so none is proposed: your examples are served to the writer whole, with what can be counted in them${argv.includes('--method') ? ' and your method' : ''}. Add pieces (four or more) to have rules read and checked.\n`);
     if (intent && !argv.includes('--for')) argv.push('--for', intent);
     await method();
     return;
@@ -281,3 +284,10 @@ function proposeFloor(skill: string): void {
   store.setFloor(L, { ...store.getFloor(L), contract: buildContract(proposals, dims, null) });
   console.log(`\nRegression floor: margins proposed for ${proposals.length} measured rule(s) from your own spread, all watched, none blocking yet (atelier floor --skill ${skill}).`);
 }
+
+/** A folder of fewer than four pieces of work: too few to read rules off some and check them on the rest. */
+function thinCorpus(path: string): boolean {
+  if (!statSync(path).isDirectory()) return true;
+  return examplePieces(corpusFiles(path).map((f) => ({ id: f, text: readCorpusText(f) }))).length < 4;
+}
+function readCorpusText(f: string): string { const x = extract(f); return x.ok ? x.text : ''; }

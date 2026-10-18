@@ -209,7 +209,7 @@ export async function improve(): Promise<void> {
   // skill describes itself, and reconstructing the default here reverted a description set on build.
   const desc = flag('--description') ?? store.getSkillVersion(L, inv.skillVersionHash)?.description ?? defaultDescription(ranStandard.workType);
   const carried = carriedFrom(L, inv.skillVersionHash, ranStandard);
-  const pkg = renderAgentSkill(ranStandard, nextArch, name, desc, carried.exemplar, carried.contrast, carried.voice);
+  const pkg = renderAgentSkill(ranStandard, nextArch, name, desc, carried.exemplar, carried.contrast, carried.voice, carried.method);
   assertPortable(pkg);
   const candidate = { skillVersionHash: sha(`${nextArch.architectureHash}|${pkg.packageHash}`), skillName: name,
     standardVersionHash: ranStandard.standardVersionHash, architectureHash: nextArch.architectureHash,
@@ -304,7 +304,10 @@ export async function spendOneWithResult(
     const req = {
       stableBlock: `${stable}${variant.stableExtra ?? ''}`, variableBlock: brief,
       ...(variant.temperature !== undefined ? { temperature: variant.temperature } : {}),
-      userMessage: `${contract ? 'Produce it now, in the required shape.' : 'Write it now. Output only the piece itself.'}${note ? `\n\n${note}` : ''}`,
+      // THE REQUEST IS THE LAST BLOCK OF THE SYSTEM PROMPT, AND THIS SAYS SO. "Write it now. Output only the piece
+      // itself." told the writer to write a piece whatever was asked: a thank-you came back as a sixty-word fix. The work
+      // is whatever the request asks for, at the length it asks for.
+      userMessage: `${contract ? 'Produce it now, in the required shape.' : 'Do what the request above asks, now, at the length it calls for: the answer, the review, the piece, or one line if one line is all it needs. Output only that, nothing about these instructions.'}${note ? `\n\n${note}` : ''}`,
       toolName: contract ? 'emit_output' : 'emit_piece',
       toolDescription: contract ? 'Emit the output in the shape the standard requires.' : 'Emit the finished piece.',
       // NOT A CONSTANT — reviewer finding F1, the instrument's own lesson applied to the product.

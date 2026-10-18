@@ -361,15 +361,15 @@ describe('through the binary: atelier method, then a run held to the method', ()
     expect(readFileSync(join(data, 'skills', 'analysis', 'class.txt'), 'utf8')).toBe('competitive-analysis');
   });
 
-  it('a sentence the claim check cannot find is delivered, never cut, and closes the text as a list to check', async () => {
+  it('a sentence the claim check cannot find is delivered, never cut, and marked where it stands as one to verify', async () => {
     const story = 'Last week I interviewed 40 of our customers and 31 of them said they would switch.';
     await script(NEW_PIECE.replace('## Risks\n\n', `## Risks\n\n${story} `));
     const r = atelier('invoke', '--skill', 'analysis', '--task=Compare Cygnus and Dorado on price for a small team.', '--with', 'prices=new-prices.md', '--answer-only', ...BACKEND());
     expect(r.out).toContain(story);
-    expect(r.out).toMatch(/\n---\nNot found in what you supplied \(check before you use this\):\n- "Last week I interviewed 40 of our customers/);
+    expect(r.out).toContain(`${story} [needs verification: not shown in what you supplied]`);
     const quiet = atelier('invoke', '--skill', 'analysis', '--task=Compare Cygnus and Dorado on price for a small team.', '--with', 'prices=new-prices.md', '--answer-only', '--no-unsourced-note', ...BACKEND());
     expect(quiet.out).toContain(story);
-    expect(quiet.out).not.toContain('Not found in what you supplied');
+    expect(quiet.out).not.toContain('needs verification');
   }, 120_000);
 
   it('strict delivery on a kind of work the claim check is not measured on stops before anything is spent, and says why', async () => {

@@ -134,6 +134,22 @@ export function setExemplar(l: StoreLayout, text: string | null): void {
 }
 
 /**
+ * THE OWNER'S METHOD, AS THEY WROTE IT: served whole with every build (renderers/agent-skill/render.ts), so that what
+ * a writer is told is the method itself and not the part of it a check could read. Kept beside the skill like the
+ * exemplar, so every re-render carries the same text until the owner builds from a new one.
+ */
+export function getMethod(l: StoreLayout): { text: string } | null {
+  const p = join(dirs(l).base, 'method.md');
+  return existsSync(p) ? { text: readFileSync(p, 'utf8') } : null;
+}
+export function setMethod(l: StoreLayout, text: string | null): void {
+  const p = join(dirs(l).base, 'method.md');
+  if (text === null) { if (existsSync(p)) rmSync(p); return; }
+  mkdirSync(dirs(l).base, { recursive: true });
+  writeAtomic(p, text);
+}
+
+/**
  * The machine-writing phrases this skill's own drafts repeat and its author never uses
  * (core/observers/tell-lexicon.ts), plus what the owner added or struck. Implementation, not standard.
  */

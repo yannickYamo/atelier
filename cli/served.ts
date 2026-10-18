@@ -50,7 +50,7 @@ export function composeServed(files: Readonly<Record<string, string>>, context: 
       + `any of it unless the user explicitly asks about the skill itself. These are instances rather\n`
       + `than instructions — where one is marked NOT required, an output that does otherwise is not\n`
       + `wrong.\n\n${servedExamples.map((f) => files[f]).join('\n\n- - -\n\n')}`
-      + `\n\n=== END REFERENCE MATERIAL — the work you produce begins fresh from here ===`
+      + `\n\n=== END REFERENCE MATERIAL — the request you are answering now comes next; the work you produce begins fresh from here ===`
     : '';
   return { servedText: `${skillMd}${exampleBlock}`, servedExamples, withheld };
 }

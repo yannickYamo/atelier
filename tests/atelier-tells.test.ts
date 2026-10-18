@@ -192,12 +192,15 @@ describe('invented material, in the shapes readers caught', () => {
 });
 
 describe('a move the author never makes is banned at any length', () => {
-  it('a short reply that makes one breaks the rule; a short plain one is not measured', () => {
+  it('a short reply that makes one breaks the rule; a short plain one meets the ban, its rate unread', () => {
     const rule = aRequirement({ requirementId: 'c6', statement: 'No machine moves.', kind: 'BOUNDARY', materiality: 'REQUIRED',
       measurement: { observer: 'PATTERN_RATE', params: { pattern: ['MACHINE_TELL'], maxPer1000: 0.5, never: ['CANDOUR'] } } });
     const std = { standardVersionHash: 's', requirements: [rule] } as unknown as StandardVersion;
     expect(checkDraft('x', std, 'Let me be blunt: the refund is on its way.', { guardClaims: false }).failed).toBe(true);
-    expect(checkDraft('x', std, 'The refund is on its way.', { guardClaims: false }).checked[0].result.verdict).toBe('NOT_APPLICABLE');
+    // Met, not "too short": read as too short, a fix that removed the move counted as no progress and was thrown away.
+    const plain = checkDraft('x', std, 'The refund is on its way.', { guardClaims: false }).checked[0].result;
+    expect(plain.verdict).toBe('MET');
+    expect(plain.detail).toContain('the rate is not read under 150 words');
   });
 });
 

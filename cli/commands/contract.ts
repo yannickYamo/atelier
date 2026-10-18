@@ -367,7 +367,7 @@ export async function contract(): Promise<void> {
           sha(`${candidateArch.architectureHash}|${p.operation.requirementId}|${p.operation.to}`));
       }
       const carried = carriedFrom(L, sv.skillVersionHash, v);
-      const candidatePkg = renderAgentSkill(v, candidateArch, name, sv.description ?? `Applies a compiled standard (${v.workType})`, carried.exemplar, carried.contrast, carried.voice);
+      const candidatePkg = renderAgentSkill(v, candidateArch, name, sv.description ?? `Applies a compiled standard (${v.workType})`, carried.exemplar, carried.contrast, carried.voice, carried.method);
       // The optimizer changed an arrangement. It may not have changed the target, and saying so is
       // cheap next to discovering later that it did.
       assertSameTarget(v, v);

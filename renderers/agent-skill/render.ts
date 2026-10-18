@@ -211,7 +211,7 @@ export function renderAgentSkill(
    * is where a voice drifts. It is an implementation carrier, chosen by the owner, never part of the
    * standard — and it is labelled as something to take the voice from, never the content.
    */
-  exemplar: { readonly text: string } | null = null,
+  exemplar: { readonly text: string; readonly request?: string } | null = null,
   /**
    * WRITE THIS, NOT THAT: sentences written for this skill that broke one of its measured rules, each
    * next to the rewrite that met it (see core/compiler/contrast-examples.ts). Chosen at build from the
@@ -223,8 +223,28 @@ export function renderAgentSkill(
    * piece length. Rules describe a writer; these are how the writer sounds. Implementation, not standard.
    */
   voice: Voice | null = null,
+  /**
+   * THE OWNER'S METHOD, AS WRITTEN (core/state/store.ts, `getMethod`). Served whole and first: every instruction,
+   * explanation, exception, worked example and final check in its own place. The requirements read from it decide
+   * what is CHECKED; they never decide what the writer is TOLD. A step that only a person can judge still reaches the
+   * writer, in the owner's words and under the owner's heading.
+   */
+  method: { readonly text: string } | null = null,
 ): PortableSkillPackage {
   assertArchitectureServesStandard(arch, v);
+  // EACH PIECE OF THE AUTHOR'S IS SERVED ONCE. The worked example is also among the pieces chosen for the voice when a
+  // folder is small, and served under both names it was read twice and weighed twice: its topic came back in answers
+  // to requests that had nothing to do with it. The copy among the voice pieces goes; the worked example stays.
+  if (exemplar && voice?.pieces?.length) {
+    const same = (t: string): string => t.replace(/^\uFEFF/, '').replace(/\s+/g, ' ').trim();
+    const keep = (voice.pieces ?? []).map((t) => same(t) !== same(exemplar.text));
+    if (keep.some((k) => !k)) {
+      voice = { ...voice, pieces: (voice.pieces ?? []).filter((_, i) => keep[i]),
+        // Each request stays with its piece.
+        ...(voice.pieceRequests ? { pieceRequests: voice.pieceRequests.filter((_, i) => keep[i]) } : {}),
+        ...(voice.composite ? { composite: { ...voice.composite, pieceAuthors: voice.composite.pieceAuthors.filter((_, i) => keep[i]) } } : {}) };
+    }
+  }
   // A skill that answers people is compiled in the words of answers, not essays (the length is a default the
   // request overrides; the line against invention names results, files and commands, not stories).
   const answers = isReplyWork(v.workType);
@@ -342,6 +362,14 @@ export function renderAgentSkill(
       + 'When that does not hold, do not.';
   };
 
+  // A STEP THE SERVED METHOD ALREADY SAYS IS NOT SAID TWICE. The owner's steps are served in their method, in order
+  // and under their headings; restated below as numbered items they were cut loose from the heading that governed
+  // them ("Before sending, delete:" lost, so the things to delete read as things to do). Such a step keeps its check,
+  // listed under "How your method is checked". A step the method does not contain verbatim is served as before.
+  const flat = (t: string): string => t.toLowerCase().replace(/[*_`>#]/g, '').replace(/\s+/g, ' ').trim();
+  const methodFlat = method ? flat(method.text) : '';
+  const inMethod = (r: typeof v.requirements[number]): boolean => Boolean(methodFlat) && r.provenance === 'EXPERT_STATED'
+    && methodFlat.includes(flat(r.statement).replace(/[.\s]+$/, ''));
   const line = (r: typeof v.requirements[number], i: number): string => {
     const prov = provenanceLabel(r.provenance);
     const text = isGeneralScope(r.appliesWhen)
@@ -356,8 +384,9 @@ export function renderAgentSkill(
     return `${i + 1}. ${text}${needs}${checked}\n   <!-- ${r.requirementId} · ${prov} -->`;
   };
 
-  const avoidSection = bound.length
-    ? `\n## What not to do\n\n${bound.map(line).join('\n\n')}\n`
+  const boundShown = bound.filter((r) => !inMethod(r));
+  const avoidSection = boundShown.length
+    ? `\n## What not to do\n\n${boundShown.map(line).join('\n\n')}\n`
     : '';
 
   // ENFORCE + SELF_CHECK: the rule is confirmed, so the check MAY act on the draft.
@@ -413,7 +442,13 @@ export function renderAgentSkill(
   // the weaker version of the schema — half-satisfiable with nothing noticing — and swapping a runtime
   // guarantee for a request is the substitution the carrier exists to prevent. Where a host cannot
   // enforce it, the honest report is UNSUPPORTED, not a paragraph.
-  const exampleCarried = carried.filter((x) => x.carrier === 'EXAMPLE');
+  // A COUNT IS A CHECK, NOT AN EXAMPLE. A habit counted off the pieces ("a new piece stays between 110 and 686
+  // characters", "no links") and not required was served as a reference card beside every request: seventeen of them
+  // were a third of what the writer read, and a band read off five short answers told it how long a requested
+  // explanation could be. Such a rule is held by its check and steered by its note after the draft; the writer is not
+  // handed it. What the author's own words show (a move with its quote) is still served.
+  const countedOnly = (r: typeof v.requirements[number]): boolean => Boolean(r.measurement) && r.materiality !== 'REQUIRED' && !r.evidence?.trim();
+  const exampleCarried = carried.filter((x) => x.carrier === 'EXAMPLE' && !countedOnly(x.r));
   const always = (r: { appliesWhen: string }): boolean => isGeneralScope(r.appliesWhen);
   // ── A MOVE IS CARRIED NO MORE WIDELY THAN THE CORPUS SUPPORTS (core/compiler/applicability.ts) ──
   //
@@ -513,15 +548,37 @@ calls for one, and never the same set every time.`}
 ${stated.map((r) => `- ${moveCarriers.get(r.requirementId)?.carrier === 'general' || always(r) ? r.statement.trim() : conditionalLine(r.statement, r.appliesWhen)}${counted(r)}`).join('\n')}
 ` : '';
 
+  // THE METHOD, WHOLE. Its headings move down two levels so they sit under this one; nothing else is touched.
+  const methodBody = method ? method.text.replace(/^\uFEFF/, '').replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, '').trim()
+    .split('\n').map((l) => l.replace(/^(#{1,4})(\s)/, (_m, h: string, sp: string) => `${h}##${sp}`)).join('\n') : '';
+  const methodSection = method ? `
+## My method
+
+Follow it as written: its steps, its exceptions, its examples of what to do and not do, and its final checks. It is
+how this work is done.
+
+${methodBody}
+` : '';
+  const genShown = gen.filter((r) => !inMethod(r));
+  const checkedSteps = [...gen, ...bound].filter((r) => inMethod(r) && r.measurement);
+  const checkedSection = checkedSteps.length ? `
+## How your method is checked
+
+Code reads the finished work for these parts of the method above (the step itself is said once, in the method):
+
+${checkedSteps.map((r) => `- ${r.measurement ? observerFor(r.measurement.observer).describe(r.measurement.params) : ''}.\n  <!-- ${r.requirementId} · ${provenanceLabel(r.provenance)} -->`).join('\n')}
+` : '';
   const skillMd = `---
 name: ${skillId}
 description: ${description}
 ---
 
 # ${skillId}
-
-Apply the standard below as judgment, not as a checklist — including knowing when a rule does not
-apply.
+${methodSection}
+${method ? `Everything below my method is secondary: examples of finished work, how I sound, and rules read from my
+pieces. Apply those as judgment, including knowing when one does not apply. None of them overrides the method.`
+  : `Apply the standard below as judgment, not as a checklist — including knowing when a rule does not
+apply.`}
 ${exemplar ? `
 ## Read first
 
@@ -534,10 +591,11 @@ moves from point to point. Never take its topic, facts, names, figures or senten
 \`examples/contrast.md\` has ${contrast.length} sentence(s) written for this skill that broke one of its rules, each
 next to the rewrite that met it. Before finalizing, check your draft for the same moves.
 ` : ''}
+${genShown.length || !method ? `
 ## What to do
 
-${gen.map(line).join('\n\n') || '_(none)_'}
-${avoidSection}${preFinalizeSection}${observeSection}${referenceSection}
+${genShown.map(line).join('\n\n') || '_(none)_'}
+` : ''}${checkedSection}${avoidSection}${preFinalizeSection}${observeSection}${referenceSection}
 ---
 
 <!--
@@ -670,10 +728,13 @@ mintedAt:        ${v.mintedAt}
       appliesWhen: x.r.appliesWhen })),
   }, null, 2)}\n` } : {};
 
+  // A PIECE AND THE REQUEST IT ANSWERED, shown as the pair they are: the subject is that request's.
+  const withRequest = (request: string | null, text: string): string => (request
+    ? `The request it answered: ${request.trim().replace(/\s+/g, ' ')}\n\nWhat I wrote:\n\n${text}` : text);
   const runtime: Record<string, string> = { 'SKILL.md': skillMd, ...exampleFiles, ...contractFiles, ...contextMap,
-    ...(exemplar ? { 'examples/exemplar.md': exemplar.text } : {}),
+    ...(exemplar ? { 'examples/exemplar.md': withRequest(exemplar.request ?? null, exemplar.text) } : {}),
     ...Object.fromEntries((voice?.pieces ?? []).map((t, i) => [`examples/voice-${i + 1}.md`,
-      `${pieceLabel(i + 1, cutPieces[i], authorOf(i))}\n\n${t}`])),
+      `${pieceLabel(i + 1, cutPieces[i], authorOf(i))}\n\n${withRequest(voice?.pieceRequests?.[i] ?? null, t)}`])),
     ...(contrast.length ? { 'examples/contrast.md': renderContrastFile(contrast, v) } : {}) };
 
   // ── MANIFEST + ASSURANCE ────────────────────────────────────────────────────────────────────
@@ -725,7 +786,8 @@ mintedAt:        ${v.mintedAt}
     return { ...rest, ...(pieceForm === 'excerpts' && cutPieces.some(Boolean) ? { pieceForm } : {}) };
   })() : null;
   const withPairs = { ...(contrast.length ? { ...assurance, 'contrast-pairs.json': `${JSON.stringify(contrast, null, 1)}\n` } : assurance),
-    ...(travelling ? { 'voice.json': `${JSON.stringify(travelling, null, 1)}\n` } : {}) };
+    ...(travelling ? { 'voice.json': `${JSON.stringify(travelling, null, 1)}\n` } : {}),
+    ...(method ? { 'method.md': method.text } : {}) };
   return { skillId, standardVersionHash: v.standardVersionHash, architectureHash: arch.architectureHash,
     runtime, assurance: withPairs, files: runtime, packageHash: sha(JSON.stringify(runtime)) };
 }
