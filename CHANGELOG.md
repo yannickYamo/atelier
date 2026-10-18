@@ -67,6 +67,33 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 - `atelier rate` takes optional reasons from a closed list (necessary part missing, unnecessary extra, wrong, unsafe,
   unsupported claim, asks instead of acting, too long, too short, voice off).
 
+### Studies: three kinds of work, and whether the style result fell since the method work (development evidence)
+
+Three contexts, every arm on the same writer model and the same tasks, scored by the domain's own checklist (code
+written before any output), by `atelier verify` as a person sees it, and by one blind judge reading three of the
+author's pieces: usable, invented specifics, six style dimensions and "sounds exactly like the author" (1-5).
+
+- **Contract** (rule-heavy, ten term sheets): Atelier and a skill creator's skill both passed the checklist 10 of 10;
+  the method page with the examples passed 0 of 10 and the examples pasted 0 of 5 (every one over the word limit). All
+  usable, none invented. Sounds like the author: Atelier 4.1, the others 4.8 to 5.0: it dropped the "includes" list and
+  the standard-of-care sentence the examples carry, to stay inside the limit. Its own verdict blocked 8 of 10 for
+  clauses shared with the examples, which is how house contracts are written. The API refused the bare model's
+  drafts 10 of 10 and the pasted arm's 5 of 10 as cyber content.
+- **Code review** (structure-heavy, ten diffs, one planted defect each): Atelier passed the checklist 7 of 10 and cited
+  the defect within two lines 9 of 10; every other arm passed 0 of 10 and found it 0 to 5 of 10 (lines counted from the
+  top of the diff). Sounds like the author: Atelier 3.1 against 4.2 to 4.8, and the judge called 4 of 10 usable against
+  9: its reviews ran a third longer, 5 of 10 added a line on what could not be settled from the diff, 3 of 10 added
+  text after the verdict, and in one the claim check cut the most serious finding down to "Await it.". Its own
+  verdict blocked 7 of 10 for specifics the diff holds.
+- **Blog** (creative, three posts read, three held-out titles, two runs each): with three pieces Atelier reads no
+  rules and serves the examples. Sounds like the author: a skill creator's skill 4.0, the posts pasted 3.2, Atelier 2.5,
+  a bare model 1.3; ranked against the author's real post on the same title, the skill creator's came first 5 of 6,
+  Atelier third of four. Atelier invented the fewest specifics (1.7 a post against 7.0 and 3.5); the judge called its
+  posts abstract: no links, images, named products or demos, which is how this author writes.
+- **Since the method work:** on the technical-paper study, the release before any method work (1.1.0) against this
+  build, judged head to head in both orders: 5 to 5. 1.1.0 lost 10 of 10 to the skill creator's skill. The style gap
+  predates the method work; the extra notes in code review come from it.
+
 ### Studies: one author's style on a new subject, built as a person builds it (development evidence)
 
 The one-article study above was built without a model, so no rule was read and no range measured. Run again as a person
