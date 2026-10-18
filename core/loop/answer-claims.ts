@@ -85,3 +85,15 @@ export function judgedOnly(text: string, judged: ReadonlySet<number> | null, cut
   return [...judged].map((i) => units[i]).filter((u): u is NonNullable<typeof u> => Boolean(u) && !cutByPattern.some((c) => c.start === u.start))
     .map((u) => ({ start: u.start, end: u.end, text: u.text, kind: 'EXPERIENCE' as const, why: 'may claim work done or a result seen (read by the context judge, not measured): check it' }));
 }
+
+/**
+ * The units the context judge read as stating the person's situation beyond what the request and its material show (a
+ * cause, a setting, a state): listed, never cut. A judge's reading that nobody has qualified can only point, and the
+ * person decides; a sentence already found by the patterns or as work claimed is not listed twice.
+ */
+export function judgedSituations(text: string, judged: ReadonlySet<number> | null, already: readonly { start: number }[]): Claim[] {
+  if (!judged?.size) return [];
+  const units = claimUnitsOf(text);
+  return [...judged].sort((a, b) => a - b).map((i) => units[i]).filter((u): u is NonNullable<typeof u> => Boolean(u) && !already.some((c) => c.start === u.start))
+    .map((u) => ({ start: u.start, end: u.end, text: u.text, kind: 'FIGURE' as const, why: 'states as fact something of your situation that your request and material do not show (read by the context judge, not measured): check it, or say it as an assumption' }));
+}

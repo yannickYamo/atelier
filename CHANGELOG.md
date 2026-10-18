@@ -7,6 +7,37 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+### Answers grounded in the request in hand
+
+- **Your examples' facts stay in their case.** Every example is served with what it was written from, and the skill
+  says once, for every kind of work, that facts in your examples and in your method's examples belong to their case:
+  the writer states of the request only what it and its material show, and gives anything else as an assumption or a
+  check. The skill's own rules are instructions to the claim check, never evidence: a figure in a rule may be repeated
+  as written, and nothing about the request in hand rests on them.
+- **A term borrowed from an example's case is listed.** A distinctive term (an acronym, an identifier, a header, a line
+  of code) that your examples hold and the request never names is listed for you to check, on every kind of work, and
+  never cut. With a claim reader set up, the delivered text is read once beside the request and its material, and a
+  cause, a setting or a state of your system it states without their support is listed the same way.
+- **Code is never taken apart.** A link, a hashtag or an emoji inside code is the code's: it is not counted against
+  your pieces and is never removed. No repair step empties a code block or removes a URL from code, and a step that
+  edits sentences leaves code as it was. A link that is a word of its sentence is left for the rewrite instead of cut
+  out of it.
+- **Every part of a request is read.** A request of more than a line is read for each thing it asks, on every run, and
+  a reply that leaves one out is written once more to give it (`--no-coverage` turns this off).
+- **Habits are said as a record.** What your examples never did is said as "in none of my examples (0 of 3)", not as
+  a rule never to do it.
+
+### Studies: finding a fact carried from an example's case (development evidence, $0)
+
+Fourteen requests, each answered twice by six arms (a bare model, one example, the method alone, a skill made by a
+skill creator, a prompt-optimised skill, and Atelier), split into 2,135 sentences and labelled by hand against the
+request each answered: 53 state something the request does not support, 15 of them a fact of an example's case. The
+term signal finds 7 of the 53, 7 of the 15, and flags none of the 2,082 sound sentences (precision 7/7; plain
+hyphenated words and "e.g." are not read as names). Reading word pairs as well found 21 but flagged 60 sound sentences
+(precision .26), so only terms are read. Seven findings bound precision only above .65, under the .9 a cut needs, so
+the signal lists and never cuts. The other unsupported sentences (a cause or a setting stated in plain
+words) are what the situational reading is for; it is not yet measured, and lists only.
+
 ### Your method and your examples reach the writer whole
 
 - **The method is served as written.** Its headings, steps in order, exceptions, worked examples and final checks

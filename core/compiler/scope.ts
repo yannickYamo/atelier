@@ -171,7 +171,8 @@ export async function deriveScope(client: InferenceClient, budget: Budget, examp
   return groundScope(examples, Array.isArray(list) ? list as RawExample[] : null, `${SCOPE_READER_VERSION}:${model}`);
 }
 
-const often = (count: number, of: number): string => (count === 0 ? 'never' : count === of ? 'always' : count / of >= 0.6 ? 'usually' : count / of >= 0.25 ? 'sometimes' : 'rarely');
+// None in the examples is a record, never a prohibition: three replies without a thank-you do not forbid one the request calls for.
+const often = (count: number, of: number): string => (count === 0 ? 'in none of my examples' : count === of ? 'always' : count / of >= 0.6 ? 'usually' : count / of >= 0.25 ? 'sometimes' : 'rarely');
 const words = (x: { lo: number; hi: number }): string => (x.lo === x.hi ? `about ${x.lo}` : `${x.lo} to ${x.hi}`);
 
 /**

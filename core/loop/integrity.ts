@@ -242,3 +242,47 @@ export function spanIntegrity(fullOriginal: string, replacement: string, allowed
   }
   return { ok: lost.length === 0, lost };
 }
+
+/** The fenced blocks of a text (their contents, trimmed) and its inline code spans, in order. */
+export function codeOf(text: string): { readonly blocks: readonly string[]; readonly inline: readonly string[] } {
+  const blocks: string[] = []; const inline: string[] = [];
+  let fence: string | null = null; let body: string[] = [];
+  for (const line of text.split('\n')) {
+    const open = /^\s*(`{3,}|~{3,})/.exec(line);
+    if (fence) {
+      if (open?.[1].startsWith(fence[0]) && open[1].length >= fence.length && line.trim() === open[1]) { blocks.push(body.join('\n').trim()); fence = null; body = []; } else body.push(line);
+      continue;
+    }
+    if (open) { fence = open[1]; continue; }
+    for (const m of line.matchAll(/(`+)(?!`)([\s\S]*?[^`])\1(?!`)/g)) inline.push(m[2].trim());
+  }
+  if (fence) blocks.push(body.join('\n').trim());
+  return { blocks, inline };
+}
+
+const URL_IN = /\bhttps?:\/\/[^\s`'"<>)\]]+|\bwww\.[^\s`'"<>)\]]+/g;
+
+/** The steps that edit sentences in place: they keep code exactly as it was. Every other step writes the draft whole. */
+const SPAN_EDITS: ReadonlySet<string> = new Set(['cut', 'mechanical', 'rewrite', 'operators', 'carrier-rewrite', 'grammar', 'trim', 'steer']);
+
+/**
+ * THE WORK A REPAIR STEP MAY NOT TAKE AWAY (the preservation floor). A step that edits sentences in place (a cut, a
+ * rewrite, a fix without a model, a removal of extras) keeps every code block and inline code span as it was; a step
+ * that writes the draft whole (a redraft, the draft written again for a missed part of the request, the voice or taste
+ * rewrite) may write its code again, but keeps every code block non-empty and every URL that stood inside code. Only a
+ * redraft whose purpose is to drop an invented claim is exempt: an invented file or command is what it removes.
+ * Why the step loses work, or null.
+ */
+export function workLost(before: string, after: string, action: string): string | null {
+  if (action === 'claim-redraft') return null;
+  const was = codeOf(before); const now = codeOf(after);
+  const nowCode = [...now.blocks, ...now.inline].join('\n');
+  const urls = (s: string): string[] => [...s.matchAll(URL_IN)].map((m) => m[0]);
+  const lostUrl = urls([...was.blocks, ...was.inline].join('\n')).find((u) => !nowCode.includes(u));
+  if (lostUrl) return `it would remove ${lostUrl} from the code it stood in`;
+  const nonEmpty = (bs: readonly string[]): number => bs.filter((b) => b.length > 0).length;
+  if (nonEmpty(now.blocks) < nonEmpty(was.blocks)) return 'it would empty or remove a code block';
+  if (!SPAN_EDITS.has(action)) return null;
+  const gone = [...was.blocks, ...was.inline].find((c) => c.length > 0 && !after.includes(c));
+  return gone ? `it would change code it was not asked to touch (${gone.split('\n')[0].slice(0, 60)})` : null;
+}

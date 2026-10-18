@@ -529,7 +529,7 @@ describe('through the binary: discovery builds the profile, invoke steers and re
     const skill = cli('export', '--skill', 'ans');
     expect(skill).toContain('How much I write follows the request, never a habit of length.');
     expect(skill).not.toMatch(/My answers usually run about/);
-    expect(skill).toMatch(/a preamble before the answer .*: never \(0 of (\d\d)\)/);
+    expect(skill).toMatch(/a preamble before the answer .*: in none of my examples \(0 of (\d\d)\)/);
     expect(skill).not.toMatch(/\(\d+ of 2\)/);
     // a request is served only beside the answer it asked for, as the pair it is: never as a rule, band or habit
     expect(skill).toContain('The request it answered: What is 2 to the power of 10?');

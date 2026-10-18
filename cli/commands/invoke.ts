@@ -10,6 +10,7 @@ import { methodReading, methodLine } from '../../core/eval/obligations.js';
 import type { CheckContext } from '../../core/observers/registry.js';
 import { checksFor, claimInstrumentOf, contextJudgeFor, smallReaderFor, CLAIMS_MODEL_DEFAULT, shortFormRequest } from '../checks.js';
 import { regressions, readAtLength, featureParamsOf, ruleParamsOf, enforcedNeverWorse, applyStep, unmeasuredIn, type ParamsOf, type Proposed } from '../../core/loop/repair.js';
+import { answerSentences, judgedSituations } from '../../core/loop/answer-claims.js';
 import { refineToStandard, checkDraft, checkDraftAsync, withWaivers, enforceClaims, heavyCut, listedClaims, brokenByCut, gradedRules, PUBLIC_FACTS, INCONCLUSIVE, UNREAD, type CheckOptions } from '../../core/loop/run-repair.js';
 import { signalChecks, displacement, isSignal, ownerWords } from '../../core/loop/graded.js';
 import { steeredShape, steersMiss, shapeLengthAim } from '../../core/loop/shape-steer.js';
@@ -483,6 +484,9 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   // judge when there is one (core/loop/context-judge.ts); the word patterns are the floor. On the run's own budget,
   // so its calls count against the cap the person set.
   const judge = !argv.includes('--allow-unsourced') ? contextJudgeFor(budget) : undefined;
+  // WHAT THE REQUEST ASKS FOR IS READ ON EVERY RUN THAT ASKS FOR MORE THAN A LINE (the task first): a reply that leaves a
+  // part out is written again once. A request of a few words is one ask, and its reply is read as a whole by the checks.
+  const coverageOn = judge?.covers !== undefined && !argv.includes('--no-coverage') && (strict || asksParts(asked));
   const intent = judge ? await judge.requestIntent(asked) : null;
   // THE REGISTER OF THE REQUEST (core/voice/register.ts): the person's flag, else the request's own words for its
   // document type as the judge quoted them, else the word table.
@@ -668,17 +672,18 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const rec = await runOnce(L, sv, servedForRun, servedHash, deliveryForRun, taskForRun, client, budget, binding,
     resolveProvenance(flag('--provenance'), process.env), contractFile,
     flag('--task') ? 'FLAG' : 'POSITIONAL',
-    std && !argv.includes('--no-repair') ? keepDelivered(withGradedRecord(withStructureRead(repairChain(refineFor(),
+    std && !argv.includes('--no-repair') ? keepDelivered(withSituations(withGradedRecord(withStructureRead(repairChain(refineFor(),
       unmet ? { unmet, notes: completions, resume: refineFor(), paramsOf: ruleParamsOf(std), round: shapeRoundNow, check: (text: string) => checkDraft(name, std, text, { ...checks, claimSensor: undefined }), redraft: async (note, purpose) => (await spendOneWithResult(client, budget, servedForRun, taskForRun, null, note, {}, purpose)).piece, graded: gradedTrace,
         steps: { usdPerCall: () => { const ls = spendBetween(ledgerBefore, processSpendByPurpose()).filter((l) => l.purpose === 'writing' || l.purpose === 'graded'); const n = ls.reduce((k, l) => k + l.calls, 0); return n ? ls.reduce((k, l) => k + l.usd, 0) / n : undefined; } },
         displaced: (from: string, to: string) => displacement(from, to, graded !== undefined ? carried : null, new Set())?.refusedFor ?? [] } : null,
       fid && (editBudget > 0 || argv.includes('--fidelity')) ? { client, budget, name, std, checks, profile: editProfile ?? fid.profile, editBudget, trace, taste } : null,
       voiceRuns && bank && fid ? { client, budget, name, std, checks, bank, copied: fid.index ? overlapIndex(fid.index.passages.map((p) => p.text)) : null, trace, taste, reader: smallReaderFor()?.client ?? null, gate: runSettings?.voiceGate === 'reader' ? 'reader' as const : 'lists' as const } : null,
-      strict && judge?.covers ? { client, budget, judge, asked, servedText: servedForRun, task: taskForRun, notes: completions, paramsOf: ruleParamsOf(std) } : null,
+      coverageOn && judge?.covers ? { client, budget, judge, asked, servedText: servedForRun, task: taskForRun, notes: completions, paramsOf: ruleParamsOf(std) } : null,
       shapeRounds > 0 ? { client, budget, std, round: shapeRoundNow, graded, gradedProfile: graded !== undefined ? carried : null, gradedTrace, calibration: fid?.typicality ?? null, detector: fid?.profile.detector ?? null, target: shapeTarget, authorTarget, rounds: shapeRounds, servedText: servedForRun, task: taskForRun, trace, taste, notes: completions,
         fresh: planState ? (round: number) => freshPlannedDraft(client, budget, servedForRun, taskForRun, planState, round) : null } : null,
       runSteps),
-      planState ? { budget, trace, state: planState } : null), gradedTrace, ledgerBefore)) : null,
+      planState ? { budget, trace, state: planState } : null), gradedTrace, ledgerBefore),
+      judge && checks.guardClaims !== false ? { judge, request: asked, material: checks.evidence ?? '' } : null)) : null,
     std && nDrafts > 1 ? withSections(selectDraft({ n: nDrafts, name, std, checks, taste, ownBand, signals: store.getSignals(L), profile: steerProfile, trace, ledger, sampling, ...(diverse ? { variant: variantOf, retrievedFor } : {}) }), sectionWriter)
       : sectionWriter ? { n: 1, write: sectionWriter, choose: () => ({ index: 0, why: '' }) } : null,
     std && checks.guardClaims !== false ? async (text: string) => {
@@ -754,7 +759,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
       applicability: rec.fidelity?.applicability ?? (std ? applicability(name, std, rec.output, waived, withheld, checks.context, transfer?.doesNotApply) : []),
       // WHAT THE REQUEST ASKED FOR, AGAINST THE DELIVERED TEXT: read under strict delivery, from the run's cache when
       // the loop already read this text. A monitor on the panel: it never decides the verdict.
-      coverage: strict && judge?.covers ? await judge.covers(asked, rec.output).catch(() => null) : null,
+      coverage: coverageOn && judge?.covers ? await judge.covers(asked, rec.output).catch(() => null) : null,
       strict: strict ? { redraws, allowed: argv.includes('--allow-nonconformant') } : null });
   } catch (e) {
     report.say(`(the evaluation of this run could not be built: ${(e as Error).message.split('\n')[0]})`);
@@ -1896,7 +1901,32 @@ function noted(d: Delivered, note: string, violatedBefore: readonly string[]): D
 }
 
 /**
- * WHAT THE REQUEST ASKS FOR, GIVEN IN FULL (under --strict). The reply is read against the parts of the request; one that
+ * WHAT THE DELIVERED TEXT STATES OF THE PERSON'S SITUATION, READ ONCE (the source roles). The context judge reads the
+ * delivered text beside the request and its material, and each sentence it reads as stating a cause, a setting or a
+ * state they do not show joins the sentences listed for the person to check. Listed, never cut, never a failure: the
+ * reading is not qualified. One small-model call per run, on the text that ships; a reading that fails changes nothing.
+ */
+export function withSituations(refine: (draft: string) => Promise<Delivered>, c: { judge: ContextJudge; request: string; material: string } | null): (draft: string) => Promise<Delivered> {
+  const judge = c?.judge;
+  if (!c || !judge?.situations) return refine;
+  return async (draft: string) => {
+    const d = await refine(draft);
+    const ss = answerSentences(d.output);
+    try { await judge.readAnswer(ss, { request: c.request, material: c.material }); } catch { return d; }
+    // kept as every listed claim is kept (`listedClaims`): its first 160 characters, so one sentence is listed once
+    const found = judgedSituations(d.output, judge.situations?.(ss) ?? null, []).map((x) => x.text.slice(0, 160));
+    const had = d.repair?.claimsToCheck ?? [];
+    const add = found.filter((t) => !had.some((h) => h.slice(0, 60) === t.slice(0, 60)));
+    if (!add.length || !d.repair) return d;
+    return { ...d, repair: { ...d.repair, claimsToCheck: [...had, ...add] } };
+  };
+}
+
+/** A request that can ask for more than one thing: more than a line of words. "Thanks, that solved it." is one ask. */
+export const asksParts = (task: string): boolean => (task.match(/[\p{L}\p{N}][\p{L}\p{N}'’-]*/gu) ?? []).length >= 8;
+
+/**
+ * WHAT THE REQUEST ASKS FOR, GIVEN IN FULL (on every run whose request can ask more than one thing, and under --strict). The reply is read against the parts of the request; one that
  * leaves a part out is written again once, told which, and the draft written again is refined on the run's same ledger.
  * The draft is one step (`coverage`) on that ledger, counted against the limit, and kept only on the one acceptance rule
  * (core/loop/controller.ts, rule A) and when it leaves out fewer parts.

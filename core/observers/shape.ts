@@ -16,7 +16,7 @@
 // format or from the owner (`--limit`), and is a separate fact the band is clipped to.
 
 import type { Observer, ObserverResult, Span } from './registry.js';
-import { sentencesOf, proseWordsOf, type Sentence } from './text.js';
+import { sentencesOf, proseWordsOf, maskCode, type Sentence } from './text.js';
 import { charsOf } from './formats.js';
 import { IMPERATIVES } from './features.js';
 
@@ -92,11 +92,13 @@ export function firstWordCaseOf(body: string): FirstWordCase | null {
 export function shapeOf(text: string, urlChars?: number): Shape {
   const body = bodyOf(text);
   const ss = sentencesOf(body);
+  // a link, a tag or an emoji inside code is the code's, never one the piece carries (./text.ts, maskCode)
+  const prose = maskCode(body);
   return {
     characters: charsOf(body, { id: 'shape', label: 'this piece', strictSpecifics: false, ...(urlChars !== undefined ? { urlChars } : {}) }),
     words: proseWordsOf(body), sentences: ss.length, longestSentence: ss.length ? Math.max(...ss.map((s) => s.words)) : 0,
     lineBreaks: count(body, /\n/g), blankLines: count(body, /\n[ \t]*\n/g),
-    hashtags: count(body, HASHTAG), mentions: count(body, MENTION), links: count(body, LINK), emoji: count(body, EMOJI),
+    hashtags: count(prose, HASHTAG), mentions: count(prose, MENTION), links: count(prose, LINK), emoji: count(prose, EMOJI),
     opening: ss.length ? openingKindOf(ss[0]) : null, closing: closingKindOf(ss), firstWord: firstWordCaseOf(body),
   };
 }
@@ -168,7 +170,7 @@ export const SHAPE: Observer = {
     const re = id === 'hashtags' ? HASHTAG : id === 'mentions' ? MENTION : id === 'links' ? LINK : id === 'emoji' ? EMOJI : null;
     let spans: Span[];
     if (off === 'long' && re) {
-      spans = [...body.matchAll(new RegExp(re.source, re.flags.includes('g') ? re.flags : `${re.flags}g`))].slice(hi ?? 0)
+      spans = [...maskCode(body).matchAll(new RegExp(re.source, re.flags.includes('g') ? re.flags : `${re.flags}g`))].slice(hi ?? 0)
         .map((m) => ({ start: at + (m.index ?? 0), end: at + (m.index ?? 0) + m[0].length, text: m[0], why: `one ${SHAPE_LABEL[id].replace(/ \(.*\)$/, '').replace(/s$/, '')} over the ${hi} your pieces carry` }));
     } else if (off === 'long' && id === 'longestSentence') {
       spans = sentencesOf(body).filter((s) => s.words > (hi ?? 0)).map((s) => ({ start: at + s.start, end: at + s.end, text: s.text, why: `${s.words} words, where your longest sentence runs ${hi}` }));

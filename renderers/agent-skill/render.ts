@@ -31,6 +31,14 @@ const sha = (s: string): string => createHash('sha256').update(s).digest('hex').
  * Normalise a skill identity. kebab-case works as a directory name on every host and as the suffix of
  * both `/name` and `$name`, so identity survives the move between them.
  */
+
+/**
+ * THE SOURCE ROLES, SAID TO THE WRITER, for every kind of work: the examples (the author's and the method's) are
+ * instruction, never evidence about the request in hand.
+ */
+export const FACTS_BELONG = `Facts in my examples, and in my method's examples, belong to their case. Say of this request only what it
+and its material show; give anything else as an assumption you state, or as a check for the person to run.`;
+
 export function skillNameFrom(raw: string): string {
   const n = raw.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);
   if (!n) throw new Error('SKILL NAME: empty after normalisation — supply a name with at least one alphanumeric character.');
@@ -531,6 +539,8 @@ project, a file or a result you have not seen.`
 sentences, coined terms or stories: a story you were not given is not yours to tell.`
       : `Take who is speaking, the register, the hedging, the rhythm and the spelling. Never take my topics, facts,
 names, figures, sentences, coined terms or stories: a story of mine you were not given is not yours to tell.`}
+
+${FACTS_BELONG}
 ` : '';
   // ── MOVES I SOMETIMES MAKE ───────────────────────────────────────────────────────────────────────
   //
@@ -584,16 +594,16 @@ description: ${yamlScalar(description)}
 # ${skillId}
 ${methodSection}
 ${method ? `Everything below my method is secondary: examples of finished work, how I sound, and rules read from my
-pieces. Apply those as judgment, including knowing when one does not apply. None of them overrides the method.`
+pieces. Apply those as judgment, including knowing when one does not apply. None of them overrides the method.${!voiceSection && !exemplar ? `\n\n${FACTS_BELONG}` : ''}`
   : `Apply the standard below as judgment, not as a checklist — including knowing when a rule does not
 apply.`}
 ${exemplar ? `
 ## Read first
 
 \`examples/exemplar.md\` is one complete piece by the author. Read it before drafting and take its
-voice, rhythm and structure from it: how it opens, how long its sentences and paragraphs run, how it
-moves from point to point. Never take its topic, facts, names, figures or sentences.
-` : ''}${voiceSection}${sometimesSection}${contrast.length ? `
+voice from it: how it opens, how its sentences and paragraphs run, how it moves from point to point.
+Not its length: the request sets that. Never take its topic, facts, names, figures or sentences.
+${voiceSection ? '' : `\n${FACTS_BELONG}\n`}` : ''}${voiceSection}${sometimesSection}${contrast.length ? `
 ## Write this, not that
 
 \`examples/contrast.md\` has ${contrast.length} sentence(s) written for this skill that broke one of its rules, each
@@ -737,8 +747,10 @@ mintedAt:        ${v.mintedAt}
   }, null, 2)}\n` } : {};
 
   // A PIECE AND THE REQUEST IT ANSWERED, shown as the pair they are: the subject is that request's.
+  // What the piece was written from, said with it: the request, and that the request was all there was. Its facts are
+  // that case's (the source roles): a writer who sees what the author had can tell what was read from the request.
   const withRequest = (request: string | null, text: string): string => (request
-    ? `The request it answered: ${request.trim().replace(/\s+/g, ' ')}\n\nWhat I wrote:\n\n${text}` : text);
+    ? `The request it answered: ${request.trim().replace(/\s+/g, ' ')}\n\nWhat I had: the request above; anything else I drew on is not shown, so its facts are not yours to use.\n\nWhat I wrote:\n\n${text}` : text);
   const runtime: Record<string, string> = { 'SKILL.md': skillMd, ...exampleFiles, ...contractFiles, ...contextMap,
     ...(exemplar ? { 'examples/exemplar.md': withRequest(exemplar.request ?? null, exemplar.text) } : {}),
     ...Object.fromEntries((voice?.pieces ?? []).map((t, i) => [`examples/voice-${i + 1}.md`,

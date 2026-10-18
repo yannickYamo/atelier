@@ -14,7 +14,7 @@ import { acts, isOmission, verifyText, type VerifyReport, type RuleCheck } from 
 import { planFor } from '../plan/execution-plan.js';
 import { unsourcedClaims, wordCountClaims, claimUnitsOf, statedFigureClaims } from './claims.js';
 import { derivedFromKnown } from './derived.js';
-import { answerWorkClaims, answerSentences, judgedOnly } from './answer-claims.js';
+import { answerWorkClaims, answerSentences, judgedOnly, judgedSituations } from './answer-claims.js';
 import { assertMayCut, type CutAuthority } from './cut-authority.js';
 import type { ContextJudge } from './context-judge.js';
 import type { ClaimSensor } from './claim-extract.js';
@@ -30,6 +30,7 @@ import { planRepair, repairPrompt, applyRepair, acceptRepair, addsNoWords, readA
   survivalLoss, type Reverted, type Applied, type RepairTarget, type Proposed, type NoChange, type StepPlan, type StepRule, type StepResult } from './repair.js';
 import { keysOf, measurementId } from '../state/rule-key.js';
 import { learnedShape, steeredShape, steersMiss, removeShapeExtras } from './shape-steer.js';
+import { carryOverClaims } from './carry-over.js';
 import { mechanicalFixes, grammarFixes } from './mechanical-repair.js';
 import { ensureGrammar, readGrammar, isGrammarNote, grammarFixing, GRAMMAR_NOTE_SUFFIX } from '../observers/grammar.js';
 import type { RepairPair } from '../state/canonical-state.js';
@@ -91,6 +92,10 @@ export interface CheckOptions {
   readonly gradedProfile?: FidelityProfile | null;
   /** what the person supplied: their notes, anecdotes, figures. Claims found here are theirs to make. */
   readonly material?: string;
+  /** the request's own material alone, without the skill's rules beside it: what a claim about the current work may rest on */
+  readonly evidence?: string;
+  /** the examples the skill is served (the author's pieces, the requests they answered, the method): their facts belong to their case (./carry-over.ts) */
+  readonly examples?: string;
   /** false turns off the invented-story and invented-figure check (`--allow-unsourced`) */
   readonly guardClaims?: boolean;
   /**
@@ -218,8 +223,9 @@ export function checkDraft(skill: string, v: StandardVersion, text: string, opts
   // answer's claim that the assistant did or saw something, a result figure, or an identifier from the
   // person's environment that the request did not give is cut (./answer-claims.ts); the rest is listed.
   const listOnly = opts.format?.claims === 'list';
-  const workClaims = listOnly ? answerWorkClaims(text, opts.material ?? '', claims) : [];
+  const workClaims = listOnly ? answerWorkClaims(text, opts.evidence ?? opts.material ?? '', claims) : [];
   const judgeFlags = listOnly ? judgedOnly(text, opts.judge?.workClaims(answerSentences(text)) ?? null, workClaims) : [];
+  const situationFlags = opts.judge?.situations ? judgedSituations(text, opts.judge.situations(answerSentences(text)), [...claims, ...workClaims, ...judgeFlags]) : [];
   // ON A KIND OF WORK NOBODY MEASURED, NOTHING IS CUT. The reader's findings and the patterns' are one list
   // for the person to check: on 27 real competitive analyses the cut deleted 32 legitimate sentences of 41.
   const unmeasured = !listOnly && opts.listsBecause ? opts.listsBecause : null;
@@ -228,7 +234,7 @@ export function checkDraft(skill: string, v: StandardVersion, text: string, opts
     .sort((x, y) => x.start - y.start).map((c) => ({ ...c, why: c.why.replace(/: the sentence is cut; /, ': listed for you to check; ') })) : [];
   const toCut = unmeasured ? [] : listOnly ? workClaims : claims;
   const toList = unmeasured ? everyFinding
-    : listOnly ? [...claims.filter((c) => !workClaims.some((w) => w.start === c.start)), ...judgeFlags.filter((j) => !claims.some((c) => c.start === j.start))] : [];
+    : listOnly ? [...claims.filter((c) => !workClaims.some((w) => w.start === c.start)), ...judgeFlags.filter((j) => !claims.some((c) => c.start === j.start)), ...situationFlags] : [];
   // A COUNT WRITTEN IN WORDS IS LISTED, NEVER CUT. "Nine people", "three of your prospects": the pattern check
   // reads a spelled-out count with less confidence than a figure in digits (./claims.ts, wordCountClaims), and a
   // review found it in true sentences. Whatever the kind of work, these join the list for the person to check
@@ -244,7 +250,14 @@ export function checkDraft(skill: string, v: StandardVersion, text: string, opts
     ? statedFigureClaims(text, opts.material ?? '', (s) => derivedFromKnown(s, opts.material ?? ''))
       .filter((c) => ![...toList, ...words].some((x) => overlaps(x, c)))
     : [];
-  const listed = [...toList, ...words, ...stated].sort((x, y) => x.start - y.start);
+  // A FACT OF AN EXAMPLE'S CASE, SAID OF THIS ONE (./carry-over.ts): a term of the served examples that the request and its
+  // material never name, in a sentence that states it. A signal, listed for the person on every kind of work, never cut.
+  // Read against a request only: with none (a `verify` with no --task), every term the examples share would be "borrowed".
+  const carried = !(opts.examples ?? '').trim() || !(opts.context?.request ?? '').trim() ? []
+    : carryOverClaims(text, opts.examples ?? '', `${opts.evidence ?? opts.material ?? ''}\n${opts.context?.request ?? ''}`)
+      .filter((c) => ![...toCut, ...toList, ...words, ...stated].some((x) => overlaps(x, c)));
+  const situated = listOnly ? [] : situationFlags.filter((c) => ![...toCut, ...toList, ...words, ...stated, ...carried].some((x) => overlaps(x, c)));
+  const listed = [...toList, ...words, ...stated, ...carried, ...situated].sort((x, y) => x.start - y.start);
   const statement = 'Never invent a story, a quotation, an attribution or a specific the person did not supply.';
   // Which instrument found what may be cut: the patterns decide an answer's work claims; otherwise the
   // gating reading's instrument, qualified or not (./cut-authority.ts refuses the ones that may not cut).
@@ -258,7 +271,8 @@ export function checkDraft(skill: string, v: StandardVersion, text: string, opts
         : toCut.length ? `${toCut.length} claim(s) not in the material supplied` : 'no unsourced stories, quotations or specifics'} [${by}]` } };
   const checkLine = listed.length ? [{ requirementId: CLAIMS_TO_CHECK, statement: unmeasured ? `Not found in what you supplied: listed for you to check, never cut, because ${unmeasured}.`
     : listOnly ? 'Specifics not in the material supplied: listed for you to check, never cut in this format.'
-      : 'Counts written in words that are not in the material supplied: listed for you to check, never cut; the pattern check reads them with less confidence than a figure in digits.',
+      : listed.length === words.length ? 'Counts written in words that are not in the material supplied: listed for you to check, never cut; the pattern check reads them with less confidence than a figure in digits.'
+        : 'Not shown by your request or the material supplied: listed for you to check, never cut.',
     materiality: 'PREFERRED', phase: 'ACCURACY' as const,
     result: { verdict: 'VIOLATED' as const, spans: [...listed], value: listed.length, detail: `${listed.length} specific(s) to check [${by}]` } }] : [];
   const readerOnly = reading?.gate && !unmeasured ? reading : null;
@@ -311,6 +325,8 @@ export async function checkDraftAsync(skill: string, v: StandardVersion, text: s
   // The grammar engine, loaded once, before the first check of a standard that carries the rule (../observers/grammar.ts).
   await ensureGrammar(v);
   if (opts.guardClaims !== false && opts.claimSensor) await opts.claimSensor.read(text);
+  // The situations a text states are read once, on the text delivered (cli/commands/invoke.ts, `withSituations`): they are
+  // only listed, so no step of the loop needs them. A text read so is listed here too, from the judge's cache.
   if (opts.guardClaims !== false && opts.format?.claims === 'list' && opts.judge) await opts.judge.readAnswer(answerSentences(text));
   return checkDraft(skill, v, text, opts);
 }

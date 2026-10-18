@@ -8,7 +8,7 @@
 import type { CheckContext } from '../core/observers/registry.js';
 import * as store from '../core/state/store.js';
 import type { CheckOptions } from '../core/loop/run-repair.js';
-import { modelSensor, patternSensor, listsBecause, type ClaimSensor } from '../core/loop/claim-extract.js';
+import { modelSensor, patternSensor, listsBecause, withRules, type ClaimSensor } from '../core/loop/claim-extract.js';
 import { modelJudge, type ContextJudge } from '../core/loop/context-judge.js';
 import type { Budget, InferenceClient } from '../core/inference/client.js';
 import { argv, flag, providerFor, clientAndBinding, boundMaterial, DATA } from './runtime.js';
@@ -52,7 +52,9 @@ export const CLAIMS_MODEL_DEFAULT = 'claude-haiku-4-5';
  * gate anyway: an escape hatch for someone who has measured it on their own writing, and the sensor's
  * notes say so every time it is used.
  */
-export function claimSensorFor(material: string, task: string, placeholders: boolean, strict = false, bound = true): ClaimSensor {
+export function claimSensorFor(evidence: string, task: string, placeholders: boolean, strict = false, bound = true, rules = ''): ClaimSensor {
+  // the figure-only pattern check may repeat a rule's figure as written; the reader's evidence is the request and its material alone
+  const material = withRules(evidence, rules);
   const mode = flag('--claims') ?? process.env.ATELIER_CLAIMS ?? 'model';
   if (mode === 'pattern') return patternSensor(material, placeholders, 'pattern check (--claims pattern)');
   // WITH NOTHING BOUND, A READING CAN ONLY LIST. Nothing is cut without material (claim-extract.ts, `listsBecause`), so
@@ -73,7 +75,7 @@ export function claimSensorFor(material: string, task: string, placeholders: boo
   // Two reads per new text (the gate below), so twice the calls of a single-read reader.
   const budget = { spentUsd: 0, capUsd: Number.isFinite(cap) && cap > 0 ? cap : 0.5, maxCalls: 48 };
   return modelSensor(clientAndBinding('discovery', model).client, budget, model,
-    { material, task, placeholders, strict, gateAnyway: process.env.ATELIER_CLAIMS_GATE === 'reader', cacheDir: join(DATA, 'cache', 'claims'), reads: 2 });
+    { material: evidence, rules, task, placeholders, strict, gateAnyway: process.env.ATELIER_CLAIMS_GATE === 'reader', cacheDir: join(DATA, 'cache', 'claims'), reads: 2 });
 }
 
 /**
@@ -148,19 +150,31 @@ export function checksFor(L: store.StoreLayout, opts: {
   // cut that sentence as an invented figure. What the approved standard says is theirs to repeat.
   // Fenced, so a figure in the rules counts only as written: "23" and "10" in a rule's wording worked out "2.3M rows"
   // as derived from what was supplied (core/loop/derived.ts reads no arithmetic out of a fenced block).
-  const own = standardStatements(L);
-  const material = [opts.material, ...(own.length ? [`\`\`\`\n${own.join('\n\n')}\n\`\`\``] : [])].filter(Boolean).join('\n\n');
+  // THE SOURCE ROLES. The evidence for what this answer may assert about the current work is the request and its material
+  // (`evidence`); the rules are instructions and license a specific only as written (claim-extract.ts, `decideSpecifics`).
+  const own = standardStatements(L).join('\n\n');
+  const evidence = opts.material ?? '';
+  const material = withRules(evidence, own);
+  // What the skill is served as examples: their facts are their case's, never this request's (core/loop/carry-over.ts).
+  const examples = servedExamples(L);
   // The format the text is: the one declared for it, or the class the standard was built from.
   const format = formatOf(flag('--class') ?? store.getDocClass(L));
   const judge = opts.offline ? undefined : opts.judge ?? (guardClaims ? contextJudgeFor() : undefined);
   // Where a deletion is not earned (no material bound, or a kind of work nobody measured), findings are listed.
   const bound = opts.bound ?? (store.getMaterial(L).length > 0 || boundMaterial().length > 0);
   const sensor = (): ClaimSensor => (opts.offline ? patternSensor(material, placeholders, 'pattern check (offline)')
-    : claimSensorFor(material, opts.task ?? '', placeholders, format?.strictSpecifics ?? false, bound));
+    : claimSensorFor(evidence, opts.task ?? '', placeholders, format?.strictSpecifics ?? false, bound, own));
   const unmeasured = listsBecause({ cls: opts.cls ?? flag('--class') ?? store.getDocClass(L), bound, slots: placeholders });
-  return { material, guardClaims, placeholders, format, ...(unmeasured ? { listsBecause: unmeasured } : {}), ...(opts.context ? { context: opts.context } : {}), ...(judge ? { judge } : {}),
+  return { material, evidence, ...(examples ? { examples } : {}), guardClaims, placeholders, format, ...(unmeasured ? { listsBecause: unmeasured } : {}), ...(opts.context ? { context: opts.context } : {}), ...(judge ? { judge } : {}),
     learnedTells: store.activeTells(store.getTells(L)),
     ...(guardClaims ? { claimSensor: sensor() } : {}) };
+}
+
+/** The examples the skill is served: the author's pieces with the requests they answered, the exemplar, the method. Empty before a build. */
+export function servedExamples(L: store.StoreLayout): string {
+  const voice = store.getVoice(L); const ex = store.getExemplar(L); const method = store.getMethod(L);
+  return [...(voice?.pieces ?? []), ...(voice?.pieceRequests ?? []).filter((r): r is string => typeof r === 'string'),
+    ...(ex ? [ex.text, ex.request ?? ''] : []), method?.text ?? ''].filter((t) => t.trim()).join('\n\n');
 }
 
 /** The statements of the active skill's approved rules, or none when the skill is not built yet. */

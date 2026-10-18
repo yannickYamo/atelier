@@ -94,7 +94,7 @@ describe('what an answer adds beyond what was asked is read, quoted and counted'
     expect(p.dropped).toBe(5);
     const d = describeScope(p);
     expect(d).toMatch(/a preamble before the answer .*: sometimes \(1 of 3\), e\.g\. "Great question!"/);
-    expect(d).toMatch(/a recap or summary of what was just said: never \(0 of 3\)/);
+    expect(d).toMatch(/a recap or summary of what was just said: in none of my examples \(0 of 3\)/);
     expect(d).toContain('This holds at any length');
   });
   it('one call reads the examples; the profile names its reader', async () => {
@@ -108,7 +108,7 @@ describe('what an answer adds beyond what was asked is read, quoted and counted'
     const raw = twelve.map((_, i) => ({ example: i + 1, asked: null, beyond: i < 3 ? [{ kind: 'caveat', quote: `Note that step ${i} drops the queue.` }] : [] }));
     const d = describeScope(groundScope(twelve, raw, 'r'));
     expect(d).toMatch(/a caveat or a warning nobody asked for: sometimes \(3 of 12\)/);
-    expect(d).toMatch(/a preamble before the answer .*: never \(0 of 12\)/);
+    expect(d).toMatch(/a preamble before the answer .*: in none of my examples \(0 of 12\)/);
   });
   it('a reader that returned two of twelve examples states no habit at all', () => {
     const p = groundScope(twelve, [{ example: 1, asked: null, beyond: [] }, { example: 2, asked: null, beyond: [] }], 'r');

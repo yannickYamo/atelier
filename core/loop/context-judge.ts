@@ -48,8 +48,13 @@ export interface ContextJudge {
   requestIntent(task: string): Promise<RequestIntent | null>;
   /** For each pair, whether `next` still reads on its own once `removed` is gone. Null when it could not answer. */
   standsAlone(pairs: readonly { removed: string; next: string }[]): Promise<boolean[] | null>;
-  /** Read an answer once: which of its sentences claim work the assistant did or a result it saw. */
-  readAnswer(sentences: readonly string[]): Promise<void>;
+  /**
+   * Read an answer once: which of its sentences claim work the assistant did or a result it saw, and, given the request
+   * and its material (`about`), which state as fact something of the person's situation that neither shows.
+   */
+  readAnswer(sentences: readonly string[], about?: { readonly request: string; readonly material: string }): Promise<void>;
+  /** The indexes `readAnswer` found stating a situation the request and its material do not show; null when not read with them. */
+  situations?(sentences: readonly string[]): ReadonlySet<number> | null;
   /** The indexes `readAnswer` found, or null when it was not read or could not answer. */
   workClaims(sentences: readonly string[]): ReadonlySet<number> | null;
 }
@@ -74,6 +79,14 @@ const ALONE_SCHEMA = { type: 'object', properties: { verdicts: { type: 'array', 
 const WORK_SYSTEM = `You read an assistant's answer, sentence by sentence. Mark each sentence that claims the ASSISTANT itself did, ran, checked, tested, fixed, changed or observed something, or reports a result or progress figure from the user's system (rows written, time taken, a test now passing, a status code returned). Do not mark instructions to the user ("run the tests"), general knowledge ("PKCE stops a stolen code from being redeemed"), or plans ("I would add a header").`;
 const WORK_SCHEMA = { type: 'object', properties: { claims: { type: 'array', items: { type: 'number' } } },
   required: ['claims'], additionalProperties: false };
+
+// THE SOURCE ROLES, READ. Only the request and its material are evidence about the person's case; a cause, a setting or
+// a state the answer asserts beyond them is its own guess stated as fact, whatever an example said of another case.
+export const SITUATION_SYSTEM = `${WORK_SYSTEM}
+
+Then, separately, mark each sentence that STATES AS FACT something about the person's own situation (the cause of their problem, a setting or a value in their system, what their code or request does, what has or has not happened) that neither the request nor the material below shows or follows from directly. Do not mark general knowledge true of any such system, instructions, questions, or a guess the sentence itself presents as a guess or a condition ("if", "likely", "assuming", "check whether").`;
+const SITUATION_SCHEMA = { type: 'object', properties: { claims: { type: 'array', items: { type: 'number' } }, situations: { type: 'array', items: { type: 'number' } } },
+  required: ['claims', 'situations'], additionalProperties: false };
 
 export const COVER_SYSTEM = `You get a request and the reply to it. List each distinct thing the request explicitly asks the reply to contain, explain, compare, plan or do, quoting the request's own words for it (a few words each; at most eight parts; a plain question is one part). An instruction about form ("return only the code", "in one line") is not a part.
 
@@ -108,6 +121,7 @@ const sha = (s: string): string => createHash('sha256').update(s).digest('hex').
 /** A judge backed by a small model. Every failure is a null, and the caller falls back to its patterns. */
 export function modelJudge(client: InferenceClient, budget: Budget): ContextJudge {
   const intents = new Map<string, RequestIntent | null>();
+  const situated = new Map<string, ReadonlySet<number> | null>();
   const answers = new Map<string, ReadonlySet<number> | null>();
   const covered = new Map<string, RequestCoverage | null>();
   const ask = async (system: string, user: string, tool: string, schema: Record<string, unknown>): Promise<unknown> => {
@@ -148,15 +162,26 @@ export function modelJudge(client: InferenceClient, budget: Budget): ContextJudg
       }
       return out;
     },
-    async readAnswer(sentences) {
+    async readAnswer(sentences, about) {
       const k = sha(sentences.join('\n'));
-      if (answers.has(k) || !sentences.length) return;
-      const raw = await ask(WORK_SYSTEM, sentences.map((s, i) => `[${i + 1}] ${s}`).join('\n'), 'emit_claims', WORK_SCHEMA) as { claims?: unknown } | null;
-      answers.set(k, Array.isArray(raw?.claims)
-        ? new Set((raw.claims as unknown[]).filter((n): n is number => typeof n === 'number' && Number.isInteger(n) && n >= 1 && n <= sentences.length).map((n) => n - 1))
-        : null);
+      // a text read for work claims alone is read again when the situations are asked for, never the other way round
+      if (!sentences.length || (about ? situated.has(k) : answers.has(k))) return;
+      const numbered = sentences.map((s, i) => `[${i + 1}] ${s}`).join('\n');
+      const indexes = (xs: unknown): Set<number> | null => (Array.isArray(xs)
+        ? new Set((xs as unknown[]).filter((n): n is number => typeof n === 'number' && Number.isInteger(n) && n >= 1 && n <= sentences.length).map((n) => n - 1)) : null);
+      if (about) {
+        const user = `<request>\n${about.request.trim() || '(none)'}\n</request>\n\n<material>\n${about.material.trim() || '(none)'}\n</material>\n\n<answer>\n${numbered}\n</answer>`;
+        const raw = await ask(SITUATION_SYSTEM, user, 'emit_claims', SITUATION_SCHEMA) as { claims?: unknown; situations?: unknown } | null;
+        // the work claims the loop already read (and acted on) stay as they were read: one text, one reading of them
+        if (!answers.has(k)) answers.set(k, indexes(raw?.claims));
+        situated.set(k, indexes(raw?.situations));
+        return;
+      }
+      const raw = await ask(WORK_SYSTEM, numbered, 'emit_claims', WORK_SCHEMA) as { claims?: unknown } | null;
+      answers.set(k, indexes(raw?.claims));
     },
     workClaims(sentences) { return answers.get(sha(sentences.join('\n'))) ?? null; },
+    situations(sentences) { return situated.get(sha(sentences.join('\n'))) ?? null; },
     async covers(task, output) {
       if (!task.trim() || !output.trim()) return null;
       // One reading per text for the run: the panel reads the delivered text the loop already read.

@@ -20,6 +20,7 @@
 
 import type { Measurement, Requirement } from '../state/canonical-state.js';
 import type { NumericShape } from '../observers/shape.js';
+import { maskCode } from '../observers/text.js';
 
 /** The learned shapes a run steers toward their band, and how. */
 export const STEERED_SHAPES: Readonly<Partial<Record<NumericShape, 'length' | 'remove'>>> = {
@@ -67,12 +68,14 @@ const PATTERN: Readonly<Record<'hashtags' | 'links' | 'emoji', RegExp>> = { hash
  * The text with every `shape` (hashtags, links, emoji) past the first `max` removed, and the gaps closed. A HASHTAG IS A
  * TAG ONLY WHERE IT STANDS OUTSIDE THE SENTENCE: on a line of tags, or after the sentence has ended (". #devops"). There
  * it goes whole. Anywhere else it is a word of the sentence ("after #approval.", "#Python is"): its `#` goes and its word
- * stays, so no removal takes a word away. Links and emoji go whole, with the space before them; a line a removal empties
+ * stays, so no removal takes a word away. A link goes only where it stands as a tag would; inside a sentence it stays
+ * (removing it would leave a hole), for the rewrite. Emoji go whole, with the space before them; a line a removal empties
  * goes with it. Nothing else in the text changes.
  */
 export function removeShapeExtras(text: string, shape: 'hashtags' | 'links' | 'emoji', max: number): string {
   const re = new RegExp(PATTERN[shape].source, PATTERN[shape].flags);
-  const found = [...text.matchAll(re)].slice(Math.max(0, max));
+  // only the prose's: a URL, a `#` or an emoji inside code is the code's (../observers/text.ts, maskCode)
+  const found = [...maskCode(text).matchAll(re)].slice(Math.max(0, max));
   let out = text;
   for (const m of found.reverse()) {
     const start = m.index; const end = start + m[0].length;
@@ -83,6 +86,9 @@ export function removeShapeExtras(text: string, shape: 'hashtags' | 'links' | 'e
     const isTag = !/[\p{L}\p{N}]/u.test(lineAfter) && (lineBefore === '' || /[.!?…]["'”’)\]]*$/u.test(lineBefore));
     const inSentence = shape === 'hashtags' && !isTag;
     if (inSentence) { out = `${out.slice(0, start)}${m[0].slice(1)}${out.slice(end)}`; continue; }
+    // A LINK THAT IS A WORD OF ITS SENTENCE STAYS: taking it leaves "See for the spec.", a sentence with a hole. Only a
+    // link standing on its own (a line of links, or after its sentence has ended) goes in code; the rest is the rewrite's.
+    if (shape === 'links' && !isTag) continue;
     const before = out.slice(0, start).replace(/[ \t]+$/, ''); const after = out.slice(end).replace(/^[ \t]+/, '');
     out = `${before}${before && after && !before.endsWith('\n') && !after.startsWith('\n') && !/^[.,;:!?)]/.test(after) ? ' ' : ''}${after}`;
   }

@@ -255,3 +255,21 @@ describe('the shape a request states is held on what is delivered', () => {
     expect(shapeOff('Run `make x.y` now.', 'sentence')).toBeNull();
   });
 });
+
+describe('the source roles reach the writer', () => {
+  it('every example says what it was written from, and the skill says their facts are their case\'s', () => {
+    const { run, skill } = seed(4, true);
+    expect(run('new', 'work', '--method', 'how.md', '--name', 'plain').code).toBe(0);
+    const files = skill('plain');
+    const md = files['SKILL.md'];
+    expect(md.split('belong to their case').length - 1).toBe(1);
+    expect(composeServed(files, '').servedText).toContain('Say of this request only what it\nand its material show');
+    const served = Object.entries(files).filter(([n]) => /^examples\/(?:exemplar|voice-\d+)\.md$/.test(n));
+    // every one of the four pieces carries a request; each piece served says what it was written from
+    expect(served.length).toBeGreaterThanOrEqual(2);
+    for (const [f, t] of served) expect(t, f).toMatch(/The request it answered: .*\n\nWhat I had: the request above; anything else I drew on is not shown, so its facts are not yours to use\.\n\nWhat I wrote:/);
+    // the exemplar's voice is taken, never its length
+    expect(files['examples/exemplar.md']).toBeDefined();
+    expect(md).toContain('Not its length: the request sets that.');
+  }, 120_000);
+});
