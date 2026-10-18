@@ -67,6 +67,21 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 - `atelier rate` takes optional reasons from a closed list (necessary part missing, unnecessary extra, wrong, unsafe,
   unsupported claim, asks instead of acting, too long, too short, voice off).
 
+### Studies: one author's style on a new subject, built as a person builds it (development evidence)
+
+The one-article study above was built without a model, so no rule was read and no range measured. Run again as a person
+runs the product (a model key set, `atelier new`, the rules accepted as shown, `atelier invoke` with its defaults), and
+in two forms. With the one article alone, Atelier proposes no rule read by a model and says to add four pieces or more;
+with what a request needs no longer said for a document, it scored 43 and 43 on style and form (37 and 35 before),
+against 73 and 77 for a skill creator's skill and 53 and 55 for the article pasted. With nine of the author's articles
+(42 rules read and checked on pieces the proposer never saw, 53 measured features, a style detector), every arm built
+from the same nine and judged against the same one article: style and form, Atelier 47 and 41, a skill creator's skill
+46 and 45, the nine pasted 42 and 35, a bare model 11 and 19; no arm was judged the author in more than one paper in
+five. Atelier's lead on style is within chance and its form trails the skill creator's (by 5 points, outside chance);
+it invented the fewest specifics (2.4 a paper against 5.0 and 5.3) and used no em dash where the author uses a few.
+It cost $0.42 a paper against $0.18 (two drafts). Atelier's own reading of how typical a text is of the author ranked
+the bare model's long academic papers highest, so it is not evidence of style on texts this long.
+
 ### Studies: the twenty-four fresh requests, all judged, with this release (development evidence)
 
 All 24 requests judged for every arm, each answer alone by three judges. Usable as written: the hand-written method
