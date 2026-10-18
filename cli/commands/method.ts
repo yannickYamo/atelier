@@ -15,11 +15,13 @@
 // between the method and the examples; `--yes` confirms the steps the examples dispute, so that they block.
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { basename, resolve } from 'node:path';
-import { DATA, argv, die, flag, positional, loadSession, saveSession, archiveSession, authoredIdAllocator, runFile, sha, canReach } from '../runtime.js';
+import { DATA, argv, die, flag, positional, loadSession, saveSession, archiveSession, authoredIdAllocator, runFile, sha, canReach, contextReaderClient, contextReaderModel } from '../runtime.js';
 import * as store from '../../core/state/store.js';
 import { normalizeClass, CLASS_ALIASES } from '../../core/observers/doc-class.js';
 import { unmeasuredKind } from '../../core/loop/claim-extract.js';
 import { skillNameFrom } from '../../renderers/agent-skill/render.js';
+import { RULE_POLARITY, polarityByWords } from '../../core/observers/rule-polarity.js';
+import { readContext } from '../../core/inference/reading.js';
 import { writeAtomic } from '../../core/state/fs-atomic.js';
 import { draftHash, appendDecision, type RatificationLedger } from '../../core/ratification/decision-record.js';
 import { decide } from '../../core/ratification/authority.js';
@@ -205,12 +207,14 @@ export function nameFor(notePath: string, goldenPath: string, viaNew: boolean): 
  * sentence: authored by them, and required where code can hold an output to it. One read off the example is the
  * machine's reading that they approved: a preference until they say otherwise.
  */
-export function decideSteps(proposals: readonly MethodProposal[], nextId: () => string, confirmed = false): { decided: Requirement[]; ledger: RatificationLedger } {
+export function decideSteps(proposals: readonly MethodProposal[], nextId: () => string, confirmed = false,
+  /** each statement's kind as read (core/observers/rule-polarity.ts); the word pattern decides a statement not in it */
+  kinds: ReadonlyMap<string, 'BOUNDARY' | 'GENERATIVE'> = new Map()): { decided: Requirement[]; ledger: RatificationLedger } {
   const bases: Requirement[] = proposals.map((p) => ({
     requirementId: nextId(), statement: p.statement, appliesWhen: 'GENERAL',
-    // A prohibition opens with one. "Then a Suggestions section: improvements that do not block the merge" asks for
-    // a section, and was listed under what not to do.
-    kind: /^\s*(?:never|do not|don't|must not|avoid|no)\b/i.test(p.statement) ? 'BOUNDARY' : 'GENERATIVE',
+    // Whether the step forbids or asks for something is read (core/observers/rule-polarity.ts); the anchored word
+    // pattern is the floor ("Then a Suggestions section: improvements that do not block the merge" asks for a section).
+    kind: kinds.get(p.statement) ?? polarityByWords(p.statement),
     authority: 'DERIVED_UNRATIFIED', provenance: 'MACHINE_DISCOVERED',
     // No evidence is carried: how the example fared on a check is said on the screen, and is not the author's words.
     evidence: null, evidenceItemId: null, wouldBeAbsentIf: null,
@@ -315,7 +319,10 @@ export async function method(): Promise<void> {
   if (again) { archiveSession(); s = loadSession(); }
 
   // ── THE OWNER'S STEPS AS THEIR OWN, WHAT THE EXAMPLE SHOWS AS APPROVED AND SHOWN ──────
-  const { decided, ledger } = decideSteps(proposals, authoredIdAllocator(s), confirmed);
+  // WHAT EACH STEP IS, READ ONCE: a prohibition or a thing to do. The reader sees every step in one call; without a
+  // model (none set up, or --no-model) the word pattern decides, and the whole account says so.
+  const kinds = await stepKinds([...likeThese, ...read.proposals].map((p) => p.statement));
+  const { decided, ledger } = decideSteps(proposals, authoredIdAllocator(s), confirmed, kinds);
   // WHOSE BUILD THIS IS, WRITTEN BEFORE ANYTHING ELSE IS. A build that stops after the standard is stored and before
   // the skill is installed leaves a skill of this name behind: with the name kept here, the same command run again
   // knows the skill as this folder's and finishes it. Without it, the person was told somebody else had built it.
@@ -399,4 +406,14 @@ export function describeFrom(note: string, purpose: string | null, name: string)
   const sentence = first ? (/^[\s\S]*?[.!?](?=\s|$)/.exec(first.replace(/\s+/g, ' '))?.[0] ?? first.replace(/\s+/g, ' ')).slice(0, 300) : '';
   const what = purpose?.trim() ? purpose.trim() : name.replace(/-/g, ' ');
   return `Use when asked to ${what.replace(/[.\s]+$/, '')}.${sentence ? ` ${sentence}` : ''}`;
+}
+
+/** The kind of every step the owner wrote or their example showed, read in one call where a model is set up (a rule counted off the pieces is worded by Atelier, and the word pattern decides it); the word pattern where none is, said in --report. */
+async function stepKinds(statements: readonly string[]): Promise<Map<string, 'BOUNDARY' | 'GENERATIVE'>> {
+  const unique = [...new Set(statements.map((t) => t.trim()).filter(Boolean))];
+  const input = { statements: unique.map((text, i) => ({ id: `r${i + 1}`, text })) };
+  const noModel = !canReach('discovery') || argv.includes('--no-model');
+  const d = await readContext(RULE_POLARITY, input, noModel ? null : contextReaderClient(), noModel ? null : contextReaderModel(), { spentUsd: 0, capUsd: 0.1, maxCalls: 1 });
+  if (argv.includes('--report') && unique.length) console.log(`(what each step is, a prohibition or a thing to do: ${d.by === 'model' ? `read by ${contextReaderModel()}` : d.by === 'code' ? 'nothing to read' : `by the words alone (${d.why})`}.)`);
+  return new Map(input.statements.map((s) => [s.text, d.value[s.id] ?? polarityByWords(s.text)]));
 }

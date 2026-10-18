@@ -12,7 +12,7 @@
 import * as store from '../../core/state/store.js';
 import { findRecurrences, type Recurrence, type ProposalEvent } from '../../core/mining/recurrence.js';
 import { spend, type Budget } from '../../core/inference/client.js';
-import { addRuleToActive } from './addition.js';
+import { addRuleToActive, readPolarityOf } from './addition.js';
 import { DATA, die, argv, flag, numericFlag, skillArg, clientFor, diagnoserModel } from '../runtime.js';
 
 const PHRASE_SYSTEM = `You word ONE rule for a writing standard from complaints its owner made about several outputs.
@@ -30,7 +30,7 @@ export async function mine(): Promise<void> {
   const v = store.getStandard(L, sv.standardVersionHash) ?? die(`standard ${sv.standardVersionHash} is missing.`);
 
   const addRef = flag('--add');
-  if (addRef !== undefined) { add(L, name, addRef, v.standardVersionHash); return; }
+  if (addRef !== undefined) { await add(L, name, addRef, v.standardVersionHash); return; }
 
   const proposals: ProposalEvent[] = store.readEvents(L).filter((e) => e.kind === 'PROPOSED_CHANGE')
     .map((e) => ({ proposal: String(e.proposal), at: String(e.at), accepted: (e.accepted ?? null) as boolean | null,
@@ -87,7 +87,7 @@ async function phrase(complaints: readonly string[], budget: Budget): Promise<st
   }
 }
 
-function add(L: store.StoreLayout, name: string, ref: string, current: string): void {
+async function add(L: store.StoreLayout, name: string, ref: string, current: string): Promise<void> {
   const report = store.getMining(L) ?? die(`run atelier mine --skill ${name} first, so --add names an item you have read.`);
   // The report is about one version of the standard. After any change (an addition included) its
   // numbers may point at something else, and adding the same gap twice would duplicate the rule.
@@ -99,7 +99,7 @@ function add(L: store.StoreLayout, name: string, ref: string, current: string): 
   const m = flag('--materiality')?.toUpperCase();
   if (m !== 'REQUIRED' && m !== 'PREFERRED') return die('--materiality required|preferred: whether the rule binds, or is shown with other forms still acceptable.');
   const statement = flag('--statement') ?? item.proposal ?? die(`item ${n} has no proposed wording: give yours with --statement "<the rule>", or re-run with --phrase.`);
-  const added = addRuleToActive(L, name, statement, m, `recurring: ${item.count} complaints, e.g. "${item.complaints[0]}"`, null, item.feedbackIds);
+  const added = addRuleToActive(L, name, statement, m, `recurring: ${item.count} complaints, e.g. "${item.complaints[0]}"`, null, item.feedbackIds, await readPolarityOf(statement));
   console.log(`Added as ${m} — ${added.requirement.requirementId}: ${statement}`);
   console.log(`StandardVersion ${added.standard.standardVersionHash} supersedes ${added.supersedes}. Rebuilt and installed.`);
 }

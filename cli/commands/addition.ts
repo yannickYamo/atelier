@@ -9,6 +9,8 @@
 // each from the run's standard would let the second silently drop the first. The complaint's provenance
 // is kept in the version's `reason`; the base is whatever the owner holds now.
 
+import { RULE_POLARITY, polarityByWords, type Polarity } from '../../core/observers/rule-polarity.js';
+import { readContext } from '../../core/inference/reading.js';
 import * as store from '../../core/state/store.js';
 import { decide } from '../../core/ratification/authority.js';
 import { draftHash, appendDecision, stampVersion } from '../../core/ratification/decision-record.js';
@@ -16,7 +18,7 @@ import { authorityStateOf, assertSupersessionRecorded, type Requirement, type St
 import { compileArchitecture } from '../../core/architecture/compile.js';
 import { renderAgentSkill, assertPortable, defaultDescription } from '../../renderers/agent-skill/render.js';
 import { describeBackup } from '../../adapters/install-tree.js';
-import { sha, die, projectDir, pickHost, carriedFrom } from '../runtime.js';
+import { sha, die, projectDir, pickHost, carriedFrom, contextReaderClient, contextReaderModel } from '../runtime.js';
 
 export interface Addition {
   readonly requirement: Requirement;
@@ -28,14 +30,16 @@ export interface Addition {
 export function addRuleToActive(L: store.StoreLayout, name: string, statement: string, materiality: 'REQUIRED' | 'PREFERRED',
   reason: string, fallback: StandardVersion | null = null,
   /** the complaints this rule answers, so `mine` does not offer the same gap again */
-  feedbackIds: readonly string[] = []): Addition {
+  feedbackIds: readonly string[] = [],
+  /** the rule's kind as read (core/observers/rule-polarity.ts, `readPolarityOf`); the word pattern when none read it */
+  kind: 'BOUNDARY' | 'GENERATIVE' = polarityByWords(statement)): Addition {
   const activeHash = store.getActive(L);
   const activeSv = activeHash ? store.getSkillVersion(L, activeHash) : null;
   const baseStandard = (activeSv && store.getStandard(L, activeSv.standardVersionHash)) ?? fallback
     ?? die(`no standard to add to for ${name}.`);
   let n = 0; for (const r of baseStandard.requirements) { const m = /^x(\d+)$/.exec(r.requirementId); if (m) n = Math.max(n, Number(m[1])); }
   const base: Requirement = { requirementId: `x${n + 1}`, statement, appliesWhen: 'GENERAL',
-    kind: /\bnever\b|\bnot\b|\bavoid\b/i.test(statement) ? 'BOUNDARY' : 'GENERATIVE',
+    kind,
     authority: 'DERIVED_UNRATIFIED', provenance: 'MACHINE_DISCOVERED', evidence: null, evidenceItemId: null,
     wouldBeAbsentIf: null, materiality: null, realizationTolerance: null, outputShape: null };
   const outcome = decide(base, { verb: 'APPROVE', materiality });
@@ -68,4 +72,10 @@ export function addRuleToActive(L: store.StoreLayout, name: string, statement: s
   store.appendEvent(L, { kind: 'PROPOSED_CHANGE', at, skillVersionHash: skill.skillVersionHash, proposal: statement, accepted: true,
     ...(feedbackIds.length ? { feedbackIds } : {}) });
   return { requirement: outcome.requirement, standard: next, supersedes: baseStandard.standardVersionHash, skillVersionHash: skill.skillVersionHash };
+}
+
+/** One added rule's kind, read by the context reader where one is set up; the word pattern otherwise. */
+export async function readPolarityOf(statement: string): Promise<Polarity> {
+  const d = await readContext(RULE_POLARITY, { statements: [{ id: 'r1', text: statement }] }, contextReaderClient(), contextReaderModel(), { spentUsd: 0, capUsd: 0.05, maxCalls: 1 });
+  return d.value.r1 ?? polarityByWords(statement);
 }

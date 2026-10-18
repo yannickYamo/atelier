@@ -47,7 +47,7 @@ import type { InstallablePackage } from '../../adapters/host-adapter.js';
 import { bindingHash } from '../../core/runtime/binding.js';
 import { spend, type Budget } from '../../core/inference/client.js';
 import { runOnce } from './improve.js';
-import { addRuleToActive } from './addition.js';
+import { addRuleToActive, readPolarityOf } from './addition.js';
 import { resolveServedVersion } from './invoke.js';
 import { checkCandidate, floorStateFor, promoteChecked, runtimeIdentity, TASTE_GATE_CALLS, type CandidateCheck } from './floor.js';
 import { keysOf } from '../../core/state/rule-key.js';
@@ -309,7 +309,7 @@ export async function fix(): Promise<void> {
     if (activeNow && activeNow.standardVersionHash !== ranStandard.standardVersionHash) {
       console.log(`Your standard has moved since that run (${ranStandard.standardVersionHash} -> ${activeNow.standardVersionHash}); the addition goes on the current one.`);
     }
-    const added = addRuleToActive(L, name, proposal, answer === 'required' ? 'REQUIRED' : 'PREFERRED', complaint, ranStandard, [fb.feedbackId]);
+    const added = addRuleToActive(L, name, proposal, answer === 'required' ? 'REQUIRED' : 'PREFERRED', complaint, ranStandard, [fb.feedbackId], await readPolarityOf(proposal));
     console.log(`Added as ${answer.toUpperCase()} — ${added.requirement.requirementId} ${answer === 'required' ? 'instructs' : 'is shown'}.`);
     console.log(`StandardVersion ${added.standard.standardVersionHash} supersedes ${added.supersedes}  (reason: your complaint, on file)`);
     console.log(`Rebuilt and installed: ${pickHost().invocationHint(name).trim()} now serves it.`);

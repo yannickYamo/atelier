@@ -299,7 +299,7 @@ describe('through the binary: atelier method, then a run held to the method', ()
     expect(existsSync(join(data, 'skills', 'reads'))).toBe(false);
   });
 
-  it('--yes builds the skill from exactly that, with the example as its one worked example, and still calls no model', async () => {
+  it('--yes builds the skill from exactly that, with the example as its one worked example; the one call reads what kind of rule each step is, never a rule', async () => {
     const before = await count();
     const r = atelier('method', 'method.md', '--golden', 'acme.md', '--name', 'analysis', '--yes', ...BACKEND());
     expect(r.code, `${r.err}${r.out}`).toBe(0);
@@ -310,7 +310,9 @@ describe('through the binary: atelier method, then a run held to the method', ()
     expect(r.out).toMatch(/You judge these yourself \(1\):/);
     expect(r.out).not.toMatch(/Standard [0-9a-f]+ minted|EVERY OUTPUT IS CHECKED BY|Kind of work/);
     expect(r.out).toContain('Use it: atelier run "<the task>" --with <file>');
-    expect(await count()).toBe(before);
+    // one reading, of what each step is (a prohibition or a thing to do): every step stays the owner's words
+    expect(await count()).toBe(before + 1);
+    expect(JSON.parse((await (await fetch(`${url()}/__log`)).json() as { bodies: string[] }).bodies.at(-1) ?? '{}').tools?.[0]?.function?.name).toBe('emit_rule_polarity');
     const skill = readFileSync(join(proj, '.claude', 'skills', 'analysis', 'SKILL.md'), 'utf8');
     for (const step of stepsOf(NOTE)) expect(skill).toContain(step.text.replace(/\.$/, ''));
     expect(readFileSync(join(proj, '.claude', 'skills', 'analysis', 'examples', 'exemplar.md'), 'utf8')).toContain('Borealis wins for a small team');
