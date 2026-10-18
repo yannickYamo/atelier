@@ -64,6 +64,8 @@ export interface Voice {
   readonly pieceBudget?: number;
   /** how the author sounds, described with frequencies and proven by quotes (./persona.ts) */
   readonly persona?: Persona;
+  /** every piece served whole, as a build from a method serves them: no later build spreads or budgets them unless asked to (cli/commands/build.ts) */
+  readonly servedWhole?: true;
   /**
    * A COMPOSITE VOICE (core/composite): the skill was built from pieces by several authors, and the owner chose what
    * to take from each. The "how I sound" section is written from these traits, never from one author's description;

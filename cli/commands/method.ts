@@ -15,7 +15,7 @@
 // between the method and the examples; `--yes` confirms the steps the examples dispute, so that they block.
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { basename, resolve } from 'node:path';
-import { DATA, argv, die, flag, positional, loadSession, saveSession, archiveSession, authoredIdAllocator, runFile, sha } from '../runtime.js';
+import { DATA, argv, die, flag, positional, loadSession, saveSession, archiveSession, authoredIdAllocator, runFile, sha, canReach } from '../runtime.js';
 import * as store from '../../core/state/store.js';
 import { normalizeClass, CLASS_ALIASES } from '../../core/observers/doc-class.js';
 import { unmeasuredKind } from '../../core/loop/claim-extract.js';
@@ -328,8 +328,16 @@ export async function method(): Promise<void> {
   // With the request it answered, when the example carried one: served beside it (renderers/agent-skill/render.ts).
   writeAtomic(exampleFile, `${example.task ? `---\nrequest: |\n${example.task.split('\n').map((l) => `  ${l}`).join('\n')}\n---\n` : ''}${withoutFrontMatter(example.reference)}`);
   process.env.ATELIER_ORCHESTRATED = '1';
-  // Every step is the owner's and every check is code: the build asks no model for a reading of the examples.
-  process.env.ATELIER_BUILD_NO_MODEL = '1';
+  // EVERY STEP IS THE OWNER'S AND EVERY CHECK IS CODE; HOW THE AUTHOR SOUNDS IS STILL READ. Nothing about the method
+  // needs a model, and this build asked for none, so a skill built this way carried no persona and no scope reading, and
+  // its log never said so. Three skills built this way scored last on "sounds like the author" in the three-context
+  // study, while every skill that tied or won had a persona (core/compiler/persona.ts: rules do not make a model sound
+  // like the author, a description does). The rules still need held-out pieces to be checked on; a description steers
+  // and never blocks, so it needs none. With a model set up, the build reads the persona, and the scope for work that
+  // answers; without one it is as it was. The pieces are served whole either way: the model reads them, it never
+  // chooses which are shown (cli/commands/build.ts, `WHOLE_PIECES`).
+  if (!canReach('discovery') || argv.includes('--no-model')) process.env.ATELIER_BUILD_NO_MODEL = '1';
+  process.env.ATELIER_BUILD_WHOLE_PIECES = '1';
   if (!argv.includes('--work-type')) argv.push('--work-type', flag('--for') ?? name.replace(/-/g, ' '));
   if (!argv.includes('--exemplar')) argv.push('--exemplar', exampleFile);
   // HOW A HOST KNOWS WHEN TO LOAD IT: the owner's own description when their method carries one, else what the skill is
@@ -348,7 +356,6 @@ export async function method(): Promise<void> {
   // Three pieces or more are served with the skill, as its own way of writing, and their lengths recorded; with
   // fewer there is no telling a usual piece from an odd one, and the one worked example stands alone.
   if (!argv.includes('--voice') && !(folder && cases.length >= 2)) argv.push('--voice', 'none');
-  if (!argv.includes('--persona')) argv.push('--persona', 'none');
   // (With no method note nothing names the kind of work: a folder called "posts" or "contract" is not thereby held
   // as a post or a contract. --class says it.)
   if (!argv.includes('--class') && notePath !== null) store.setDocClass({ root: DATA, skillName: name }, kind);
@@ -357,6 +364,12 @@ export async function method(): Promise<void> {
   const said: string[] = []; const log = console.log;
   if (!whole) console.log = (...a: unknown[]) => { said.push(a.map(String).join(' ')); };
   try { ratifyClose(); await build(name); } catch (e) { console.log = log; for (const l of said) console.log(l); throw e; } finally { console.log = log; }
+  // HOW THE AUTHOR WAS READ IS SAID ON THE SHORT SCREEN TOO. The persona and the scope carry the author's voice, and a
+  // build without them was indistinguishable, on this screen, from one with them. One line each, in the build's own
+  // words, when a model was there to read: what it read, or why it read nothing. With no model set up the screen stays
+  // as it was (`atelier new` has said so once already), and what the owner asked for (--persona none) is not said back.
+  // Everything the build said is in --report.
+  if (!whole) for (const l of said.filter((x) => /^(Persona: |Scope: |\(no persona: \d|\(the persona could not be derived|\(the examples could not be read for scope)/.test(x))) console.log(l);
   // Required is what a run is held to. What the example showed is checked and reported, and fails nothing: said apart,
   // so that the count of what is enforced is never larger than it is.
   // The screen above already said what is checked and what is theirs: all that is left to say is that it is ready.

@@ -7,6 +7,26 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+### How you sound is read on every path that has your pieces
+
+- **A skill built from your method and examples, or from two or three pieces, now carries how you sound.** Those builds
+  called no model, so they had no persona (the description of how you write, each point quoted from your pieces with how
+  often it holds) and, for work that answers requests, no reading of how much you add beyond what was asked. The skill
+  stated "too few of any one kind" about examples that were all of one kind. With a model set up, both are read at
+  build; without one, the build is as it was. The persona steers and never blocks, so it needs no held-out pieces, unlike
+  a rule. A build from a method still serves every one of your pieces whole: the model reads them, it never chooses
+  which are shown.
+- **The build says what it read about you, or why it read nothing.** One line for the persona and one for the scope on the
+  short screen when a model was there to read, and the one reason you can act on (fewer than three pieces); the others
+  (no model set up, `--persona none`) are in `--report`. `--no-model` skips the reading. A skill built before this
+  carries no persona until it is built again with `atelier build --name <name> --persona auto`, which keeps its pieces
+  served whole.
+- **Building a skill again that serves the same files no longer fails.** The record kept beside a package (your voice,
+  the pairs, the method) was written with its keys in a different order on a rebuild and refused as a second body under
+  one hash. A package is its served files: only files that differ are refused now.
+- Evidence: in the three-context study below, every skill that scored last on "sounds like the author" was built on one
+  of these paths and had no persona; every skill that tied or won had one.
+
 ### Answers grounded in the request in hand
 
 - **Your examples' facts stay in their case.** Every example is served with what it was written from, and the skill

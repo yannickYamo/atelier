@@ -17,6 +17,8 @@ import { targetOf } from '../../core/observers/obligations.js';
 
 /** Set by a command that builds from what the owner wrote and promised no model call (cli/commands/method.ts). */
 const NO_MODEL = (): boolean => process.env.ATELIER_BUILD_NO_MODEL === '1';
+/** A build whose pieces are served whole, every one (`atelier method`, cli/commands/method.ts): the model reads them, it never chooses which are shown. */
+const WHOLE_PIECES = (): boolean => process.env.ATELIER_BUILD_WHOLE_PIECES === '1';
 const QUIET = 'no model was asked';
 import { deriveScope, groundScope, spreadByKind, type ScopeProfile } from '../../core/compiler/scope.js';
 
@@ -99,7 +101,7 @@ export function revert(): void {
  * author's pieces for the first time and told nothing about them, serves passages within 3,000 words, and that
  * choice is stored as an explicit one is: a later rebuild chooses the same whatever the default becomes. A skill
  * that already holds a voice keeps what it holds, so a rebuild of a skill built before is the same bytes. A skill
- * that answers, one built from a method (`atelier method`, no model), and `--voice none` are as they were:
+ * that answers, one built from a method (`atelier method`, every piece whole), and `--voice none` are as they were:
  * `--pieces whole --piece-budget default` is the whole serving, for a first build too.
  */
 /**
@@ -144,8 +146,8 @@ async function chooseVoice(L: store.StoreLayout, v: StandardVersion): Promise<Vo
   // `--voice auto` included (it chooses the pieces again, it does not forget what it was told about them).
   // `--piece-budget default` is how the budget is given up.
   // The compact default applies to a first build alone, of a skill that writes, with no flag given about the pieces
-  // (a build from a method calls no model and keeps the whole serving); what it chooses is stored as a flag would be.
-  const compact = !stored && !answers && !reselect && !NO_MODEL();
+  // (a build from a method keeps the whole serving, `WHOLE_PIECES`); what it chooses is stored as a flag would be.
+  const compact = !stored && !answers && !reselect && !NO_MODEL() && !WHOLE_PIECES();
   const wordBudget = asked.budget === undefined ? (compact ? WRITING_PIECE_BUDGET_WORDS : stored?.pieceBudget) : asked.budget ?? undefined;
   const form: PieceForm = asked.form ?? (compact ? 'whole' : stored?.pieceForm ?? 'whole');
   // A persona is derived (one model call) only for a voice chosen in this run, or when asked for: choosing the
@@ -161,7 +163,7 @@ async function chooseVoice(L: store.StoreLayout, v: StandardVersion): Promise<Vo
   }
   // A skill that answers shows examples spread over the kinds of request (`spreadExamples`), so no whole pieces are
   // chosen for it here when that spread will replace them.
-  const spreads = (x: Voice | null): boolean => answers && Boolean(x?.scope?.kinds) && voiceFlag === undefined && !argv.includes('--full');
+  const spreads = (x: Voice | null): boolean => answers && Boolean(x?.scope?.kinds) && voiceFlag === undefined && !argv.includes('--full') && !WHOLE_PIECES() && !x?.servedWhole;
   // The default choice when no budget is set (as it has always been made); a budget the owner set is a ceiling.
   const choose = (): string[] => (wordBudget === undefined && form === 'whole' ? selectVoicePieces(readable) : selectWithinBudget(readable, wordBudget ?? PIECE_BUDGET_WORDS, form));
   const said = (pieces: readonly string[]): string => {
@@ -189,7 +191,8 @@ async function chooseVoice(L: store.StoreLayout, v: StandardVersion): Promise<Vo
   }
   if (!voice && readable.length >= 2) {
     const pieces = choose();
-    voice = { passages: [], lengthWords: usualLength(readable), pieces, ...(prefs.pieceForm ? { pieceForm: prefs.pieceForm } : {}), ...(wordBudget === undefined ? {} : { pieceBudget: wordBudget }) };
+    // A method build's whole serving is kept with the voice: a later `atelier build --persona auto` must not spread it.
+    voice = { passages: [], lengthWords: usualLength(readable), pieces, ...(prefs.pieceForm ? { pieceForm: prefs.pieceForm } : {}), ...(wordBudget === undefined ? {} : { pieceBudget: wordBudget }), ...(WHOLE_PIECES() ? { servedWhole: true as const } : {}) };
     if (pieces.length) console.log(`Voice: ${said(pieces)}. Turn off with --voice none.`);
     else if (wordBudget !== undefined && !answers) console.log(`Voice: ${none()}.`);
     if (!voice.lengthWords && !answers) console.log('Length: your pieces vary too much in length to hold one, so none is set; a request that names one sets it.');
@@ -244,7 +247,7 @@ async function chooseVoice(L: store.StoreLayout, v: StandardVersion): Promise<Vo
         if ((e as Error).message !== QUIET) console.log(`(the examples could not be read for scope: ${(e as Error).message.split('\n')[0]}; the skill states that the request sets the length, and no habit.)`);
       }
       voice = { ...voice, scope };
-      if (voiceFlag === undefined) voice = spreadExamples(voice, pairs);
+      if (voiceFlag === undefined && !WHOLE_PIECES() && !voice.servedWhole) voice = spreadExamples(voice, pairs);
     }
   }
   // A skill that answers, built before, asked for another budget: its examples are spread again over the kinds its
@@ -282,9 +285,19 @@ async function chooseVoice(L: store.StoreLayout, v: StandardVersion): Promise<Vo
       for (const x of asks) console.log(`  ${x.r.requirementId}  "${x.r.statement.trim().slice(0, 140)}"\n      To make it a rule, say when it applies in your own words: atelier amend --skill ${skillNameFrom(flag('--name') ?? loadSession().skillName ?? 'name')} --rule ${x.r.requirementId} --applies-when "<the cases where you hold back>" --reason "<why>"`);
     }
   }
-  if (personaFlag === 'none') return { ...voice, persona: undefined };
+  // WHEN THERE IS NO PERSONA, THE BUILD SAYS WHY. Three skills were built with none and nothing in their logs said so;
+  // the gap was found by reading their stored voice. Nothing is said for a voice kept from an earlier build (its
+  // persona is kept with it) or for a composite (said where the composite is built).
+  const kept = voice;
+  const noPersona = (why: string): Voice => { console.log(`(no persona: ${why})`); return kept; };
+  if (personaFlag === 'none') { console.log('(no persona: --persona none.)'); return { ...voice, persona: undefined }; }
   // A composite has no persona: one read over several authors' pieces describes their average (see above).
-  if (!derivesPersona || voice.composite || readable.length < 3 || (personaFlag !== 'auto' && voice.persona)) return voice;
+  if (!derivesPersona || voice.composite || (personaFlag !== 'auto' && voice.persona)) return voice;
+  // A persona already held is kept where it cannot be read again (--persona auto from a folder without the pieces, or with no model).
+  if (voice.persona && (readable.length < 3 || NO_MODEL())) return voice;
+  // Three pieces at least: a habit's frequency is read across pieces, and across two there is no "most".
+  if (readable.length < 3) return noPersona(`${readable.length} piece(s) can be read here; three or more are needed to say how often a habit holds.`);
+  if (NO_MODEL()) return noPersona('no model read the pieces (none is set up, or --no-model); how the author sounds is read by one.');
   const budget: Budget = { spentUsd: 0, capUsd: numericFlag('--cap', 1.5), maxCalls: 1 };
   try {
     const persona = reconcilePersona(await onCorpusReader((c) => derivePersona(c, budget, readable)), standardForbids(v));

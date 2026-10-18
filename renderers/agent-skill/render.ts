@@ -800,9 +800,11 @@ mintedAt:        ${v.mintedAt}
   // last, so its place in the record does not depend on which path of the build set it, and only when a piece was
   // actually cut: asked of pieces too short to cut, `excerpts` serves the very files `whole` does. Every other field is written as it always was, in the order it came.
   const travelling = voice ? (() => {
-    // Which moves a reading covered is the build's own bookkeeping, like the budget: it shaped no file.
-    const { pieceBudget: _budget, holdsBackOf: _covered, standardWording: _standard, lengthSpan: _span, lengthPieces: _pieces, sharedAmong: _shared, guardPieces: _guard, pieceForm, ...rest } = voice;
-    void _budget; void _covered; void _standard; void _span; void _pieces; void _guard;
+    // Which moves a reading covered is the build's own bookkeeping, like the budget: it shaped no file. So is whether
+    // the pieces are served whole (`servedWhole`): it tells the next build not to spread them, and the same files
+    // are served with or without it.
+    const { pieceBudget: _budget, holdsBackOf: _covered, standardWording: _standard, lengthSpan: _span, lengthPieces: _pieces, sharedAmong: _shared, guardPieces: _guard, servedWhole: _whole, pieceForm, ...rest } = voice;
+    void _budget; void _covered; void _standard; void _span; void _pieces; void _guard; void _whole;
     return { ...rest, ...(pieceForm === 'excerpts' && cutPieces.some(Boolean) ? { pieceForm } : {}) };
   })() : null;
   const withPairs = { ...(contrast.length ? { ...assurance, 'contrast-pairs.json': `${JSON.stringify(contrast, null, 1)}\n` } : assurance),

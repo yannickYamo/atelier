@@ -88,7 +88,7 @@ export async function newSkill(): Promise<void> {
   // NO MODEL IS NOT A REASON TO BUILD NOTHING. What can be counted in the examples is read without one; a model
   // adds the rules only a reading finds, and can be added later. Decided before anything is written for the other
   // path, and what the person said the skill is for is kept as what it is for.
-  const keyless = !canReach('discovery');
+  const keyless = !canReach('discovery') || argv.includes('--no-model');
   // PIECES BY SEVERAL VOICES, WITH OR WITHOUT A MODEL: declared (front matter, a folder per author, --authors), or
   // found in the writing when none is declared (core/composite/voices.ts). Each voice is read on its own and the
   // combination is inferred (./composite.ts); with no model, from what can be counted in each voice's pieces. Pooled
@@ -107,7 +107,7 @@ export async function newSkill(): Promise<void> {
     console.log(keyless ? 'No model is set up (ANTHROPIC_API_KEY), so the skill is built from what can be counted in your examples, with no rules read by a model and none for you to approve.\n  To have a model read them too, set the key and run this again in a folder of its own.\n'
       // NEVER A REFUSAL FOR FEW EXAMPLES. Two or three pieces cannot have rules read off some and checked on the others,
       // so none is proposed as if checked: the pieces themselves are served, with what can be counted in them.
-      : `With ${examplePieces(corpusFiles(path).map((f) => ({ id: f, text: readCorpusText(f) }))).length} example(s), rules read by a model could not be checked on pieces it had not read, so none is proposed: your examples are served to the writer whole, with what can be counted in them${argv.includes('--method') ? ' and your method' : ''}. Add pieces (four or more) to have rules read and checked.\n`);
+      : ((n: number): string => `With ${n} example(s), rules read by a model could not be checked on pieces it had not read, so none is proposed: your examples are served to the writer whole, with what can be counted in them${argv.includes('--method') ? ' and your method' : ''}${n >= 3 ? ', and how you sound, read from them' : ''}. Add pieces (four or more) to have rules read and checked.\n`)(examplePieces(corpusFiles(path).map((f) => ({ id: f, text: readCorpusText(f) }))).length));
     if (intent && !argv.includes('--for')) argv.push('--for', intent);
     await method();
     return;

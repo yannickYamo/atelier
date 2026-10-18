@@ -482,8 +482,24 @@ export const getArchitecture = (l: StoreLayout, hash: string, standardVersionHas
     + 'and picking one would silently attribute an arrangement to the wrong standard.');
 };
 
+/**
+ * A PACKAGE IS ITS SERVED FILES. The hash is over them (renderers/agent-skill/render.ts, `packageHash`); the record
+ * beside them (the voice, the pairs, the method) is unhashed bookkeeping. A rebuild that serves the same files wrote
+ * that record with its keys in another order (the voice's `pieceRequests` is taken off and put back last on every
+ * build) and was refused as a second body under one hash: no file differed. So the files are what is compared, in
+ * any key order; the stored record stays canonical when they agree, and only files that differ are refused.
+ */
 export function putPackage(l: StoreLayout, pkg: StoredPackage): void {
-  putByHash(join(dirs(l).packages, `${pkg.packageHash}.json`), pkg.packageHash, pkg, 'package');
+  const p = join(dirs(l).packages, `${pkg.packageHash}.json`);
+  if (existsSync(p)) {
+    const existing = readJson<StoredPackage>(p, { what: `package ${pkg.packageHash}`, requireKeys: ['packageHash', 'files'] });
+    const canon = (files: Readonly<Record<string, string>>): string => JSON.stringify(Object.keys(files).sort().map((k) => [k, files[k]]));
+    if (canon(existing.files) !== canon(pkg.files)) {
+      throw new Error(`STORE: package ${pkg.packageHash} already exists with different served files. A hash is an identity; two bodies cannot share one.`);
+    }
+    return;
+  }
+  putByHash(p, pkg.packageHash, pkg, 'package');
 }
 export const getPackage = (l: StoreLayout, hash: string): StoredPackage | null => {
   const p = join(dirs(l).packages, `${hash}.json`);
