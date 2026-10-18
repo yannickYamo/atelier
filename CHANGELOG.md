@@ -7,6 +7,27 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+### Your method and your examples reach the writer whole
+
+- **The method is served as written.** Its headings, steps in order, exceptions, worked examples and final checks
+  reach the writer word for word, first, in the installed skill and in every run. The steps still decide what code
+  checks; they no longer decide what the writer is told. A step the method already says is not said twice.
+- **Each example once, with the request it answered.** A finished example is served beside the request it was written
+  for (`request:` front matter), and never twice. A habit only counted off your pieces is checked, not handed to the
+  writer as a card.
+- **The task sets the length.** A run writes one draft by default and never chooses between drafts by how near they
+  run to your examples. A length learned from your pieces is said as how they ran, and no draft is written again only
+  to move toward it; a length or a shape the request states ("one line") is held.
+- **Writing skills see whole pieces.** A skill that writes from your pieces serves whole pieces within 8,000 words by
+  default; `--pieces excerpts --piece-budget 3000` serves passages from more of them in less.
+- **Findings are tied to what you gave.** With material bound, a claim the material does not show is marked where it
+  stands as one to verify. A figure in code or in the skill's own rules counts only as written, never as something to
+  work a new figure out of.
+- **Fewer calls.** With no material bound, specifics are read by the pattern check: a model reading could only list
+  them. A short acknowledgement takes one writer call and one small reading of the request.
+- **Two or three examples build a skill**, with or without a model set up, and say what is proposed rather than
+  checked. The skill's description is your method's own when it has one.
+
 ### This release, by area
 
 The release Phase F tests. Each area below is detailed in the sections that follow.
