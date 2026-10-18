@@ -242,3 +242,16 @@ describe('what an independent review found in the first round', () => {
     expect(derivedFromKnown('That is 40000 rows.', `${diff}\n- The orders table holds 40 rows per user and 1000 users.`)).toBe(true);
   });
 });
+
+describe('the shape a request states is held on what is delivered', () => {
+  it('one line is one line, one sentence one sentence; anything else is no shape code reads', async () => {
+    const { statedShape, shapeOff } = await import('../cli/commands/invoke.js');
+    expect(statedShape('One line, please')).toBe('line');
+    expect(statedShape('in a single sentence')).toBe('sentence');
+    expect(statedShape('return only the code block')).toBeNull();
+    expect(shapeOff('Glad it works.', 'line')).toBeNull();
+    expect(shapeOff('Glad it works.\n\nHere is what happened.', 'line')).toEqual({ detail: '2 lines, asked for one', off: 1 });
+    expect(shapeOff('Glad it works. Nothing else to do.', 'sentence')?.off).toBe(1);
+    expect(shapeOff('Run `make x.y` now.', 'sentence')).toBeNull();
+  });
+});

@@ -656,7 +656,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const notHeld = stated && contractFile === null ? notHeldBecause(asked, stated) : null;
   // A length in pages is held in words, at the number of words a page that it says (core/intake/length.ts, `inWords`).
   const askedWords = stated && contractFile === null && !notHeld ? inWords(stated) : null;
-  const unmet = std && !argv.includes('--no-redraft') ? unmetReader(std, ownBand && ownSpan && enough && !transfer ? { band: ownBand, span: ownSpan } : null, askedWords, graded, graded !== undefined ? carried : null) : null;
+  const unmet = std && !argv.includes('--no-redraft') ? unmetReader(std, ownBand && ownSpan && enough && !transfer ? { band: ownBand, span: ownSpan } : null, askedWords, graded, graded !== undefined ? carried : null, formatAsked ?? null) : null;
   let delivered: Delivered | null = null;
   const keepDelivered = (refine: (draft: string) => Promise<Delivered>) => async (draft: string): Promise<Delivered> => (delivered = await refine(draft));
   // THE BOUNDED CONTROLLER (core/loop/controller.ts): the release's settings, whether a draft can be written again when it
@@ -1312,7 +1312,8 @@ const lengthMove = (off: number, long: boolean): string | undefined => (off > 0 
 /** The reader of what a draft left unmet for this skill and this run, or null when there is nothing of the kind to read. */
 export function unmetReader(std: Standard, own: { band: readonly [number, number]; span: readonly [number, number] } | null, asked: StatedLength | null = null,
   /** the graded features: a miss of a FEATURE rule on one of them is written again for, PREFERRED or not */ graded?: CheckOptions['graded'],
-  /** the profile whose far-out SIGNAL features are graded misses too (core/loop/graded.ts) */ profile?: FidelityProfile | null):
+  /** the profile whose far-out SIGNAL features are graded misses too (core/loop/graded.ts) */ profile?: FidelityProfile | null,
+  /** the shape the request itself asks for, in its own words ("one line, please"), when it states one */ format: string | null = null):
   ((d: { output: string; report: VerifyReport }, handed?: readonly string[]) => Unmet[]) | null {
   // A missing section or table is not a sentence to rewrite (core/loop/repair.ts leaves such a rule alone); nor is a
   // citation that is no line of the material, since the right number is on the page the writer was given.
@@ -1324,7 +1325,8 @@ export function unmetReader(std: Standard, own: { band: readonly [number, number
   const params = new Map(std.requirements.flatMap((r) => (r.measurement ? [[r.requirementId, r.measurement] as const] : [])));
   // A request that names a length sets it: no learned length band is told against it (core/loop/run-repair.ts, `gradedRules`).
   if (asked) for (const id of [...gradedOf.keys()]) if (steeredShape(params.get(id))?.how === 'length') gradedOf.delete(id);
-  if (!must.size && !own && !asked && !gradedOf.size) return null;
+  const shape = format ? statedShape(format) : null;
+  if (!must.size && !own && !asked && !gradedOf.size && !shape) return null;
   // A length the method states in words is a miss of length too: how far, and what to aim for.
   const limits = new Map(std.requirements.flatMap((r) => (r.measurement?.observer === 'LENGTH' && ((r.measurement.params.unit as readonly string[] | undefined)?.[0] ?? 'words').toLowerCase() === 'words'
     ? [[r.requirementId, { lo: typeof r.measurement.params.min === 'number' ? r.measurement.params.min : null, hi: typeof r.measurement.params.max === 'number' ? r.measurement.params.max : null, whole: !r.measurement.params.in }] as const] : [])));
@@ -1376,6 +1378,10 @@ export function unmetReader(std: Standard, own: { band: readonly [number, number
         && (steeredShape(params.get(x.requirementId)) === null || steersMiss(params.get(x.requirementId), x.result.error, x.result.value))).map((x) => gradedMiss(x)),
       // the profile's far-out SIGNAL features, read on the text itself: they are no line of the recorded report
       ...(gradedOf.size ? signalChecks(d.output, profile).filter((x) => x.result.verdict === 'VIOLATED' && gradedOf.has(x.requirementId)).map((x) => gradedMiss(x, x.params)) : [])]);
+    // THE SHAPE THE REQUEST ASKS FOR, where code can read it: "one line" is one line, "one sentence" one sentence. It
+    // reached the prompt and nothing after it: "one line, please" came back as a paragraph.
+    const shapeMiss = shape ? shapeOff(d.output, shape) : null;
+    if (shapeMiss) rules.push({ id: LENGTH_ID, whole: true as const, of: 'request' as const, statement: `Answer in the shape the request asks for: ${format ?? ''}`, detail: shapeMiss.detail, off: shapeMiss.off });
     if (asked) {
       const written = wordsWritten(d.output); const [lo, hi] = statedBounds(asked);
       if (againstStated(written, asked) === 'met') return rules;
@@ -1590,7 +1596,8 @@ function redraftOutcome(before: readonly Unmet[], after: readonly Unmet[], kept:
   }
   if (before.every((u) => u.id === LENGTH_ID)) {
     const now = after.find((u) => u.id === LENGTH_ID); const what = before[0].of === 'request' ? 'what the request asks for' : 'what your pieces span';
-    return kept ? `Written again for length: the first draft ran ${before[0].detail}, outside ${what}; ${now ? `it now runs ${now.detail}, nearer and still outside` : 'it is now inside it'}.`
+    const why = before[0].statement.startsWith('Answer in the shape') ? 'in the shape the request asks for' : 'for length';
+    return kept ? `Written again ${why}: the first draft ran ${before[0].detail}, outside ${what}; ${now ? `it now runs ${now.detail}, nearer and still outside` : 'it is now inside it'}.`
       : `The draft runs ${before[0].detail}, outside ${what}; one more draft did not do better, so the first is kept.`;
   }
   // A graded miss is a feature off the author's range (too many asides as often as too few): missed, never "left out".
@@ -2725,4 +2732,16 @@ export function markUnsupported(text: string, listed: readonly string[]): string
   let out = text;
   for (const e of [...new Set(ends)].sort((x, y) => y - x)) out = `${out.slice(0, e)}${MARK}${out.slice(e)}`;
   return rest.length ? `${out.trimEnd()}\n\n---\nNot found in what you supplied (check before you use this):\n${rest.map((c) => `- "${c}"`).join('\n')}` : out;
+}
+
+/** The shapes a request can state that code reads exactly: one line, one sentence. Null for any other. */
+export function statedShape(format: string): 'line' | 'sentence' | null {
+  return /\b(?:one|a single|single)\s+line\b/i.test(format) ? 'line' : /\b(?:one|a single|single)\s+sentence\b/i.test(format) ? 'sentence' : null;
+}
+/** How a text misses the stated shape (what it found, and how many lines or sentences over), or null when it holds it. */
+export function shapeOff(text: string, shape: 'line' | 'sentence'): { detail: string; off: number } | null {
+  const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
+  if (shape === 'line') return lines.length > 1 ? { detail: `${lines.length} lines, asked for one`, off: lines.length - 1 } : null;
+  const sentences = text.replace(/`[^`]*`/g, 'x').split(/(?<=[.!?])\s+(?=\S)/).filter((x) => x.trim());
+  return sentences.length > 1 || lines.length > 1 ? { detail: `${sentences.length} sentences, asked for one`, off: Math.max(sentences.length, lines.length) - 1 } : null;
 }
