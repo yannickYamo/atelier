@@ -27,6 +27,20 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 - **Habits are said as a record.** What your examples never did is said as "in none of my examples (0 of 3)", not as
   a rule never to do it.
 
+### Studies: the fourteen-request comparison, before and after grounding (development evidence)
+
+The same fourteen requests, twice each, the same writer and settings, the same frozen criteria and the same three
+blind judges; only Atelier's answers were written again, and every request was judged afresh with all six arms side by
+side. The five unchanged arms moved by up to 11 points on "usable" between the two judgings, so a comparison is read
+within one judging. Atelier, before → after: statements the judges counted as invented per answer .55 → .26 (now the
+fewest of the six; the method alone .45, a skill creator's .76); usable 54% → 68% (level with the method alone and the
+skill creator's skill, ahead of the optimised prompt's 61%); method checks followed 90% → 91% and golden traits 89%
+(both the highest); run-to-run spread the lowest. Answers judged unusable fell from 13 to 9 of 28. A stated cause the
+request did not support and the empty code block are gone. The thank-you that named the subject of an example's case
+was still written in both runs, and was listed for the person both times: the instruction did not prevent it. Cost per
+usable answer held level ($.033 → $.035) while the cost per run rose 36%: a reading of each delivered text, the reading
+of longer requests for what they ask, and four drafts written again for a missed part, two of them not kept.
+
 ### Studies: finding a fact carried from an example's case (development evidence, $0)
 
 Fourteen requests, each answered twice by six arms (a bare model, one example, the method alone, a skill made by a
