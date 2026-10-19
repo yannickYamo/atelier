@@ -1,0 +1,26 @@
+{
+  "reading": "method-units",
+  "pass": {
+    "runs": 5,
+    "perCaseAtLeast": 4,
+    "codeDecidedExact": true
+  },
+  "cases": [
+    { "id": "plain-instruction", "label": "instruction|always", "step": "Open with a Summary section: two or three sentences on what the change does." },
+    { "id": "conditional-instruction", "label": "instruction|conditional", "step": "Add a Risks section when the change touches billing." },
+    { "id": "unless", "label": "instruction|conditional", "step": "Do not end with a Sources section unless the reader asked for sources." },
+    { "id": "decision-bets", "label": "instruction|always", "step": "Frame each initiative as a bet: the choice, its rationale, the assumptions it rests on, and what would change the decision." },
+    { "id": "cite-lines", "label": "instruction|always", "step": "Cite each Must fix item as path:line, the line number in the new file." },
+    { "id": "template-example", "label": "template|always", "step": "For example: \"Verdict: Request changes — the retry loop never backs off.\"", "under": "Verdict" },
+    { "id": "template-table", "label": "template|always", "step": "A typical table: | Account | Why now | Owner |", "under": "Target accounts" },
+    { "id": "explanation", "label": "explanation|always", "step": "We lead with the riskiest line because reviewers stop reading after the second paragraph." },
+    { "id": "explanation-history", "label": "explanation|always", "step": "This section exists because two launches in 2024 shipped without an owner named.", "under": "Owners" },
+    { "id": "criterion", "label": "criterion|always", "step": "A good summary lets someone who has not read the diff say what changed and why." },
+    { "id": "criterion-bet", "label": "criterion|always", "step": "A bet is well framed when a reader can say what evidence would make us drop it." },
+    { "id": "conditional-with-exception", "label": "instruction|conditional", "step": "Name the missing test under Suggestions, except when the change is documentation only." },
+    { "id": "only-for", "label": "instruction|conditional", "step": "Include the pricing table only for enterprise accounts." },
+    { "id": "always-despite-when", "label": "instruction|always", "step": "Say when the decision was made and who was in the room.", "note": "\"when\" here is the content, not a condition" },
+    { "id": "dependency", "label": "instruction|always", "step": "Then rank the initiatives you framed as bets by expected impact.", "under": "Prioritise" },
+    { "id": "short-reply-step", "label": "instruction|always", "step": "Lead with the one action the person should take." }
+  ]
+}

@@ -16,6 +16,7 @@ import { readContext } from '../../dist/core/inference/reading.js';
 import { WORK_FORM } from '../../dist/core/observers/work-form.js';
 import { RULE_POLARITY } from '../../dist/core/observers/rule-polarity.js';
 import { INTENT_MODE } from '../../dist/core/observers/intent-mode.js';
+import { METHOD_UNITS } from '../../dist/core/method/decision-units.js';
 import { AnthropicInferenceClient } from '../../dist/providers/anthropic.js';
 import { OpenAICompatibleInferenceClient } from '../../dist/providers/openai-compatible.js';
 
@@ -31,6 +32,8 @@ const READINGS = {
   'work-form': { reading: WORK_FORM, input: (c) => ({ workType: c.workType, examples: pieces(c), method: c.method ? readFileSync(resolve(c.method), 'utf8') : null }), answer: (v) => v },
   'rule-polarity': { reading: RULE_POLARITY, input: (c) => ({ statements: [{ id: 'r1', text: c.statement }] }), answer: (v) => v.r1 ?? null },
   'intent-mode': { reading: INTENT_MODE, input: (c) => ({ intent: c.intent }), answer: (v) => v.mode },
+  // one step per case: the label is `kind|conditional` or `kind|always`, the two fields the brief selects by
+  'method-units': { reading: METHOD_UNITS, input: (c) => ({ steps: [{ id: '1', text: c.step, under: c.under ?? null }] }), answer: (v) => (v['1'] ? `${v['1'].kind}|${v['1'].condition ? 'conditional' : 'always'}` : null) },
 };
 const args = process.argv.slice(2);
 const id = args[0]; const opt = (k, d) => { const i = args.indexOf(k); return i >= 0 ? args[i + 1] : d; };

@@ -145,6 +145,26 @@ export function assertAuthorityCeiling(r: Pick<Requirement, 'provenance' | 'auth
   }
 }
 
+/** What kind of thing a step of a method is: an instruction, a template example, an explanation, or a criterion (core/method/decision-units.ts). */
+export type UnitKind = 'instruction' | 'template' | 'explanation' | 'criterion';
+/**
+ * A STEP OF A METHOD, COMPILED FOR EXECUTION (core/method/decision-units.ts): the decision it asks for, what it consults,
+ * when it applies (its own words), what it puts in the work, what changes the default, and which steps come first.
+ * Never a requirement of its own and never a weight: a reading of the owner's step, said beside it. `by` says whether a
+ * model read it or the words alone decided (the floor: an instruction, applying always unless its words say when).
+ */
+export interface DecisionUnit {
+  readonly kind: UnitKind;
+  readonly decision: string | null;
+  readonly inputs: readonly string[];
+  readonly condition: string | null;
+  readonly output: string | null;
+  readonly exception: string | null;
+  readonly dependsOn: readonly string[];
+  readonly quote: string;
+  readonly by: 'model' | 'floor';
+}
+
 export interface Requirement {
   readonly requirementId: string;
   readonly statement: string;
@@ -231,6 +251,8 @@ export interface Requirement {
    * with this check, which is them saying the check is what they meant.
    */
   readonly related?: true;
+  /** For a step the owner stated: what it asks the writer to decide, read once at build (core/method/decision-units.ts). */
+  readonly unit?: DecisionUnit;
   /**
    * WHAT MUST BE BOUND FOR THIS RULE TO BE EXECUTED TRUTHFULLY.
    *

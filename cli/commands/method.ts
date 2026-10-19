@@ -18,6 +18,8 @@ import { basename, resolve } from 'node:path';
 import { DATA, argv, die, flag, positional, loadSession, saveSession, archiveSession, authoredIdAllocator, runFile, sha, canReach, contextReaderClient, contextReaderModel } from '../runtime.js';
 import * as store from '../../core/state/store.js';
 import { resetStages } from '../stages.js';
+import { METHOD_UNITS, unitFloor, describeUnit } from '../../core/method/decision-units.js';
+import type { DecisionUnit } from '../../core/state/canonical-state.js';
 import { normalizeClass, CLASS_ALIASES } from '../../core/observers/doc-class.js';
 import { unmeasuredKind } from '../../core/loop/claim-extract.js';
 import { skillNameFrom } from '../../renderers/agent-skill/render.js';
@@ -210,7 +212,9 @@ export function nameFor(notePath: string, goldenPath: string, viaNew: boolean): 
  */
 export function decideSteps(proposals: readonly MethodProposal[], nextId: () => string, confirmed = false,
   /** each statement's kind as read (core/observers/rule-polarity.ts); the word pattern decides a statement not in it */
-  kinds: ReadonlyMap<string, 'BOUNDARY' | 'GENERATIVE'> = new Map()): { decided: Requirement[]; ledger: RatificationLedger } {
+  kinds: ReadonlyMap<string, 'BOUNDARY' | 'GENERATIVE'> = new Map(),
+  /** each stated step's decision unit as read (core/method/decision-units.ts); a step not in it carries none */
+  units: ReadonlyMap<string, DecisionUnit> = new Map()): { decided: Requirement[]; ledger: RatificationLedger } {
   const bases: Requirement[] = proposals.map((p) => ({
     requirementId: nextId(), statement: p.statement, appliesWhen: 'GENERAL',
     // Whether the step forbids or asks for something is read (core/observers/rule-polarity.ts); the anchored word
@@ -230,6 +234,8 @@ export function decideSteps(proposals: readonly MethodProposal[], nextId: () => 
     ...(p.origin === 'STATED' && p.conflict && !confirmed ? { contested: p.conflict } : {}),
     // A check tied to the step by its subject, not by what it asks: kept and shown, and it blocks nothing.
     ...(p.origin === 'STATED' && p.related ? { related: true as const } : {}),
+    // What the step asks the writer to decide, read once (core/method/decision-units.ts): compiled beside the step, never a rule of its own.
+    ...(p.origin === 'STATED' && units.get(p.statement) ? { unit: units.get(p.statement) } : {}),
   }));
   let ledger: RatificationLedger = { standardDraftHash: draftHash(bases), records: [] };
   const decided = bases.map((base, i) => {
@@ -324,7 +330,12 @@ export async function method(): Promise<void> {
   // WHAT EACH STEP IS, READ ONCE: a prohibition or a thing to do. The reader sees every step in one call; without a
   // model (none set up, or --no-model) the word pattern decides, and the whole account says so.
   const kinds = await stepKinds([...likeThese, ...read.proposals].map((p) => p.statement));
-  const { decided, ledger } = decideSteps(proposals, authoredIdAllocator(s), confirmed, kinds);
+  // WHAT EACH STATED STEP ASKS THE WRITER TO DECIDE, read once (core/method/decision-units.ts): kind, decision, inputs,
+  // condition in the step's own words, output, exception, dependencies. Said in the whole account; the brief for one
+  // request selects by it. With no model the words decide: an instruction, applying always unless they say when.
+  const units = await decisionUnits(read.proposals.filter((p) => p.origin === 'STATED'), stepsOf(note));
+  if (whole && units.size) { console.log('\nWhat each step asks the writer to decide:'); let i = 0; for (const [statement, u] of units) console.log(`  ${++i}. ${statement.slice(0, 90)}\n      ${describeUnit(u)}`); }
+  const { decided, ledger } = decideSteps(proposals, authoredIdAllocator(s), confirmed, kinds, units);
   // WHOSE BUILD THIS IS, WRITTEN BEFORE ANYTHING ELSE IS. A build that stops after the standard is stored and before
   // the skill is installed leaves a skill of this name behind: with the name kept here, the same command run again
   // knows the skill as this folder's and finishes it. Without it, the person was told somebody else had built it.
@@ -408,6 +419,18 @@ export function describeFrom(note: string, purpose: string | null, name: string)
   const sentence = first ? (/^[\s\S]*?[.!?](?=\s|$)/.exec(first.replace(/\s+/g, ' '))?.[0] ?? first.replace(/\s+/g, ' ')).slice(0, 300) : '';
   const what = purpose?.trim() ? purpose.trim() : name.replace(/-/g, ' ');
   return `Use when asked to ${what.replace(/[.\s]+$/, '')}.${sentence ? ` ${sentence}` : ''}`;
+}
+
+/** The decision unit of every stated step, read in one call where a model is set up (core/method/decision-units.ts); the words alone where none is. */
+async function decisionUnits(stated: readonly MethodProposal[], steps: readonly { text: string; under: string | null }[]): Promise<Map<string, DecisionUnit>> {
+  const unique = [...new Set(stated.map((p) => p.statement.trim()).filter(Boolean))];
+  if (!unique.length) return new Map();
+  const under = new Map(steps.map((st) => [st.text.trim(), st.under]));
+  const input = { steps: unique.map((text, i) => ({ id: String(i + 1), text, under: under.get(text) ?? null })) };
+  const noModel = !canReach('discovery') || argv.includes('--no-model');
+  const d = await readContext(METHOD_UNITS, input, noModel ? null : contextReaderClient(), noModel ? null : contextReaderModel(), { spentUsd: 0, capUsd: 0.2, maxCalls: 1 });
+  if (argv.includes('--report')) console.log(`(what each step asks the writer to decide: ${d.by === 'model' ? `read by ${contextReaderModel()}` : d.by === 'code' ? 'nothing to read' : `by the words alone (${d.why})`}.)`);
+  return new Map(input.steps.map((st) => [st.text, d.value[st.id] ?? unitFloor(st)]));
 }
 
 /** The kind of every step the owner wrote or their example showed, read in one call where a model is set up (a rule counted off the pieces is worded by Atelier, and the word pattern decides it); the word pattern where none is, said in --report. */

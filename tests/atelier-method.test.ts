@@ -299,7 +299,7 @@ describe('through the binary: atelier method, then a run held to the method', ()
     expect(existsSync(join(data, 'skills', 'reads'))).toBe(false);
   });
 
-  it('--yes builds the skill from exactly that, with the example as its one worked example; the one call reads what kind of rule each step is, never a rule', async () => {
+  it('--yes builds the skill from exactly that, with the example as its one worked example; the two calls read what each step is and asks, never a rule', async () => {
     const before = await count();
     const r = atelier('method', 'method.md', '--golden', 'acme.md', '--name', 'analysis', '--yes', ...BACKEND());
     expect(r.code, `${r.err}${r.out}`).toBe(0);
@@ -310,9 +310,11 @@ describe('through the binary: atelier method, then a run held to the method', ()
     expect(r.out).toMatch(/You judge these yourself \(1\):/);
     expect(r.out).not.toMatch(/Standard [0-9a-f]+ minted|EVERY OUTPUT IS CHECKED BY|Kind of work/);
     expect(r.out).toContain('Use it: atelier run "<the task>" --with <file>');
-    // one reading, of what each step is (a prohibition or a thing to do): every step stays the owner's words
-    expect(await count()).toBe(before + 1);
-    expect(JSON.parse((await (await fetch(`${url()}/__log`)).json() as { bodies: string[] }).bodies.at(-1) ?? '{}').tools?.[0]?.function?.name).toBe('emit_rule_polarity');
+    // two readings of the steps, never a rule: what each step is (a prohibition or a thing to do), then what each asks
+    // the writer to decide (core/method/decision-units.ts). Every step stays the owner's words.
+    expect(await count()).toBe(before + 2);
+    const tools = (await (await fetch(`${url()}/__log`)).json() as { bodies: string[] }).bodies.slice(-2).map((b) => (JSON.parse(b) as { tools?: { function?: { name?: string } }[] }).tools?.[0]?.function?.name);
+    expect(tools).toEqual(['emit_rule_polarity', 'emit_method_units']);
     const skill = readFileSync(join(proj, '.claude', 'skills', 'analysis', 'SKILL.md'), 'utf8');
     for (const step of stepsOf(NOTE)) expect(skill).toContain(step.text.replace(/\.$/, ''));
     expect(readFileSync(join(proj, '.claude', 'skills', 'analysis', 'examples', 'exemplar.md'), 'utf8')).toContain('Borealis wins for a small team');
