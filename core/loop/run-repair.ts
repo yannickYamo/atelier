@@ -94,8 +94,10 @@ export interface CheckOptions {
   readonly material?: string;
   /** the request's own material alone, without the skill's rules beside it: what a claim about the current work may rest on */
   readonly evidence?: string;
-  /** the examples the skill is served (the author's pieces, the requests they answered, the method): their facts belong to their case (./carry-over.ts) */
+  /** the examples the skill is served (the author's pieces, the requests they answered, the exemplar): their facts belong to their case (./carry-over.ts) */
   readonly examples?: string;
+  /** what the owner approved and the writer may name on any request: the method note and the standard's statements. A term of theirs is never borrowed */
+  readonly approved?: string;
   /** false turns off the invented-story and invented-figure check (`--allow-unsourced`) */
   readonly guardClaims?: boolean;
   /**
@@ -254,7 +256,7 @@ export function checkDraft(skill: string, v: StandardVersion, text: string, opts
   // material never name, in a sentence that states it. A signal, listed for the person on every kind of work, never cut.
   // Read against a request only: with none (a `verify` with no --task), every term the examples share would be "borrowed".
   const carried = !(opts.examples ?? '').trim() || !(opts.context?.request ?? '').trim() ? []
-    : carryOverClaims(text, opts.examples ?? '', `${opts.evidence ?? opts.material ?? ''}\n${opts.context?.request ?? ''}`)
+    : carryOverClaims(text, opts.examples ?? '', `${opts.evidence ?? opts.material ?? ''}\n${opts.approved ?? ''}\n${opts.context?.request ?? ''}`)
       .filter((c) => ![...toCut, ...toList, ...words, ...stated].some((x) => overlaps(x, c)));
   const situated = listOnly ? [] : situationFlags.filter((c) => ![...toCut, ...toList, ...words, ...stated, ...carried].some((x) => overlaps(x, c)));
   const listed = [...toList, ...words, ...stated, ...carried, ...situated].sort((x, y) => x.start - y.start);

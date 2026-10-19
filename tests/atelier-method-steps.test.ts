@@ -468,9 +468,9 @@ describe('how long one section runs', () => {
     const offered = sectionLengthsFromExamples(examples);
     const how = offered.find((p) => p.statement.startsWith('The How it works section'));
     expect(how).toMatchObject({ statement: 'The How it works section runs 61 to 76 words in my pieces.', counted: true, origin: 'SHOWN_BY_EXAMPLE',
-      measurement: { observer: 'LENGTH', params: { unit: ['words'], in: ['How it works'], min: 46, max: 91 } } });
+      measurement: { observer: 'LENGTH', params: { unit: ['words'], in: ['How it works'], min: 42, max: 95 } } });
     for (const e of examples) expect(measure(e.reference, how!.measurement!).verdict, e.id).toBe('MET');
-    expect(measure(page(109, 9).reference, how!.measurement!)).toMatchObject({ verdict: 'VIOLATED', detail: '"How it works": 109 words (46 to 91): long by 18' });
+    expect(measure(page(109, 9).reference, how!.measurement!)).toMatchObject({ verdict: 'VIOLATED', detail: '"How it works": 109 words (42 to 95): long by 14' });
   });
   it('a section that doubles from one piece to the next has no usual length, and two pieces show none', async () => {
     const { sectionLengthsFromExamples } = await import('../core/method/standard.js');

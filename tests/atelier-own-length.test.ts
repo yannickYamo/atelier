@@ -16,9 +16,11 @@ describe('the band comes from the pieces, and every piece is inside it', () => {
     expect(lengthSpan([words(202), words(217)])).toBeNull();
   });
   it('the band is the span widened by its own width on each side', () => {
-    expect(ownLengthBand([202, 217])).toEqual([187, 232]);
+    // the width is the spread, and never less than a quarter of the longest piece: pieces of one length are not a preference one word wide
+    expect(ownLengthBand([202, 217])).toEqual([147, 272]);
     expect(ownLengthBand([300, 3000])).toEqual([1, 5700]);
-    expect(ownLengthBand([150, 150])).toEqual([149, 151]);
+    expect(ownLengthBand([150, 150])).toEqual([112, 188]);
+    expect(ownLengthBand([231, 231])).toEqual([173, 289]);
     expect(ownLengthBand(null)).toBeNull();
     expect(ownLengthBand(undefined)).toBeNull();
   });

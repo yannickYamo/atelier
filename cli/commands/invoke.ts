@@ -717,7 +717,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
         fresh: planState ? (round: number) => freshPlannedDraft(client, budget, servedForRun, taskForRun, planState, round) : null } : null,
       runSteps),
       planState ? { budget, trace, state: planState } : null), gradedTrace, ledgerBefore),
-      checks.guardClaims !== false && checks.examples ? { client, budget, request: asked, evidence: checks.evidence ?? '', examples: checks.examples, notes: completions,
+      checks.guardClaims !== false && checks.examples ? { client, budget, request: asked, evidence: `${checks.evidence ?? ''}\n${checks.approved ?? ''}`, examples: checks.examples, notes: completions,
         recheck: (text: string) => checkDraftAsync(name, std, text, checks) } : null),
       judge && checks.guardClaims !== false ? { judge, request: asked, material: checks.evidence ?? '' } : null)) : null,
     std && nDrafts > 1 ? withSections(selectDraft({ n: nDrafts, name, std, checks, taste, ownBand, signals: store.getSignals(L), profile: steerProfile, trace, ledger, sampling, ...(diverse ? { variant: variantOf, retrievedFor } : {}) }), sectionWriter)

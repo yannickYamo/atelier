@@ -166,7 +166,10 @@ export function checksFor(L: store.StoreLayout, opts: {
   const evidence = opts.material ?? '';
   const material = withRules(evidence, own);
   // What the skill is served as examples: their facts are their case's, never this request's (core/loop/carry-over.ts).
+  // THE METHOD IS NOT AN EXAMPLE. A term the owner's method names is approved terminology, the writer's to use on any
+  // request; read among the examples, it was called borrowed ("the OCR pass" in a method about scanned imports).
   const examples = servedExamples(L);
+  const approved = [store.getMethod(L)?.text ?? '', own].filter((t) => t.trim()).join('\n\n');
   // The format the text is: the one declared for it, or the class the standard was built from.
   const format = formatOf(flag('--class') ?? store.getDocClass(L));
   const judge = opts.offline ? undefined : opts.judge ?? (guardClaims ? contextJudgeFor() : undefined);
@@ -175,16 +178,16 @@ export function checksFor(L: store.StoreLayout, opts: {
   const sensor = (): ClaimSensor => (opts.offline ? patternSensor(material, placeholders, 'pattern check (offline)')
     : claimSensorFor(evidence, opts.task ?? '', placeholders, format?.strictSpecifics ?? false, bound, own));
   const unmeasured = listsBecause({ cls: opts.cls ?? flag('--class') ?? store.getDocClass(L), bound, slots: placeholders });
-  return { material, evidence, ...(examples ? { examples } : {}), guardClaims, placeholders, format, ...(unmeasured ? { listsBecause: unmeasured } : {}), ...(opts.context ? { context: opts.context } : {}), ...(judge ? { judge } : {}),
+  return { material, evidence, ...(examples ? { examples } : {}), ...(approved ? { approved } : {}), guardClaims, placeholders, format, ...(unmeasured ? { listsBecause: unmeasured } : {}), ...(opts.context ? { context: opts.context } : {}), ...(judge ? { judge } : {}),
     learnedTells: store.activeTells(store.getTells(L)),
     ...(guardClaims ? { claimSensor: sensor() } : {}) };
 }
 
-/** The examples the skill is served: the author's pieces with the requests they answered, the exemplar, the method. Empty before a build. */
+/** The examples the skill is served: the author's pieces with the requests they answered, and the exemplar. The method is the owner's, not an example. Empty before a build. */
 export function servedExamples(L: store.StoreLayout): string {
-  const voice = store.getVoice(L); const ex = store.getExemplar(L); const method = store.getMethod(L);
+  const voice = store.getVoice(L); const ex = store.getExemplar(L);
   return [...(voice?.pieces ?? []), ...(voice?.pieceRequests ?? []).filter((r): r is string => typeof r === 'string'),
-    ...(ex ? [ex.text, ex.request ?? ''] : []), method?.text ?? ''].filter((t) => t.trim()).join('\n\n');
+    ...(ex ? [ex.text, ex.request ?? ''] : [])].filter((t) => t.trim()).join('\n\n');
 }
 
 /** The statements of the active skill's approved rules, or none when the skill is not built yet. */
