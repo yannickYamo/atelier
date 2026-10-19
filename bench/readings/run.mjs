@@ -18,7 +18,7 @@ import { RULE_POLARITY } from '../../dist/core/observers/rule-polarity.js';
 import { INTENT_MODE } from '../../dist/core/observers/intent-mode.js';
 import { METHOD_UNITS } from '../../dist/core/method/decision-units.js';
 import { EXECUTION_BRIEF } from '../../dist/core/loop/execution-brief.js';
-import { PERSONA_MOVES } from '../../dist/core/compiler/moves.js';
+import { PERSONA_MOVES, PERSONA_EVIDENCE } from '../../dist/core/compiler/moves.js';
 import { MOVE_CASES } from '../../dist/core/loop/move-cases.js';
 import { MOVE_READER } from '../../dist/core/taste/move-reader.js';
 import { AnthropicInferenceClient } from '../../dist/providers/anthropic.js';
@@ -44,6 +44,8 @@ const READINGS = {
     answer: (v) => (v.m1 ? (v.m1.applies === 'applies' ? 'placed' : v.m1.applies) : null) },
   // one move against one delivered piece: the label is the outcome
   'move-realisation': { reading: MOVE_READER, input: (c) => ({ text: c.text, request: c.request, moves: [{ id: 'm1', aspect: c.move.aspect, observed: c.move.realisation, frequency: c.move.trigger ? 'SOMETIMES' : 'ALWAYS', trigger: { text: c.move.trigger ?? null, status: c.move.trigger ? 'supported' : 'none' }, applicability: c.move.trigger ? 'CONDITIONAL' : 'GENERAL', provisional: false, realisation: c.move.realisation, forbidden: c.move.forbidden ?? null, evidence: c.move.quote ? [{ piece: 'piece-1', quote: c.move.quote, situationQuote: null }] : [], pieces: 3, corpus: 6, scope: 'sentence', link: null, check: null, by: 'model' }] }), answer: (v) => v.m1?.outcome ?? null },
+  // one standing habit against the pieces not yet evidenced: the label is the pieces that should yield a quote, sorted and joined by +, or 'none'
+  'persona-evidence': { reading: PERSONA_EVIDENCE, input: (c) => ({ points: [{ n: 1, aspect: c.point.aspect, description: c.point.description, quote: c.point.quote, have: c.have }], pieces: c.pieces }), answer: (v) => ((v[1] ?? []).map((e) => e.piece).sort().join('+') || 'none') },
   'method-units': { reading: METHOD_UNITS, input: (c) => ({ steps: [{ id: '1', text: c.step, under: c.under ?? null }] }), answer: (v) => (v['1'] ? `${v['1'].kind}|${v['1'].condition ? 'conditional' : 'always'}` : null) },
 };
 const args = process.argv.slice(2);

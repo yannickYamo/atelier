@@ -44,7 +44,7 @@ export const MOVE_READER_SYSTEM = `You read one piece of writing against a numbe
 - NOT_APPLICABLE: the piece never reaches the move's situation.
 - UNCLEAR: you cannot tell from the piece.
 
-A move described as how the writer always writes (no situation) is REALISED where the piece writes that way and MISSING where it does not, including where the piece does the opposite (says "I" where the writer never does): MISAPPLIED is for a move made in the wrong place or the wrong way, never for one not made. Judge the move's purpose, not the presence of a gesture: a sentence that challenges an assumption without saying why it is misleading does not realise a move whose point is the why. Quote only words that are in the piece. Answer for every move.`;
+A move described as how the writer always writes (no situation) is REALISED where the piece writes that way and MISSING where it does not, including where the piece does the opposite (says "I" where the writer never does): MISAPPLIED is for a move made in the wrong place or the wrong way, never for one not made. Judge the situation from the piece and its request, never from the fact that the move was listed: a move listed for a piece that is not in its situation, and made there all the same (an attacker named for code nothing can reach, a concession where nothing is defensible), is MISAPPLIED. Judge the move's purpose, not the presence of a gesture: a sentence that challenges an assumption without saying why it is misleading does not realise a move whose point is the why. Quote only words that are in the piece. Answer for every move.`;
 
 export const MOVE_READER_SCHEMA: Record<string, unknown> = {
   type: 'object',
@@ -60,7 +60,7 @@ const describe = (u: MoveUnit, i: number): string =>
   `${i + 1}. ${u.aspect || u.observed}\n   situation: ${u.trigger.text ?? 'none: how the writer always writes'}\n   the move: ${u.realisation}${u.forbidden ? `\n   not: ${u.forbidden}` : ''}${u.evidence[0] ? `\n   as the writer once made it: "${u.evidence[0].quote}"` : ''}`;
 
 export const MOVE_READER: Reading<MoveReadInput, MoveReadOutput> = {
-  id: 'move-realisation', version: '2',
+  id: 'move-realisation', version: '3',
   system: MOVE_READER_SYSTEM, schema: MOVE_READER_SCHEMA,
   toolName: 'emit_move_readings', toolDescription: 'One reading per numbered move: what the piece did with it, with the passage where there is one.',
   maxTokens: 2400, estimateUsd: 0.01,

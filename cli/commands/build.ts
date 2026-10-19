@@ -26,7 +26,7 @@ import { deriveScope, groundScope, spreadByKind, type ScopeProfile } from '../..
 const ANSWER_EXAMPLE_WORDS = 1200;
 import { WORK_FORM, type WorkForm } from '../../core/observers/work-form.js';
 import { readContext } from '../../core/inference/reading.js';
-import { PERSONA_MOVES, profileOf, personaHashOf, describeMoves, describeMove, type MoveProfile } from '../../core/compiler/moves.js';
+import { PERSONA_MOVES, PERSONA_EVIDENCE, wantsEvidence, collectEvidence, profileOf, personaHashOf, describeMoves, describeMove, type MoveProfile } from '../../core/compiler/moves.js';
 import { isGeneralScope } from '../../core/state/canonical-state.js';
 import { moveEvidence, readHoldsBack, ownerWrote, HOLDS_BACK } from '../../core/compiler/applicability.js';
 import { normalizeClass } from '../../core/observers/doc-class.js';
@@ -367,11 +367,20 @@ async function movesFor(L: store.StoreLayout, voice: Voice | null, methodText: {
   const steps = methodText ? stepsOf(methodText.text).map((st, i) => ({ n: i + 1, text: st.text })) : [];
   const noModel = NO_MODEL();
   const d = await readContext(PERSONA_MOVES, { points, pieces, steps }, noModel ? null : contextReaderClient(), noModel ? null : contextReaderModel(), { spentUsd: 0, capUsd: 0.3, maxCalls: 1 });
-  const profile = profileOf(d.value, personaHash, d.by === 'model' ? contextReaderModel() : null, pieces);
+  // THE EVIDENCE PASS (core/compiler/moves.ts): a standing habit the first reading quoted from fewer than three pieces is
+  // looked for in the pieces it left out, once, so an UNKNOWN that stays is seen in few pieces rather than uncollected.
+  let units = d.value; let soughtN = 0;
+  const sought = d.by === 'model' ? wantsEvidence(units, pieces.length) : [];
+  if (sought.length) {
+    const input = { points: sought.map((u) => ({ n: units.indexOf(u) + 1, aspect: u.aspect, description: u.observed, quote: points[units.indexOf(u)]?.quote ?? u.evidence[0]?.quote ?? '', have: u.evidence.map((e) => e.piece) })), pieces };
+    const e = await readContext(PERSONA_EVIDENCE, input, contextReaderClient(), contextReaderModel(), { spentUsd: 0, capUsd: 0.3, maxCalls: 1 });
+    if (e.by === 'model') { units = collectEvidence(units, e.value, sought); soughtN = sought.length; }
+  }
+  const profile = profileOf(units, personaHash, d.by === 'model' ? contextReaderModel() : null, pieces);
   store.putMoves(L, personaHash, profile);
   if (d.by === 'model') {
-    recordStage('moves', { ran: true, detail: describeMoves(profile.units) });
-    console.log(`Moves: ${describeMoves(profile.units)}, read from the persona and your pieces. A general move holds in three or more pieces; a conditional one has the situation it answers shown in a piece; an unknown one is served to no run as a rule.`);
+    recordStage('moves', { ran: true, detail: `${describeMoves(profile.units)}${soughtN ? ` (evidence sought in every piece for ${soughtN})` : ''}` });
+    console.log(`Moves: ${describeMoves(profile.units)}${soughtN ? `, evidence sought in every piece for ${soughtN} standing habit(s)` : ''}, read from the persona and your pieces. A general move holds in three or more pieces; a conditional one has the situation it answers shown in a piece; an unknown one is served to no run as a rule.`);
   } else recordStage('moves', { ran: false, why: `${d.why ?? 'no model'}: every move is of unknown applicability` });
   if (argv.includes('--report') && profile.units.length) console.log(`What my moves are, and when I make them:\n${profile.units.map((u) => `  - ${describeMove(u)}`).join('\n')}`);
   return profile;

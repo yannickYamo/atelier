@@ -112,6 +112,34 @@
       "text": "## Summary\nI think your loop stops one short of the last item, you should use a range to the length.\n\n## Verdict\nRequest changes",
       "soft": true,
       "note": "Live evals of v1 and v2: MISAPPLIED 5/5 and 4/5 for a standing trait the piece does the opposite of (says I where the writer never does); the prompt's rule (MISSING for a move not made) does not move it. The two outcomes lead to the same action and are summed apart; soft, with the ambiguity recorded: for a standing trait, 'done the opposite' reads as misapplied to this reader."
+    },
+    {
+      "id": "misapplied-situation-absent",
+      "label": "MISAPPLIED",
+      "request": "Review this change: it moves date parsing out of three report builders into one helper.",
+      "move": {
+        "aspect": "Adversarial framing on risky surfaces",
+        "trigger": "where input is untrusted",
+        "realisation": "one sentence from the abusive caller's view, saying what they can do",
+        "forbidden": "never an attacker the diff does not expose",
+        "quote": "A caller can refund more than the order total"
+      },
+      "text": "## Summary\nThe change extracts timestamp parsing into one helper that returns the numeric fields.\n\n## Must fix\n- src/time/parse.ts:22 — The offset group is matched and discarded, so two instants in different zones parse the same.\n- src/time/parse.ts:21 — The rejected input is interpolated into the error message. If any of the three builders reads stamps from request data, a caller controls the text of an error that reaches a log, which an attacker can use to inject lines.\n\n## Verdict\nRequest changes",
+      "note": "the live C4 miss: the move listed for the piece, the piece not in its situation (an internal helper, no caller exposed by the diff), and the move made anyway with a speculative attacker. Must read MISAPPLIED, never REALISED."
+    },
+    {
+      "id": "mentioned-not-performed",
+      "label": "MISSING",
+      "request": "Review this change: the handler takes the refund amount from the request body.",
+      "move": {
+        "aspect": "Adversarial framing on risky surfaces",
+        "trigger": "where input is untrusted",
+        "realisation": "one sentence from the abusive caller's view, saying what they can do",
+        "forbidden": "never an attacker the diff does not expose",
+        "quote": "A caller can refund more than the order total"
+      },
+      "text": "## Summary\nThe handler reads the amount from the body and passes it to the gateway. Input validation deserves a look here.\n\n## Must fix\n- src/api/refund.py:14 — The amount is not checked against the order total.\n\n## Verdict\nRequest changes",
+      "note": "the situation is present, the move is named (\"deserves a look\") and not made: no sentence from the abusive caller. MISSING; a gesture is not the move."
     }
   ]
 }

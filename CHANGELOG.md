@@ -149,6 +149,23 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 - **A reader that cannot be reached is asked once.** With a key set for a backend that answers nothing, a build waited
   out the retries of every reading in turn; the first failure now turns the rest of that build's readings off, said once.
 
+### A review's finding is not a result seen; the reader judges the situation from the piece; a standing habit is sought in every piece
+
+- **A cited line is not a figure of progress.** "orders.py:42 — the status is written straight onto the column" carries
+  a result word and a number, and the pattern that catches "1.1M rows written" read it as a result the assistant saw,
+  blocking nine of twenty reviews in every arm of a study on the grounding gate. A line reference, a number inside a
+  name, and a line inside a hunk the material shows are not figures of result now. A real claim of progress still is.
+- **The move reader judges the situation from the piece, never from the list.** A move placed for a request and made
+  in a piece that is not in its situation (an attacker named for code nothing reaches) read as realised; it is
+  misapplied, and the reader is told so. Two case forms join its eval, the listed-but-absent situation and the move
+  named without being made; the live run of that eval waits for the next spend.
+- **A standing habit the first reading quoted from fewer than three pieces is looked for in the rest, once.** On a
+  real persona of twenty points, eleven read "always" and one became general: the reading quoted most from one or
+  two pieces, so they fell to unknown as uncollected rather than rare. A second bounded read asks one verbatim passage
+  per remaining piece; applicability is recomputed by the same code; a habit that stays unknown is marked as sought,
+  so "seen in few pieces" is told apart from "not collected". Nothing here raises evidence past observed or
+  permission past monitor.
+
 ### A run uses the profile its build named; a profile read from pieces that changed is read again
 
 - **A run takes the move profile from the receipt of the version it serves**, never from a lookup by the persona on

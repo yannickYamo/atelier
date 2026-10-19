@@ -65,6 +65,8 @@ export interface MoveUnit {
   /** a counted feature that measures the move, when one does (core/observers/features.ts) */
   readonly check: string | null;
   readonly by: 'model' | 'floor';
+  /** the evidence pass looked for this habit in every piece the first reading left out: an UNKNOWN that stays is seen in few pieces, not uncollected */
+  readonly evidenceSought?: boolean;
 }
 export interface MoveProfile {
   readonly schema: 1;
@@ -210,6 +212,76 @@ export const PERSONA_MOVES: Reading<MovesInput, MovesOutput> = {
   floor(input) { return input.points.map((p) => moveFloor(p, input.pieces)); },
 };
 
+// ── THE EVIDENCE PASS ─────────────────────────────────────────────────────────────────────────────────────────────
+//
+// On a real persona of twenty points, eleven read ALWAYS and one became GENERAL: the first reading quoted most habits
+// from one or two pieces, so they fell to UNKNOWN as uncollected, not as rare. A second, bounded reading asks, for each
+// such point, one passage per remaining piece that shows the habit, or none. Grounded like the first: a quote
+// verbatim in the piece it names, one per piece, never a piece already evidenced. Applicability is recomputed by the
+// same code; the authority ceiling is unchanged (observed at best, monitor). A point that stays UNKNOWN after the pass
+// is marked `evidenceSought`: seen in few pieces, which is a finding, not a gap.
+
+export interface EvidenceInput {
+  readonly points: readonly { readonly n: number; readonly aspect: string; readonly description: string; readonly quote: string; readonly have: readonly string[] }[];
+  readonly pieces: readonly MovePiece[];
+}
+export type EvidenceOutput = Readonly<Record<number, readonly MoveEvidence[]>>;
+
+export const PERSONA_EVIDENCE_SYSTEM = `You read one author's pieces for the habits named, numbered. Each habit is a point about HOW the author writes, with one quote that shows it and the pieces already known to show it. For each habit and each OTHER piece, quote one passage, copied character for character, where the piece shows the habit as described; give nothing for a piece that does not show it. A quote that is not verbatim is dropped. A habit is shown by a passage that does what the point describes, not by one on a similar subject. Answer for every habit.`;
+
+export const PERSONA_EVIDENCE_SCHEMA: Record<string, unknown> = {
+  type: 'object',
+  properties: { evidence: { type: 'array', items: { type: 'object', properties: { point: { type: 'integer' }, piece: { type: 'string' }, quote: { type: 'string' } }, required: ['point', 'piece', 'quote'], additionalProperties: false } } },
+  required: ['evidence'], additionalProperties: false,
+};
+
+export const PERSONA_EVIDENCE: Reading<EvidenceInput, EvidenceOutput> = {
+  id: 'persona-evidence', version: '1',
+  system: PERSONA_EVIDENCE_SYSTEM, schema: PERSONA_EVIDENCE_SCHEMA,
+  toolName: 'emit_persona_evidence', toolDescription: 'For each numbered habit, one verbatim passage per other piece that shows it.',
+  maxTokens: 6000, estimateUsd: 0.04,
+  prompt(input) {
+    const points = input.points.map((p) => `${p.n}. ${p.aspect ? `${p.aspect}: ` : ''}${p.description} e.g. "${p.quote}" (already shown in: ${p.have.join(', ') || 'none'})`).join('\n');
+    return `THE HABITS:\n${points}\n\nTHE PIECES:\n${input.pieces.map((p) => `=== ${p.name} ===\n${p.text}`).join('\n\n')}`;
+  },
+  decide(input) { return input.points.length ? null : {}; },
+  ground(raw, input) {
+    const r = raw as { evidence?: unknown } | null;
+    if (!r || !Array.isArray(r.evidence)) return null;
+    const byName = new Map(input.pieces.map((p) => [p.name, p]));
+    const byN = new Map(input.points.map((p) => [p.n, p]));
+    const out: Record<number, MoveEvidence[]> = {};
+    for (const e of r.evidence as { point?: unknown; piece?: unknown; quote?: unknown }[]) {
+      const p = typeof e.point === 'number' ? byN.get(e.point) : undefined;
+      const piece = typeof e.piece === 'string' ? byName.get(e.piece) : undefined;
+      const quote = short(e.quote, 300);
+      if (!p || !piece || !quote || p.have.includes(piece.name) || words(quote) < (words(p.quote) < MIN_EVIDENCE_WORDS ? 1 : MIN_EVIDENCE_WORDS) || !quoteIsReal(quote, piece.text)) continue;
+      const list = (out[p.n] ??= []);
+      if (list.some((x) => x.piece === piece.name)) continue;
+      list.push({ piece: piece.name, quote, situationQuote: null });
+    }
+    return Object.keys(out).length ? out : null;
+  },
+  floor() { return {}; },
+};
+
+/** The units that want the pass: a standing habit (always, often) evidenced in fewer than three pieces of a corpus of three or more. */
+export const wantsEvidence = (units: readonly MoveUnit[], corpus: number): MoveUnit[] =>
+  units.filter((u) => (u.frequency === 'ALWAYS' || u.frequency === 'OFTEN') && u.pieces < 3 && corpus >= 3 && u.by === 'model');
+
+/** The units with the pass's evidence merged, applicability recomputed by code, and the pass recorded on each unit it ran for. */
+export function collectEvidence(units: readonly MoveUnit[], found: EvidenceOutput, sought: readonly MoveUnit[]): MoveUnit[] {
+  const soughtIds = new Set(sought.map((u) => u.id));
+  return units.map((u, i) => {
+    if (!soughtIds.has(u.id)) return u;
+    const more = (found[i + 1] ?? []).filter((e) => !u.evidence.some((x) => x.piece === e.piece));
+    const evidence = [...u.evidence, ...more];
+    const pieces = new Set(evidence.map((e) => e.piece)).size;
+    const { applicability, provisional } = applicabilityOf(u.frequency, u.trigger.status, pieces, u.corpus);
+    return { ...u, evidence, pieces, applicability, provisional, evidenceSought: true };
+  });
+}
+
 /** An immutable profile named by its content; the build receipt names it. */
 export function profileOf(units: readonly MoveUnit[], personaHash: string, reader: string | null, pieces: readonly MovePiece[], builtAt = new Date().toISOString()): MoveProfile {
   const named = pieces.map((p) => ({ name: p.name, sha: createHash('sha256').update(p.text).digest('hex').slice(0, 16) }));
@@ -219,7 +291,7 @@ export function profileOf(units: readonly MoveUnit[], personaHash: string, reade
 
 /** One line per unit for the build's whole account and `report`. */
 export function describeMove(u: MoveUnit): string {
-  const head = `${u.applicability}${u.provisional ? ' (provisional)' : ''}${u.by === 'floor' ? ' (by the words alone)' : ''}`;
+  const head = `${u.applicability}${u.provisional ? ' (provisional)' : ''}${u.by === 'floor' ? ' (by the words alone)' : ''}${u.evidenceSought && u.applicability === 'UNKNOWN' ? ' (sought in every piece: seen in few)' : ''}`;
   const when = u.trigger.text ? ` · when: "${u.trigger.text}" (${u.trigger.status === 'supported' ? `shown in ${u.evidence.filter((e) => e.situationQuote).length} piece(s)` : 'proposed, no piece shows the situation'})` : '';
   const parts = [u.scope !== 'UNKNOWN' ? `scope: ${u.scope}` : null, u.link ? `at step ${u.link.step} (${u.link.status})` : null, u.check ? `counted: ${u.check}` : null, u.forbidden ? `not: ${u.forbidden}` : null].filter((x): x is string => x !== null);
   return `${head} · ${u.aspect || u.observed}${when} · seen in ${u.pieces} of ${u.corpus} piece(s)${parts.length ? ` · ${parts.join(' · ')}` : ''}`;

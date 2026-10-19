@@ -16,7 +16,7 @@
 // "orders_legacy". Each is judged against what the person supplied (the request, bound material): a
 // detail they gave is theirs to have repeated.
 
-import { claimUnitsOf, type Claim } from './claims.js';
+import { claimUnitsOf, LINE_REF, IN_A_NAME, type Claim } from './claims.js';
 import { numbersIn } from './claim-extract.js';
 
 const WORK_DONE = /^\W*(?:fixed|checked|verified|tested|ran|done|updated|deployed|applied|migrated|confirmed|reproduced|patched)\b|\bI(?:['’]ve| have)?\s+(?:ran|run|checked|verified|tested|fixed|updated|deployed|applied|reproduced|confirmed|changed|edited|patched|migrated|backfilled)\b|\b(?:now (?:passes|returns|works|succeeds)|returns? 200 now|(?:all )?tests? (?:now )?pass(?:es|ed)?|all green)\b/i;
@@ -41,18 +41,30 @@ const SPECIFIC = (id: string): boolean => /[\w][_:.-][\w]/.test(id) && !COMMON_N
  */
 export function answerWorkClaims(text: string, known: string, flagged: readonly Claim[]): Claim[] {
   const k = known.toLowerCase();
-  const knownFigures = new Set(numbersIn(known));
+  const knownFigures = new Set([...numbersIn(known), ...hunkLines(known)]);
   const out: Claim[] = [];
   for (const u of claimUnitsOf(text)) {
     // The unit's own text has inline code blanked out; the identifiers are the point here, so the
     // original is read at the unit's offsets.
     const s = text.slice(u.start, u.end);
-    const work = WORK_DONE.test(s) || (RESULT_WORDS.test(s) && numbersIn(s).some((n) => !knownFigures.has(n)));
+    // A RESULT IS A FIGURE OF PROGRESS, NOT A LINE CITED. "**orders.py:42** — the status is written straight onto the
+    // column" has "written" and a number, and read as "1.1M rows written" on nine of twenty reviews in a study: the
+    // number was the line the finding cites. A line reference, a number inside a name, and a line inside a hunk the
+    // material shows are not figures of result (the stated-figure listing already strips the first two).
+    const figures = numbersIn(s.replace(LINE_REF, ' ').replace(IN_A_NAME, ' '));
+    const work = WORK_DONE.test(s) || (RESULT_WORDS.test(s) && figures.some((n) => !knownFigures.has(n)));
     const why = work ? 'a claim of work done or a result seen, which the request did not report' : environmentIdentifier(s, k);
     if (!why) continue;
     const reused = flagged.find((c) => c.start === u.start);
     out.push(reused ? { ...reused, kind: 'EXPERIENCE', why } : { start: u.start, end: u.end, text: u.text, kind: 'EXPERIENCE', why });
   }
+  return out;
+}
+
+/** The line numbers a diff's hunk headers in `known` cover ("@@ -18,0 +18,28 @@" covers 18 to 45): lines a review may cite. */
+export function hunkLines(known: string): string[] {
+  const out: string[] = [];
+  for (const m of known.matchAll(/^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/gm)) { const start = Number(m[1]); const n = m[2] === undefined ? 1 : Number(m[2]); for (let i = 0; i < Math.min(n, 5000); i++) out.push(String(start + i)); }
   return out;
 }
 

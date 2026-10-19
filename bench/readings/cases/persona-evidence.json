@@ -1,0 +1,122 @@
+{
+  "reading": "persona-evidence",
+  "pass": {
+    "runs": 5,
+    "perCaseAtLeast": 4,
+    "codeDecidedExact": true
+  },
+  "note": "One standing habit, its first-pass evidence, and the pieces left to read. The label names the pieces that show the habit (a verbatim quote from each), or none. Not yet run live (no spend authorised on 2026-10-19); run before the pass's result steers anything.",
+  "cases": [
+    {
+      "id": "impersonal-in-all",
+      "label": "piece-2+piece-3",
+      "point": {
+        "aspect": "Impersonal point of view",
+        "description": "Never says I or you; a finding is a bare statement about the artifact.",
+        "quote": "The loop stops one short"
+      },
+      "have": [
+        "piece-1"
+      ],
+      "pieces": [
+        {
+          "name": "piece-1",
+          "text": "## Summary\nThe loop stops one short. Use a range to the length.\n\n## Verdict\nRequest changes"
+        },
+        {
+          "name": "piece-2",
+          "text": "## Summary\nThe handler trusts the body. Validate the amount before the charge.\n\n## Verdict\nRequest changes"
+        },
+        {
+          "name": "piece-3",
+          "text": "## Summary\nThe migration is reversible and the tests cover it.\n\n## Verdict\nApprove"
+        }
+      ]
+    },
+    {
+      "id": "habit-absent-in-one",
+      "label": "piece-2",
+      "point": {
+        "aspect": "Finding closed with a prescribed fix",
+        "description": "Nearly every criticism ends with a specific remedy.",
+        "quote": "Use a range to the length"
+      },
+      "have": [
+        "piece-1"
+      ],
+      "pieces": [
+        {
+          "name": "piece-1",
+          "text": "## Summary\nThe loop stops one short. Use a range to the length.\n\n## Verdict\nRequest changes"
+        },
+        {
+          "name": "piece-2",
+          "text": "## Summary\nThe handler trusts the body. Validate the amount before the charge.\n\n## Verdict\nRequest changes"
+        },
+        {
+          "name": "piece-3",
+          "text": "## Summary\nThe migration is reversible and the tests cover it.\n\n## Verdict\nApprove"
+        }
+      ],
+      "note": "piece-3 has no criticism and so no remedy: nothing from it"
+    },
+    {
+      "id": "similar-subject-not-habit",
+      "label": "none",
+      "point": {
+        "aspect": "Concession before critique",
+        "description": "Grants what is defensible before pressing the point, with 'which is safe but'.",
+        "quote": "which is safe on its own, but"
+      },
+      "have": [
+        "piece-1"
+      ],
+      "pieces": [
+        {
+          "name": "piece-1",
+          "text": "## Must fix\nThe handler now checks the amount, which is safe on its own, but the check runs after the charge.\n\n## Verdict\nRequest changes"
+        },
+        {
+          "name": "piece-2",
+          "text": "## Must fix\nThe check runs after the charge, so a bad amount is charged and then refused.\n\n## Verdict\nRequest changes"
+        },
+        {
+          "name": "piece-3",
+          "text": "## Summary\nThe migration is reversible.\n\n## Verdict\nApprove"
+        }
+      ],
+      "note": "piece-2 is on the same subject and makes no concession: a passage on a similar subject is not the habit"
+    },
+    {
+      "id": "terse-verdict-everywhere",
+      "label": "piece-2+piece-3+piece-4",
+      "point": {
+        "aspect": "Abrupt closing",
+        "description": "Ends on a terse verdict line with no sign-off.",
+        "quote": "Request changes"
+      },
+      "have": [
+        "piece-1"
+      ],
+      "pieces": [
+        {
+          "name": "piece-1",
+          "text": "## Summary\nThe loop stops one short.\n\n## Verdict\nRequest changes"
+        },
+        {
+          "name": "piece-2",
+          "text": "## Summary\nThe handler trusts the body.\n\n## Verdict\nRequest changes"
+        },
+        {
+          "name": "piece-3",
+          "text": "## Summary\nThe migration is reversible.\n\n## Verdict\nApprove"
+        },
+        {
+          "name": "piece-4",
+          "text": "## Summary\nThe rename keeps its tests.\n\n## Verdict\nComment"
+        }
+      ],
+      "note": "a two-word move is evidenced at its own grain"
+    }
+  ]
+}
