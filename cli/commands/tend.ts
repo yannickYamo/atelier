@@ -22,7 +22,7 @@
 //   0 9 * * 1  cd /path/to/project && atelier tend --skill house-style --cap 5 --auto >> ~/.atelier/tend.log 2>&1
 
 import * as store from '../../core/state/store.js';
-import { degradedStages } from '../../core/state/receipt.js';
+import { degradedStages, describeStages } from '../../core/state/receipt.js';
 import { findRecurrences, ruleBreakRates, regressedRules, type VersionBreakRates } from '../../core/mining/recurrence.js';
 import { rollbackTo } from './inspect.js';
 import { tasteRules } from '../../core/taste/reader.js';
@@ -113,6 +113,7 @@ export function skillDashboard(name: string): void {
   // WHAT THE BUILD RAN AND WHAT IT LOST (core/state/receipt.ts): a persona lost to a failed call is said here until a
   // later build reads it, with the command that does.
   const receipt = store.getReceipt(L, active); const lost = receipt ? degradedStages(receipt) : [];
+  if (receipt) console.log(`  stages         ${describeStages(receipt.stages).replace(/^Stages: /, '')}`);
   console.log(`  build          ${receipt ? `receipt ${receipt.receiptHash}${lost.length ? `; built without: ${lost.map((x) => `${x.id} (${x.why})`).join(', ')}. Repair: atelier build --name ${name} --persona auto` : '; complete'}` : 'no receipt (built before receipts were kept)'}`);
   console.log(`  rules          ${live.length}: ${live.filter((r) => r.measurement).length} counted, ${rules.length} read by the taste reader`);
   // WHAT THE ONE HUMAN ACT WAS. Pressing Enter accepts every suggested ruling, so "you approved every rule"

@@ -407,8 +407,10 @@ export function renderAgentSkill(
     // refuses before the call; a host serving this file directly cannot be made to, so the file says it.
     const needs = (r.prerequisites ?? []).map((p) =>
       `\n   Needs: ${p.why.replace(/[.\s]+$/, '')}. If you were not given it, ask for it. Never invent it.`).join('');
-    // A measured rule states its number: the model is told the target it will be checked against.
-    const checked = r.measurement ? `\n   Checked: ${observerFor(r.measurement.observer).describe(r.measurement.params)}.` : '';
+    // A measured rule states its number: the model is told the target it will be checked against. One no count
+    // checks says so too: a run reports it as the owner's to read (or a reader's to report), never as held.
+    const checked = r.measurement ? `\n   Checked: ${observerFor(r.measurement.observer).describe(r.measurement.params)}.`
+      : '\n   Read, not counted: no check measures this; whether the work does it is reported, never counted as held.';
     return `${i + 1}. ${text}${needs}${checked}\n   <!-- ${r.requirementId} · ${prov} -->`;
   };
 

@@ -644,7 +644,8 @@ export async function build(nameArg?: string, opts: { closing?: boolean } = {}):
   const receipt = receiptOf({ skillVersionHash: skill.skillVersionHash, standardVersionHash: v.standardVersionHash, architectureHash: arch.architectureHash, packageHash: pkg0.packageHash,
     corpusHash: expectCorpus, methodHash: methodText ? sha(methodText.text) : null, models: { contextReader: NO_MODEL() ? 'none' : contextReaderModel() ?? 'none' }, stages: stagesSoFar(), builtAt: new Date().toISOString() });
   store.putReceipt(L, receipt);
-  console.log(describeStages(receipt.stages));
+  // Said in the whole account and by `status`; under `atelier new` the short screen stays the owner's.
+  if (!orchestrated() || argv.includes('--report')) console.log(describeStages(receipt.stages));
   store.setActive(L, skill.skillVersionHash);
 
   // ── IMPROVE: WRITE INTO THE USER'S OWN SKILL ───────────────────────────────────────────────
