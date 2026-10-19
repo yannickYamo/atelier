@@ -43,6 +43,8 @@ export interface RunEvalInput {
   readonly profile: FidelityProfile | null;
   readonly format: { readonly words: string | null; readonly shape: 'SHAPE' | 'BARE' | null; readonly withheld: number };
   readonly taste: EvalSummary['monitors']['taste'];
+  /** the author's moves read on the delivered text (core/taste/move-reader.ts), when they were */
+  readonly moves?: EvalSummary['monitors']['moves'];
   readonly costUsd: number;
   /** where the cost went, by purpose, and what the run sent the writer (core/eval/size.ts); both recorded as given */
   readonly spend?: EvalSummary['spend'];
@@ -180,6 +182,7 @@ export function buildRunEval(x: RunEvalInput): EvalSummary {
     monitors: {
       detector: reading?.detector ? { p: reading.detector.p, families: reading.detector.families ?? [], qualified: detectorQ ? detectorQ.result.passes : null } : null,
       taste: x.taste,
+      ...(x.moves ? { moves: x.moves } : {}),
       ...(x.coverage ? { coverage: { asked: x.coverage.parts.length, given: x.coverage.parts.filter((p) => p.covered === true).length,
         missing: x.coverage.parts.filter((p) => p.covered === false && !p.deferred).map((p) => p.words), unclear: x.coverage.parts.filter((p) => p.covered === null).length,
         ...(x.coverage.parts.some((p) => p.deferred) ? { heldBack: x.coverage.parts.filter((p) => p.deferred).map((p) => p.words) } : {}) } } : {}),

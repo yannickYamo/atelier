@@ -1,0 +1,117 @@
+{
+  "reading": "move-realisation",
+  "pass": {
+    "runs": 5,
+    "perCaseAtLeast": 4,
+    "codeDecidedExact": true
+  },
+  "note": "One move against one delivered piece. REALISED and MISAPPLIED must quote the piece; MISSING and NOT_APPLICABLE need no quote; UNCLEAR grounds to NOT_READ. The outcome is the reader's judgement of the move's purpose, not of a gesture's presence.",
+  "cases": [
+    {
+      "id": "realised-adversarial",
+      "label": "REALISED",
+      "request": "Review this change: the handler takes the refund amount from the request body.",
+      "move": {
+        "aspect": "Adversarial framing on risky surfaces",
+        "trigger": "where input is untrusted",
+        "realisation": "one sentence from the abusive caller's view, saying what they can do",
+        "forbidden": "never an attacker the diff does not expose",
+        "quote": "A caller can refund more than the order total"
+      },
+      "text": "## Summary\nThe handler reads the amount from the body and passes it to the gateway unchecked. A caller can send any amount, including more than the order, and the gateway will refund it.\n\n## Must fix\n- src/api/refund.py:14: clamp the amount to the order total before the call.\n\n## Verdict\nRequest changes"
+    },
+    {
+      "id": "missing-adversarial",
+      "label": "MISSING",
+      "request": "Review this change: the handler takes the refund amount from the request body.",
+      "move": {
+        "aspect": "Adversarial framing on risky surfaces",
+        "trigger": "where input is untrusted",
+        "realisation": "one sentence from the abusive caller's view, saying what they can do",
+        "forbidden": "never an attacker the diff does not expose",
+        "quote": "A caller can refund more than the order total"
+      },
+      "text": "## Summary\nThe handler reads the amount from the body and passes it to the gateway. The code is tidy and the tests pass.\n\n## Suggestions\n- Consider a docstring on refund().\n\n## Verdict\nApprove"
+    },
+    {
+      "id": "misapplied-forbidden-attacker",
+      "label": "MISAPPLIED",
+      "request": "Review this change: it renames a CSS class in the docs site and touches nothing else.",
+      "move": {
+        "aspect": "Adversarial framing on risky surfaces",
+        "trigger": "where input is untrusted",
+        "realisation": "one sentence from the abusive caller's view, saying what they can do",
+        "forbidden": "never an attacker the diff does not expose",
+        "quote": "A caller can refund more than the order total"
+      },
+      "text": "## Summary\nThe change renames .hero to .banner in the docs stylesheet. An attacker could inject styles through the class name and take over the page.\n\n## Verdict\nApprove"
+    },
+    {
+      "id": "not-applicable-docs",
+      "label": "NOT_APPLICABLE",
+      "request": "Review this change: it renames a CSS class in the docs site and touches nothing else.",
+      "move": {
+        "aspect": "Adversarial framing on risky surfaces",
+        "trigger": "where input is untrusted",
+        "realisation": "one sentence from the abusive caller's view, saying what they can do",
+        "forbidden": "never an attacker the diff does not expose",
+        "quote": "A caller can refund more than the order total"
+      },
+      "text": "## Summary\nThe change renames .hero to .banner in the docs stylesheet and updates the two pages that use it.\n\n## Verdict\nApprove"
+    },
+    {
+      "id": "gesture-without-why",
+      "label": "MISAPPLIED",
+      "request": "Explain why the deploy is slow.",
+      "move": {
+        "aspect": "Challenge the shared assumption",
+        "trigger": "when a claim rests on an assumption the reader shares",
+        "realisation": "name the assumption, then say why it misleads, before the mechanism",
+        "forbidden": "never a bare contradiction with no reason",
+        "quote": "The usual story is that the queue is slow. It is not the queue."
+      },
+      "text": "Everyone says the queue is slow. That assumption is wrong.\n\nThe lock on the writer is held across the network call, so every consumer waits on one socket. Release the lock before the call.",
+      "soft": true,
+      "note": "the gesture is there (a challenge) and the move's point (why the assumption misleads) is not; MISSING is also defensible, since the move as described was not made. Soft on the two."
+    },
+    {
+      "id": "realised-with-why",
+      "label": "REALISED",
+      "request": "Explain why the deploy is slow.",
+      "move": {
+        "aspect": "Challenge the shared assumption",
+        "trigger": "when a claim rests on an assumption the reader shares",
+        "realisation": "name the assumption, then say why it misleads, before the mechanism",
+        "forbidden": "never a bare contradiction with no reason",
+        "quote": "The usual story is that the queue is slow. It is not the queue."
+      },
+      "text": "Everyone on the team blamed the queue, because the queue is the only thing they can see in the dashboard. The queue is a symptom: it fills because the writer holds a lock across the network call, so every consumer waits on one socket.\n\nRelease the lock before the call."
+    },
+    {
+      "id": "standing-realised",
+      "label": "REALISED",
+      "request": "Review this change.",
+      "move": {
+        "aspect": "Impersonal point of view",
+        "trigger": null,
+        "realisation": "findings as bare statements about the artifact, never I or you",
+        "quote": "The loop stops one short"
+      },
+      "text": "## Summary\nThe loop stops one short of the last item. Use a range to the length.\n\n## Verdict\nRequest changes"
+    },
+    {
+      "id": "standing-missing",
+      "label": "MISSING",
+      "request": "Review this change.",
+      "move": {
+        "aspect": "Impersonal point of view",
+        "trigger": null,
+        "realisation": "findings as bare statements about the artifact, never I or you",
+        "quote": "The loop stops one short"
+      },
+      "text": "## Summary\nI think your loop stops one short of the last item, you should use a range to the length.\n\n## Verdict\nRequest changes",
+      "soft": true,
+      "note": "Live evals of v1 and v2: MISAPPLIED 5/5 and 4/5 for a standing trait the piece does the opposite of (says I where the writer never does); the prompt's rule (MISSING for a move not made) does not move it. The two outcomes lead to the same action and are summed apart; soft, with the ambiguity recorded: for a standing trait, 'done the opposite' reads as misapplied to this reader."
+    }
+  ]
+}

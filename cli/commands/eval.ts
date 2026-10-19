@@ -82,10 +82,22 @@ export function evaluate(): void {
   const thinRequests = thinIds.size ? store.listInvocations(L).filter((r) => thinIds.has(r.invocationId)).map((r) => r.input.split('\n')[0].slice(0, 80)) : [];
   const coverage = { runs: withSubject.length, thin: thinIds.size, requests: thinRequests };
 
+  // THE AUTHOR'S MOVES, OVER RUNS (core/taste/move-reader.ts): for each move, in how many runs it was placed or standing
+  // and what the piece did with it. A reading, never a gate; the rate is the reader's, until a study rates the reader.
+  const moveRuns = evals.filter((e) => e.monitors.moves);
+  const byMove = new Map<string, { aspect: string; runs: number; realised: number; misapplied: number; missing: number; notApplicable: number; notRead: number }>();
+  for (const e of moveRuns) for (const x of e.monitors.moves!.each) {
+    const m = byMove.get(x.id) ?? { aspect: x.aspect, runs: 0, realised: 0, misapplied: 0, missing: 0, notApplicable: 0, notRead: 0 };
+    m.runs += 1;
+    if (x.outcome === 'REALISED') m.realised += 1; else if (x.outcome === 'MISAPPLIED') m.misapplied += 1; else if (x.outcome === 'MISSING') m.missing += 1; else if (x.outcome === 'NOT_APPLICABLE') m.notApplicable += 1; else m.notRead += 1;
+    byMove.set(x.id, m);
+  }
+  const moves = { runs: moveRuns.length, served: moveRuns.filter((e) => e.monitors.moves!.mode === 'serve').length, each: [...byMove.entries()].map(([id, m]) => ({ id, ...m })).sort((a, b) => b.runs - a.runs) };
+
   if (argv.includes('--json')) {
     console.log(JSON.stringify({ skill: name, cohorts: summary.map((c) => ({ ...c, conformantCi: wilson(c.conformant, c.runs), wouldShipCi: wilson(c.wouldShip, c.rated) })),
       brokenRules: Object.fromEntries(brokenCount), reasons: Object.fromEntries(reasonCount), complaints: Object.fromEntries(complaints),
-      notShippedBecause: noRating, toRead: queue.map((e) => e.invocationId), coverage }, null, 1));
+      notShippedBecause: noRating, toRead: queue.map((e) => e.invocationId), coverage, moves }, null, 1));
     return;
   }
   if (testRuns.size && !argv.includes('--json')) console.log(`(${testRuns.size} run(s) marked as tests are left out: a benchmark answer or a held-back case is a measurement, not use.)`);
@@ -123,6 +135,10 @@ export function evaluate(): void {
     console.log(coverage.thin ? `    ${coverage.thin} of ${coverage.runs} run(s): their readings rest on your whole range, not on how you write on that subject`
       : `    none of ${coverage.runs} run(s): every request was near at least two of your pieces`);
     for (const q of [...new Set(coverage.requests)].slice(0, 5)) console.log(`    "${q}"`);
+  }
+  if (moves.runs) {
+    console.log(`\n  MY MOVES, READ ON THE WORK (${moves.runs} run(s), ${moves.served} with the moves served; a reading, never a gate)`);
+    for (const m of moves.each.slice(0, 8)) console.log(`    ${m.aspect.slice(0, 44).padEnd(46)}realised ${m.realised}/${m.runs} · misapplied ${m.misapplied} · missing ${m.missing} · not applicable ${m.notApplicable}${m.notRead ? ` · not read ${m.notRead}` : ''}`);
   }
   console.log(`\n  drift on your range: atelier fidelity --skill ${name}`);
 }

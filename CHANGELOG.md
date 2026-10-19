@@ -149,6 +149,21 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 - **A reader that cannot be reached is asked once.** With a key set for a backend that answers nothing, a build waited
   out the retries of every reading in turn; the first failure now turns the rest of that build's readings off, said once.
 
+### What the work did with your moves, read after the draft and never counted
+
+- **Each move placed or standing for a request is read on the delivered text**, by a small read of its own after the
+  draft, apart from the taste reader's, so the reader's coverage of your method's steps is never spent on a move.
+  Five outcomes, because presence is not realisation: realised (the piece is in the move's situation and makes the
+  move as you make it, with the passage quoted), misapplied (made where it does not fit, or as its own "not" line
+  forbids, quoted), missing (the situation is there and the move is not), not applicable (the piece never reaches
+  the situation), not read. A sentence that challenges an assumption without saying why it misleads does not realise
+  a move whose point is the why.
+- **A reading, never a gate.** Nothing redrafts on it, nothing counts it as held; it is said in the run's panel under
+  the monitors ("my moves: 1 realised · 0 misapplied · 1 missing · 0 not applicable (observed, not served)"), kept
+  with the run as an event, and summed by `atelier eval` per move: in how many runs it was placed, and what the
+  pieces did with it. The reader's agreement with a blind judge is a study's to measure before any of it steers.
+  `--no-taste` skips it with the taste reader; a short request, which gets no brief, gets no reading.
+
 ### Which of your moves this request calls for, read with the brief and recorded
 
 - **Your moves are placed for each request as your steps are, by a reading of their own.** For each conditional move

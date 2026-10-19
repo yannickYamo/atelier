@@ -16,6 +16,7 @@ import { groundCarried } from '../../core/loop/grounding.js';
 import { SLOT_NOTE } from '../../renderers/agent-skill/render.js';
 import { EXECUTION_BRIEF, briefNote, applyingSteps, setAsideSteps, unresolvedSteps, type BriefStep, selectMoves, type MoveSelection } from '../../core/loop/execution-brief.js';
 import { MOVE_CASES, eligibleMoves } from '../../core/loop/move-cases.js';
+import { MOVE_READER, countOutcomes } from '../../core/taste/move-reader.js';
 /** Reading calls a run makes by default on a long request: two batches of twelve rules, each read twice. */
 const READ_CALLS_DEFAULT = 4;
 import { readContext } from '../../core/inference/reading.js';
@@ -818,6 +819,9 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   reportChecks(report, rec, std, checks);
   if (lineCiting && material.length) report.say(lineCitationsLine(rec.output, material));
   const tasteMonitor = taste ? await taste.report(report, rec, name) : null;
+  // THE MOVES, READ ON THE WORK (core/taste/move-reader.ts): its own small call, under the taste reader's own gate, so
+  // the reader's coverage of the method's steps is never spent on a move. A reading, never a gate: recorded, shown, summed.
+  const movesMonitor = selection && profile && placement && !argv.includes('--no-taste') && (readerAsked || canReach('discovery')) ? await readMovesOnWork(L, rec, asked, selection, profile.hash, movesMode, report) : null;
   reportIntegrity(report, rec, cls.ok ? cls.note : null, std, L);
   reportFidelity(report, rec);
   if (ownBand) report.say(ownLengthLine(rec.output, ownBand, store.getVoice(L)?.lengthSpan ?? ownBand));
@@ -845,7 +849,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
       : await checkDraftAsync(name, std, rec.output, checks).catch(() => null);
     evaluation = buildRunEval({ L, rec, std, sensor: checks.claimSensor, claimsOff: argv.includes('--allow-unsourced'),
       answers: checks.format?.claims === 'list', unmeasured: checks.listsBecause ?? null, profile: fid?.profile ?? null,
-      format: { words: formatAsked ?? null, shape, withheld: presentationWithheld }, taste: tasteMonitor, costUsd: spent,
+      format: { words: formatAsked ?? null, shape, withheld: presentationWithheld }, taste: tasteMonitor, moves: movesMonitor, costUsd: spent,
       // Where the cost went (core/inference/client.ts, `SpendPurpose`) and what the writer was sent, in words.
       spend: spentBy,
       sent: { skill: countWords(needMaterial.length ? withoutRules(servedText, needMaterial) : servedText), added: countWords(impl.notes) + countWords(carryBlock) + countWords(requestNotes) + perDraftWords, request: countWords(taskForRun) },
@@ -2741,6 +2745,30 @@ function reportChecks(report: RunReport, rec: Invocation, std: Standard | null, 
   if (r?.storiesCut?.length) {
     report.say(`${checks.placeholders ? 'Left a slot for' : 'Cut'} ${r.storiesCut.length} invented stor(ies), quotation(s) or figure(s); your own would fit where they were (listed in the details).`);
     for (const c of r.storiesCut) report.detail(`    cut: "${c.slice(0, 160)}"`);
+  }
+}
+
+type MovesMonitor = NonNullable<EvalSummary['monitors']['moves']>;
+/**
+ * What the delivered text did with the moves placed and standing for this request, read by the taste reader's model in
+ * one call of its own (core/taste/move-reader.ts). Said in one line, kept with the run as an event (never for a run
+ * marked as a test), and never a reason to write again. A failure to read is said, and costs the person nothing.
+ */
+async function readMovesOnWork(L: store.StoreLayout, rec: Invocation, asked: string, selection: MoveSelection, profile: string, mode: 'observe' | 'serve', report: RunReport): Promise<MovesMonitor | null> {
+  const units = [...selection.placed, ...selection.standing];
+  if (!units.length) return null;
+  try {
+    const placed = new Set(selection.placed.map((u) => u.id));
+    const d = await readContext(MOVE_READER, { text: rec.output, request: asked, moves: units }, readerClientFor(), readerModel(), { spentUsd: 0, capUsd: 0.05, maxCalls: 1 });
+    const n = countOutcomes(d.value);
+    const each = units.map((u) => ({ id: u.id, aspect: u.aspect || u.observed, placed: placed.has(u.id), outcome: d.value[u.id]?.outcome ?? 'NOT_READ' as const, why: d.value[u.id]?.why ?? '' }));
+    if (!argv.includes('--test-run')) store.appendEvent(L, { kind: 'MOVE_READING', invocationId: rec.invocationId, profile, mode, by: d.by, readerModel: d.by === 'model' ? readerModel() : null, at: new Date().toISOString(), readings: d.value });
+    const said = each.filter((x) => x.outcome === 'MISSING' || x.outcome === 'MISAPPLIED').slice(0, 2).map((x) => `${x.aspect} ${x.outcome.toLowerCase()}: ${x.why}`).join('; ');
+    report.say(`My moves, read on the work: ${n.REALISED} realised, ${n.MISAPPLIED} misapplied, ${n.MISSING} missing, ${n.NOT_APPLICABLE} not applicable${n.NOT_READ ? `, ${n.NOT_READ} not read` : ''} of ${units.length} (${mode === 'serve' ? 'served' : 'observed, not served'}; a reading, never a gate)${said ? `. ${said}` : ''}.`);
+    return { mode, profile, by: d.by, realised: n.REALISED, misapplied: n.MISAPPLIED, missing: n.MISSING, notApplicable: n.NOT_APPLICABLE, notRead: n.NOT_READ, each };
+  } catch (e) {
+    report.say(`(the moves could not be read on the work: ${(e as Error).message.split('\n')[0]})`);
+    return null;
   }
 }
 
