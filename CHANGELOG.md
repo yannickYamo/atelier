@@ -7,6 +7,26 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+### The author's own clause survives the trim, and a document writes concretely
+
+- **A cut for length never removes the house's own wording.** Asked to bring a draft under a required cap, the cutter
+  was shown the draft alone and named the "includes, without limitation" list that every one of the author's
+  contracts carries. A sentence carrying a six-word run the author's pieces share is never cut; the cut falls on what
+  else was named. And under a required cap on words, the skill states the span the pieces run as the aim and the cap
+  as the limit, without the hedge ("not how long an answer must be") that licensed 10 of 10 drafts to overshoot.
+- **One frame around your pieces, said positively.** Four separate instructions told the writer what never to take from
+  your pieces, and a writer told four times to keep its distance wrote abstractly where you write in links, named
+  products, figures and scenes. The skill now says once: write the way these are written, concreteness included; the
+  facts come from the request; what the piece needs and the request did not give is written in your shape and marked as
+  a slot for you to fill (`[link: …]`, `[product: …]`, `[figure: …]`). For a document, an invented story, source or
+  figure becomes such a slot by default rather than a cut (`--no-placeholders` asks for cuts; replies still list).
+- **Two false alarms in the verdict.** A six-word run two pieces of a corpus of four or more share is the house's
+  wording, not a lifted passage (7 of 10 good contracts were BLOCKED as lifted). And a `path:line` that names a line
+  inside the bound diff's hunks traces to the diff: the line number is not written in a diff, so every citation of one
+  was called invented, and once a Must fix finding was cut down to "Await it.". This is claim decision 4, a changed
+  instrument: until the study that measures it, no shipped claim reader cuts; it reads, lists, and the pattern check
+  gates, as for any unmeasured reader.
+
 ### What kind of work it is, read from your pieces, not off its name
 
 - **Whether a skill writes replies or documents is read from the examples.** It was read off the skill's name by a word

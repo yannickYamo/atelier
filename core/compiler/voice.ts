@@ -247,7 +247,8 @@ export const isExcerpt = (piece: string): boolean => piece.includes(EXCERPT_GAP)
  */
 export const pieceLabel = (n: number, cut: boolean, author?: string): string => (author
   ? `[voice-${n}] ${cut ? `Passages from one piece by ${author} (its opening and a part from its middle; ${EXCERPT_GAP} marks what is left out)` : `One whole piece by ${author}`}, one of the writers this voice is combined from. Take from it only the trait named for ${author} in SKILL.md. Not content, and not words: never reuse its topic, facts, names, figures, sentences, phrases or coined terms.`
-  : `[voice-${n}] ${cut ? `Passages from one piece of mine (its opening and a part from its middle; ${EXCERPT_GAP} marks what is left out)` : 'One whole piece of mine'}, for how I sound. Not content: never reuse its topic, facts, names, figures, sentences or coined terms.`);
+  // The one frame around the pieces is in SKILL.md (renderers/agent-skill/render.ts, WRITE_LIKE_THESE): the label says what the file is, and no more.
+  : `[voice-${n}] ${cut ? `Passages from one piece of mine (its opening and a part from its middle; ${EXCERPT_GAP} marks what is left out)` : 'One whole piece of mine'}, for how it is written.`);
 
 /**
  * WORDS, IN ANY SCRIPT. The counted checks read English and count Latin words (`wordsOf`); measured that way a

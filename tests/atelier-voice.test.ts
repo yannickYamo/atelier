@@ -120,7 +120,9 @@ describe('P1: the skill carries passages the author wrote', () => {
     const pkg = renderAgentSkill(std, compileArchitecture(std), 'x', 'd', null, [], v);
     const md = pkg.files['SKILL.md'];
     expect(md).toContain('## How I sound');
-    expect(md).toMatch(/Never take my topics, facts,\s+names, figures, sentences, coined terms or stories/);
+    expect(md).toMatch(/Write the way my pieces are written/);
+    expect(md).toMatch(/a story of mine you were not given is not yours to tell/);
+    expect(md).not.toMatch(/Never take my topics/);
     expect(md).toContain(`> ${v.passages[0].split('\n')[0]}`);
     // a range when the pieces vary, one number when they do not ("about 200 to 200" read as a defect)
     expect(md).toMatch(/run about \d+( to \d+)? words/);
@@ -240,7 +242,7 @@ describe('round 5 design: describe the voice, guard the edges, never displace', 
     const pkg = renderAgentSkill(std, compileArchitecture(std), 'x', 'd', null, [], voice);
     expect(pkg.files['SKILL.md']).toContain('- (often) Talks to the reader directly.');
     expect(pkg.files['SKILL.md']).toContain('`examples/voice-1.md` is a whole piece');
-    expect(pkg.files['examples/voice-1.md']).toMatch(/never reuse its topic, facts, names, figures, sentences or coined terms/);
+    expect(pkg.files['examples/voice-1.md']).toMatch(/One whole piece of mine, for how it is written/); // (/never reuse its topic, facts, names, figures, sentences or coined terms/);
   });
 });
 

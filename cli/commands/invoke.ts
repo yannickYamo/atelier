@@ -4,6 +4,7 @@
 // the provider factory, host selection — lives in ../runtime.js and is imported, so a
 // command file reads as one job rather than as a slice of everything.
 
+import { wordsOf as overlapWords } from '../../core/observers/overlap.js';
 import { inRepairChain, stepGuarded, outOfStepCalls } from '../../core/inference/step-guard.js';
 import { existsSync, readFileSync } from 'node:fs';
 import { methodReading, methodLine } from '../../core/eval/obligations.js';
@@ -341,6 +342,11 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   // evidence: a standard requiring "one counted observation from our own records" produced "I pulled
   // our last 200 tickets. 63% of them are…" from a runtime holding no tickets.
   const std = store.getStandard(L, sv.standardVersionHash);
+  // SLOTS BY DEFAULT FOR WORK THAT WRITES. An invented story, source or figure in a document becomes a marked slot for
+  // the person's own ("[your story: …]"), never a cut that leaves the piece abstract; replies keep listing specifics for
+  // the reader to check. `--placeholders` asks for slots anywhere; `--no-placeholders` asks for cuts on a document.
+  // A skill built before the form was read falls to the name of the work, as the compiler did.
+  const placeholdersOn = argv.includes('--placeholders') || (!argv.includes('--no-placeholders') && (store.getWorkForm(L) ?? (std && isReplyWork(std.workType) ? 'REPLY' : 'DOCUMENT')) === 'DOCUMENT');
   const satisfiable = checkSatisfiable(std?.requirements ?? [], boundResources());
   const shortfall = describeSatisfiability(satisfiable);
   // A run is never refused for material it was not given (core/state/prerequisite.ts): said where it is seen.
@@ -522,7 +528,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
 
   // ASKED FOR, NOT INVENTED. A story, a named source or a figure the person did not supply is cut from
   // the output (core/loop/claims.ts). Said before anything is spent, with how to supply the real ones.
-  const needsLine = materialLine(satisfiable, material.length > 0, !argv.includes('--allow-unsourced'), name);
+  const needsLine = materialLine(satisfiable, material.length > 0, !argv.includes('--allow-unsourced'), name, placeholdersOn);
   if (needsLine) report.say(needsLine);
   if (nDrafts > 1 && (!std || contractFile !== null)) {
     console.log(`(--drafts ${nDrafts} does not apply here: ${!std ? 'the standard is missing' : 'this skill has an output contract, so there is one shape to produce'}; writing one draft.)`);
@@ -593,7 +599,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
     report.say(transfer.said);
     for (const q of std?.requirements ?? []) if (transfer.doesNotApply.has(q.requirementId)) withheld.push(q.statement);
   }
-  const checks = { ...checksFor(L, { material: materialText, task: asked, context: { request: asked, material }, guardClaims: !argv.includes('--allow-unsourced'), placeholders: argv.includes('--placeholders'), ...(judge ? { judge } : {}) }),
+  const checks = { ...checksFor(L, { material: materialText, task: asked, context: { request: asked, material }, guardClaims: !argv.includes('--allow-unsourced'), placeholders: placeholdersOn, ...(judge ? { judge } : {}) }),
     ...(short.format ? { format: short.format } : {}),
     ...(transfer ? { doesNotApply: transfer.doesNotApply } : {}),
     ...(waived.size ? { waived } : {}), ...(graded !== undefined ? { graded, gradedProfile: carried } : {}) };
@@ -695,7 +701,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
     resolveProvenance(flag('--provenance'), process.env), contractFile,
     flag('--task') ? 'FLAG' : 'POSITIONAL',
     std && !argv.includes('--no-repair') ? keepDelivered(withSituations(withGrounding(withGradedRecord(withStructureRead(repairChain(refineFor(),
-      unmet ? { unmet, notes: completions, resume: refineFor(), paramsOf: ruleParamsOf(std), round: shapeRoundNow, check: (text: string) => checkDraft(name, std, text, { ...checks, claimSensor: undefined }), redraft: async (note, purpose) => (await spendOneWithResult(client, budget, servedForRun, taskForRun, null, note, {}, purpose)).piece, graded: gradedTrace,
+      unmet ? { unmet, notes: completions, resume: refineFor(), paramsOf: ruleParamsOf(std), round: shapeRoundNow, protect: store.getVoice(L)?.standardWording ?? [], check: (text: string) => checkDraft(name, std, text, { ...checks, claimSensor: undefined }), redraft: async (note, purpose) => (await spendOneWithResult(client, budget, servedForRun, taskForRun, null, note, {}, purpose)).piece, graded: gradedTrace,
         steps: { usdPerCall: () => { const ls = spendBetween(ledgerBefore, processSpendByPurpose()).filter((l) => l.purpose === 'writing' || l.purpose === 'graded'); const n = ls.reduce((k, l) => k + l.calls, 0); return n ? ls.reduce((k, l) => k + l.usd, 0) / n : undefined; } },
         displaced: (from: string, to: string) => displacement(from, to, graded !== undefined ? carried : null, new Set())?.refusedFor ?? [] } : null,
       fid && (editBudget > 0 || argv.includes('--fidelity')) ? { client, budget, name, std, checks, profile: editProfile ?? fid.profile, editBudget, trace, taste } : null,
@@ -738,7 +744,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   // A sentence that cannot be found as written is listed after the text, as before.
   // Only where the claim check lists and does not cut (a kind nobody measured, or one that lists by design): where it
   // cuts, what it leaves is what a qualified reading kept, and marks in finished prose are noise.
-  const lists = Boolean(listsBecause({ cls: flag('--class') ?? store.getDocClass(L), bound: materialBound, slots: argv.includes('--placeholders') }))
+  const lists = Boolean(listsBecause({ cls: flag('--class') ?? store.getDocClass(L), bound: materialBound, slots: placeholdersOn }))
     || formatOf(flag('--class') ?? store.getDocClass(L))?.claims === 'list';
   const listed = lists && materialBound && !argv.includes('--no-unsourced-note') ? rec.repair?.claimsToCheck ?? [] : [];
   const shipped = markUnsupported(rec.output, listed);
@@ -1523,7 +1529,7 @@ export function cutNote(unmet: readonly Unmet[], draft: string): string {
   const n = wordsWritten(draft); const cut = to ? Math.max(over, n - Number(to.replace(/,/g, ''))) : over;
   return `The draft below holds what this work requires and runs too long: ${unmet.map((u) => u.detail).join('; ')}.\n`
     + `Choose what to delete so that at least ${cut} words go. Pick whole sentences, or clauses that can go without the sentence around them breaking: a restated point, a qualifier, an aside, a sentence that repeats its paragraph. `
-    + 'Never pick a heading, a table row, anything in a list, a name, a figure or a citation; never the first sentence of a paragraph; never a sentence that another sentence points to, counts or continues ("the test above", "the second reason", a list it introduces). '
+    + 'Never pick a heading, a table row, anything in a list, a name, a figure or a citation; never the first sentence of a paragraph; never a sentence that another sentence points to, counts or continues ("the test above", "the second reason", a list it introduces); never a clause the author\'s own pieces carry word for word (a standard clause, a list the pieces always give). '
     + 'Answer with one deletion per line, each copied exactly from the draft, character for character, and nothing else.\n\n'
     + `The draft:\n<earlier-draft>\n${draft.trim()}\n</earlier-draft>`;
 }
@@ -1560,11 +1566,23 @@ const balanced = (t: string): boolean => {
  * digits or in words), sits in no heading or table row, is not a whole list item, and leaves every emphasis, code
  * span, link, bracket and quotation around it as balanced as it found them. Everything else is left as it was.
  */
-export function applyCuts(draft: string, picks: readonly string[], target: number, count: (text: string) => number = wordsWritten): { text: string; applied: string[] } {
+export function applyCuts(draft: string, picks: readonly string[], target: number, count: (text: string) => number = wordsWritten,
+  /** the author's standard wording (core/observers/overlap.ts): a sentence carrying any of these six-word runs is the house's, and never cut */
+  protect: readonly string[] = []): { text: string; applied: string[] } {
   let text = draft; const applied: string[] = [];
+  const protectedGrams = new Set(protect);
+  const carriesHouseWording = (sentence: string): boolean => {
+    if (!protectedGrams.size) return false;
+    const w = overlapWords(sentence);
+    for (let i = 0; i + 6 <= w.length; i++) if (protectedGrams.has(w.slice(i, i + 6).join(' '))) return true;
+    return false;
+  };
   for (const raw of picks) {
     if (count(text) <= target) break;
     const p = raw.trim().replace(LIST_MARK, '').replace(/^["“'‘](.*)["”'’]$/s, '$1').trim();
+    // THE HOUSE'S OWN CLAUSE IS NOT WHAT ADDS LEAST. The cutter, shown the draft alone, named the "includes, without
+    // limitation" list that every one of the author's contracts carries; the pieces say what the author keeps.
+    if (carriesHouseWording(p)) continue;
     if (p.length < 12 || /[\r\n]/.test(p) || /\d/.test(p) || NUMBER_WORD.test(p) || wordsWritten(p) > CUT_MAX_WORDS || !SENTENCE_ENDS.test(p) || !balanced(p) || !/^[\p{Lu}"“'‘(*_]/u.test(p)) continue;
     const at = text.indexOf(p); if (at < 0 || text.lastIndexOf(p) !== at) continue;
     const start = text.lastIndexOf('\n', at) + 1; const nl = text.indexOf('\n', at); const end = nl === -1 ? text.length : nl;
@@ -1637,6 +1655,8 @@ function redraftOutcome(before: readonly Unmet[], after: readonly Unmet[], kept:
  */
 export function withRedraft(refine: Refine,
   c: { unmet: (d: Delivered, handed?: readonly string[]) => Unmet[]; redraft: (note: string, purpose?: SpendPurpose) => Promise<string>; notes: string[];
+    /** the author's standard wording (core/observers/overlap.ts): a sentence carrying it is never cut for length */
+    protect?: readonly string[];
     /** where the graded note lines sent and the drafts written for graded misses alone are counted */
     graded?: GradedTrace | null;
     /** the displacement guard (core/loop/graded.ts) on a draft written again: why it may not be kept, or nothing */
@@ -1765,7 +1785,7 @@ export function withRedraft(refine: Refine,
       const s = await applyStep<Rewritten>(ledger, planned, { text: d.output, report: d.report }, async (taken) => {
         if (cutting) {
           const said = await c.redraft(cutNote(aimed, d.output)); const count = countFor(aimed);
-          const cut = applyCuts(d.output, said.split('\n'), cutTarget(aimed, count(d.output)), count);
+          const cut = applyCuts(d.output, said.split('\n'), cutTarget(aimed, count(d.output)), count, c.protect ?? []);
           if (!cut.applied.length) { cutApplied = false; return { unchanged: 'nothing named could be removed' }; }
           piece = cut.text;
         } else {
@@ -2444,7 +2464,7 @@ function settingsFor(checks: Checks, taste: TasteSession | null, nDrafts: number
     contextJudge: checks.judge ? `${contextJudgeModel() ?? CLAIMS_MODEL_DEFAULT} (context judge, report-only)` : null,
     maxTokens: draftMaxTokens(),
     ...(temperature === undefined ? {} : { temperature }),
-    flags: { drafts: nDrafts, noTaste: !argv.includes('--taste') || argv.includes('--no-taste'), allowUnsourced: argv.includes('--allow-unsourced'), placeholders: argv.includes('--placeholders'), ...(argv.includes('--test-run') ? { testRun: true } : {}), ...(carryNote ? { carryNoteHash: sha(carryNote) } : {}) },
+    flags: { drafts: nDrafts, noTaste: !argv.includes('--taste') || argv.includes('--no-taste'), allowUnsourced: argv.includes('--allow-unsourced'), placeholders: checks.placeholders ?? false, ...(argv.includes('--test-run') ? { testRun: true } : {}), ...(carryNote ? { carryNoteHash: sha(carryNote) } : {}) },
   };
 }
 
@@ -2530,8 +2550,8 @@ export function withoutWaiting(veto: ReadonlySet<string>, rules: readonly { rule
  * THE ONE LINE ABOUT MATERIAL, near the top. Names the exact `--with` that lets waiting rules fire:
  * a prerequisite is matched by name, so a generic "bind your notes" would not have cleared it.
  */
-export function materialLine(v: SatisfiabilityVerdict, materialBound: boolean, guardClaims: boolean, name: string): string | null {
-  const cut = !guardClaims ? null : argv.includes('--placeholders') ? 'a story, source or figure the draft invents is replaced by a slot for yours'
+export function materialLine(v: SatisfiabilityVerdict, materialBound: boolean, guardClaims: boolean, name: string, placeholders = false): string | null {
+  const cut = !guardClaims ? null : placeholders ? 'a story, source or figure the draft invents is replaced by a slot for yours'
     : materialBound ? 'any story, source or figure not found in what you bound is cut, or listed where the check is not measured'
     : 'a story, source or figure in the draft cannot be checked against anything of yours, and is listed for you, not cut';
   if (v.kind === 'DEGRADED') {

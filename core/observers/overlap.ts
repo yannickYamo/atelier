@@ -18,7 +18,7 @@ import { visible } from './visible.js';
 /** A stretch of a script that puts no space between its words. */
 const UNSPACED = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Thai}\p{Script=Lao}\p{Script=Khmer}\p{Script=Myanmar}]/u;
 const segmenter = new Intl.Segmenter(undefined, { granularity: 'word' });
-const wordsOf = (t: string): string[] => {
+export const wordsOf = (t: string): string[] => {
   const runs = t.normalize('NFKC').toLowerCase().match(/[\p{L}\p{N}'’][\p{L}\p{N}\p{M}'’]*/gu) ?? [];
   return runs.some((r) => UNSPACED.test(r)) ? runs.flatMap((r) => (UNSPACED.test(r) ? [...segmenter.segment(r)].filter((x) => x.isWordLike).map((x) => x.segment) : [r])) : runs;
 };
@@ -33,6 +33,12 @@ export interface CorpusOverlap { readonly shared6: number; readonly longestShare
 
 /** A six-word run found in at least this many separate pieces of the author's is their standard wording. */
 export const STANDARD_WORDING_PIECES = 3;
+/**
+ * In a corpus of this many pieces or more, a six-word run two pieces share is the house's: two of twelve contracts
+ * carrying the same clause is how a template shows, and counting only runs in three or more called 7 of 10 good
+ * contracts lifted. Below this, two pieces may be the whole corpus, and three are still asked for.
+ */
+export const STANDARD_WORDING_FROM_TWO_AT = 4;
 
 /**
  * An index of a corpus's six-word sequences, built once and reused for every text compared with it.
@@ -112,9 +118,10 @@ const gramsOf = (w: readonly string[]): string[] => w.slice(0, Math.max(0, w.len
 export function standardWordingOf(pieces: readonly string[]): string[] {
   const separate = [...new Set(pieces.map((p) => p.normalize('NFKC').trim()))].map(wordsOf);
   if (separate.length < STANDARD_WORDING_PIECES) return [];
+  const need = separate.length >= STANDARD_WORDING_FROM_TWO_AT ? 2 : STANDARD_WORDING_PIECES;
   const seenIn = new Map<string, number>();
   for (const w of separate) for (const g of new Set(gramsOf(w))) seenIn.set(g, (seenIn.get(g) ?? 0) + 1);
-  return [...seenIn].filter(([, n]) => n >= STANDARD_WORDING_PIECES).map(([g]) => g).sort();
+  return [...seenIn].filter(([, n]) => n >= need).map(([g]) => g).sort();
 }
 
 /** Above this many pieces the reading below is made on the first of them, by text: it is a bound, not a census. */

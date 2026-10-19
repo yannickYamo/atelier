@@ -162,8 +162,10 @@ const sha = (s: string): string => createHash('sha256').update(s).digest('hex').
  *      with markdown stripped and across adjacent sentences of one paragraph; a number is a phrase
  *      ("twenty-five", "two hundred", "3 million", "a dozen"), and a lone "one" counts only where it
  *      quantifies. Qualified on product essays: see QUALIFIED_READERS
+ *   4  a path:line that names a line inside the bound material's hunks is supported: the line number is not written
+ *      in a diff, and the reader called every citation of one invented
  */
-export const DECISION_VERSION = 3;
+export const DECISION_VERSION = 4;
 /** The reader's version: the hash of what it is told and how its answer is decided. Recorded with every reading. */
 export const READER_VERSION = sha(`${EXTRACT_SYSTEM}|${JSON.stringify(EXTRACT_SCHEMA)}|decision ${DECISION_VERSION}`).slice(0, 8);
 
@@ -364,6 +366,15 @@ export function decideSpecifics(text: string, specifics: readonly ExtractedSpeci
   const ruleNumbers = new Set(numbersIn(rules));
   const ruleAndKnownWords = new Set(contentWords(`${known}\n\n${rules}`));
   const knownNumbers = new Set(numbersIn(known));
+  // A LINE OF THE MATERIAL IS IN THE MATERIAL. "src/audit/log.js:90" names a line of a diff the person bound; the
+  // number is not written in the diff, so the reader called it invented and the code cut a Must fix finding down to
+  // "Await it.". A path the material holds, at a line inside the hunks it shows, traces to it (decision 4).
+  const hunkEnds = [...known.matchAll(/^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/gm)].map((m) => Number(m[1]) + Number(m[2] ?? '1'));
+  const lastShownLine = hunkEnds.length ? Math.max(...hunkEnds) : 0;
+  const namesShownLine = (t: string): boolean => {
+    const m = /([\w./-]+\.\w{1,6}):(\d+)\b/.exec(t);
+    return m !== null && known.includes(m[1]) && Number(m[2]) <= lastShownLine;
+  };
   const bySentence = new Map<number, Claim>();
   const publicFacts: { start: number; end: number; text: string; why: string }[] = [];
   const rank: Readonly<Record<Claim['kind'], number>> = { EXPERIENCE: 3, SOURCE: 2, FIGURE: 1 };
@@ -403,7 +414,7 @@ export function decideSpecifics(text: string, specifics: readonly ExtractedSpeci
     const fromRule = !lived && rules.length > 0 && numbersIn(sp.text).some((n) => ruleNumbers.has(n))
       && numbersIn(sp.text).every((n) => ruleNumbers.has(n) || knownNumbers.has(n))
       && (supportIsIn(sp.text, rules) || contentWords(sp.text).every((w) => ruleAndKnownWords.has(w)));
-    const tracedItself = (numbersOk && supportIsIn(sp.text, known)) || fromRule;
+    const tracedItself = (numbersOk && supportIsIn(sp.text, known)) || fromRule || namesShownLine(sp.text);
     let supported: boolean;
     if (tracedItself) {
       supported = true;

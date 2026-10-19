@@ -39,6 +39,21 @@ const sha = (s: string): string => createHash('sha256').update(s).digest('hex').
 export const FACTS_BELONG = `Facts in my examples, and in my method's examples, belong to their case. Say of this request only what it
 and its material show; give anything else as an assumption you state, or as a check for the person to run.`;
 
+/**
+ * THE ONE FRAME AROUND THE AUTHOR'S PIECES, FOR WORK THAT WRITES. Four layers used to say what not to take from them
+ * ("never reuse its topic, facts, names…", "never take my topics…", "say of this request only what it shows", the
+ * fence's "do not reproduce…"), and a writer told four times to keep its distance wrote abstractly where the author
+ * writes in links, named products, figures and scenes: the posts had none. The pieces are the standard for how a
+ * piece is written; the facts come from the request; what the piece needs and the request did not give is written
+ * in the author's shape and marked as a slot for the person to fill, never invented and never left out.
+ */
+export const WRITE_LIKE_THESE = `Write the way my pieces are written: who is speaking, the register, the hedging, the rhythm and the spelling; how
+a piece opens, moves and closes; and how concrete it is, with the links, named things, figures, quoted lines and
+scenes a piece of mine carries. The facts, names, figures and stories of the new piece come from this request and
+its material, never from my pieces (a story of mine you were not given is not yours to tell). Where the piece needs
+a specific that neither gives, write it in the shape I would and mark it as a slot for me to fill: [link: what it
+points to], [product: which one], [figure: what it measures], [quote: who says what], [story: what it shows].`;
+
 export function skillNameFrom(raw: string): string {
   const n = raw.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);
   if (!n) throw new Error('SKILL NAME: empty after normalisation — supply a name with at least one alphanumeric character.');
@@ -489,6 +504,15 @@ export function renderAgentSkill(
   // rounds found rules alone never produced it. The persona says how the author sounds and HOW OFTEN;
   // whole pieces show their modes; the length is theirs. Never their topics, facts or sentences.
   const pieceFiles = (voice?.pieces ?? []).map((_, i) => `examples/voice-${i + 1}.md`);
+  // A required cap on the piece's words, from the standard (a method's "between 220 and 420 words"), when there is one.
+  const wordCap = ((): number | null => {
+    for (const q of v.requirements) {
+      if (q.materiality !== 'REQUIRED' || q.measurement?.observer !== 'LENGTH') continue;
+      const prm = q.measurement.params as { unit?: unknown; max?: unknown; in?: unknown };
+      if (Array.isArray(prm.unit) && prm.unit.includes('word') && !prm.in && typeof prm.max === 'number') return prm.max;
+    }
+    return null;
+  })();
   // A COMPOSITE VOICE (core/composite): several writers, and the owner's choice from each. Said as what it is, so no one
   // piece is read as the voice and no writer's words are reused: the traits chosen carry it, and the rules above hold them.
   const composite = voice?.composite;
@@ -516,6 +540,11 @@ export function renderAgentSkill(
       // For writing, the length the author's pieces run is theirs, and still only a default: it is what a piece runs
       // when the request names no length. (The line keeps its opening words: `invoke` finds it by them to withhold it
       // from a run whose request states a length.)
+      // UNDER A REQUIRED CAP, THE AUTHOR'S SPAN IS THE TARGET. "Run about 400 words, but that is not how long an answer must
+      // be" beside a method's "between 220 and 420 words" overshot on 10 of 10 drafts (449–502), and the trim then cut
+      // the clause every example carries. Where the standard requires a length in words, the span the pieces run is
+      // the aim and the cap is named; the hedge that licensed the overshoot is left out.
+      : voice?.lengthWords && wordCap ? `My pieces of this kind run about ${voice.lengthSpan ? `${voice.lengthSpan[0]} to ${voice.lengthSpan[1]}` : voice.lengthWords[0] === voice.lengthWords[1] ? voice.lengthWords[0] : `${voice.lengthWords[0]} to ${voice.lengthWords[1]}`} words, and my method allows at most ${wordCap}: aim for what my pieces run, and never pass ${wordCap}. Make room by writing the standard parts tightly, never by dropping one of them.`
       : voice?.lengthWords ? `My pieces of this kind run about ${voice.lengthWords[0] === voice.lengthWords[1] ? voice.lengthWords[0] : `${voice.lengthWords[0]} to ${voice.lengthWords[1]}`} words when a request asks for a piece like mine and names no length. That is how my pieces ran, not how long an answer must be: the task sets how much is needed, so a request that needs less (a short reply, a direct answer) gets less, and one that needs more gets more.` : '',
   ].filter(Boolean);
   const voiceSection = voiceParts.length ? `
@@ -538,11 +567,8 @@ acting on the wrong one would do damage, and then say what you will do with each
 project, a file or a result you have not seen.`
     : composite ? `Take from each writer only what is named for them above. Never take their topics, facts, names, figures,
 sentences, coined terms or stories: a story you were not given is not yours to tell.`
-      : `Take who is speaking, the register, the hedging, the rhythm and the spelling. Never take my topics, facts,
-names, figures, sentences, coined terms or stories: a story of mine you were not given is not yours to tell.`}
-
-${FACTS_BELONG}
-` : '';
+      : WRITE_LIKE_THESE}
+${answers || composite || method ? `\n${FACTS_BELONG}\n` : ''}` : '';
   // ── MOVES I SOMETIMES MAKE ───────────────────────────────────────────────────────────────────────
   //
   // A move the author makes in some pieces, instructed as a rule, is made in every piece, and several
