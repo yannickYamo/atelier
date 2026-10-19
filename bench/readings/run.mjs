@@ -17,6 +17,7 @@ import { WORK_FORM } from '../../dist/core/observers/work-form.js';
 import { RULE_POLARITY } from '../../dist/core/observers/rule-polarity.js';
 import { INTENT_MODE } from '../../dist/core/observers/intent-mode.js';
 import { METHOD_UNITS } from '../../dist/core/method/decision-units.js';
+import { EXECUTION_BRIEF } from '../../dist/core/loop/execution-brief.js';
 import { AnthropicInferenceClient } from '../../dist/providers/anthropic.js';
 import { OpenAICompatibleInferenceClient } from '../../dist/providers/openai-compatible.js';
 
@@ -33,6 +34,8 @@ const READINGS = {
   'rule-polarity': { reading: RULE_POLARITY, input: (c) => ({ statements: [{ id: 'r1', text: c.statement }] }), answer: (v) => v.r1 ?? null },
   'intent-mode': { reading: INTENT_MODE, input: (c) => ({ intent: c.intent }), answer: (v) => v.mode },
   // one step per case: the label is `kind|conditional` or `kind|always`, the two fields the brief selects by
+  // one conditional step per case against one request: the label is applies | set-aside | unresolved
+  'execution-brief': { reading: EXECUTION_BRIEF, input: (c) => ({ request: c.request, material: c.material ? [{ name: 'notes', head: c.material }] : [], steps: [{ id: 's1', n: 1, statement: c.step, required: true, unit: { kind: 'instruction', decision: c.decision ?? null, inputs: [], condition: c.condition, output: null, exception: null, dependsOn: [], quote: c.step, by: 'model' } }] }), answer: (v) => v.placed.s1?.applies ?? null },
   'method-units': { reading: METHOD_UNITS, input: (c) => ({ steps: [{ id: '1', text: c.step, under: c.under ?? null }] }), answer: (v) => (v['1'] ? `${v['1'].kind}|${v['1'].condition ? 'conditional' : 'always'}` : null) },
 };
 const args = process.argv.slice(2);

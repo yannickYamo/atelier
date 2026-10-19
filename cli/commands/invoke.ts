@@ -14,6 +14,8 @@ import { regressions, readAtLength, featureParamsOf, ruleParamsOf, enforcedNever
 import { answerSentences, judgedSituations } from '../../core/loop/answer-claims.js';
 import { groundCarried } from '../../core/loop/grounding.js';
 import { SLOT_NOTE } from '../../renderers/agent-skill/render.js';
+import { EXECUTION_BRIEF, briefNote, applyingSteps, setAsideSteps, type BriefStep } from '../../core/loop/execution-brief.js';
+import { readContext } from '../../core/inference/reading.js';
 import { needsNote, needsNothing } from '../../core/loop/task-needs.js';
 import { refineToStandard, checkDraft, checkDraftAsync, withWaivers, enforceClaims, heavyCut, listedClaims, brokenByCut, gradedRules, PUBLIC_FACTS, INCONCLUSIVE, UNREAD, type CheckOptions } from '../../core/loop/run-repair.js';
 import { signalChecks, displacement, isSignal, ownerWords } from '../../core/loop/graded.js';
@@ -84,7 +86,7 @@ import { version } from '../help.js';
 import { writeAtomic } from '../../core/state/fs-atomic.js';
 import { compareBindings, describeMismatch, describeNewSurface, detectResolvedModelDrift, bindingHash } from '../../core/runtime/binding.js';
 import { resolve as resolvePath } from 'node:path';
-import { sha, DATA, VALUED_OPTIONS, die, argv, flag, clientAndBinding, describeBinding, numericFlag, positional, boundResources, boundMaterial, assertSkillName, runFile, clientFor, callsSeen, thinkingOfCalls, thinkingBlocksOfCalls } from '../runtime.js';
+import { sha, DATA, VALUED_OPTIONS, die, argv, flag, clientAndBinding, describeBinding, numericFlag, positional, boundResources, boundMaterial, assertSkillName, runFile, clientFor, callsSeen, thinkingOfCalls, thinkingBlocksOfCalls, contextReaderClient } from '../runtime.js';
 
 /**
  * What a skill serves, resolved once and shared.
@@ -603,6 +605,21 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
     report.say(transfer.said);
     for (const q of std?.requirements ?? []) if (transfer.doesNotApply.has(q.requirementId)) withheld.push(q.statement);
   }
+  // THE EXECUTION BRIEF (core/loop/execution-brief.ts): which of the method's stated steps this request asks for, read
+  // once against the request where a step's own words make it conditional; the decisions they ask for; what was given;
+  // what to leave open. A step set aside is withheld from the writer by name and marked set aside in the evaluation
+  // (a required one keeps the run at NEEDS REVIEW). A short request gets no brief: the method as served says it all.
+  const briefSteps: BriefStep[] = (std?.requirements ?? []).filter((q) => q.provenance === 'EXPERT_STATED' && q.authority !== 'EXPERT_REJECTED' && !waived.has(q.requirementId))
+    .map((q, i) => ({ id: q.requirementId, n: i + 1, statement: q.statement, required: q.materiality === 'REQUIRED', unit: q.unit ?? null }));
+  const briefOn = briefSteps.length > 0 && contractFile === null && lengthAsked !== 'SHORT' && asksParts(asked) && !argv.includes('--no-brief');
+  const brief = briefOn ? await readContext(EXECUTION_BRIEF, { request: asked, material: material.map((m) => ({ name: m.name, head: m.text.slice(0, 600) })), steps: briefSteps },
+    contextJudgeModel() ? contextReaderClient() : null, contextJudgeModel(), { spentUsd: 0, capUsd: 0.05, maxCalls: 1 }) : null;
+  const briefText = brief ? briefNote(brief.value, briefSteps, material) : '';
+  if (brief) {
+    for (const s of setAsideSteps(brief.value, briefSteps)) { waived.set(s.id, `set aside for this request: ${brief.value.placed[s.id].why ?? 'not this case'}`); withheld.push(s.statement); }
+    const off = setAsideSteps(brief.value, briefSteps);
+    if (off.length || brief.value.unsupported.length) report.say(`For this request: ${off.length ? `${off.length} step(s) of the method set aside (${off.map((s) => s.n).join(', ')})` : 'every step applies'}${brief.value.unsupported.length ? `; ${brief.value.unsupported.length} decision(s) nothing given supports, left open` : ''} (${brief.by === 'model' ? 'read' : brief.by === 'code' ? 'no conditional step' : `by default: ${brief.why ?? ''}`}).`);
+  }
   const checks = { ...checksFor(L, { material: materialText, task: asked, context: { request: asked, material }, guardClaims: !argv.includes('--allow-unsourced'), placeholders: placeholdersOn, ...(judge ? { judge } : {}) }),
     ...(short.format ? { format: short.format } : {}),
     ...(transfer ? { doesNotApply: transfer.doesNotApply } : {}),
@@ -654,7 +671,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const needs = intent?.document ? undefined : intent?.needs;
   if (needs && !needsNothing(needs)) report.say(`Read before writing: ${[needs.deliver.length ? `${needs.deliver.length} thing(s) asked for` : '', needs.unknowns.length ? `turns on ${needs.unknowns.map((u) => u.what).join('; ')}` : '', needs.actOn ? `could act on "${needs.actOn}"` : '', needs.irreversible ? `cannot be undone: "${needs.irreversible}"` : ''].filter(Boolean).join(' · ')}.`);
   // The slot shape is said for the run that wants slots (a document, no material bound), never in the skill (SLOT_NOTE).
-  const requestNotes = forThisRequest(withheld.filter((w) => !needMaterial.includes(w)), impl.passages, lengthNote, needsNote(needs), placeholdersOn ? SLOT_NOTE : '');
+  const requestNotes = forThisRequest(withheld.filter((w) => !needMaterial.includes(w)), briefText, impl.passages, lengthNote, needsNote(needs), placeholdersOn ? SLOT_NOTE : '');
   const servedForRun = `${needMaterial.length ? withoutRules(servedText, needMaterial) : servedText}${impl.notes ? `\n\n${impl.notes}` : ''}${carryBlock}${requestNotes}`;
   const deliveryForRun = withheld.length ? { ...delivery, withheldRules: withheld } : delivery;
   // What the person said was wrong with an earlier version (`atelier fix`) goes to the writer whatever shape was asked for.
@@ -725,7 +742,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
     std && checks.guardClaims !== false ? async (text: string) => {
       const r = await checkDraftAsync(name, std, text, checks);
       return (r.checked.find((c) => c.requirementId === 'UNSOURCED' && acts(c))?.result.spans ?? []).map((sp) => sp.text);
-    } : null, settingsFor(checks, taste, nDrafts, carryBlock ? carryNote : ''),
+    } : null, settingsFor(checks, taste, nDrafts, carryBlock ? carryNote : '', brief ? { by: brief.by, applies: applyingSteps(brief.value, briefSteps).map((s) => s.id), setAside: setAsideSteps(brief.value, briefSteps).map((s) => s.id), unsupported: [...brief.value.unsupported] } : null),
     // A structured output is JSON, not prose: no reading of it means anything against a prose range.
     fid && std && contractFile === null ? (output: string) => fidelityRecord(fid, output, trace, impl.retrieved, applicability(name, std, output, waived, withheld, checks.context, transfer?.doesNotApply), ledger,
       { ...(runSettings ?? fid.release.settings), drafts: nDrafts, editBudget, ...(voiceMode === 'incontext' ? { voice: 'incontext' as const } : { voice: undefined }),
@@ -2459,7 +2476,8 @@ function draftScore(r: Awaited<ReturnType<typeof checkDraftAsync>>, std: Standar
 }
 
 /** What this run was configured with, beyond the binding and the package: enough to re-run a study arm from its record. */
-function settingsFor(checks: Checks, taste: TasteSession | null, nDrafts: number, carryNote = ''): InvocationSettings {
+type BriefFlag = NonNullable<InvocationSettings['flags']['brief']>;
+function settingsFor(checks: Checks, taste: TasteSession | null, nDrafts: number, carryNote = '', brief: BriefFlag | null = null): InvocationSettings {
   const temperature = flag('--temperature') === undefined ? undefined : Number(flag('--temperature'));
   return {
     atelierVersion: version(),
@@ -2472,7 +2490,8 @@ function settingsFor(checks: Checks, taste: TasteSession | null, nDrafts: number
     contextJudge: checks.judge ? `${contextJudgeModel() ?? CLAIMS_MODEL_DEFAULT} (context judge, report-only)` : null,
     maxTokens: draftMaxTokens(),
     ...(temperature === undefined ? {} : { temperature }),
-    flags: { drafts: nDrafts, noTaste: !argv.includes('--taste') || argv.includes('--no-taste'), allowUnsourced: argv.includes('--allow-unsourced'), placeholders: checks.placeholders ?? false, ...(argv.includes('--test-run') ? { testRun: true } : {}), ...(carryNote ? { carryNoteHash: sha(carryNote) } : {}) },
+    flags: { drafts: nDrafts, noTaste: !argv.includes('--taste') || argv.includes('--no-taste'), allowUnsourced: argv.includes('--allow-unsourced'), placeholders: checks.placeholders ?? false, ...(argv.includes('--test-run') ? { testRun: true } : {}), ...(carryNote ? { carryNoteHash: sha(carryNote) } : {}),
+      ...(brief ? { brief } : {}) },
   };
 }
 

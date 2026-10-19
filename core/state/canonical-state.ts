@@ -569,7 +569,9 @@ export interface InvocationSettings {
     /** a run made as a test (`invoke --test-run`): recorded like any run, and never a source of what the skill learns from its runs */
     readonly testRun?: boolean;
     /** the note from earlier runs that was served beside the skill (`atelier evolve`), by its hash: two runs of one skill version differ by it */
-    readonly carryNoteHash?: string };
+    readonly carryNoteHash?: string;
+    /** the execution brief (core/loop/execution-brief.ts): who decided it, and the stated steps held as applying, set aside, and left open */
+    readonly brief?: { readonly by: 'code' | 'model' | 'floor'; readonly applies: readonly string[]; readonly setAside: readonly string[]; readonly unsupported: readonly string[] } };
 }
 
 export interface InvocationRecord {
