@@ -319,6 +319,31 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 - `atelier rate` takes optional reasons from a closed list (necessary part missing, unnecessary extra, wrong, unsafe,
   unsupported claim, asks instead of acting, too long, too short, voice off).
 
+### Studies: the author's moves served, against Gate B, on fresh code-review tasks (development evidence, $12)
+
+Ten code-review tasks no arm had seen, five with a change in the author's adversarial situation (untrusted input);
+twenty outputs per arm, the same writer and diff; a blind judge. Arms: Gate B frozen; all frequencies served as
+description with the moves observed; the moves served; the moves served and read; the method note with the goldens
+pasted.
+
+| | Gate B | described only | served | served and read | method only |
+|---|---|---|---|---|---|
+| method checklist | 16/20 | 14/20 | 17/20 | 16/20 | 9/20 |
+| planted defect cited first | 19/20 | 16/20 | 20/20 | 20/20 | 20/20 |
+| usable | 17/20 | 16/20 | 18/20 | 18/20 | 20/20 |
+| sounds like the author (1–5) | 4.20 | 4.35 | 4.40 | 4.35 | 4.55 |
+| within-task variation (sd) | 0.35 | 0.46 | 0.23 | 0.66 | 0.12 |
+| cost per usable output | $0.107 | $0.074 | $0.074 | $0.130 | $0.115 |
+
+Serving the placed moves moved sounds-like from 4.20 to 4.40 against Gate B (five wins, thirteen ties, two losses;
+the interval includes zero at this size), closed most of the gap to the method-only ceiling (0.8 in the last study,
+0.15 here), lost no method adherence, cited the defect first on every output, lifted fewer runs from the goldens (1
+against 4), and varied least between runs of one task. The brief placed the adversarial move on every task in that
+situation and on one of the five others; a blind judge called 15 of the 16 placed moves the right call. Describing
+the conditional habits without placing them helped nothing. The reader agreed with the judge on 14 of 16 placed
+moves and never read a served move as missing or misapplied: a positive bias to watch. Development evidence on one
+domain; the documents half is prepared and not run.
+
 ### Studies: the move cases read apart from the brief (development evidence, $0.05)
 
 The move cases were first added to the brief's own reading, and the two could not share a prompt. One sentence in the
