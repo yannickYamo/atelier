@@ -335,14 +335,20 @@ pasted.
 | within-task variation (sd) | 0.35 | 0.46 | 0.23 | 0.66 | 0.12 |
 | cost per usable output | $0.107 | $0.074 | $0.074 | $0.130 | $0.115 |
 
-Serving the placed moves moved sounds-like from 4.20 to 4.40 against Gate B (five wins, thirteen ties, two losses;
-the interval includes zero at this size), closed most of the gap to the method-only ceiling (0.8 in the last study,
-0.15 here), lost no method adherence, cited the defect first on every output, lifted fewer runs from the goldens (1
-against 4), and varied least between runs of one task. The brief placed the adversarial move on every task in that
-situation and on one of the five others; a blind judge called 15 of the 16 placed moves the right call. Describing
-the conditional habits without placing them helped nothing. The reader agreed with the judge on 14 of 16 placed
-moves and never read a served move as missing or misapplied: a positive bias to watch. Development evidence on one
-domain; the documents half is prepared and not run.
+Against Gate B, serving the placed moves lost no method adherence, cited the defect first on every output, lifted
+fewer runs from the goldens (1 against 4), varied least between runs of one task, and read as more the author's (4.20
+to 4.40; by independent task +0.27 with an interval that includes zero). Describing the conditional habits without
+placing them read as the author's about as much (+0.30 by task) and cost the method (checklist 14, defect first 16,
+usable 16): what placing them adds is the method recovered at that likeness. The gap to the method-only ceiling went
+from 0.8 in the last study to 0.15; method-only leads with the defect on every output and fails the method's rules
+of form (the exact line, weak citations). The brief placed the adversarial move on every task in that situation and
+once on the five others; a blind judge called 15 of the 16 placed moves the right call. The reader agreed with the
+judge on 14 of 16 and read the one off-situation placement as realised where the judge saw it made badly: not
+qualified to detect misapplication, reporting only. Every run in every arm delivered its text; the blocked verdicts
+(9 to 11 of 20 in each Atelier arm, Gate B included) are the claim check reading a review's statements of what the
+code does as results seen, a false positive of that check on review prose, to be fixed apart from this work. No
+fabricated name, figure or event in 100 outputs. Development evidence on one domain; the documents half is prepared
+and not run.
 
 ### Studies: the move cases read apart from the brief (development evidence, $0.05)
 
