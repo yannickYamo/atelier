@@ -31,7 +31,8 @@ export interface Standing {
 export type Actor = 'owner' | 'model' | 'count' | 'reading' | 'feedback';
 
 /**
- * WHAT A STANDING PERMITS AT RUN TIME. Binding needs the owner's adoption (a STATED step is adopted by being stated);
+ * WHAT A STANDING PERMITS AT RUN TIME. No call site yet: the author profile of Gate C reads it for each band
+ * (core/fidelity/profile.ts), in place of the one role field that encoded evidence and permission together. Binding needs the owner's adoption (a STATED step is adopted by being stated);
  * a rejected item is monitored and nothing more; what the owner has not ruled on steers softly only when its evidence
  * is qualified, and is monitored otherwise.
  */
@@ -42,7 +43,10 @@ export function runtimePermission(s: Standing): RuntimePermission {
   return s.evidence === 'qualified' ? 'soft' : 'monitor';
 }
 
-/** Can this actor move the owner's decision to `to`? Only the owner, and only forward from where it stands. */
+/**
+ * Can this actor move the owner's decision to `to`? Only the owner, and only forward from where it stands.
+ * No call site yet: `ratify`, `amend` and `confirm` are the owner's events, and Gate C's profile rulings go through this.
+ */
 export function mayDecide(actor: Actor, from: OwnerDecision, to: OwnerDecision): boolean {
   if (actor !== 'owner') return false;
   if (from === to) return true;
@@ -51,7 +55,10 @@ export function mayDecide(actor: Actor, from: OwnerDecision, to: OwnerDecision):
   return true;
 }
 
-/** Can this actor raise the evidence of an item? A reading raises nothing on its own; a study qualifies; the owner may dispute. */
+/**
+ * Can this actor raise the evidence of an item? A reading raises nothing on its own; a study qualifies; the owner may
+ * dispute. No call site yet: Gate C's profile builder and `qualify` set evidence through this.
+ */
 export function mayRaiseEvidence(actor: Actor, from: Evidence, to: Evidence): boolean {
   const rank: Record<Evidence, number> = { unsupported: 0, disputed: 0, observed: 1, provisional: 2, qualified: 3 };
   if (rank[to] <= rank[from]) return true;
@@ -70,10 +77,10 @@ export function readingMay(permission: ObserverPermission, verdict: 'FOLLOWED' |
   return permission === 'veto' && verdict === 'MISSED' ? 'fail' : 'report';
 }
 
-/** What a runtime permission may do when the item is missed on an output. */
+/** What a runtime permission may do when the item is missed on an output. No call site yet: the graded steering of Gate C reads it. */
 export function interventionFor(p: RuntimePermission): 'record' | 'note' | 'redraft-or-block' {
   return p === 'monitor' ? 'record' : p === 'soft' ? 'note' : 'redraft-or-block';
 }
 
-/** An unresolved applicability is held as applying: a step is never dropped by a reading that could not decide. */
+/** An unresolved applicability is held as applying: a step is never dropped by a reading that could not decide. No call site yet: the execution brief of Gate B reads it. */
 export const applies = (a: Applicability): boolean => a !== 'set-aside';

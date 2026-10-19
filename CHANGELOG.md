@@ -7,6 +7,35 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+### What a build ran, what it lost, and what it was built from
+
+- **A receipt beside every skill version.** What the build read and with what (persona, work form, scope, counted rules,
+  author profile, signals, model contrast), each stage ran with its detail or not with its reason, keyed by the version's
+  hash and never inside it: two builds that emit the same files are the same version, and the receipt says how each was
+  made. `atelier build --report` says the stages in one line; `atelier status --skill <name>` shows them.
+- **A lost reading is said with its repair.** A persona lost to a failed call used to be one line in the build log and
+  nothing else. It is now recorded as a degraded build, said on the short screen with the command that reads it later
+  (`atelier build --name <name> --persona auto`), and shown by `status` until a build repairs it. The build never fails
+  for it.
+- **A profile of other pieces is never installed.** The project's run folder is shared by every build in that folder, so
+  a fidelity profile discovery wrote for one corpus was installed by any later build there (a method, stated rules), for
+  pieces it never measured. A profile is installed only for the sealed corpus it names; anything else is set aside as
+  `fidelity.stale.json` with the signals, index and calibration written with it, kept, and said. The active pointer
+  moves last, after everything the version needs is in place.
+- **One owner of what is required.** The standard is the owner's statements, ratifications and amendments; the pieces,
+  the counts and a model's readings are evidence. The rules between them are stated in one place and tried
+  adversarially: only an owner event adopts or rejects; a rejected item returns only by being presented again; a reading
+  raises no evidence and passes no requirement; a provisional range records, a soft one notes, only a binding one
+  redrafts or blocks; a step a reading could not place is held as applying. A rule no check measures says so in the
+  skill ("Read, not counted"), as a measured one says "Checked".
+- **The served examples are framed by the form of the work.** A document's own pieces were served inside a frame
+  written for support replies ("a separate, earlier conversation with someone else"). The package now carries the
+  form it was compiled for; replies keep their frame, and a document's pieces are framed as the author's whole pieces,
+  read for how they are written, their subjects and facts their own. The slot shape (`[link: …]`) leaves the skill: it
+  is said in the request's notes only where slots are on, since shown in every skill it was taken as the safe answer.
+  The case the frame is for is tested end to end: after goldens about a PDF import, "Thanks, that solved it." gets a
+  short reply with no PDF in it.
+
 ### The author's own clause survives the trim, and a document writes concretely
 
 - **A cut for length never removes the house's own wording.** Asked to bring a draft under a required cap, the cutter
@@ -20,7 +49,7 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
   your pieces, and a writer told four times to keep its distance wrote abstractly where you write in links, named
   products, figures and scenes. The skill now says once: write the way these are written, concreteness included; the
   facts come from the request; what the piece needs and the request did not give is written in your shape and marked as
-  a slot for you to fill (`[link: …]`, `[product: …]`, `[figure: …]`). For a document written with no material bound,
+  a slot for you to fill (`[link: …]`, `[product: …]`, `[figure: …]`), said for the run that wants slots. For a document written with no material bound,
   an invented story, source or figure becomes such a slot by default rather than being listed (`--no-placeholders`
   asks for the listing). Where material is bound (a diff, a term sheet) a specific not in it is listed for you, as before: the facts
   are the material's, and a finding is never replaced by a slot. Because the skill's own text shows the slot shape,

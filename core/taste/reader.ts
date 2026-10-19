@@ -12,6 +12,7 @@
 // The reader reports. What its readings may do is decided by calibration (./calibration.ts).
 
 import { readingAs } from '../inference/step-guard.js';
+import { readingMay } from '../state/contract.js';
 import type { Requirement, StandardVersion } from '../state/canonical-state.js';
 import { isGeneralScope } from '../state/canonical-state.js';
 import { keysOf } from '../state/rule-key.js';
@@ -220,6 +221,6 @@ export function describeTaste(readings: readonly TasteReading[], rules: Readonly
   return [head, ...lines].join('\n');
 }
 
-/** The misses that act: PRESENCE misses on rules the reader holds VETO on. */
+/** The misses that act: PRESENCE misses on rules the reader holds VETO on (the contract's `readingMay`: observe reports, veto fails a miss, nothing passes). */
 export const vetoMisses = (readings: readonly TasteReading[], veto: ReadonlySet<string>): TasteReading[] =>
-  readings.filter((r) => actsAsMiss(r) && veto.has(r.key));
+  readings.filter((r) => actsAsMiss(r) && readingMay(veto.has(r.key) ? 'veto' : 'observe', 'MISSED') === 'fail');

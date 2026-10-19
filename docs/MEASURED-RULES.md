@@ -305,14 +305,14 @@ only; the rest of the pass stands, and the loop tries again with a reason that n
 may not take. The negation inside a contrast is the move itself, so it may go. (An earlier version
 refused the whole pass, and in one round the guard kept only one style pass in ten.)
 
-### Invented stories are cut, not left as slots
+### Invented stories: a slot in a document, a listing elsewhere
 
-A first-person story or a figure that is not in your material is rewritten out of the text, keeping the
-point it made, and the output lists where a story of your own would fit. A rewrite that leaves a
-bracketed slot anyway is refused. `--placeholders` asks for slots instead. The better answer is real
-material: `atelier material --skill <name> <file>` binds your own incidents, and a story found there is
-yours to tell. A slot in the delivered text was honest, but every blind reader took it for a
-broken draft.
+With material bound, a first-person story or a figure not found in it is cut or listed, keeping the point it
+made, and a finding is never replaced by a slot. A document written with no material bound gets a slot in its
+place by default (`[story: what it shows]`, `[figure: what it measures]`), said to the writer in the run's own
+notes and never in the skill; `--no-placeholders` asks for the listing instead, and `--placeholders` for slots on
+any run. The better answer is real material: `atelier material --skill <name> <file>` binds your own incidents,
+and a story found there is yours to tell.
 
 ### Required means nearly always
 
