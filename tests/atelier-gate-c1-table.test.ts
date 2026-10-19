@@ -8,7 +8,7 @@ import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, existsSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { PERSONA_TABLE, PERSONA_MOVES, cellsToAsk, habitsPerCall, inferMoves, personaHashOf, type MovesInput } from '../core/compiler/moves.js';
+import { PERSONA_TABLE, PERSONA_MOVES, cellsToAsk, habitsPerCall, inferMoves, describeMove, personaHashOf, type MovesInput } from '../core/compiler/moves.js';
 import { readContext } from '../core/inference/reading.js';
 import type { PersonaPoint } from '../core/compiler/persona.js';
 import * as store from '../core/state/store.js';
@@ -41,7 +41,7 @@ describe('the table as a value', () => {
   });
   it('a cell is kept only verbatim, only when asked, once; the counts and the kinds follow', async () => {
     const asked = cellsToAsk(firstPass, pieces);
-    const ask = { habits: [{ n: 1, aspect: points[0].aspect, description: points[0].description, quote: points[0].quote, situation: null }, { n: 2, aspect: points[1].aspect, description: points[1].description, quote: points[1].quote, situation: 'where input is untrusted' }], pieces, cells: asked };
+    const ask = { habits: [{ n: 1, aspect: points[0].aspect, description: points[0].description, quote: points[0].quote, situation: null, modality: 'document' as const }, { n: 2, aspect: points[1].aspect, description: points[1].description, quote: points[1].quote, situation: 'where input is untrusted', modality: 'passage' as const }], pieces, cells: asked };
     expect(PERSONA_TABLE.decide({ ...ask, cells: [] })).toEqual([]);
     expect(PERSONA_TABLE.decide(ask)).toBeNull();
     expect((await readContext(PERSONA_TABLE, ask, null, null, { spentUsd: 0, capUsd: 1 })).by).toBe('floor');
@@ -56,13 +56,20 @@ describe('the table as a value', () => {
       { habit: 2, piece: 'piece-2', move: null, situation: 'The handler trusts the body' },               // the situation shown where the move was
       { habit: 2, piece: 'piece-1', move: null, situation: 'Use a range to the length' },                 // the situation without the move
       { habit: 2, piece: 'piece-3', move: null, situation: null },
-      { habit: 2, piece: 'piece-4', move: 'you should merge it', situation: 'you should merge it' },      // one quote for both: the situation is dropped
-    ] }, ask)!;
+      { habit: 2, piece: 'piece-4', move: 'you should merge it', situation: 'you should merge it', shows: true },      // one quote for both: the situation is dropped; `shows` is for a whole-piece habit only
+    ].map((c) => ({ shows: null, ...c })) }, ask)!;
     expect(g.map((c) => `${c.habit}:${c.piece}:${c.move ? 'm' : '-'}${c.situation ? 's' : '-'}`)).toEqual(['1:piece-2:m-', '1:piece-3:--', '1:piece-4:--', '2:piece-2:-s', '2:piece-1:-s', '2:piece-3:--', '2:piece-4:m-']);
+    expect(g.every((c) => c.shows === null)).toBe(true);
     const units = inferMoves(firstPass, g, pieces, true);
     // impersonal: 2 of 4, no situation: occasional (a majority no more probable than not), said with its interval
     expect(units[0]).toMatchObject({ kind: 'occasional', pieces: 2, corpus: 4, tabled: true, situation: null });
     expect(units[0].rate).toMatchObject({ k: 2, n: 4 }); expect(units[0].rate.pMajority).toBeCloseTo(0.5, 6);
+    // a whole-piece habit is judged over the piece: `shows` counts, a passage only illustrates; a piece judged not to show it does not count
+    const gw = PERSONA_TABLE.ground({ cells: [{ habit: 1, piece: 'piece-2', move: null, situation: null, shows: true }, { habit: 1, piece: 'piece-3', move: null, situation: null, shows: true }, { habit: 1, piece: 'piece-4', move: null, situation: null, shows: false }] }, ask)!;
+    expect(gw.map((c) => c.shows)).toEqual([true, true, false]);
+    const wu = inferMoves(firstPass, gw, pieces, true)[0];
+    expect(wu).toMatchObject({ kind: 'standing', pieces: 3 }); expect(wu.judged).toEqual([{ piece: 'piece-2', shows: true }, { piece: 'piece-3', shows: true }, { piece: 'piece-4', shows: false }]);
+    expect(describeMove(wu)).toContain('in 3 of 4 pieces [0.28, 0.97] judged over each whole piece');
     // adversarial: made in piece-2 (in the situation) and piece-4 (outside); the situation seen in piece-1 without it: 1 of 2 in, 1 of 2 out: one rate fits as well, it does not explain
     expect(units[1].evidence.map((e) => [e.piece, e.situationQuote !== null])).toEqual([['piece-2', true], ['piece-4', false]]);
     expect(units[1].situationOnly).toEqual([{ piece: 'piece-1', quote: 'Use a range to the length' }]);
@@ -89,7 +96,7 @@ const MOVES = { moves: [
 const TABLE = { cells: [
   ...['piece-2', 'piece-3', 'piece-4'].map((piece) => ({ habit: 1, piece, move: 'I would start with the riskiest line.', situation: null })),
   { habit: 2, piece: 'piece-2', move: 'Tests first, then the rest.', situation: null }, { habit: 2, piece: 'piece-3', move: null, situation: null }, { habit: 2, piece: 'piece-4', move: null, situation: null },
-] };
+].map((c) => ({ ...c, shows: null })) };
 
 let backend: ChildProcess; let port = 0;
 const url = (): string => `http://127.0.0.1:${port}`;

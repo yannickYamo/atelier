@@ -28,8 +28,8 @@ const move = (over: Partial<MoveUnit> & { k?: number; n?: number; a?: number; b?
   const trigger = rest.trigger ?? { text: 'where input is untrusted', status: 'supported' as const };
   const rate = posterior(k, n); const situation = trigger.text ? situationEffect(a, b, k - a, n - a - b - (k - a)) : null;
   return { id: 'm', aspect: 'a', observed: 'o', readAs: 'SOMETIMES', trigger, realisation: 'one sentence from the abusive caller', forbidden: 'never an attacker the diff does not expose',
-    evidence: [{ piece: 'piece-1', quote: 'A caller can refund more than the order total', situationQuote: 'trusts the caller' }], situationOnly: [],
-    rate, situation, kind: situation?.explains ? 'situational' : rate.pMajority > 0.5 ? 'standing' : 'occasional', pieces: k, corpus: n, scope: 'sentence', link: { step: '1', status: 'candidate' }, check: null, by: 'model', tabled: true, ...rest };
+    evidence: [{ piece: 'piece-1', quote: 'A caller can refund more than the order total', situationQuote: 'trusts the caller' }], situationOnly: [], judged: [],
+    rate, situation, kind: situation?.explains ? 'situational' : rate.pMajority > 0.5 ? 'standing' : 'occasional', pieces: k, corpus: n, scope: 'sentence', link: { step: '1', status: 'candidate' }, check: null, checkMeans: null, modality: 'passage', measured: [], measureAgrees: null, by: 'model', tabled: true, ...rest };
 };
 const units: MoveUnit[] = [
   move({ id: 'adv', aspect: 'Adversarial framing' }),

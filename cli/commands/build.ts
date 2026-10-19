@@ -388,7 +388,7 @@ async function movesFor(L: store.StoreLayout, voice: Voice | null, methodText: {
     let answered = 0;
     for (let i = 0; i < habitNs.length; i += perCall) {
       const batch = new Set(habitNs.slice(i, i + perCall));
-      const habits = d.value.map((u, n) => ({ n: n + 1, aspect: u.aspect, description: u.observed, quote: points[n]?.quote ?? u.evidence[0]?.quote ?? '', situation: u.trigger.text })).filter((h) => batch.has(h.n));
+      const habits = d.value.map((u, n) => ({ n: n + 1, aspect: u.aspect, description: u.observed, quote: points[n]?.quote ?? u.evidence[0]?.quote ?? '', situation: u.trigger.text, modality: u.modality })).filter((h) => batch.has(h.n));
       const t = await readContext(PERSONA_TABLE, { habits, pieces, cells: asked.filter((c) => batch.has(c.habit)) }, contextReaderClient(), contextReaderModel(), { spentUsd: 0, capUsd: 0.3, maxCalls: 1 });
       calls += 1; if (t.by === 'model') { cells.push(...t.value); answered += 1; }
     }

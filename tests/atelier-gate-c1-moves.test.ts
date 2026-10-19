@@ -4,7 +4,7 @@
 // never a floor of pieces); the no-model floor counts the point's own quote; the id is a content hash; the profile is
 // immutable and named by the build receipt; the standard is untouched.
 import { describe, it, expect } from 'vitest';
-import { PERSONA_MOVES, moveFloor, moveId, personaHashOf, profileOf, inferMoves, describeMove, describeMoves, type MovesInput } from '../core/compiler/moves.js';
+import { PERSONA_MOVES, moveFloor, moveId, personaHashOf, profileOf, inferMoves, measureHabit, cellsToAsk, describeMove, describeMoves, type MovesInput } from '../core/compiler/moves.js';
 import { readContext } from '../core/inference/reading.js';
 import type { PersonaPoint } from '../core/compiler/persona.js';
 
@@ -105,6 +105,34 @@ describe('the reading as a value', () => {
     expect(PERSONA_MOVES.ground(raw([{ point: 9, trigger: null, evidence: [], realisation: 'x', forbidden: null, scope: 'sentence', link: null, check: null }]), input)).toBeNull();
     expect(PERSONA_MOVES.ground({ nope: 1 }, input)).toBeNull();
   });
+  it('a habit a counted feature measures is counted over every whole piece, by code, where the reading says the habit is that feature present or absent; a feature only near the habit leaves the quote to decide', () => {
+    // impersonal: the habit IS the absence of "we": every piece of the three has none, so 3 of 3 by the count, whatever was quoted
+    const measured = PERSONA_MOVES.ground(raw([{ point: 2, trigger: null, evidence: [{ piece: 'piece-1', quote: 'Use `>=` so the state is correct', situationQuote: null }], realisation: 'bare statements', forbidden: null, scope: 'sentence', link: null, check: 'firstPlural', modality: 'document', checkMeans: 'absent' }]), input)!;
+    expect(measured[1]).toMatchObject({ modality: 'document', check: 'firstPlural', checkMeans: 'absent' });
+    expect(measureHabit('firstPlural', 'absent', pieces).map((m) => [m.piece, m.count, m.exhibits])).toEqual([['piece-1', 0, true], ['piece-2', 0, true], ['piece-3', 0, true]]);
+    const u = inferMoves(measured, [], pieces, true);
+    expect(u[1]).toMatchObject({ kind: 'standing', pieces: 3, corpus: 3 }); expect(u[1].measured).toHaveLength(3);
+    expect(describeMove(u[1])).toBe('standing · Impersonal point of view · in 3 of 3 pieces by the count of firstPlural · scope: sentence · over the whole piece · counted: firstPlural (absent in a piece is the habit)');
+    // the move cells of a measured habit are still asked of the table: the count decides only where it agrees with the quotes
+    expect(cellsToAsk(measured, pieces).filter((c) => c.habit === 2).map((c) => c.piece)).toEqual(['piece-2']); // piece-1 quoted, piece-3 holds the point's own quote
+    // a feature that is only near the habit: the quotes decide, and the line says so; a plain-value feature has no events to count
+    const near = PERSONA_MOVES.ground(raw([{ point: 2, trigger: null, evidence: [{ piece: 'piece-1', quote: 'Use `>=` so the state is correct', situationQuote: null }], realisation: 'x', forbidden: null, scope: 'sentence', link: null, check: 'tentativeModal', modality: 'passage', checkMeans: null }]), input)!;
+    expect(inferMoves(near, [], pieces, true)[1]).toMatchObject({ checkMeans: null, pieces: 2 }); expect(inferMoves(near, [], pieces, true)[1].measured).toEqual([]);
+    expect(describeMove(inferMoves(near, [], pieces, true)[1])).toContain('counted: tentativeModal (near the habit, not it)');
+    const value = PERSONA_MOVES.ground(raw([{ point: 2, trigger: null, evidence: [], realisation: 'x', forbidden: null, scope: 'sentence', link: null, check: 'sentenceP10', modality: 'document', checkMeans: 'present' }]), input)!;
+    expect(value[1]).toMatchObject({ check: 'sentenceP10', checkMeans: null });
+    // a feature present in a piece, where the habit is its presence: counted where it occurs
+    const hedges = [{ name: 'p1', text: 'This might fail. It may not.' }, { name: 'p2', text: 'This fails.' }];
+    expect(measureHabit('tentativeModal', 'present', hedges).map((m) => [m.count, m.exhibits])).toEqual([[2, true], [0, false]]);
+    // a count that disagrees with a quote does not measure the habit: the author hedges with "probably", the feature counts "might": the quotes decide
+    const hedgy = [{ name: 'h1', text: 'The branch is probably safe, but confirm it.' }, { name: 'h2', text: 'This fails.' }, { name: 'h3', text: 'It might fail.' }];
+    const hin = { points: [{ aspect: 'Hedges', description: 'Hedges where the code cannot settle it.', frequency: 'SOMETIMES' as const, quote: 'probably safe' }], pieces: hedgy, steps: [] };
+    const hg = PERSONA_MOVES.ground(raw([{ point: 1, trigger: null, evidence: [{ piece: 'h1', quote: 'probably safe, but confirm it', situationQuote: null }], realisation: 'x', forbidden: null, scope: 'sentence', link: null, check: 'tentativeModal', modality: 'passage', checkMeans: 'present' }]), hin)!;
+    const hu = inferMoves(hg, [], hedgy, true)[0];
+    expect(hu).toMatchObject({ measureAgrees: false, pieces: 1, kind: 'occasional' }); expect(hu.measured.map((m) => m.exhibits)).toEqual([false, false, true]);
+    expect(describeMove(hu)).toContain('by the quotes (the count of tentativeModal disagrees with them in 1 piece(s): it does not measure this habit)');
+    expect(u[1].measureAgrees).toBe(true);
+  });
   it('a profile is named by its content and its persona; the time is outside the hash', () => {
     const g = inferMoves(PERSONA_MOVES.ground(raw([m1]), input)!, [], pieces, true);
     const a = profileOf(g, personaHashOf(points), 'scripted', pieces, '2026-10-19T00:00:00Z');
@@ -195,7 +223,7 @@ describe('through the build', () => {
     expect(profile).not.toBeNull();
     expect(receipt.movesHash).toBe(profile.hash);
     expect(profile.reader).toBe('scripted');
-    expect(profile.schema).toBe(2); expect(profile.reading).toBe('persona-moves-5+persona-table-2');
+    expect(profile.schema).toBe(2); expect(profile.reading).toBe('persona-moves-7+persona-table-3');
     expect(profile.units.map((u) => u.kind)).toEqual(['standing', 'occasional']);
     expect(profile.units[0]).toMatchObject({ pieces: 4, corpus: 4, link: { step: '1', status: 'candidate' }, by: 'model', tabled: false, readAs: 'ALWAYS' });
     expect(profile.units[0].rate).toMatchObject({ k: 4, n: 4 }); expect(profile.units[0].rate.pMajority).toBeGreaterThan(0.5);

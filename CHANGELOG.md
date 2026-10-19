@@ -192,11 +192,23 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
   ten cases, the two formerly soft ones included.
 - **A profile read by an earlier reading is read again** where a model is there, as one read from changed pieces
   is; with no model, a profile a model read is kept over a floor, and the stage says why.
-- On the real persona of twenty points that C4 ran on, the compiler now reads 9 standing, 6 situational and 5
-  occasional moves, tabled in three calls, against 1 general, 6 conditional and 13 unknown before. Three register
-  traits (impersonal, formal, neutral openings) read as occasional: the table asks for a passage that makes the
-  move, and a register has no single passage. Those habits name a counted feature where one exists; how a counted
-  feature should stand in for the quote is the next question, and no judged run uses this build yet.
+- **A habit is observed in a passage or over the whole piece, and a counted feature stands in for the quote only
+  where it measures the habit.** The first reading now says, per point, whether the move is made in a passage a
+  reader could quote or is a property of the whole piece, and, where it names a counted feature, whether the habit
+  is that feature present in a piece, absent from it, or only near it. In the first two cases the feature's count
+  over each whole piece fills the cell, by code and with no threshold (present is one or more, absent is none), and
+  the count is kept; a count that disagrees with a verbatim quote does not measure the habit, so the quotes decide
+  and the line says so. A whole-piece habit with no feature is judged over the piece by the table, a passage only
+  illustrating. The table is told each habit's modality and that a finding on topic is not the move (v3; four hard
+  negatives modelled on real over-counts join its eval, 44 of 50).
+- On the real persona of twenty points that C4 ran on, three reads of the same twelve pieces gave 9, 16 and 11
+  standing moves, 6, 2 and 4 situational, 5, 2 and 5 occasional: nine of twenty kinds changed between two reads on
+  identical pieces. The arithmetic is deterministic; the table reading that feeds it is not yet an instrument on
+  long pieces with many findings, over-counting abstract habits (a plain finding read as a severity escalation) under
+  one prompt and under-counting plain ones (every piece's "Add tests for…" paragraph read as absent) under the next.
+  Where a feature measured the habit the count was right and stable (no "we" in any piece; every piece opening
+  "This change adds…"). The audit, the cells of each read and an offline replay of the profile through the brief's
+  selection are recorded with the study; no judged run uses these builds.
 
 ### A review's finding is not a result seen; the reader judges the situation from the piece
 

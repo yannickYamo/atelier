@@ -20,8 +20,8 @@ const move = (over: Partial<MoveUnit> & { k?: number; n?: number; a?: number; b?
   const trigger = rest.trigger ?? { text: 'where input is untrusted', status: 'supported' as const };
   const rate = posterior(k, n); const situation = trigger.text ? situationEffect(a, b, k - a, n - a - b - (k - a)) : null;
   return { id: 'm', aspect: 'Adversarial framing', observed: 'o', readAs: 'SOMETIMES', trigger, realisation: 'one sentence from the abusive caller', forbidden: 'never an attacker the diff does not expose',
-    evidence: [{ piece: 'piece-1', quote: 'A caller can refund more than the order total', situationQuote: null }], situationOnly: [],
-    rate, situation, kind: situation?.explains ? 'situational' : rate.pMajority > 0.5 ? 'standing' : 'occasional', pieces: k, corpus: n, scope: 'sentence', link: null, check: null, by: 'model', tabled: true, ...rest };
+    evidence: [{ piece: 'piece-1', quote: 'A caller can refund more than the order total', situationQuote: null }], situationOnly: [], judged: [],
+    rate, situation, kind: situation?.explains ? 'situational' : rate.pMajority > 0.5 ? 'standing' : 'occasional', pieces: k, corpus: n, scope: 'sentence', link: null, check: null, checkMeans: null, modality: 'passage', measured: [], measureAgrees: null, by: 'model', tabled: true, ...rest };
 };
 const text = '## Summary\nThe handler reads the amount from the body unchecked. A caller can send any amount and the gateway refunds it.\n\n## Verdict\nRequest changes';
 const moves = [move({ id: 'adv' }), move({ id: 'stance', aspect: 'Impersonal', trigger: { text: null, status: 'none' }, k: 11, realisation: 'findings as bare statements' })];

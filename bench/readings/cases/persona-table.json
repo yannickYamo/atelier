@@ -5,7 +5,7 @@
     "perCaseAtLeast": 4,
     "codeDecidedExact": true
   },
-  "note": "One habit against the pieces the first reading left. The label is `moves|situations`: the pieces that should yield a verbatim quote making the move, and those that should yield one in the habit's situation (none when the habit names no situation), each sorted and joined by +. Every cell becomes a count (core/compiler/moves.ts inferMoves), so a false move here raises a rate and a false situation moves the 2×2. v1 live on claude-haiku-5-5, 2026-10-19: 25/30; the one failure took a situation present (input from the query string unchecked) for the move made, 5 of 5, and found the situation nowhere; v2 says the situation present is not the move made.",
+  "note": "One habit against the pieces the first reading left. The label is `moves|situations`: the pieces that should yield a verbatim quote making the move, and those that should yield one in the habit's situation (none when the habit names no situation), each sorted and joined by +. Every cell becomes a count (core/compiler/moves.ts inferMoves), so a false move here raises a rate and a false situation moves the 2×2. v1 live on claude-haiku-5-5, 2026-10-19: 25/30; the one failure took a situation present (input from the query string unchecked) for the move made, 5 of 5, and found the situation nowhere; v2 says the situation present is not the move made. v3 (2026-10-19) tells the reading each habit's modality and that a finding on topic is not the move; four hard negatives modelled on the over-counts seen on the real persona (severity, consistency, concession) and one whole-piece habit.",
   "cases": [
     {
       "id": "impersonal-in-all",
@@ -184,6 +184,146 @@
           "text": "## Summary\nThe migration drops a column nothing reads.\n\n## Verdict\nApprove"
         }
       ]
+    },
+    {
+      "id": "severity-escalation-not-a-finding",
+      "label": "piece-3|piece-3",
+      "habit": {
+        "aspect": "Severity escalation in plain words",
+        "description": "Names the class of harm in one plain phrase after the mechanism (a privilege escalation, a cross-account leak), never raising the temperature.",
+        "quote": "This is a privilege escalation affecting every route behind the guard.",
+        "situation": "when a defect lets one user act with another's privileges or data",
+        "modality": "passage"
+      },
+      "ask": [
+        "piece-1",
+        "piece-2",
+        "piece-3",
+        "piece-4"
+      ],
+      "pieces": [
+        {
+          "name": "piece-1",
+          "text": "## Must fix\n- **src/orders/refund.js:56** — The refund amount is never checked against what was paid, so a caller can refund more than the order total.\n\n## Suggestions\n- Use `>=` so the state is correct even if totals drift.\n\n## Verdict\nRequest changes"
+        },
+        {
+          "name": "piece-2",
+          "text": "## Must fix\n- **src/mail/digest.py:65** — The loop `range(len(messages) - 1)` stops one short, so the most recent message in every thread is silently dropped.\n\n## Suggestions\n- Consider documenting the contract in the docstring above `render_thread()`.\n\n## Verdict\nRequest changes"
+        },
+        {
+          "name": "piece-3",
+          "text": "## Must fix\n- **src/perm/roles.js:151** — The admin check uses `||` where `&&` is required. As written, any active user is treated as an admin. This is a privilege escalation affecting every route behind the guard.\n\n## Verdict\nRequest changes"
+        },
+        {
+          "name": "piece-4",
+          "text": "## Must fix\n- **src/rate/limiter.js:109** — `release` performs a read-modify-write of `bucket.count` outside `withLock`, contradicting the class comment that all counter access is guarded.\n\n## Verdict\nRequest changes"
+        }
+      ],
+      "note": "Modelled on a live over-count (2026-10-19): the table quoted a plain finding in every piece as the escalation. Only piece-3 names the class of harm; piece-1 is in a situation of sorts (a caller over-refunds) but names no class, so situation is null there too by this habit's wording."
+    },
+    {
+      "id": "internal-consistency-not-a-defect",
+      "label": "piece-4|none",
+      "habit": {
+        "aspect": "Internal-consistency arguments",
+        "description": "Argues from the artifact's own comment or declared contract disagreeing with its code.",
+        "quote": "contradicting the class comment that all counter access is guarded",
+        "situation": "when the artifact's own comment or declared contract disagrees with its code",
+        "modality": "passage"
+      },
+      "ask": [
+        "piece-1",
+        "piece-2",
+        "piece-3",
+        "piece-4"
+      ],
+      "pieces": [
+        {
+          "name": "piece-1",
+          "text": "## Must fix\n- **src/orders/refund.js:56** — The refund amount is never checked against what was paid, so a caller can refund more than the order total.\n\n## Suggestions\n- Use `>=` so the state is correct even if totals drift.\n\n## Verdict\nRequest changes"
+        },
+        {
+          "name": "piece-2",
+          "text": "## Must fix\n- **src/mail/digest.py:65** — The loop `range(len(messages) - 1)` stops one short, so the most recent message in every thread is silently dropped.\n\n## Suggestions\n- Consider documenting the contract in the docstring above `render_thread()`.\n\n## Verdict\nRequest changes"
+        },
+        {
+          "name": "piece-3",
+          "text": "## Must fix\n- **src/perm/roles.js:151** — The admin check uses `||` where `&&` is required. As written, any active user is treated as an admin. This is a privilege escalation affecting every route behind the guard.\n\n## Verdict\nRequest changes"
+        },
+        {
+          "name": "piece-4",
+          "text": "## Must fix\n- **src/rate/limiter.js:109** — `release` performs a read-modify-write of `bucket.count` outside `withLock`, contradicting the class comment that all counter access is guarded.\n\n## Verdict\nRequest changes"
+        }
+      ],
+      "note": "Live over-count: every defect sentence read as a consistency argument. Only piece-4 argues from the comment. The situation and the move are one clause in piece-4, and a situation quote must be distinct from the move's, so situation is none there: a habit whose situation is inside the move's own sentence shows its situation nowhere apart, and the counts say so."
+    },
+    {
+      "id": "concession-not-a-consider",
+      "label": "none|none",
+      "habit": {
+        "aspect": "Measured concessions before critique",
+        "description": "Grants what is defensible in the finding's first clause before pressing the defect.",
+        "quote": "which is safe but silent",
+        "situation": "when part of a change is defensible",
+        "modality": "passage"
+      },
+      "ask": [
+        "piece-1",
+        "piece-2",
+        "piece-3"
+      ],
+      "pieces": [
+        {
+          "name": "piece-1",
+          "text": "## Must fix\n- **src/orders/refund.js:56** — The refund amount is never checked against what was paid, so a caller can refund more than the order total.\n\n## Suggestions\n- Use `>=` so the state is correct even if totals drift.\n\n## Verdict\nRequest changes"
+        },
+        {
+          "name": "piece-2",
+          "text": "## Must fix\n- **src/mail/digest.py:65** — The loop `range(len(messages) - 1)` stops one short, so the most recent message in every thread is silently dropped.\n\n## Suggestions\n- Consider documenting the contract in the docstring above `render_thread()`.\n\n## Verdict\nRequest changes"
+        },
+        {
+          "name": "piece-3",
+          "text": "## Must fix\n- **src/perm/roles.js:151** — The admin check uses `||` where `&&` is required. As written, any active user is treated as an admin. This is a privilege escalation affecting every route behind the guard.\n\n## Verdict\nRequest changes"
+        }
+      ],
+      "note": "Live over-count: \"Consider documenting…\" read as a concession. None of these grants anything."
+    },
+    {
+      "id": "document-habit-shown-whole",
+      "label": "piece-1+piece-2+piece-3+piece-4|none",
+      "habit": {
+        "aspect": "Economy over elaboration",
+        "description": "Says each finding once, with no restatement, analogy or digression.",
+        "quote": "Use `>=` so the state is correct even if totals drift.",
+        "situation": null,
+        "modality": "document"
+      },
+      "ask": [
+        "piece-1",
+        "piece-2",
+        "piece-3",
+        "piece-4"
+      ],
+      "pieces": [
+        {
+          "name": "piece-1",
+          "text": "## Must fix\n- **src/orders/refund.js:56** — The refund amount is never checked against what was paid, so a caller can refund more than the order total.\n\n## Suggestions\n- Use `>=` so the state is correct even if totals drift.\n\n## Verdict\nRequest changes"
+        },
+        {
+          "name": "piece-2",
+          "text": "## Must fix\n- **src/mail/digest.py:65** — The loop `range(len(messages) - 1)` stops one short, so the most recent message in every thread is silently dropped.\n\n## Suggestions\n- Consider documenting the contract in the docstring above `render_thread()`.\n\n## Verdict\nRequest changes"
+        },
+        {
+          "name": "piece-3",
+          "text": "## Must fix\n- **src/perm/roles.js:151** — The admin check uses `||` where `&&` is required. As written, any active user is treated as an admin. This is a privilege escalation affecting every route behind the guard.\n\n## Verdict\nRequest changes"
+        },
+        {
+          "name": "piece-4",
+          "text": "## Must fix\n- **src/rate/limiter.js:109** — `release` performs a read-modify-write of `bucket.count` outside `withLock`, contradicting the class comment that all counter access is guarded.\n\n## Verdict\nRequest changes"
+        }
+      ],
+      "note": "A whole-piece habit: each piece as a whole shows it, and one characteristic passage is quoted. A document habit is judged over the piece, not found in a passage. Live (v3, 2026-10-19): pieces 1 and 4 judged to show it 5 of 5; pieces 2 and 3 vary between runs (a 'Consider…' line and a restated harm can each be read as elaboration). Soft: a whole-piece judgement carries a variance of its own that the counts do not show; recorded, and the question for a study.",
+      "soft": true
     }
   ]
 }

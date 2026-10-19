@@ -37,8 +37,8 @@ const pieces = (c) => {
 const unitOf = ({ aspect, realisation, trigger, forbidden = null, quote = null, k = 2, n = 6, inSit = 2, sitN = 2 }) => {
   const rate = posterior(k, n); const situation = trigger ? situationEffect(inSit, sitN - inSit, k - inSit, n - sitN - (k - inSit)) : null;
   return { id: 'm1', aspect, observed: realisation, readAs: trigger ? 'SOMETIMES' : 'ALWAYS', trigger: { text: trigger ?? null, status: trigger ? 'supported' : 'none' }, realisation, forbidden,
-    evidence: quote ? [{ piece: 'piece-1', quote, situationQuote: null }] : [], situationOnly: [], rate, situation, kind: situation?.explains ? 'situational' : rate.pMajority > 0.5 ? 'standing' : 'occasional',
-    pieces: k, corpus: n, scope: 'sentence', link: null, check: null, by: 'model', tabled: true };
+    evidence: quote ? [{ piece: 'piece-1', quote, situationQuote: null }] : [], situationOnly: [], judged: [], rate, situation, kind: situation?.explains ? 'situational' : rate.pMajority > 0.5 ? 'standing' : 'occasional',
+    pieces: k, corpus: n, scope: 'sentence', link: null, check: null, checkMeans: null, modality: 'passage', measured: [], measureAgrees: null, by: 'model', tabled: true };
 };
 // Each reading: its definition, how a case becomes its input, and how its value is compared with the case's label.
 const READINGS = {
@@ -49,15 +49,15 @@ const READINGS = {
   // one conditional step per case against one request: the label is applies | set-aside | unresolved
   'execution-brief': { reading: EXECUTION_BRIEF, input: (c) => ({ request: c.request, material: c.material ? [{ name: 'notes', head: c.material }] : [], steps: [{ id: 's1', n: 1, statement: c.step, required: true, unit: { kind: 'instruction', decision: c.decision ?? null, inputs: [], condition: c.condition ?? null, output: null, exception: null, dependsOn: [], quote: c.step, by: 'model' } }] }), answer: (v) => (v.unsupported.some((u) => u.id === 's1') ? 'unsupported' : v.placed.s1?.applies ?? null) },
   // one persona point per case against the pieces it quotes: the label is `trigger status|pieces evidenced`, both decided by code from what the reading grounds; the scope is recorded beside each run as `aside`, not judged
-  'persona-moves': { reading: PERSONA_MOVES, input: (c) => ({ points: [c.point], pieces: c.pieces, steps: [] }), answer: (v) => `${v[0].trigger.status}|${new Set(v[0].evidence.map((e) => e.piece)).size}`, aside: (v) => v[0].scope },
+  'persona-moves': { reading: PERSONA_MOVES, input: (c) => ({ points: [c.point], pieces: c.pieces, steps: [] }), answer: (v) => `${v[0].trigger.status}|${new Set(v[0].evidence.map((e) => e.piece)).size}`, aside: (v) => `${v[0].scope}|${v[0].modality}|${v[0].check ?? '-'}:${v[0].checkMeans ?? '-'}` },
   // one of the author's conditional moves against one request: the label is placed | set-aside | unresolved
   'move-cases': { reading: MOVE_CASES, input: (c) => ({ request: c.request, material: c.material ? [{ name: 'notes', head: c.material }] : [], moves: [unitOf({ aspect: c.move.aspect, realisation: c.move.realisation, trigger: c.move.trigger })] }),
     answer: (v) => (v.m1 ? (v.m1.applies === 'applies' ? 'placed' : v.m1.applies) : null) },
   // one move against one delivered piece: the label is the outcome
   'move-realisation': { reading: MOVE_READER, input: (c) => ({ text: c.text, request: c.request, moves: [unitOf({ aspect: c.move.aspect, realisation: c.move.realisation, trigger: c.move.trigger ?? null, forbidden: c.move.forbidden ?? null, quote: c.move.quote ?? null })] }), answer: (v) => v.m1?.outcome ?? null },
   // one habit against the pieces the first reading left: the label is `moves|situations`, each the pieces that should yield a quote, sorted and joined by +, or none
-  'persona-table': { reading: PERSONA_TABLE, input: (c) => ({ habits: [{ n: 1, aspect: c.habit.aspect, description: c.habit.description, quote: c.habit.quote, situation: c.habit.situation ?? null }], pieces: c.pieces, cells: c.ask.map((piece) => ({ habit: 1, piece })) }),
-    answer: (v) => `${v.filter((x) => x.move).map((x) => x.piece).sort().join('+') || 'none'}|${v.filter((x) => x.situation).map((x) => x.piece).sort().join('+') || 'none'}` },
+  'persona-table': { reading: PERSONA_TABLE, input: (c) => ({ habits: [{ n: 1, aspect: c.habit.aspect, description: c.habit.description, quote: c.habit.quote, situation: c.habit.situation ?? null, modality: c.habit.modality ?? 'passage' }], pieces: c.pieces, cells: c.ask.map((piece) => ({ habit: 1, piece })) }),
+    answer: (v) => `${v.filter((x) => x.move || x.shows === true).map((x) => x.piece).sort().join('+') || 'none'}|${v.filter((x) => x.situation).map((x) => x.piece).sort().join('+') || 'none'}` },
   'method-units': { reading: METHOD_UNITS, input: (c) => ({ steps: [{ id: '1', text: c.step, under: c.under ?? null }] }), answer: (v) => (v['1'] ? `${v['1'].kind}|${v['1'].condition ? 'conditional' : 'always'}` : null) },
 };
 const args = process.argv.slice(2);
