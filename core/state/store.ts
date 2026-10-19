@@ -769,15 +769,29 @@ export function recordBinding(l: StoreLayout, skillVersionHash: string, binding:
 }
 
 /**
- * THE AUTHOR'S MOVE PROFILE (core/compiler/moves.ts), keyed by the hash of the persona it was read from: an immutable
- * implementation artifact beside the voice, never in the standard or the package, so a model's reading of the moves
- * moves no standard hash and a rebuild with the same persona reuses it. The build receipt names the profile's hash.
+ * THE AUTHOR'S MOVE PROFILE (core/compiler/moves.ts): an immutable implementation artifact beside the voice, never in the
+ * standard or the package, so a model's reading of the moves moves no standard hash. Each profile is written under its
+ * own content hash and never overwritten, so a build receipt that names it resolves for as long as the store does; a
+ * pointer by the persona's hash names the profile a persona currently has, and is what a rebuild with the same
+ * persona reuses (a floor profile is replaced by a model's when one is there, and the floor stays on disk).
  */
 export function putMoves(l: StoreLayout, personaHash: string, profile: MoveProfile): void {
   const d = join(dirs(l).base, 'moves'); mkdirSync(d, { recursive: true });
-  writeAtomic(join(d, `${personaHash}.json`), JSON.stringify(profile, null, 1));
+  // The hash covers everything but the time, so a profile already on disk under this hash is this profile: kept as
+  // first written, never overwritten.
+  const file = join(d, `${profile.hash}.json`);
+  if (!existsSync(file)) writeAtomic(file, JSON.stringify(profile, null, 1));
+  writeAtomic(join(d, `persona-${personaHash}.json`), JSON.stringify({ hash: profile.hash }, null, 1));
 }
+/** The profile a persona currently has, by the persona's hash; null when none was read. */
 export function getMoves(l: StoreLayout, personaHash: string): MoveProfile | null {
-  const p = join(dirs(l).base, 'moves', `${personaHash}.json`);
+  const p = join(dirs(l).base, 'moves', `persona-${personaHash}.json`);
+  if (!existsSync(p)) return null;
+  const { hash } = readJson<{ hash: string }>(p, { what: 'the move profile pointer', requireKeys: ['hash'] });
+  return getMovesByHash(l, hash);
+}
+/** A profile by its own hash, as a build receipt names it. */
+export function getMovesByHash(l: StoreLayout, hash: string): MoveProfile | null {
+  const p = join(dirs(l).base, 'moves', `${hash}.json`);
   return existsSync(p) ? readJson<MoveProfile>(p, { what: 'the move profile', requireKeys: ['hash', 'units'] }) : null;
 }

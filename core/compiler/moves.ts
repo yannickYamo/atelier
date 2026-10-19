@@ -74,6 +74,8 @@ export interface MoveProfile {
   readonly personaHash: string;
   readonly reading: string;
   readonly reader: string | null;
+  /** the pieces the evidence names, in order, each by the hash of its text: `piece-3` traces to a file of the corpus */
+  readonly pieces: readonly { readonly name: string; readonly sha: string }[];
   readonly units: readonly MoveUnit[];
   readonly builtAt: string;
 }
@@ -209,9 +211,10 @@ export const PERSONA_MOVES: Reading<MovesInput, MovesOutput> = {
 };
 
 /** An immutable profile named by its content; the build receipt names it. */
-export function profileOf(units: readonly MoveUnit[], personaHash: string, reader: string | null, builtAt = new Date().toISOString()): MoveProfile {
-  const hash = sha(JSON.stringify({ reading: `${PERSONA_MOVES.id}-${PERSONA_MOVES.version}`, units }));
-  return { schema: 1, hash, personaHash, reading: `${PERSONA_MOVES.id}-${PERSONA_MOVES.version}`, reader, units, builtAt };
+export function profileOf(units: readonly MoveUnit[], personaHash: string, reader: string | null, pieces: readonly MovePiece[], builtAt = new Date().toISOString()): MoveProfile {
+  const named = pieces.map((p) => ({ name: p.name, sha: createHash('sha256').update(p.text).digest('hex').slice(0, 16) }));
+  const hash = sha(JSON.stringify({ reading: `${PERSONA_MOVES.id}-${PERSONA_MOVES.version}`, pieces: named, units }));
+  return { schema: 1, hash, personaHash, reading: `${PERSONA_MOVES.id}-${PERSONA_MOVES.version}`, reader, pieces: named, units, builtAt };
 }
 
 /** One line per unit for the build's whole account and `report`. */

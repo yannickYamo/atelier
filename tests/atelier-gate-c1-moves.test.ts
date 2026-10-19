@@ -104,11 +104,14 @@ describe('the reading as a value', () => {
   });
   it('a profile is named by its content and its persona; the time is outside the hash', () => {
     const g = PERSONA_MOVES.ground(raw([m1]), input)!;
-    const a = profileOf(g, personaHashOf(points), 'scripted', '2026-10-19T00:00:00Z');
-    const b = profileOf(g, personaHashOf(points), 'scripted', '2026-10-20T00:00:00Z');
+    const a = profileOf(g, personaHashOf(points), 'scripted', pieces, '2026-10-19T00:00:00Z');
+    const b = profileOf(g, personaHashOf(points), 'scripted', pieces, '2026-10-20T00:00:00Z');
     expect(a.hash).toBe(b.hash); expect(a.hash).toHaveLength(12);
     expect(a.personaHash).toBe(personaHashOf(points));
-    expect(profileOf(PERSONA_MOVES.floor(input), personaHashOf(points), null).hash).not.toBe(a.hash);
+    expect(profileOf(PERSONA_MOVES.floor(input), personaHashOf(points), null, pieces).hash).not.toBe(a.hash);
+    // the pieces the evidence names trace to their text
+    expect(a.pieces.map((p) => p.name)).toEqual(['piece-1', 'piece-2', 'piece-3']); expect(a.pieces[0].sha).toHaveLength(16);
+    expect(profileOf(g, personaHashOf(points), 'scripted', [...pieces].reverse(), '2026-10-19T00:00:00Z').hash).not.toBe(a.hash);
   });
 });
 
@@ -129,8 +132,15 @@ const PERSONA = { points: [
   { aspect: 'close', description: 'Closes on a short plain instruction.', frequency: 'OFTEN', quote: 'Tests first, then the rest.' },
 ] };
 // one move answered for point 1 (its quote stands in every piece, so general); point 2 unanswered falls to the floor
-const MOVES = { moves: [{ point: 1, trigger: null, evidence: ['piece-1', 'piece-2', 'piece-3'].map((piece) => ({ piece, quote: 'I would start with the riskiest line.', situationQuote: null })),
-  realisation: 'the first sentence takes a position', forbidden: 'never a summary first', scope: 'sentence', link: 1, check: null }] };
+// ADVERSARIAL: point 2 comes back with a trigger no piece shows (an invented situation quote), the same quote twice from one
+// piece, a link to a step the method does not have, and a "forbidden" line that is an instruction: proposed, so UNKNOWN;
+// one piece of evidence; no link; no forbidden line.
+const MOVES = { moves: [
+  { point: 1, trigger: null, evidence: ['piece-1', 'piece-2', 'piece-3'].map((piece) => ({ piece, quote: 'I would start with the riskiest line.', situationQuote: null })),
+    realisation: 'the first sentence takes a position', forbidden: 'never a summary first', scope: 'sentence', link: 1, check: null },
+  { point: 2, trigger: 'when the reader has a next step', evidence: [{ piece: 'piece-1', quote: 'Tests first, then the rest.', situationQuote: 'the reader must act now' }, { piece: 'piece-1', quote: 'Tests first, then the rest.', situationQuote: null }],
+    realisation: 'one short instruction', forbidden: 'always close softly', scope: 'sentence', link: 9, check: null },
+] };
 
 let backend: ChildProcess; let port = 0;
 const url = (): string => `http://127.0.0.1:${port}`;
@@ -172,7 +182,7 @@ describe('through the build', () => {
     expect(r.out).toContain('Moves: 2 moves: 1 general, 0 conditional, 1 unknown, read from the persona and your pieces.');
     expect(r.out).toContain('What my moves are, and when I make them:');
     expect(r.out).toContain('GENERAL · stance · seen in 3 of 4 piece(s) · scope: sentence · at step 1 (candidate) · not: never a summary first');
-    expect(r.out).toContain('UNKNOWN (by the words alone) · close · seen in 1 of 4 piece(s)');
+    expect(r.out).toContain('UNKNOWN · close · when: "when the reader has a next step" (proposed, no piece shows the situation) · seen in 1 of 4 piece(s) · scope: sentence');
     expect(r.out).toMatch(/· moves ✓ \(2 moves: 1 general, 0 conditional, 1 unknown\) ·/);
     const sv = activeOf(withModel.data);
     const receipt = store.getReceipt(L(withModel.data), sv.skillVersionHash)!;
@@ -182,6 +192,12 @@ describe('through the build', () => {
     expect(profile.reader).toBe('scripted');
     expect(profile.units.map((u) => u.applicability)).toEqual(['GENERAL', 'UNKNOWN']);
     expect(profile.units[0]).toMatchObject({ pieces: 3, corpus: 4, link: { step: '1', status: 'candidate' }, by: 'model' });
+    // THE PERSISTED RECORD IS TRUTHFUL ON THE ADVERSARIAL POINT: proposed trigger, one evidence with no situation, no link, no forbidden line
+    expect(profile.units[1]).toMatchObject({ applicability: 'UNKNOWN', trigger: { text: 'when the reader has a next step', status: 'proposed' }, pieces: 1, link: null, forbidden: null, by: 'model' });
+    expect(profile.units[1].evidence).toEqual([{ piece: 'piece-1', quote: 'Tests first, then the rest.', situationQuote: null }]);
+    expect(profile.pieces.map((x) => x.name)).toEqual(['piece-1', 'piece-2', 'piece-3', 'piece-4']);
+    // the profile on disk is the one the receipt names, by its own hash
+    expect(store.getMovesByHash(L(withModel.data), receipt.movesHash!)!.hash).toBe(profile.hash);
     // THE STANDARD IS UNTOUCHED: the same hash and requirements as a build with no model at all
     expect(without.run('method', 'method.md', '--golden', 'examples', '--name', 'code-review', '--yes', '--report').code).toBe(0);
     expect(activeOf(without.data).standardVersionHash).toBe(sv.standardVersionHash);

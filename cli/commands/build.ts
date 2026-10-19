@@ -302,12 +302,16 @@ async function chooseVoice(L: store.StoreLayout, v: StandardVersion, workForm: W
   // persona is kept with it) or for a composite (said where the composite is built).
   const kept = voice;
   const noPersona = (why: string): Voice => { console.log(`(no persona: ${why})`); recordStage('persona', { ran: false, why }); return kept; };
-  const heldPersona = (why: string): Voice => { recordStage('persona', voice.persona ? { ran: true, detail: describeCounts(voice.persona) } : { ran: false, why }); return voice; };
   if (personaFlag === 'none') { console.log('(no persona: --persona none.)'); recordStage('persona', { ran: false, why: '--persona none' }); return { ...voice, persona: undefined }; }
   // A composite has no persona: one read over several authors' pieces describes their average (see above).
-  if (!derivesPersona || voice.composite || (personaFlag !== 'auto' && voice.persona)) return heldPersona(voice.composite ? 'a composite voice has no persona' : 'kept from an earlier build');
+  // A KEPT PERSONA IS RECONCILED AGAIN. The standard may have changed since it was read (a rule rejected, a boundary
+  // added): a point that describes a move the standard now rules out is dropped here, as it would be at derivation,
+  // so no rejected behaviour comes back through a persona kept from an earlier build, or through the moves read from it.
+  const reconciled = (vc: Voice): Voice => (vc.persona ? { ...vc, persona: reconcilePersona(vc.persona, standardForbids(v)) } : vc);
+  const held = (why: string): Voice => { const r = reconciled(voice); recordStage('persona', r.persona ? { ran: true, detail: describeCounts(r.persona) } : { ran: false, why }); return r; };
+  if (!derivesPersona || voice.composite || (personaFlag !== 'auto' && voice.persona)) return held(voice.composite ? 'a composite voice has no persona' : 'kept from an earlier build');
   // A persona already held is kept where it cannot be read again (--persona auto from a folder without the pieces, or with no model).
-  if (voice.persona && (readable.length < 3 || NO_MODEL())) return heldPersona('kept');
+  if (voice.persona && (readable.length < 3 || NO_MODEL())) return held('kept');
   // Three pieces at least: a habit's frequency is read across pieces, and across two there is no "most".
   if (readable.length < 3) return noPersona(`${readable.length} piece(s) can be read here; three or more are needed to say how often a habit holds.`);
   if (NO_MODEL()) return noPersona('no model read the pieces (none is set up, or --no-model); how the author sounds is read by one.');
@@ -356,7 +360,7 @@ async function movesFor(L: store.StoreLayout, voice: Voice | null, methodText: {
   const steps = methodText ? stepsOf(methodText.text).map((st, i) => ({ n: i + 1, text: st.text })) : [];
   const noModel = NO_MODEL();
   const d = await readContext(PERSONA_MOVES, { points, pieces, steps }, noModel ? null : contextReaderClient(), noModel ? null : contextReaderModel(), { spentUsd: 0, capUsd: 0.3, maxCalls: 1 });
-  const profile = profileOf(d.value, personaHash, d.by === 'model' ? contextReaderModel() : null);
+  const profile = profileOf(d.value, personaHash, d.by === 'model' ? contextReaderModel() : null, pieces);
   store.putMoves(L, personaHash, profile);
   if (d.by === 'model') {
     recordStage('moves', { ran: true, detail: describeMoves(profile.units) });

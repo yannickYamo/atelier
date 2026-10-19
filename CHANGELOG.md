@@ -168,6 +168,13 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
   pieces show it; the stage line says "moves ✓ (20 moves: 9 general, 4 conditional, 7 unknown)". A step link is a
   candidate until you confirm it; a "what it is not" line is guidance, kept only as a negation, never a requirement.
   Which moves fit one request is not yet said to the writer.
+- **A profile once written is never overwritten, and names its pieces.** Each profile is kept under its own content
+  hash, so the receipt of an earlier build resolves after a later reading replaces what the persona currently has;
+  the pieces its evidence names are recorded by the hash of their text, so "piece 3" traces to a file of your corpus.
+- **A persona kept from an earlier build is held to your current standard.** A point that describes a move your
+  standard has since ruled out (a boundary added, a rule rejected) was dropped only when the persona was first read;
+  kept through a rebuild, it came back, and the moves were read from it. It is dropped on every build now, before the
+  skill is written and before the moves are read.
 
 ### Every move the persona read of you is served, each as what it is
 
