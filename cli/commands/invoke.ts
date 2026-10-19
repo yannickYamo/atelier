@@ -15,6 +15,8 @@ import { answerSentences, judgedSituations } from '../../core/loop/answer-claims
 import { groundCarried } from '../../core/loop/grounding.js';
 import { SLOT_NOTE } from '../../renderers/agent-skill/render.js';
 import { EXECUTION_BRIEF, briefNote, applyingSteps, setAsideSteps, type BriefStep } from '../../core/loop/execution-brief.js';
+/** Reading calls a run makes by default on a long request: two batches of twelve rules, each read twice. */
+const READ_CALLS_DEFAULT = 4;
 import { readContext } from '../../core/inference/reading.js';
 import { needsNote, needsNothing } from '../../core/loop/task-needs.js';
 import { refineToStandard, checkDraft, checkDraftAsync, withWaivers, enforceClaims, heavyCut, listedClaims, brokenByCut, gradedRules, PUBLIC_FACTS, INCONCLUSIVE, UNREAD, type CheckOptions } from '../../core/loop/run-repair.js';
@@ -57,7 +59,7 @@ import { chainOf, sampleSkeleton, skeletonBlock, followed, NEAR_WEIGHT, type Mov
 import { readStructure, STRUCTURE_READER_VERSION, type StructureMove } from '../../core/structure/moves.js';
 import { structureModel } from './fidelity.js';
 import { checkClass } from '../../core/observers/doc-class.js';
-import { readTaste, tasteRules, describeTaste, applicabilityFor, vetoMisses, type TasteReading } from '../../core/taste/reader.js';
+import { readTaste, tasteRules, describeTaste, applicabilityFor, vetoMisses, readCoverage, type TasteReading, type ReadBounds } from '../../core/taste/reader.js';
 import { tastePermissions } from '../../core/taste/calibration.js';
 import { refineTaste } from '../../core/taste/repair.js';
 import { overlapIndex, sentencesKept, sentencesAdded } from '../../core/observers/overlap.js';
@@ -86,7 +88,7 @@ import { version } from '../help.js';
 import { writeAtomic } from '../../core/state/fs-atomic.js';
 import { compareBindings, describeMismatch, describeNewSurface, detectResolvedModelDrift, bindingHash } from '../../core/runtime/binding.js';
 import { resolve as resolvePath } from 'node:path';
-import { sha, DATA, VALUED_OPTIONS, die, argv, flag, clientAndBinding, describeBinding, numericFlag, positional, boundResources, boundMaterial, assertSkillName, runFile, clientFor, callsSeen, thinkingOfCalls, thinkingBlocksOfCalls, contextReaderClient } from '../runtime.js';
+import { sha, DATA, VALUED_OPTIONS, die, argv, flag, clientAndBinding, describeBinding, numericFlag, positional, boundResources, boundMaterial, assertSkillName, runFile, clientFor, callsSeen, thinkingOfCalls, thinkingBlocksOfCalls, contextReaderClient, canReach } from '../runtime.js';
 
 /**
  * What a skill serves, resolved once and shared.
@@ -453,9 +455,14 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const carryNote = (carryNoteFile !== undefined ? (existsSync(carryNoteFile) ? readFileSync(carryNoteFile, 'utf8') : die(`--carry-note ${carryNoteFile}: there is no such file.`)) : methodCarry?.note ?? '').trim();
   const nDrafts = Math.max(1, Math.floor(numericFlag('--drafts', runSettings ? runSettings.drafts : methodCarry?.drafts ?? 1)));
   const editBudget = runSettings && !argv.includes('--no-repair') ? Math.max(0, Math.floor(numericFlag('--edits', runSettings.editBudget))) : 0;
-  // THE TASTE READER IS A MODEL'S OPINION OF THE OWNER'S RULES, and has not earned a say (docs/TASTE.md): it runs
-  // only when asked for (--taste). A run is held to what code can read and what the owner judges.
-  const taste = std && argv.includes('--taste') && !argv.includes('--no-taste') ? TasteSession.open(L, std, asked, waiting) : null;
+  // THE TASTE READER IS A MODEL'S OPINION OF THE OWNER'S RULES, and has not earned a say (docs/TASTE.md). It reads the
+  // delivered text against every rule no count checks, in reporting mode, wherever a model can be reached: what it
+  // finds is shown, counted toward the labels that earn it a say, and never a reason to cut or redraft until then.
+  // Bounded (`setBounds`, after the request is read): a short request gets no reading unless asked (--taste), a long
+  // one at most a few calls, --strict every rule. --no-taste turns it off. A run is held to what code can read and
+  // what the owner judges.
+  const readerAsked = argv.includes('--taste');
+  let taste = std && !argv.includes('--no-taste') && (readerAsked || canReach('discovery')) ? TasteSession.open(L, std, asked, waiting) : null;
   // The bounds grow with the drafts and the taste reader's calls, and a request the cap cannot cover is
   // refused before anything is spent rather than failing halfway with nothing delivered.
   // GRADED FEATURES, ON BY DEFAULT: the standard's FEATURE rules and the profile's far-out SIGNAL features are repair
@@ -609,12 +616,22 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   // once against the request where a step's own words make it conditional; the decisions they ask for; what was given;
   // what to leave open. A step set aside is withheld from the writer by name and marked set aside in the evaluation
   // (a required one keeps the run at NEEDS REVIEW). A short request gets no brief: the method as served says it all.
+  // Whether a step is enforced is the plan's to say (core/plan/execution-plan.ts), never read off the rule's own field.
+  const enforcedSteps = new Set(std ? planFor(std).rules.filter((p) => p.enforced).map((p) => p.id) : []);
   const briefSteps: BriefStep[] = (std?.requirements ?? []).filter((q) => q.provenance === 'EXPERT_STATED' && q.authority !== 'EXPERT_REJECTED' && !waived.has(q.requirementId))
-    .map((q, i) => ({ id: q.requirementId, n: i + 1, statement: q.statement, required: q.materiality === 'REQUIRED', unit: q.unit ?? null }));
+    .map((q, i) => ({ id: q.requirementId, n: i + 1, statement: q.statement, required: enforcedSteps.has(q.requirementId), unit: q.unit ?? null }));
   const briefOn = briefSteps.length > 0 && contractFile === null && lengthAsked !== 'SHORT' && asksParts(asked) && !argv.includes('--no-brief');
   const brief = briefOn ? await readContext(EXECUTION_BRIEF, { request: asked, material: material.map((m) => ({ name: m.name, head: m.text.slice(0, 600) })), steps: briefSteps },
     contextJudgeModel() ? contextReaderClient() : null, contextJudgeModel(), { spentUsd: 0, capUsd: 0.05, maxCalls: 1 }) : null;
   const briefText = brief ? briefNote(brief.value, briefSteps, material) : '';
+  // HOW MUCH THE READER MAY READ THIS RUN: nothing on a short request unless asked, four calls on a long one (two
+  // batches of twelve rules, the brief's applying steps and the required rules first), every rule under --strict.
+  if (taste) {
+    const shortRun = lengthAsked === 'SHORT' || !asksParts(asked);
+    const maxCalls = readerAsked || strict ? Infinity : shortRun ? 0 : READ_CALLS_DEFAULT;
+    if (maxCalls === 0) taste = null;
+    else taste.setBounds({ maxCalls, first: new Set(brief ? applyingSteps(brief.value, briefSteps).filter((s) => s.required).map((s) => s.id) : []) });
+  }
   if (brief) {
     for (const s of setAsideSteps(brief.value, briefSteps)) { waived.set(s.id, `set aside for this request: ${brief.value.placed[s.id].why ?? 'not this case'}`); withheld.push(s.statement); }
     const off = setAsideSteps(brief.value, briefSteps);
@@ -938,6 +955,7 @@ class TasteSession {
   private budget: Budget | null = null;
   private decided: Promise<boolean[]> | null = null;
   private reader: InferenceClient | null = null;
+  private bounds: ReadBounds = {};
 
   private constructor(
     private readonly L: store.StoreLayout, private readonly std: Standard, readonly asked: string,
@@ -954,6 +972,9 @@ class TasteSession {
 
   /** Whether the reader has earned the right to act on any rule this run. */
   get acts(): boolean { return this.veto.size > 0; }
+
+  /** What this run may spend on readings (core/taste/reader.ts, `ReadBounds`); set once the request has been read. */
+  setBounds(b: ReadBounds): void { this.bounds = b; }
 
   /**
    * Calls reserved in the ceiling from the start, so a repair is never dropped for want of one: every
@@ -974,7 +995,7 @@ class TasteSession {
   async read(text: string): Promise<TasteReading[]> {
     const had = this.readings.get(text);
     if (had) return had;
-    const r = await readTaste(this.client(), this.meter, this.std, text, this.asked, await this.applies());
+    const r = await readTaste(this.client(), this.meter, this.std, text, this.asked, await this.applies(), this.bounds);
     this.readings.set(text, r);
     return r;
   }
@@ -2490,7 +2511,7 @@ function settingsFor(checks: Checks, taste: TasteSession | null, nDrafts: number
     contextJudge: checks.judge ? `${contextJudgeModel() ?? CLAIMS_MODEL_DEFAULT} (context judge, report-only)` : null,
     maxTokens: draftMaxTokens(),
     ...(temperature === undefined ? {} : { temperature }),
-    flags: { drafts: nDrafts, noTaste: !argv.includes('--taste') || argv.includes('--no-taste'), allowUnsourced: argv.includes('--allow-unsourced'), placeholders: checks.placeholders ?? false, ...(argv.includes('--test-run') ? { testRun: true } : {}), ...(carryNote ? { carryNoteHash: sha(carryNote) } : {}),
+    flags: { drafts: nDrafts, noTaste: taste === null, allowUnsourced: argv.includes('--allow-unsourced'), placeholders: checks.placeholders ?? false, ...(argv.includes('--test-run') ? { testRun: true } : {}), ...(carryNote ? { carryNoteHash: sha(carryNote) } : {}),
       ...(brief ? { brief } : {}) },
   };
 }
@@ -2725,11 +2746,12 @@ async function reportTaste(report: RunReport, t: TasteContext): Promise<TasteMon
     if (held) return null;
     const missed = read.filter((x) => x.verdict === 'MISSED' && !t.waiting.has(x.requirementId)).length;
     const waiting = read.filter((x) => t.waiting.has(x.requirementId)).length;
+    const cov = readCoverage(read);
     const status = t.permissions?.veto.size ? 'it acts on the rules your labels gave it' : `reporting only until you label it: atelier taste --skill ${t.name} --calibrate`;
-    report.say(`Taste reader: ${missed} of ${read.length} reading-based rule(s) read as missed${waiting ? `, ${waiting} waiting for your material` : ''} (${status}).`);
+    report.say(`Taste reader: read ${cov.read} of ${cov.of} reading-based rule(s), ${missed} read as missed${cov.notRead ? `, ${cov.notRead} not read under this run's reading cap (--strict reads every rule)` : ''}${waiting ? `, ${waiting} waiting for your material` : ''} (${status}).`);
     const trials = earned.pooled.trials;
     return { followed: read.filter((x) => x.verdict === 'FOLLOWED' && !t.waiting.has(x.requirementId)).length, missed,
-      unclear: read.filter((x) => x.verdict === 'UNCLEAR' && !t.waiting.has(x.requirementId)).length, waiting,
+      unclear: read.filter((x) => x.verdict === 'UNCLEAR' && !t.waiting.has(x.requirementId)).length, waiting, ...(cov.notRead ? { notRead: cov.notRead } : {}),
       labelled: trials ? { right: earned.pooled.confirmed, of: trials } : null, acts: Boolean(t.permissions?.veto.size) };
   } catch (e) {
     if (t.rec.repair?.taste) report.say(`taste repair: ${t.rec.repair.taste.why}.`);

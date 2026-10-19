@@ -106,6 +106,8 @@ export interface EvalSummary {
   readonly monitors: {
     readonly detector: { readonly p: number; readonly families: readonly string[]; readonly qualified: boolean | null } | null;
     readonly taste: { readonly followed: number; readonly missed: number; readonly unclear: number; readonly waiting: number;
+      /** rules the run's reading cap left unread (core/taste/reader.ts, `ReadBounds`) */
+      readonly notRead?: number;
       readonly labelled: { readonly right: number; readonly of: number } | null; readonly acts: boolean } | null;
     /** what the request explicitly asks for, and how much of it the delivered text gives (read under strict delivery) */
     readonly coverage?: { readonly asked: number; readonly given: number; readonly missing: readonly string[]; readonly unclear: number; readonly heldBack?: readonly string[] };

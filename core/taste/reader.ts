@@ -19,7 +19,16 @@ import { keysOf } from '../state/rule-key.js';
 import type { Budget, InferenceClient } from '../inference/client.js';
 import { spend } from '../inference/client.js';
 
-export type TasteVerdict = 'FOLLOWED' | 'MISSED' | 'UNCLEAR' | 'NOT_APPLICABLE' | 'UNSTABLE';
+export type TasteVerdict = 'FOLLOWED' | 'MISSED' | 'UNCLEAR' | 'NOT_APPLICABLE' | 'UNSTABLE' | 'NOT_READ';
+
+/**
+ * HOW MUCH ONE RUN MAY READ. A reading is two calls per batch of rules; a method with fifty judgement steps must not
+ * cost a run ten calls by default. `maxCalls` caps the calls (two per batch, in priority order: `first`, then the
+ * required rules, then the rest); what the cap leaves unread is NOT_READ and said as such, never UNCLEAR.
+ */
+export interface ReadBounds { readonly maxCalls?: number; readonly batch?: number; /** requirement ids read before the rest: the plan's enforced steps that apply to the request */ readonly first?: ReadonlySet<string> }
+/** Rules read per call: at this size a reading's answer fits its tokens with room for every quote. */
+export const READ_BATCH = 12;
 
 export interface TasteReading {
   readonly requirementId: string;
@@ -116,7 +125,9 @@ async function readOnce(client: InferenceClient, budget: Budget, text: string, r
       stableBlock: READING_SYSTEM, variableBlock: '',
       userMessage: `RULES\n${rules.map((r, i) => `${i + 1}. ${r.statement}`).join('\n')}\n\nTEXT\n"""\n${text}\n"""`,
       toolName: 'emit_readings', toolDescription: 'One reading per numbered rule.',
-      schema: READING_SCHEMA, maxTokens: 3000, temperature: 0,
+      // tokens for every rule's reading with its quote: a fixed 3,000 gave fifty rules sixty tokens each, and a truncated
+      // answer read as the model's own UNCLEAR
+      schema: READING_SCHEMA, maxTokens: Math.min(6000, 400 + 220 * rules.length), temperature: 0,
     });
     return { value: x, cost: x.cost, usage: x };
   }, 'taste reader');
@@ -153,8 +164,8 @@ export const applicabilityFor = (client: InferenceClient, budget: Budget, v: Sta
   applicability(client, budget, task, tasteRules(v).map((x) => x.rule));
 
 /** A pass's reading, checked: an unverifiable quote makes it UNCLEAR. */
-function checked(r: RawReading | undefined, text: string): { verdict: 'FOLLOWED' | 'MISSED' | 'UNCLEAR'; kind?: 'PRESENCE' | 'OMISSION'; quote?: string; why: string } {
-  if (!r) return { verdict: 'UNCLEAR', why: 'no reading returned' };
+function checked(r: RawReading | undefined, text: string): { verdict: 'FOLLOWED' | 'MISSED' | 'UNCLEAR' | 'NOT_READ'; kind?: 'PRESENCE' | 'OMISSION'; quote?: string; why: string } {
+  if (!r) return { verdict: 'NOT_READ', why: 'no reading returned' };
   const quote = r.quote?.trim() ? r.quote.trim() : undefined;
   if (r.verdict === 'FOLLOWED') return quote && quoteIsReal(quote, text) ? { verdict: 'FOLLOWED', quote, why: r.why } : { verdict: 'UNCLEAR', why: 'FOLLOWED without a real quote' };
   if (r.verdict === 'MISSED') {
@@ -171,29 +182,52 @@ function checked(r: RawReading | undefined, text: string): { verdict: 'FOLLOWED'
  * (`applicabilityFor`) and passes it in.
  */
 export async function readTaste(client: InferenceClient, budget: Budget, v: StandardVersion, text: string, task: string | null = null,
-  decided: readonly boolean[] | null = null): Promise<TasteReading[]> {
+  decided: readonly boolean[] | null = null, bounds: ReadBounds = {}): Promise<TasteReading[]> {
   const rules = tasteRules(v);
   if (!rules.length) return [];
   const applies = decided ?? await applicability(client, budget, task, rules.map((x) => x.rule));
   const live = rules.filter((_, i) => applies[i]);
+  // IN BATCHES, IN PRIORITY ORDER, UNDER THE CAP: the rules the run names first (the plan's enforced steps the brief
+  // holds as applying; whether a rule is enforced is the plan's to say, so it is given, never read off the rule here),
+  // then the rest in the standard's order; each batch read twice; a batch the cap cannot hold is not read, and says so.
+  const rank = (x: { rule: Requirement }): number => (bounds.first?.has(x.rule.requirementId) ? 0 : 1);
+  const ordered = live.map((x, i) => ({ x, i })).sort((p, q) => rank(p.x) - rank(q.x) || p.i - q.i).map((p) => p.x);
+  const size = Math.max(1, bounds.batch ?? READ_BATCH); const maxCalls = bounds.maxCalls ?? Infinity;
   const flat = flatten(text);
-  const reversed = [...live].reverse();
-  const [a, b] = live.length
-    ? await Promise.all([readOnce(client, budget, text, live.map((x) => x.rule)), readOnce(client, budget, flat, reversed.map((x) => x.rule))])
-    : [new Map<number, RawReading>(), new Map<number, RawReading>()];
+  const read = new Map<string, { verdict: TasteVerdict; kind?: 'PRESENCE' | 'OMISSION'; quote?: string; why: string }>();
+  let calls = 0;
+  for (let at = 0; at < ordered.length; at += size) {
+    if (calls + 2 > maxCalls) break;
+    const group = ordered.slice(at, at + size); const reversed = [...group].reverse();
+    const [a, b] = await Promise.all([readOnce(client, budget, text, group.map((x) => x.rule)), readOnce(client, budget, flat, reversed.map((x) => x.rule))]);
+    calls += 2;
+    group.forEach((x, j) => {
+      const first = checked(a.get(j + 1), text);
+      const second = checked(b.get(group.length - j), flat);
+      // A pass that returned nothing for a rule did not read it.
+      if (first.verdict === 'NOT_READ' || second.verdict === 'NOT_READ') { read.set(x.rule.requirementId, { verdict: 'NOT_READ', why: 'no reading came back for it' }); return; }
+      // Only a verdict that survives being read differently is a reading.
+      if (first.verdict !== second.verdict || (first.verdict === 'MISSED' && first.kind !== second.kind)) {
+        read.set(x.rule.requirementId, { verdict: 'UNSTABLE', why: `read as ${first.verdict} one way and ${second.verdict} the other` }); return;
+      }
+      read.set(x.rule.requirementId, { verdict: first.verdict, ...(first.kind ? { kind: first.kind } : {}), ...(first.quote ? { quote: first.quote } : {}), why: first.why });
+    });
+  }
   return rules.map(({ rule, key }, i) => {
     const base = { requirementId: rule.requirementId, key };
     if (!applies[i]) return { ...base, verdict: 'NOT_APPLICABLE', why: 'the task is not one where this rule\'s condition holds' };
-    const j = live.findIndex((x) => x.rule === rule);
-    const first = checked(a.get(j + 1), text);
-    const second = checked(b.get(live.length - j), flat);
-    // Only a verdict that survives being read differently is a reading.
-    if (first.verdict !== second.verdict || (first.verdict === 'MISSED' && first.kind !== second.kind)) {
-      return { ...base, verdict: 'UNSTABLE', why: `read as ${first.verdict} one way and ${second.verdict} the other` };
-    }
-    return { ...base, verdict: first.verdict, ...(first.kind ? { kind: first.kind } : {}), ...(first.quote ? { quote: first.quote } : {}), why: first.why };
+    const r = read.get(rule.requirementId);
+    if (!r) return { ...base, verdict: 'NOT_READ', why: `not read: the run's reading cap (${maxCalls} call${maxCalls === 1 ? '' : 's'}) was spent on the rules before it` };
+    return { ...base, ...r };
   });
 }
+
+/** How many rules a set of readings read: everything but what was not applicable or not read. */
+export const readCoverage = (readings: readonly TasteReading[]): { read: number; of: number; notRead: number } => {
+  const of = readings.filter((r) => r.verdict !== 'NOT_APPLICABLE').length;
+  const notRead = readings.filter((r) => r.verdict === 'NOT_READ').length;
+  return { read: of - notRead, of, notRead };
+};
 
 /**
  * One line per reading, for the terminal. A held-back reading (./calibration.ts `heldBack`) shows no
@@ -213,7 +247,7 @@ export function describeTaste(readings: readonly TasteReading[], rules: Readonly
   const count = (v: TasteVerdict): number => readings.filter((r) => r.verdict === v && !isWaiting(r)).length;
   const waitingIds = readings.filter(isWaiting).map((r) => r.requirementId);
   const head = `read against ${readings.length} reading-based rule(s): ${count('FOLLOWED')} followed, ${count('MISSED')} missed, `
-    + `${count('UNCLEAR') + count('UNSTABLE')} could not be told, ${count('NOT_APPLICABLE')} did not apply`
+    + `${count('UNCLEAR') + count('UNSTABLE')} could not be told, ${count('NOT_APPLICABLE')} did not apply${count('NOT_READ') ? `, ${count('NOT_READ')} not read` : ''}`
     + (waitingIds.length ? `, ${waitingIds.length} waiting for your material (${waitingIds.join(', ')})` : '');
   const lines = readings.filter((r) => r.verdict === 'MISSED' && !isWaiting(r)).map((r) =>
     `  missed ${r.requirementId}${permitted.has(r.key) ? '' : ' (observed)'}: ${(rules.get(r.requirementId)?.statement ?? '').slice(0, 90)}\n`

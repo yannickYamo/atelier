@@ -254,7 +254,7 @@ describe('through the binary: every output is read, labels earn authority, and t
       emit_readings: readings([{ n: 1, verdict: 'MISSED', kind: 'PRESENCE', quote: 'At the end, review matters.' }]) } });
     holdback = '0';
     const first = run(data, proj, 'invoke', '--taste', '--skill', 'voice', '--task', 'write about review');
-    expect(first).toContain('Taste reader: 1 of 1 reading-based rule(s) read as missed (reporting only until you label it');
+    expect(first).toContain('Taste reader: read 1 of 1 reading-based rule(s), 1 read as missed (reporting only until you label it');
     expect(withDetails(first)).toContain('read against 1 reading-based rule(s): 0 followed, 1 missed');
     expect(store.readEvents(L).some((e) => e.kind === 'TASTE_READING')).toBe(true);
     // An OBSERVE-only verdict is a report, never evidence for the convergence loop.

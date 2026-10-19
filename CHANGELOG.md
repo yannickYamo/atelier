@@ -7,6 +7,36 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+### The method, executed: what each step asks, which steps this request needs, and a reader that reports
+
+- **What each step asks the writer to decide, read once at build.** A method note is not seventy flat rules. Each step
+  the owner stated is compiled for execution beside the step: its kind (an instruction, a template example, an
+  explanation, a criterion), the decision it asks for, what it consults, when it applies in the step's own words, what
+  it puts in the work, what changes the default, and which steps come first. Read by the context reader, grounded step
+  by step (a quote or condition not in the step's words drops that unit to the floor: an instruction, applying always
+  unless its words say when). Never a requirement of its own and never a weight: the standard is the same with the
+  reading as without it. Said in the whole account.
+- **The execution brief, before the draft.** For each request, which stated steps apply: a step with no condition
+  applies by code and is never read; a conditional one is read against the request and its material, and set aside
+  only on the request's own words; one the reading could not place applies. The writer gets step numbers and one line
+  each after the cached skill: what applies, what is set aside and why, the decisions in dependency order, what was
+  given, and which decisions nothing given supports, to be left open rather than invented. A set-aside step is withheld
+  by name and marked set aside in the evaluation, where a required one keeps the run at NEEDS REVIEW. A short request
+  gets no brief. `--no-brief` leaves it out.
+- **The judgement reader reports by default, bounded.** Wherever a model can be reached, the delivered text is read
+  against every rule no count checks, in reporting mode: what it finds is shown, counted toward the labels that earn
+  it a say, and never counted as held (a FOLLOWED leaves the rule yours to confirm; only a MISSED where your labels
+  gave it VETO fails a rule). Read in batches of twelve rules, each twice, the request's enforced applying steps first;
+  a long request makes four reading calls at most by default and says what the cap left unread as not read, never as
+  unclear; a short request is not read unless `--taste` asks; `--strict` reads every rule; `--no-taste` turns it off.
+  A pass that returns nothing for a rule leaves it not read.
+- **The method's terms are approved, never borrowed.** The method note and the standard's statements travel to the
+  carry-over signal and grounding as given, so "the OCR pass" of a method about scanned imports is terminology the
+  writer may name; a term only the goldens hold still is not.
+- **Pieces of one length are not a preference one word wide.** The band read from the author's lengths is the spread
+  and never less than a quarter of the longest piece: three replies of 231 characters gave 230 to 232, and a band read
+  from a few pieces is descriptive.
+
 ### What a build ran, what it lost, and what it was built from
 
 - **A receipt beside every skill version.** What the build read and with what (persona, work form, scope, counted rules,
