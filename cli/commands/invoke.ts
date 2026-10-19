@@ -14,7 +14,7 @@ import { regressions, readAtLength, featureParamsOf, ruleParamsOf, enforcedNever
 import { answerSentences, judgedSituations } from '../../core/loop/answer-claims.js';
 import { groundCarried } from '../../core/loop/grounding.js';
 import { SLOT_NOTE } from '../../renderers/agent-skill/render.js';
-import { EXECUTION_BRIEF, briefNote, applyingSteps, setAsideSteps, type BriefStep } from '../../core/loop/execution-brief.js';
+import { EXECUTION_BRIEF, briefNote, applyingSteps, setAsideSteps, unresolvedSteps, type BriefStep } from '../../core/loop/execution-brief.js';
 /** Reading calls a run makes by default on a long request: two batches of twelve rules, each read twice. */
 const READ_CALLS_DEFAULT = 4;
 import { readContext } from '../../core/inference/reading.js';
@@ -618,24 +618,29 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   // (a required one keeps the run at NEEDS REVIEW). A short request gets no brief: the method as served says it all.
   // Whether a step is enforced is the plan's to say (core/plan/execution-plan.ts), never read off the rule's own field.
   const enforcedSteps = new Set(std ? planFor(std).rules.filter((p) => p.enforced).map((p) => p.id) : []);
+  const unitsOf = store.getUnits(L, sv.standardVersionHash);
   const briefSteps: BriefStep[] = (std?.requirements ?? []).filter((q) => q.provenance === 'EXPERT_STATED' && q.authority !== 'EXPERT_REJECTED' && !waived.has(q.requirementId))
-    .map((q, i) => ({ id: q.requirementId, n: i + 1, statement: q.statement, required: enforcedSteps.has(q.requirementId), unit: q.unit ?? null }));
-  const briefOn = briefSteps.length > 0 && contractFile === null && lengthAsked !== 'SHORT' && asksParts(asked) && !argv.includes('--no-brief');
+    .map((q, i) => ({ id: q.requirementId, n: i + 1, statement: q.statement, required: enforcedSteps.has(q.requirementId), unit: unitsOf[q.requirementId] ?? null }));
+  // WHETHER THE REQUEST NEEDS THE METHOD decides the brief, not its word count: "Review this change" with a diff bound is
+  // the method's work, and so is "The import stalls. Why?"; "Thanks, that solved it." is not. Material bound is need;
+  // otherwise what the request asks for, as the intent reading quoted it from the request (core/loop/task-needs.ts);
+  // with no reading, a request long enough to ask for parts.
+  const needsMethod = material.length > 0 || (intent?.needs ? !needsNothing(intent.needs) : lengthAsked !== 'SHORT' && asksParts(asked));
+  const briefOn = briefSteps.length > 0 && contractFile === null && needsMethod && !argv.includes('--no-brief');
   const brief = briefOn ? await readContext(EXECUTION_BRIEF, { request: asked, material: material.map((m) => ({ name: m.name, head: m.text.slice(0, 600) })), steps: briefSteps },
     contextJudgeModel() ? contextReaderClient() : null, contextJudgeModel(), { spentUsd: 0, capUsd: 0.05, maxCalls: 1 }) : null;
   const briefText = brief ? briefNote(brief.value, briefSteps, material) : '';
   // HOW MUCH THE READER MAY READ THIS RUN: nothing on a short request unless asked, four calls on a long one (two
   // batches of twelve rules, the brief's applying steps and the required rules first), every rule under --strict.
   if (taste) {
-    const shortRun = lengthAsked === 'SHORT' || !asksParts(asked);
-    const maxCalls = readerAsked || strict ? Infinity : shortRun ? 0 : READ_CALLS_DEFAULT;
+    const maxCalls = readerAsked || strict ? Infinity : needsMethod ? READ_CALLS_DEFAULT : 0;
     if (maxCalls === 0) taste = null;
     else taste.setBounds({ maxCalls, first: new Set(brief ? applyingSteps(brief.value, briefSteps).filter((s) => s.required).map((s) => s.id) : []) });
   }
   if (brief) {
     for (const s of setAsideSteps(brief.value, briefSteps)) { waived.set(s.id, `set aside for this request: ${brief.value.placed[s.id].why ?? 'not this case'}`); withheld.push(s.statement); }
-    const off = setAsideSteps(brief.value, briefSteps);
-    if (off.length || brief.value.unsupported.length) report.say(`For this request: ${off.length ? `${off.length} step(s) of the method set aside (${off.map((s) => s.n).join(', ')})` : 'every step applies'}${brief.value.unsupported.length ? `; ${brief.value.unsupported.length} decision(s) nothing given supports, left open` : ''} (${brief.by === 'model' ? 'read' : brief.by === 'code' ? 'no conditional step' : `by default: ${brief.why ?? ''}`}).`);
+    const off = setAsideSteps(brief.value, briefSteps); const open = unresolvedSteps(brief.value, briefSteps);
+    if (off.length || open.length || brief.value.unsupported.length || brief.value.contradicted.length) report.say(`For this request: ${off.length ? `${off.length} step(s) of the method set aside (${off.map((s) => s.n).join(', ')})` : 'every step applies'}${open.length ? `; ${open.length} not decided by the request, held as applying (${open.map((s) => s.n).join(', ')})` : ''}${brief.value.unsupported.length ? `; ${brief.value.unsupported.length} decision(s) nothing given supports, left open` : ''}${brief.value.contradicted.length ? `; the request asks against ${brief.value.contradicted.length} step(s), which stand` : ''} (${brief.by === 'model' ? 'read' : brief.by === 'code' ? 'nothing to read' : `by default: ${brief.why ?? ''}`}).`);
   }
   const checks = { ...checksFor(L, { material: materialText, task: asked, context: { request: asked, material }, guardClaims: !argv.includes('--allow-unsourced'), placeholders: placeholdersOn, ...(judge ? { judge } : {}) }),
     ...(short.format ? { format: short.format } : {}),
@@ -759,7 +764,8 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
     std && checks.guardClaims !== false ? async (text: string) => {
       const r = await checkDraftAsync(name, std, text, checks);
       return (r.checked.find((c) => c.requirementId === 'UNSOURCED' && acts(c))?.result.spans ?? []).map((sp) => sp.text);
-    } : null, settingsFor(checks, taste, nDrafts, carryBlock ? carryNote : '', brief ? { by: brief.by, applies: applyingSteps(brief.value, briefSteps).map((s) => s.id), setAside: setAsideSteps(brief.value, briefSteps).map((s) => s.id), unsupported: [...brief.value.unsupported] } : null),
+    } : null, settingsFor(checks, taste, nDrafts, carryBlock ? carryNote : '', brief ? { by: brief.by, applies: applyingSteps(brief.value, briefSteps).map((s) => s.id), setAside: setAsideSteps(brief.value, briefSteps).map((s) => s.id),
+      unresolved: unresolvedSteps(brief.value, briefSteps).map((s) => s.id), unsupported: [...brief.value.unsupported], contradicted: brief.value.contradicted.map((c) => c.id) } : null),
     // A structured output is JSON, not prose: no reading of it means anything against a prose range.
     fid && std && contractFile === null ? (output: string) => fidelityRecord(fid, output, trace, impl.retrieved, applicability(name, std, output, waived, withheld, checks.context, transfer?.doesNotApply), ledger,
       { ...(runSettings ?? fid.release.settings), drafts: nDrafts, editBudget, ...(voiceMode === 'incontext' ? { voice: 'incontext' as const } : { voice: undefined }),

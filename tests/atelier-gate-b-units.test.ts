@@ -32,6 +32,19 @@ describe('the reading as a value', () => {
     expect(d.value['2'].condition).not.toBeNull();
     expect(describeUnit(unitFloor(steps[0]))).toBe('instruction (by the words alone)');
   });
+  it('the floor reads a template and an explanation by their words, and a heading\'s condition scopes the steps under it', () => {
+    expect(unitFloor({ id: '1', text: 'For example: "Verdict: Request changes — the retry loop never backs off."', under: 'Verdict' })).toMatchObject({ kind: 'template', condition: null });
+    expect(unitFloor({ id: '2', text: '| Account | Why now | Owner |', under: null })).toMatchObject({ kind: 'template' });
+    expect(unitFloor({ id: '3', text: 'We lead with the riskiest line because reviewers stop reading after the second paragraph.', under: null })).toMatchObject({ kind: 'instruction' });
+    expect(unitFloor({ id: '4', text: 'Because reviewers stop reading after the second paragraph, the riskiest line comes first.', under: null })).toMatchObject({ kind: 'explanation' });
+    const under = 'Escalation (only when the customer asks for a manager)';
+    expect(unitFloor({ id: '5', text: 'Name who will call the customer back and the hour they will.', under })).toMatchObject({ kind: 'instruction', condition: under });
+    expect(unitFloor({ id: '6', text: 'Name who will call the customer back and the hour they will.', under: 'Routine replies' })).toMatchObject({ condition: null });
+    // a model may quote the heading's condition for a step under it, and it is kept
+    const g = METHOD_UNITS.ground({ units: [unit({ id: '1', condition: 'only when the customer asks for a manager', quote: 'Name who will call the customer back' })] },
+      { steps: [{ id: '1', text: 'Name who will call the customer back and the hour they will.', under }] })!;
+    expect(g['1']).toMatchObject({ condition: 'only when the customer asks for a manager', by: 'model' });
+  });
   it('a unit stands only on its step\'s words: a condition or a quote not in the step falls to the floor; dependencies name other steps', () => {
     const raw = { units: [
       unit({ id: '1', decision: 'what the change does', output: 'a Summary section', quote: 'Open with a Summary section' }),
@@ -99,15 +112,20 @@ describe('through the build', () => {
     const a = standardOf(withModel.data); const b = standardOf(without.data);
     const stated = a.requirements.filter((q) => q.provenance === 'EXPERT_STATED');
     expect(stated.length).toBe(3);
-    expect(stated.map((q) => q.unit?.kind)).toEqual(['instruction', 'instruction', 'instruction']);
-    expect(stated[1].unit).toMatchObject({ condition: 'when the change touches billing', decision: 'whether billing is touched', dependsOn: ['1'], by: 'model' });
-    // the same requirements, the same weights, the same ids: a unit is beside a step, never a step of its own
-    expect(a.requirements.map((q) => [q.requirementId, q.statement, q.materiality, q.kind, q.authority])).toEqual(b.requirements.map((q) => [q.requirementId, q.statement, q.materiality, q.kind, q.authority]));
+    // THE UNITS LIVE BESIDE THE STANDARD, NEVER IN IT: the two standards are the same bytes and the same hash, though one
+    // was read by a model and the other by the words alone. No requirement carries a unit.
+    expect(a.standardVersionHash).toBe(b.standardVersionHash);
+    expect(a.requirements).toEqual(b.requirements);
+    expect(a.requirements.some((q) => 'unit' in q)).toBe(false);
+    const unitsA = store.getUnits({ root: withModel.data, skillName: 'review' }, a.standardVersionHash);
+    const unitsB = store.getUnits({ root: without.data, skillName: 'review' }, b.standardVersionHash);
+    expect(stated.map((q) => unitsA[q.requirementId]?.kind)).toEqual(['instruction', 'instruction', 'instruction']);
+    expect(unitsA[stated[1].requirementId]).toMatchObject({ condition: 'when the change touches billing', decision: 'whether billing is touched', dependsOn: ['1'], by: 'model' });
     // without a model the words decide: the billing step is conditional by its own "when", the others apply always
-    const floors = b.requirements.filter((q) => q.provenance === 'EXPERT_STATED').map((q) => q.unit);
+    const floors = stated.map((q) => unitsB[q.requirementId]);
     expect(floors.map((u) => u?.by)).toEqual(['floor', 'floor', 'floor']);
     expect(floors[0]?.condition).toBeNull(); expect(floors[1]?.condition).not.toBeNull(); expect(floors[2]?.condition).toBeNull();
     // rules read off the examples carry no unit
-    expect(a.requirements.filter((q) => q.provenance !== 'EXPERT_STATED').every((q) => q.unit === undefined)).toBe(true);
+    expect(Object.keys(unitsA).sort()).toEqual(stated.map((q) => q.requirementId).sort());
   }, 180_000);
 });

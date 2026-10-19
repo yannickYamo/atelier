@@ -21,10 +21,12 @@ const steps: BriefStep[] = [
 const request = 'Review this change: it renames a CSS class in the docs site and touches nothing else.';
 
 describe('the brief as a value', () => {
-  it('no conditional step: every step applies by code, no model asked, and the note names the decisions in dependency order', async () => {
+  it('no conditional step and no decision: every step applies by code; with decisions and no model the floor applies all, and the note names them in dependency order', async () => {
+    const bare = steps.map((s) => ({ ...s, unit: unit({ dependsOn: s.unit!.dependsOn }) }));
+    expect(EXECUTION_BRIEF.decide({ request, material: [], steps: bare })?.by).toBe('code');
     const plain = steps.map((s) => ({ ...s, unit: unit({ decision: s.unit!.decision, inputs: s.unit!.inputs, dependsOn: s.unit!.dependsOn }) }));
     const d = await readContext(EXECUTION_BRIEF, { request, material: [], steps: plain }, null, null, { spentUsd: 0, capUsd: 1 });
-    expect(d.by).toBe('code');
+    expect(d.by).toBe('floor');
     expect(applyingSteps(d.value, plain).map((s) => s.n)).toEqual([1, 2, 3]);
     const note = briefNote(d.value, plain, []);
     expect(note).toContain("For this request, my method's steps that apply: 1, 2, 3.");
@@ -34,8 +36,12 @@ describe('the brief as a value', () => {
   it('a set-aside needs the request\'s words; without them the step is unresolved and applies; an unsupported decision is said', () => {
     const input = { request, material: [], steps };
     expect(EXECUTION_BRIEF.decide(input)).toBeNull();
-    const g = EXECUTION_BRIEF.ground({ placed: [{ n: 2, applies: 'SET_ASIDE', quote: 'touches nothing else' }], unsupported: [3] }, input)!;
+    const g = EXECUTION_BRIEF.ground({ placed: [{ n: 2, applies: 'SET_ASIDE', quote: 'touches nothing else' }], unsupported: [3], contradicted: [{ n: 1, quote: 'renames a CSS class' }, { n: 3, quote: 'not in the request' }] }, input)!;
     expect(g.placed.r2).toEqual({ applies: 'set-aside', why: 'the request says "touches nothing else"' });
+    // a contradiction stands only on the request's words, and the step it names still applies
+    expect(g.contradicted).toEqual([{ id: 'r1', quote: 'renames a CSS class' }]);
+    expect(applyingSteps(g, steps).map((s) => s.n)).toEqual([1, 3]);
+    expect(briefNote(g, steps, [])).toContain('The request says "renames a CSS class", which is against step 1: my method stands; follow it, and say in one line that the request asked otherwise.');
     expect(g.placed.r1.applies).toBe('applies');
     expect(g.unsupported).toEqual(['r3']);
     expect(setAsideSteps(g, steps).map((s) => s.n)).toEqual([2]);
@@ -43,12 +49,13 @@ describe('the brief as a value', () => {
     expect(note).toContain("steps that apply: 1, 3. Set aside, not this case: 2 (the request says \"touches nothing else\").");
     expect(note).toContain('- Step 3: decide the verdict — nothing given supports this: say what is missing, decide nothing');
     expect(note).toContain('Given: the request and change.diff. A decision nothing given supports is left open and said so, never invented.');
-    const invented = EXECUTION_BRIEF.ground({ placed: [{ n: 2, applies: 'SET_ASIDE', quote: 'the change touches billing' }], unsupported: [] }, input);
-    // the quote is in the step, not the request: unresolved, and unresolved applies
+    const invented = EXECUTION_BRIEF.ground({ placed: [{ n: 2, applies: 'SET_ASIDE', quote: 'the change touches billing' }], unsupported: [], contradicted: [] }, input);
+    // the quote is in the step, not the request: unresolved, and unresolved applies, and the note says so
     expect(invented?.placed.r2.applies ?? 'applies').toBe('unresolved');
     expect(applyingSteps(invented!, steps).map((s) => s.n)).toEqual([1, 2, 3]);
+    expect(briefNote(invented!, steps, [])).toContain('Not decided by the request, so held as applying: 2.');
     // an unsupported id on a set-aside step is dropped; nothing grounded is no reading
-    expect(EXECUTION_BRIEF.ground({ placed: [{ n: 9, applies: 'APPLIES', quote: null }], unsupported: [] }, input)).toBeNull();
+    expect(EXECUTION_BRIEF.ground({ placed: [{ n: 9, applies: 'APPLIES', quote: null }], unsupported: [], contradicted: [] }, input)).toBeNull();
     expect(EXECUTION_BRIEF.floor(input).by).toBe('floor');
   });
 });
@@ -60,7 +67,7 @@ const UNITS = { units: [
   { id: '2', kind: 'instruction', decision: 'whether billing is touched', inputs: ['the diff'], condition: 'when the change touches billing', output: 'a Risks section', exception: null, dependsOn: ['1'], quote: 'Add a Risks section' },
   { id: '3', kind: 'instruction', decision: 'the verdict', inputs: [], condition: null, output: 'a Verdict section', exception: null, dependsOn: ['1', '2'], quote: 'End with a Verdict section' },
 ] };
-const BRIEF = { placed: [{ n: 2, applies: 'SET_ASIDE', quote: 'touches nothing else' }], unsupported: [] };
+const BRIEF = { placed: [{ n: 2, applies: 'SET_ASIDE', quote: 'touches nothing else' }], unsupported: [], contradicted: [] };
 const DRAFT = '## Summary\nThe change renames one CSS class in the docs site and keeps the build green.\n\n## Verdict\nApprove\n';
 
 let backend: ChildProcess; let port = 0;
@@ -111,11 +118,15 @@ describe('through a run', () => {
     expect(store.getStandard(L, store.getSkillVersion(L, store.getActive(L)!)!.standardVersionHash)!.requirements.filter((q) => q.provenance === 'EXPERT_STATED')).toHaveLength(3);
     // the run's own report says the step was set aside for this request, with the request's words
     expect(r.out).toMatch(/set aside for this request: the request says/);
-    // a short request: no brief, no reading
+    // THE NEED FOR THE METHOD DECIDES, NOT THE WORD COUNT: three words with the diff bound get the brief; a bare thank-you does not
     const before = (await promptsFor('emit_execution_brief')).length;
+    const terse = run('invoke', '--skill', 'review', 'Review this change.', '--with', 'change=change.diff', '--json', ...BACKEND());
+    expect(terse.code, terse.out).toBe(0);
+    expect((await promptsFor('emit_execution_brief')).length).toBe(before + 1);
+    expect((await promptsFor('emit_piece')).at(-1) ?? '').toContain("For this request, my method's steps that apply");
     const short = run('invoke', '--skill', 'review', 'Thanks, done.', '--json', ...BACKEND());
     expect(short.code, short.out).toBe(0);
-    expect((await promptsFor('emit_execution_brief')).length).toBe(before);
+    expect((await promptsFor('emit_execution_brief')).length).toBe(before + 1);
     const shortRec = store.listInvocations(L).find((i) => i.invocationId === (JSON.parse(short.out.slice(short.out.indexOf('\n{') + 1)) as { invocationId: string }).invocationId)!;
     expect(shortRec.settings.flags.brief).toBeUndefined();
   }, 240_000);

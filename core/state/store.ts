@@ -19,6 +19,7 @@ import type { QualityFloorContract, FloorQualification, FrozenBaselineEntry } fr
 import { mkdirSync, readFileSync, existsSync, readdirSync, appendFileSync, rmSync } from 'node:fs';
 import { writeAtomic } from './fs-atomic.js';
 import type { BuildReceipt } from './receipt.js';
+import type { DecisionUnit } from './canonical-state.js';
 import { readJson, MalformedStoreFile } from './read-json.js';
 import { join, dirname } from 'node:path';
 import type { Observation } from '../measurement/observation.js';
@@ -614,6 +615,20 @@ export function putReceipt(l: StoreLayout, r: BuildReceipt): void {
 export function getReceipt(l: StoreLayout, skillVersionHash: string): BuildReceipt | null {
   const p = join(dirs(l).base, 'receipts', `${skillVersionHash}.json`);
   return existsSync(p) ? readJson<BuildReceipt>(p, { what: 'the build receipt', requireKeys: ['receiptHash', 'stages'] }) : null;
+}
+
+/**
+ * THE DECISION UNITS OF A STANDARD (core/method/decision-units.ts), by requirement id, keyed by the standard version they
+ * were read from: an implementation artifact beside the standard, never inside it, so a model's reading of the steps
+ * moves no standard hash. Absent for a standard built before units were read.
+ */
+export function putUnits(l: StoreLayout, standardVersionHash: string, units: Readonly<Record<string, DecisionUnit>>): void {
+  const d = join(dirs(l).base, 'units'); mkdirSync(d, { recursive: true });
+  writeAtomic(join(d, `${standardVersionHash}.json`), JSON.stringify(units, null, 1));
+}
+export function getUnits(l: StoreLayout, standardVersionHash: string): Readonly<Record<string, DecisionUnit>> {
+  const p = join(dirs(l).base, 'units', `${standardVersionHash}.json`);
+  return existsSync(p) ? readJson<Record<string, DecisionUnit>>(p, { what: 'the decision units' }) : {};
 }
 
 export function setActive(l: StoreLayout, skillVersionHash: string): void {

@@ -150,8 +150,10 @@ export type UnitKind = 'instruction' | 'template' | 'explanation' | 'criterion';
 /**
  * A STEP OF A METHOD, COMPILED FOR EXECUTION (core/method/decision-units.ts): the decision it asks for, what it consults,
  * when it applies (its own words), what it puts in the work, what changes the default, and which steps come first.
- * Never a requirement of its own and never a weight: a reading of the owner's step, said beside it. `by` says whether a
- * model read it or the words alone decided (the floor: an instruction, applying always unless its words say when).
+ * Never a requirement of its own and never a weight, and never inside the standard: a reading of the owner's step, kept
+ * beside the standard version it was read from (core/state/store.ts, `putUnits`), so a reading never moves the
+ * standard's hash. `by` says whether a model read it or the words alone decided (the floor: an instruction, applying
+ * always unless its words, or its heading's, say when).
  */
 export interface DecisionUnit {
   readonly kind: UnitKind;
@@ -251,8 +253,6 @@ export interface Requirement {
    * with this check, which is them saying the check is what they meant.
    */
   readonly related?: true;
-  /** For a step the owner stated: what it asks the writer to decide, read once at build (core/method/decision-units.ts). */
-  readonly unit?: DecisionUnit;
   /**
    * WHAT MUST BE BOUND FOR THIS RULE TO BE EXECUTED TRUTHFULLY.
    *
@@ -571,7 +571,11 @@ export interface InvocationSettings {
     /** the note from earlier runs that was served beside the skill (`atelier evolve`), by its hash: two runs of one skill version differ by it */
     readonly carryNoteHash?: string;
     /** the execution brief (core/loop/execution-brief.ts): who decided it, and the stated steps held as applying, set aside, and left open */
-    readonly brief?: { readonly by: 'code' | 'model' | 'floor'; readonly applies: readonly string[]; readonly setAside: readonly string[]; readonly unsupported: readonly string[] } };
+    readonly brief?: { readonly by: 'code' | 'model' | 'floor'; readonly applies: readonly string[]; readonly setAside: readonly string[];
+      /** steps the reading could not place: held as applying, and said so */
+      readonly unresolved?: readonly string[]; readonly unsupported: readonly string[];
+      /** steps the request asked against: they stand, and the writer was told */
+      readonly contradicted?: readonly string[] } };
 }
 
 export interface InvocationRecord {

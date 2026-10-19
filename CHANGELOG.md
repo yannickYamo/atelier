@@ -9,6 +9,25 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ### The method, executed: what each step asks, which steps this request needs, and a reader that reports
 
+- **A reading never moves the standard.** The decision units are kept beside the standard version they were read from,
+  keyed by requirement id, never inside the requirement: a skill built with a model and one built without read the
+  same steps to the same standard hash. (A first cut stored them in the requirement, and a model's reading would have
+  minted a new standard.)
+- **The need for the method decides the brief, not the word count.** "Review this change" with a diff bound, and "The
+  import stalls. Why?" when the intent reading quotes what it asks for, are the method's work; a bare thank-you is not.
+  The same need decides whether the judgement reader reads.
+- **An unknown is never a silent yes, and a contradiction is never a silent no.** A step the reading could not place is
+  said to the writer as held applying, and recorded; a step the request asks against in so many words is surfaced
+  ("the request says …, which is against step n: my method stands") and never set aside; set-aside needs the request's
+  own words. The record carries applying, set aside, unresolved, unsupported and contradicted apart.
+- **A heading's condition scopes the steps under it**, by the words (the floor) and by the reading; a line that opens as an
+  example or a table row is a template, one that opens by giving a reason an explanation, and either stays a requirement
+  with its kind shown.
+- **An approved term is not approved evidence.** The method's terms may be named; whether this person's stall is the
+  OCR pass is a decision, and the brief marks it unsupported when nothing given supports it, so the writer is told to
+  say what is missing and decide nothing. The count bands of short pieces (longest sentence, counts) widen as the
+  length bands do: never narrower than a quarter of the largest value.
+
 - **What each step asks the writer to decide, read once at build.** A method note is not seventy flat rules. Each step
   the owner stated is compiled for execution beside the step: its kind (an instruction, a template example, an
   explanation, a criterion), the decision it asks for, what it consults, when it applies in the step's own words, what

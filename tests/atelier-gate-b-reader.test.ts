@@ -123,11 +123,15 @@ describe('through a run', () => {
     const b2 = (await readingCalls()).length;
     expect(run('invoke', '--skill', 'review', 'Thanks, approve it.', ...BACKEND()).code).toBe(0);
     expect((await readingCalls()).length).toBe(b2);
-    // off: no reading
-    expect(run('invoke', '--skill', 'review', long, '--no-taste', ...BACKEND()).code).toBe(0);
-    expect((await readingCalls()).length).toBe(b2);
+    // off: no reading; and the reporting reader changed nothing: the delivered text is the same with it and without it
+    const on = run('invoke', '--skill', 'review', long, '--json', ...BACKEND());
+    const off = run('invoke', '--skill', 'review', long, '--no-taste', '--json', ...BACKEND());
+    expect(on.code, on.out).toBe(0); expect(off.code, off.out).toBe(0);
+    const textOf = (o: string): string | null => (JSON.parse(o.slice(o.indexOf('\n{') + 1)) as { output: string | null }).output;
+    expect(textOf(on.out)).toBe(textOf(off.out));
+    expect((await readingCalls()).length).toBe(b2 + 4);
     // the record says the reader was off on that run and on for the first
     const recs = store.listInvocations(L);
-    expect(recs.map((x) => x.settings.flags.noTaste).sort()).toEqual([false, true, true]);
+    expect(recs.map((x) => x.settings.flags.noTaste).sort()).toEqual([false, false, true, true]);
   }, 300_000);
 });

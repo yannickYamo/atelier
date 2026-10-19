@@ -18,8 +18,7 @@ import { basename, resolve } from 'node:path';
 import { DATA, argv, die, flag, positional, loadSession, saveSession, archiveSession, authoredIdAllocator, runFile, sha, canReach, contextReaderClient, contextReaderModel } from '../runtime.js';
 import * as store from '../../core/state/store.js';
 import { resetStages } from '../stages.js';
-import { METHOD_UNITS, unitFloor, describeUnit } from '../../core/method/decision-units.js';
-import type { DecisionUnit } from '../../core/state/canonical-state.js';
+import { METHOD_UNITS, unitFloor, describeUnit, type DecisionUnit } from '../../core/method/decision-units.js';
 import { normalizeClass, CLASS_ALIASES } from '../../core/observers/doc-class.js';
 import { unmeasuredKind } from '../../core/loop/claim-extract.js';
 import { skillNameFrom } from '../../renderers/agent-skill/render.js';
@@ -213,8 +212,7 @@ export function nameFor(notePath: string, goldenPath: string, viaNew: boolean): 
 export function decideSteps(proposals: readonly MethodProposal[], nextId: () => string, confirmed = false,
   /** each statement's kind as read (core/observers/rule-polarity.ts); the word pattern decides a statement not in it */
   kinds: ReadonlyMap<string, 'BOUNDARY' | 'GENERATIVE'> = new Map(),
-  /** each stated step's decision unit as read (core/method/decision-units.ts); a step not in it carries none */
-  units: ReadonlyMap<string, DecisionUnit> = new Map()): { decided: Requirement[]; ledger: RatificationLedger } {
+): { decided: Requirement[]; ledger: RatificationLedger } {
   const bases: Requirement[] = proposals.map((p) => ({
     requirementId: nextId(), statement: p.statement, appliesWhen: 'GENERAL',
     // Whether the step forbids or asks for something is read (core/observers/rule-polarity.ts); the anchored word
@@ -234,8 +232,6 @@ export function decideSteps(proposals: readonly MethodProposal[], nextId: () => 
     ...(p.origin === 'STATED' && p.conflict && !confirmed ? { contested: p.conflict } : {}),
     // A check tied to the step by its subject, not by what it asks: kept and shown, and it blocks nothing.
     ...(p.origin === 'STATED' && p.related ? { related: true as const } : {}),
-    // What the step asks the writer to decide, read once (core/method/decision-units.ts): compiled beside the step, never a rule of its own.
-    ...(p.origin === 'STATED' && units.get(p.statement) ? { unit: units.get(p.statement) } : {}),
   }));
   let ledger: RatificationLedger = { standardDraftHash: draftHash(bases), records: [] };
   const decided = bases.map((base, i) => {
@@ -335,7 +331,7 @@ export async function method(): Promise<void> {
   // request selects by it. With no model the words decide: an instruction, applying always unless they say when.
   const units = await decisionUnits(read.proposals.filter((p) => p.origin === 'STATED'), stepsOf(note));
   if (whole && units.size) { console.log('\nWhat each step asks the writer to decide:'); let i = 0; for (const [statement, u] of units) console.log(`  ${++i}. ${statement.slice(0, 90)}\n      ${describeUnit(u)}`); }
-  const { decided, ledger } = decideSteps(proposals, authoredIdAllocator(s), confirmed, kinds, units);
+  const { decided, ledger } = decideSteps(proposals, authoredIdAllocator(s), confirmed, kinds);
   // WHOSE BUILD THIS IS, WRITTEN BEFORE ANYTHING ELSE IS. A build that stops after the standard is stored and before
   // the skill is installed leaves a skill of this name behind: with the name kept here, the same command run again
   // knows the skill as this folder's and finishes it. Without it, the person was told somebody else had built it.
@@ -384,6 +380,12 @@ export async function method(): Promise<void> {
   const said: string[] = []; const log = console.log;
   if (!whole) console.log = (...a: unknown[]) => { said.push(a.map(String).join(' ')); };
   try { ratifyClose(); await build(name); } catch (e) { console.log = log; for (const l of said) console.log(l); throw e; } finally { console.log = log; }
+  // THE UNITS, BESIDE THE STANDARD THEY WERE READ FROM, never inside it: keyed by requirement id under the standard's
+  // hash, so a reading moves no standard and a rebuild under the same standard finds them (core/state/store.ts).
+  if (units.size) {
+    const built = store.getActive(LN); const sv = built ? store.getSkillVersion(LN, built) : null;
+    if (sv) store.putUnits(LN, sv.standardVersionHash, Object.fromEntries(decided.flatMap((q) => { const u = units.get(q.statement); return u ? [[q.requirementId, u]] : []; })));
+  }
   // HOW THE AUTHOR WAS READ IS SAID ON THE SHORT SCREEN TOO. The persona and the scope carry the author's voice, and a
   // build without them was indistinguishable, on this screen, from one with them. One line each, in the build's own
   // words, when a model was there to read: what it read, or why it read nothing. With no model set up the screen stays

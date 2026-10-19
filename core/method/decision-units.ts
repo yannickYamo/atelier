@@ -35,9 +35,9 @@ export const METHOD_UNITS_SYSTEM = `You read the steps of one person's working m
 - output: what the step puts in the work, in a few words, or null ("a Risks section", "the verdict line").
 - exception: the step's own words that change the default, copied exactly, or null.
 - dependsOn: the numbers of earlier steps this one needs done first; empty when none.
-- quote: a short phrase copied exactly from the step that shows your reading of it.
+- quote: a short phrase copied exactly from the step, or from the heading it stands under, that shows your reading of it.
 
-Copy quotes character for character. Never invent a condition the step does not state; when unsure, leave it null. Answer for every step.`;
+A heading's condition scopes every step under it ("Escalation (only when the customer asks for a manager)" makes each step under it conditional): copy the heading's words as the condition then. Copy quotes character for character. Never invent a condition the step and its heading do not state; when unsure, leave it null. Answer for every step.`;
 
 export const METHOD_UNITS_SCHEMA: Record<string, unknown> = {
   type: 'object',
@@ -52,13 +52,32 @@ export const METHOD_UNITS_SCHEMA: Record<string, unknown> = {
 const short = (s: unknown, max = 200): string | null => (typeof s === 'string' && s.trim() ? s.trim().slice(0, max) : null);
 const strings = (x: unknown, max = 8): string[] => (Array.isArray(x) ? x.map((s) => short(s, 120)).filter((s): s is string => s !== null).slice(0, max) : []);
 
-/** The floor for one step: an instruction, applying always unless its own words say when (the step readers' word pattern). */
+/**
+ * WHAT THE WORDS ALONE SAY A STEP IS. A line that opens as an example ("For example:", "e.g.", "A typical table:"), a
+ * table row or a quoted line is a template; one that opens by giving a reason ("because", "this section exists because",
+ * "the reason") is an explanation; anything else an instruction. The floor, and the reader's grounding of a kind it
+ * cannot otherwise place; never a weight.
+ */
+export function kindByWords(text: string): UnitKind {
+  const t = text.trim();
+  if (/^(?:for example|for instance|e\.g\.|example:|an? (?:typical|sample) (?:table|reply|answer|line|verdict)|sample:|such as:)/i.test(t) || t.startsWith('|') || /^[“"'].*[”"']\.?$/.test(t)) return 'template';
+  if (/^(?:because|this (?:section|step|rule) exists because|we (?:do|ask|lead with|put) this because|the reason (?:is|for|we)|rationale:)/i.test(t)) return 'explanation';
+  return 'instruction';
+}
+
+/**
+ * The floor for one step: what its words say it is, applying always unless its own words, or the heading it stands
+ * under, say when ("Escalation (only when the customer asks for a manager)" scopes every step under it).
+ */
+/** A heading that says when: a condition word in a short label scopes every step under it. */
+const HEADING_CONDITION = /\b(?:only when|only if|only for|unless|except|when|if|whenever|where|in case of)\b/i;
 export function unitFloor(step: UnitStep): DecisionUnit {
-  return { kind: 'instruction', decision: null, inputs: [], condition: isConditional(step.text) ? step.text : null, output: null, exception: null, dependsOn: [], quote: step.text, by: 'floor' };
+  const condition = isConditional(step.text) ? step.text : step.under && HEADING_CONDITION.test(step.under) ? step.under : null;
+  return { kind: kindByWords(step.text), decision: null, inputs: [], condition, output: null, exception: null, dependsOn: [], quote: step.text, by: 'floor' };
 }
 
 export const METHOD_UNITS: Reading<UnitsInput, UnitsOutput> = {
-  id: 'method-units', version: '1',
+  id: 'method-units', version: '2',
   system: METHOD_UNITS_SYSTEM, schema: METHOD_UNITS_SCHEMA,
   toolName: 'emit_method_units', toolDescription: 'For every numbered step: its kind, the decision it asks for, its inputs, condition, output, exception, dependencies and a quote.',
   maxTokens: 6000, estimateUsd: 0.03,
@@ -77,12 +96,14 @@ export const METHOD_UNITS: Reading<UnitsInput, UnitsOutput> = {
       const step = typeof u.id === 'string' ? byId.get(u.id) : undefined;
       if (!step || out[step.id]) continue;
       const kind = KINDS.find((k) => k === u.kind);
+      // A quote, a condition or an exception may be the step's words or its heading's: a heading's condition scopes the steps under it.
+      const own = `${step.text}\n${step.under ?? ''}`;
       const quote = short(u.quote, 160);
-      if (!kind || !quote || !quoteIsReal(quote, step.text)) continue;
+      if (!kind || !quote || !quoteIsReal(quote, own)) continue;
       const condition = short(u.condition, 200);
-      if (condition !== null && !quoteIsReal(condition, step.text)) continue;
+      if (condition !== null && !quoteIsReal(condition, own)) continue;
       const exception = short(u.exception, 200);
-      if (exception !== null && !quoteIsReal(exception, step.text)) continue;
+      if (exception !== null && !quoteIsReal(exception, own)) continue;
       const dependsOn = strings(u.dependsOn).filter((d) => d !== step.id && byId.has(d));
       out[step.id] = { kind, decision: short(u.decision), inputs: strings(u.inputs), condition, output: short(u.output, 120), exception, dependsOn, quote, by: 'model' };
     }

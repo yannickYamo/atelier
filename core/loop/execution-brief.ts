@@ -39,6 +39,11 @@ export interface Brief {
   readonly placed: Readonly<Record<string, Placement>>;
   /** ids of applying steps whose decision the request and material cannot support, as read; empty by code */
   readonly unsupported: readonly string[];
+  /**
+   * steps the request asks against ("skip the Risks section"), with the request's words: surfaced, never set aside.
+   * An unconditional step the request contradicts stands; the writer is told the method stands and to say so.
+   */
+  readonly contradicted: readonly { readonly id: string; readonly quote: string }[];
   readonly by: 'code' | 'model' | 'floor';
 }
 
@@ -52,6 +57,8 @@ export const EXECUTION_BRIEF_SYSTEM = `You read one request, the material that c
 
 Then, over the steps that apply (the unconditional ones are listed too), name the steps whose decision the request and material give nothing to make: no figure, no fact, no instruction that the decision would rest on. These are left open by the writer, never invented.
 
+Last, name any step the request asks against in so many words ("skip the summary", "no verdict needed"), with the request's words. Such a step is not set aside: the method stands, and the writer is told.
+
 Quote character for character. Never set a step aside on a guess: the person wrote it to be followed.`;
 
 export const EXECUTION_BRIEF_SCHEMA: Record<string, unknown> = {
@@ -60,8 +67,9 @@ export const EXECUTION_BRIEF_SCHEMA: Record<string, unknown> = {
     placed: { type: 'array', items: { type: 'object', properties: { n: { type: 'number' }, applies: { type: 'string', enum: ['APPLIES', 'SET_ASIDE', 'UNRESOLVED'] }, quote: { type: ['string', 'null'] } },
       required: ['n', 'applies', 'quote'], additionalProperties: false } },
     unsupported: { type: 'array', items: { type: 'number' } },
+    contradicted: { type: 'array', items: { type: 'object', properties: { n: { type: 'number' }, quote: { type: 'string' } }, required: ['n', 'quote'], additionalProperties: false } },
   },
-  required: ['placed', 'unsupported'], additionalProperties: false,
+  required: ['placed', 'unsupported', 'contradicted'], additionalProperties: false,
 };
 
 const givenText = (input: BriefInput): string => `${input.request}\n${input.material.map((m) => `${m.name}\n${m.head}`).join('\n')}`;
@@ -78,10 +86,11 @@ export const EXECUTION_BRIEF: Reading<BriefInput, Brief> = {
       + `Conditional steps:\n${cond.map((s) => `${s.n}. ${s.statement}${s.unit?.condition ? `\n   when: "${s.unit.condition}"` : ''}${s.unit?.exception ? `\n   except: "${s.unit.exception}"` : ''}${s.unit?.decision ? `\n   decides: ${s.unit.decision}` : ''}`).join('\n')}\n\n`
       + `Steps that apply always:\n${plain.map((s) => `${s.n}. ${s.statement}${s.unit?.decision ? `\n   decides: ${s.unit.decision}` : ''}`).join('\n')}`;
   },
-  // NO CONDITION, NOTHING TO READ: every step applies and nothing is named unsupported (that reading needs a model).
+  // NOTHING TO READ when no step is conditional and none asks for a decision: every step applies. A decision the
+  // request and material cannot support is read, so a method of unconditional decisions is still read for that.
   decide(input) {
-    if (input.steps.some(conditional)) return null;
-    return { placed: Object.fromEntries(input.steps.map((s) => [s.id, { applies: 'applies' as const, why: null }])), unsupported: [], by: 'code' };
+    if (input.steps.some(conditional) || input.steps.some((s) => Boolean(s.unit?.decision))) return null;
+    return { placed: Object.fromEntries(input.steps.map((s) => [s.id, { applies: 'applies' as const, why: null }])), unsupported: [], contradicted: [], by: 'code' };
   },
   ground(raw, input) {
     const r = raw as { placed?: unknown; unsupported?: unknown } | null;
@@ -104,17 +113,24 @@ export const EXECUTION_BRIEF: Reading<BriefInput, Brief> = {
         placed[step.id] = { applies: 'applies', why: quote && quoteIsReal(quote, given) ? `"${quote.slice(0, 120)}"` : null }; grounded += 1;
       } else if (p.applies === 'UNRESOLVED') { placed[step.id] = { applies: 'unresolved', why: 'the request does not say' }; grounded += 1; }
     }
-    if (!grounded) return null;
     const unsupported = (Array.isArray(r.unsupported) ? r.unsupported : []).filter((n): n is number => typeof n === 'number').map((n) => byN.get(n)?.id ?? null)
       .filter((id): id is string => id !== null && holds(placed[id].applies));
-    return { placed, unsupported: [...new Set(unsupported)], by: 'model' };
+    // A contradiction stands only on the request's words, and never sets the step aside.
+    const contradicted = ((r as { contradicted?: unknown }).contradicted as { n?: unknown; quote?: unknown }[] | undefined ?? [])
+      .flatMap((c) => { const step = typeof c.n === 'number' ? byN.get(c.n) : undefined; const q = typeof c.quote === 'string' ? c.quote.trim() : '';
+        return step && q && quoteIsReal(q, input.request) && holds(placed[step.id].applies) ? [{ id: step.id, quote: q.slice(0, 120) }] : []; });
+    // A reading that placed nothing, named nothing unsupported and nothing contradicted said nothing: the floor decides.
+    if (!grounded && !unsupported.length && !contradicted.length) return null;
+    return { placed, unsupported: [...new Set(unsupported)], contradicted, by: 'model' };
   },
-  floor(input) { return { placed: Object.fromEntries(input.steps.map((s) => [s.id, { applies: 'applies' as const, why: null }])), unsupported: [], by: 'floor' }; },
+  floor(input) { return { placed: Object.fromEntries(input.steps.map((s) => [s.id, { applies: 'applies' as const, why: null }])), unsupported: [], contradicted: [], by: 'floor' }; },
 };
 
 /** The steps the brief holds as applying (a step a reading could not place applies). */
 export const applyingSteps = (b: Brief, steps: readonly BriefStep[]): BriefStep[] => steps.filter((s) => holds(b.placed[s.id]?.applies ?? 'applies'));
 export const setAsideSteps = (b: Brief, steps: readonly BriefStep[]): BriefStep[] => steps.filter((s) => b.placed[s.id]?.applies === 'set-aside');
+/** The steps a reading could not place: held as applying, and said so, so an unknown is never a silent yes. */
+export const unresolvedSteps = (b: Brief, steps: readonly BriefStep[]): BriefStep[] => steps.filter((s) => b.placed[s.id]?.applies === 'unresolved');
 
 /**
  * THE BRIEF AS THE WRITER READS IT, after the cached skill (cli/served.ts, `forThisRequest`): step numbers and one line
@@ -122,9 +138,9 @@ export const setAsideSteps = (b: Brief, steps: readonly BriefStep[]): BriefStep[
  * step applies and nothing is open: then the method as served says it all.
  */
 export function briefNote(b: Brief, steps: readonly BriefStep[], material: readonly { name: string }[]): string {
-  const on = applyingSteps(b, steps); const off = setAsideSteps(b, steps);
+  const on = applyingSteps(b, steps); const off = setAsideSteps(b, steps); const unresolved = unresolvedSteps(b, steps);
   const open = new Set(b.unsupported);
-  if (!off.length && !open.size && on.every((s) => !s.unit?.decision)) return '';
+  if (!off.length && !unresolved.length && !open.size && !b.contradicted.length && on.every((s) => !s.unit?.decision)) return '';
   const order = (xs: readonly BriefStep[]): BriefStep[] => {
     const byId = new Map(xs.map((s) => [s.id, s])); const seen = new Set<string>(); const out: BriefStep[] = [];
     const visit = (s: BriefStep): void => { if (seen.has(s.id)) return; seen.add(s.id); for (const d of s.unit?.dependsOn ?? []) { const dep = [...byId.values()].find((x) => String(x.n) === d); if (dep) visit(dep); } out.push(s); };
@@ -137,8 +153,9 @@ export function briefNote(b: Brief, steps: readonly BriefStep[], material: reado
     return [`- Step ${s.n}: decide ${u.decision}${u.inputs.length ? ` (from ${u.inputs.join(', ')})` : ''}${open.has(s.id) ? ' — nothing given supports this: say what is missing, decide nothing' : ''}`];
   });
   const lines = [
-    `For this request, my method's steps that apply: ${on.map((s) => s.n).join(', ') || 'none'}.${off.length ? ` Set aside, not this case: ${off.map((s) => `${s.n} (${b.placed[s.id].why ?? 'not this case'})`).join('; ')}.` : ''}`,
+    `For this request, my method's steps that apply: ${on.map((s) => s.n).join(', ') || 'none'}.${off.length ? ` Set aside, not this case: ${off.map((s) => `${s.n} (${b.placed[s.id].why ?? 'not this case'})`).join('; ')}.` : ''}${unresolved.length ? ` Not decided by the request, so held as applying: ${unresolved.map((s) => s.n).join(', ')}.` : ''}`,
     ...(decisions.length ? ['Decisions it asks for, in order:', ...decisions] : []),
+    ...b.contradicted.map((c) => { const s = steps.find((x) => x.id === c.id); return `The request says "${c.quote}", which is against step ${s?.n ?? '?'}: my method stands; follow it, and say in one line that the request asked otherwise.`; }),
     `Given: the request${material.length ? ` and ${material.map((m) => m.name).join(', ')}` : ', and nothing else'}.${open.size ? ' A decision nothing given supports is left open and said so, never invented.' : ''}`,
   ];
   return lines.join('\n');
