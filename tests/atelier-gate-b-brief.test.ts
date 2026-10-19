@@ -36,26 +36,26 @@ describe('the brief as a value', () => {
   it('a set-aside needs the request\'s words; without them the step is unresolved and applies; an unsupported decision is said', () => {
     const input = { request, material: [], steps };
     expect(EXECUTION_BRIEF.decide(input)).toBeNull();
-    const g = EXECUTION_BRIEF.ground({ placed: [{ n: 2, applies: 'SET_ASIDE', quote: 'touches nothing else' }], unsupported: [3], contradicted: [{ n: 1, quote: 'renames a CSS class' }, { n: 3, quote: 'not in the request' }] }, input)!;
+    const g = EXECUTION_BRIEF.ground({ placed: [{ n: 2, holds: 'DOES_NOT_HOLD', quote: 'touches nothing else' }], unsupported: [{ n: 3, missing: 'which verdict the author would give' }], contradicted: [{ n: 1, quote: 'renames a CSS class' }, { n: 3, quote: 'not in the request' }] }, input)!;
     expect(g.placed.r2).toEqual({ applies: 'set-aside', why: 'the request says "touches nothing else"' });
     // a contradiction stands only on the request's words, and the step it names still applies
     expect(g.contradicted).toEqual([{ id: 'r1', quote: 'renames a CSS class' }]);
     expect(applyingSteps(g, steps).map((s) => s.n)).toEqual([1, 3]);
     expect(briefNote(g, steps, [])).toContain('The request says "renames a CSS class", which is against step 1: my method stands; follow it, and say in one line that the request asked otherwise.');
     expect(g.placed.r1.applies).toBe('applies');
-    expect(g.unsupported).toEqual(['r3']);
+    expect(g.unsupported).toEqual([{ id: 'r3', missing: 'which verdict the author would give' }]);
     expect(setAsideSteps(g, steps).map((s) => s.n)).toEqual([2]);
     const note = briefNote(g, steps, [{ name: 'change.diff' }]);
     expect(note).toContain("steps that apply: 1, 3. Set aside, not this case: 2 (the request says \"touches nothing else\").");
-    expect(note).toContain('- Step 3: decide the verdict — nothing given supports this: say what is missing, decide nothing');
-    expect(note).toContain('Given: the request and change.diff. A decision nothing given supports is left open and said so, never invented.');
-    const invented = EXECUTION_BRIEF.ground({ placed: [{ n: 2, applies: 'SET_ASIDE', quote: 'the change touches billing' }], unsupported: [], contradicted: [] }, input);
+    expect(note).toContain('- Step 3: decide the verdict — a specific this needs is not given (which verdict the author would give): say so in one line, and decide on what is given');
+    expect(note).toContain('Given: the request and change.diff. A specific not given is said to be missing, never invented; every decision is still made, on what is given, in the shape my method asks for.');
+    const invented = EXECUTION_BRIEF.ground({ placed: [{ n: 2, holds: 'DOES_NOT_HOLD', quote: 'the change touches billing' }], unsupported: [], contradicted: [] }, input);
     // the quote is in the step, not the request: unresolved, and unresolved applies, and the note says so
     expect(invented?.placed.r2.applies ?? 'applies').toBe('unresolved');
     expect(applyingSteps(invented!, steps).map((s) => s.n)).toEqual([1, 2, 3]);
     expect(briefNote(invented!, steps, [])).toContain('Not decided by the request, so held as applying: 2.');
     // an unsupported id on a set-aside step is dropped; nothing grounded is no reading
-    expect(EXECUTION_BRIEF.ground({ placed: [{ n: 9, applies: 'APPLIES', quote: null }], unsupported: [], contradicted: [] }, input)).toBeNull();
+    expect(EXECUTION_BRIEF.ground({ placed: [{ n: 9, holds: 'HOLDS', quote: null }], unsupported: [], contradicted: [] }, input)).toBeNull();
     expect(EXECUTION_BRIEF.floor(input).by).toBe('floor');
   });
 });
@@ -67,7 +67,7 @@ const UNITS = { units: [
   { id: '2', kind: 'instruction', decision: 'whether billing is touched', inputs: ['the diff'], condition: 'when the change touches billing', output: 'a Risks section', exception: null, dependsOn: ['1'], quote: 'Add a Risks section' },
   { id: '3', kind: 'instruction', decision: 'the verdict', inputs: [], condition: null, output: 'a Verdict section', exception: null, dependsOn: ['1', '2'], quote: 'End with a Verdict section' },
 ] };
-const BRIEF = { placed: [{ n: 2, applies: 'SET_ASIDE', quote: 'touches nothing else' }], unsupported: [], contradicted: [] };
+const BRIEF = { placed: [{ n: 2, holds: 'DOES_NOT_HOLD', quote: 'touches nothing else' }], unsupported: [], contradicted: [] };
 const DRAFT = '## Summary\nThe change renames one CSS class in the docs site and keeps the build green.\n\n## Verdict\nApprove\n';
 
 let backend: ChildProcess; let port = 0;

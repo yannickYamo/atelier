@@ -23,7 +23,7 @@ const UNITS = { units: [
   { id: '3', kind: 'instruction', decision: null, inputs: [], condition: null, output: 'a short plain line', exception: null, dependsOn: [], quote: 'End on a short plain line' },
 ] };
 // the brief: nothing in "The import stalls. Why?" says what caused it
-const BRIEF = { placed: [], unsupported: [1], contradicted: [] };
+const BRIEF = { placed: [], unsupported: [{ n: 1, missing: 'what the person saw before the stall' }], contradicted: [] };
 // three times the goldens' length, in its own words (a run shared with a golden would be a lifted passage, which blocks for its own reason)
 const LONG = `An OCR pass reads every page of a scan before an import can move, and that is the usual reason a scanned import looks stuck. ${'It is slow rather than broken, and a second attempt goes faster because the pages already read are skipped. '.repeat(6)}Give it a minute, then start the import again from where you are. Nothing more is needed.`;
 
@@ -80,8 +80,8 @@ describe('provisional length, and terminology that is not evidence', () => {
     const prompts = await promptsFor('emit_piece');
     const prompt = prompts.find((p) => p.includes("For this request, my method's steps that apply")) ?? '';
     const intents = await promptsFor('emit_intent'); const briefs = await promptsFor('emit_execution_brief');
-    expect(prompt, `${prompts.length} writer prompt(s), ${intents.length} intent reading(s), ${briefs.length} brief reading(s); run said: ${r.out.split('\n').filter((l) => /For this request|Read before writing|brief|intent/.test(l)).join(' | ')}; tails: ${prompts.map((p) => p.slice(-200).replace(/\s+/g, ' ')).join(' || ')}`).toContain('- Step 1: decide the cause of the stall (from what the person reports) — nothing given supports this: say what is missing, decide nothing');
-    expect(prompt).toContain('A decision nothing given supports is left open and said so, never invented.');
-    expect(r.out).toMatch(/1 decision\(s\) nothing given supports, left open/);
+    expect(prompt, `${prompts.length} writer prompt(s), ${intents.length} intent reading(s), ${briefs.length} brief reading(s); run said: ${r.out.split('\n').filter((l) => /For this request|Read before writing|brief|intent/.test(l)).join(' | ')}; tails: ${prompts.map((p) => p.slice(-200).replace(/\s+/g, ' ')).join(' || ')}`).toContain('- Step 1: decide the cause of the stall (from what the person reports) — a specific this needs is not given (what the person saw before the stall): say so in one line, and decide on what is given');
+    expect(prompt).toContain('A specific not given is said to be missing, never invented; every decision is still made, on what is given, in the shape my method asks for.');
+    expect(r.out).toMatch(/1 decision\(s\) need a specific not given/);
   }, 240_000);
 });

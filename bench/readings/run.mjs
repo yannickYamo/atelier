@@ -35,7 +35,7 @@ const READINGS = {
   'intent-mode': { reading: INTENT_MODE, input: (c) => ({ intent: c.intent }), answer: (v) => v.mode },
   // one step per case: the label is `kind|conditional` or `kind|always`, the two fields the brief selects by
   // one conditional step per case against one request: the label is applies | set-aside | unresolved
-  'execution-brief': { reading: EXECUTION_BRIEF, input: (c) => ({ request: c.request, material: c.material ? [{ name: 'notes', head: c.material }] : [], steps: [{ id: 's1', n: 1, statement: c.step, required: true, unit: { kind: 'instruction', decision: c.decision ?? null, inputs: [], condition: c.condition, output: null, exception: null, dependsOn: [], quote: c.step, by: 'model' } }] }), answer: (v) => v.placed.s1?.applies ?? null },
+  'execution-brief': { reading: EXECUTION_BRIEF, input: (c) => ({ request: c.request, material: c.material ? [{ name: 'notes', head: c.material }] : [], steps: [{ id: 's1', n: 1, statement: c.step, required: true, unit: { kind: 'instruction', decision: c.decision ?? null, inputs: [], condition: c.condition ?? null, output: null, exception: null, dependsOn: [], quote: c.step, by: 'model' } }] }), answer: (v) => (v.unsupported.some((u) => u.id === 's1') ? 'unsupported' : v.placed.s1?.applies ?? null) },
   'method-units': { reading: METHOD_UNITS, input: (c) => ({ steps: [{ id: '1', text: c.step, under: c.under ?? null }] }), answer: (v) => (v['1'] ? `${v['1'].kind}|${v['1'].condition ? 'conditional' : 'always'}` : null) },
 };
 const args = process.argv.slice(2);

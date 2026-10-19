@@ -37,8 +37,8 @@ export interface Placement { readonly applies: Applicability; readonly why: stri
 export interface Brief {
   /** every step by id: applies by code (no condition), or as read */
   readonly placed: Readonly<Record<string, Placement>>;
-  /** ids of applying steps whose decision the request and material cannot support, as read; empty by code */
-  readonly unsupported: readonly string[];
+  /** applying steps whose decision needs a specific fact the request and material do not contain, with the fact named, as read; empty by code */
+  readonly unsupported: readonly { readonly id: string; readonly missing: string }[];
   /**
    * steps the request asks against ("skip the Risks section"), with the request's words: surfaced, never set aside.
    * An unconditional step the request contradicts stands; the writer is told the method stands and to say so.
@@ -48,25 +48,36 @@ export interface Brief {
 }
 
 const conditional = (s: BriefStep): boolean => s.unit !== null && (s.unit.condition !== null || s.unit.exception !== null);
+/**
+ * THE CASE A STEP TURNS ON, AND WHICH WAY. A step's own words name a case; whether the case keeps the step or lifts it is
+ * read off the words by code, never by the reader: "when", "only for", "if" keep the step while the case holds; "unless",
+ * "except", "other than" lift it while the case holds. An exception field is a lifting case by definition.
+ */
+export function caseOf(s: BriefStep): { readonly words: string; readonly lifts: boolean } | null {
+  const u = s.unit; if (!u) return null;
+  if (u.exception !== null) return { words: u.exception, lifts: true };
+  if (u.condition === null) return null;
+  return { words: u.condition, lifts: /^\s*(?:unless|except|other than|save when|but not)\b/i.test(u.condition) };
+}
 
-export const EXECUTION_BRIEF_SYSTEM = `You read one request, the material that came with it, and the numbered steps of the person's own method that apply only under a condition. For each step say whether this request falls under its condition:
+export const EXECUTION_BRIEF_SYSTEM = `You read one request, the material that came with it, and a numbered list of CASES. Each case is the words of one step of the person's own method that say when it applies or when it does not ("when the change touches billing", "unless the reader asked for sources", "only for enterprise accounts"). You say nothing about the step itself; only whether its case holds for this request:
 
-- APPLIES: the request or its material is the case the condition names. Quote the words of the request or material that show it.
-- SET_ASIDE: the request is plainly not that case. Quote the words of the request that show it is not; without such words, answer UNRESOLVED.
-- UNRESOLVED: the request does not say. The step will be treated as applying.
+- HOLDS: this request, or its material, is the case named. Quote the words of the request or material that show it.
+- DOES_NOT_HOLD: the request plainly is not the case named. Quote the words of the request that show it; without such words, answer UNRESOLVED.
+- UNRESOLVED: the request does not say.
 
-Then, over the steps that apply (the unconditional ones are listed too), name the steps whose decision the request and material give nothing to make: no figure, no fact, no instruction that the decision would rest on. These are left open by the writer, never invented.
+Then, over the steps listed under "Steps that apply always" and any case that holds, name a step only when its decision CANNOT BE MADE AT ALL without a specific fact the request and material do not contain: a number, a date, a name, what happened in the person's case. Say which fact is missing. A judgement a reasonable expert could make from what was given (which defect is worst in this diff, which option to recommend from these notes, what verdict this change deserves) is supported, even where more facts would help: it is the writer's to make, and is never named here. A step whose case you answered UNRESOLVED is never named here either: its open question is its case, already said.
 
 Last, name any step the request asks against in so many words ("skip the summary", "no verdict needed"), with the request's words. Such a step is not set aside: the method stands, and the writer is told.
 
-Quote character for character. Never set a step aside on a guess: the person wrote it to be followed.`;
+Quote character for character. Never decide a case on a guess: the person wrote the step to be followed.`;
 
 export const EXECUTION_BRIEF_SCHEMA: Record<string, unknown> = {
   type: 'object',
   properties: {
-    placed: { type: 'array', items: { type: 'object', properties: { n: { type: 'number' }, applies: { type: 'string', enum: ['APPLIES', 'SET_ASIDE', 'UNRESOLVED'] }, quote: { type: ['string', 'null'] } },
-      required: ['n', 'applies', 'quote'], additionalProperties: false } },
-    unsupported: { type: 'array', items: { type: 'number' } },
+    placed: { type: 'array', items: { type: 'object', properties: { n: { type: 'number' }, holds: { type: 'string', enum: ['HOLDS', 'DOES_NOT_HOLD', 'UNRESOLVED'] }, quote: { type: ['string', 'null'] } },
+      required: ['n', 'holds', 'quote'], additionalProperties: false } },
+    unsupported: { type: 'array', items: { type: 'object', properties: { n: { type: 'number' }, missing: { type: 'string' } }, required: ['n', 'missing'], additionalProperties: false } },
     contradicted: { type: 'array', items: { type: 'object', properties: { n: { type: 'number' }, quote: { type: 'string' } }, required: ['n', 'quote'], additionalProperties: false } },
   },
   required: ['placed', 'unsupported', 'contradicted'], additionalProperties: false,
@@ -75,7 +86,7 @@ export const EXECUTION_BRIEF_SCHEMA: Record<string, unknown> = {
 const givenText = (input: BriefInput): string => `${input.request}\n${input.material.map((m) => `${m.name}\n${m.head}`).join('\n')}`;
 
 export const EXECUTION_BRIEF: Reading<BriefInput, Brief> = {
-  id: 'execution-brief', version: '1',
+  id: 'execution-brief', version: '5',
   system: EXECUTION_BRIEF_SYSTEM, schema: EXECUTION_BRIEF_SCHEMA,
   toolName: 'emit_execution_brief', toolDescription: 'For each conditional step whether this request falls under it, with the words that show it; and the steps whose decision nothing given supports.',
   maxTokens: 1500, estimateUsd: 0.01,
@@ -83,7 +94,7 @@ export const EXECUTION_BRIEF: Reading<BriefInput, Brief> = {
     const cond = input.steps.filter(conditional);
     const plain = input.steps.filter((s) => !conditional(s));
     return `<request>\n${input.request.trim()}\n</request>\n\n${input.material.length ? `<material>\n${input.material.map((m) => `[${m.name}]\n${m.head}`).join('\n\n')}\n</material>\n\n` : '(no material beyond the request)\n\n'}`
-      + `Conditional steps:\n${cond.map((s) => `${s.n}. ${s.statement}${s.unit?.condition ? `\n   when: "${s.unit.condition}"` : ''}${s.unit?.exception ? `\n   except: "${s.unit.exception}"` : ''}${s.unit?.decision ? `\n   decides: ${s.unit.decision}` : ''}`).join('\n')}\n\n`
+      + `Cases (one per step, by the step's number):\n${cond.map((s) => `${s.n}. case: "${caseOf(s)?.words ?? ''}"   (the step: ${s.statement})`).join('\n')}\n\n`
       + `Steps that apply always:\n${plain.map((s) => `${s.n}. ${s.statement}${s.unit?.decision ? `\n   decides: ${s.unit.decision}` : ''}`).join('\n')}`;
   },
   // NOTHING TO READ when no step is conditional and none asks for a decision: every step applies. A decision the
@@ -99,29 +110,39 @@ export const EXECUTION_BRIEF: Reading<BriefInput, Brief> = {
     const byN = new Map(input.steps.map((s) => [s.n, s]));
     const placed: Record<string, Placement> = Object.fromEntries(input.steps.map((s) => [s.id, { applies: 'applies' as const, why: null }]));
     let grounded = 0;
-    for (const p of r.placed as { n?: unknown; applies?: unknown; quote?: unknown }[]) {
+    for (const p of r.placed as { n?: unknown; holds?: unknown; quote?: unknown }[]) {
       const step = typeof p.n === 'number' ? byN.get(p.n) : undefined;
-      if (!step || !conditional(step)) continue;
+      const c = step ? caseOf(step) : null;
+      if (!step || !c) continue;
       const quote = typeof p.quote === 'string' && p.quote.trim() ? p.quote.trim() : null;
-      if (p.applies === 'SET_ASIDE') {
+      // Which way the case cuts is code's: a holding case keeps a "when" step and lifts an "unless" one.
+      const outcome: Applicability | null = p.holds === 'HOLDS' ? (c.lifts ? 'set-aside' : 'applies') : p.holds === 'DOES_NOT_HOLD' ? (c.lifts ? 'applies' : 'set-aside') : p.holds === 'UNRESOLVED' ? 'unresolved' : null;
+      if (outcome === null) continue;
+      grounded += 1;
+      if (outcome === 'set-aside') {
         // A step is set aside only on the request's own words; a quote not in them leaves it unresolved, which applies.
-        // A set-aside the reader could not quote from the request is a placement all the same: unresolved, which applies.
-        if (quote && quoteIsReal(quote, input.request)) placed[step.id] = { applies: 'set-aside', why: `the request says "${quote.slice(0, 120)}"` };
-        else placed[step.id] = { applies: 'unresolved', why: 'the reading could not quote the request' };
-        grounded += 1;
-      } else if (p.applies === 'APPLIES') {
-        placed[step.id] = { applies: 'applies', why: quote && quoteIsReal(quote, given) ? `"${quote.slice(0, 120)}"` : null }; grounded += 1;
-      } else if (p.applies === 'UNRESOLVED') { placed[step.id] = { applies: 'unresolved', why: 'the request does not say' }; grounded += 1; }
+        const inRequest = quote !== null && quoteIsReal(quote, input.request);
+        placed[step.id] = inRequest ? { applies: 'set-aside', why: `the request says "${quote.slice(0, 120)}"${c.lifts ? ', which lifts it' : ''}` } : { applies: 'unresolved', why: 'the reading could not quote the request' };
+      } else if (outcome === 'applies') placed[step.id] = { applies: 'applies', why: quote && quoteIsReal(quote, given) ? `"${quote.slice(0, 120)}"` : null };
+      else placed[step.id] = { applies: 'unresolved', why: 'the request does not say' };
     }
-    const unsupported = (Array.isArray(r.unsupported) ? r.unsupported : []).filter((n): n is number => typeof n === 'number').map((n) => byN.get(n)?.id ?? null)
-      .filter((id): id is string => id !== null && holds(placed[id].applies));
+    // A missing specific is named, or it is not missing: an unnamed "unsupported" is a hedge, and once told the writer to
+    // decide nothing on five of six steps of a code review whose diff supported every one of them.
+    const seen = new Set<string>();
+    const unsupported = (Array.isArray(r.unsupported) ? r.unsupported : [] as unknown[]).flatMap((u) => {
+      const x = u as { n?: unknown; missing?: unknown }; const step = typeof x.n === 'number' ? byN.get(x.n) : undefined;
+      const missing = typeof x.missing === 'string' ? x.missing.trim().slice(0, 120) : '';
+      // Only a step that applies outright: an unresolved case is its own open question, already said, not a missing fact.
+      if (!step || !missing || seen.has(step.id) || placed[step.id].applies !== 'applies') return [];
+      seen.add(step.id); return [{ id: step.id, missing }];
+    });
     // A contradiction stands only on the request's words, and never sets the step aside.
     const contradicted = ((r as { contradicted?: unknown }).contradicted as { n?: unknown; quote?: unknown }[] | undefined ?? [])
       .flatMap((c) => { const step = typeof c.n === 'number' ? byN.get(c.n) : undefined; const q = typeof c.quote === 'string' ? c.quote.trim() : '';
         return step && q && quoteIsReal(q, input.request) && holds(placed[step.id].applies) ? [{ id: step.id, quote: q.slice(0, 120) }] : []; });
     // A reading that placed nothing, named nothing unsupported and nothing contradicted said nothing: the floor decides.
     if (!grounded && !unsupported.length && !contradicted.length) return null;
-    return { placed, unsupported: [...new Set(unsupported)], contradicted, by: 'model' };
+    return { placed, unsupported, contradicted, by: 'model' };
   },
   floor(input) { return { placed: Object.fromEntries(input.steps.map((s) => [s.id, { applies: 'applies' as const, why: null }])), unsupported: [], contradicted: [], by: 'floor' }; },
 };
@@ -139,7 +160,7 @@ export const unresolvedSteps = (b: Brief, steps: readonly BriefStep[]): BriefSte
  */
 export function briefNote(b: Brief, steps: readonly BriefStep[], material: readonly { name: string }[]): string {
   const on = applyingSteps(b, steps); const off = setAsideSteps(b, steps); const unresolved = unresolvedSteps(b, steps);
-  const open = new Set(b.unsupported);
+  const open = new Map(b.unsupported.map((u) => [u.id, u.missing]));
   if (!off.length && !unresolved.length && !open.size && !b.contradicted.length && on.every((s) => !s.unit?.decision)) return '';
   const order = (xs: readonly BriefStep[]): BriefStep[] => {
     const byId = new Map(xs.map((s) => [s.id, s])); const seen = new Set<string>(); const out: BriefStep[] = [];
@@ -150,13 +171,13 @@ export function briefNote(b: Brief, steps: readonly BriefStep[], material: reado
   const decisions = order(on).flatMap((s) => {
     const u = s.unit;
     if (!u?.decision) return [];
-    return [`- Step ${s.n}: decide ${u.decision}${u.inputs.length ? ` (from ${u.inputs.join(', ')})` : ''}${open.has(s.id) ? ' — nothing given supports this: say what is missing, decide nothing' : ''}`];
+    return [`- Step ${s.n}: decide ${u.decision}${u.inputs.length ? ` (from ${u.inputs.join(', ')})` : ''}${open.has(s.id) ? ` — a specific this needs is not given (${open.get(s.id)}): say so in one line, and decide on what is given` : ''}`];
   });
   const lines = [
     `For this request, my method's steps that apply: ${on.map((s) => s.n).join(', ') || 'none'}.${off.length ? ` Set aside, not this case: ${off.map((s) => `${s.n} (${b.placed[s.id].why ?? 'not this case'})`).join('; ')}.` : ''}${unresolved.length ? ` Not decided by the request, so held as applying: ${unresolved.map((s) => s.n).join(', ')}.` : ''}`,
     ...(decisions.length ? ['Decisions it asks for, in order:', ...decisions] : []),
     ...b.contradicted.map((c) => { const s = steps.find((x) => x.id === c.id); return `The request says "${c.quote}", which is against step ${s?.n ?? '?'}: my method stands; follow it, and say in one line that the request asked otherwise.`; }),
-    `Given: the request${material.length ? ` and ${material.map((m) => m.name).join(', ')}` : ', and nothing else'}.${open.size ? ' A decision nothing given supports is left open and said so, never invented.' : ''}`,
+    `Given: the request${material.length ? ` and ${material.map((m) => m.name).join(', ')}` : ', and nothing else'}.${open.size ? ' A specific not given is said to be missing, never invented; every decision is still made, on what is given, in the shape my method asks for.' : ''}`,
   ];
   return lines.join('\n');
 }

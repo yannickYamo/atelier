@@ -28,7 +28,7 @@ const KINDS: readonly UnitKind[] = ['instruction', 'template', 'explanation', 'c
 
 export const METHOD_UNITS_SYSTEM = `You read the steps of one person's working method, numbered, each with the heading it stands under. For each step say what it is and what it asks of someone doing the work:
 
-- kind: instruction (something to do or decide on every piece of work), template (an example of what the work can look like, not an instruction), explanation (why the method does something, not an instruction), criterion (how to judge whether a step was done well).
+- kind: instruction (something to do or decide: "Open with a Summary section: two or three sentences on what the change does" is an instruction, though it describes what the section holds), template (text shown as it would appear in the work, as an example to imitate: a quoted line, a sample table row, "for example: …"; never a description of what to write), explanation (why the method does something, with no instruction in it), criterion (how to judge whether a step was done well).
 - decision: the choice the step asks the person to make, in a few words, or null when it asks for none ("which initiatives are bets", "whether the change needs a test").
 - inputs: what the step says to consult to make it (the term sheet, the diff, the customer's message); empty when it names none.
 - condition: the step's own words that say when it applies ("when billing is touched", "unless asked"), copied exactly; null when it applies always.
@@ -77,7 +77,7 @@ export function unitFloor(step: UnitStep): DecisionUnit {
 }
 
 export const METHOD_UNITS: Reading<UnitsInput, UnitsOutput> = {
-  id: 'method-units', version: '2',
+  id: 'method-units', version: '3',
   system: METHOD_UNITS_SYSTEM, schema: METHOD_UNITS_SCHEMA,
   toolName: 'emit_method_units', toolDescription: 'For every numbered step: its kind, the decision it asks for, its inputs, condition, output, exception, dependencies and a quote.',
   maxTokens: 6000, estimateUsd: 0.03,

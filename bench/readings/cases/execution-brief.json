@@ -1,18 +1,146 @@
 {
   "reading": "execution-brief",
-  "pass": { "runs": 5, "perCaseAtLeast": 4, "codeDecidedExact": true },
+  "pass": {
+    "runs": 5,
+    "perCaseAtLeast": 4,
+    "codeDecidedExact": true
+  },
   "cases": [
-    { "id": "billing-applies", "label": "applies", "step": "Add a Risks section when the change touches billing.", "condition": "when the change touches billing", "request": "Review this change to the invoice retry loop in billing/retry.py.", "material": "diff --git a/billing/retry.py b/billing/retry.py" },
-    { "id": "billing-set-aside", "label": "set-aside", "step": "Add a Risks section when the change touches billing.", "condition": "when the change touches billing", "request": "Review this change: it renames a CSS class in the docs site and touches nothing else." },
-    { "id": "billing-unresolved", "label": "unresolved", "step": "Add a Risks section when the change touches billing.", "condition": "when the change touches billing", "request": "Review this change." },
-    { "id": "enterprise-applies", "label": "applies", "step": "Include the pricing table only for enterprise accounts.", "condition": "only for enterprise accounts", "request": "Write the GTM brief for Northwind, an enterprise account with 4,000 seats." },
-    { "id": "enterprise-set-aside", "label": "set-aside", "step": "Include the pricing table only for enterprise accounts.", "condition": "only for enterprise accounts", "request": "Write the GTM brief for a two-person startup on the free tier." },
-    { "id": "sources-unless", "label": "set-aside", "step": "Do not end with a Sources section unless the reader asked for sources.", "condition": "unless the reader asked for sources", "request": "Explain why the deploy hangs on step four. Keep it short, no references needed." },
-    { "id": "sources-asked", "label": "applies", "step": "Do not end with a Sources section unless the reader asked for sources.", "condition": "unless the reader asked for sources", "request": "Explain why the deploy hangs on step four, with sources I can cite." },
-    { "id": "docs-only-exception", "label": "set-aside", "step": "Name the missing test under Suggestions, except when the change is documentation only.", "condition": "except when the change is documentation only", "request": "Review this change. It only edits README.md and the CONTRIBUTING guide." },
-    { "id": "docs-only-not", "label": "applies", "step": "Name the missing test under Suggestions, except when the change is documentation only.", "condition": "except when the change is documentation only", "request": "Review this change to the payment validator and its README." },
-    { "id": "update-not-full", "label": "set-aside", "step": "Open with the target account and why now, when writing a full strategy.", "condition": "when writing a full strategy", "request": "Update last quarter's strategy with the two new competitors; keep everything else as it was." },
-    { "id": "full-strategy", "label": "applies", "step": "Open with the target account and why now, when writing a full strategy.", "condition": "when writing a full strategy", "request": "Write the full GTM strategy for our launch into the UK mid-market." },
-    { "id": "no-words-unresolved", "label": "unresolved", "step": "Include the pricing table only for enterprise accounts.", "condition": "only for enterprise accounts", "request": "Write the GTM brief for Contoso." }
+    {
+      "id": "billing-applies",
+      "label": "applies",
+      "step": "Add a Risks section when the change touches billing.",
+      "condition": "when the change touches billing",
+      "request": "Review this change to the invoice retry loop in billing/retry.py.",
+      "material": "diff --git a/billing/retry.py b/billing/retry.py"
+    },
+    {
+      "id": "billing-set-aside",
+      "label": "set-aside",
+      "step": "Add a Risks section when the change touches billing.",
+      "condition": "when the change touches billing",
+      "request": "Review this change: it renames a CSS class in the docs site and touches nothing else."
+    },
+    {
+      "id": "billing-unresolved",
+      "label": "unresolved",
+      "step": "Add a Risks section when the change touches billing.",
+      "condition": "when the change touches billing",
+      "request": "Review this change."
+    },
+    {
+      "id": "enterprise-applies",
+      "label": "applies",
+      "step": "Include the pricing table only for enterprise accounts.",
+      "condition": "only for enterprise accounts",
+      "request": "Write the GTM brief for Northwind, an enterprise account with 4,000 seats."
+    },
+    {
+      "id": "enterprise-set-aside",
+      "label": "set-aside",
+      "step": "Include the pricing table only for enterprise accounts.",
+      "condition": "only for enterprise accounts",
+      "request": "Write the GTM brief for a two-person startup on the free tier."
+    },
+    {
+      "id": "sources-unless",
+      "label": "applies",
+      "step": "Do not end with a Sources section unless the reader asked for sources.",
+      "condition": "unless the reader asked for sources",
+      "request": "Explain why the deploy hangs on step four. Keep it short, no references needed.",
+      "note": "Live eval 2026-10-19 (v3): read as unresolved 4/5: \"no references needed\" does not say the reader asked for sources. Unresolved is held as applying, so the writer follows the step either way. Soft.",
+      "soft": true
+    },
+    {
+      "id": "sources-asked",
+      "label": "set-aside",
+      "step": "Do not end with a Sources section unless the reader asked for sources.",
+      "condition": "unless the reader asked for sources",
+      "request": "Explain why the deploy hangs on step four, with sources I can cite.",
+      "note": "the exception holds (sources were asked for): the prohibition is set aside"
+    },
+    {
+      "id": "docs-only-exception",
+      "label": "set-aside",
+      "step": "Name the missing test under Suggestions, except when the change is documentation only.",
+      "condition": "except when the change is documentation only",
+      "request": "Review this change. It only edits README.md and the CONTRIBUTING guide."
+    },
+    {
+      "id": "docs-only-not",
+      "label": "applies",
+      "step": "Name the missing test under Suggestions, except when the change is documentation only.",
+      "condition": "except when the change is documentation only",
+      "request": "Review this change to the payment validator and its README.",
+      "note": "Live eval 2026-10-19 (v3): read as unresolved 5/5 with no diff bound (a validator and its README). Unresolved is held as applying, the safe side; with the diff bound the case is decidable. Soft.",
+      "soft": true
+    },
+    {
+      "id": "update-not-full",
+      "label": "set-aside",
+      "step": "Open with the target account and why now, when writing a full strategy.",
+      "condition": "when writing a full strategy",
+      "request": "Update last quarter's strategy with the two new competitors; keep everything else as it was.",
+      "soft": true,
+      "note": "Live eval 2026-10-19: read as unresolved 4/5 (an update of a strategy is not plainly not a strategy); unresolved applies, so the cost is a step followed where it might not be needed. Soft."
+    },
+    {
+      "id": "full-strategy",
+      "label": "applies",
+      "step": "Open with the target account and why now, when writing a full strategy.",
+      "condition": "when writing a full strategy",
+      "request": "Write the full GTM strategy for our launch into the UK mid-market."
+    },
+    {
+      "id": "no-words-unresolved",
+      "label": "unresolved",
+      "step": "Include the pricing table only for enterprise accounts.",
+      "condition": "only for enterprise accounts",
+      "request": "Write the GTM brief for Contoso."
+    },
+    {
+      "id": "verdict-supported-by-diff",
+      "label": "applies",
+      "step": "End with a Verdict section that holds one of: Approve, Request changes, Comment.",
+      "decision": "choose Approve, Request changes, or Comment",
+      "request": "Review this change.",
+      "material": "diff --git a/src/cart.py b/src/cart.py\n@@ -88,6 +88,9 @@ def cart_total(items, discount):\n+    total = sum(line_total(i) for i in items)\n+    total -= total * discount\n+    return total - total * discount",
+      "note": "a judgement over the diff: supported"
+    },
+    {
+      "id": "must-fix-supported-by-diff",
+      "label": "applies",
+      "step": "Then a Must fix section: each defect that blocks the merge, cited as path:line.",
+      "decision": "which defects block the merge",
+      "request": "Review this change.",
+      "material": "diff --git a/src/cart.py b/src/cart.py\n@@ -88,6 +88,9 @@ def cart_total(items, discount):\n+    total = sum(line_total(i) for i in items)\n+    total -= total * discount\n+    return total - total * discount",
+      "note": "a judgement over the diff: supported"
+    },
+    {
+      "id": "figure-missing",
+      "label": "unsupported",
+      "step": "State the quarter's revenue figure in the opening line.",
+      "decision": "the revenue figure to state",
+      "request": "Write the quarterly update for the board.",
+      "note": "a specific fact nothing given contains"
+    },
+    {
+      "id": "name-missing",
+      "label": "unsupported",
+      "step": "Name the owner of each initiative.",
+      "decision": "who owns each initiative",
+      "request": "Write the GTM brief for our launch into the UK mid-market; the initiatives are the three in the notes.",
+      "material": "Initiatives: 1. partner channel with two resellers. 2. a pricing page for mid-market. 3. a webinar series in Q3.",
+      "note": "owners are nowhere in the notes"
+    },
+    {
+      "id": "recommendation-supported",
+      "label": "applies",
+      "step": "Recommend one option and say why.",
+      "decision": "which option to recommend",
+      "request": "Which notes app should the team use? Here are my notes.",
+      "material": "Option A: Obsidian, local files, $4/month sync. Option B: Notion, hosted, free tier, slow offline. Team: 6 people, two travel weekly.",
+      "note": "a judgement over the notes: supported"
+    }
   ]
 }

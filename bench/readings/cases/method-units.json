@@ -46,7 +46,9 @@
     {
       "id": "explanation",
       "label": "explanation|always",
-      "step": "We lead with the riskiest line because reviewers stop reading after the second paragraph."
+      "step": "We lead with the riskiest line because reviewers stop reading after the second paragraph.",
+      "soft": true,
+      "note": "Live eval 2026-10-19: read as instruction 5/5. \"We lead with the riskiest line because…\" states a practice with its reason, and is followed as one; defensible either way, so soft. The pure explanation (explanation-history) is read as one."
     },
     {
       "id": "explanation-history",

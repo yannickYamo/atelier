@@ -229,6 +229,47 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 - `atelier rate` takes optional reasons from a closed list (necessary part missing, unnecessary extra, wrong, unsafe,
   unsupported claim, asks instead of acting, too long, too short, voice off).
 
+### Studies: the readings of Gate B live, and the brief against no brief on code review (development evidence, $4.30)
+
+Two readings were evaluated live on `claude-haiku-5-5`, five runs per case, before either decided anything in a run.
+
+- **What each step asks (method-units)**, 19 steps: version 2 failed (84/95): "Open with a Summary section: two or
+  three sentences on what the change does" was read as a template 5/5, the prompt having defined a template as "an
+  example of what the work can look like". Version 3 defines a template as text shown as it would appear and an
+  instruction as something to do or decide even when it describes what a part holds: 90/95 (CI .88–.98), pass. The one
+  case left is soft: "We lead with the riskiest line because reviewers stop reading" is read as an instruction, which a
+  stated practice with its reason is. Heading-scoped conditions and templates under headings read 5/5.
+- **Which steps this request needs (execution-brief)**, 17 cases: version 1 failed (42/60) on prohibitions with
+  exceptions, the reader deciding the step's polarity and getting it backwards ("do not end with sources unless
+  asked" was set aside when the request said no references were needed). Version 3 asks only whether the named case
+  holds and lets code decide which way a holding case cuts ("when" keeps the step, "unless" lifts it): 50/60, zero
+  false set-asides in 60 readings, three soft cases read as unresolved where unresolved is held as applying. Version 4
+  added the missing-fact check and failed it the other way: an unresolved case was also named a missing fact, and a
+  recommendation from given notes was called unsupported 3/5. Version 5 names a missing fact only where the decision
+  cannot be made at all without it, and never on an unresolved case: 60/75, pass; zero false set-asides, one false
+  "unsupported" in 25.
+- **Why the reading had to pass first.** The brief built on version 3 was run on the ten code-review tasks before
+  version 5 existed: it named five of six decisions "unsupported" (the diff "supports" nothing, by that reading) and
+  told the writer to decide nothing, so nine verdicts came out as "Comment" with a paragraph of hedging and the
+  method's verdict rule failed 9/10, against 7/10 passing with no brief. The reading's eval reproduced the defect in
+  miniature, and the fix was measured there for $0.01 before the arm was written again for $1.21.
+- **The comparison, code review, ten tasks, same writer (claude-opus-5), same blind judge as before:**
+
+  | | no brief, no reader (Gate A) | brief + reporting reader (Gate B) | method-only prompt |
+  |---|---|---|---|
+  | method checklist passed | 7/10 | **8/10** | 0/10 |
+  | planted defect found (±2 lines) | 10/10 | **10/10** | 4/10 |
+  | usable (blind judge) | 8/10 | **9/10** | 9/10 |
+  | invented specifics per output | 0.0 | **0.0** | 0.1 |
+  | sounds like the author (1–5) | 4.00 | 3.80 [3.4, 4.2] | **4.80** |
+  | $ per output / per usable | 0.113 / 0.141 | 0.121 / **0.134** | 0.120 / 0.133 |
+
+  The brief holds every step applying on these requests (one conditional step unresolved, held, on all ten), names no
+  missing fact, and the reader reads the one judgement step on each run (three readings held back blind for labels),
+  no miss. The method-only prompt writes in the author's voice and reads as usable, and misses the planted defect six
+  times in ten while failing the method's citation rules on every output. Atelier executes the method; its style gap
+  is the open front. Ten tasks, one run each: development evidence, not a claim of superiority.
+
 ### Studies: the same three kinds of work, after the closing fixes (development evidence, about $9)
 
 The three-context study a third time, the Atelier arm rebuilt with the cutter that spares the house's wording, the
