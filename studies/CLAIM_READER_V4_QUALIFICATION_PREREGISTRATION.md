@@ -62,4 +62,34 @@ node studies/harness/claim-qualification.mjs --corpus <essays-a> --corpus <essay
 - Decision 4's own rule (a line of a bound diff) is exercised by no plant here: this corpus binds prose, not code. Its
   effect is measured by the code-review context study (`CHANGELOG`, Studies), not by this battery.
 
+## Result (2026-10-18, run as sealed, $7.43 of the $8 cap)
+
+TEST: 48 clean drafts, 44 planted (4 excerpts had no faithful plant in three tries).
+
+| | reader (`claude-haiku-5-5`, `47d18891`) | pattern check |
+|---|---|---|
+| specificity (clean draft not flagged) | **9/48 = 0.19** (95% CI 0.09–0.33) | 47/48 = 0.98 |
+| sensitivity (plant caught) | 44/44 = 1.00 (CI 0.92–1) | 12/44 = 0.27 |
+
+**FAIL** on specificity. Every plant kind was caught every time (figures, dated events, named and anonymous
+quotations, attributed statistics, linked figures, first- and second-hand events, heading and table figures), and
+the pattern check missed most of them; but 39 of 48 clean paraphrases of the authors' own essays were flagged, about
+two sentences each. What the reader called an unsupported specific, source NONE, in clean drafts: idiom read as fact
+("the piece of straw that would herniate a disc in even the most stoical camel", "someone buys booze forty-eight hours
+shy of their twenty-first birthday"), rhetorical questions ("How does fruit hang that low for centuries without anyone
+picking it?"), vague time ("A while back", "For days afterward"), and public names ("Polymarket") with no source in
+the material. Version 3 on `claude-haiku-4-5` passed on the same floors with one author of this genre; version 4 on
+`claude-haiku-5-5` reads far more of a sentence as a claim. The instrument is a different one, as the pre-registration
+said, and it is not qualified.
+
+Consequence, per the rule: `QUALIFIED_READERS` is unchanged, no shipped claim reader cuts, the pattern check gates,
+and the reader's findings are reported as `UNSOURCED·reader` warnings. The default claim reader stays
+`claude-haiku-4-5`. Decision 3 is not restored.
+
+What this says beyond the verdict: on a blog post written by Atelier in the three-context study, the same reader's
+warnings named public products and figurative lines, and a rewrite that made the post more concrete was discarded
+for making those warnings worse. A reader that cannot tell a public, checkable name from an invented one, or an idiom
+from a figure, pulls every draft toward abstraction. The next version has to make that distinction (public and
+checkable, private and the author's, invented), and its battery has to plant public names as clean controls.
+
 [← studies](README.md)

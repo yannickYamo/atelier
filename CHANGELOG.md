@@ -14,12 +14,18 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
   contracts carries. A sentence carrying a six-word run the author's pieces share is never cut; the cut falls on what
   else was named. And under a required cap on words, the skill states the span the pieces run as the aim and the cap
   as the limit, without the hedge ("not how long an answer must be") that licensed 10 of 10 drafts to overshoot.
+  Told to aim at the span itself (405 to 419 under a cap of 420), the writer still landed at 429 to 452 on 10 of 10:
+  a draft lands a few percent longer than it was aimed, so the stated aim ends at least a twentieth under the cap.
 - **One frame around your pieces, said positively.** Four separate instructions told the writer what never to take from
   your pieces, and a writer told four times to keep its distance wrote abstractly where you write in links, named
   products, figures and scenes. The skill now says once: write the way these are written, concreteness included; the
   facts come from the request; what the piece needs and the request did not give is written in your shape and marked as
-  a slot for you to fill (`[link: …]`, `[product: …]`, `[figure: …]`). For a document, an invented story, source or
-  figure becomes such a slot by default rather than a cut (`--no-placeholders` asks for cuts; replies still list).
+  a slot for you to fill (`[link: …]`, `[product: …]`, `[figure: …]`). For a document written with no material bound,
+  an invented story, source or figure becomes such a slot by default rather than being listed (`--no-placeholders`
+  asks for the listing). Where material is bound (a diff, a term sheet) a specific not in it is listed for you, as before: the facts
+  are the material's, and a finding is never replaced by a slot. Because the skill's own text shows the slot shape,
+  a writer with material bound is told to leave none (one code review named "[person: who owns the shipping policy]"
+  as a Must fix).
 - **Two false alarms in the verdict.** A six-word run two pieces of a corpus of four or more share is the house's
   wording, not a lifted passage (7 of 10 good contracts were BLOCKED as lifted). And a `path:line` that names a line
   inside the bound diff's hunks traces to the diff: the line number is not written in a diff, so every citation of one
@@ -144,6 +150,36 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
   Anything short of that leaves it a candidate. `--set` is your own choice and takes effect at once.
 - `atelier rate` takes optional reasons from a closed list (necessary part missing, unnecessary extra, wrong, unsafe,
   unsupported claim, asks instead of acting, too long, too short, voice off).
+
+### Studies: the same three kinds of work, after the closing fixes (development evidence, about $9)
+
+The three-context study a third time, the Atelier arm rebuilt with the cutter that spares the house's wording, the
+one positive frame with slots, and the two verdict fixes; same tasks, writer, material and blind judge as before.
+
+- **Contract: the clause survives, the length does not.** "Includes, without limitation" present 10/10 (from 0/10);
+  BLOCKED as lifted 0/10 (from 7/10). But every draft overshot the 420-word cap (429 to 452 words), so the checklist
+  fell to 1/10 and 9 were BLOCKED for length: the span-as-aim line told the writer to aim at 405 to 419, and a draft
+  lands a few percent over its aim. The aim now ends a twentieth under the cap; that rebuild was not run, the key
+  having no credit left.
+- **Code review: style up again, usable down.** Sounds-like 3.1 → 3.7 → 3.8 (CI 3.4–4.3); checklist 6/10 → 8/10;
+  every planted defect found; invented specifics 0.3. Usable 7/10 → 4/10, on the judge's reading of the content: a
+  finding that contradicts itself, line numbers off, four or five Must fix items where the author writes three, and
+  one literal slot ("[person: who owns the shipping policy]") in a review with the diff bound, which the no-slot
+  line above answers. The paired gap to the hand-written skill stays at −0.56 (0 wins, 5 ties, 4 losses).
+- **Blog: unchanged** (2.67; rank 3rd of 4; usable 0/6, every post carrying slots in place of the links and products
+  the author names). Counted against the author's own posts per thousand words, Atelier's are the least concrete arm:
+  links 1.2 against 14, named products 0 against 18, figures 1.3 against 19, parentheticals 1.2 against 11.7,
+  one-sentence paragraphs 1.3 against 7.7, questions 0.7 against 5.7. 4 of 6 were BLOCKED by the model-tells rule on
+  genuine tells ("I want to be careful here", "I keep circling back to"). The cause has moved from the frame to the
+  claim machinery: a draft that names public products and figures is flagged by a claim reader that does not
+  distinguish a public, checkable name from an invented one (next entry), and the writer, shown slots as the safe
+  shape, leaves slots.
+- **Claim reader, version 4, qualification battery** ([pre-registration and result](studies/CLAIM_READER_V4_QUALIFICATION_PREREGISTRATION.md),
+  $7.43): sensitivity 44/44, specificity 9/48. **FAIL.** `claude-haiku-5-5` on the qualified prompt flags idiom,
+  rhetorical questions, vague time and public names as unsupported specifics in 39 of 48 clean paraphrases of the
+  authors' essays. Nothing changes in what ships: no claim reader cuts, the pattern check gates, the default reader
+  stays `claude-haiku-4-5`. The next reader has to tell public from private from invented, and its battery has to
+  plant public names as clean controls.
 
 ### Studies: the same three kinds of work, after the readings (development evidence, $5.28)
 

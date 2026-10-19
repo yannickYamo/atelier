@@ -509,7 +509,7 @@ export function renderAgentSkill(
     for (const q of v.requirements) {
       if (q.materiality !== 'REQUIRED' || q.measurement?.observer !== 'LENGTH') continue;
       const prm = q.measurement.params as { unit?: unknown; max?: unknown; in?: unknown };
-      if (Array.isArray(prm.unit) && prm.unit.includes('word') && !prm.in && typeof prm.max === 'number') return prm.max;
+      if (Array.isArray(prm.unit) && (prm.unit.includes('word') || prm.unit.includes('words')) && !prm.in && typeof prm.max === 'number') return prm.max;
     }
     return null;
   })();
@@ -544,7 +544,13 @@ export function renderAgentSkill(
       // be" beside a method's "between 220 and 420 words" overshot on 10 of 10 drafts (449–502), and the trim then cut
       // the clause every example carries. Where the standard requires a length in words, the span the pieces run is
       // the aim and the cap is named; the hedge that licensed the overshoot is left out.
-      : voice?.lengthWords && wordCap ? `My pieces of this kind run about ${voice.lengthSpan ? `${voice.lengthSpan[0]} to ${voice.lengthSpan[1]}` : voice.lengthWords[0] === voice.lengthWords[1] ? voice.lengthWords[0] : `${voice.lengthWords[0]} to ${voice.lengthWords[1]}`} words, and my method allows at most ${wordCap}: aim for what my pieces run, and never pass ${wordCap}. Make room by writing the standard parts tightly, never by dropping one of them.`
+      // The aim ends at least a twentieth under the cap: told to aim at 405–419 under a cap of 420, the writer landed at
+      // 429–452 on 10 of 10 drafts; a draft lands a few percent long, and the margin has to hold that.
+      : voice?.lengthWords && wordCap ? ((): string => {
+        const span = voice.lengthSpan ?? [voice.lengthWords[0], voice.lengthWords[1]];
+        const hi = Math.min(span[1], Math.floor(wordCap * 0.95)); const lo = Math.min(span[0], Math.floor(wordCap * 0.9));
+        return `My pieces of this kind run about ${span[0] === span[1] ? span[0] : `${span[0]} to ${span[1]}`} words, and my method allows at most ${wordCap}. A draft lands a few percent longer than it was aimed, so aim for ${lo} to ${hi} words and never pass ${wordCap}. Make room by writing the standard parts tightly, never by dropping one of them.`;
+      })()
       : voice?.lengthWords ? `My pieces of this kind run about ${voice.lengthWords[0] === voice.lengthWords[1] ? voice.lengthWords[0] : `${voice.lengthWords[0]} to ${voice.lengthWords[1]}`} words when a request asks for a piece like mine and names no length. That is how my pieces ran, not how long an answer must be: the task sets how much is needed, so a request that needs less (a short reply, a direct answer) gets less, and one that needs more gets more.` : '',
   ].filter(Boolean);
   const voiceSection = voiceParts.length ? `

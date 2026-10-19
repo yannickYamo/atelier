@@ -342,11 +342,6 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   // evidence: a standard requiring "one counted observation from our own records" produced "I pulled
   // our last 200 tickets. 63% of them are…" from a runtime holding no tickets.
   const std = store.getStandard(L, sv.standardVersionHash);
-  // SLOTS BY DEFAULT FOR WORK THAT WRITES. An invented story, source or figure in a document becomes a marked slot for
-  // the person's own ("[your story: …]"), never a cut that leaves the piece abstract; replies keep listing specifics for
-  // the reader to check. `--placeholders` asks for slots anywhere; `--no-placeholders` asks for cuts on a document.
-  // A skill built before the form was read falls to the name of the work, as the compiler did.
-  const placeholdersOn = argv.includes('--placeholders') || (!argv.includes('--no-placeholders') && (store.getWorkForm(L) ?? (std && isReplyWork(std.workType) ? 'REPLY' : 'DOCUMENT')) === 'DOCUMENT');
   const satisfiable = checkSatisfiable(std?.requirements ?? [], boundResources());
   const shortfall = describeSatisfiability(satisfiable);
   // A run is never refused for material it was not given (core/state/prerequisite.ts): said where it is seen.
@@ -528,6 +523,14 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
 
   // ASKED FOR, NOT INVENTED. A story, a named source or a figure the person did not supply is cut from
   // the output (core/loop/claims.ts). Said before anything is spent, with how to supply the real ones.
+  // SLOTS BY DEFAULT FOR WRITING WITH NO MATERIAL. An invented story, source or figure in a document written from a
+  // title alone becomes a marked slot for the person's own ("[your story: …]"), never a cut that leaves the piece
+  // abstract. Where material is bound (a diff, a term sheet) the facts are the material's: a specific not in it is
+  // listed for the reader, never slotted (a Must fix finding became "[your own story, figure or source goes here]").
+  // Replies list too. `--placeholders` asks for slots anywhere; `--no-placeholders` asks for cuts on a document.
+  // A skill built before the form was read falls to the name of the work, as the compiler did.
+  const placeholdersOn = argv.includes('--placeholders') || (!argv.includes('--no-placeholders') && material.length === 0
+    && (store.getWorkForm(L) ?? (std && isReplyWork(std.workType) ? 'REPLY' : 'DOCUMENT')) === 'DOCUMENT');
   const needsLine = materialLine(satisfiable, material.length > 0, !argv.includes('--allow-unsourced'), name, placeholdersOn);
   if (needsLine) report.say(needsLine);
   if (nDrafts > 1 && (!std || contractFile !== null)) {
@@ -850,15 +853,18 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
  * figure in the output may come from. The request itself is material too: a story typed into the task
  * is theirs to tell.
  */
-function taskWithMaterial(L: store.StoreLayout, asked: string, lineCiting = false): { material: readonly { name: string; text: string }[]; materialText: string; task: string } {
+export function taskWithMaterial(L: store.StoreLayout, asked: string, lineCiting = false, slots = argv.includes('--placeholders')): { material: readonly { name: string; text: string }[]; materialText: string; task: string } {
   const material = [...store.getMaterial(L), ...boundMaterial()];
   const materialText = [asked, ...material.map((m) => m.text)].join('\n\n');
   // What the checks read is the material as given; what the writer sees, for a skill that cites lines, carries
-  // each line's number, so a citation is read off the page and never counted.
+  // each line's number, so a citation is read off the page and never counted. The skill's own text shows the
+  // writer how to leave a slot ([link: …]) for a specific no one gave; with material bound, nothing is missing,
+  // and a code review once named "[person: who owns the shipping policy]" as a Must fix. So the writer is told.
+  const noSlots = slots ? '' : '\n\n(The material holds every specific this piece names. Leave no bracketed slot for me to fill: what the material does not give, the piece does without.)';
   const task = !material.length ? asked
     : lineCiting ? `${asked}\n\n${material.map((m) => `<material name="${m.name}" lines="numbered">\n${numbered(m.name, m.text)}\n</material>`).join('\n\n')}\n\n`
-      + '(Each line of the material is shown with its line number in front of it. When you cite a line, use that number; do not count.)'
-      : `${asked}\n\n${material.map((m) => `<material name="${m.name}">\n${m.text}\n</material>`).join('\n\n')}`;
+      + '(Each line of the material is shown with its line number in front of it. When you cite a line, use that number; do not count.)' + noSlots
+      : `${asked}\n\n${material.map((m) => `<material name="${m.name}">\n${m.text}\n</material>`).join('\n\n')}${noSlots}`;
   return { material, materialText, task };
 }
 

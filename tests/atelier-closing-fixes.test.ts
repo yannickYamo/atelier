@@ -2,9 +2,14 @@
 //   the length trim cut the clause every contract carried → the cutter never removes a sentence with the house's wording;
 //   7 of 10 good contracts were BLOCKED as "lifted" → a run two of twelve pieces share is the house's;
 //   "src/audit/log.js:90" was called invented and a Must fix finding cut to "Await it." → a line of the bound diff traces to it;
+//   a code review named "[person: who owns the shipping policy]" as a Must fix → with material bound, the writer is told to leave no slot;
 //   the length line hedged ("not how long an answer must be") beside a required cap → under a cap, the span is the target.
 import { describe, it, expect } from 'vitest';
-import { applyCuts } from '../cli/commands/invoke.js';
+import { applyCuts, taskWithMaterial } from '../cli/commands/invoke.js';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import * as store from '../core/state/store.js';
 import { standardWordingOf, overlapIndex, STANDARD_WORDING_FROM_TWO_AT } from '../core/observers/overlap.js';
 import { decideSpecifics } from '../core/loop/claim-extract.js';
 import { renderAgentSkill, WRITE_LIKE_THESE } from '../renderers/agent-skill/render.js';
@@ -59,14 +64,28 @@ describe('under a required cap, the author\'s span is the target', () => {
   const std = (rs: Requirement[]): StandardVersion => ({ standardVersionHash: 's', evidenceId: 'e', workType: 'contract', requirements: rs, authorityState: 'RATIFIED', mintedAt: '2026-10-18T00:00:00Z' } as unknown as StandardVersion);
   const voice: Voice = { passages: [], lengthWords: [400, 400], lengthSpan: [405, 419], pieces: ['A piece of some length here, with words.', 'Another piece of some length, with its words.'] };
   it('says the span and the cap, and drops the hedge; without a cap the line is as it was; the frame is the one positive one', () => {
-    const withCap = std([req({ measurement: { observer: 'LENGTH', params: { unit: ['word'], min: 220, max: 420 } } })]);
+    const withCap = std([req({ measurement: { observer: 'LENGTH', params: { unit: ['words'], min: 220, max: 420 } } })]);
     const capped = renderAgentSkill(withCap, compileArchitecture(withCap), 'c', 'd', null, [], voice).files['SKILL.md'];
-    expect(capped).toContain('My pieces of this kind run about 405 to 419 words, and my method allows at most 420: aim for what my pieces run, and never pass 420.');
+    expect(capped).toContain('My pieces of this kind run about 405 to 419 words, and my method allows at most 420. A draft lands a few percent longer than it was aimed, so aim for 378 to 399 words and never pass 420.');
     expect(capped).not.toContain('one that needs more gets more');
     expect(capped).toContain(WRITE_LIKE_THESE.split('\n')[0]);
     expect(capped).not.toMatch(/Never take my topics|never reuse its topic/);
     const noCap = std([req({})]);
     const open = renderAgentSkill(noCap, compileArchitecture(noCap), 'c', 'd', null, [], voice).files['SKILL.md'];
     expect(open).toContain('one that needs more gets more');
+  });
+});
+
+describe('with material bound, the writer is told to leave no slot', () => {
+  it('the task carries the material and the no-slot line; asked for slots, the line is absent; with no material, nothing is added', () => {
+    const L = { root: mkdtempSync(join(tmpdir(), 'atelier-slots-')), skillName: 'review' };
+    store.initStore(L);
+    expect(taskWithMaterial(L, 'Review this change.', false, false).task).toBe('Review this change.');
+    store.addMaterial(L, 'change.diff', 'diff --git a/x b/x\n+1\n');
+    const t = taskWithMaterial(L, 'Review this change.', false, false).task;
+    expect(t).toContain('<material name="change.diff">');
+    expect(t).toContain('Leave no bracketed slot for me to fill');
+    expect(taskWithMaterial(L, 'Review this change.', true, false).task).toMatch(/do not count\.\)\n\n\(The material holds every specific/);
+    expect(taskWithMaterial(L, 'Review this change.', false, true).task).not.toContain('bracketed slot');
   });
 });

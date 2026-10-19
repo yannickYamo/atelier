@@ -135,10 +135,14 @@ const SHARED_AMONG_MOST = 40;
  * this is the most a run may share before it is one (cli/eval-run.ts, `copyLimit`). Nothing is chosen here: the
  * number is read off the pieces. Null on fewer pieces than can tell standard wording at all.
  */
-export function sharedAmong(pieces: readonly string[], standardWording: readonly string[] = []): number | null {
+export function sharedAmong(pieces: readonly string[], _standardWording: readonly string[] = []): number | null {
   const separate = [...new Set(pieces.map((p) => p.normalize('NFKC').trim()))].sort().slice(0, SHARED_AMONG_MOST);
   if (separate.length < STANDARD_WORDING_PIECES) return null;
-  return Math.max(...separate.map((p, i) => overlapIndex(separate.filter((_, k) => k !== i), standardWording)(p).longestShared));
+  // READ RAW. With the standard wording left out, the pieces of a template corpus "shared" ten words among themselves
+  // and a new contract sharing a sixteen-word clause with one of them was called lifted (11 at most). What the author's
+  // own pieces share is read on the pieces as written; the standard wording is left out of a run's count, not of this.
+  void _standardWording;
+  return Math.max(...separate.map((p, i) => overlapIndex(separate.filter((_, k) => k !== i))(p).longestShared));
 }
 
 /**
