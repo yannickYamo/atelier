@@ -189,6 +189,12 @@ export interface ImplementationSettings {
    */
   readonly voiceGate?: 'reader';
   /**
+   * THE AUTHOR'S MOVES IN THE BRIEF (../loop/execution-brief.ts). 'observe' (absent): which moves this request calls for
+   * is read, selected and recorded, and nothing is served; 'serve': the selected moves are said to the writer in the
+   * brief. Observe until a study rates serving; the owner's word flips it (a run's --moves overrides it for that run).
+   */
+  readonly moves?: 'observe' | 'serve';
+  /**
    * HOW A DRAFT IS CHOSEN among those the rules cannot separate (./sampling.ts): absent, the best-scoring one;
    * 'sample', drawn in proportion to how much likelier it is the author's than the model's. Opt-in.
    */

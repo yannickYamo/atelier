@@ -14,7 +14,8 @@ import { regressions, readAtLength, featureParamsOf, ruleParamsOf, enforcedNever
 import { answerSentences, judgedSituations } from '../../core/loop/answer-claims.js';
 import { groundCarried } from '../../core/loop/grounding.js';
 import { SLOT_NOTE } from '../../renderers/agent-skill/render.js';
-import { EXECUTION_BRIEF, briefNote, applyingSteps, setAsideSteps, unresolvedSteps, type BriefStep } from '../../core/loop/execution-brief.js';
+import { EXECUTION_BRIEF, briefNote, applyingSteps, setAsideSteps, unresolvedSteps, type BriefStep, selectMoves, type MoveSelection } from '../../core/loop/execution-brief.js';
+import { MOVE_CASES, eligibleMoves } from '../../core/loop/move-cases.js';
 /** Reading calls a run makes by default on a long request: two batches of twelve rules, each read twice. */
 const READ_CALLS_DEFAULT = 4;
 import { readContext } from '../../core/inference/reading.js';
@@ -76,6 +77,7 @@ import { findOwnershipBreaches, describeBreaches } from '../../core/state/output
 import { assertHistoryNotServed, foldRepairs } from '../../core/architecture/repair-memory.js';
 import type { SkillVersion, InvocationSettings } from '../../core/state/canonical-state.js';
 import * as store from '../../core/state/store.js';
+import { personaHashOf } from '../../core/compiler/moves.js';
 import { copyGuardPieces } from '../../core/compiler/voice.js';
 import { listsBecause, unmeasuredKind } from '../../core/loop/claim-extract.js';
 import { formatOf } from '../../core/observers/formats.js';
@@ -627,9 +629,25 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   // with no reading, a request long enough to ask for parts.
   const needsMethod = material.length > 0 || (intent?.needs ? !needsNothing(intent.needs) : lengthAsked !== 'SHORT' && asksParts(asked));
   const briefOn = briefSteps.length > 0 && contractFile === null && needsMethod && !argv.includes('--no-brief');
-  const brief = briefOn ? await readContext(EXECUTION_BRIEF, { request: asked, material: material.map((m) => ({ name: m.name, head: m.text.slice(0, 600) })), steps: briefSteps },
+  // THE AUTHOR'S MOVES (core/compiler/moves.ts), read with the brief: the profile of the persona this skill serves, the
+  // eligible moves (never unknown, never provisional) placed by the same reading, selected by code. Under 'observe' (the
+  // default, or the release's setting) the selection is recorded and nothing is served; under 'serve' (--moves serve,
+  // or the release) the placed moves are said to the writer in the brief. The standard is untouched either way.
+  const voiceNow = store.getVoice(L);
+  const profile = voiceNow?.persona?.points.length ? store.getMoves(L, personaHashOf(voiceNow.persona.points)) : null;
+  const movesFlag = flag('--moves');
+  if (movesFlag !== undefined && movesFlag !== 'observe' && movesFlag !== 'serve') die(`--moves is observe or serve, got "${movesFlag}".`);
+  const movesMode: 'observe' | 'serve' = (movesFlag as 'observe' | 'serve' | undefined) ?? runSettings?.moves ?? 'observe';
+  const eligible = profile ? eligibleMoves(profile.units) : [];
+  const given = { request: asked, material: material.map((m) => ({ name: m.name, head: m.text.slice(0, 600) })) };
+  const brief = briefOn ? await readContext(EXECUTION_BRIEF, { ...given, steps: briefSteps },
     contextJudgeModel() ? contextReaderClient() : null, contextJudgeModel(), { spentUsd: 0, capUsd: 0.05, maxCalls: 1 }) : null;
-  const briefText = brief ? briefNote(brief.value, briefSteps, material) : '';
+  // The moves' cases are their own reading (core/loop/move-cases.ts): a second small call only when a move has a case.
+  const placement = brief && profile ? await readContext(MOVE_CASES, { ...given, moves: eligible },
+    contextJudgeModel() ? contextReaderClient() : null, contextJudgeModel(), { spentUsd: 0, capUsd: 0.03, maxCalls: 1 }) : null;
+  const selection: MoveSelection | null = brief && placement ? selectMoves(placement.value, brief.value, eligible, briefSteps) : null;
+  const briefText = brief ? briefNote(brief.value, briefSteps, material, movesMode === 'serve' ? selection : null) : '';
+  if (selection && profile && placement) report.say(`Moves of mine for this request: ${selection.placed.length} placed (${movesMode === 'serve' ? 'served to the writer' : 'observed, not served'}; about ${selection.budget} a piece), ${selection.standing.length} standing (how I always am, in the skill), ${selection.notPlaced.length} not this case, ${selection.unresolved.length} unresolved and never served; read by ${placement.by === 'model' ? 'the context reader' : placement.by}; profile ${profile.hash}.`);
   // HOW MUCH THE READER MAY READ THIS RUN: nothing on a short request unless asked, four calls on a long one (two
   // batches of twelve rules, the brief's applying steps and the required rules first), every rule under --strict.
   if (taste) {
@@ -765,7 +783,8 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
       const r = await checkDraftAsync(name, std, text, checks);
       return (r.checked.find((c) => c.requirementId === 'UNSOURCED' && acts(c))?.result.spans ?? []).map((sp) => sp.text);
     } : null, settingsFor(checks, taste, nDrafts, carryBlock ? carryNote : '', brief ? { by: brief.by, applies: applyingSteps(brief.value, briefSteps).map((s) => s.id), setAside: setAsideSteps(brief.value, briefSteps).map((s) => s.id),
-      unresolved: unresolvedSteps(brief.value, briefSteps).map((s) => s.id), unsupported: brief.value.unsupported.map((u) => u.id), contradicted: brief.value.contradicted.map((c) => c.id) } : null),
+      unresolved: unresolvedSteps(brief.value, briefSteps).map((s) => s.id), unsupported: brief.value.unsupported.map((u) => u.id), contradicted: brief.value.contradicted.map((c) => c.id),
+      ...(selection && profile && placement ? { moves: { by: placement.by, mode: movesMode, profile: profile.hash, placed: selection.placed.map((u) => u.id), standing: selection.standing.map((u) => u.id), notPlaced: selection.notPlaced.map((x) => x.id), unresolved: selection.unresolved, budget: selection.budget } } : {}) } : null),
     // A structured output is JSON, not prose: no reading of it means anything against a prose range.
     fid && std && contractFile === null ? (output: string) => fidelityRecord(fid, output, trace, impl.retrieved, applicability(name, std, output, waived, withheld, checks.context, transfer?.doesNotApply), ledger,
       { ...(runSettings ?? fid.release.settings), drafts: nDrafts, editBudget, ...(voiceMode === 'incontext' ? { voice: 'incontext' as const } : { voice: undefined }),

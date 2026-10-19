@@ -575,7 +575,10 @@ export interface InvocationSettings {
       /** steps the reading could not place: held as applying, and said so */
       readonly unresolved?: readonly string[]; readonly unsupported: readonly string[];
       /** steps the request asked against: they stand, and the writer was told */
-      readonly contradicted?: readonly string[] } };
+      readonly contradicted?: readonly string[];
+      /** the author's moves for this request (core/loop/execution-brief.ts, `selectMoves`): the profile they came from, and the mode they were served under */
+      readonly moves?: { readonly by: 'code' | 'model' | 'floor'; readonly mode: 'observe' | 'serve'; readonly profile: string; readonly placed: readonly string[]; readonly standing: readonly string[];
+        readonly notPlaced: readonly string[]; readonly unresolved: readonly string[]; readonly budget: number } } };
 }
 
 export interface InvocationRecord {

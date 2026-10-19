@@ -1,0 +1,65 @@
+{
+  "reading": "move-cases",
+  "pass": {
+    "runs": 5,
+    "perCaseAtLeast": 4,
+    "codeDecidedExact": true
+  },
+  "note": "One conditional move of the author's against one request. Placed only on a quote of the request or material showing the situation itself; does not hold needs no quote; unresolved is never placed.",
+  "cases": [
+    {
+      "id": "move-holds-in-material",
+      "label": "placed",
+      "request": "Review this change.",
+      "material": "diff --git a/api/refund.py\n+    amount = request.json['amount']\n+    gateway.refund(order.id, amount)",
+      "move": {
+        "aspect": "Adversarial framing on risky surfaces",
+        "trigger": "where input is untrusted",
+        "realisation": "one sentence from the abusive caller's view"
+      }
+    },
+    {
+      "id": "move-holds-in-request",
+      "label": "placed",
+      "request": "Review this change: the handler now takes the refund amount straight from the request body and passes it to the gateway.",
+      "move": {
+        "aspect": "Adversarial framing on risky surfaces",
+        "trigger": "where input is untrusted",
+        "realisation": "one sentence from the abusive caller's view"
+      }
+    },
+    {
+      "id": "move-does-not-hold",
+      "label": "set-aside",
+      "request": "Review this change: it renames a CSS class in the docs site and touches nothing else.",
+      "move": {
+        "aspect": "Adversarial framing on risky surfaces",
+        "trigger": "where input is untrusted",
+        "realisation": "one sentence from the abusive caller's view"
+      }
+    },
+    {
+      "id": "move-unresolved",
+      "label": "unresolved",
+      "request": "Review this change.",
+      "move": {
+        "aspect": "Adversarial framing on risky surfaces",
+        "trigger": "where input is untrusted",
+        "realisation": "one sentence from the abusive caller's view"
+      },
+      "note": "no diff, no words: the request does not say whether input is untrusted; a move never placed on a guess"
+    },
+    {
+      "id": "move-judgement-trigger-unresolved",
+      "label": "unresolved",
+      "request": "Review this change: it adds an index on orders(customer_id) to speed up the nightly report; the table takes about ten thousand inserts a second during the day.",
+      "move": {
+        "aspect": "Recommendation changed by a tradeoff",
+        "trigger": "when a fix has a cost that outweighs it",
+        "realisation": "recommend against the fix the diff makes and name what to do instead"
+      },
+      "note": "A judgement-worded trigger (a cost that outweighs) names no situation the request shows; the reader placed it 3/5 by inference in one version and refused it 5/5 in another. Soft: the compiler's prompt (persona-moves v4) now asks for triggers a reader could see, so such a trigger should not reach a run; when one does, placing it on an inference is the residual risk this case watches.",
+      "soft": true
+    }
+  ]
+}

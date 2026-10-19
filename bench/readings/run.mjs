@@ -19,6 +19,7 @@ import { INTENT_MODE } from '../../dist/core/observers/intent-mode.js';
 import { METHOD_UNITS } from '../../dist/core/method/decision-units.js';
 import { EXECUTION_BRIEF } from '../../dist/core/loop/execution-brief.js';
 import { PERSONA_MOVES } from '../../dist/core/compiler/moves.js';
+import { MOVE_CASES } from '../../dist/core/loop/move-cases.js';
 import { AnthropicInferenceClient } from '../../dist/providers/anthropic.js';
 import { OpenAICompatibleInferenceClient } from '../../dist/providers/openai-compatible.js';
 
@@ -37,9 +38,9 @@ const READINGS = {
   // one step per case: the label is `kind|conditional` or `kind|always`, the two fields the brief selects by
   // one conditional step per case against one request: the label is applies | set-aside | unresolved
   'execution-brief': { reading: EXECUTION_BRIEF, input: (c) => ({ request: c.request, material: c.material ? [{ name: 'notes', head: c.material }] : [], steps: [{ id: 's1', n: 1, statement: c.step, required: true, unit: { kind: 'instruction', decision: c.decision ?? null, inputs: [], condition: c.condition ?? null, output: null, exception: null, dependsOn: [], quote: c.step, by: 'model' } }] }), answer: (v) => (v.unsupported.some((u) => u.id === 's1') ? 'unsupported' : v.placed.s1?.applies ?? null) },
-  // one persona point per case against the pieces it quotes: the label is `applicability|trigger status`, both decided by
-  // code from what the reading grounds; the scope the reading gave is recorded beside the answer (`aside`), not judged
-  'persona-moves': { reading: PERSONA_MOVES, input: (c) => ({ points: [c.point], pieces: c.pieces, steps: c.steps ?? [] }), answer: (v) => (v[0] ? `${v[0].applicability}|${v[0].trigger.status}` : null), aside: (v) => v[0]?.scope ?? null },
+  // one of the author's conditional moves against one request: the label is placed | set-aside | unresolved
+  'move-cases': { reading: MOVE_CASES, input: (c) => ({ request: c.request, material: c.material ? [{ name: 'notes', head: c.material }] : [], moves: [{ id: 'm1', aspect: c.move.aspect, observed: c.move.realisation, frequency: 'SOMETIMES', trigger: { text: c.move.trigger, status: 'supported' }, applicability: 'CONDITIONAL', provisional: false, realisation: c.move.realisation, forbidden: null, evidence: [], pieces: 2, corpus: 6, scope: 'sentence', link: null, check: null, by: 'model' }] }),
+    answer: (v) => (v.m1 ? (v.m1.applies === 'applies' ? 'placed' : v.m1.applies) : null) },
   'method-units': { reading: METHOD_UNITS, input: (c) => ({ steps: [{ id: '1', text: c.step, under: c.under ?? null }] }), answer: (v) => (v['1'] ? `${v['1'].kind}|${v['1'].condition ? 'conditional' : 'always'}` : null) },
 };
 const args = process.argv.slice(2);

@@ -313,6 +313,32 @@
         }
       ],
       "aside": "sentence"
+    },
+    {
+      "id": "judgement-trigger-reworded",
+      "label": "CONDITIONAL|supported",
+      "aside": "decision",
+      "point": {
+        "aspect": "Recommendation changed by a tradeoff",
+        "description": "When a fix adds work to a hot write path to speed a cold read, recommends against the fix the diff makes and names what to do instead.",
+        "frequency": "SOMETIMES",
+        "quote": "Do not add the index: the write path pays for it on every insert"
+      },
+      "pieces": [
+        {
+          "name": "piece-1",
+          "text": "## Summary\nThe change adds an index to speed the nightly report. The table takes ten thousand inserts a second during the day. Do not add the index: the write path pays for it on every insert. Run the report from the replica.\n\n## Verdict\nRequest changes"
+        },
+        {
+          "name": "piece-2",
+          "text": "## Summary\nThe loop stops one short. Use a range to the length.\n\n## Verdict\nRequest changes"
+        },
+        {
+          "name": "piece-3",
+          "text": "## Summary\nThe migration is reversible and the tests cover it.\n\n## Verdict\nApprove"
+        }
+      ],
+      "note": "the trigger a reader can see (work added to a hot write path), shown by the inserts-per-second sentence"
     }
   ]
 }

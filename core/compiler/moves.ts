@@ -98,7 +98,7 @@ export const personaHashOf = (points: readonly PersonaPoint[]): string => sha(JS
 export const PERSONA_MOVES_SYSTEM = `You read a description of how one author writes (numbered points, each with how often it holds and a quote from their pieces), beside the pieces themselves and, when there is one, the steps of their working method. For each point say what a writer composing a new piece as this author would need:
 
 - point: the point's number.
-- trigger: the situation in which the author makes this move, in a few words, as a situation a new piece could be in ("where input is untrusted", "when a claim rests on an assumption the reader shares"); null when the point describes how the author always writes (a register, a point of view) rather than a move made in some situations. Never a topic, a name, a product or a fact of the pieces: a trigger is a kind of situation, not a subject.
+- trigger: the situation in which the author makes this move, in a few words, as a situation a new piece could be in ("where input is untrusted", "when a claim rests on an assumption the reader shares"); null when the point describes how the author always writes (a register, a point of view) rather than a move made in some situations. Never a topic, a name, a product or a fact of the pieces: a trigger is a kind of situation, not a subject. And a situation a reader could see in a request or its material, never a judgement the author makes about it: "when a change adds work to a hot write path" can be seen; "when the fix costs more than it saves" is the author's conclusion, and names no situation.
 - evidence: places in the pieces where the move is made. For each: the piece's name, a quote copied character for character from that piece showing the move AS THE POINT DESCRIBES IT, and situationQuote: a second quote copied from the SAME piece showing the trigger's situation present there, or null when the piece shows the move but not why. Include the point's own quote. A piece in which the author did not make the move is not evidence: a verdict line with no reason is no evidence of "the verdict carries its reason", and a plain sentence is no evidence of a concession. A quote that is not verbatim is dropped, so copy exactly.
 - realisation: how the move may show in a new piece, in a few words ("one flat adjective, then the clearer name").
 - forbidden: what this move is not, as one negation ("never invent a contradiction the text does not contain"), or null.
@@ -147,7 +147,7 @@ export function moveFloor(p: PersonaPoint, pieces: readonly MovePiece[]): MoveUn
 }
 
 export const PERSONA_MOVES: Reading<MovesInput, MovesOutput> = {
-  id: 'persona-moves', version: '3',
+  id: 'persona-moves', version: '4',
   system: PERSONA_MOVES_SYSTEM, schema: PERSONA_MOVES_SCHEMA,
   toolName: 'emit_persona_moves', toolDescription: 'For every point of the persona: its trigger, evidence with situation quotes, realisation, forbidden use, scope, method link and counted check.',
   maxTokens: 8000, estimateUsd: 0.05,

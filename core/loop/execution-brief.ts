@@ -17,6 +17,7 @@ import type { Applicability } from '../state/contract.js';
 import { applies as holds } from '../state/contract.js';
 import type { DecisionUnit } from '../state/canonical-state.js';
 import { quoteIsReal } from '../taste/reader.js';
+import type { MoveUnit } from '../compiler/moves.js';
 
 export interface BriefStep {
   /** the requirement id */
@@ -153,15 +154,59 @@ export const setAsideSteps = (b: Brief, steps: readonly BriefStep[]): BriefStep[
 /** The steps a reading could not place: held as applying, and said so, so an unknown is never a silent yes. */
 export const unresolvedSteps = (b: Brief, steps: readonly BriefStep[]): BriefStep[] => steps.filter((s) => b.placed[s.id]?.applies === 'unresolved');
 
+export interface MoveSelection {
+  /** conditional moves whose situation the request shows, within the author's own rate, in the order served */
+  readonly placed: readonly MoveUnit[];
+  /** general moves: how the author always is, already served as description; recorded for the reader, never in the note */
+  readonly standing: readonly MoveUnit[];
+  readonly notPlaced: readonly { readonly id: string; readonly why: string }[];
+  /** conditional moves the reading could not place: never served, said in the record */
+  readonly unresolved: readonly string[];
+  /** the most conditional moves one piece gets: about as many as the author's own pieces carry */
+  readonly budget: number;
+}
+const RANK: Readonly<Record<MoveUnit['frequency'], number>> = { ALWAYS: 0, OFTEN: 1, SOMETIMES: 2, RARELY: 3 };
+/**
+ * WHICH MOVES THIS REQUEST GETS, decided by code from what the reading grounded, in this order: the situation holds (a
+ * general move stands by itself and is not served again); not at a step set aside for this request; shown in two pieces
+ * at least; no second move of the same scope at the same step; within the author's own rate, the better-evidenced first.
+ * Zero is an ordinary result. Frequency only breaks ties: a rare move the request calls for outranks a frequent one it
+ * does not.
+ */
+export function selectMoves(placement: Readonly<Record<string, Placement>>, b: Brief, units: readonly MoveUnit[], steps: readonly BriefStep[]): MoveSelection {
+  const placedOf = (u: MoveUnit): Placement => placement[u.id] ?? (u.applicability === 'GENERAL' ? { applies: 'applies', why: null } : { applies: 'unresolved', why: 'not read' });
+  const standing = units.filter((u) => u.applicability === 'GENERAL' && placedOf(u).applies === 'applies');
+  const conditional = units.filter((u) => u.applicability === 'CONDITIONAL');
+  const unresolved = conditional.filter((u) => placedOf(u).applies === 'unresolved').map((u) => u.id);
+  const notPlaced: { id: string; why: string }[] = conditional.filter((u) => placedOf(u).applies === 'set-aside').map((u) => ({ id: u.id, why: placedOf(u).why ?? 'not this case' }));
+  const setAside = new Set(setAsideSteps(b, steps).map((s) => String(s.n)));
+  const candidates = conditional.filter((u) => placedOf(u).applies === 'applies').filter((u) => {
+    if (u.link && setAside.has(u.link.step)) { notPlaced.push({ id: u.id, why: `at step ${u.link.step}, set aside for this request` }); return false; }
+    if (u.pieces < 2) { notPlaced.push({ id: u.id, why: 'shown in one piece only' }); return false; }
+    return true;
+  }).sort((a, c) => c.pieces - a.pieces || RANK[a.frequency] - RANK[c.frequency] || a.aspect.localeCompare(c.aspect));
+  // THE AUTHOR'S OWN RATE: each conditional move was seen in `pieces` of `corpus`, so the pieces carry about their sum per piece.
+  const budget = Math.max(1, Math.round(conditional.reduce((n, u) => n + (u.corpus ? u.pieces / u.corpus : 0), 0)));
+  const placed: MoveUnit[] = []; const at = new Set<string>();
+  for (const u of candidates) {
+    const key = u.link ? `${u.scope}@${u.link.step}` : null;
+    if (key && at.has(key)) { notPlaced.push({ id: u.id, why: `another move of the same scope at step ${u.link!.step}` }); continue; }
+    if (placed.length >= budget) { notPlaced.push({ id: u.id, why: `past the ${budget} such move(s) a piece of the author's carries` }); continue; }
+    placed.push(u); if (key) at.add(key);
+  }
+  return { placed, standing, notPlaced, unresolved, budget };
+}
+
 /**
  * THE BRIEF AS THE WRITER READS IT, after the cached skill (cli/served.ts, `forThisRequest`): step numbers and one line
  * each, in the method's order with what depends on what first; what was given; what to leave open. Empty when every
  * step applies and nothing is open: then the method as served says it all.
  */
-export function briefNote(b: Brief, steps: readonly BriefStep[], material: readonly { name: string }[]): string {
+export function briefNote(b: Brief, steps: readonly BriefStep[], material: readonly { name: string }[], served: MoveSelection | null = null): string {
   const on = applyingSteps(b, steps); const off = setAsideSteps(b, steps); const unresolved = unresolvedSteps(b, steps);
   const open = new Map(b.unsupported.map((u) => [u.id, u.missing]));
-  if (!off.length && !unresolved.length && !open.size && !b.contradicted.length && on.every((s) => !s.unit?.decision)) return '';
+  const moves = served?.placed ?? [];
+  if (!off.length && !unresolved.length && !open.size && !b.contradicted.length && on.every((s) => !s.unit?.decision) && !moves.length) return '';
   const order = (xs: readonly BriefStep[]): BriefStep[] => {
     const byId = new Map(xs.map((s) => [s.id, s])); const seen = new Set<string>(); const out: BriefStep[] = [];
     const visit = (s: BriefStep): void => { if (seen.has(s.id)) return; seen.add(s.id); for (const d of s.unit?.dependsOn ?? []) { const dep = [...byId.values()].find((x) => String(x.n) === d); if (dep) visit(dep); } out.push(s); };
@@ -176,6 +221,10 @@ export function briefNote(b: Brief, steps: readonly BriefStep[], material: reado
   const lines = [
     `For this request, my method's steps that apply: ${on.map((s) => s.n).join(', ') || 'none'}.${off.length ? ` Set aside, not this case: ${off.map((s) => `${s.n} (${b.placed[s.id].why ?? 'not this case'})`).join('; ')}.` : ''}${unresolved.length ? ` Not decided by the request, so held as applying: ${unresolved.map((s) => s.n).join(', ')}.` : ''}`,
     ...(decisions.length ? ['Decisions it asks for, in order:', ...decisions] : []),
+    // THE MOVES, AS MYSELF: only the conditional moves this request calls for, each with its situation, how it may show, the
+    // author's own words as one instance, and what it is not. Never a rate to hit, never the general traits again.
+    ...(moves.length ? ['How I would make this, as myself:', ...moves.map((u) => { const step = u.link ? steps.find((s) => String(s.n) === u.link!.step) : undefined;
+      return `- ${step ? `at step ${step.n}: ` : ''}${u.trigger.text}: ${u.realisation}, as in "${u.evidence[0]?.quote ?? u.observed}" (${u.pieces} of ${u.corpus} of my pieces).${u.forbidden ? ` Not: ${u.forbidden}.` : ''}`; })] : []),
     ...b.contradicted.map((c) => { const s = steps.find((x) => x.id === c.id); return `The request says "${c.quote}", which is against step ${s?.n ?? '?'}: my method stands; follow it, and say in one line that the request asked otherwise.`; }),
     `Given: the request${material.length ? ` and ${material.map((m) => m.name).join(', ')}` : ', and nothing else'}.${open.size ? ' A specific not given is said to be missing, never invented; every decision is still made, on what is given, in the shape my method asks for.' : ''}`,
   ];

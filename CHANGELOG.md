@@ -149,6 +149,28 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 - **A reader that cannot be reached is asked once.** With a key set for a backend that answers nothing, a build waited
   out the retries of every reading in turn; the first failure now turns the rest of that build's readings off, said once.
 
+### Which of your moves this request calls for, read with the brief and recorded
+
+- **Your moves are placed for each request as your steps are, by a reading of their own.** For each conditional move
+  of the profile (never an unknown one, never a general one read off fewer than three pieces), a second small read,
+  beside the one that places the method's conditional steps, says whether the move's situation is named by this
+  request or its material, quoting the words that name it. A move is placed only on such a quote; "does not hold"
+  needs none, since not placing is the safe direction; an unresolved move is never placed, the reverse of a step,
+  because a move steers and a step binds. The read runs only on a request that has a conditional move, and costs a
+  fraction of a cent.
+- **Which placed moves one piece gets is decided by code, in this order:** not at a step set aside for this request;
+  shown in two of your pieces at least; one move per scope at a step; within your own rate (about as many such moves
+  as your pieces carry, the better-evidenced first, frequency only breaking ties, so a rare move the request calls for
+  outranks a frequent one it does not). Zero is an ordinary result, and a short request gets none, by the same need
+  that withholds the brief. A general move stands by itself: it is how you always are, served in the skill already,
+  and is never said again in the brief.
+- **Observed by default, served by your word.** Under `observe` the selection is read, made and recorded with the run
+  (the profile it came from, what was placed, what was not and why, what was unresolved) and the writer is served
+  nothing of it. Under `serve` (`--moves serve` on a run, or `moves: serve` in the skill's release settings) the placed
+  moves are said to the writer after the steps: "How I would make this, as myself: at step 1: where input is
+  untrusted: one sentence from the abusive caller, as in "…" (3 of 12 of my pieces). Not: never an attacker the diff
+  does not expose." The run's report says what was placed and under which mode. The standard is untouched either way.
+
 ### Your moves, compiled: when you make each one, and whether that is known
 
 - **Each point of the persona is now compiled for execution, not only described.** A build with a model reads, for
@@ -273,6 +295,19 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
   Anything short of that leaves it a candidate. `--set` is your own choice and takes effect at once.
 - `atelier rate` takes optional reasons from a closed list (necessary part missing, unnecessary extra, wrong, unsafe,
   unsupported claim, asks instead of acting, too long, too short, voice off).
+
+### Studies: the move cases read apart from the brief (development evidence, $0.05)
+
+The move cases were first added to the brief's own reading, and the two could not share a prompt. One sentence in the
+system prompt about "the author's own moves" turned a step's supported decision into "unsupported" on every run of a
+request that had no move at all; with the sentence moved into the per-request prompt, the model answered a step's case
+under the moves' field and seven step cases fell to the floor; a field renamed and a purely structural sentence brought
+the first shift back. The brief's reading is back to its text of the day before, byte for byte, and the move cases are
+read on their own (`move-cases`), evaluated on five cases, five runs each: placement right on every case from the
+first version; the second version sharpens "does not hold" (the request's own words rule the situation out) against
+"unresolved" (the request does not say), and refuses a situation that would have to be worked out from figures or
+consequences. The compiler's reading (`persona-moves`, version 4) now asks for a trigger a reader could see in a
+request, never the author's own judgement ("when the fix costs more than it saves" names no situation): 60 of 65.
 
 ### Studies: the reading of your moves, live (development evidence, $0.03)
 
