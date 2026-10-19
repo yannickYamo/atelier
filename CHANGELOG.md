@@ -149,7 +149,39 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 - **A reader that cannot be reached is asked once.** With a key set for a backend that answers nothing, a build waited
   out the retries of every reading in turn; the first failure now turns the rest of that build's readings off, said once.
 
-### A review's finding is not a result seen; the reader judges the situation from the piece; a standing habit is sought in every piece
+### How often you make each move, and whether a situation explains it, is measured, never a word
+
+- **No count fixed by hand decides anything about your moves now.** Until today a point of the persona was "always"
+  or "sometimes" by the reading's word, a move was general only when seen in three pieces, a quote under three words
+  was not evidence, a "not" line had to match a pattern of negation, the persona was asked for twelve to twenty
+  points, and what met none of these was unknown and served to no run. Each of those was a number or a category
+  someone picked. They are gone. The persona is asked for as many points as the pieces show. Every verbatim quote is
+  kept at any length; whether it shows the move is the reading's judgement, measured by its eval, never a word count.
+  The "not" line is kept as read.
+- **Every habit is counted against every piece.** After the first reading, a second (`persona-table`) is asked, for
+  each habit and each piece the first left, for one verbatim passage making the move and one in its situation, or
+  none; the calls are sized by the answer budget and the corpus, never by a fixed number of habits. From the cells:
+  in k of n pieces the move is made; where the habit has a situation, a and b pieces in it with and without the move,
+  c and d outside.
+- **From the counts, a posterior and a decision** (`core/stats/habit.ts`). The rate of a move is θ ~ Beta(k+½, n−k+½),
+  the Jeffreys posterior: its mean, a 95% credible interval, and P(θ > ½), the probability the habit holds in most
+  pieces. Whether a situation explains a habit is the Bayes factor of two rates (in and out of the situation) against
+  one, by closed-form Beta-Binomial marginal likelihoods, with P(θ_in > θ_out) saying which way. The kind is the more
+  probable hypothesis: *situational* when two rates beat one and the move is likelier in the situation; else
+  *standing* when a majority is more probable than not; else *occasional*. Nothing is unknown: one piece of one has a
+  posterior and an interval that says what it knows. Three pieces and forty get the same arithmetic. The only
+  constants are the prior, the pivot ½ ("most pieces" means a majority) and equal prior odds between the models.
+- **The skill and the record say the count, never the word.** "How I sound" carries what more probably holds in most
+  pieces than not, each point "in 11 of 12 pieces [0.66, 0.99]"; the repertoire carries the rest the same way; the
+  reading's own word is kept on the profile as what was read and decides nothing. A situational move is placed by
+  the brief when its situation is read in the request; a standing one stands; an occasional one is description. The
+  budget of moves a piece gets is the sum of the situational moves' posterior means, rounded, never a floor of
+  pieces; candidates are ordered by their posterior in the situation. The profile's schema is 2; a run built on the
+  earlier schema keeps its profile by the receipt.
+- The evals of `persona-moves` (v5) and `persona-table` (v1) are written and not yet run live; their labels are what
+  code decides from what the reading grounds (the trigger's status and the pieces quoted), never a kind.
+
+### A review's finding is not a result seen; the reader judges the situation from the piece
 
 - **A cited line is not a figure of progress.** "orders.py:42 — the status is written straight onto the column" carries
   a result word and a number, and the pattern that catches "1.1M rows written" read it as a result the assistant saw,
@@ -159,12 +191,9 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
   in a piece that is not in its situation (an attacker named for code nothing reaches) read as realised; it is
   misapplied, and the reader is told so. Two case forms join its eval, the listed-but-absent situation and the move
   named without being made; the live run of that eval waits for the next spend.
-- **A standing habit the first reading quoted from fewer than three pieces is looked for in the rest, once.** On a
-  real persona of twenty points, eleven read "always" and one became general: the reading quoted most from one or
-  two pieces, so they fell to unknown as uncollected rather than rare. A second bounded read asks one verbatim passage
-  per remaining piece; applicability is recomputed by the same code; a habit that stays unknown is marked as sought,
-  so "seen in few pieces" is told apart from "not collected". Nothing here raises evidence past observed or
-  permission past monitor.
+- On a real persona of twenty points, eleven read "always" and one became general under the old fixed counts: the
+  reading quoted most from one or two pieces, so they fell to unknown as uncollected rather than rare. That finding
+  led to the table and the measured rates above, which replace the fixed counts outright.
 
 ### A run uses the profile its build named; a profile read from pieces that changed is read again
 
@@ -191,8 +220,8 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ### Which of your moves this request calls for, read with the brief and recorded
 
-- **Your moves are placed for each request as your steps are, by a reading of their own.** For each conditional move
-  of the profile (never an unknown one, never a general one read off fewer than three pieces), a second small read,
+- **Your moves are placed for each request as your steps are, by a reading of their own.** For each situational move
+  of the profile (never an occasional one; a standing one stands by itself), a second small read,
   beside the one that places the method's conditional steps, says whether the move's situation is named by this
   request or its material, quoting the words that name it. A move is placed only on such a quote; "does not hold"
   needs none, since not placing is the safe direction; an unresolved move is never placed, the reverse of a step,

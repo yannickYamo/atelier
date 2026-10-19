@@ -8,6 +8,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { EXECUTION_BRIEF, selectMoves, briefNote, type BriefStep } from '../core/loop/execution-brief.js';
 import type { MoveUnit } from '../core/compiler/moves.js';
+import { posterior, situationEffect } from '../core/stats/habit.js';
 import * as store from '../core/state/store.js';
 import { listEvals } from '../core/state/eval-store.js';
 
@@ -17,8 +18,14 @@ const steps: BriefStep[] = [
   { id: 'r1', n: 1, statement: 'Open with a Summary section.', required: true, unit: unit({ decision: 'what the change does' }) },
   { id: 'r2', n: 2, statement: 'Add a Risks section when the change touches billing.', required: true, unit: unit({ condition: 'when the change touches billing' }) },
 ];
-const move = (over: Partial<MoveUnit>): MoveUnit => ({ id: 'm', aspect: 'a', observed: 'o', frequency: 'SOMETIMES', trigger: { text: 'where input is untrusted', status: 'supported' }, applicability: 'CONDITIONAL', provisional: false,
-  realisation: 'one sentence from the abusive caller', forbidden: null, evidence: [{ piece: 'piece-1', quote: 'A caller can refund more', situationQuote: null }], pieces: 3, corpus: 12, scope: 'sentence', link: null, check: null, by: 'model', ...over });
+const move = (over: Partial<MoveUnit> & { k?: number; n?: number; a?: number; b?: number }): MoveUnit => {
+  const { k = 3, n = 12, a = 3, b = 0, ...rest } = over;
+  const trigger = rest.trigger ?? { text: 'where input is untrusted', status: 'supported' as const };
+  const rate = posterior(k, n); const situation = trigger.text ? situationEffect(a, b, k - a, n - a - b - (k - a)) : null;
+  return { id: 'm', aspect: 'a', observed: 'o', readAs: 'SOMETIMES', trigger, realisation: 'one sentence from the abusive caller', forbidden: null,
+    evidence: [{ piece: 'piece-1', quote: 'A caller can refund more', situationQuote: null }], situationOnly: [],
+    rate, situation, kind: situation?.explains ? 'situational' : rate.pMajority > 0.5 ? 'standing' : 'occasional', pieces: k, corpus: n, scope: 'sentence', link: null, check: null, by: 'model', tabled: true, ...rest };
+};
 
 describe('audit 3, as values', () => {
   it('9. a link to a step the brief does not have never suppresses a valid move; 10. the steps the brief placed are untouched by the moves', () => {
@@ -26,7 +33,7 @@ describe('audit 3, as values', () => {
     const before = JSON.stringify(b.placed);
     // the better-evidenced move links to a step the brief does not list (a candidate link that found no step): it is
     // placed first all the same, and the other is past the budget of one
-    const sel = selectMoves({ ghost: { applies: 'applies', why: '"x"' }, adv: { applies: 'applies', why: '"x"' } }, b, [move({ id: 'ghost', pieces: 4, link: { step: '9', status: 'candidate' } }), move({ id: 'adv' })], steps);
+    const sel = selectMoves({ ghost: { applies: 'applies', why: '"x"' }, adv: { applies: 'applies', why: '"x"' } }, b, [move({ id: 'ghost', k: 4, a: 4, link: { step: '9', status: 'candidate' } }), move({ id: 'adv' })], steps);
     expect(sel.budget).toBe(1);
     expect(sel.placed.map((u) => u.id)).toEqual(['ghost']);
     expect(sel.notPlaced).toEqual([{ id: 'adv', why: "past the 1 such move(s) a piece of the author's carries" }]);
@@ -41,7 +48,8 @@ describe('audit 3, as values', () => {
 // ── THROUGH RUNS, WITH THE ARTIFACTS INSPECTED ────────────────────────────────────────────────────────────────
 const NOTE = 'How we review a change\n\n1. Open with a Summary section.\n2. Add a Risks section when the change touches billing.\n3. End with a Verdict section that holds one of: Approve, Request changes, Comment.\n';
 const NOTE_B = `${NOTE}4. Name the missing test under Suggestions.\n`;
-const body = (n: number): string => `I would start with the riskiest line. A caller can refund more than the order total. ${'The change touches the runner and keeps its tests. '.repeat(n)}The handler trusts the caller.`;
+// the adversarial sentence in two of the four pieces, so the situation (shown with it there) explains the move
+const body = (n: number): string => `I would start with the riskiest line. ${n <= 2 ? 'A caller can refund more than the order total. ' : ''}${'The change touches the runner and keeps its tests. '.repeat(n)}The handler trusts the caller.`;
 const review = (verdict: string, n: number): string => `---\nrequest: Review this change.\n---\n## Summary\n${body(n)}\n\n## Risks\nNone to billing.\n\n## Verdict\n${verdict}\n`;
 const UNITS = { units: [
   { id: '1', kind: 'instruction', decision: 'what the change does', inputs: ['the diff'], condition: null, output: 'a Summary section', exception: null, dependsOn: [], quote: 'Open with a Summary section' },
@@ -119,7 +127,7 @@ describe('through runs', () => {
     const served = s.run('invoke', '--skill', 'review', REQUEST, '--json', '--moves', 'serve', ...BACKEND()); expect(served.code, served.out).toBe(0);
     const pSrv = (await bodiesFor('emit_piece')).at(-1)!;
     const extra = pSrv.split('\n').filter((l) => !pObs.includes(l));
-    expect(extra).toEqual(['How I would make this, as myself:', expect.stringMatching(/^- at step 1: where input is untrusted: one sentence from the abusive caller, as in "A caller can refund more than the order total\." \(2 of 4 of my pieces\)\. Not: never an attacker the diff does not expose\.$/)]);
+    expect(extra).toEqual(['How I would make this, as myself:', expect.stringMatching(/^- at step 1: where input is untrusted: one sentence from the abusive caller, as in "A caller can refund more than the order total\." \(2 of the 2 of my pieces in this situation\)\. Not: never an attacker the diff does not expose\.$/)]);
     expect(pObs.split('\n').filter((l) => !pSrv.includes(l))).toEqual([]);
     expect(outputOf(served.out)).toBe(outputOf(observed.out));
     // 5. the reader on or off: the writer's prompt and the output are identical; only the record and the events differ

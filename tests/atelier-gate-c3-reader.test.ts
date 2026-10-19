@@ -10,14 +10,21 @@ import { join, resolve } from 'node:path';
 import { MOVE_READER, READ_MOVES, countOutcomes } from '../core/taste/move-reader.js';
 import { readContext } from '../core/inference/reading.js';
 import type { MoveUnit } from '../core/compiler/moves.js';
+import { posterior, situationEffect } from '../core/stats/habit.js';
 import * as store from '../core/state/store.js';
 import { listEvals } from '../core/state/eval-store.js';
 
 const CLI = resolve('dist/cli/atelier.mjs');
-const move = (over: Partial<MoveUnit>): MoveUnit => ({ id: 'm', aspect: 'Adversarial framing', observed: 'o', frequency: 'SOMETIMES', trigger: { text: 'where input is untrusted', status: 'supported' }, applicability: 'CONDITIONAL', provisional: false,
-  realisation: 'one sentence from the abusive caller', forbidden: 'never an attacker the diff does not expose', evidence: [{ piece: 'piece-1', quote: 'A caller can refund more than the order total', situationQuote: null }], pieces: 3, corpus: 12, scope: 'sentence', link: null, check: null, by: 'model', ...over });
+const move = (over: Partial<MoveUnit> & { k?: number; n?: number; a?: number; b?: number }): MoveUnit => {
+  const { k = 3, n = 12, a = 3, b = 0, ...rest } = over;
+  const trigger = rest.trigger ?? { text: 'where input is untrusted', status: 'supported' as const };
+  const rate = posterior(k, n); const situation = trigger.text ? situationEffect(a, b, k - a, n - a - b - (k - a)) : null;
+  return { id: 'm', aspect: 'Adversarial framing', observed: 'o', readAs: 'SOMETIMES', trigger, realisation: 'one sentence from the abusive caller', forbidden: 'never an attacker the diff does not expose',
+    evidence: [{ piece: 'piece-1', quote: 'A caller can refund more than the order total', situationQuote: null }], situationOnly: [],
+    rate, situation, kind: situation?.explains ? 'situational' : rate.pMajority > 0.5 ? 'standing' : 'occasional', pieces: k, corpus: n, scope: 'sentence', link: null, check: null, by: 'model', tabled: true, ...rest };
+};
 const text = '## Summary\nThe handler reads the amount from the body unchecked. A caller can send any amount and the gateway refunds it.\n\n## Verdict\nRequest changes';
-const moves = [move({ id: 'adv' }), move({ id: 'stance', aspect: 'Impersonal', trigger: { text: null, status: 'none' }, applicability: 'GENERAL', realisation: 'findings as bare statements' })];
+const moves = [move({ id: 'adv' }), move({ id: 'stance', aspect: 'Impersonal', trigger: { text: null, status: 'none' }, k: 11, realisation: 'findings as bare statements' })];
 
 describe('the reading as a value', () => {
   it('nothing to read decides by code; no model is not read; the prompt names each move with its situation, move, not-line and one instance', async () => {
@@ -51,7 +58,8 @@ describe('the reading as a value', () => {
 
 // ── THROUGH A RUN ──────────────────────────────────────────────────────────────────────────────────────────────
 const NOTE = 'How we review a change\n\n1. Open with a Summary section.\n2. Add a Risks section when the change touches billing.\n3. End with a Verdict section that holds one of: Approve, Request changes, Comment.\n4. Say what the reader should check next, as a judgement of what matters most.\n';
-const body = (n: number): string => `I would start with the riskiest line. A caller can refund more than the order total. ${'The change touches the runner and keeps its tests. '.repeat(n)}The handler trusts the caller.`;
+// the adversarial sentence in two of the four pieces, so the situation (shown with it there) explains the move
+const body = (n: number): string => `I would start with the riskiest line. ${n <= 2 ? 'A caller can refund more than the order total. ' : ''}${'The change touches the runner and keeps its tests. '.repeat(n)}The handler trusts the caller.`;
 const review = (verdict: string, n: number): string => `---\nrequest: Review this change.\n---\n## Summary\n${body(n)}\n\n## Risks\nNone to billing.\n\n## Verdict\n${verdict}\n`;
 const UNITS = { units: [
   { id: '1', kind: 'instruction', decision: 'what the change does', inputs: ['the diff'], condition: null, output: 'a Summary section', exception: null, dependsOn: [], quote: 'Open with a Summary section' },

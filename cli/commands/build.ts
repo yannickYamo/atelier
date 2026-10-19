@@ -26,7 +26,7 @@ import { deriveScope, groundScope, spreadByKind, type ScopeProfile } from '../..
 const ANSWER_EXAMPLE_WORDS = 1200;
 import { WORK_FORM, type WorkForm } from '../../core/observers/work-form.js';
 import { readContext } from '../../core/inference/reading.js';
-import { PERSONA_MOVES, PERSONA_EVIDENCE, wantsEvidence, collectEvidence, profileOf, personaHashOf, describeMoves, describeMove, type MoveProfile } from '../../core/compiler/moves.js';
+import { PERSONA_MOVES, PERSONA_TABLE, cellsToAsk, habitsPerCall, inferMoves, profileOf, personaHashOf, describeMoves, describeMove, pointsWithRates, type MoveProfile, type TableCell } from '../../core/compiler/moves.js';
 import { isGeneralScope } from '../../core/state/canonical-state.js';
 import { moveEvidence, readHoldsBack, ownerWrote, HOLDS_BACK } from '../../core/compiler/applicability.js';
 import { normalizeClass } from '../../core/observers/doc-class.js';
@@ -342,10 +342,11 @@ async function chooseVoice(L: store.StoreLayout, v: StandardVersion, workForm: W
  */
 /**
  * THE AUTHOR'S MOVES (core/compiler/moves.ts): each persona point compiled for execution, with its trigger grounded in a
- * situation quote from the same piece, its scope and its candidate step, and an applicability decided by code. Read
- * once per persona and kept by the persona's hash, so a rebuild with the same persona spends nothing; a floor profile
- * (no model) is read again when a model is there. Nothing here is a requirement, and an unknown move is served to no
- * run as a rule.
+ * situation quote from the same piece, its scope and its candidate step; then every habit tabled against every piece
+ * the first reading left, in calls sized by the token budget; then its rate and its situation's effect inferred from
+ * the counts (core/stats/habit.ts), and its kind decided from them. Read once per persona and kept by the persona's
+ * hash, so a rebuild with the same persona spends nothing; a floor profile (no model) is read again when a model is
+ * there. Nothing here is a requirement; an occasional habit is served to no run as a placement.
  */
 async function movesFor(L: store.StoreLayout, voice: Voice | null, methodText: { text: string } | null): Promise<MoveProfile | null> {
   const points = voice?.persona?.points ?? [];
@@ -367,21 +368,30 @@ async function movesFor(L: store.StoreLayout, voice: Voice | null, methodText: {
   const steps = methodText ? stepsOf(methodText.text).map((st, i) => ({ n: i + 1, text: st.text })) : [];
   const noModel = NO_MODEL();
   const d = await readContext(PERSONA_MOVES, { points, pieces, steps }, noModel ? null : contextReaderClient(), noModel ? null : contextReaderModel(), { spentUsd: 0, capUsd: 0.3, maxCalls: 1 });
-  // THE EVIDENCE PASS (core/compiler/moves.ts): a standing habit the first reading quoted from fewer than three pieces is
-  // looked for in the pieces it left out, once, so an UNKNOWN that stays is seen in few pieces rather than uncollected.
-  let units = d.value; let soughtN = 0;
-  const sought = d.by === 'model' ? wantsEvidence(units, pieces.length) : [];
-  if (sought.length) {
-    const input = { points: sought.map((u) => ({ n: units.indexOf(u) + 1, aspect: u.aspect, description: u.observed, quote: points[units.indexOf(u)]?.quote ?? u.evidence[0]?.quote ?? '', have: u.evidence.map((e) => e.piece) })), pieces };
-    const e = await readContext(PERSONA_EVIDENCE, input, contextReaderClient(), contextReaderModel(), { spentUsd: 0, capUsd: 0.3, maxCalls: 1 });
-    if (e.by === 'model') { units = collectEvidence(units, e.value, sought); soughtN = sought.length; }
+  // THE TABLE (core/compiler/moves.ts): every cell the first reading left (a piece with no quote for the move, or none
+  // for its situation) is asked once, in calls that hold as many habits as the answer budget allows for this corpus.
+  // Every cell is then a count, and the counts are what the kinds are inferred from.
+  const cells: TableCell[] = []; let tabled = false; let calls = 0;
+  if (d.by === 'model') {
+    const asked = cellsToAsk(d.value, pieces);
+    const perCall = habitsPerCall(PERSONA_TABLE.maxTokens, pieces.length);
+    const habitNs = [...new Set(asked.map((c) => c.habit))];
+    let answered = 0;
+    for (let i = 0; i < habitNs.length; i += perCall) {
+      const batch = new Set(habitNs.slice(i, i + perCall));
+      const habits = d.value.map((u, n) => ({ n: n + 1, aspect: u.aspect, description: u.observed, quote: points[n]?.quote ?? u.evidence[0]?.quote ?? '', situation: u.trigger.text })).filter((h) => batch.has(h.n));
+      const t = await readContext(PERSONA_TABLE, { habits, pieces, cells: asked.filter((c) => batch.has(c.habit)) }, contextReaderClient(), contextReaderModel(), { spentUsd: 0, capUsd: 0.3, maxCalls: 1 });
+      calls += 1; if (t.by === 'model') { cells.push(...t.value); answered += 1; }
+    }
+    tabled = habitNs.length === 0 || answered === Math.ceil(habitNs.length / perCall);
   }
+  const units = inferMoves(d.value, cells, pieces, tabled);
   const profile = profileOf(units, personaHash, d.by === 'model' ? contextReaderModel() : null, pieces);
   store.putMoves(L, personaHash, profile);
   if (d.by === 'model') {
-    recordStage('moves', { ran: true, detail: `${describeMoves(profile.units)}${soughtN ? ` (evidence sought in every piece for ${soughtN})` : ''}` });
-    console.log(`Moves: ${describeMoves(profile.units)}${soughtN ? `, evidence sought in every piece for ${soughtN} standing habit(s)` : ''}, read from the persona and your pieces. A general move holds in three or more pieces; a conditional one has the situation it answers shown in a piece; an unknown one is served to no run as a rule.`);
-  } else recordStage('moves', { ran: false, why: `${d.why ?? 'no model'}: every move is of unknown applicability` });
+    recordStage('moves', { ran: true, detail: `${describeMoves(profile.units)}${tabled ? '' : ' (not every cell tabled)'}` });
+    console.log(`Moves: ${describeMoves(profile.units)}, read from the persona and your pieces${calls ? ` and tabled against every piece in ${calls} call(s)` : ''}${tabled ? '' : ' (not every cell was answered: the counts are the first reading\'s)'}. A standing move holds in most pieces more probably than not; a situational one is explained by the situation it answers; an occasional one is neither, and is placed in no run.`);
+  } else recordStage('moves', { ran: false, why: `${d.why ?? 'no model'}: counted by the words alone` });
   if (argv.includes('--report') && profile.units.length) console.log(`What my moves are, and when I make them:\n${profile.units.map((u) => `  - ${describeMove(u)}`).join('\n')}`);
   return profile;
 }
@@ -620,7 +630,10 @@ export async function build(nameArg?: string, opts: { closing?: boolean } = {}):
   // package or the standard, read once per persona. A review builds nothing and reads nothing.
   const moves = argv.includes('--review') ? null : await movesFor(L, voice, methodText);
   if (!argv.includes('--review')) reportOwnPieces(v, name, s);
-  const pkg0 = renderAgentSkill(v, arch, name, desc, exemplar, shipped, voice, methodText);
+  // THE SKILL WORDS EACH POINT BY ITS COUNT: the persona's points carry the rates the profile measured (never the
+  // reading's own word for how often) where a profile was read; the voice on disk is unchanged.
+  const served = voice?.persona && moves ? { ...voice, persona: { ...voice.persona, points: pointsWithRates(voice.persona.points, moves) } } : voice;
+  const pkg0 = renderAgentSkill(v, arch, name, desc, exemplar, shipped, served, methodText);
   const skill = { skillVersionHash: sha(`${arch.architectureHash}|${pkg0.packageHash}`), skillName: name,
     standardVersionHash: v.standardVersionHash, architectureHash: arch.architectureHash, materializedHash: pkg0.packageHash, builtAt: new Date().toISOString(), description: desc };
 

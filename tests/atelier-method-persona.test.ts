@@ -81,10 +81,11 @@ describe('the persona on the method path and the thin path', () => {
     expect(v.persona?.points.map((p) => p.description)).toEqual(['Opens from a position of my own, not a summary.', 'Closes on a short plain instruction.']);
     expect(v.form).toBe('DOCUMENT');
     expect(readFileSync(join(data, 'skills', 'code-review', 'form.txt'), 'utf8')).toBe('DOCUMENT');
-    // served to the writer, with how thin the evidence is said in pieces, not as "always"
+    // served to the writer with its count (the moves reading has no scripted answer here, so the count is of the point's own quote, by the words alone), never as "always"
     const skill = readFileSync(join(proj, '.claude', 'skills', 'code-review', 'SKILL.md'), 'utf8');
-    expect(skill).toContain('How I sound (each point is quoted from my own pieces and holds in most or all of them):');
-    expect(skill).toContain('- (always) Opens from a position of my own, not a summary. e.g. "I would start with the riskiest line."');
+    expect(skill).toContain('How I sound (each point is quoted from my own pieces, and holds across them; where a count is given, it is how many of my pieces show it):');
+    expect(skill).toContain('- (in 4 of 4 pieces) Opens from a position of my own, not a summary. e.g. "I would start with the riskiest line."');
+    expect(skill).not.toContain('(always)');
     expect(skill).not.toContain('too few of any one kind');
     expect(skill).not.toMatch(/handing it back|Never shorten it to match my shorter examples|How much I write follows the request/);
     // a method build still serves its pieces whole, as before (2,000 words of them, past the 1,200 a skill that answers

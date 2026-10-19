@@ -15,7 +15,7 @@ import type { PersonaPoint } from '../core/compiler/persona.js';
 const CLI = resolve('dist/cli/atelier.mjs');
 const NOTE = 'How we review a change\n\n1. Open with a Summary section.\n2. Then a Must fix section.\n3. End with a Verdict section that holds one of: Approve, Request changes, Comment.\n';
 const NOTE_BAN = `${NOTE}4. Never use "synergy".\n`;
-const body = (n: number): string => `I would start with the riskiest line. ${Array.from({ length: n }, (_, i) => `The change touches part ${i + 1} of the runner and keeps its tests.`).join(' ')} We need synergy here. Tests first, then the rest.`;
+const body = (n: number): string => `I would start with the riskiest line. ${Array.from({ length: n }, (_, i) => `The change touches part ${i + 1} of the runner and keeps its tests.`).join(' ')} ${n === 1 ? 'We need synergy here. ' : ''}Tests first, then the rest.`;
 const review = (verdict: string, n: number): string => `---\nrequest: Review this change.\n---\n## Summary\n${body(n)}\n\n## Must fix\nNone.\n\n## Verdict\n${verdict}\n`;
 const PERSONA = { points: [
   { aspect: 'stance', description: 'Opens from a position of my own, not a summary.', frequency: 'ALWAYS', quote: 'I would start with the riskiest line.' },
@@ -60,7 +60,7 @@ describe('the C0/C1 contract, through the build', () => {
     const s = seed();
     const first = s.run('method', 'method.md', '--golden', 'examples', '--name', 'code-review', '--yes', '--report', '--persona', 'auto', ...BACKEND());
     expect(first.code, first.out).toBe(0);
-    expect(skillMd(s.proj)).toContain('Leans on the word synergy');
+    expect(skillMd(s.proj)).toContain('buzzword: leans on the word synergy'); // situational (1 of 4, in its situation): a repertoire line
     const p1 = store.getMoves(L(s.data), personaHashOf(PERSONA.points as PersonaPoint[]))!;
     expect(p1.units.map((u) => u.aspect)).toEqual(['stance', 'buzzword']);
     // the owner's method now bans the word; the persona is kept (no --persona auto), and reconciled
@@ -77,23 +77,24 @@ describe('the C0/C1 contract, through the build', () => {
     expect(store.getMovesByHash(L(s.data), p1.hash)).not.toBeNull();
   }, 300_000);
 
-  it('4 and 7. a reading that floors (a model present, nothing grounded) persists an unknown-throughout profile; a later reading replaces it under a new hash and the floor stays for the receipt that named it', async () => {
+  it('4 and 7. a reading that floors (a model present, nothing grounded) persists a profile counted by the words alone; a later reading replaces it under a new hash and the floor stays for the receipt that named it', async () => {
     // the script answers the persona but not the moves: the moves reading grounds nothing and floors
     await fetch(`${url()}/__set`, { method: 'POST', body: JSON.stringify({ byTool: { emit_persona: PERSONA, emit_holds_back: { ids: [] } } }) });
     const s = seed();
     const first = s.run('method', 'method.md', '--golden', 'examples', '--name', 'code-review', '--yes', '--report', '--persona', 'auto', ...BACKEND());
     expect(first.code, first.out).toBe(0);
-    expect(first.out).toMatch(/· moves — [^·]*every move is of unknown applicability ·/);
+    expect(first.out).toMatch(/· moves — [^·]*counted by the words alone ·/);
     const r1 = store.getReceipt(L(s.data), activeOf(s.data).skillVersionHash)!;
     const floor = store.getMovesByHash(L(s.data), r1.movesHash!)!;
     expect(floor.reader).toBeNull();
-    expect(floor.units.map((u) => [u.applicability, u.by, u.trigger.status])).toEqual([['UNKNOWN', 'floor', 'none'], ['UNKNOWN', 'floor', 'none']]);
+    // by the words alone: the first quote is in every piece (4 of 4, it stands), the second in one (1 of 4, occasional); said as a floor, and read again when a model is there
+    expect(floor.units.map((u) => [u.kind, u.by, u.trigger.status, u.rate.k, u.tabled])).toEqual([['standing', 'floor', 'none', 4, false], ['occasional', 'floor', 'none', 1, false]]);
     expect(skillMd(s.proj)).not.toContain('What my moves');
     // now the script answers the moves: the floor profile is read again, not kept
     await fetch(`${url()}/__set`, { method: 'POST', body: JSON.stringify({ byTool: { emit_persona: PERSONA, emit_persona_moves: MOVES, emit_holds_back: { ids: [] } } }) });
     const again = s.run('build', '--name', 'code-review', '--report', ...BACKEND());
     expect(again.code, again.out).toBe(0);
-    expect(again.out).toMatch(/· moves ✓ \(2 moves: 1 general, 1 conditional, 0 unknown\) ·/);
+    expect(again.out).toMatch(/· moves ✓ \(2 moves: 1 standing, 1 situational, 0 occasional \(not every cell tabled\)\) ·/);
     const r2 = store.getReceipt(L(s.data), activeOf(s.data).skillVersionHash)!;
     expect(r2.movesHash).not.toBe(r1.movesHash);
     expect(store.getMovesByHash(L(s.data), r1.movesHash!)!.hash).toBe(floor.hash);

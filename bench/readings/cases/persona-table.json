@@ -1,0 +1,189 @@
+{
+  "reading": "persona-table",
+  "pass": {
+    "runs": 5,
+    "perCaseAtLeast": 4,
+    "codeDecidedExact": true
+  },
+  "note": "One habit against the pieces the first reading left. The label is `moves|situations`: the pieces that should yield a verbatim quote making the move, and those that should yield one in the habit's situation (none when the habit names no situation), each sorted and joined by +. Every cell becomes a count (core/compiler/moves.ts inferMoves), so a false move here raises a rate and a false situation moves the 2×2. Not yet run live (no spend authorised on 2026-10-19); run before the table's counts steer anything.",
+  "cases": [
+    {
+      "id": "impersonal-in-all",
+      "label": "piece-2+piece-3|none",
+      "habit": {
+        "aspect": "Impersonal point of view",
+        "description": "Never says I or you; a finding is a bare statement about the artifact.",
+        "quote": "The loop stops one short",
+        "situation": null
+      },
+      "ask": [
+        "piece-2",
+        "piece-3"
+      ],
+      "pieces": [
+        {
+          "name": "piece-1",
+          "text": "## Summary\nThe loop stops one short. Use a range to the length.\n\n## Verdict\nRequest changes"
+        },
+        {
+          "name": "piece-2",
+          "text": "## Summary\nThe handler trusts the body. Validate the amount before the charge.\n\n## Verdict\nRequest changes"
+        },
+        {
+          "name": "piece-3",
+          "text": "## Summary\nThe migration is reversible and the tests cover it.\n\n## Verdict\nApprove"
+        }
+      ]
+    },
+    {
+      "id": "habit-absent-in-one",
+      "label": "piece-2|none",
+      "habit": {
+        "aspect": "Finding closed with a prescribed fix",
+        "description": "Nearly every criticism ends with a specific remedy.",
+        "quote": "Use a range to the length",
+        "situation": null
+      },
+      "ask": [
+        "piece-2",
+        "piece-3"
+      ],
+      "pieces": [
+        {
+          "name": "piece-1",
+          "text": "## Summary\nThe loop stops one short. Use a range to the length.\n\n## Verdict\nRequest changes"
+        },
+        {
+          "name": "piece-2",
+          "text": "## Summary\nThe handler trusts the body. Validate the amount before the charge.\n\n## Verdict\nRequest changes"
+        },
+        {
+          "name": "piece-3",
+          "text": "## Summary\nThe migration is reversible and the tests cover it.\n\n## Verdict\nApprove"
+        }
+      ]
+    },
+    {
+      "id": "similar-subject-not-habit",
+      "label": "none|none",
+      "habit": {
+        "aspect": "Concession before critique",
+        "description": "Grants what is defensible before pressing the point, with 'which is safe but'.",
+        "quote": "which is safe on its own, but",
+        "situation": null
+      },
+      "ask": [
+        "piece-2",
+        "piece-3"
+      ],
+      "pieces": [
+        {
+          "name": "piece-1",
+          "text": "## Must fix\nThe handler now checks the amount, which is safe on its own, but the check runs after the charge.\n\n## Verdict\nRequest changes"
+        },
+        {
+          "name": "piece-2",
+          "text": "## Must fix\nThe check runs after the charge, so a bad amount is charged and then refused.\n\n## Verdict\nRequest changes"
+        },
+        {
+          "name": "piece-3",
+          "text": "## Summary\nThe migration is reversible.\n\n## Verdict\nApprove"
+        }
+      ]
+    },
+    {
+      "id": "terse-verdict-everywhere",
+      "label": "piece-2+piece-3+piece-4|none",
+      "habit": {
+        "aspect": "Abrupt closing",
+        "description": "Ends on a terse verdict line with no sign-off.",
+        "quote": "Request changes",
+        "situation": null
+      },
+      "ask": [
+        "piece-2",
+        "piece-3",
+        "piece-4"
+      ],
+      "pieces": [
+        {
+          "name": "piece-1",
+          "text": "## Summary\nThe loop stops one short.\n\n## Verdict\nRequest changes"
+        },
+        {
+          "name": "piece-2",
+          "text": "## Summary\nThe handler trusts the body.\n\n## Verdict\nRequest changes"
+        },
+        {
+          "name": "piece-3",
+          "text": "## Summary\nThe migration is reversible.\n\n## Verdict\nApprove"
+        },
+        {
+          "name": "piece-4",
+          "text": "## Summary\nThe rename keeps its tests.\n\n## Verdict\nComment"
+        }
+      ]
+    },
+    {
+      "id": "situation-and-move-where-both",
+      "label": "piece-2|piece-2+piece-4",
+      "habit": {
+        "aspect": "Adversarial framing",
+        "description": "Where input is untrusted, writes one sentence from the abusive caller's view, saying what they can do.",
+        "quote": "A caller can refund more than the order total",
+        "situation": "where input comes from the caller unchecked"
+      },
+      "ask": [
+        "piece-2",
+        "piece-3",
+        "piece-4"
+      ],
+      "pieces": [
+        {
+          "name": "piece-1",
+          "text": "## Summary\nThe handler takes the amount from the request body without checking it. A caller can refund more than the order total.\n\n## Verdict\nRequest changes"
+        },
+        {
+          "name": "piece-2",
+          "text": "## Summary\nThe count comes straight from the form. A caller can pass a negative count and the loop never ends.\n\n## Verdict\nRequest changes"
+        },
+        {
+          "name": "piece-3",
+          "text": "## Summary\nThis change renames a module and keeps its tests.\n\n## Verdict\nApprove"
+        },
+        {
+          "name": "piece-4",
+          "text": "## Summary\nThe id is read from the query string and used in the lookup as it is. The lookup is fine otherwise.\n\n## Verdict\nComment"
+        }
+      ]
+    },
+    {
+      "id": "situation-absent-everywhere",
+      "label": "none|none",
+      "habit": {
+        "aspect": "Concession clause",
+        "description": "When part of a change is defensible, grants it in the finding's first clause before pressing the defect.",
+        "quote": "which is safe on its own, but",
+        "situation": "when part of the change is defensible"
+      },
+      "ask": [
+        "piece-2",
+        "piece-3"
+      ],
+      "pieces": [
+        {
+          "name": "piece-1",
+          "text": "## Must fix\nThe handler now checks the amount against the order, which is safe on its own, but the check runs after the charge.\n\n## Verdict\nRequest changes"
+        },
+        {
+          "name": "piece-2",
+          "text": "## Summary\nThe loop stops one short. Use a range to the length.\n\n## Verdict\nRequest changes"
+        },
+        {
+          "name": "piece-3",
+          "text": "## Summary\nThe migration drops a column nothing reads.\n\n## Verdict\nApprove"
+        }
+      ]
+    }
+  ]
+}

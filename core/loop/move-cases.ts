@@ -26,13 +26,13 @@ export interface MoveCasesInput {
 }
 export type MovePlacement = Readonly<Record<string, Placement>>;
 
-/** The moves a run may consider at all: never an unknown one, never a general one read off fewer than three pieces. */
-export const eligibleMoves = (units: readonly MoveUnit[]): MoveUnit[] => units.filter((u) => u.applicability !== 'UNKNOWN' && !u.provisional);
-/** The moves with a case to read: conditional, with a trigger in words, in the order the prompt numbers them. */
-export const conditionalMoves = (units: readonly MoveUnit[]): MoveUnit[] => units.filter((u) => u.applicability === 'CONDITIONAL' && u.trigger.text !== null);
-/** What code says of each move before any reading: a general move applies; a conditional one is unresolved until read. */
+/** The moves a run may consider at all: standing and situational; an occasional habit is description, never a placement. */
+export const eligibleMoves = (units: readonly MoveUnit[]): MoveUnit[] => units.filter((u) => u.kind !== 'occasional');
+/** The moves with a case to read: situational, with a trigger in words, in the order the prompt numbers them. */
+export const conditionalMoves = (units: readonly MoveUnit[]): MoveUnit[] => units.filter((u) => u.kind === 'situational' && u.trigger.text !== null);
+/** What code says of each move before any reading: a standing move applies; a situational one is unresolved until read. */
 export const placementByCode = (units: readonly MoveUnit[]): Record<string, Placement> =>
-  Object.fromEntries(units.map((u) => [u.id, u.applicability === 'GENERAL' || u.trigger.text === null ? { applies: 'applies' as const, why: null } : { applies: 'unresolved' as const, why: 'not read' }]));
+  Object.fromEntries(units.map((u) => [u.id, u.kind === 'standing' || u.trigger.text === null ? { applies: 'applies' as const, why: null } : { applies: 'unresolved' as const, why: 'not read' }]));
 
 export const MOVE_CASES_SYSTEM = `You read one request, the material that came with it, and a numbered list of CASES. Each case is a situation; for each, say whether this request is in it:
 

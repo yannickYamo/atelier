@@ -5,11 +5,11 @@
     "perCaseAtLeast": 4,
     "codeDecidedExact": true
   },
-  "note": "One persona point per case against the pieces it quotes. The label is applicability|trigger status, both decided by code from what the reading grounds (a trigger is supported only by a second quote from the same piece as the move; an evidence quote has three words at least unless the point's own quote is that short). The scope the reading gives is recorded beside each run as `aside` against the case's `aside`, and not judged: live evals of v1 and v2 put it at 7 of 12 cases and showed it is a judgement that moves between runs; nothing uses it until C5. A trigger that names a topic is forbidden by the prompt and not checkable by a label; it is read in the study.",
+  "note": "One persona point per case against the pieces it quotes. The label is `trigger status|pieces evidenced`: the status decided by code from what the reading grounds (a trigger is supported only by a second quote from the same piece as the move; none when the point is not a move), the count the distinct pieces the reading quotes the move from, verbatim. No applicability is labelled: the kind is inferred from counts after the table (core/stats/habit.ts), not read. The scope the reading gives is recorded beside each run as `aside` against the case's `aside`, and not judged. v5 (2026-10-19) shows the reading no frequency word and keeps every verbatim quote: not yet run live (no spend authorised).",
   "cases": [
     {
       "id": "supported-trigger-two-pieces",
-      "label": "CONDITIONAL|supported",
+      "label": "supported|2",
       "point": {
         "aspect": "Adversarial framing on risky surfaces",
         "description": "Where input is untrusted, writes one sentence from the abusive caller's view, saying what they can do.",
@@ -34,7 +34,7 @@
     },
     {
       "id": "hedge-only-under-uncertainty",
-      "label": "CONDITIONAL|supported",
+      "label": "supported|1",
       "point": {
         "aspect": "Hedged words reserved for genuine uncertainty",
         "description": "Uses 'probably' or 'confirm' in a sentence only where the diff cannot show the fact.",
@@ -59,7 +59,7 @@
     },
     {
       "id": "move-shown-situation-not",
-      "label": "UNKNOWN|proposed",
+      "label": "proposed|1",
       "point": {
         "aspect": "Quiet naming judgements",
         "description": "Calls a name awkward in one flat adjective, then proposes a clearer one.",
@@ -85,8 +85,8 @@
       "aside": "sentence"
     },
     {
-      "id": "always-in-three-general",
-      "label": "GENERAL|none",
+      "id": "always-in-three",
+      "label": "none|3",
       "point": {
         "aspect": "Impersonal point of view",
         "description": "Never says I or you; a finding is a bare statement about the artifact.",
@@ -110,8 +110,8 @@
       "aside": "sentence"
     },
     {
-      "id": "always-in-two-of-five-unknown",
-      "label": "UNKNOWN|none",
+      "id": "always-in-two-of-five",
+      "label": "none|2",
       "point": {
         "aspect": "Verdict line with a reason",
         "description": "The verdict line carries its reason after a dash.",
@@ -145,7 +145,7 @@
     },
     {
       "id": "register-is-not-a-move",
-      "label": "UNKNOWN|none",
+      "label": "none|3",
       "point": {
         "aspect": "Formal register",
         "description": "Clipped and professional: no jokes, no exclamation marks, almost no contractions.",
@@ -171,7 +171,7 @@
     },
     {
       "id": "section-scope-competing-explanation",
-      "label": "CONDITIONAL|supported",
+      "label": "supported|1",
       "point": {
         "aspect": "Competing explanation first",
         "description": "When the accepted explanation hides the real constraint, opens the argument with the competing explanation and only then the mechanism, across the opening paragraphs.",
@@ -192,11 +192,12 @@
           "text": "The deploy failed because the image tag moved. Pin the tag and the deploy is reproducible."
         }
       ],
-      "aside": "section"
+      "aside": "section",
+      "soft": true
     },
     {
       "id": "decision-scope-tradeoff",
-      "label": "CONDITIONAL|supported",
+      "label": "supported|1",
       "point": {
         "aspect": "Recommendation changed by a tradeoff",
         "description": "When a fix has a cost that outweighs it, recommends against the fix the diff makes and names what to do instead.",
@@ -220,8 +221,8 @@
       "aside": "decision"
     },
     {
-      "id": "terse-verdict-general",
-      "label": "GENERAL|none",
+      "id": "terse-verdict",
+      "label": "none|3",
       "point": {
         "aspect": "Abrupt closing",
         "description": "Ends on a terse verdict line with no sign-off.",
@@ -245,8 +246,8 @@
       "aside": "sentence"
     },
     {
-      "id": "one-golden-provisional-general",
-      "label": "GENERAL|none",
+      "id": "one-golden",
+      "label": "none|1",
       "point": {
         "aspect": "Impersonal point of view",
         "description": "Never says I or you; a finding is a bare statement about the artifact.",
@@ -264,7 +265,7 @@
     },
     {
       "id": "rarely-supported",
-      "label": "CONDITIONAL|supported",
+      "label": "supported|1",
       "point": {
         "aspect": "Side benefit in passing",
         "description": "When a fix has a second payoff, tacks it on with 'which also'.",
@@ -291,7 +292,7 @@
     },
     {
       "id": "concession-clause",
-      "label": "CONDITIONAL|supported",
+      "label": "supported|2",
       "point": {
         "aspect": "Concession before critique",
         "description": "When part of a change is defensible, grants it in the finding's first clause before pressing the defect.",
@@ -316,7 +317,7 @@
     },
     {
       "id": "judgement-trigger-reworded",
-      "label": "CONDITIONAL|supported",
+      "label": "supported|1",
       "aside": "decision",
       "point": {
         "aspect": "Recommendation changed by a tradeoff",

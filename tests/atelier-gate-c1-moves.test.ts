@@ -1,9 +1,10 @@
-// GATE C1: THE AUTHOR'S MOVES COMPILED FROM THE PERSONA, GROUNDED IN THE PIECES, OF A STATED APPLICABILITY
-// (core/compiler/moves.ts). A trigger is supported only by a situation quote from the same piece as the evidence;
-// the no-model floor is UNKNOWN, never general; the id is a content hash; the profile is immutable and named by the
-// build receipt; the standard is untouched.
+// GATE C1: THE AUTHOR'S MOVES COMPILED FROM THE PERSONA, GROUNDED IN THE PIECES, COUNTED, AND OF AN INFERRED KIND
+// (core/compiler/moves.ts, core/stats/habit.ts). A trigger is supported only by a situation quote from the same piece
+// as the evidence; every quote is kept verbatim at any length; the kind is a decision from the counts (never a word,
+// never a floor of pieces); the no-model floor counts the point's own quote; the id is a content hash; the profile is
+// immutable and named by the build receipt; the standard is untouched.
 import { describe, it, expect } from 'vitest';
-import { PERSONA_MOVES, MIN_EVIDENCE_WORDS, applicabilityOf, moveFloor, moveId, personaHashOf, profileOf, describeMove, describeMoves, type MovesInput } from '../core/compiler/moves.js';
+import { PERSONA_MOVES, moveFloor, moveId, personaHashOf, profileOf, inferMoves, describeMove, describeMoves, type MovesInput } from '../core/compiler/moves.js';
 import { readContext } from '../core/inference/reading.js';
 import type { PersonaPoint } from '../core/compiler/persona.js';
 
@@ -25,20 +26,27 @@ const m1 = { point: 1, trigger: 'where input is untrusted', evidence: [
   { piece: 'piece-2', quote: 'A caller can pass a negative count', situationQuote: 'The input comes straight from the form' }],
   realisation: 'one sentence from the abusive caller', forbidden: 'never an attacker the diff does not expose', scope: 'paragraph', link: 2, check: null };
 
-describe('applicability is decided by code', () => {
-  it('general needs ALWAYS in three pieces, or every piece of a small corpus (provisional); conditional needs a supported trigger; the rest is unknown', () => {
-    expect(applicabilityOf('ALWAYS', 'none', 3, 12)).toEqual({ applicability: 'GENERAL', provisional: false });
-    expect(applicabilityOf('ALWAYS', 'none', 2, 12)).toEqual({ applicability: 'UNKNOWN', provisional: false });
-    expect(applicabilityOf('ALWAYS', 'none', 2, 2)).toEqual({ applicability: 'GENERAL', provisional: true });
-    expect(applicabilityOf('ALWAYS', 'none', 1, 1)).toEqual({ applicability: 'GENERAL', provisional: true });
-    expect(applicabilityOf('OFTEN', 'none', 12, 12)).toEqual({ applicability: 'UNKNOWN', provisional: false });
-    expect(applicabilityOf('SOMETIMES', 'supported', 2, 12)).toEqual({ applicability: 'CONDITIONAL', provisional: false });
-    expect(applicabilityOf('SOMETIMES', 'proposed', 2, 12)).toEqual({ applicability: 'UNKNOWN', provisional: false });
-    expect(applicabilityOf('ALWAYS', 'supported', 1, 12)).toEqual({ applicability: 'CONDITIONAL', provisional: false });
+describe('the kind is inferred from the counts', () => {
+  it('a move in most pieces stands; one its situation explains is situational; the rest occasional; nothing is unknown', () => {
+    const draft = PERSONA_MOVES.ground(raw([m1]), input)!;
+    const units = inferMoves(draft, [], pieces, false);
+    // adversarial: made in 2 of 3, both in the situation, none outside: the situation explains it
+    expect(units[0]).toMatchObject({ kind: 'situational', pieces: 2, corpus: 3, tabled: false, trigger: { status: 'supported' } });
+    expect(units[0].rate).toMatchObject({ k: 2, n: 3 }); expect(units[0].situation).toMatchObject({ explains: true, in: { k: 2, n: 2 }, out: { k: 0, n: 1 } });
+    // the floor for the other points: the own quote's pieces, counted; 2 of 3 stands, 1 of 3 does not
+    expect(units[1]).toMatchObject({ kind: 'standing', by: 'floor', pieces: 2, situation: null }); expect(units[1].rate.pMajority).toBeGreaterThan(0.5);
+    expect(units[2]).toMatchObject({ kind: 'occasional', by: 'floor', pieces: 1 }); expect(units[2].rate.pMajority).toBeLessThan(0.5);
+    // the table fills a cell: the move found in piece-3 too, outside the situation, makes it 3 of 3 and the situation no longer explains it: standing
+    const tabled = inferMoves(draft, [{ habit: 1, piece: 'piece-3', move: 'keeps its tests', situation: null }], pieces, true);
+    expect(tabled[0]).toMatchObject({ pieces: 3, tabled: true, kind: 'standing' }); expect(tabled[0].situation).toMatchObject({ in: { k: 2, n: 2 }, out: { k: 1, n: 1 }, explains: false });
+    // a situation seen without the move counts against it, and with no piece outside the situation there is nothing to compare
+    const against = inferMoves(draft, [{ habit: 1, piece: 'piece-3', move: null, situation: 'keeps its tests' }], pieces, true);
+    expect(against[0].situationOnly).toEqual([{ piece: 'piece-3', quote: 'keeps its tests' }]);
+    expect(against[0]).toMatchObject({ situation: null, kind: 'standing', trigger: { status: 'proposed' } });
   });
-  it('the floor is UNKNOWN with the point\'s own quote as evidence, and the id is a content hash of aspect and quote', () => {
+  it('the floor is the point\'s own quote as evidence in every piece that holds it, and the id is a content hash of aspect and quote', () => {
     const f = moveFloor(points[0], pieces);
-    expect(f).toMatchObject({ applicability: 'UNKNOWN', trigger: { text: null, status: 'none' }, scope: 'UNKNOWN', link: null, check: null, by: 'floor', pieces: 1, corpus: 3 });
+    expect(f).toMatchObject({ trigger: { text: null, status: 'none' }, scope: 'UNKNOWN', link: null, check: null, by: 'floor' });
     expect(f.evidence).toEqual([{ piece: 'piece-1', quote: points[0].quote, situationQuote: null }]);
     expect(moveId(points[0])).toBe(moveId({ aspect: '  adversarial   FRAMING ', quote: 'a caller can refund more than the order total' }));
     expect(moveId(points[0])).not.toBe(moveId(points[1]));
@@ -54,23 +62,24 @@ describe('the reading as a value', () => {
     expect(PERSONA_MOVES.decide(input)).toBeNull();
     const d = await readContext(PERSONA_MOVES, input, null, null, { spentUsd: 0, capUsd: 1 });
     expect(d.by).toBe('floor');
-    expect(d.value.map((u) => u.applicability)).toEqual(['UNKNOWN', 'UNKNOWN', 'UNKNOWN']);
+    expect(d.value.map((u) => [u.by, u.evidence.length])).toEqual([['floor', 1], ['floor', 2], ['floor', 1]]);
   });
   it('a supported trigger: situation quotes from the same pieces; the link is a candidate; the forbidden line a negation', () => {
     const g = PERSONA_MOVES.ground(raw([m1]), input)!;
-    expect(g[0]).toMatchObject({ applicability: 'CONDITIONAL', trigger: { text: 'where input is untrusted', status: 'supported' }, pieces: 2, corpus: 3, scope: 'paragraph', link: { step: '2', status: 'candidate' }, forbidden: 'never an attacker the diff does not expose', by: 'model' });
+    expect(g[0]).toMatchObject({ trigger: { text: 'where input is untrusted', status: 'supported' }, scope: 'paragraph', link: { step: '2', status: 'candidate' }, forbidden: 'never an attacker the diff does not expose', by: 'model' });
     expect(g[0].evidence).toHaveLength(2);
     // the other points, unanswered, fall to the floor
-    expect(g[1]).toMatchObject({ by: 'floor', applicability: 'UNKNOWN' });
-    expect(g[2]).toMatchObject({ by: 'floor' });
-    expect(g.filter((u) => u.applicability !== 'UNKNOWN').map((u) => u.aspect)).toEqual(['Adversarial framing']);
-    expect(describeMove(g[0])).toBe('CONDITIONAL · Adversarial framing · when: "where input is untrusted" (shown in 2 piece(s)) · seen in 2 of 3 piece(s) · scope: paragraph · at step 2 (candidate) · not: never an attacker the diff does not expose');
-    expect(describeMoves(g)).toBe('3 moves: 0 general, 1 conditional, 2 unknown');
+    expect(g[1]).toMatchObject({ by: 'floor' }); expect(g[2]).toMatchObject({ by: 'floor' });
+    const u = inferMoves(g, [], pieces, true);
+    expect(describeMove(u[0])).toBe('situational · Adversarial framing · in 2 of 3 pieces [0.18, 0.96] · when: "where input is untrusted" (explains it: in 2 of 2 pieces [0.33, 1.00] in the situation, in 0 of 1 piece [0.00, 0.85] outside) · scope: paragraph · at step 2 (candidate) · not: never an attacker the diff does not expose');
+    expect(describeMove(u[2])).toBe('occasional (by the words alone) · Side benefits · in 1 of 3 pieces [0.04, 0.82]');
+    expect(describeMoves(u)).toBe('3 moves: 1 standing, 1 situational, 1 occasional');
   });
-  it('a situation quote from another piece, or not verbatim, does not support the trigger: proposed, so UNKNOWN', () => {
+  it('a situation quote from another piece, or not verbatim, does not support the trigger: proposed, and the situation has one side only', () => {
     const cross = { ...m1, evidence: [{ piece: 'piece-1', quote: 'A caller can refund more than the order total', situationQuote: 'The input comes straight from the form' }] };
     const g = PERSONA_MOVES.ground(raw([cross]), input)!;
-    expect(g[0]).toMatchObject({ trigger: { status: 'proposed' }, applicability: 'UNKNOWN', pieces: 1 });
+    expect(g[0]).toMatchObject({ trigger: { status: 'proposed' } }); expect(g[0].evidence).toHaveLength(1);
+    expect(inferMoves(g, [], pieces, false)[0]).toMatchObject({ situation: null, kind: 'occasional', trigger: { status: 'proposed' } });
     expect(g[0].evidence[0].situationQuote).toBeNull();
     const invented = { ...m1, evidence: [{ piece: 'piece-1', quote: 'A caller can refund more than the order total', situationQuote: 'the caller is hostile' }] };
     expect(PERSONA_MOVES.ground(raw([invented]), input)![0].trigger.status).toBe('proposed');
@@ -84,31 +93,25 @@ describe('the reading as a value', () => {
       { piece: 'piece-2', quote: 'these words are in no piece', situationQuote: null },
       { piece: 'piece-3', quote: 'keeps its tests', situationQuote: 'This change renames a module' }],
     realisation: 'findings as facts', forbidden: 'use the passive voice', scope: 'poem', link: 7, check: 'no-such-feature' }]), input)!;
-    expect(g[1]).toMatchObject({ trigger: { text: null, status: 'none' }, scope: 'UNKNOWN', link: null, check: null, forbidden: null, by: 'model' });
+    // the forbidden line is kept as read: guidance to a writer, never a requirement, and no pattern judges its wording
+    expect(g[1]).toMatchObject({ trigger: { text: null, status: 'none' }, scope: 'UNKNOWN', link: null, check: null, forbidden: 'use the passive voice', by: 'model' });
     expect(g[1].evidence.map((e) => e.piece)).toEqual(['piece-1', 'piece-3']);
     expect(g[1].evidence.every((e) => e.situationQuote === null)).toBe(true);
-    // ALWAYS in two distinct pieces of three is not general
-    expect(g[1].applicability).toBe('UNKNOWN');
     const g2 = PERSONA_MOVES.ground(raw([{ point: 2, trigger: null, evidence: [{ piece: 'piece-1', quote: 'Use `>=` so the state is correct', situationQuote: null }, { piece: 'piece-3', quote: 'Use `>=` so the state is correct', situationQuote: null }, { piece: 'piece-2', quote: 'is awkward: rename it', situationQuote: null }], realisation: 'x', forbidden: null, scope: 'sentence', link: null, check: 'question' }]), input)!;
-    expect(g2[1]).toMatchObject({ applicability: 'GENERAL', provisional: false, pieces: 3, check: 'question', scope: 'sentence' });
-    // a quote of one or two words shows that a line exists, not how a move is made: never evidence
-    expect(MIN_EVIDENCE_WORDS).toBe(3);
+    expect(g2[1]).toMatchObject({ check: 'question', scope: 'sentence' }); expect(g2[1].evidence).toHaveLength(3);
+    // a quote of any length is kept when verbatim: whether it shows the move is the reading's judgement, measured by its eval, never a word count
     const bare = PERSONA_MOVES.ground(raw([{ point: 2, trigger: null, evidence: [{ piece: 'piece-1', quote: 'The handler', situationQuote: null }, { piece: 'piece-2', quote: 'rename it.', situationQuote: null }], realisation: 'x', forbidden: null, scope: 'sentence', link: null, check: null }]), input)!;
-    expect(bare[1].evidence.map((e) => e.piece)).toEqual(['piece-1']);
-    // unless the move is a short line by its own quote: then a short quote is at the move's grain
-    const terse = { ...input, points: [{ aspect: 'Abrupt closing', description: 'Ends on a terse verdict line.', frequency: 'ALWAYS' as const, quote: 'rename it.' }] };
-    const ok = PERSONA_MOVES.ground(raw([{ point: 1, trigger: null, evidence: [{ piece: 'piece-2', quote: 'rename it.', situationQuote: null }, { piece: 'piece-1', quote: 'The handler', situationQuote: null }, { piece: 'piece-3', quote: 'keeps its tests.', situationQuote: null }], realisation: 'x', forbidden: null, scope: 'sentence', link: null, check: null }]), terse)!;
-    expect(ok[0]).toMatchObject({ pieces: 3, applicability: 'GENERAL' });
+    expect(bare[1].evidence.map((e) => e.piece)).toEqual(['piece-1', 'piece-2', 'piece-3']);
     expect(PERSONA_MOVES.ground(raw([{ point: 9, trigger: null, evidence: [], realisation: 'x', forbidden: null, scope: 'sentence', link: null, check: null }]), input)).toBeNull();
     expect(PERSONA_MOVES.ground({ nope: 1 }, input)).toBeNull();
   });
   it('a profile is named by its content and its persona; the time is outside the hash', () => {
-    const g = PERSONA_MOVES.ground(raw([m1]), input)!;
+    const g = inferMoves(PERSONA_MOVES.ground(raw([m1]), input)!, [], pieces, true);
     const a = profileOf(g, personaHashOf(points), 'scripted', pieces, '2026-10-19T00:00:00Z');
     const b = profileOf(g, personaHashOf(points), 'scripted', pieces, '2026-10-20T00:00:00Z');
-    expect(a.hash).toBe(b.hash); expect(a.hash).toHaveLength(12);
+    expect(a.hash).toBe(b.hash); expect(a.hash).toHaveLength(12); expect(a.schema).toBe(2);
     expect(a.personaHash).toBe(personaHashOf(points));
-    expect(profileOf(PERSONA_MOVES.floor(input), personaHashOf(points), null, pieces).hash).not.toBe(a.hash);
+    expect(profileOf(inferMoves(PERSONA_MOVES.floor(input), [], pieces, false), personaHashOf(points), null, pieces).hash).not.toBe(a.hash);
     // the pieces the evidence names trace to their text
     expect(a.pieces.map((p) => p.name)).toEqual(['piece-1', 'piece-2', 'piece-3']); expect(a.pieces[0].sha).toHaveLength(16);
     expect(profileOf(g, personaHashOf(points), 'scripted', [...pieces].reverse(), '2026-10-19T00:00:00Z').hash).not.toBe(a.hash);
@@ -125,15 +128,15 @@ import * as store from '../core/state/store.js';
 
 const CLI = resolve('dist/cli/atelier.mjs');
 const NOTE = 'How we review a change\n\n1. Open with a Summary section.\n2. Then a Must fix section.\n3. End with a Verdict section that holds one of: Approve, Request changes, Comment.\n';
-const body = (n: number): string => `I would start with the riskiest line. ${Array.from({ length: n }, (_, i) => `The change touches part ${i + 1} of the runner and keeps its tests.`).join(' ')} Tests first, then the rest.`;
+const body = (n: number): string => `I would start with the riskiest line. ${Array.from({ length: n }, (_, i) => `The change touches part ${i + 1} of the runner and keeps its tests.`).join(' ')} ${n === 1 ? 'Tests first, then the rest.' : 'Run the tests.'}`;
 const review = (verdict: string, n: number): string => `---\nrequest: Review this change.\n---\n## Summary\n${body(n)}\n\n## Must fix\nNone.\n\n## Verdict\n${verdict}\n`;
 const PERSONA = { points: [
   { aspect: 'stance', description: 'Opens from a position of my own, not a summary.', frequency: 'ALWAYS', quote: 'I would start with the riskiest line.' },
   { aspect: 'close', description: 'Closes on a short plain instruction.', frequency: 'OFTEN', quote: 'Tests first, then the rest.' },
 ] };
-// one move answered for point 1 (its quote stands in every piece, so general); point 2 unanswered falls to the floor
+// one move answered for point 1 (its quote stands in 3 of 4 pieces: standing); point 2 is adversarial
 // ADVERSARIAL: point 2 comes back with a trigger no piece shows (an invented situation quote), the same quote twice from one
-// piece, a link to a step the method does not have, and a "forbidden" line that is an instruction: proposed, so UNKNOWN;
+// piece, a link to a step the method does not have, and a "forbidden" line that is an instruction: proposed, 1 of 4, occasional;
 // one piece of evidence; no link; no forbidden line.
 const MOVES = { moves: [
   { point: 1, trigger: null, evidence: ['piece-1', 'piece-2', 'piece-3'].map((piece) => ({ piece, quote: 'I would start with the riskiest line.', situationQuote: null })),
@@ -179,21 +182,25 @@ describe('through the build', () => {
     const withModel = seed(); const without = seed(true);
     const r = withModel.run('method', 'method.md', '--golden', 'examples', '--name', 'code-review', '--yes', '--report', '--persona', 'auto', ...BACKEND());
     expect(r.code, r.out).toBe(0);
-    expect(r.out).toContain('Moves: 2 moves: 1 general, 0 conditional, 1 unknown, read from the persona and your pieces.');
+    // the table pass is asked (the backend has no answer for it, so the counts are the first reading's and the stage says so)
+    expect(r.out).toContain('Moves: 2 moves: 1 standing, 0 situational, 1 occasional, read from the persona and your pieces and tabled against every piece in 1 call(s) (not every cell was answered: the counts are the first reading\'s).');
     expect(r.out).toContain('What my moves are, and when I make them:');
-    expect(r.out).toContain('GENERAL · stance · seen in 3 of 4 piece(s) · scope: sentence · at step 1 (candidate) · not: never a summary first');
-    expect(r.out).toContain('UNKNOWN · close · when: "when the reader has a next step" (proposed, no piece shows the situation) · seen in 1 of 4 piece(s) · scope: sentence');
-    expect(r.out).toMatch(/· moves ✓ \(2 moves: 1 general, 0 conditional, 1 unknown\) ·/);
+    // the point's own quote is evidence in every piece that holds it verbatim: 4 of 4, said without an interval the counts leave nothing of
+    expect(r.out).toContain('standing · stance · in 4 of 4 pieces · scope: sentence · at step 1 (candidate) · not: never a summary first (not tabled: counts from the first reading alone)');
+    expect(r.out).toContain('occasional · close · in 1 of 4 pieces [0.03, 0.72] · when: "when the reader has a next step" (proposed, the situation not seen on both sides) · scope: sentence · not: always close softly (not tabled: counts from the first reading alone)');
+    expect(r.out).toMatch(/· moves ✓ \(2 moves: 1 standing, 0 situational, 1 occasional \(not every cell tabled\)\) ·/);
     const sv = activeOf(withModel.data);
     const receipt = store.getReceipt(L(withModel.data), sv.skillVersionHash)!;
     const profile = store.getMoves(L(withModel.data), personaHashOf(PERSONA.points as PersonaPoint[]))!;
     expect(profile).not.toBeNull();
     expect(receipt.movesHash).toBe(profile.hash);
     expect(profile.reader).toBe('scripted');
-    expect(profile.units.map((u) => u.applicability)).toEqual(['GENERAL', 'UNKNOWN']);
-    expect(profile.units[0]).toMatchObject({ pieces: 3, corpus: 4, link: { step: '1', status: 'candidate' }, by: 'model' });
-    // THE PERSISTED RECORD IS TRUTHFUL ON THE ADVERSARIAL POINT: proposed trigger, one evidence with no situation, no link, no forbidden line
-    expect(profile.units[1]).toMatchObject({ applicability: 'UNKNOWN', trigger: { text: 'when the reader has a next step', status: 'proposed' }, pieces: 1, link: null, forbidden: null, by: 'model' });
+    expect(profile.schema).toBe(2); expect(profile.reading).toBe('persona-moves-5+persona-table-1');
+    expect(profile.units.map((u) => u.kind)).toEqual(['standing', 'occasional']);
+    expect(profile.units[0]).toMatchObject({ pieces: 4, corpus: 4, link: { step: '1', status: 'candidate' }, by: 'model', tabled: false, readAs: 'ALWAYS' });
+    expect(profile.units[0].rate).toMatchObject({ k: 4, n: 4 }); expect(profile.units[0].rate.pMajority).toBeGreaterThan(0.5);
+    // THE PERSISTED RECORD IS TRUTHFUL ON THE ADVERSARIAL POINT: proposed trigger, one evidence with no situation, no link; the forbidden line kept as read
+    expect(profile.units[1]).toMatchObject({ kind: 'occasional', trigger: { text: 'when the reader has a next step', status: 'proposed' }, pieces: 1, link: null, forbidden: 'always close softly', by: 'model', situation: null });
     expect(profile.units[1].evidence).toEqual([{ piece: 'piece-1', quote: 'Tests first, then the rest.', situationQuote: null }]);
     expect(profile.pieces.map((x) => x.name)).toEqual(['piece-1', 'piece-2', 'piece-3', 'piece-4']);
     // the profile on disk is the one the receipt names, by its own hash
@@ -205,12 +212,16 @@ describe('through the build', () => {
     // THE PACKAGE CARRIES NOTHING OF IT: the profile is beside the voice, not in the skill
     const skillMd = readFileSync(join(withModel.proj, '.claude', 'skills', 'code-review', 'SKILL.md'), 'utf8');
     expect(skillMd).not.toContain('never a summary first'); expect(skillMd).not.toContain('What my moves');
+    // THE SKILL WORDS EACH POINT BY ITS COUNT, never by the reading's word: "always" seen in 3 of 4, "often" seen in 1 of 4 (a repertoire line)
+    expect(skillMd).toContain('- (in 4 of 4 pieces) Opens from a position of my own, not a summary. e.g. "I would start with the riskiest line."');
+    expect(skillMd).toContain('- (in 1 of 4 pieces [0.03, 0.72]) close: closes on a short plain instruction.');
+    expect(skillMd).not.toContain('(always)'); expect(skillMd).not.toContain('(often)');
     // A REBUILD WITH THE SAME PERSONA READS NOTHING AGAIN
     const before = (await toolsCalled()).filter((t) => t === 'emit_persona_moves').length;
     expect(before).toBe(1);
     const again = withModel.run('build', '--name', 'code-review', '--report', ...BACKEND());
     expect(again.code, again.out).toBe(0);
-    expect(again.out).toMatch(/· moves ✓ \(2 moves: 1 general, 0 conditional, 1 unknown \(kept\)\) ·/);
+    expect(again.out).toMatch(/· moves ✓ \(2 moves: 1 standing, 0 situational, 1 occasional \(kept\)\) ·/);
     expect((await toolsCalled()).filter((t) => t === 'emit_persona_moves').length).toBe(1);
     expect(store.getReceipt(L(withModel.data), activeOf(withModel.data).skillVersionHash)!.movesHash).toBe(profile.hash);
   }, 240_000);

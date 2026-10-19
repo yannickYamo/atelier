@@ -165,28 +165,28 @@ export interface MoveSelection {
   /** the most conditional moves one piece gets: about as many as the author's own pieces carry */
   readonly budget: number;
 }
-const RANK: Readonly<Record<MoveUnit['frequency'], number>> = { ALWAYS: 0, OFTEN: 1, SOMETIMES: 2, RARELY: 3 };
 /**
  * WHICH MOVES THIS REQUEST GETS, decided by code from what the reading grounded, in this order: the situation holds (a
- * general move stands by itself and is not served again); not at a step set aside for this request; shown in two pieces
- * at least; no second move of the same scope at the same step; within the author's own rate, the better-evidenced first.
- * Zero is an ordinary result. Frequency only breaks ties: a rare move the request calls for outranks a frequent one it
- * does not.
+ * standing move stands by itself and is not served again); not at a step set aside for this request; no second move of
+ * the same scope at the same step; within the author's own rate, the better-evidenced first by posterior rate. Zero is
+ * an ordinary result. A rare move the request calls for outranks a frequent one it does not: only a holding situation
+ * makes a candidate.
  */
 export function selectMoves(placement: Readonly<Record<string, Placement>>, b: Brief, units: readonly MoveUnit[], steps: readonly BriefStep[]): MoveSelection {
-  const placedOf = (u: MoveUnit): Placement => placement[u.id] ?? (u.applicability === 'GENERAL' ? { applies: 'applies', why: null } : { applies: 'unresolved', why: 'not read' });
-  const standing = units.filter((u) => u.applicability === 'GENERAL' && placedOf(u).applies === 'applies');
-  const conditional = units.filter((u) => u.applicability === 'CONDITIONAL');
+  const placedOf = (u: MoveUnit): Placement => placement[u.id] ?? (u.kind === 'standing' ? { applies: 'applies', why: null } : { applies: 'unresolved', why: 'not read' });
+  const standing = units.filter((u) => u.kind === 'standing' && placedOf(u).applies === 'applies');
+  const conditional = units.filter((u) => u.kind === 'situational');
   const unresolved = conditional.filter((u) => placedOf(u).applies === 'unresolved').map((u) => u.id);
   const notPlaced: { id: string; why: string }[] = conditional.filter((u) => placedOf(u).applies === 'set-aside').map((u) => ({ id: u.id, why: placedOf(u).why ?? 'not this case' }));
   const setAside = new Set(setAsideSteps(b, steps).map((s) => String(s.n)));
   const candidates = conditional.filter((u) => placedOf(u).applies === 'applies').filter((u) => {
     if (u.link && setAside.has(u.link.step)) { notPlaced.push({ id: u.id, why: `at step ${u.link.step}, set aside for this request` }); return false; }
-    if (u.pieces < 2) { notPlaced.push({ id: u.id, why: 'shown in one piece only' }); return false; }
     return true;
-  }).sort((a, c) => c.pieces - a.pieces || RANK[a.frequency] - RANK[c.frequency] || a.aspect.localeCompare(c.aspect));
-  // THE AUTHOR'S OWN RATE: each conditional move was seen in `pieces` of `corpus`, so the pieces carry about their sum per piece.
-  const budget = Math.max(1, Math.round(conditional.reduce((n, u) => n + (u.corpus ? u.pieces / u.corpus : 0), 0)));
+  // the better-evidenced first: the posterior rate of the move in its situation, then overall
+  }).sort((a, c) => (c.situation?.in.mean ?? c.rate.mean) - (a.situation?.in.mean ?? a.rate.mean) || c.rate.mean - a.rate.mean || a.aspect.localeCompare(c.aspect));
+  // THE AUTHOR'S OWN RATE: the expected number of situational moves in one piece of theirs is the sum of the posterior
+  // means; the nearest whole number is how many a piece of this request gets, at most.
+  const budget = Math.max(1, Math.round(conditional.reduce((n, u) => n + u.rate.mean, 0)));
   const placed: MoveUnit[] = []; const at = new Set<string>();
   for (const u of candidates) {
     const key = u.link ? `${u.scope}@${u.link.step}` : null;
@@ -224,7 +224,8 @@ export function briefNote(b: Brief, steps: readonly BriefStep[], material: reado
     // THE MOVES, AS MYSELF: only the conditional moves this request calls for, each with its situation, how it may show, the
     // author's own words as one instance, and what it is not. Never a rate to hit, never the general traits again.
     ...(moves.length ? ['How I would make this, as myself:', ...moves.map((u) => { const link = u.link; const step = link ? steps.find((s) => String(s.n) === link.step) : undefined;
-      return `- ${step ? `at step ${step.n}: ` : ''}${u.trigger.text}: ${u.realisation}, as in "${u.evidence[0]?.quote ?? u.observed}" (${u.pieces} of ${u.corpus} of my pieces).${u.forbidden ? ` Not: ${u.forbidden}.` : ''}`; })] : []),
+      const where = u.situation ? `${u.situation.in.k} of the ${u.situation.in.n} of my pieces in this situation` : `${u.pieces} of ${u.corpus} of my pieces`;
+      return `- ${step ? `at step ${step.n}: ` : ''}${u.trigger.text}: ${u.realisation}, as in "${u.evidence[0]?.quote ?? u.observed}" (${where}).${u.forbidden ? ` Not: ${u.forbidden}.` : ''}`; })] : []),
     ...b.contradicted.map((c) => { const s = steps.find((x) => x.id === c.id); return `The request says "${c.quote}", which is against step ${s?.n ?? '?'}: my method stands; follow it, and say in one line that the request asked otherwise.`; }),
     `Given: the request${material.length ? ` and ${material.map((m) => m.name).join(', ')}` : ', and nothing else'}.${open.size ? ' A specific not given is said to be missing, never invented; every decision is still made, on what is given, in the shape my method asks for.' : ''}`,
   ];

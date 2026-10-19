@@ -9,7 +9,8 @@ import { renderAgentSkill } from '../renderers/agent-skill/render.js';
 import { compileArchitecture } from '../core/architecture/compile.js';
 import type { StandardVersion } from '../core/state/canonical-state.js';
 import type { Voice } from '../core/compiler/voice.js';
-import { describePersona, describeRepertoire, countByFrequency, standingPoints, conditionalPoints, type Persona } from '../core/compiler/persona.js';
+import { describePersona, describeRepertoire, describeCounts, countByFrequency, standingPoints, conditionalPoints, type Persona } from '../core/compiler/persona.js';
+import { posterior } from '../core/stats/habit.js';
 import { aRequirement } from './fixtures.js';
 
 const persona: Persona = { dropped: 0, points: [
@@ -25,10 +26,18 @@ const voice: Voice = { passages: [], lengthWords: null, corpusPieces: 12, person
 const render = (workType = 'code reviews'): string => renderAgentSkill(stdOf(workType), compileArchitecture(stdOf(workType)), 'x', 'd', null, [], voice).files['SKILL.md'];
 
 describe('the persona, split by what holds and what is conditional', () => {
-  it('counts and splits by frequency', () => {
+  it('with no measured rate, counts and splits by the reading\'s word; with one, by the rate alone', () => {
     expect(countByFrequency(persona)).toEqual({ ALWAYS: 1, OFTEN: 1, SOMETIMES: 2, RARELY: 1 });
     expect(standingPoints(persona).map((p) => p.frequency)).toEqual(['ALWAYS', 'OFTEN']);
     expect(conditionalPoints(persona).map((p) => p.frequency)).toEqual(['SOMETIMES', 'SOMETIMES', 'RARELY']);
+    // the rate decides against the word: an "always" seen in 2 of 12 is conditional; a "rarely" seen in 11 of 12 stands; a situational habit is never served as how I sound
+    const rated: Persona = { dropped: 0, points: [
+      { ...persona.points[0], rate: posterior(2, 12), kind: 'occasional' }, { ...persona.points[4], rate: posterior(11, 12), kind: 'standing' }, { ...persona.points[2], rate: posterior(10, 12), kind: 'situational' }] };
+    expect(standingPoints(rated).map((p) => p.aspect)).toEqual(['Side benefits in passing']);
+    expect(conditionalPoints(rated).map((p) => p.aspect)).toEqual(['Impersonal point of view', 'Adversarial framing on risky surfaces']);
+    expect(describePersona({ ...rated, points: standingPoints(rated) })).toMatch(/^- \(in 11 of 12 pieces \[0\.\d\d, 0\.\d\d\]\) Tacks a secondary payoff/);
+    expect(describeRepertoire(conditionalPoints(rated))).toMatch(/^- \(in 2 of 12 pieces \[0\.\d\d, 0\.\d\d\]\) Impersonal point of view: the author never says I or you/);
+    expect(describeCounts(rated)).toBe('3 points (1 standing, 1 situational, 1 occasional)');
   });
   it('a standing point is described with its quote; a conditional one as a repertoire line, its aspect first, no quote, no imperative', () => {
     expect(describePersona({ ...persona, points: standingPoints(persona) })).toContain('- (always) The author never says I or you; findings are stated as facts about the artifact. e.g. "Use `>=` so the state is correct"');
@@ -45,7 +54,7 @@ describe('the persona, split by what holds and what is conditional', () => {
 
 describe('the compiled skill serves every frequency', () => {
   const md = render();
-  it('what holds in most or all pieces is under "How I sound", and nothing conditional is', () => {
+  it('what holds across the pieces is under "How I sound", and nothing conditional is', () => {
     const sound = md.slice(md.indexOf('How I sound (each point'), md.indexOf('Moves I make in some pieces'));
     expect(sound).toContain('(always) The author never says I or you');
     expect(sound).toContain('(often) Grants what is defensible');
