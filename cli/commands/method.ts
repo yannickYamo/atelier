@@ -17,6 +17,7 @@ import { existsSync, readFileSync, statSync } from 'node:fs';
 import { basename, resolve } from 'node:path';
 import { DATA, argv, die, flag, positional, loadSession, saveSession, archiveSession, authoredIdAllocator, runFile, sha, canReach, contextReaderClient, contextReaderModel } from '../runtime.js';
 import * as store from '../../core/state/store.js';
+import { resetStages } from '../stages.js';
 import { normalizeClass, CLASS_ALIASES } from '../../core/observers/doc-class.js';
 import { unmeasuredKind } from '../../core/loop/claim-extract.js';
 import { skillNameFrom } from '../../renderers/agent-skill/render.js';
@@ -244,6 +245,7 @@ export function decideSteps(proposals: readonly MethodProposal[], nextId: () => 
 }
 
 export async function method(): Promise<void> {
+  resetStages();
   // `atelier new <your-work> --method <note>` and `atelier method <note> --golden <your-work>` are one command; and
   // `atelier new <your-work>` with no note (--no-model, or no model set up) is the same one with no stated step:
   // the skill is what the examples show, counted, and the pieces themselves.
@@ -376,7 +378,7 @@ export async function method(): Promise<void> {
   // words, when a model was there to read: what it read, or why it read nothing. With no model set up the screen stays
   // as it was (`atelier new` has said so once already), and what the owner asked for (--persona none) is not said back.
   // Everything the build said is in --report.
-  if (!whole) for (const l of said.filter((x) => /^(Work form: |Persona: |Scope: |\(no persona: \d|\(the persona could not be derived|\(the examples could not be read for scope)/.test(x))) console.log(l);
+  if (!whole) for (const l of said.filter((x) => /^(Work form: |Persona: |Scope: |\(no persona: \d|\(the persona could not be derived|\(the examples could not be read for scope|\(a fidelity profile in this project)/.test(x))) console.log(l);
   // Required is what a run is held to. What the example showed is checked and reported, and fails nothing: said apart,
   // so that the count of what is enforced is never larger than it is.
   // The screen above already said what is checked and what is theirs: all that is left to say is that it is ready.

@@ -8,7 +8,7 @@
 // The standard is never touched here. A release names the standard's hash and the skill version, and
 // every change below the standard is a new release with a parent.
 
-import { existsSync } from 'node:fs';
+import { existsSync, renameSync, rmSync } from 'node:fs';
 import * as store from '../core/state/store.js';
 import * as fstore from '../core/state/fidelity-store.js';
 import { makeRelease, assertSameStandard } from '../core/fidelity/release.js';
@@ -63,10 +63,15 @@ export function ratifiedProfile(p: FidelityProfile, v: StandardVersion): Fidelit
  * first implementation release for this skill version. Returns the release, or null for a skill built
  * without a corpus (a standard written by hand has no author's range to steer toward).
  */
-export function installFidelity(L: store.StoreLayout, v: StandardVersion, skillVersionHash: string): ImplementationRelease | null {
+export function installFidelity(L: store.StoreLayout, v: StandardVersion, skillVersionHash: string, expectCorpusHash: string | null = null): ImplementationRelease | null {
   const profileFile = runFile('fidelity.json'); const indexFile = runFile('retrieval.json');
   if (!existsSync(profileFile)) return null;
-  const profile = ratifiedProfile(readJson<FidelityProfile>(profileFile, { what: 'the fidelity profile' }), v);
+  const read = readJson<FidelityProfile>(profileFile, { what: 'the fidelity profile' });
+  // ONLY A PROFILE OF THESE PIECES. The run folder is the project's, so a profile discovery wrote for one corpus was
+  // installed by any later build in that folder (a method build, a skill from stated rules) for pieces it never
+  // measured. A profile is installed only for the sealed corpus it names; anything else is set aside, kept, and said.
+  if (expectCorpusHash === null || read.corpusHash !== expectCorpusHash) { quarantineRunFiles(); return null; }
+  const profile = ratifiedProfile(read, v);
   fstore.setProfile(L, profile);
   const index = existsSync(indexFile) ? readJson<RetrievalIndex>(indexFile, { what: 'the retrieval index' }) : null;
   if (index) fstore.setRetrievalIndex(L, index);
@@ -91,6 +96,25 @@ export function installFidelity(L: store.StoreLayout, v: StandardVersion, skillV
   }));
   fstore.setActiveRelease(L, release.id);
   return release;
+}
+
+/** The discovery artifacts set aside at the last `installFidelity`, by name; empty when none was. */
+let setAside: string[] = [];
+export const lastSetAside = (): readonly string[] => setAside;
+/**
+ * A PROFILE THAT IS NOT THIS BUILD'S IS SET ASIDE, NOT DELETED: renamed beside itself (`fidelity.stale.json`) with the
+ * signals, index and calibration written with it, so what was there can still be read, and so no later build in this
+ * folder installs it either. Said once by the caller.
+ */
+export function quarantineRunFiles(): readonly string[] {
+  setAside = [];
+  for (const f of ['fidelity', 'signals', 'retrieval', 'typicality']) {
+    const from = runFile(`${f}.json`);
+    if (!existsSync(from)) continue;
+    const to = runFile(`${f}.stale.json`);
+    rmSync(to, { force: true }); renameSync(from, to); setAside.push(`${f}.stale.json`);
+  }
+  return setAside;
 }
 
 /**

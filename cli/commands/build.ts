@@ -50,7 +50,11 @@ import { buildProposal, renderProposal, unconfirmedIn } from '../../core/compile
 import { defaultPlan, maintenanceMap, describeMaintenance } from '../../core/coverage/observation.js';
 import { planImprovement, describeImprovement, type UndoRecord } from '../../core/compiler/apply.js';
 import type { AdaptedComponent } from '../../core/intake/package.js';
-import { installFidelity } from '../fidelity.js';
+import { installFidelity, lastSetAside } from '../fidelity.js';
+import * as fstore from '../../core/state/fidelity-store.js';
+import { recordStage, stagesSoFar, resetStages } from '../stages.js';
+import { receiptOf, describeStages } from '../../core/state/receipt.js';
+import { stepsOf } from '../../core/method/standard.js';
 import { skillCardFor } from '../skill-card.js';
 import { renderSkillCard } from '../../core/eval/skill-card.js';
 import * as store from '../../core/state/store.js';
@@ -228,6 +232,7 @@ async function chooseVoice(L: store.StoreLayout, v: StandardVersion, workForm: W
   // HOW MUCH THE AUTHOR WRITES FOR WHAT WAS ASKED (core/compiler/scope.ts), for a skill that answers requests: read
   // once from the examples, with the request each one answers when its file carries it. A failure costs the reading,
   // never the build: the profile is then counts alone, and states no habit nobody read.
+  recordStage('scope', answers ? (voice.scope ? { ran: true, detail: `${voice.scope.examples} example(s), kept` } : { ran: false, why: 'fewer than 3 request-and-answer pairs' }) : { ran: false, why: 'the work does not answer requests' });
   if (answers && (!voice.scope || personaFlag === 'auto')) {
     const pairs = sessionPairs();
     // Said once, by name: such a file's request was learned as the author's writing by every reading before this one.
@@ -240,12 +245,13 @@ async function chooseVoice(L: store.StoreLayout, v: StandardVersion, workForm: W
         // A build that promised to call no model (`atelier method`) states the counts alone, and says nothing.
         if (NO_MODEL()) throw new Error(QUIET);
         scope = await onCorpusReader((c) => deriveScope(c, scopeBudget, pairs, proposerModel()));
+        recordStage('scope', { ran: true, detail: `${scope.examples} example(s)` });
         console.log(`Scope: what ${scope.examples} example(s) add beyond what was asked, ${scope.paired} of them read with the request they answer`
           + (scope.dropped ? ` (${scope.dropped} finding(s) dropped: not quoted from the answer)` : '')
           + `${scope.unread ? ` (${scope.unread} example(s) not read${scope.beyond.length ? '' : ': too many to state a habit from the rest'})` : ''}; $${scopeBudget.spentUsd.toFixed(3)}. No usual length is stated: the request sets it.`);
       } catch (e) {
         scope = groundScope(pairs, null, null);
-        if ((e as Error).message !== QUIET) console.log(`(the examples could not be read for scope: ${(e as Error).message.split('\n')[0]}; the skill states that the request sets the length, and no habit.)`);
+        if ((e as Error).message === QUIET) recordStage('scope', { ran: false, why: 'no model read the examples' }); else { recordStage('scope', { ran: false, why: `the call failed: ${(e as Error).message.split('\n')[0]}`, degraded: true }); console.log(`(the examples could not be read for scope: ${(e as Error).message.split('\n')[0]}; the skill states that the request sets the length, and no habit.)`); }
       }
       voice = { ...voice, scope };
       if (voiceFlag === undefined && !WHOLE_PIECES() && !voice.servedWhole) voice = spreadExamples(voice, pairs);
@@ -292,12 +298,13 @@ async function chooseVoice(L: store.StoreLayout, v: StandardVersion, workForm: W
   // the gap was found by reading their stored voice. Nothing is said for a voice kept from an earlier build (its
   // persona is kept with it) or for a composite (said where the composite is built).
   const kept = voice;
-  const noPersona = (why: string): Voice => { console.log(`(no persona: ${why})`); return kept; };
-  if (personaFlag === 'none') { console.log('(no persona: --persona none.)'); return { ...voice, persona: undefined }; }
+  const noPersona = (why: string): Voice => { console.log(`(no persona: ${why})`); recordStage('persona', { ran: false, why }); return kept; };
+  const heldPersona = (why: string): Voice => { recordStage('persona', voice.persona ? { ran: true, detail: `${voice.persona.points.length} points` } : { ran: false, why }); return voice; };
+  if (personaFlag === 'none') { console.log('(no persona: --persona none.)'); recordStage('persona', { ran: false, why: '--persona none' }); return { ...voice, persona: undefined }; }
   // A composite has no persona: one read over several authors' pieces describes their average (see above).
-  if (!derivesPersona || voice.composite || (personaFlag !== 'auto' && voice.persona)) return voice;
+  if (!derivesPersona || voice.composite || (personaFlag !== 'auto' && voice.persona)) return heldPersona(voice.composite ? 'a composite voice has no persona' : 'kept from an earlier build');
   // A persona already held is kept where it cannot be read again (--persona auto from a folder without the pieces, or with no model).
-  if (voice.persona && (readable.length < 3 || NO_MODEL())) return voice;
+  if (voice.persona && (readable.length < 3 || NO_MODEL())) return heldPersona('kept');
   // Three pieces at least: a habit's frequency is read across pieces, and across two there is no "most".
   if (readable.length < 3) return noPersona(`${readable.length} piece(s) can be read here; three or more are needed to say how often a habit holds.`);
   if (NO_MODEL()) return noPersona('no model read the pieces (none is set up, or --no-model); how the author sounds is read by one.');
@@ -305,12 +312,17 @@ async function chooseVoice(L: store.StoreLayout, v: StandardVersion, workForm: W
   try {
     const persona = reconcilePersona(await onCorpusReader((c) => derivePersona(c, budget, readable)), standardForbids(v));
     // Nothing to say about a persona with no point in it: it adds nothing to the skill.
+    recordStage('persona', { ran: true, detail: `${persona.points.length} points` });
     if (persona.points.length) console.log(`Persona: ${persona.points.length} point(s) on how the author sounds, each with how often and a quote from their pieces`
       + (persona.dropped ? ` (${persona.dropped} dropped: their quote was not in the pieces)` : '')
       + `${persona.conflicting ? ` (${persona.conflicting} dropped: they describe a move your standard rules out)` : ''}; $${budget.spentUsd.toFixed(3)}. Turn off with --persona none.`);
     return { ...voice, persona };
   } catch (e) {
-    console.log(`(the persona could not be derived: ${(e as Error).message.split('\n')[0]}; the skill is built without it.)`);
+    // SAID WITH THE WAY BACK, AND RECORDED: a skill built without its persona on a failed call is a degraded build, not
+    // a build without a persona; the receipt says so and `status` shows it until a later build reads it.
+    const why = (e as Error).message.split('\n')[0];
+    console.log(`(the persona could not be derived: ${why}; the skill is built without it. Read it later: atelier build --name ${L.skillName} --persona auto.)`);
+    recordStage('persona', { ran: false, why: `the call failed: ${why}`, degraded: true });
     return voice;
   }
 }
@@ -395,6 +407,9 @@ function amendedFrom(L: store.StoreLayout, closed: StandardVersion): StandardVer
 export async function build(nameArg?: string, opts: { closing?: boolean } = {}): Promise<void> {
   let s = loadSession();
   const name = skillNameFrom(nameArg ?? flag('--name') ?? die('--name required'));
+  // The stages of this build, for its receipt (core/state/receipt.ts): a command that orchestrates this one has begun
+  // recording; a build on its own starts the record here.
+  if (!orchestrated()) resetStages();
   // THE FIRST THING A NEW USER HITS IF THEY RUN THIS TOO EARLY, so it says what to do rather than
   // what failed. It used to surface a raw ENOENT with an absolute store path — technically accurate,
   // and useless to someone who has simply not minted a standard yet.
@@ -587,7 +602,7 @@ export async function build(nameArg?: string, opts: { closing?: boolean } = {}):
   if (s.ledger?.records.some((r) => r.resultingStandardVersionHash === v.standardVersionHash)) {
     store.putLedger(L, v.standardVersionHash, s.ledger);
   }
-  store.putStandard(L, v); store.putSkillVersion(L, skill); store.putArchitecture(L, arch); store.putPackage(L, pkg0); store.setActive(L, skill.skillVersionHash);
+  store.putStandard(L, v); store.putSkillVersion(L, skill); store.putArchitecture(L, arch); store.putPackage(L, pkg0);
   // THE AUTHOR'S STANDARD WORDING, read over every piece of theirs that can still be read (those held back
   // included: a clause they use anywhere is theirs). Kept with the stored voice for the copying check and never
   // written into a package. Where the pieces cannot be read, what an earlier build found is kept.
@@ -604,12 +619,33 @@ export async function build(nameArg?: string, opts: { closing?: boolean } = {}):
   // The composite the owner chose (core/composite), kept with the skill as data; null for a skill of one author.
   if (s.evidence) store.setComposite(L, s.composite ?? null);
   store.setExemplar(L, exemplar?.text ?? null, exemplar?.request ?? null); store.setMethod(L, methodText?.text ?? null); store.setVoice(L, storedVoice); store.setDocClass(L, docClass); store.setContrast(L, { off: contrastOff, pairs: chosenPairs });
-  // The author's signals, read off their pieces against the model's drafts at discovery (never a rule).
-  if (existsSync(runFile('signals.json'))) store.setSignals(L, readJson<StoredSignal[]>(runFile('signals.json'), { what: 'the discovered signals', kind: 'array' }));
   // The fidelity profile and the first implementation release (cli/fidelity.ts): what steers drafts toward
-  // the author's range, below the standard and never able to move it.
-  const release = installFidelity(L, v, skill.skillVersionHash);
+  // the author's range, below the standard and never able to move it. Only a profile of this build's sealed corpus:
+  // one another build left in the run folder is set aside (`quarantineRunFiles`), and the signals written with it too.
+  const expectCorpus = s.evidence?.corpusHash ?? null;
+  const hadProfile = existsSync(runFile('fidelity.json')); const hadSignals = existsSync(runFile('signals.json'));
+  const release = installFidelity(L, v, skill.skillVersionHash, expectCorpus);
+  const aside = lastSetAside();
+  if (hadProfile && !release && aside.length) console.log(`(a fidelity profile in this project's run folder is not from these pieces: set aside as fidelity.stale.json, not installed.)`);
   if (release) console.log(`Implementation release ${release.id}: ${release.settings.drafts} drafts, up to ${release.settings.editBudget} structural edit(s)${release.retrievalHash ? `, ${release.settings.retrievalK} of your passages retrieved per request` : ''}.`);
+  const installed = release ? fstore.getProfile(L) : null;
+  recordStage('profile', installed ? { ran: true, detail: `${installed.bands.filter((b) => b.cls === 'all').length} feature(s) banded` }
+    : { ran: false, why: hadProfile ? 'a profile in the run folder was not from these pieces: set aside' : s.evidence ? 'discovery wrote no profile' : 'no sealed corpus was read with a model: no bands' });
+  // The author's signals, read off their pieces against the model's drafts at discovery (never a rule): installed with
+  // the profile they were written beside, never without it.
+  if (release && existsSync(runFile('signals.json'))) store.setSignals(L, readJson<StoredSignal[]>(runFile('signals.json'), { what: 'the discovered signals', kind: 'array' }));
+  recordStage('signals', release && hadSignals ? { ran: true, detail: `${store.getSignals(L).length} signal(s)` } : { ran: false, why: hadSignals ? 'set aside with the profile' : installed ? 'fewer than 2 model drafts' : 'no model drafts to compare with' });
+  recordStage('contrast', installed?.detector ? { ran: true, detail: `${installed.detector.trainedOn.model} model draft(s)` } : { ran: false, why: s.evidence ? 'no model drafts' : 'no model-read corpus: a method, stated rules, or fewer than four pieces' });
+  recordStage('method', methodText ? { ran: true, detail: `${stepsOf(methodText.text).length} step(s) served whole` } : { ran: false, why: 'no method note' });
+  const counted = v.requirements.filter((r) => r.wordedFromCheck && r.authority !== 'EXPERT_REJECTED').length;
+  recordStage('counted', counted ? { ran: true, detail: `${counted} rule(s) counted off the pieces` } : { ran: false, why: 'nothing counted off the pieces' });
+  // THE RECEIPT, THEN THE SWITCH. Everything the version needs is in place before the active pointer moves to it, so a
+  // build that stops part-way leaves the skill that was active, whole.
+  const receipt = receiptOf({ skillVersionHash: skill.skillVersionHash, standardVersionHash: v.standardVersionHash, architectureHash: arch.architectureHash, packageHash: pkg0.packageHash,
+    corpusHash: expectCorpus, methodHash: methodText ? sha(methodText.text) : null, models: { contextReader: NO_MODEL() ? 'none' : contextReaderModel() ?? 'none' }, stages: stagesSoFar(), builtAt: new Date().toISOString() });
+  store.putReceipt(L, receipt);
+  console.log(describeStages(receipt.stages));
+  store.setActive(L, skill.skillVersionHash);
 
   // ── IMPROVE: WRITE INTO THE USER'S OWN SKILL ───────────────────────────────────────────────
   //
@@ -861,10 +897,11 @@ async function workFormFor(L: store.StoreLayout, v: StandardVersion, method: { t
     const chosen: WorkForm = asked === 'REPLY' ? 'REPLY' : 'DOCUMENT';
     store.setWorkForm(L, chosen);
     console.log(`Work form: ${chosen === 'REPLY' ? 'replies in a conversation' : 'documents'}, as you said.`);
+    recordStage('work-form', { ran: true, detail: chosen === 'REPLY' ? 'replies' : 'documents' });
     return chosen;
   }
   const stored = store.getWorkForm(L);
-  if (stored && flag('--persona')?.trim().toLowerCase() !== 'auto') return stored;
+  if (stored && flag('--persona')?.trim().toLowerCase() !== 'auto') { recordStage('work-form', { ran: true, detail: stored === 'REPLY' ? 'replies' : 'documents' }); return stored; }
   const fromSession = sessionPairs().map((p) => ({ text: withoutFrontMatter(p.text), request: p.request }));
   const storedPieces = store.getVoice(L)?.pieces ?? [];
   // The one worked example counts as evidence too: a single sectioned piece is a document.
@@ -874,6 +911,7 @@ async function workFormFor(L: store.StoreLayout, v: StandardVersion, method: { t
   const d = await readContext(WORK_FORM, input, NO_MODEL() ? null : contextReaderClient(), model, { spentUsd: 0, capUsd: 0.2, maxCalls: 1 });
   // `--review` writes nothing: the reading is made and said, and kept only by a build that commits.
   if (!argv.includes('--review')) store.setWorkForm(L, d.value);
+  recordStage('work-form', { ran: true, detail: d.value === 'REPLY' ? 'replies' : 'documents' });
   // A READER THAT CANNOT BE REACHED IS NOT ASKED AGAIN THIS BUILD. A key set for a backend that answers nothing made every
   // reading after this one wait its own retries out (a minute, for a build that needs none of them): the first failure
   // turns the rest of the build's readings off, said once, and the build finishes as a build with no model does.

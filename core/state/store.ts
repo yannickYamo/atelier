@@ -18,6 +18,7 @@ import type { Recurrence, VersionBreakRates } from '../mining/recurrence.js';
 import type { QualityFloorContract, FloorQualification, FrozenBaselineEntry } from '../distinctiveness/floor.js';
 import { mkdirSync, readFileSync, existsSync, readdirSync, appendFileSync, rmSync } from 'node:fs';
 import { writeAtomic } from './fs-atomic.js';
+import type { BuildReceipt } from './receipt.js';
 import { readJson, MalformedStoreFile } from './read-json.js';
 import { join, dirname } from 'node:path';
 import type { Observation } from '../measurement/observation.js';
@@ -605,6 +606,16 @@ export function listFeedback(l: StoreLayout): readonly FeedbackRecord[] {
 }
 
 /** The ONLY mutable file. Rollback moves this and nothing else. */
+/** THE BUILD RECEIPT (./receipt.ts), beside the version it describes and keyed by the version's hash. */
+export function putReceipt(l: StoreLayout, r: BuildReceipt): void {
+  const d = join(dirs(l).base, 'receipts'); mkdirSync(d, { recursive: true });
+  writeAtomic(join(d, `${r.skillVersionHash}.json`), JSON.stringify(r, null, 1));
+}
+export function getReceipt(l: StoreLayout, skillVersionHash: string): BuildReceipt | null {
+  const p = join(dirs(l).base, 'receipts', `${skillVersionHash}.json`);
+  return existsSync(p) ? readJson<BuildReceipt>(p, { what: 'the build receipt', requireKeys: ['receiptHash', 'stages'] }) : null;
+}
+
 export function setActive(l: StoreLayout, skillVersionHash: string): void {
   if (!getSkillVersion(l, skillVersionHash)) {
     throw new Error(`STORE: cannot activate ${skillVersionHash} — no such version. Activation points at history; it does not create it.`);
