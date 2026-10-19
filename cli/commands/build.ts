@@ -143,6 +143,8 @@ async function chooseVoice(L: store.StoreLayout, v: StandardVersion, workForm: W
   if (answers && asked.form === 'excerpts') die('--pieces excerpts applies to a skill that writes: the answers this skill shows are short, and are shown whole. Use --piece-budget to show fewer of them.');
   if (voiceFlag === 'none') {
     if (reselect) die('--voice none serves none of your pieces, so --piece-budget and --pieces have nothing to choose from: drop one of them.');
+    recordStage('persona', { ran: false, why: 'no pieces served (--voice none, or one example alone)' });
+    recordStage('scope', { ran: false, why: 'no pieces served' });
     return null;
   }
   const stored = store.getVoice(L);
