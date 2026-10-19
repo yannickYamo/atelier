@@ -92,7 +92,7 @@ describe('the receipt of a method build', () => {
     // the same build again decides the same: the receipt hash is stable, the time is not part of it
     const again = run('build', '--name', 'code-review', '--report', ...BACKEND());
     expect(again.code, again.out).toBe(0);
-    expect(again.out).toMatch(/^Stages: method ✓ \(3 step\(s\) served whole\) · counted rules ✓ .* · work form ✓ \(documents\) · persona ✓ \(2 points \(1 always, 1 often\)\) · scope — the work does not answer requests · author profile — .* · signals — .* · model contrast — /m);
+    expect(again.out).toMatch(/^Stages: method ✓ \(3 step\(s\) served whole\) · counted rules ✓ .* · work form ✓ \(documents\) · persona ✓ \(2 points \(1 always, 1 often\)\) · moves — .* · scope — the work does not answer requests · author profile — .* · signals — .* · model contrast — /m);
     expect(store.getReceipt(L(data), store.getActive(L(data))!)!.receiptHash).toBe(receipt!.receiptHash);
   }, 120_000);
 

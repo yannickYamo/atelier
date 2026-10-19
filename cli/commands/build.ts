@@ -26,6 +26,7 @@ import { deriveScope, groundScope, spreadByKind, type ScopeProfile } from '../..
 const ANSWER_EXAMPLE_WORDS = 1200;
 import { WORK_FORM, type WorkForm } from '../../core/observers/work-form.js';
 import { readContext } from '../../core/inference/reading.js';
+import { PERSONA_MOVES, profileOf, personaHashOf, describeMoves, describeMove, type MoveProfile } from '../../core/compiler/moves.js';
 import { isGeneralScope } from '../../core/state/canonical-state.js';
 import { moveEvidence, readHoldsBack, ownerWrote, HOLDS_BACK } from '../../core/compiler/applicability.js';
 import { normalizeClass } from '../../core/observers/doc-class.js';
@@ -334,6 +335,37 @@ async function chooseVoice(L: store.StoreLayout, v: StandardVersion, workForm: W
  * each, labelled with whose they are; the traits taken from each, for "how I sound"; and every piece of every author
  * in the folder for the copying check alone (never served). Null when no author's pieces can be read here.
  */
+/**
+ * THE AUTHOR'S MOVES (core/compiler/moves.ts): each persona point compiled for execution, with its trigger grounded in a
+ * situation quote from the same piece, its scope and its candidate step, and an applicability decided by code. Read
+ * once per persona and kept by the persona's hash, so a rebuild with the same persona spends nothing; a floor profile
+ * (no model) is read again when a model is there. Nothing here is a requirement, and an unknown move is served to no
+ * run as a rule.
+ */
+async function movesFor(L: store.StoreLayout, voice: Voice | null, methodText: { text: string } | null): Promise<MoveProfile | null> {
+  const points = voice?.persona?.points ?? [];
+  if (!points.length) { recordStage('moves', { ran: false, why: voice?.persona ? 'the persona has no point' : 'no persona' }); return null; }
+  const personaHash = personaHashOf(points);
+  const kept = store.getMoves(L, personaHash);
+  if (kept && (kept.reader !== null || NO_MODEL())) {
+    if (kept.reader !== null) recordStage('moves', { ran: true, detail: `${describeMoves(kept.units)} (kept)` });
+    else recordStage('moves', { ran: false, why: `by the words alone, kept: ${describeMoves(kept.units)}` });
+    return kept;
+  }
+  const pieces = sessionCorpus().map(withoutFrontMatter).map((text, i) => ({ name: `piece-${i + 1}`, text }));
+  const steps = methodText ? stepsOf(methodText.text).map((st, i) => ({ n: i + 1, text: st.text })) : [];
+  const noModel = NO_MODEL();
+  const d = await readContext(PERSONA_MOVES, { points, pieces, steps }, noModel ? null : contextReaderClient(), noModel ? null : contextReaderModel(), { spentUsd: 0, capUsd: 0.3, maxCalls: 1 });
+  const profile = profileOf(d.value, personaHash, d.by === 'model' ? contextReaderModel() : null);
+  store.putMoves(L, personaHash, profile);
+  if (d.by === 'model') {
+    recordStage('moves', { ran: true, detail: describeMoves(profile.units) });
+    console.log(`Moves: ${describeMoves(profile.units)}, read from the persona and your pieces. A general move holds in three or more pieces; a conditional one has the situation it answers shown in a piece; an unknown one is served to no run as a rule.`);
+  } else recordStage('moves', { ran: false, why: `${d.why ?? 'no model'}: every move is of unknown applicability` });
+  if (argv.includes('--report') && profile.units.length) console.log(`What my moves are, and when I make them:\n${profile.units.map((u) => `  - ${describeMove(u)}`).join('\n')}`);
+  return profile;
+}
+
 function compositeVoice(c: CompositeRecord, v: StandardVersion, budget: number | null, form: PieceForm): Voice | null {
   const pathsFile = runFile('corpus-paths.json');
   if (!existsSync(pathsFile)) return null;
@@ -564,6 +596,9 @@ export async function build(nameArg?: string, opts: { closing?: boolean } = {}):
   const form = await workFormFor(L, v, methodText, exemplar);
   const voice0 = await chooseVoice(L, v, form);
   const voice = voice0 ? { ...voice0, form } : null;
+  // THE AUTHOR'S MOVES, compiled from the persona (core/compiler/moves.ts): a profile beside the voice, never in the
+  // package or the standard, read once per persona. A review builds nothing and reads nothing.
+  const moves = argv.includes('--review') ? null : await movesFor(L, voice, methodText);
   if (!argv.includes('--review')) reportOwnPieces(v, name, s);
   const pkg0 = renderAgentSkill(v, arch, name, desc, exemplar, shipped, voice, methodText);
   const skill = { skillVersionHash: sha(`${arch.architectureHash}|${pkg0.packageHash}`), skillName: name,
@@ -644,7 +679,7 @@ export async function build(nameArg?: string, opts: { closing?: boolean } = {}):
   // THE RECEIPT, THEN THE SWITCH. Everything the version needs is in place before the active pointer moves to it, so a
   // build that stops part-way leaves the skill that was active, whole.
   const receipt = receiptOf({ skillVersionHash: skill.skillVersionHash, standardVersionHash: v.standardVersionHash, architectureHash: arch.architectureHash, packageHash: pkg0.packageHash,
-    corpusHash: expectCorpus, methodHash: methodText ? sha(methodText.text) : null, models: { contextReader: NO_MODEL() ? 'none' : contextReaderModel() ?? 'none' }, stages: stagesSoFar(), builtAt: new Date().toISOString() });
+    corpusHash: expectCorpus, methodHash: methodText ? sha(methodText.text) : null, models: { contextReader: NO_MODEL() ? 'none' : contextReaderModel() ?? 'none' }, movesHash: moves?.hash ?? null, stages: stagesSoFar(), builtAt: new Date().toISOString() });
   store.putReceipt(L, receipt);
   // Said in the whole account and by `status`; under `atelier new` the short screen stays the owner's.
   if (!orchestrated() || argv.includes('--report')) console.log(describeStages(receipt.stages));

@@ -8,7 +8,7 @@
 // recorded for `status` to show and for a later build to repair.
 import { createHash } from 'node:crypto';
 
-export type StageId = 'method' | 'persona' | 'work-form' | 'scope' | 'counted' | 'profile' | 'signals' | 'contrast';
+export type StageId = 'method' | 'persona' | 'moves' | 'work-form' | 'scope' | 'counted' | 'profile' | 'signals' | 'contrast';
 
 export interface BuildStage {
   readonly id: StageId;
@@ -36,6 +36,8 @@ export interface BuildReceipt {
   readonly methodHash: string | null;
   /** the models that read at this build, by role (persona, context reader), as configured */
   readonly models: Readonly<Record<string, string>>;
+  /** the author's move profile this build read or kept (core/compiler/moves.ts), by its content hash; null when none */
+  readonly movesHash?: string | null;
   readonly stages: readonly BuildStage[];
   readonly builtAt: string;
 }
@@ -53,11 +55,11 @@ export function receiptOf(body: Omit<BuildReceipt, 'receiptHash' | 'schema'>): B
 export const degradedStages = (r: Pick<BuildReceipt, 'stages'>): BuildStage[] => r.stages.filter((s) => s.degraded);
 
 const LABEL: Readonly<Record<StageId, string>> = {
-  method: 'method', persona: 'persona', 'work-form': 'work form', scope: 'scope', counted: 'counted rules',
+  method: 'method', persona: 'persona', moves: 'moves', 'work-form': 'work form', scope: 'scope', counted: 'counted rules',
   profile: 'author profile', signals: 'signals', contrast: 'model contrast',
 };
 
-const ORDER: readonly StageId[] = ['method', 'counted', 'work-form', 'persona', 'scope', 'profile', 'signals', 'contrast'];
+const ORDER: readonly StageId[] = ['method', 'counted', 'work-form', 'persona', 'moves', 'scope', 'profile', 'signals', 'contrast'];
 
 /** One line for the screen, in the order a build reads: each stage, ran with its detail or not with its reason. */
 export function describeStages(stages: readonly BuildStage[]): string {

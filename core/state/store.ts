@@ -19,6 +19,7 @@ import type { QualityFloorContract, FloorQualification, FrozenBaselineEntry } fr
 import { mkdirSync, readFileSync, existsSync, readdirSync, appendFileSync, rmSync } from 'node:fs';
 import { writeAtomic } from './fs-atomic.js';
 import type { BuildReceipt } from './receipt.js';
+import type { MoveProfile } from '../compiler/moves.js';
 import type { DecisionUnit } from './canonical-state.js';
 import { readJson, MalformedStoreFile } from './read-json.js';
 import { join, dirname } from 'node:path';
@@ -765,4 +766,18 @@ export function recordBinding(l: StoreLayout, skillVersionHash: string, binding:
   mkdirSync(dirs(l).bindings, { recursive: true });
   const next: BindingLog = { bindings: [...existing, { binding, hash: h, firstSeenAt: new Date().toISOString() }] };
   writeAtomic(bindingPath(l, skillVersionHash), JSON.stringify(next, null, 1));
+}
+
+/**
+ * THE AUTHOR'S MOVE PROFILE (core/compiler/moves.ts), keyed by the hash of the persona it was read from: an immutable
+ * implementation artifact beside the voice, never in the standard or the package, so a model's reading of the moves
+ * moves no standard hash and a rebuild with the same persona reuses it. The build receipt names the profile's hash.
+ */
+export function putMoves(l: StoreLayout, personaHash: string, profile: MoveProfile): void {
+  const d = join(dirs(l).base, 'moves'); mkdirSync(d, { recursive: true });
+  writeAtomic(join(d, `${personaHash}.json`), JSON.stringify(profile, null, 1));
+}
+export function getMoves(l: StoreLayout, personaHash: string): MoveProfile | null {
+  const p = join(dirs(l).base, 'moves', `${personaHash}.json`);
+  return existsSync(p) ? readJson<MoveProfile>(p, { what: 'the move profile', requireKeys: ['hash', 'units'] }) : null;
 }

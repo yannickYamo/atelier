@@ -149,6 +149,26 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 - **A reader that cannot be reached is asked once.** With a key set for a backend that answers nothing, a build waited
   out the retries of every reading in turn; the first failure now turns the rest of that build's readings off, said once.
 
+### Your moves, compiled: when you make each one, and whether that is known
+
+- **Each point of the persona is now compiled for execution, not only described.** A build with a model reads, for
+  every point, the situation in which you make the move, how it may show, what it is not, what it governs (a
+  wording, a paragraph, the shape of an argument, a decision), the step of your method it realises, and the counted
+  feature that measures it where one does. Every claim is grounded in your pieces: each quote must be verbatim in the
+  piece it names, and a situation counts as shown only by a second quote from the same piece as the move, because a
+  quote proves the move and not why you made it.
+- **Whether a move is general, conditional or unknown is decided by code, never by the reading.** General needs a
+  habit marked "always" shown in three distinct pieces (or in every piece of a corpus under three, said as
+  provisional); conditional needs a situation shown; everything else is unknown, including everything a build
+  without a model produces. An unknown move is served to no run as a rule: the no-model floor cannot turn an unknown
+  trigger into "always".
+- **The profile is immutable and beside the voice.** Named by its content, keyed by the persona it was read from, so a
+  rebuild with the same persona reads nothing again; the build receipt names it; the standard and the package are
+  the same bytes with and without it. `--report` lists each move with its applicability, its situation and how many
+  pieces show it; the stage line says "moves ✓ (20 moves: 9 general, 4 conditional, 7 unknown)". A step link is a
+  candidate until you confirm it; a "what it is not" line is guidance, kept only as a negation, never a requirement.
+  Which moves fit one request is not yet said to the writer.
+
 ### Every move the persona read of you is served, each as what it is
 
 - **A habit of some of your pieces now reaches the writer.** The persona reads every point with how often it holds.
@@ -246,6 +266,25 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
   Anything short of that leaves it a candidate. `--set` is your own choice and takes effect at once.
 - `atelier rate` takes optional reasons from a closed list (necessary part missing, unnecessary extra, wrong, unsafe,
   unsupported claim, asks instead of acting, too long, too short, voice off).
+
+### Studies: the reading of your moves, live (development evidence, $0.03)
+
+The reading that compiles each persona point into a move (`persona-moves`) was evaluated on `claude-haiku-5-5`,
+twelve cases, five runs each, before it decided anything in a build. The label is the applicability and the trigger
+status, both decided by code from what the reading grounds.
+
+- Version 1 (36 of 60): the reading quoted bare verdict lines ("Approve") of pieces where the move was not made as
+  evidence of "the verdict carries its reason after a dash", and a habit of two pieces in five came out general in
+  two runs of five. The prompt had said what evidence is, not what it is not.
+- Version 2 (43 of 60): the prompt says a piece in which the author did not make the move is no evidence, and code
+  refused any quote under three words. That refused the one move that is a two-word line by nature, "ends on a terse
+  verdict line", on every run.
+- Version 3 (56 of 60, pass): the floor yields where the point's own quote is that short, so a short-line move is
+  evidenced at its own grain. The one case that still fails is by design and marked so: a move whose situation lives in
+  the same sentence as the move ("which also removes the retry" is both the side benefit and the fix that has one)
+  grounds to a proposed trigger and stays unknown until you confirm it. The scope the reading gives (sentence,
+  paragraph, section, decision) is a judgement that agreed with the case on 51 of 60 runs; it is recorded beside each
+  move and used by nothing yet.
 
 ### Studies: the readings of Gate B live, and the brief against no brief on code review (development evidence, $4.30)
 

@@ -153,7 +153,7 @@ describe('the receipt on one golden, and with no model', () => {
     expect(r.code, r.out).toBe(0);
     const L = { root: data, skillName: 'one' };
     const receipt = store.getReceipt(L, store.getActive(L)!)!;
-    expect(receipt.stages.map((s) => s.id).sort()).toEqual(['contrast', 'counted', 'method', 'persona', 'profile', 'scope', 'signals', 'work-form']);
+    expect(receipt.stages.map((s) => s.id).sort()).toEqual(['contrast', 'counted', 'method', 'moves', 'persona', 'profile', 'scope', 'signals', 'work-form']);
     expect(degradedStages(receipt)).toEqual([]);
     expect(receipt.stages.find((s) => s.id === 'persona')).toMatchObject({ ran: false, why: expect.stringContaining('one example alone') });
     expect(receipt.stages.find((s) => s.id === 'method')).toMatchObject({ ran: true, detail: '3 step(s) served whole' });
