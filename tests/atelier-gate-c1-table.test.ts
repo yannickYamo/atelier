@@ -113,7 +113,7 @@ describe('through the build', () => {
     mkdirSync(join(proj, 'examples')); writeFileSync(join(proj, 'method.md'), NOTE);
     ['Approve', 'Request changes', 'Comment', 'Approve'].forEach((v, i) => { writeFileSync(join(proj, 'examples', `e${i + 1}.md`), review(v, i + 1)); });
     const env: NodeJS.ProcessEnv = { ...process.env, ATELIER_DATA: data, ATELIER_PROJECT_DIR: proj, ATELIER_PRICE_IN: '1', ATELIER_PRICE_OUT: '1' };
-    delete env.ANTHROPIC_API_KEY; delete env.ANTHROPIC_AUTH_TOKEN;
+    delete env.ANTHROPIC_API_KEY; delete env.ANTHROPIC_AUTH_TOKEN; delete env.ATELIER_PROVIDER;
     const run = (...a: string[]): { code: number; out: string } => {
       try { return { code: 0, out: execFileSync('node', [resolve('dist/cli/atelier.mjs'), ...a], { encoding: 'utf8', cwd: proj, env, stdio: ['ignore', 'pipe', 'pipe'] }) }; }
       catch (e) { const x = e as { status: number; stdout: string; stderr: string }; return { code: x.status, out: x.stdout + x.stderr }; }
@@ -135,5 +135,20 @@ describe('through the build', () => {
     expect(md).toContain('- (in 4 of 4 pieces) Opens from a position of my own, not a summary.');
     expect(md).toContain('- (in 2 of 4 pieces [0.12, 0.88]) close: closes on a short plain instruction.');
     expect(md).not.toContain('(always)'); expect(md).not.toContain('(rarely)');
+    // A PROFILE READ BY AN EARLIER READING IS READ AGAIN where a model is there: the pointer is moved to a copy of the
+    // profile marked as read by the earlier versions; the next build reads both passes anew and the receipt names the new one
+    const older = { ...profile, hash: 'older0000000', schema: 1, reading: 'persona-moves-4' } as unknown as typeof profile;
+    store.putMoves(L, personaHashOf(PERSONA.points as PersonaPoint[]), older);
+    const again = run('build', '--name', 'code-review', '--report', ...BACKEND());
+    expect(again.code, again.out).toBe(0);
+    expect(again.out).toMatch(/· moves ✓ \(2 moves: 1 standing, 0 situational, 1 occasional\) ·/);
+    expect((await toolsCalled()).filter((t) => t === 'emit_persona_table')).toHaveLength(2);
+    const sv2 = store.getSkillVersion(L, store.getActive(L)!)!;
+    expect(store.getReceipt(L, sv2.skillVersionHash)!.movesHash).toBe(profile.hash);
+    // and with no model, the older profile is kept and the stage says so
+    store.putMoves(L, personaHashOf(PERSONA.points as PersonaPoint[]), older);
+    const noModel = run('build', '--name', 'code-review', '--report');
+    expect(noModel.code, noModel.out).toBe(0);
+    expect(noModel.out).toMatch(/· moves — kept from an earlier reading \(persona-moves-4\) and no model to read again/);
   }, 240_000);
 });

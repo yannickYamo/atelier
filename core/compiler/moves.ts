@@ -213,7 +213,7 @@ export type TableOutput = readonly TableCell[];
 export const PERSONA_TABLE_SYSTEM = `You read one author's pieces for the habits named, numbered. Each habit is a point about HOW the author writes, with one quote that shows it and, for some, the situation in which the author makes the move. For each pair of habit and piece you are asked about, answer two things, each as a quote copied character for character from that piece, or null:
 - move: a passage where the piece makes the move as the point describes it; null when the piece does not.
 - situation: a passage where the piece is in the habit's situation; null when it is not, or when the habit names no situation.
-A passage on a similar subject is not the habit. A quote that is not verbatim is dropped. Answer for every pair asked.`;
+A passage on a similar subject is not the habit. The situation present is not the move made: a piece can be in the situation (input taken unchecked) and never make the move (no sentence from the caller's view); then situation is quoted and move is null. The same passage is never both. A quote that is not verbatim is dropped. Answer for every pair asked.`;
 
 export const PERSONA_TABLE_SCHEMA: Record<string, unknown> = {
   type: 'object',
@@ -222,7 +222,7 @@ export const PERSONA_TABLE_SCHEMA: Record<string, unknown> = {
 };
 
 export const PERSONA_TABLE: Reading<TableInput, TableOutput> = {
-  id: 'persona-table', version: '1',
+  id: 'persona-table', version: '2',
   system: PERSONA_TABLE_SYSTEM, schema: PERSONA_TABLE_SCHEMA,
   toolName: 'emit_persona_table', toolDescription: 'For each habit and piece asked, a verbatim passage making the move and one in its situation, or null.',
   maxTokens: 8000, estimateUsd: 0.05,
@@ -297,10 +297,13 @@ export function inferMoves(drafts: readonly MoveDraft[], cells: readonly TableCe
   });
 }
 
+/** The readings a profile is read by, as one string: a profile read by any other is read again where a model is there. */
+export const currentReading = (): string => `${PERSONA_MOVES.id}-${PERSONA_MOVES.version}+${PERSONA_TABLE.id}-${PERSONA_TABLE.version}`;
+
 /** An immutable profile named by its content; the build receipt names it. */
 export function profileOf(units: readonly MoveUnit[], personaHash: string, reader: string | null, pieces: readonly MovePiece[], builtAt = new Date().toISOString()): MoveProfile {
   const named = pieces.map((p) => ({ name: p.name, sha: createHash('sha256').update(p.text).digest('hex').slice(0, 16) }));
-  const reading = `${PERSONA_MOVES.id}-${PERSONA_MOVES.version}+${PERSONA_TABLE.id}-${PERSONA_TABLE.version}`;
+  const reading = currentReading();
   const hash = sha(JSON.stringify({ reading, pieces: named, units }));
   return { schema: 2, hash, personaHash, reading, reader, pieces: named, units, builtAt };
 }

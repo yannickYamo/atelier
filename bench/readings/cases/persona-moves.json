@@ -5,7 +5,7 @@
     "perCaseAtLeast": 4,
     "codeDecidedExact": true
   },
-  "note": "One persona point per case against the pieces it quotes. The label is `trigger status|pieces evidenced`: the status decided by code from what the reading grounds (a trigger is supported only by a second quote from the same piece as the move; none when the point is not a move), the count the distinct pieces the reading quotes the move from, verbatim. No applicability is labelled: the kind is inferred from counts after the table (core/stats/habit.ts), not read. The scope the reading gives is recorded beside each run as `aside` against the case's `aside`, and not judged. v5 (2026-10-19) shows the reading no frequency word and keeps every verbatim quote: not yet run live (no spend authorised).",
+  "note": "One persona point per case against the pieces it quotes. The label is `trigger status|pieces evidenced`: the status decided by code from what the reading grounds (a trigger is supported only by a second quote from the same piece as the move; none when the point is not a move), the count the distinct pieces the reading quotes the move from, verbatim. No applicability is labelled: the kind is inferred from counts after the table (core/stats/habit.ts), not read. The scope the reading gives is recorded beside each run as `aside` against the case's `aside`, and not judged. v5 (2026-10-19) shows the reading no frequency word and keeps every verbatim quote: run live on claude-haiku-5-5, 2026-10-19: 52/65, two soft cases, one label corrected (see its note).",
   "cases": [
     {
       "id": "supported-trigger-two-pieces",
@@ -111,7 +111,7 @@
     },
     {
       "id": "always-in-two-of-five",
-      "label": "none|2",
+      "label": "supported|2",
       "point": {
         "aspect": "Verdict line with a reason",
         "description": "The verdict line carries its reason after a dash.",
@@ -140,7 +140,7 @@
           "text": "## Summary\nThe log line is at the wrong level.\n\n## Verdict\nComment"
         }
       ],
-      "note": "ALWAYS as read, shown in two pieces of five: code says unknown, whatever the reading proposes. Live eval of v1: the reading quoted the bare verdict lines of the other pieces as evidence (2/5 runs general); v2 says a piece without the move is no evidence, and a quote under three words never counts.",
+      "note": "Labelled none|2 as a standing trait before the live run of v5 (2026-10-19): the reading gave it a situation, 'when the verdict requests changes', shown by a second quote in both pieces, 5 of 5 runs; the pieces bear it out (the reason follows the two Request changes verdicts and none of the others), so the kind the counts give is situational (2 of 2 in, 0 of 3 out). The label follows the reading and the data, not the assumption.",
       "aside": "sentence"
     },
     {
@@ -287,7 +287,7 @@
         }
       ],
       "soft": true,
-      "note": "The situation (the fix has a second payoff) and the move sit in one sentence; a reading may find no second quote, which grounds to proposed. Soft.",
+      "note": "Soft: the move and its situation are one sentence here ('Move the call inside the transaction, which also removes the retry'), and a situation quote must be distinct from the move's, so the reading answers proposed 4 of 5 (v5 live, 2026-10-19). A sentence-scope move whose situation is in the same sentence has no second quote to give; the table and the counts decide its kind.",
       "aside": "sentence"
     },
     {

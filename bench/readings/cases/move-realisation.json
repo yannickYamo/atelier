@@ -125,7 +125,7 @@
         "quote": "A caller can refund more than the order total"
       },
       "text": "## Summary\nThe change extracts timestamp parsing into one helper that returns the numeric fields.\n\n## Must fix\n- src/time/parse.ts:22 — The offset group is matched and discarded, so two instants in different zones parse the same.\n- src/time/parse.ts:21 — The rejected input is interpolated into the error message. If any of the three builders reads stamps from request data, a caller controls the text of an error that reaches a log, which an attacker can use to inject lines.\n\n## Verdict\nRequest changes",
-      "note": "the live C4 miss: the move listed for the piece, the piece not in its situation (an internal helper, no caller exposed by the diff), and the move made anyway with a speculative attacker. Must read MISAPPLIED, never REALISED."
+      "note": "the live C4 miss: the move listed for the piece, the piece not in its situation (an internal helper, no caller exposed by the diff), and the move made anyway with a speculative attacker. Must read MISAPPLIED, never REALISED. v3 live (2026-10-19): REALISED 5/5, the reader taking the piece's supposition ('if any of the three builders reads stamps from request data') for its situation. v4 says a supposed situation is not one the piece is in, and the not-line decides."
     },
     {
       "id": "mentioned-not-performed",

@@ -178,8 +178,25 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
   budget of moves a piece gets is the sum of the situational moves' posterior means, rounded, never a floor of
   pieces; candidates are ordered by their posterior in the situation. The profile's schema is 2; a run built on the
   earlier schema keeps its profile by the receipt.
-- The evals of `persona-moves` (v5) and `persona-table` (v1) are written and not yet run live; their labels are what
-  code decides from what the reading grounds (the trigger's status and the pieces quoted), never a kind.
+- The evals, run on `claude-haiku-5-5`: `persona-moves` v5 52 of 65 runs over 13 cases, two soft (a move whose
+  situation is in its own sentence has no second quote to give; a competing-explanation case the reading quotes
+  from one or two pieces), one label corrected after the run (a point labelled as standing that the reading gave a
+  situation, "when the verdict requests changes", and the pieces bear out: 2 of 2 in, 0 of 3 out). `persona-table`
+  v1 took a situation present (input from the query string, unchecked) for the move made, five of five; v2 says the
+  situation present is not the move made, and reads 30 of 30. The labels are what code decides from what the
+  reading grounds (the trigger's status and the pieces quoted), never a kind.
+- **The move reader (v4) reads a supposed situation as absent.** On the piece of the C4 miss, v3 still read the
+  speculative attacker ("if any of the three builders reads stamps from request data") as realised, five of five:
+  the piece supposed its situation and the reader granted it. v4 says a situation the piece only supposes is not one
+  it is in, and that a passage the move's "not" line forbids is misapplied whatever else it does well: 50 of 50 on
+  ten cases, the two formerly soft ones included.
+- **A profile read by an earlier reading is read again** where a model is there, as one read from changed pieces
+  is; with no model, a profile a model read is kept over a floor, and the stage says why.
+- On the real persona of twenty points that C4 ran on, the compiler now reads 9 standing, 6 situational and 5
+  occasional moves, tabled in three calls, against 1 general, 6 conditional and 13 unknown before. Three register
+  traits (impersonal, formal, neutral openings) read as occasional: the table asks for a passage that makes the
+  move, and a register has no single passage. Those habits name a counted feature where one exists; how a counted
+  feature should stand in for the quote is the next question, and no judged run uses this build yet.
 
 ### A review's finding is not a result seen; the reader judges the situation from the piece
 

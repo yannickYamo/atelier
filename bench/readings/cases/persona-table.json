@@ -5,7 +5,7 @@
     "perCaseAtLeast": 4,
     "codeDecidedExact": true
   },
-  "note": "One habit against the pieces the first reading left. The label is `moves|situations`: the pieces that should yield a verbatim quote making the move, and those that should yield one in the habit's situation (none when the habit names no situation), each sorted and joined by +. Every cell becomes a count (core/compiler/moves.ts inferMoves), so a false move here raises a rate and a false situation moves the 2×2. Not yet run live (no spend authorised on 2026-10-19); run before the table's counts steer anything.",
+  "note": "One habit against the pieces the first reading left. The label is `moves|situations`: the pieces that should yield a verbatim quote making the move, and those that should yield one in the habit's situation (none when the habit names no situation), each sorted and joined by +. Every cell becomes a count (core/compiler/moves.ts inferMoves), so a false move here raises a rate and a false situation moves the 2×2. v1 live on claude-haiku-5-5, 2026-10-19: 25/30; the one failure took a situation present (input from the query string unchecked) for the move made, 5 of 5, and found the situation nowhere; v2 says the situation present is not the move made.",
   "cases": [
     {
       "id": "impersonal-in-all",

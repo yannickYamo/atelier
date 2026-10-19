@@ -26,7 +26,7 @@ import { deriveScope, groundScope, spreadByKind, type ScopeProfile } from '../..
 const ANSWER_EXAMPLE_WORDS = 1200;
 import { WORK_FORM, type WorkForm } from '../../core/observers/work-form.js';
 import { readContext } from '../../core/inference/reading.js';
-import { PERSONA_MOVES, PERSONA_TABLE, cellsToAsk, habitsPerCall, inferMoves, profileOf, personaHashOf, describeMoves, describeMove, pointsWithRates, type MoveProfile, type TableCell } from '../../core/compiler/moves.js';
+import { PERSONA_MOVES, PERSONA_TABLE, cellsToAsk, habitsPerCall, inferMoves, profileOf, currentReading, personaHashOf, describeMoves, describeMove, pointsWithRates, type MoveProfile, type TableCell } from '../../core/compiler/moves.js';
 import { isGeneralScope } from '../../core/state/canonical-state.js';
 import { moveEvidence, readHoldsBack, ownerWrote, HOLDS_BACK } from '../../core/compiler/applicability.js';
 import { normalizeClass } from '../../core/observers/doc-class.js';
@@ -359,8 +359,12 @@ async function movesFor(L: store.StoreLayout, voice: Voice | null, methodText: {
   // read from these pieces: the receipt names it, and the stage says what changed).
   const pieceHashes = pieces.map((x) => createHash('sha256').update(x.text).digest('hex').slice(0, 16));
   const changed = kept && pieces.length ? kept.pieces.filter((x) => !pieceHashes.includes(x.sha)).length + pieceHashes.filter((h) => !kept.pieces.some((x) => x.sha === h)).length : 0;
-  if (kept && ((kept.reader !== null && !changed) || NO_MODEL())) {
-    if (kept.reader !== null && !changed) recordStage('moves', { ran: true, detail: `${describeMoves(kept.units)} (kept)` });
+  // STALE AGAINST THE READINGS: a profile read by an earlier version of either reading (or of an earlier schema) is read
+  // again where a model is there; with none it is kept and said so.
+  const stale = kept !== null && (kept.schema !== 2 || kept.reading !== currentReading());
+  if (kept && ((kept.reader !== null && !changed && !stale) || NO_MODEL())) {
+    if (kept.reader !== null && !changed && !stale) recordStage('moves', { ran: true, detail: `${describeMoves(kept.units)} (kept)` });
+    else if (kept.reader !== null && stale) recordStage('moves', { ran: false, why: `kept from an earlier reading (${kept.reading}) and no model to read again: ${describeMoves(kept.units)}` });
     else if (kept.reader !== null) recordStage('moves', { ran: false, why: `kept from pieces that have changed since (${changed} piece(s) differ) and no model to read them again: ${describeMoves(kept.units)}` });
     else recordStage('moves', { ran: false, why: `by the words alone, kept: ${describeMoves(kept.units)}` });
     return kept;
@@ -368,6 +372,11 @@ async function movesFor(L: store.StoreLayout, voice: Voice | null, methodText: {
   const steps = methodText ? stepsOf(methodText.text).map((st, i) => ({ n: i + 1, text: st.text })) : [];
   const noModel = NO_MODEL();
   const d = await readContext(PERSONA_MOVES, { points, pieces, steps }, noModel ? null : contextReaderClient(), noModel ? null : contextReaderModel(), { spentUsd: 0, capUsd: 0.3, maxCalls: 1 });
+  // A PROFILE A MODEL READ IS NEVER REPLACED BY A FLOOR: where no model could read again, the kept one stays, and the stage says why.
+  if (d.by !== 'model' && kept && kept.reader !== null) {
+    recordStage('moves', { ran: false, why: `kept from ${stale ? `an earlier reading (${kept.reading})` : `pieces that have changed since (${changed} piece(s) differ)`} and no model to read again: ${describeMoves(kept.units)}` });
+    return kept;
+  }
   // THE TABLE (core/compiler/moves.ts): every cell the first reading left (a piece with no quote for the move, or none
   // for its situation) is asked once, in calls that hold as many habits as the answer budget allows for this corpus.
   // Every cell is then a count, and the counts are what the kinds are inferred from.
