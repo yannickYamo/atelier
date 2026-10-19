@@ -149,6 +149,14 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 - **A reader that cannot be reached is asked once.** With a key set for a backend that answers nothing, a build waited
   out the retries of every reading in turn; the first failure now turns the rest of that build's readings off, said once.
 
+### A run uses the profile its build named; a profile read from pieces that changed is read again
+
+- **A run takes the move profile from the receipt of the version it serves**, never from a lookup by the persona on
+  disk, which a later build may have moved to another profile. A version built before profiles were kept has none.
+- **A kept profile whose pieces have changed is read again** where a model is there: the profile names each piece by
+  the hash of its text, and a build whose readable pieces differ reads the moves anew (the old profile stays on disk
+  for the receipt that named it). With no model it is kept, and the stage says how many pieces differ.
+
 ### What the work did with your moves, read after the draft and never counted
 
 - **Each move placed or standing for a request is read on the delivered text**, by a small read of its own after the

@@ -78,7 +78,6 @@ import { findOwnershipBreaches, describeBreaches } from '../../core/state/output
 import { assertHistoryNotServed, foldRepairs } from '../../core/architecture/repair-memory.js';
 import type { SkillVersion, InvocationSettings } from '../../core/state/canonical-state.js';
 import * as store from '../../core/state/store.js';
-import { personaHashOf } from '../../core/compiler/moves.js';
 import { copyGuardPieces } from '../../core/compiler/voice.js';
 import { listsBecause, unmeasuredKind } from '../../core/loop/claim-extract.js';
 import { formatOf } from '../../core/observers/formats.js';
@@ -634,8 +633,10 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   // eligible moves (never unknown, never provisional) placed by the same reading, selected by code. Under 'observe' (the
   // default, or the release's setting) the selection is recorded and nothing is served; under 'serve' (--moves serve,
   // or the release) the placed moves are said to the writer in the brief. The standard is untouched either way.
-  const voiceNow = store.getVoice(L);
-  const profile = voiceNow?.persona?.points.length ? store.getMoves(L, personaHashOf(voiceNow.persona.points)) : null;
+  // THE PROFILE THE BUILD NAMED, by the receipt of the version this run serves: never one looked up by the persona
+  // on disk now, which a later build may have moved. A version built before profiles were kept has none.
+  const receiptNow = store.getReceipt(L, sv.skillVersionHash);
+  const profile = receiptNow?.movesHash ? store.getMovesByHash(L, receiptNow.movesHash) : null;
   const movesFlag = flag('--moves');
   if (movesFlag !== undefined && movesFlag !== 'observe' && movesFlag !== 'serve') die(`--moves is observe or serve, got "${movesFlag}".`);
   const movesMode: 'observe' | 'serve' = (movesFlag as 'observe' | 'serve' | undefined) ?? runSettings?.moves ?? 'observe';

@@ -190,7 +190,7 @@ export function selectMoves(placement: Readonly<Record<string, Placement>>, b: B
   const placed: MoveUnit[] = []; const at = new Set<string>();
   for (const u of candidates) {
     const key = u.link ? `${u.scope}@${u.link.step}` : null;
-    if (key && at.has(key)) { notPlaced.push({ id: u.id, why: `another move of the same scope at step ${u.link!.step}` }); continue; }
+    if (key && u.link && at.has(key)) { notPlaced.push({ id: u.id, why: `another move of the same scope at step ${u.link.step}` }); continue; }
     if (placed.length >= budget) { notPlaced.push({ id: u.id, why: `past the ${budget} such move(s) a piece of the author's carries` }); continue; }
     placed.push(u); if (key) at.add(key);
   }
@@ -223,7 +223,7 @@ export function briefNote(b: Brief, steps: readonly BriefStep[], material: reado
     ...(decisions.length ? ['Decisions it asks for, in order:', ...decisions] : []),
     // THE MOVES, AS MYSELF: only the conditional moves this request calls for, each with its situation, how it may show, the
     // author's own words as one instance, and what it is not. Never a rate to hit, never the general traits again.
-    ...(moves.length ? ['How I would make this, as myself:', ...moves.map((u) => { const step = u.link ? steps.find((s) => String(s.n) === u.link!.step) : undefined;
+    ...(moves.length ? ['How I would make this, as myself:', ...moves.map((u) => { const link = u.link; const step = link ? steps.find((s) => String(s.n) === link.step) : undefined;
       return `- ${step ? `at step ${step.n}: ` : ''}${u.trigger.text}: ${u.realisation}, as in "${u.evidence[0]?.quote ?? u.observed}" (${u.pieces} of ${u.corpus} of my pieces).${u.forbidden ? ` Not: ${u.forbidden}.` : ''}`; })] : []),
     ...b.contradicted.map((c) => { const s = steps.find((x) => x.id === c.id); return `The request says "${c.quote}", which is against step ${s?.n ?? '?'}: my method stands; follow it, and say in one line that the request asked otherwise.`; }),
     `Given: the request${material.length ? ` and ${material.map((m) => m.name).join(', ')}` : ', and nothing else'}.${open.size ? ' A specific not given is said to be missing, never invented; every decision is still made, on what is given, in the shape my method asks for.' : ''}`,

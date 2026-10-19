@@ -84,15 +84,15 @@ export function evaluate(): void {
 
   // THE AUTHOR'S MOVES, OVER RUNS (core/taste/move-reader.ts): for each move, in how many runs it was placed or standing
   // and what the piece did with it. A reading, never a gate; the rate is the reader's, until a study rates the reader.
-  const moveRuns = evals.filter((e) => e.monitors.moves);
+  const moveRuns = evals.flatMap((e) => (e.monitors.moves ? [{ e, m: e.monitors.moves }] : []));
   const byMove = new Map<string, { aspect: string; runs: number; realised: number; misapplied: number; missing: number; notApplicable: number; notRead: number }>();
-  for (const e of moveRuns) for (const x of e.monitors.moves!.each) {
+  for (const { m: mon } of moveRuns) for (const x of mon.each) {
     const m = byMove.get(x.id) ?? { aspect: x.aspect, runs: 0, realised: 0, misapplied: 0, missing: 0, notApplicable: 0, notRead: 0 };
     m.runs += 1;
     if (x.outcome === 'REALISED') m.realised += 1; else if (x.outcome === 'MISAPPLIED') m.misapplied += 1; else if (x.outcome === 'MISSING') m.missing += 1; else if (x.outcome === 'NOT_APPLICABLE') m.notApplicable += 1; else m.notRead += 1;
     byMove.set(x.id, m);
   }
-  const moves = { runs: moveRuns.length, served: moveRuns.filter((e) => e.monitors.moves!.mode === 'serve').length, each: [...byMove.entries()].map(([id, m]) => ({ id, ...m })).sort((a, b) => b.runs - a.runs) };
+  const moves = { runs: moveRuns.length, served: moveRuns.filter(({ m: mon }) => mon.mode === 'serve').length, each: [...byMove.entries()].map(([id, m]) => ({ id, ...m })).sort((a, b) => b.runs - a.runs) };
 
   if (argv.includes('--json')) {
     console.log(JSON.stringify({ skill: name, cohorts: summary.map((c) => ({ ...c, conformantCi: wilson(c.conformant, c.runs), wouldShipCi: wilson(c.wouldShip, c.rated) })),

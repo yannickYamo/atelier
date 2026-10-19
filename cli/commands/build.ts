@@ -54,6 +54,7 @@ import type { AdaptedComponent } from '../../core/intake/package.js';
 import { installFidelity, lastSetAside } from '../fidelity.js';
 import * as fstore from '../../core/state/fidelity-store.js';
 import { recordStage, stagesSoFar, resetStages } from '../stages.js';
+import { createHash } from 'node:crypto';
 import { receiptOf, describeStages } from '../../core/state/receipt.js';
 import { stepsOf } from '../../core/method/standard.js';
 import { skillCardFor } from '../skill-card.js';
@@ -351,12 +352,18 @@ async function movesFor(L: store.StoreLayout, voice: Voice | null, methodText: {
   if (!points.length) { recordStage('moves', { ran: false, why: voice?.persona ? 'the persona has no point' : 'no persona' }); return null; }
   const personaHash = personaHashOf(points);
   const kept = store.getMoves(L, personaHash);
-  if (kept && (kept.reader !== null || NO_MODEL())) {
-    if (kept.reader !== null) recordStage('moves', { ran: true, detail: `${describeMoves(kept.units)} (kept)` });
+  const pieces = sessionCorpus().map(withoutFrontMatter).map((text, i) => ({ name: `piece-${i + 1}`, text }));
+  // STALE AGAINST THE PIECES: a profile's evidence names pieces by the hash of their text; when the pieces readable now
+  // differ, the profile is read again where a model is there, and kept and said so where none is (never served as if
+  // read from these pieces: the receipt names it, and the stage says what changed).
+  const pieceHashes = pieces.map((x) => createHash('sha256').update(x.text).digest('hex').slice(0, 16));
+  const changed = kept && pieces.length ? kept.pieces.filter((x) => !pieceHashes.includes(x.sha)).length + pieceHashes.filter((h) => !kept.pieces.some((x) => x.sha === h)).length : 0;
+  if (kept && ((kept.reader !== null && !changed) || NO_MODEL())) {
+    if (kept.reader !== null && !changed) recordStage('moves', { ran: true, detail: `${describeMoves(kept.units)} (kept)` });
+    else if (kept.reader !== null) recordStage('moves', { ran: false, why: `kept from pieces that have changed since (${changed} piece(s) differ) and no model to read them again: ${describeMoves(kept.units)}` });
     else recordStage('moves', { ran: false, why: `by the words alone, kept: ${describeMoves(kept.units)}` });
     return kept;
   }
-  const pieces = sessionCorpus().map(withoutFrontMatter).map((text, i) => ({ name: `piece-${i + 1}`, text }));
   const steps = methodText ? stepsOf(methodText.text).map((st, i) => ({ n: i + 1, text: st.text })) : [];
   const noModel = NO_MODEL();
   const d = await readContext(PERSONA_MOVES, { points, pieces, steps }, noModel ? null : contextReaderClient(), noModel ? null : contextReaderModel(), { spentUsd: 0, capUsd: 0.3, maxCalls: 1 });
