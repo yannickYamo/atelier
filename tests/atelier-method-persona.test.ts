@@ -71,7 +71,7 @@ describe('the persona on the method path and the thin path', () => {
     const { data, proj, run } = seed(reviews(4), true);
     const r = run('method', 'method.md', '--golden', 'examples', '--name', 'code-review', '--yes', ...BACKEND());
     expect(r.code, r.out).toBe(0);
-    expect(r.out).toMatch(/Persona: 2 point\(s\) on how the author sounds, each with how often and a quote from their pieces \(1 dropped: their quote was not in the pieces\)/);
+    expect(r.out).toMatch(/Persona: 2 points \(1 always, 1 often\) on how the author sounds, each with how often and a quote from their pieces \(1 dropped: their quote was not in the pieces\)/);
     // the name says "code review", the pieces are sectioned review documents: code decides the form, no model is asked,
     // and the skill is compiled as documents (no chat assistant's voice, no scope reading, no "never shorten")
     expect(r.out).not.toMatch(/Scope: |Work form: /);
@@ -99,7 +99,7 @@ describe('the persona on the method path and the thin path', () => {
     expect(plain.code, plain.out.slice(-600)).toBe(0);
     const again = run('build', '--name', 'code-review', '--persona', 'auto', ...BACKEND());
     expect(again.code, again.out.slice(-600)).toBe(0);
-    expect(again.out).toMatch(/Persona: 2 point\(s\)/);
+    expect(again.out).toMatch(/Persona: 2 points \(1 always, 1 often\)/);
     expect(voiceOf(data, 'code-review').pieces).toHaveLength(4);
     expect(voiceOf(data, 'code-review').persona?.points).toHaveLength(2);
   }, 120_000);
@@ -127,7 +127,7 @@ describe('the persona on the method path and the thin path', () => {
     expect(r.code, r.out).toBe(0);
     expect(r.out).toContain('With 3 example(s), rules read by a model could not be checked');
     expect(r.out).toContain(', and how you sound, read from them.');
-    expect(r.out).toMatch(/Persona: 2 point\(s\) on how the author sounds/);
+    expect(r.out).toMatch(/Persona: 2 points \(1 always, 1 often\) on how the author sounds/);
     // the pieces are served whole, not within the compact budget a first build of a writing skill takes with a model
     expect(r.out).not.toMatch(/whole pieces served by default, within/);
     expect(voiceOf(data, 'posts').persona?.points).toHaveLength(2);

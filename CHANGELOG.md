@@ -149,6 +149,24 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 - **A reader that cannot be reached is asked once.** With a key set for a backend that answers nothing, a build waited
   out the retries of every reading in turn; the first failure now turns the rest of that build's readings off, said once.
 
+### Every move the persona read of you is served, each as what it is
+
+- **A habit of some of your pieces now reaches the writer.** The persona reads every point with how often it holds.
+  The skill served only the points that hold in most or all pieces, on the claim that the moves section carried the
+  rest; that section lists your standard's rated rules and never read the persona, so every point marked "sometimes"
+  or "rarely" reached no writer. On a code-review skill of twelve pieces those were four of twenty points, and the
+  four that made the author recognisable: reasoning from the abusive caller where input is untrusted, hedging only
+  under real uncertainty, one flat adjective on an awkward name, a side benefit tacked on. The format and register
+  the checklist already holds were what survived.
+- **Served apart, so a conditional habit never reads as how you always are.** What holds in most or all pieces stays
+  under "How I sound", each point with its quote. What you do in some pieces, or rarely, is served under "Moves I make
+  in some pieces, not most" as one descriptive line each, the aspect first ("Quiet naming judgements: calls a choice
+  awkward in one flat adjective, then proposes a clearer name"), marked "in some pieces" or "rarely", with no quote
+  and no instruction: the block says none of these is a rule and no piece of yours carries many of them. Which of
+  them fit one request is not yet said to the writer; that is the next step, and the quotes stay in the record.
+- **The build says how many of each it read.** The stage line and the whole account give the persona as "20 points
+  (11 always, 5 often, 4 sometimes)". A skill built before this serves the points it has once built again.
+
 ### How you sound is read on every path that has your pieces
 
 - **A skill built from your method and examples, or from two or three pieces, now carries how you sound.** Those builds

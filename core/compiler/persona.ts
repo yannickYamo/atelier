@@ -104,6 +104,34 @@ export function describePersona(p: Persona): string {
   return p.points.map((x) => `- (${WORD[x.frequency]}) ${x.description} e.g. "${x.quote}"`).join('\n');
 }
 
+// WHAT HOLDS AND WHAT IS CONDITIONAL. A point of most or all pieces is how the author sounds; a point of some
+// pieces, or of few, is a move they make when a piece calls for it. Served apart (renderers/agent-skill/render.ts):
+// under "How I sound" a conditional habit reads as how the author always is, and dropped it reaches no writer at
+// all, which is what happened to every SOMETIMES and RARELY point until 2026-10-19.
+export const standingPoints = (p: Persona): PersonaPoint[] => p.points.filter((x) => x.frequency === 'ALWAYS' || x.frequency === 'OFTEN');
+export const conditionalPoints = (p: Persona): PersonaPoint[] => p.points.filter((x) => x.frequency === 'SOMETIMES' || x.frequency === 'RARELY');
+export function countByFrequency(p: Persona): Record<Frequency, number> {
+  const n: Record<Frequency, number> = { ALWAYS: 0, OFTEN: 0, SOMETIMES: 0, RARELY: 0 };
+  for (const x of p.points) n[x.frequency] += 1;
+  return n;
+}
+/** "20 points (11 always, 5 often, 4 sometimes)": the build's stage line and the whole account. */
+export function describeCounts(p: Persona): string {
+  const n = countByFrequency(p);
+  const parts = (['ALWAYS', 'OFTEN', 'SOMETIMES', 'RARELY'] as const).filter((f) => n[f] > 0).map((f) => `${n[f]} ${WORD[f]}`);
+  return `${p.points.length} point${p.points.length === 1 ? '' : 's'}${parts.length ? ` (${parts.join(', ')})` : ''}`;
+}
+/**
+ * The repertoire: the author's conditional moves, one descriptive line each, the aspect first, with no quote and no
+ * instruction. What the author does in some pieces, said as that; never a rate for the writer to hit (the moves
+ * section's "use about N" turned habits of some pieces into a template), and never the quote, which belongs to the
+ * record (`report`) and, placed for one request, to the brief.
+ */
+export function describeRepertoire(points: readonly PersonaPoint[]): string {
+  const lower = (s: string): string => (/^[A-Z][a-z]/.test(s) && !/^I\b/.test(s) ? s[0].toLowerCase() + s.slice(1) : s);
+  return points.map((x) => `- (${x.frequency === 'RARELY' ? 'rarely' : 'in some pieces'}) ${x.aspect ? `${x.aspect}: ${lower(x.description)}` : x.description}`).join('\n');
+}
+
 /**
  * THE STANDARD WINS. A persona point that describes, or quotes, a move any boundary the standard holds
  * (required or shown, not rejected) caps or bans is dropped: the persona is how the author sounds, but the owner's ratified

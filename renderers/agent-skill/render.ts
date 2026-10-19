@@ -16,7 +16,7 @@ import { moveEvidence, ownerWrote, HOLDS_BACK } from '../../core/compiler/applic
 import { isReplyWork } from '../../core/observers/formats.js';
 import { renderContrastFile, type ContrastPair } from '../../core/compiler/contrast-examples.js';
 import { EXCERPT_GAP, isExcerpt, pieceLabel, type Voice } from '../../core/compiler/voice.js';
-import { describePersona } from '../../core/compiler/persona.js';
+import { describePersona, describeRepertoire, standingPoints, conditionalPoints } from '../../core/compiler/persona.js';
 import { TRAIT_LABEL } from '../../core/composite/traits.js';
 import { observerFor } from '../../core/observers/registry.js';
 import { createHash } from 'node:crypto';
@@ -526,12 +526,22 @@ export function renderAgentSkill(
   const authorOf = (i: number): string | undefined => composite?.pieceAuthors[i];
   // Which served pieces were cut: under `excerpts`, the ones that carry the mark. A short piece is served whole.
   const cutPieces = (voice?.pieces ?? []).map((t) => voice?.pieceForm === 'excerpts' && isExcerpt(t));
-  const traits = voice?.persona ? { ...voice.persona, points: voice.persona.points.filter((x) => x.frequency === 'ALWAYS' || x.frequency === 'OFTEN') } : undefined;
+  // EVERY FREQUENCY READ IS SERVED (core/compiler/persona.ts). A point of most or all pieces is how the author sounds;
+  // a point of some pieces, or of few, is a move they make when a piece calls for it, served as a repertoire index
+  // below. Until 2026-10-19 the conditional points were filtered out here on the claim that the moves section carried
+  // them; that section is built from the standard's rated requirements and never read the persona, so the author's
+  // conditional moves (the ones that made them recognisable) reached no writer.
+  const traits = voice?.persona ? { ...voice.persona, points: standingPoints(voice.persona) } : undefined;
+  const repertoire = voice?.persona ? conditionalPoints(voice.persona) : [];
   const voiceParts = [
     composite ? `My voice is a composite: the owner of this skill read pieces by ${composite.authors.length === 1 ? 'one writer' : `${composite.authors.length} writers`} and chose what to take from each. It is that combination, not any one of them and not their average:\n\n${composite.authors.map((a) => `- From ${a.name}: ${a.classes.map((c) => TRAIT_LABEL[c]).join('; ')}.${a.traits.length ? ` Taken as: ${a.traits.map((t) => `"${t.trim().replace(/\.$/, '')}"`).join('; ')}.` : ''}`).join('\n')}\n\nNothing else about these writers is to be imitated, and none of their words is to be reused: a phrase of theirs in my work is copying, and is checked for.` : '',
     // A TRAIT IS WHAT HOLDS ACROSS PIECES. A point marked "sometimes" or "rarely" is a conditional habit, and served
-    // under "How I sound" it reads as how I always am: the moves carry such habits, each with its condition.
+    // under "How I sound" it reads as how I always am: it is served apart, as what I do in some pieces.
     traits?.points.length ? `How I sound (each point is quoted from my own pieces and holds in most or all of them):\n\n${describePersona(traits)}` : '',
+    // THE REPERTOIRE: descriptive, no quote, no instruction. What the author does when a piece calls for it, so the
+    // writer knows the range; which of these fit one request is the brief's to say (core/loop/execution-brief.ts,
+    // Gate C2), never a rate to hit.
+    repertoire.length ? `Moves I make in some pieces, not most (what I do when a piece calls for it; none of these is a rule, and no piece of mine carries many of them):\n\n${describeRepertoire(repertoire)}` : '',
     // Whole pieces, or each piece shown by its opening and a passage from its middle (core/compiler/voice.ts,
     // `selectWithinBudget`). Said as what it is: a model told it holds a whole piece takes the cut for the ending.
     pieceFiles.length && composite ? `${pieceFiles.map((f, i) => `\`${f}\` (${authorOf(i) ?? 'one of the writers'})`).join(', ')}: ${cutPieces.some(Boolean) ? `passages from one piece by each writer named, the opening and a part from the middle, with ${EXCERPT_GAP} where text is left out` : 'one whole piece by each writer named'}. Read each for the trait taken from that writer and for nothing else; take no content, no sentence and no phrase from any of them.`

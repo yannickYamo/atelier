@@ -8,7 +8,7 @@ import type { StoredSignal } from '../../core/observers/selection.js';
 import { compositeVoiceOf, pieceLengthOpen, type CompositeRecord } from '../../core/composite/selection.js';
 import { withoutFrontMatter } from '../../core/composite/authors.js';
 import { selectCompositePieces, selectVoicePieces, selectWithinBudget, isExcerpt, usualLength, lengthSpan, compositeLength, PIECE_BUDGET_WORDS, COMPACT_PIECE_BUDGET_WORDS, COMPACT_PIECE_FORM, WRITING_PIECE_BUDGET_WORDS, type PieceForm, type Voice } from '../../core/compiler/voice.js';
-import { derivePersona, reconcilePersona, standardForbids } from '../../core/compiler/persona.js';
+import { derivePersona, reconcilePersona, standardForbids, describeCounts } from '../../core/compiler/persona.js';
 import type { Budget } from '../../core/inference/client.js';
 import { sessionCorpus, sessionPairs, unsplitPairs } from '../corpus.js';
 import { splitRequest } from '../../core/intake/extract.js';
@@ -301,7 +301,7 @@ async function chooseVoice(L: store.StoreLayout, v: StandardVersion, workForm: W
   // persona is kept with it) or for a composite (said where the composite is built).
   const kept = voice;
   const noPersona = (why: string): Voice => { console.log(`(no persona: ${why})`); recordStage('persona', { ran: false, why }); return kept; };
-  const heldPersona = (why: string): Voice => { recordStage('persona', voice.persona ? { ran: true, detail: `${voice.persona.points.length} points` } : { ran: false, why }); return voice; };
+  const heldPersona = (why: string): Voice => { recordStage('persona', voice.persona ? { ran: true, detail: describeCounts(voice.persona) } : { ran: false, why }); return voice; };
   if (personaFlag === 'none') { console.log('(no persona: --persona none.)'); recordStage('persona', { ran: false, why: '--persona none' }); return { ...voice, persona: undefined }; }
   // A composite has no persona: one read over several authors' pieces describes their average (see above).
   if (!derivesPersona || voice.composite || (personaFlag !== 'auto' && voice.persona)) return heldPersona(voice.composite ? 'a composite voice has no persona' : 'kept from an earlier build');
@@ -314,8 +314,8 @@ async function chooseVoice(L: store.StoreLayout, v: StandardVersion, workForm: W
   try {
     const persona = reconcilePersona(await onCorpusReader((c) => derivePersona(c, budget, readable)), standardForbids(v));
     // Nothing to say about a persona with no point in it: it adds nothing to the skill.
-    recordStage('persona', { ran: true, detail: `${persona.points.length} points` });
-    if (persona.points.length) console.log(`Persona: ${persona.points.length} point(s) on how the author sounds, each with how often and a quote from their pieces`
+    recordStage('persona', { ran: true, detail: describeCounts(persona) });
+    if (persona.points.length) console.log(`Persona: ${describeCounts(persona)} on how the author sounds, each with how often and a quote from their pieces`
       + (persona.dropped ? ` (${persona.dropped} dropped: their quote was not in the pieces)` : '')
       + `${persona.conflicting ? ` (${persona.conflicting} dropped: they describe a move your standard rules out)` : ''}; $${budget.spentUsd.toFixed(3)}. Turn off with --persona none.`);
     return { ...voice, persona };

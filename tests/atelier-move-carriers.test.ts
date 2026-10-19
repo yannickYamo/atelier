@@ -94,9 +94,11 @@ describe('the compiled skill of a skill that answers', () => {
   it('serves every example file of a new package, so a move is never served without its example', () => {
     expect((JSON.parse(files['context-map.json']) as { serveAll?: boolean }).serveAll).toBe(true);
   });
-  it('a persona point of "sometimes" is not a trait; the built-in guidance gives what was asked first', () => {
+  it('a persona point of "sometimes" is not a trait: served as a move of some pieces, never under "How I sound"; the built-in guidance gives what was asked first', () => {
     expect(md).toContain('Gives the answer in the first line.');
-    expect(md).not.toContain('and nothing else');
+    const sound = md.slice(md.indexOf('How I sound (each point'), md.indexOf('Moves I make in some pieces'));
+    expect(sound).not.toContain('and nothing else');
+    expect(md).toContain('- (in some pieces) risk: asks one question first, and nothing else.');
     expect(md).toMatch(/Give what was asked first\./);
   });
   it('the owner\'s ruling states the move that holds back, with their condition', () => {
