@@ -13,6 +13,7 @@ import { checksFor, claimInstrumentOf, contextJudgeFor, contextJudgeModel, small
 import { regressions, readAtLength, featureParamsOf, ruleParamsOf, enforcedNeverWorse, applyStep, unmeasuredIn, type ParamsOf, type Proposed } from '../../core/loop/repair.js';
 import { answerSentences, judgedSituations } from '../../core/loop/answer-claims.js';
 import { groundCarried } from '../../core/loop/grounding.js';
+import { SLOT_NOTE } from '../../renderers/agent-skill/render.js';
 import { needsNote, needsNothing } from '../../core/loop/task-needs.js';
 import { refineToStandard, checkDraft, checkDraftAsync, withWaivers, enforceClaims, heavyCut, listedClaims, brokenByCut, gradedRules, PUBLIC_FACTS, INCONCLUSIVE, UNREAD, type CheckOptions } from '../../core/loop/run-repair.js';
 import { signalChecks, displacement, isSignal, ownerWords } from '../../core/loop/graded.js';
@@ -652,7 +653,8 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   // piece to write, not someone to answer, and its form is the author's.
   const needs = intent?.document ? undefined : intent?.needs;
   if (needs && !needsNothing(needs)) report.say(`Read before writing: ${[needs.deliver.length ? `${needs.deliver.length} thing(s) asked for` : '', needs.unknowns.length ? `turns on ${needs.unknowns.map((u) => u.what).join('; ')}` : '', needs.actOn ? `could act on "${needs.actOn}"` : '', needs.irreversible ? `cannot be undone: "${needs.irreversible}"` : ''].filter(Boolean).join(' · ')}.`);
-  const requestNotes = forThisRequest(withheld.filter((w) => !needMaterial.includes(w)), impl.passages, lengthNote, needsNote(needs));
+  // The slot shape is said for the run that wants slots (a document, no material bound), never in the skill (SLOT_NOTE).
+  const requestNotes = forThisRequest(withheld.filter((w) => !needMaterial.includes(w)), impl.passages, lengthNote, needsNote(needs), placeholdersOn ? SLOT_NOTE : '');
   const servedForRun = `${needMaterial.length ? withoutRules(servedText, needMaterial) : servedText}${impl.notes ? `\n\n${impl.notes}` : ''}${carryBlock}${requestNotes}`;
   const deliveryForRun = withheld.length ? { ...delivery, withheldRules: withheld } : delivery;
   // What the person said was wrong with an earlier version (`atelier fix`) goes to the writer whatever shape was asked for.

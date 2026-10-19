@@ -58,9 +58,14 @@ export function composeServed(files: Readonly<Record<string, string>>, context: 
   //
   // So the block is fenced rather than headed, and says what it is FOR rather than only what it is
   // NOT. No heading to continue, and an explicit statement that the deliverable starts after it.
+  // TWO FRAMES, BY THE FORM THE PACKAGE CARRIES (`<!-- form: … -->`, renderers/agent-skill/render.ts). Replies: each
+  // example is another person's earlier conversation, and nothing in it is true of this one. Documents: each piece is
+  // a whole piece the author wrote on a subject of its own, read for how it is written; its subject and facts are its
+  // own. The reply frame around a blog's pieces told the writer its own author's essays were someone else's chats.
+  const documents = skillMd.includes('<!-- form: documents -->');
   const exampleBlock = servedExamples.length
     ? `\n\n=== REFERENCE MATERIAL — PRIVATE CONTEXT, NOT PART OF YOUR OUTPUT ===\n\n`
-      + `Everything up to the end marker shows how the author works, or how this skill's rules apply\n`
+      + `Everything up to the end marker shows how the author ${documents ? 'writes' : 'works'}, or how this skill's rules apply\n`
       + `(a "write this, not that" file is model-written, never the author's). It is context for you, never\n`
       + `content for the reader: do not reproduce, continue, quote, enumerate, summarise or mention\n`
       + `any of it unless the user explicitly asks about the skill itself. These are instances rather\n`
@@ -69,13 +74,20 @@ export function composeServed(files: Readonly<Record<string, string>>, context: 
       // NOT THIS CONVERSATION. "Thanks, that solved it." came back as "CORS is fixed": the writer read an example's
       // exchange as what had gone before in this one. And an example that rightly asked first (its request named no
       // target) taught asking where the request did name one. Said once, for every kind of work, in no example's words.
-      + `None of it happened in this conversation. Each example is a separate, earlier conversation with someone\n`
-      + `else: its request, what was known then, and what was written. The person you are answering now has told\n`
-      + `you only what their request says; nothing in these examples was said by them, done for them, or is true of\n`
-      + `their case. Whether an example asked first, acted, confirmed before acting or declined was decided by its\n`
-      + `own request; for the request in front of you, the method and that request decide.\n\n`
+      + (documents
+        ? `Each piece of the author's below is a whole piece they wrote on a subject of its own, shown for how it is\n`
+          + `written. Its subject, its facts, its names and its stories belong to that piece and not to this one: the\n`
+          + `piece you write begins from the request and its material alone, and takes from these only the way they\n`
+          + `are written.\n\n`
+        : `None of it happened in this conversation. Each example is a separate, earlier conversation with someone\n`
+          + `else: its request, what was known then, and what was written. The person you are answering now has told\n`
+          + `you only what their request says; nothing in these examples was said by them, done for them, or is true of\n`
+          + `their case. Whether an example asked first, acted, confirmed before acting or declined was decided by its\n`
+          + `own request; for the request in front of you, the method and that request decide.\n\n`)
       + servedExamples.map((f) => files[f]).join('\n\n- - -\n\n')
-      + `\n\n=== END REFERENCE MATERIAL — the request you are answering now comes next. Its words are all you know of this person's situation; the work you produce begins fresh from here ===`
+      + (documents
+        ? `\n\n=== END REFERENCE MATERIAL — the request comes next. The piece you write begins fresh from it and its material ===`
+        : `\n\n=== END REFERENCE MATERIAL — the request you are answering now comes next. Its words are all you know of this person's situation; the work you produce begins fresh from here ===`)
     : '';
   return { servedText: `${skillMd}${exampleBlock}`, servedExamples, withheld };
 }

@@ -50,9 +50,14 @@ and its material show; give anything else as an assumption you state, or as a ch
 export const WRITE_LIKE_THESE = `Write the way my pieces are written: who is speaking, the register, the hedging, the rhythm and the spelling; how
 a piece opens, moves and closes; and how concrete it is, with the links, named things, figures, quoted lines and
 scenes a piece of mine carries. The facts, names, figures and stories of the new piece come from this request and
-its material, never from my pieces (a story of mine you were not given is not yours to tell). Where the piece needs
-a specific that neither gives, write it in the shape I would and mark it as a slot for me to fill: [link: what it
-points to], [product: which one], [figure: what it measures], [quote: who says what], [story: what it shows].`;
+its material, never from my pieces (a story of mine you were not given is not yours to tell).`;
+
+/**
+ * THE SLOT, SAID FOR THE RUN THAT WANTS ONE, NEVER IN THE SKILL. Shown in the skill, the slot shape was taken as the safe
+ * answer on every run: a code review with the diff bound named "[person: who owns the shipping policy]" as a Must fix.
+ * `invoke` serves this line in the request's own notes only where slots are on (a document, no material bound).
+ */
+export const SLOT_NOTE = `Where this piece needs a specific that neither the request nor its material gives, write it in the shape I would and mark it as a slot for me to fill: [link: what it points to], [product: which one], [figure: what it measures], [quote: who says what], [story: what it shows].`;
 
 export function skillNameFrom(raw: string): string {
   const n = raw.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);
@@ -621,10 +626,14 @@ Code reads the finished work for these parts of the method above (the step itsel
 
 ${checkedSteps.map((r) => `- ${r.measurement ? observerFor(r.measurement.observer).describe(r.measurement.params) : ''}.\n  <!-- ${r.requirementId} · ${provenanceLabel(r.provenance)} -->`).join('\n')}
 ` : '';
+  // THE FORM OF THE WORK, IN THE PACKAGE: what frames the served examples at run time (cli/served.ts) is read from this
+  // marker, so the text a run is served is a function of the package's files alone, as the card and the delivery check
+  // require. A comment: the only frontmatter keys that travel are name and description (`PORTABLE_FRONTMATTER`).
   const skillMd = `---
 name: ${skillId}
 description: ${yamlScalar(description)}
 ---
+<!-- form: ${answers ? 'replies' : 'documents'} -->
 
 # ${skillId}
 ${methodSection}
