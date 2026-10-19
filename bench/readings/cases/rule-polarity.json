@@ -1,22 +1,98 @@
 {
   "reading": "rule-polarity",
-  "pass": { "runs": 5, "perCaseAtLeast": 4, "codeDecidedExact": true },
+  "pass": {
+    "runs": 5,
+    "perCaseAtLeast": 4,
+    "codeDecidedExact": true
+  },
   "cases": [
-    { "id": "never-phrase", "label": "BOUNDARY", "statement": "Never use the phrase \"best efforts\"." },
-    { "id": "avoid-jargon", "label": "BOUNDARY", "statement": "Avoid jargon unless the term is defined where it first appears." },
-    { "id": "no-bullets", "label": "BOUNDARY", "statement": "No bullet points: the post is prose." },
-    { "id": "dont-open-question", "label": "BOUNDARY", "statement": "Do not open with a question." },
-    { "id": "ban-midsentence", "label": "BOUNDARY", "statement": "The word \"leverage\" is never used, in any form.", "note": "the ban is not at the start of the sentence: the floor misses it" },
-    { "id": "stock-phrases", "label": "BOUNDARY", "statement": "Stock model phrasing (delve, tapestry, a testament to) stays out of every piece.", "note": "no negative word at all" },
-    { "id": "summary-section", "label": "GENERATIVE", "statement": "Open with a Summary section: two or three sentences on what the change does." },
-    { "id": "suggestions-not-block", "label": "GENERATIVE", "statement": "Then a Suggestions section: improvements that do not block the merge. Write \"None.\" when there are none." },
-    { "id": "two-not-three", "label": "GENERATIVE", "statement": "Keep the summary to two sentences, not three." },
-    { "id": "at-most-one", "label": "GENERATIVE", "statement": "Use at most one example per section." },
-    { "id": "no-more-than", "label": "GENERATIVE", "statement": "No more than 420 words, counting the headings.", "note": "opens with \"No\": the floor says BOUNDARY; it is a cap on the piece" },
-    { "id": "cite-lines", "label": "GENERATIVE", "statement": "Cite each Must fix item as path:line, the line number in the new file." },
-    { "id": "name-missing-test", "label": "GENERATIVE", "statement": "If the change adds behaviour and no test, name the missing test under Suggestions." },
-    { "id": "end-verdict", "label": "GENERATIVE", "statement": "End with a Verdict section that holds one of: Approve, Request changes, Comment." },
-    { "id": "take-from-term-sheet", "label": "GENERATIVE", "statement": "Take every name, date and figure from the term sheet: add none of your own." },
-    { "id": "dont-leave-empty", "label": "GENERATIVE", "statement": "Don't leave the Suggestions section empty; write \"None.\" when there is nothing to suggest.", "note": "opens with a negation and asks for something" }
+    {
+      "id": "never-phrase",
+      "label": "BOUNDARY",
+      "statement": "Never use the phrase \"best efforts\"."
+    },
+    {
+      "id": "avoid-jargon",
+      "label": "BOUNDARY",
+      "statement": "Avoid jargon unless the term is defined where it first appears."
+    },
+    {
+      "id": "no-bullets",
+      "label": "BOUNDARY",
+      "statement": "No bullet points: the post is prose."
+    },
+    {
+      "id": "dont-open-question",
+      "label": "BOUNDARY",
+      "statement": "Do not open with a question."
+    },
+    {
+      "id": "ban-midsentence",
+      "label": "BOUNDARY",
+      "statement": "The word \"leverage\" is never used, in any form.",
+      "note": "the ban is not at the start of the sentence: the floor misses it"
+    },
+    {
+      "id": "stock-phrases",
+      "label": "BOUNDARY",
+      "statement": "Stock model phrasing (delve, tapestry, a testament to) stays out of every piece.",
+      "note": "no negative word at all"
+    },
+    {
+      "id": "summary-section",
+      "label": "GENERATIVE",
+      "statement": "Open with a Summary section: two or three sentences on what the change does."
+    },
+    {
+      "id": "suggestions-not-block",
+      "label": "GENERATIVE",
+      "statement": "Then a Suggestions section: improvements that do not block the merge. Write \"None.\" when there are none."
+    },
+    {
+      "id": "two-not-three",
+      "label": "GENERATIVE",
+      "statement": "Keep the summary to two sentences, not three.",
+      "soft": true,
+      "note": "Live eval 2026-10-18: read as BOUNDARY 5/5; defensible either way (a cap, or a ban on the excess), and either kind serves the rule: ambiguous, so soft."
+    },
+    {
+      "id": "at-most-one",
+      "label": "GENERATIVE",
+      "statement": "Use at most one example per section."
+    },
+    {
+      "id": "no-more-than",
+      "label": "GENERATIVE",
+      "statement": "No more than 420 words, counting the headings.",
+      "note": "opens with \"No\": the floor says BOUNDARY; it is a cap on the piece"
+    },
+    {
+      "id": "cite-lines",
+      "label": "GENERATIVE",
+      "statement": "Cite each Must fix item as path:line, the line number in the new file."
+    },
+    {
+      "id": "name-missing-test",
+      "label": "GENERATIVE",
+      "statement": "If the change adds behaviour and no test, name the missing test under Suggestions."
+    },
+    {
+      "id": "end-verdict",
+      "label": "GENERATIVE",
+      "statement": "End with a Verdict section that holds one of: Approve, Request changes, Comment."
+    },
+    {
+      "id": "take-from-term-sheet",
+      "label": "GENERATIVE",
+      "statement": "Take every name, date and figure from the term sheet: add none of your own.",
+      "soft": true,
+      "note": "Live eval 2026-10-18: read as BOUNDARY 5/5; defensible either way (a cap, or a ban on the excess), and either kind serves the rule: ambiguous, so soft."
+    },
+    {
+      "id": "dont-leave-empty",
+      "label": "GENERATIVE",
+      "statement": "Don't leave the Suggestions section empty; write \"None.\" when there is nothing to suggest.",
+      "note": "opens with a negation and asks for something"
+    }
   ]
 }

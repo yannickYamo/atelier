@@ -28,7 +28,7 @@ describe('code decides where every example is sectioned', () => {
   it('two or more headings in every example is a document, whatever the work is called, and no model is asked', async () => {
     const client = scripted([{ examples: [], form: 'REPLY' }]);
     const d = await readContext(WORK_FORM, input('code review', [review('Approve'), review('Comment'), review('Request changes')]), client, 'm', budget());
-    expect(d).toMatchObject({ value: 'DOCUMENT', by: 'code', reader: 'work-form-1' });
+    expect(d).toMatchObject({ value: 'DOCUMENT', by: 'code', reader: 'work-form-2' });
     expect(client.calls).toBe(0);
   });
   it('one sectioned piece is enough; one unsectioned piece among them, or no piece, is not decisive', () => {
@@ -47,7 +47,7 @@ describe('the model reads, code grounds', () => {
       { example: 3, form: 'REPLY', quote: 'Clear the cache.' },
       { example: 4, form: 'DOCUMENT', quote: 'this quote is in no piece' } ], form: 'DOCUMENT' };
     const d = await readContext(WORK_FORM, input('posts', texts), scripted([raw]), 'm', budget());
-    expect(d).toMatchObject({ value: 'REPLY', by: 'model', reader: 'work-form-1:m' });
+    expect(d).toMatchObject({ value: 'REPLY', by: 'model', reader: 'work-form-2:m' });
   });
   it('fewer than half the pieces grounded, or a tie, is no reading: the floor decides and says so', async () => {
     const one = { examples: [{ example: 1, form: 'REPLY', quote: 'Thanks for the details.' }], form: 'REPLY' };

@@ -45,7 +45,7 @@ export const WORK_FORM_SYSTEM = `You read examples of one person's work and say 
 
 A REPLY is a turn in a conversation: an answer to someone who asked, read once in the flow of a chat, a support thread, a code-review comment thread or a ticket. It speaks to that person, it is shaped by their question, and it ends when the question is answered.
 
-A DOCUMENT is a self-standing piece: an article, an essay, a post, a report, a review written up under its own sections, a contract, a memo, a plan. It has a shape of its own (a title, sections, a template, a closing part) that does not come from a question, and it is read apart from any conversation. A document that happens to answer a request is still a document.
+A DOCUMENT is a self-standing piece: an article, an essay, a post, an explainer, a report, a review written up under its own sections, a contract, a memo, a plan. It has a shape of its own (a title, sections, a template, a closing part) that does not come from a question, and it is read apart from any conversation. A piece written to a request is still a document when it addresses no particular person and would read the same published on its own: an explainer commissioned by a request is a document; a message back to the person who asked is a reply.
 
 For each example, say its form and copy a short quote (under 25 words, exactly as written) that shows it: a greeting or an address to the person, a reference to their question, a section heading, a title, a closing formula. Then give the form of the work as a whole. Judge the pieces, not the name of the work.`;
 
@@ -61,7 +61,7 @@ export const WORK_FORM_SCHEMA: Record<string, unknown> = {
 };
 
 export const WORK_FORM: Reading<WorkFormInput, WorkForm> = {
-  id: 'work-form', version: '1',
+  id: 'work-form', version: '2',
   system: WORK_FORM_SYSTEM, schema: WORK_FORM_SCHEMA,
   toolName: 'emit_work_form', toolDescription: 'The form of each example and of the work as a whole, each with a quote that shows it.',
   maxTokens: 1200, estimateUsd: 0.02,

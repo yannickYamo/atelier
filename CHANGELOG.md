@@ -125,6 +125,30 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 - `atelier rate` takes optional reasons from a closed list (necessary part missing, unnecessary extra, wrong, unsafe,
   unsupported claim, asks instead of acting, too long, too short, voice off).
 
+### Studies: the same three kinds of work, after the readings (development evidence, $5.28)
+
+The morning's three-context study, re-run with the Atelier arm rebuilt on this version: same tasks, writer, material and
+blind judge; the other arms' outputs are the morning's, and the strongest of them was re-judged in the same session to
+measure drift (0.1 at most). What changed in the build: a persona on every path, the form of the work read from the
+examples instead of the name, rule polarity and intent read instead of matched.
+
+- **Code review moved.** Sounds-like-the-author 3.1 → 3.7 (95% CI 3.4–4.0); usable 4/10 → 7/10; every planted defect
+  found (10/10, from 9); text after the Verdict 3/10 → 0; "what I could not check" notes 7/10 → 0; length 451 → 397
+  words. The paired gap to the hand-written skill is −0.56 (CI −1.22 to 0.00; 1 win, 4 ties, 4 losses), from −1.11.
+  The checklist slipped 7/10 → 6/10 on summary length, a rule the skill checks only in part.
+- **Contract did not move** (4.1 → 4.1; checklist 10/10 both): the loss is in the length trim, which still cuts the
+  one clause every example carries. That fix is next.
+- **Blog barely moved** (2.5 → 2.7; rank 3rd of 4 both times): the posts are still abstract (no links, no named
+  products), though first-person presence doubled. The positive frame around the pieces and concreteness with
+  marked slots are next.
+- **The readings, live on claude-haiku-5-5, five runs per case:** intent-mode 75/75; rule-polarity 70/80 with two
+  cases read the other way every time and relabelled as ambiguous; work-form 21/30 on its first prompt, which read a
+  corpus of explainers as replies, and 25/30 on the second (a piece written to a request is a document when it
+  addresses no particular person). The claim reader was not re-qualified: the drafts of its last qualification are
+  gone, so a fresh battery would be a new population.
+- **Not measurable this round:** where outputs sit on the measured feature set. Feature bands exist only for skills
+  built on the full discovery path; a skill built from a method, or from fewer than four pieces, has none.
+
 ### Studies: three kinds of work, and whether the style result fell since the method work (development evidence)
 
 Three contexts, every arm on the same writer model and the same tasks, scored by the domain's own checklist (code
