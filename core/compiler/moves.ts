@@ -357,8 +357,10 @@ export function inferMoves(drafts: readonly MoveDraft[], cells: readonly TableCe
   });
 }
 
-/** The readings a profile is read by, as one string: a profile read by any other is read again where a model is there. */
-export const currentReading = (): string => `${PERSONA_MOVES.id}-${PERSONA_MOVES.version}+${PERSONA_TABLE.id}-${PERSONA_TABLE.version}`;
+/** The version of the inference from cells to counts and kinds (`inferMoves`): bumped when what a cell counts for changes. */
+export const INFER_VERSION = '2';
+/** The readings a profile is read by, and the inference, as one string: a profile read by any other is read again where a model is there. */
+export const currentReading = (): string => `${PERSONA_MOVES.id}-${PERSONA_MOVES.version}+${PERSONA_TABLE.id}-${PERSONA_TABLE.version}+infer-${INFER_VERSION}`;
 
 /** An immutable profile named by its content; the build receipt names it. */
 export function profileOf(units: readonly MoveUnit[], personaHash: string, reader: string | null, pieces: readonly MovePiece[], builtAt = new Date().toISOString()): MoveProfile {

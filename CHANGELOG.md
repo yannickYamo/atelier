@@ -201,7 +201,25 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
   and the line says so. A whole-piece habit with no feature is judged over the piece by the table, a passage only
   illustrating. The table is told each habit's modality and that a finding on topic is not the move (v3; four hard
   negatives modelled on real over-counts join its eval, 44 of 50).
-- On the real persona of twenty points that C4 ran on, three reads of the same twelve pieces gave 9, 16 and 11
+- **The evidence of a habit is read by a mid-size model, on an eval labelled by hand from the corpus.** Twelve
+  habits of the public code-review corpus (bench/standing/domains/code-review) were labelled piece by piece by a
+  person and joined the table reading's eval, with the ambiguous pieces marked soft. On them the small reader
+  answered the abstract habits differently from call to call and moved with the prompt's wording (a crisp habit
+  every piece shows went from 12 of 12 to none between two wordings); the mid-size reader did not, and its extras
+  were the pieces the labeller had marked as borderline. The two evidence readings (each point compiled, every habit
+  tabled) run on Sonnet 5.5 by default, a few calls per build; `--evidence-reader` or `ATELIER_EVIDENCE_READER`
+  names another, and on another backend they take the context reader. The client takes the `between_tools` form of
+  thinking off where the API asks for it, and the price table has the 5.5 models.
+- **A counted feature confirms a reading and never adds to it.** A feature absent from every piece (no exclamation
+  marks) is consistent with any habit that never raises the temperature and measures none of them; the reading
+  linked it to "severity named plainly" and the count made that 12 of 12. Now a piece counts for a measured habit
+  only when the reading found the habit in it and the count agrees; the inference carries a version of its own, so
+  a profile inferred under an earlier rule is read again.
+- Two reads of the real persona on the final instrument agree on the kind of 18 of 20 habits and on the count of 9
+  of 20; the counts that move are the abstract habits' (severity named plainly 4 of 12 against 9 of 12). Against the
+  small reader's 9 of 20 kinds changed, better and not finished: carrying each cell as a posterior over repeated
+  reads is the principled next step, and it multiplies the table's cost by the number of reads.
+- On the real persona of twenty points that C4 ran on, three reads of the same twelve pieces under the small reader gave 9, 16 and 11
   standing moves, 6, 2 and 4 situational, 5, 2 and 5 occasional: nine of twenty kinds changed between two reads on
   identical pieces. The arithmetic is deterministic; the table reading that feeds it is not yet an instrument on
   long pieces with many findings, over-counting abstract habits (a plain finding read as a severity escalation) under

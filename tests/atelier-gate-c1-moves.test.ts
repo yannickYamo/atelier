@@ -230,7 +230,7 @@ describe('through the build', () => {
     expect(profile).not.toBeNull();
     expect(receipt.movesHash).toBe(profile.hash);
     expect(profile.reader).toBe('scripted');
-    expect(profile.schema).toBe(2); expect(profile.reading).toBe('persona-moves-7+persona-table-4');
+    expect(profile.schema).toBe(2); expect(profile.reading).toBe('persona-moves-7+persona-table-4+infer-2');
     expect(profile.units.map((u) => u.kind)).toEqual(['standing', 'occasional']);
     expect(profile.units[0]).toMatchObject({ pieces: 4, corpus: 4, link: { step: '1', status: 'candidate' }, by: 'model', tabled: false, readAs: 'ALWAYS' });
     expect(profile.units[0].rate).toMatchObject({ k: 4, n: 4 }); expect(profile.units[0].rate.pMajority).toBeGreaterThan(0.5);
