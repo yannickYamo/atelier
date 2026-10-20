@@ -32,6 +32,65 @@ export function distinctTerms(text: string): Set<string> {
   return out;
 }
 
+const KEY_LINE = /^["']?([^"'\s:]{1,80})["']?\s*:(?:\s|$)/;
+const SEPARATOR_ROW = /^\|[\s:|-]*$/;
+
+/**
+ * A UNIT THAT IS STRUCTURE, NOT PROSE: a table row, or a block of two or more lines where at least half are a key and
+ * its value, a brace or a bracket. One line that opens "Note:" is a sentence with a label; a record has lines. The
+ * grounding step never rewrites such a unit (a rewrite is a sentence, and a sentence in its place breaks it), and the
+ * keys of such a unit in the examples are the form's own names (`formTerms`).
+ */
+export function structuredUnit(text: string): boolean {
+  const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
+  if (!lines.length) return false;
+  if (lines[0].startsWith('|')) return true;
+  if (lines.length < 2) return false;
+  const structural = lines.filter((l) => /^[{}[\],]+$/.test(l) || KEY_LINE.test(l)).length;
+  return structural * 2 >= lines.length;
+}
+
+/** Every key of a JSON value, at any depth; none when the text is not JSON. */
+function jsonKeys(text: string): string[] {
+  const t = text.trim();
+  if (!/^[{[]/.test(t)) return [];
+  let v: unknown;
+  try { v = JSON.parse(t); } catch { return []; }
+  const out: string[] = [];
+  const walk = (x: unknown): void => {
+    if (Array.isArray(x)) { x.forEach(walk); return; }
+    if (x && typeof x === 'object') { for (const [k, y] of Object.entries(x)) { out.push(k); walk(y); } }
+  };
+  walk(v);
+  return out;
+}
+
+/**
+ * THE FORM'S OWN NAMES. A term the examples hold as a KEY of a record (`"video_id":` in a JSON assessment,
+ * `safety_score:` in a YAML one) or as a column heading of a table is the shape every piece of this kind takes, not a
+ * fact of one example's case: a new assessment must carry the same keys, and a request told in prose never says them.
+ * Read from where the term stands, so no list of keys is kept anywhere. Only a record counts: a label opening one line
+ * of prose ("CORS: the browser blocks it") is that example's own subject, and a term that only stands in a value
+ * (`"vid_0012"`) is that example's own fact.
+ */
+export function formTerms(examples: string): Set<string> {
+  const out = new Set<string>();
+  const add = (s: string): void => { for (const t of distinctTerms(s)) out.add(t); };
+  for (const block of examples.split(/\n\s*\n/)) {
+    const keys = jsonKeys(block);
+    if (keys.length) { keys.forEach(add); continue; }
+    if (!structuredUnit(block)) continue;
+    for (const raw of block.split('\n')) { const k = KEY_LINE.exec(raw.trim()); if (k) add(k[1]); }
+  }
+  // a table's heading row: the row a separator row underlines
+  const lines = examples.split('\n');
+  lines.forEach((raw, i) => {
+    const l = raw.trim();
+    if (l.startsWith('|') && !SEPARATOR_ROW.test(l) && SEPARATOR_ROW.test(lines[i + 1]?.trim() ?? '')) for (const cell of l.split('|')) add(cell.trim());
+  });
+  return out;
+}
+
 /**
  * THE SENTENCES OF `text` THAT ASSERT A FACT OF AN EXAMPLE'S CASE: a distinctive term from `examples` that neither
  * the request nor its material (`evidence`) holds. An instruction counts too: "add the production origin to the same
@@ -44,6 +103,7 @@ export function distinctTerms(text: string): Set<string> {
 export function carryOverClaims(text: string, examples: string, evidence: string): Claim[] {
   if (!examples.trim()) return [];
   const theirs = distinctTerms(examples);
+  for (const t of formTerms(examples)) theirs.delete(t);
   if (!theirs.size) return [];
   // the request names a term when it holds it as a word of its own, not inside a longer one
   const known = new Set([...distinctTerms(evidence), ...(evidence.toLowerCase().match(/[\w][\w:./-]*[\w]|\w/g) ?? [])]);

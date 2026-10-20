@@ -59,3 +59,38 @@ describe('a rule licenses its own figure beside the request\'s', async () => {
     expect(decideSpecifics(text, sp('45 users in under 2 minutes'), '', 'Invite our 30 users.', false, 't', false, 'End with one thing the reader can do in under 2 minutes.').claims).toHaveLength(1);
   });
 });
+
+describe('the form\'s own names are never borrowed (brand-safety assessments, v6)', async () => {
+  const { formTerms } = await import('../core/loop/carry-over.js');
+  const example = '{\n  "video_id": "vid_0012",\n  "verdict": "fail",\n  "safety_score": 23,\n  "moments": [{"timestamp": "00:12", "note": "a fight"}]\n}';
+  const request = 'Assess this video under the policy. A 3 minute cooking show: the host chops onions and plates a dish. Duration 3:02.';
+  it('a key of the examples is the form, read from where it stands; a value is still the example\'s own', () => {
+    expect([...formTerms(example)].sort()).toEqual(['safety_score', 'video_id']);
+    const draft = '{\n  "video_id": "vid_0107",\n  "verdict": "pass",\n  "safety_score": 92\n}';
+    expect(carryOverClaims(draft, example, request)).toEqual([]);
+    const copied = '{\n  "video_id": "vid_0012",\n  "verdict": "pass"\n}';
+    expect(carryOverClaims(copied, example, request).map((c) => c.why)).toEqual([expect.stringMatching(/^states vid_0012 of your case/)]);
+  });
+  it('a YAML key and a table heading are the form too; a cell of a body row is not', () => {
+    const yaml = 'video_id: vid_0012\nsafety_score: 23\n';
+    expect(carryOverClaims('safety_score: 92\nverdict: pass', yaml, request)).toEqual([]);
+    const table = '| video_id | safety_score |\n|---|---|\n| vid_0012 | 23 |\n';
+    expect([...formTerms(table)].sort()).toEqual(['safety_score', 'video_id']);
+    expect(carryOverClaims('| video_id | safety_score |\n|---|---|\n| vid_0107 | 92 |', table, request)).toEqual([]);
+    expect(carryOverClaims('| video_id | safety_score |\n|---|---|\n| vid_0012 | 92 |', table, request)).toHaveLength(1);
+  });
+  it('is metamorphic: the same key under another name moves with it, and a prose example yields no form terms', () => {
+    const ex2 = example.replace(/video_id/g, 'clip_ref');
+    expect([...formTerms(ex2)].sort()).toEqual(['clip_ref', 'safety_score']);
+    expect(carryOverClaims('{"clip_ref": "x1", "safety_score": 9}', ex2, request)).toEqual([]);
+    expect(carryOverClaims('{"clip_ref": "vid_0012"}', ex2, request)).toHaveLength(1);
+    expect(formTerms(golden('CORS', 'Access-Control-Allow-Origin')).size).toBe(0);
+    // a label opening one line of prose is the example's own subject, not a key of a record
+    const labelled = 'CORS: the browser blocks the call because the API sends no header.\n\nFix: allow the origin.';
+    expect(formTerms(labelled).size).toBe(0);
+    expect(carryOverClaims('Good. CORS is fixed.', labelled, 'Thanks, that solved it.')).toHaveLength(1);
+    // a one-line JSON example, and keys at any depth, are read as JSON
+    expect([...formTerms('{"video_id": "v1", "moments": [{"segment_id": 3, "note": "x"}]}')].sort()).toEqual(['segment_id', 'video_id']);
+    expect(carryOverClaims('Good. CORS is fixed.', golden('CORS', 'Access-Control-Allow-Origin'), 'Thanks, that solved it.')).toHaveLength(1);
+  });
+});

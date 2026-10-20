@@ -19,7 +19,8 @@
 
 import type { InferenceClient, Budget } from '../inference/client.js';
 import { spend } from '../inference/client.js';
-import { carryOverClaims, distinctTerms } from './carry-over.js';
+import { carryOverClaims, distinctTerms, structuredUnit } from './carry-over.js';
+export { structuredUnit } from './carry-over.js';
 import { workLost } from './integrity.js';
 import type { Claim } from './claims.js';
 
@@ -85,8 +86,9 @@ export async function groundCarried(text: string, c: {
 }): Promise<GroundingResult> {
   if (!c.request.trim() || !c.examples.trim()) return { text, found: [], note: null };
   const given = `${c.evidence}\n${c.request}`;
-  // A table row is a row: a sentence spliced into it would break the table, so a row is left listed, never rewritten.
-  const claims = carryOverClaims(text, c.examples, given).filter((cl) => !cl.text.trimStart().startsWith('|'));
+  // A table row is a row, and a block of keys and values (a JSON object, a YAML record) is a structure: a sentence
+  // spliced into either would break it, so both are left listed, never rewritten.
+  const claims = carryOverClaims(text, c.examples, given).filter((cl) => !structuredUnit(cl.text));
   if (!claims.length) return { text, found: [], note: null };
   const items = claims.map((cl, i) => ({ id: i + 1, claim: cl, borrowed: borrowedOf(cl) }));
   let raw: unknown;

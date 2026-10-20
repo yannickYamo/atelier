@@ -406,9 +406,15 @@ export const describeVoices = (g: VoiceGrouping, pieces: number): string =>
  * nothing is declared at all, the voices found in the writing. `voices` is the grouping read (one voice included), or
  * null when authors were declared.
  */
-export function authorship(files: readonly { readonly id: string; readonly text: string }[], listed: readonly string[] | null = null): { readonly authors: AuthorMap | null; readonly voices: VoiceGrouping | null } {
+/**
+ * WHO WROTE THE PIECES: the authors declared (front matter, a folder per author, --authors), or, with none declared, the
+ * voices read in the writing. A split the writing shows is RECORDED and SAID, and built apart only when the person asks
+ * (`byStyle`, the `--voices` flag): a company's blog by several hands is one house voice to the person who points at it,
+ * and built as two it lost the long-form usable rate (75% to 30% on 24 posts, the rc.g2 retest).
+ */
+export function authorship(files: readonly { readonly id: string; readonly text: string }[], listed: readonly string[] | null = null, byStyle = false): { readonly authors: AuthorMap | null; readonly voices: VoiceGrouping | null } {
   const declared = detectAuthors(files, listed);
   if (declared || authorsDeclared(files, listed)) return { authors: declared, voices: null };
   const voices = groupByStyle(files);
-  return { authors: voicesAsAuthors(voices), voices };
+  return { authors: byStyle ? voicesAsAuthors(voices) : null, voices };
 }

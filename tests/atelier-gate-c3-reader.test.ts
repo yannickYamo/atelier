@@ -116,8 +116,9 @@ describe('through a run', () => {
     expect(bare.code, bare.out).toBe(0);
     const tasteCallsBare = await callsFor('emit_readings');
     expect(await callsFor('emit_move_readings')).toBe(0);
-    // with the moves placed: one call of its own; the taste reader made exactly as many calls as before
-    const r = run('invoke', '--skill', 'review', REQUEST, '--json', ...BACKEND());
+    // with the moves placed (--moves observe: unasked, a reading served to no one is not made): one call of its own; the
+    // taste reader made exactly as many calls as before
+    const r = run('invoke', '--skill', 'review', REQUEST, '--json', '--moves', 'observe', ...BACKEND());
     expect(r.code, r.out).toBe(0);
     expect(await callsFor('emit_move_readings')).toBe(1);
     expect((await callsFor('emit_readings')) - tasteCallsBare).toBe(tasteCallsBare);
@@ -138,7 +139,7 @@ describe('through a run', () => {
     expect(summary.out).toMatch(/stance\s+realised 1\/1 · misapplied 0 · missing 0/);
     // --no-taste skips the reading with the taste reader's
     const before = await callsFor('emit_move_readings');
-    const nt = run('invoke', '--skill', 'review', REQUEST, '--json', '--no-taste', ...BACKEND());
+    const nt = run('invoke', '--skill', 'review', REQUEST, '--json', '--moves', 'observe', '--no-taste', ...BACKEND());
     expect(nt.code, nt.out).toBe(0);
     expect(await callsFor('emit_move_readings')).toBe(before);
     expect(listEvals(L).find((e) => e.invocationId === idOf(nt.out))!.monitors.moves ?? null).toBeNull();

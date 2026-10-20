@@ -48,7 +48,7 @@ const shellWord = (p: string): string => (/^[\w./~-]+$/.test(p) ? p : `'${p.repl
 function readAuthorship(path: string, mode: SkillMode): ReturnType<typeof authorship> {
   const dir = statSync(path).isDirectory();
   const files = corpusFiles(path).flatMap((f) => { const r = extract(f); return r.ok ? [{ id: dir ? relative(path, f) : basename(f), text: (r as { text: string }).text }] : []; });
-  return authorship(examplePieces(files, mode), flagAll('--authors'));
+  return authorship(examplePieces(files, mode), flagAll('--authors'), argv.includes('--voices'));
 }
 
 /** The folder the sealed corpus was read from, for runs that predate recording it. */
@@ -104,6 +104,11 @@ export async function newSkill(): Promise<void> {
   // model-free build, with several voices kept apart where there are several.
   const thin = fresh && thinCorpus(path);
   const composite = fresh && (keyless || thin) && Boolean(who?.authors);
+  // VOICES READ IN THE WRITING ARE SAID, AND BUILT AS ONE unless asked: the person pointed at one folder.
+  const voicesRead = fresh && who && !who.authors ? who.voices : null;
+  if (voicesRead && voicesRead.groups.length > 1) {
+    console.log(`${voicesRead.groups.length} voices read in how the pieces are written (${voicesRead.groups.map((g) => `${g.pieces.length} piece(s)`).join(', ')}): built as one voice, which is what pointing at one folder asks for.\n  To build the combination of them, each read on its own:  atelier new ${shellWord(corpus)} --voices\n`);
+  }
   // Nothing at build reads with a model when none is set up: the persona and the other readings are left out, and said.
   if (keyless) process.env.ATELIER_BUILD_NO_MODEL = '1';
   if (composite) {

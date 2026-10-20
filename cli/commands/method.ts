@@ -36,6 +36,7 @@ import { readCase, corpusFiles, sessionCorpus, corpusHashOf } from '../corpus.js
 import { buildProfile } from '../../core/fidelity/profile.js';
 import { SELECTION } from '../../core/observers/selection.js';
 import { withoutFrontMatter } from '../../core/composite/authors.js';
+import { authorship } from '../../core/composite/voices.js';
 import { shortFormFolder } from './intake.js';
 import { MIN_GOLDEN_CHARS } from '../../core/discovery/chain/corpus-import.js';
 import { observesOf, propositionOf, type Observes } from '../../core/eval/observes.js';
@@ -304,6 +305,9 @@ export async function method(): Promise<void> {
   const example = cases[lead];
   const whole = argv.includes('--report');
   console.log(`${notePath === null ? 'No method note: built from your examples' : `Method: ${basename(notePath)}`}  ·  ${cases.length === 1 ? `example: ${example.id}` : `${cases.length} examples from ${basename(goldenPath)}`}${whole && cases.length > 1 ? `; checks read from ${example.id}, then held against the rest` : ''}${whole && example.material.length ? ` with ${example.material.length} file(s) of material` : ''}\n`);
+  // VOICES READ IN THE WRITING ARE SAID, AND BUILT AS ONE unless asked (cli/commands/new.ts says the same on its path).
+  const voices = notePath === null && folder && cases.length > 1 ? authorship(cases.map((c) => ({ id: c.id, text: c.reference }))).voices : null;
+  if (voices && voices.groups.length > 1) console.log(`${voices.groups.length} voices read in how the pieces are written (${voices.groups.map((g) => `${g.pieces.length} piece(s)`).join(', ')}): built as one voice, which is what pointing at one folder asks for.\n  To build the combination of them, each read on its own:  atelier new ${goldenPath} --voices\n`);
   for (const line of whole ? describeMethod(proposals, example.caseClass) : shortScreen(proposals)) console.log(line);
   // The limits of a corpus of short pieces: one line on the screen, the whole account with --report.
   if (short.brief) { console.log(''); for (const line of whole ? short.limits : [short.brief]) console.log(`Short form: ${line}`); }

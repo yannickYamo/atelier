@@ -7,6 +7,48 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+### The form is not a fact, the notes are not the work, one folder is one voice, and a reader reads where it can act
+
+- **A key of the examples is the form, never a borrowed fact.** The carry-over signal read `video_id` and `safety_score`,
+  which every example assessment carries and a described video never says, as facts of one example's case, and the
+  grounding step's rewrite dropped the keys from 22 of 40 delivered assessments (the v6 study). A term the examples hold
+  as a key or a column heading is the shape of the work (`formTerms`, read from where the term stands, no list of keys
+  kept), and a unit that is structure (a record of keys and values, a table row) is listed and never spliced.
+- **The brief is never printed into the work.** A line of this request's notes that the writer put in the draft is
+  removed by code before any check reads it, and said; the person's own lines are never touched (`core/loop/echo.ts`).
+- **One folder is one voice.** Voices read in the writing are said and recorded, and built apart only with `--voices`;
+  declared authors (front matter, a folder per author, `--authors`) are built apart as before. Built as two, a blog of 24
+  posts lost its long-form usable rate (75% to 30%, the rc.g2 retest).
+- **A reader that can change nothing is not run unasked.** The judgement reader reads by default only on a skill where
+  the labels have given it VETO; before that `--taste` runs it and records readings to label, and the run says so in one
+  line. The moves' placement and the reading of them on the work run under `--moves observe` or `--moves serve`. On
+  short work the readings had doubled the cost per output without changing the text (the v6 study).
+
+### Studies: seven real-user scenarios against five alternatives (external test of rc.g2, about $195)
+
+An independent tester used rc.g2 as a person would: one or two examples and one sentence, `atelier new --accept`,
+default settings, no method file; against the bare model, the examples pasted into one chat, Anthropic's skill-creator,
+the pasted chat with one self-review pass, and a hand-written skill where one exists. Ten tasks a scenario (twenty for
+brand safety), three judge families each picking one output blind and reading every head-to-head pair in both orders.
+
+- **Where it wins.** Market entry from one 4,900-word strategy: the judges' top pick, head to head 17–2 bare, 15–6
+  pasted, 16–2 skill-creator, 9–6 self-review; the only arm usable 10 of 10 after edits and closest to the example (65%);
+  the pasted arms copied runs of 30 to 36 words of the example into other companies' playbooks, Atelier 12. Competitive
+  analysis: most picked, ties the pasted and self-reviewed arms, beats skill-creator 13–6. Against the bare model it wins
+  every scenario but brand safety; against the hand-written skills 24–1 and 27–0.
+- **Where it loses.** Contracts (0 picks; 91% close and the least copying, but clauses the new situation did not ask
+  for), pricing memos (arithmetic and consistency flags, slots left in the memo, 9 of 20 BLOCKED), code review against
+  the simple alternatives (3–19 to skill-creator, while 27–0 against the expert's own skill), and brand safety, where
+  the grounding step stripped `video_id` and `safety_score` from 22 of 40 assessments whose verdicts were all correct;
+  `verify` caught none of 20 planted errors, since a skill built from two JSON examples compiles no schema check.
+- **Blog from two liked posts:** tied with the pasted prompt, the most picked by one vote, the closest to the posts; usable
+  near zero for every arm. **Cost:** 1.5 to 3 times the pasted prompt per output, about self-review's.
+- **The tester's reading, which we accept:** the advantage over the simple alternatives grows with the complexity of the
+  example (rank correlation 0.75 on seven scenarios); short one-off work does not need Atelier; strict structured output
+  at volume is a second wedge that needs schema, vocabulary, rule-table and timestamp checks compiled from the examples
+  and the policy. The three product causes named (keys stripped, the brief in the work, the folder split in two) are the
+  entries above; the figure path on numeric memos and the one-example contract are the next two.
+
 ### The method, executed: what each step asks, which steps this request needs, and a reader that reports
 
 - **A reading never moves the standard.** The decision units are kept beside the standard version they were read from,

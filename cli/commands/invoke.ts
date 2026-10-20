@@ -13,6 +13,7 @@ import { checksFor, claimInstrumentOf, contextJudgeFor, contextJudgeModel, small
 import { regressions, readAtLength, featureParamsOf, ruleParamsOf, enforcedNeverWorse, applyStep, unmeasuredIn, type ParamsOf, type Proposed } from '../../core/loop/repair.js';
 import { answerSentences, judgedSituations } from '../../core/loop/answer-claims.js';
 import { groundCarried } from '../../core/loop/grounding.js';
+import { withoutServedNotes } from '../../core/loop/echo.js';
 import { SLOT_NOTE } from '../../renderers/agent-skill/render.js';
 import { EXECUTION_BRIEF, briefNote, applyingSteps, setAsideSteps, unresolvedSteps, type BriefStep, selectMoves, type MoveSelection } from '../../core/loop/execution-brief.js';
 import { MOVE_CASES, eligibleMoves } from '../../core/loop/move-cases.js';
@@ -654,7 +655,8 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const brief = briefOn ? await readContext(EXECUTION_BRIEF, { ...given, steps: briefSteps },
     contextJudgeModel() ? contextReaderClient() : null, contextJudgeModel(), { spentUsd: 0, capUsd: 0.05, maxCalls: 1 }) : null;
   // The moves' cases are their own reading (core/loop/move-cases.ts): a second small call only when a move has a case.
-  const placement = brief && profile ? await readContext(MOVE_CASES, { ...given, moves: eligible },
+  // The moves' placement is read only where it is served, or where --moves observe asks for the record.
+  const placement = brief && profile && (movesMode === 'serve' || movesFlag !== undefined) ? await readContext(MOVE_CASES, { ...given, moves: eligible },
     contextJudgeModel() ? contextReaderClient() : null, contextJudgeModel(), { spentUsd: 0, capUsd: 0.03, maxCalls: 1 }) : null;
   const selection: MoveSelection | null = brief && placement ? selectMoves(placement.value, brief.value, eligible, briefSteps) : null;
   const briefNoteText = brief ? briefNote(brief.value, briefSteps, material, movesMode === 'serve' ? selection : null) : '';
@@ -662,10 +664,15 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   if (selection && profile && placement) report.say(`Moves of mine for this request: ${selection.placed.length} placed (${movesMode === 'serve' ? 'served to the writer' : 'observed, not served'}; about ${selection.budget} a piece), ${selection.standing.length} standing (how I always am, in the skill), ${selection.notPlaced.length} not this case, ${selection.unresolved.length} unresolved and never served; read by ${placement.by === 'model' ? 'the context reader' : placement.by}; profile ${profile.hash}.`);
   // HOW MUCH THE READER MAY READ THIS RUN: nothing on a short request unless asked, four calls on a long one (two
   // batches of twelve rules, the brief's applying steps and the required rules first), every rule under --strict.
+  // A READER THAT CAN CHANGE NOTHING IS NOT RUN UNASKED: where the reader holds no VETO on this skill its reading is a
+  // report, and a report on every run doubled the cost of short work without touching the text (the v6 study). --taste
+  // runs it and records readings to label; once the labels qualify it, it reads by default where the method is needed.
   if (taste) {
-    const maxCalls = readerAsked || strict ? Infinity : needsMethod ? READ_CALLS_DEFAULT : 0;
-    if (maxCalls === 0) taste = null;
-    else taste.setBounds({ maxCalls, first: new Set(brief ? applyingSteps(brief.value, briefSteps).filter((s) => s.required).map((s) => s.id) : []) });
+    const maxCalls = readerAsked || strict ? Infinity : needsMethod && taste.acts ? READ_CALLS_DEFAULT : 0;
+    if (maxCalls === 0) {
+      if (needsMethod && !taste.acts) report.say(`Judgement reader: not run (reporting only until your labels qualify it; --taste reads this run and records readings to label: atelier taste --skill ${name} --calibrate).`);
+      taste = null;
+    } else taste.setBounds({ maxCalls, first: new Set(brief ? applyingSteps(brief.value, briefSteps).filter((s) => s.required).map((s) => s.id) : []) });
   }
   if (brief) {
     for (const s of setAsideSteps(brief.value, briefSteps)) { waived.set(s.id, `set aside for this request: ${brief.value.placed[s.id].why ?? 'not this case'}`); withheld.push(s.statement); }
@@ -780,7 +787,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const rec = await runOnce(L, sv, servedForRun, servedHash, deliveryForRun, taskForRun, client, budget, binding,
     resolveProvenance(flag('--provenance'), process.env), contractFile,
     flag('--task') ? 'FLAG' : 'POSITIONAL',
-    std && !argv.includes('--no-repair') ? keepDelivered(withSituations(withGrounding(withGradedRecord(withStructureRead(repairChain(refineFor(),
+    std && !argv.includes('--no-repair') ? keepDelivered(withSituations(withGrounding(withGradedRecord(withStructureRead(withoutEcho(repairChain(refineFor(),
       unmet ? { unmet, notes: completions, resume: refineFor(), paramsOf: ruleParamsOf(std), round: shapeRoundNow, protect: store.getVoice(L)?.standardWording ?? [], check: (text: string) => checkDraft(name, std, text, { ...checks, claimSensor: undefined }), redraft: async (note, purpose) => (await spendOneWithResult(client, budget, servedForRun, taskForRun, null, note, {}, purpose)).piece, graded: gradedTrace,
         steps: { usdPerCall: () => { const ls = spendBetween(ledgerBefore, processSpendByPurpose()).filter((l) => l.purpose === 'writing' || l.purpose === 'graded'); const n = ls.reduce((k, l) => k + l.calls, 0); return n ? ls.reduce((k, l) => k + l.usd, 0) / n : undefined; } },
         displaced: (from: string, to: string) => displacement(from, to, graded !== undefined ? carried : null, new Set())?.refusedFor ?? [] } : null,
@@ -790,7 +797,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
         ...(checks.guardClaims !== false ? { readsWith: { material: checks.evidence ?? '' } } : {}) } : null,
       shapeRounds > 0 ? { client, budget, std, round: shapeRoundNow, graded, gradedProfile: graded !== undefined ? carried : null, gradedTrace, calibration: fid?.typicality ?? null, detector: fid?.profile.detector ?? null, target: shapeTarget, authorTarget, rounds: shapeRounds, servedText: servedForRun, task: taskForRun, trace, taste, notes: completions,
         fresh: planState ? (round: number) => freshPlannedDraft(client, budget, servedForRun, taskForRun, planState, round) : null } : null,
-      runSteps),
+      runSteps), requestNotes, completions),
       planState ? { budget, trace, state: planState } : null), gradedTrace, ledgerBefore),
       checks.guardClaims !== false && checks.examples ? { client, budget, request: asked, evidence: `${checks.evidence ?? ''}\n${checks.approved ?? ''}`, examples: checks.examples, notes: completions,
         recheck: (text: string) => checkDraftAsync(name, std, text, checks) } : null),
@@ -840,7 +847,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const tasteMonitor = taste ? await taste.report(report, rec, name) : null;
   // THE MOVES, READ ON THE WORK (core/taste/move-reader.ts): its own small call, under the taste reader's own gate, so
   // the reader's coverage of the method's steps is never spent on a move. A reading, never a gate: recorded, shown, summed.
-  const movesMonitor = selection && profile && placement && !argv.includes('--no-taste') && (readerAsked || canReach('discovery')) ? await readMovesOnWork(L, rec, asked, selection, profile.hash, movesMode, report) : null;
+  const movesMonitor = selection && profile && placement && !argv.includes('--no-taste') && (readerAsked || movesFlag !== undefined || movesMode === 'serve') && canReach('discovery') ? await readMovesOnWork(L, rec, asked, selection, profile.hash, movesMode, report) : null;
   reportIntegrity(report, rec, cls.ok ? cls.note : null, std, L);
   reportFidelity(report, rec);
   if (ownBand) report.say(ownLengthLine(rec.output, ownBand, store.getVoice(L)?.lengthSpan ?? ownBand));
@@ -2072,6 +2079,19 @@ export function withSituations(refine: (draft: string) => Promise<Delivered>, c:
     const add = found.filter((t) => !had.some((h) => h.slice(0, 60) === t.slice(0, 60)));
     if (!add.length || !d.repair) return d;
     return { ...d, repair: { ...d.repair, claimsToCheck: [...had, ...add] } };
+  };
+}
+
+/**
+ * THE NOTES ARE NEVER PART OF THE WORK (core/loop/echo.ts). A line of this request's notes (the brief, the rules set
+ * aside, the slot shape) that the writer printed into the draft is removed by code before any check reads it, and said.
+ */
+export function withoutEcho(refine: (draft: string) => Promise<Delivered>, notes: string, say: string[]): (draft: string) => Promise<Delivered> {
+  if (!notes.trim()) return refine;
+  return async (draft: string) => {
+    const r = withoutServedNotes(draft, notes);
+    if (r.removed.length) say.push(`Removed from the work: ${r.removed.length} line(s) of the brief the writer printed into it (an instruction to the writer, never part of the piece).`);
+    return refine(r.text);
   };
 }
 

@@ -388,9 +388,11 @@ until its sealed qualification is run ([pre-registration](../studies/SUBJECT_REA
 
 ### Several writers in one skill
 
-Point `atelier new` at a folder with pieces by several writers, labelled or not. The voices are told apart by how
-they are written (function words, phrasing, punctuation), never by format or length, so one writer's essays, lists and
-posts stay one voice. Each voice is read on its own, its most characteristic traits are taken, what every voice shares
+Point `atelier new` at a folder with pieces by several writers, labelled (`author:` front matter, a folder per writer,
+or `--authors`). Unlabelled, a folder is one voice: where the writing itself shows several, the build says how many and
+builds them as one, since one folder is what you pointed at; `--voices` builds the blend of them instead. The voices are
+told apart by how they are written (function words, phrasing, punctuation), never by format or length, so one writer's
+essays, lists and posts stay one voice. Each voice is read on its own, its most characteristic traits are taken, what every voice shares
 is kept as method, and every clash is settled by which side is more characteristic, with the reason. Nothing is asked;
 the build says one line ("Combined 2 voices: openings from the first, tone from the second…"). Every inferred trait
 steers and never blocks. `atelier report --skill <name>` shows the grouping, every weight and every settled clash;

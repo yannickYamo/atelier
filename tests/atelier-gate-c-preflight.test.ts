@@ -116,13 +116,13 @@ describe('through runs', () => {
     const receipt = store.getReceipt(L(s.data), activeOf(s.data).skillVersionHash)!;
     expect(receipt.movesHash).toMatch(/^[0-9a-f]{12}$/);
     // 3.7 a three-word request with the diff bound is the method's work: the case is read on the material and the move placed
-    const short = s.run('invoke', '--skill', 'review', 'Review this change.', '--with', 'change=change.diff', '--json', ...BACKEND());
+    const short = s.run('invoke', '--skill', 'review', 'Review this change.', '--with', 'change=change.diff', '--json', '--moves', 'observe', ...BACKEND());
     expect(short.code, short.out).toBe(0);
     expect((await bodiesFor('emit_move_cases')).at(-1) ?? '').toContain('straight from the request body');
     const shortRec = store.listInvocations(L(s.data)).find((i) => i.invocationId === idOf(short.out))!;
     expect(shortRec.settings.flags.brief!.moves).toMatchObject({ profile: receipt.movesHash, placed: [expect.stringMatching(/./)], mode: 'observe' });
     // 5. observe vs serve: the writer's prompt differs by the moves block and nothing else
-    const observed = s.run('invoke', '--skill', 'review', REQUEST, '--json', ...BACKEND()); expect(observed.code, observed.out).toBe(0);
+    const observed = s.run('invoke', '--skill', 'review', REQUEST, '--json', '--moves', 'observe', ...BACKEND()); expect(observed.code, observed.out).toBe(0);
     const pObs = (await bodiesFor('emit_piece')).at(-1)!;
     const served = s.run('invoke', '--skill', 'review', REQUEST, '--json', '--moves', 'serve', ...BACKEND()); expect(served.code, served.out).toBe(0);
     const pSrv = (await bodiesFor('emit_piece')).at(-1)!;
@@ -131,7 +131,7 @@ describe('through runs', () => {
     expect(pObs.split('\n').filter((l) => !pSrv.includes(l))).toEqual([]);
     expect(outputOf(served.out)).toBe(outputOf(observed.out));
     // 5. the reader on or off: the writer's prompt and the output are identical; only the record and the events differ
-    const noRead = s.run('invoke', '--skill', 'review', REQUEST, '--json', '--no-taste', ...BACKEND()); expect(noRead.code, noRead.out).toBe(0);
+    const noRead = s.run('invoke', '--skill', 'review', REQUEST, '--json', '--moves', 'observe', '--no-taste', ...BACKEND()); expect(noRead.code, noRead.out).toBe(0);
     expect((await bodiesFor('emit_piece')).at(-1)).toBe(pObs);
     expect(outputOf(noRead.out)).toBe(outputOf(observed.out));
     const evObs = listEvals(L(s.data)).find((e) => e.invocationId === idOf(observed.out))!; const evNo = listEvals(L(s.data)).find((e) => e.invocationId === idOf(noRead.out))!;
@@ -139,7 +139,7 @@ describe('through runs', () => {
     expect(evObs.result.conformant).toBe(evNo.result.conformant); expect(evObs.record?.state).toBe(evNo.record?.state);
     // 4. the reading fails (the script does not answer it): not read, said, and the delivered output is the same bytes
     await setTools({ ...ALL, emit_move_readings: undefined });
-    const failed = s.run('invoke', '--skill', 'review', REQUEST, '--json', ...BACKEND()); expect(failed.code, failed.out).toBe(0);
+    const failed = s.run('invoke', '--skill', 'review', REQUEST, '--json', '--moves', 'observe', ...BACKEND()); expect(failed.code, failed.out).toBe(0);
     expect(outputOf(failed.out)).toBe(outputOf(observed.out));
     const evF = listEvals(L(s.data)).find((e) => e.invocationId === idOf(failed.out))!;
     expect(evF.monitors.moves).toMatchObject({ by: 'floor', notRead: 2, realised: 0 });

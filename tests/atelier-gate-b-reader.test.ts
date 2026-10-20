@@ -93,7 +93,7 @@ describe('through a run', () => {
   }, 60_000);
   afterAll(() => { backend.kill(); });
 
-  it('on by default on a long request, four calls at most and the cap said; nothing on a short request; off with --no-taste; every rule under --strict; never VERIFIED on its word', async () => {
+  it('not run unasked while it only reports, and said; under --taste on a long request four calls at most and the cap said; nothing on a short request; off with --no-taste; every rule under --strict; never VERIFIED on its word', async () => {
     const data = mkdtempSync(join(tmpdir(), 'atelier-gr-data-')); const proj = mkdtempSync(join(tmpdir(), 'atelier-gr-proj-'));
     mkdirSync(join(proj, 'examples')); writeFileSync(join(proj, 'method.md'), NOTE);
     ['Approve', 'Request changes', 'Comment', 'Approve'].forEach((v, i) => { writeFileSync(join(proj, 'examples', `e${i + 1}.md`), review(v, i + 1)); });
@@ -110,8 +110,14 @@ describe('through a run', () => {
     expect(judgement).toBe(16);
     const long = 'Review this change: it renames a CSS class in the docs site and touches nothing else, so weigh each point as you would.';
     const before = (await readingCalls()).length;
-    // `run` prints the work and its evaluation card, which opens with where the work stands
-    const r = run('run', long, '--skill', 'review', '--report', ...BACKEND());
+    // UNASKED, A READER THAT CAN CHANGE NOTHING IS NOT RUN: no reading, and the run says how to run it
+    const quiet = run('run', long, '--skill', 'review', '--report', ...BACKEND());
+    expect(quiet.code, quiet.out).toBe(0);
+    expect((await readingCalls()).slice(before)).toEqual([]);
+    expect(quiet.out).toContain('Judgement reader: not run (reporting only until your labels qualify it; --taste reads this run and records readings to label: atelier taste --skill review --calibrate).');
+    expect(quiet.out).toMatch(/NEEDS REVIEW/);
+    // `run --taste` prints the work and its evaluation card, which opens with where the work stands
+    const r = run('run', long, '--skill', 'review', '--report', '--taste', ...BACKEND());
     expect(r.code, r.out).toBe(0);
     const calls = (await readingCalls()).slice(before);
     expect(calls).toEqual([12, 12, 4, 4]);
@@ -124,7 +130,7 @@ describe('through a run', () => {
     expect(run('invoke', '--skill', 'review', 'Thanks, approve it.', ...BACKEND()).code).toBe(0);
     expect((await readingCalls()).length).toBe(b2);
     // off: no reading; and the reporting reader changed nothing: the delivered text is the same with it and without it
-    const on = run('invoke', '--skill', 'review', long, '--json', ...BACKEND());
+    const on = run('invoke', '--skill', 'review', long, '--taste', '--json', ...BACKEND());
     const off = run('invoke', '--skill', 'review', long, '--no-taste', '--json', ...BACKEND());
     expect(on.code, on.out).toBe(0); expect(off.code, off.out).toBe(0);
     const textOf = (o: string): string | null => (JSON.parse(o.slice(o.indexOf('\n{') + 1)) as { output: string | null }).output;
@@ -132,6 +138,6 @@ describe('through a run', () => {
     expect((await readingCalls()).length).toBe(b2 + 4);
     // the record says the reader was off on that run and on for the first
     const recs = store.listInvocations(L);
-    expect(recs.map((x) => x.settings.flags.noTaste).sort()).toEqual([false, false, true, true]);
+    expect(recs.map((x) => x.settings.flags.noTaste).sort()).toEqual([false, false, true, true, true]);
   }, 300_000);
 });
