@@ -219,6 +219,16 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
   of 20; the counts that move are the abstract habits' (severity named plainly 4 of 12 against 9 of 12). Against the
   small reader's 9 of 20 kinds changed, better and not finished: carrying each cell as a posterior over repeated
   reads is the principled next step, and it multiplies the table's cost by the number of reads.
+- **Studied (development evidence, both halves).** On the ten C4 code-review tasks, the measured profile served as
+  C2 held the method exactly (checklist 17 of 20, the defect first 20 of 20), placed 17 moves of four kinds the judge
+  called the right call 16 times, delivered 20 usable pieces with no invention, and read to the blind judge as the
+  same author to the same degree as the frozen profile (0.00 [−0.37, 0.37] by task). On ten fresh price-analysis
+  tasks with their price lists as material, against the Gate B skill and the pasted method: no likeness gain (−0.20
+  [−0.70, 0.17] by task), a loss on structure the judge reads as real (−0.63 [−1.03, −0.27]), the one placed move the
+  right call 13 of 13 times, no invention, and every Atelier run in both arms blocked by the owner's step "every
+  figure must be sourced from the price list" read as a count: a worked cost is a figure not in the material, a
+  product defect in the figure rule and not in the moves. The method-only arm is the ceiling on likeness in both
+  domains. The records: `STUDY_2026-10-19_step4.md`, `STUDY_2026-10-19_step5.md` (internal).
 - On the real persona of twenty points that C4 ran on, three reads of the same twelve pieces under the small reader gave 9, 16 and 11
   standing moves, 6, 2 and 4 situational, 5, 2 and 5 occasional: nine of twenty kinds changed between two reads on
   identical pieces. The arithmetic is deterministic; the table reading that feeds it is not yet an instrument on
