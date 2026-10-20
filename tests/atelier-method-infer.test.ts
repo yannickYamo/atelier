@@ -130,5 +130,14 @@ describe('through the build and a run', () => {
     const nm = run('build', '--name', 'pricing', '--report', '--no-infer-method', ...BACKEND());
     expect(nm.code, nm.out).toBe(0);
     expect(nm.out).toMatch(/Stages: method — no method note \(--no-infer-method\) ·/); expect(store.getInferredMethod(L)).toBeNull();
+    // A READ THAT FINDS NONE IS REMEMBERED AS NONE: the next rebuild on the same pieces calls nothing again
+    await fetch(`${url()}/__set`, { method: 'POST', body: JSON.stringify({ byTool: { emit_method_infer: { steps: [] }, emit_method_units: UNITS, emit_holds_back: { ids: [] } } }) });
+    const none = run('build', '--name', 'pricing', '--report', ...BACKEND());
+    expect(none.code, none.out).toBe(0);
+    expect(none.out).toMatch(/Stages: method — no method note, and the pieces share no method a reading could show ·/);
+    expect(store.getInferredMethod(L)).toMatchObject({ steps: [] });
+    const before = (await promptsFor('emit_method_infer')).length;
+    expect(run('build', '--name', 'pricing', '--report', ...BACKEND()).code).toBe(0);
+    expect((await promptsFor('emit_method_infer')).length).toBe(before);
   }, 300_000);
 });

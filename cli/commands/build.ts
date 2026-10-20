@@ -419,10 +419,16 @@ async function inferredMethodFor(L: store.StoreLayout, methodText: { text: strin
   const corpusHash = sha(pieces.map((p) => p.text).join('\n\x00'));
   if (kept?.reading === `${METHOD_INFER.id}-${METHOD_INFER.version}+${corpusHash}`) return kept;
   if (NO_MODEL() || !pieces.length) return kept;
+  const reading = `${METHOD_INFER.id}-${METHOD_INFER.version}+${corpusHash}`;
   const d = await readContext(METHOD_INFER, { purpose, pieces }, contextReaderClient(), contextReaderModel(), { spentUsd: 0, capUsd: 0.2, maxCalls: 1 });
-  if (d.by !== 'model' || !d.value.length) { if (d.by === 'model') store.setInferredMethod(L, null); return d.by === 'model' ? null : kept; }
+  // READ AND FOUND NONE, OR NOT GROUNDED: remembered as none for this corpus, so a rebuild with the same pieces calls nothing
+  // again; a corpus that changes is read afresh. No model reachable at all was handled above, and keeps what there was.
+  if (d.by !== 'model' || !d.value.length) {
+    const none: InferredMethod = { schema: 1, reader: contextReaderModel() ?? 'model', reading, steps: [], builtAt: new Date().toISOString() };
+    store.setInferredMethod(L, none); return none;
+  }
   const units = await readContext(METHOD_UNITS, { steps: d.value.map((st, i) => ({ id: String(i + 1), text: st.text, under: null })) }, contextReaderClient(), contextReaderModel(), { spentUsd: 0, capUsd: 0.2, maxCalls: 1 });
-  const m: InferredMethod = { schema: 1, reader: contextReaderModel() ?? 'model', reading: `${METHOD_INFER.id}-${METHOD_INFER.version}+${corpusHash}`,
+  const m: InferredMethod = { schema: 1, reader: contextReaderModel() ?? 'model', reading,
     steps: d.value.map((st, i) => ({ ...st, id: `i${i + 1}`, unit: units.value[String(i + 1)] ?? null })), builtAt: new Date().toISOString() };
   store.setInferredMethod(L, m);
   console.log(`Method, read from your pieces (you wrote none): ${m.steps.length} step(s), followed as your habit on every run and made a rule of nothing; write them yourself with atelier method <file> to make them yours. ${argv.includes('--report') ? `\n${m.steps.map((st) => `  ${st.id.slice(1)}. ${st.text}  (as in "${st.quote.slice(0, 80)}")`).join('\n')}` : ''}`);
@@ -664,7 +670,7 @@ export async function build(nameArg?: string, opts: { closing?: boolean } = {}):
   // THE METHOD THE PIECES FOLLOW, when the owner wrote none (core/method/infer.ts): read once per corpus, kept beside the
   // skill for the brief and the moves to use, never a requirement; --no-infer-method leaves it out; a review reads nothing.
   const inferred = argv.includes('--review') ? store.getInferredMethod(L) : await inferredMethodFor(L, methodText, desc);
-  const moves = argv.includes('--review') ? null : await movesFor(L, voice, methodText ?? (inferred ? { text: noteOf(inferred.steps) } : null));
+  const moves = argv.includes('--review') ? null : await movesFor(L, voice, methodText ?? (inferred?.steps.length ? { text: noteOf(inferred.steps) } : null));
   if (!argv.includes('--review')) reportOwnPieces(v, name, s);
   // THE SKILL WORDS EACH POINT BY ITS COUNT: the persona's points carry the rates the profile measured (never the
   // reading's own word for how often) where a profile was read; the voice on disk is unchanged.
@@ -743,7 +749,7 @@ export async function build(nameArg?: string, opts: { closing?: boolean } = {}):
   recordStage('signals', release && hadSignals ? { ran: true, detail: `${store.getSignals(L).length} signal(s)` } : { ran: false, why: hadSignals ? 'set aside with the profile' : installed ? 'fewer than 2 model drafts' : 'no model drafts to compare with' });
   recordStage('contrast', installed?.detector ? { ran: true, detail: `${installed.detector.trainedOn.model} model draft(s)` } : { ran: false, why: s.evidence ? 'no model drafts' : 'no model-read corpus: a method, stated rules, or fewer than four pieces' });
   recordStage('method', methodText ? { ran: true, detail: `${stepsOf(methodText.text).length} step(s) served whole` }
-    : inferred ? { ran: true, detail: `${inferred.steps.length} step(s) read from your pieces, not confirmed: the brief follows them as your habit, no rule is made of them` }
+    : inferred?.steps.length ? { ran: true, detail: `${inferred.steps.length} step(s) read from your pieces, not confirmed: the brief follows them as your habit, no rule is made of them` }
     : { ran: false, why: argv.includes('--no-infer-method') ? 'no method note (--no-infer-method)' : NO_MODEL() ? 'no method note, and no model to read one off the pieces' : 'no method note, and the pieces share no method a reading could show' });
   const counted = v.requirements.filter((r) => r.wordedFromCheck && r.authority !== 'EXPERT_REJECTED').length;
   recordStage('counted', counted ? { ran: true, detail: `${counted} rule(s) counted off the pieces` } : { ran: false, why: 'nothing counted off the pieces' });

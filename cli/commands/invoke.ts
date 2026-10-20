@@ -625,7 +625,8 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
     .map((q, i) => ({ id: q.requirementId, n: i + 1, statement: q.statement, required: enforcedSteps.has(q.requirementId), unit: unitsOf[q.requirementId] ?? null }));
   // WITH NO NOTE OF THE OWNER'S, the steps read off the pieces at build (core/method/infer.ts) brief the run instead: a habit
   // of the pieces, none of them required, said to the writer as not confirmed; the standard holds none of them.
-  const inferredMethod = statedSteps.length ? null : store.getInferredMethod(L);
+  const inferredRecord = statedSteps.length ? null : store.getInferredMethod(L);
+  const inferredMethod = inferredRecord?.steps.length ? inferredRecord : null;
   const briefSteps: BriefStep[] = statedSteps.length ? statedSteps : (inferredMethod?.steps ?? []).map((st, i) => ({ id: st.id, n: i + 1, statement: st.text, required: false, unit: st.unit }));
   // WHETHER THE REQUEST NEEDS THE METHOD decides the brief, not its word count: "Review this change" with a diff bound is
   // the method's work, and so is "The import stalls. Why?"; "Thanks, that solved it." is not. Material bound is need;
