@@ -90,8 +90,8 @@ describe('through a run', () => {
     expect(r.out).toContain('Examples first: served without the description of how I sound or my repertoire; my moves are read on the work and never served.');
     expect(r.out).toMatch(/Moves of mine for this request: 1 placed \(observed, not served/);
     const rec = recOf(r.out);
-    expect(rec.settings.flags.brief!.served).toBe('examples-first');
-    expect(rec.settings.flags.brief!.moves!.mode).toBe('observe');
+    expect(rec.settings!.flags.brief!.served).toBe('examples-first');
+    expect(rec.settings!.flags.brief!.moves!.mode).toBe('observe');
     // the move reader still read the work, and nothing was repaired on the profile's account
     const ev = listEvals(L).find((e) => e.invocationId === idOf(r.out))!;
     expect(ev.monitors.moves).toMatchObject({ mode: 'observe', by: 'model', realised: 1, missing: 1 });
@@ -101,7 +101,7 @@ describe('through a run', () => {
     expect(s.code, s.out).toBe(0);
     const again = (await promptsFor('emit_piece')).at(-1) ?? '';
     expect(again).toContain('How I sound ('); expect(again).toContain('How I would make this');
-    expect(recOf(s.out).settings.flags.brief!.served).toBeUndefined();
+    expect(recOf(s.out).settings!.flags.brief!.served).toBeUndefined();
     expect(readFileSync(join(proj, '.claude', 'skills', 'review', 'SKILL.md'), 'utf8')).toBe(skillMd);
   }, 300_000);
 });

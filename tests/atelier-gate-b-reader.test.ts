@@ -138,6 +138,6 @@ describe('through a run', () => {
     expect((await readingCalls()).length).toBe(b2 + 4);
     // the record says the reader was off on that run and on for the first
     const recs = store.listInvocations(L);
-    expect(recs.map((x) => x.settings.flags.noTaste).sort()).toEqual([false, false, true, true, true]);
+    expect(recs.map((x) => x.settings!.flags.noTaste).sort()).toEqual([false, false, true, true, true]);
   }, 300_000);
 });

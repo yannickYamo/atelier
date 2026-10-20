@@ -112,8 +112,8 @@ describe('through a run', () => {
     expect(prompt).toContain('These rules of the skill above are set aside for this request');
     // the brief did not touch the standard; the record carries it; the set-aside step is set aside in the evaluation
     const rec = store.listInvocations({ root: data, skillName: 'review' }).find((i) => i.invocationId === json.invocationId)!;
-    expect(rec.settings.flags.brief).toMatchObject({ by: 'model', setAside: [expect.stringMatching(/./)], unsupported: [] });
-    expect(rec.settings.flags.brief!.applies).toHaveLength(2);
+    expect(rec.settings!.flags.brief).toMatchObject({ by: 'model', setAside: [expect.stringMatching(/./)], unsupported: [] });
+    expect(rec.settings!.flags.brief!.applies).toHaveLength(2);
     const L = { root: data, skillName: 'review' };
     expect(store.getStandard(L, store.getSkillVersion(L, store.getActive(L)!)!.standardVersionHash)!.requirements.filter((q) => q.provenance === 'EXPERT_STATED')).toHaveLength(3);
     // the run's own report says the step was set aside for this request, with the request's words
@@ -128,6 +128,6 @@ describe('through a run', () => {
     expect(short.code, short.out).toBe(0);
     expect((await promptsFor('emit_execution_brief')).length).toBe(before + 1);
     const shortRec = store.listInvocations(L).find((i) => i.invocationId === (JSON.parse(short.out.slice(short.out.indexOf('\n{') + 1)) as { invocationId: string }).invocationId)!;
-    expect(shortRec.settings.flags.brief).toBeUndefined();
+    expect(shortRec.settings!.flags.brief).toBeUndefined();
   }, 240_000);
 });

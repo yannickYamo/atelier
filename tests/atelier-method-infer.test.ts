@@ -125,7 +125,7 @@ describe('through the build and a run', () => {
     expect(pieceP).toContain("For this request, my method's steps that apply: 1, 2, 3, 4.");
     const idOf = (out: string): string => (JSON.parse(out.slice(out.indexOf('\n{') + 1)) as { invocationId: string }).invocationId;
     const rec = store.listInvocations(L).find((i) => i.invocationId === idOf(r.out))!;
-    expect(rec.settings.flags.brief).toMatchObject({ inferred: true, applies: ['i1', 'i2', 'i3', 'i4'] });
+    expect(rec.settings!.flags.brief).toMatchObject({ inferred: true, applies: ['i1', 'i2', 'i3', 'i4'] });
     // AN OWNER'S NOTE REPLACES THEM; --no-infer-method LEAVES THEM OUT
     const nm = run('build', '--name', 'pricing', '--report', '--no-infer-method', ...BACKEND());
     expect(nm.code, nm.out).toBe(0);

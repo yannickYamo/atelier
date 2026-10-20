@@ -120,7 +120,7 @@ describe('through runs', () => {
     expect(short.code, short.out).toBe(0);
     expect((await bodiesFor('emit_move_cases')).at(-1) ?? '').toContain('straight from the request body');
     const shortRec = store.listInvocations(L(s.data)).find((i) => i.invocationId === idOf(short.out))!;
-    expect(shortRec.settings.flags.brief!.moves).toMatchObject({ profile: receipt.movesHash, placed: [expect.stringMatching(/./)], mode: 'observe' });
+    expect(shortRec.settings!.flags.brief!.moves).toMatchObject({ profile: receipt.movesHash, placed: [expect.stringMatching(/./)], mode: 'observe' });
     // 5. observe vs serve: the writer's prompt differs by the moves block and nothing else
     const observed = s.run('invoke', '--skill', 'review', REQUEST, '--json', '--moves', 'observe', ...BACKEND()); expect(observed.code, observed.out).toBe(0);
     const pObs = (await bodiesFor('emit_piece')).at(-1)!;

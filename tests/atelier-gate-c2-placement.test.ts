@@ -167,7 +167,7 @@ describe('through a run', () => {
     expect(d.code, d.out).toBe(0);
     expect((await promptsFor('emit_move_cases')).length).toBe(none);
     expect(d.out).not.toMatch(/Moves of mine for this request/);
-    expect(recOf(d.out).settings.flags.brief!.moves).toBeUndefined();
+    expect(recOf(d.out).settings!.flags.brief!.moves).toBeUndefined();
     // OBSERVE, ASKED: the case was read, the move placed and recorded; the writer was served nothing of it
     const r = run('invoke', '--skill', 'review', REQUEST, '--json', '--moves', 'observe', ...BACKEND());
     expect(r.code, r.out).toBe(0);
@@ -179,14 +179,14 @@ describe('through a run', () => {
     expect(r.out).toMatch(/Moves of mine for this request: 1 placed \(observed, not served; about 1 a piece\), 1 standing/);
     const rec = recOf(r.out);
     const profile = store.getReceipt(L, store.getActive(L)!)!.movesHash!;
-    expect(rec.settings.flags.brief!.moves).toMatchObject({ by: 'model', mode: 'observe', profile, placed: [expect.stringMatching(/./)], standing: [expect.stringMatching(/./)], notPlaced: [], unresolved: [], budget: 1 });
+    expect(rec.settings!.flags.brief!.moves).toMatchObject({ by: 'model', mode: 'observe', profile, placed: [expect.stringMatching(/./)], standing: [expect.stringMatching(/./)], notPlaced: [], unresolved: [], budget: 1 });
     // SERVE, ASKED FOR THIS RUN: the placed move is in the brief, with its situation, one instance and what it is not
     const s = run('invoke', '--skill', 'review', REQUEST, '--json', '--moves', 'serve', ...BACKEND());
     expect(s.code, s.out).toBe(0);
     piece = (await promptsFor('emit_piece')).at(-1) ?? '';
     expect(piece).toContain('How I would make this, as myself:\n- at step 1: where input is untrusted: one sentence from the abusive caller, as in "A caller can refund more than the order total." (2 of the 2 of my pieces in this situation). Not: never an attacker the diff does not expose.');
     expect(piece).not.toContain('Opens from a position of my own, not a summary.\n- '); // the standing trait is not served again in the brief
-    expect(recOf(s.out).settings.flags.brief!.moves!.mode).toBe('serve');
+    expect(recOf(s.out).settings!.flags.brief!.moves!.mode).toBe('serve');
     expect(run('invoke', '--skill', 'review', REQUEST, '--json', '--moves', 'sometimes', ...BACKEND()).out).toContain('--moves is observe or serve');
     // THE STANDARD IS UNTOUCHED
     expect(store.getStandard(L, store.getSkillVersion(L, store.getActive(L)!)!.standardVersionHash)!.requirements.filter((q) => q.provenance === 'EXPERT_STATED')).toHaveLength(3);
@@ -194,11 +194,11 @@ describe('through a run', () => {
     const before = (await promptsFor('emit_move_cases')).length;
     const nb = run('invoke', '--skill', 'review', REQUEST, '--json', '--no-brief', '--moves', 'serve', ...BACKEND());
     expect(nb.code, nb.out).toBe(0);
-    expect(recOf(nb.out).settings.flags.brief).toBeUndefined();
+    expect(recOf(nb.out).settings!.flags.brief).toBeUndefined();
     expect((await promptsFor('emit_piece')).at(-1) ?? '').not.toContain('How I would make this');
     const short = run('invoke', '--skill', 'review', 'Thanks, done.', '--json', '--moves', 'serve', ...BACKEND());
     expect(short.code, short.out).toBe(0);
     expect((await promptsFor('emit_move_cases')).length).toBe(before);
-    expect(recOf(short.out).settings.flags.brief).toBeUndefined();
+    expect(recOf(short.out).settings!.flags.brief).toBeUndefined();
   }, 300_000);
 });

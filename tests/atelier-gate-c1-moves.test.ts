@@ -37,10 +37,10 @@ describe('the kind is inferred from the counts', () => {
     expect(units[1]).toMatchObject({ kind: 'standing', by: 'floor', pieces: 2, situation: null }); expect(units[1].rate.pMajority).toBeGreaterThan(0.5);
     expect(units[2]).toMatchObject({ kind: 'occasional', by: 'floor', pieces: 1 }); expect(units[2].rate.pMajority).toBeLessThan(0.5);
     // the table fills a cell: the move found in piece-3 too, outside the situation, makes it 3 of 3 and the situation no longer explains it: standing
-    const tabled = inferMoves(draft, [{ habit: 1, piece: 'piece-3', move: 'keeps its tests', situation: null }], pieces, true);
+    const tabled = inferMoves(draft, [{ habit: 1, piece: 'piece-3', move: 'keeps its tests', situation: null, shows: null }], pieces, true);
     expect(tabled[0]).toMatchObject({ pieces: 3, tabled: true, kind: 'standing' }); expect(tabled[0].situation).toMatchObject({ in: { k: 2, n: 2 }, out: { k: 1, n: 1 }, explains: false });
     // a situation seen without the move counts against it, and with no piece outside the situation there is nothing to compare
-    const against = inferMoves(draft, [{ habit: 1, piece: 'piece-3', move: null, situation: 'keeps its tests' }], pieces, true);
+    const against = inferMoves(draft, [{ habit: 1, piece: 'piece-3', move: null, situation: 'keeps its tests', shows: null }], pieces, true);
     expect(against[0].situationOnly).toEqual([{ piece: 'piece-3', quote: 'keeps its tests' }]);
     expect(against[0]).toMatchObject({ situation: null, kind: 'standing', trigger: { status: 'proposed' } });
   });

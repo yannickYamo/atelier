@@ -50,7 +50,7 @@ describe('what two pieces of a large corpus share is the house\'s wording', () =
 
 describe('a line of the bound diff traces to the diff', () => {
   const diff = 'diff --git a/src/audit/log.js b/src/audit/log.js\n--- a/src/audit/log.js\n+++ b/src/audit/log.js\n@@ -80,6 +84,12 @@ class AuditLog {\n+  write(entry) {\n+    fs.appendFile(this.path, line);\n+  }\n';
-  const sp = (text: string, sentence: number) => ({ sentence, text, kind: 'FIGURE' as const, source: 'NONE' as const, support: '' });
+  const sp = (text: string, sentence: number) => ({ sentence, text, kind: 'FIGURE' as const, source: 'NONE' as const, support: '', attributed: false });
   it('a path:line inside the hunks is supported whatever the reader said; one past them, or a path the diff lacks, is not', () => {
     const text = '- **src/audit/log.js:90** — The promise is neither awaited nor returned.\n- **src/audit/log.js:400** — Also wrong.\n- **src/other.js:12** — Elsewhere.\n';
     const r = decideSpecifics(text, [sp('src/audit/log.js:90', 1), sp('src/audit/log.js:400', 2), sp('src/other.js:12', 3)], diff, 'Review this change.', false, 'test');

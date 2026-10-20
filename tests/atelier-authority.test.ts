@@ -76,7 +76,7 @@ describe('the record decides a result from the observation alone', () => {
     expect(judge(o({ verdict: null, coverage: 'NONE' }))).toEqual({ result: 'UNVERIFIED', reason: 'NOT_MACHINE_CHECKABLE' });
     const entry = (id: string, required: boolean, obs: Observed): Entry => {
       const { result, reason } = judge(obs);
-      return { id, dimension: 'STANDARD', source: 'OWNER', statement: id, required, observation: { proposition: null, coverage: obs.coverage, qualification: obs.qualification, evidence: null }, result, reason } as Entry;
+      return { id, dimension: 'STANDARD', source: 'METHOD', statement: id, required, observation: { proposition: null, coverage: obs.coverage, qualification: obs.qualification, evidence: null }, result, reason };
     };
     const held = entry('m1', true, o({}));
     const unread = entry('j1', true, o({ verdict: null, coverage: 'NONE', qualification: 'UNAVAILABLE' }));
