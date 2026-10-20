@@ -739,7 +739,7 @@ export async function build(nameArg?: string, opts: { closing?: boolean } = {}):
   const release = installFidelity(L, v, skill.skillVersionHash, expectCorpus);
   const aside = lastSetAside();
   if (hadProfile && !release && aside.length) console.log(`(a fidelity profile in this project's run folder is not from these pieces: set aside as fidelity.stale.json, not installed.)`);
-  if (release) console.log(`Implementation release ${release.id}: ${release.settings.drafts} drafts, up to ${release.settings.editBudget} structural edit(s)${release.retrievalHash ? `, ${release.settings.retrievalK} of your passages retrieved per request` : ''}.`);
+  if (release) console.log(`Implementation release ${release.id}: ${release.settings.drafts} drafts${release.settings.drafts > 1 ? ' (the first alone when it holds every rule)' : ''}, up to ${release.settings.editBudget} structural edit(s)${release.retrievalHash ? `, ${release.settings.retrievalK} of your passages retrieved per request` : ''}.`);
   const installed = release ? fstore.getProfile(L) : null;
   recordStage('profile', installed ? { ran: true, detail: `${installed.bands.filter((b) => b.cls === 'all').length} feature(s) banded` }
     : { ran: false, why: hadProfile ? 'a profile in the run folder was not from these pieces: set aside' : s.evidence ? 'discovery wrote no profile' : 'no sealed corpus was read with a model: no bands' });

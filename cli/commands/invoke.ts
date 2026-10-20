@@ -679,6 +679,10 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   // DRAFTS THAT DIFFER (core/fidelity/types.ts, `diversity`): each draft its own temperature and its own slice of
   // the author's closest passages, so the shared block carries only the notes.
   const diverse = Boolean(runSettings?.diversity) && nDrafts > 1 && fid !== null;
+  // DRAFTS ON DEMAND (cli/commands/improve.ts, `enough`): the drafts a release setting plans are written only as far as
+  // the first wants a rival. Drafts the person asked for by `--drafts`, and drafts sampled or varied to keep the author's
+  // spread, are all written, as asked.
+  const draftsOnDemand = nDrafts > 1 && !argv.includes('--drafts') && !sampling && !diverse;
   const impl = fid && runSettings ? implementationBlock({ ...fid.release, settings: diverse ? { ...runSettings, retrievalK: 0 } : runSettings }, fid.index, asked, readNear) : { retrieved: [], notes: '', passages: '' };
   const pool = diverse && fid?.index && runSettings && runSettings.retrievalK > 0 ? retrieveNear(fid.index, asked, runSettings.retrievalK * nDrafts, readNear) : [];
   // A run whose flags changed what the release would have done is recorded with the settings that ran and
@@ -791,7 +795,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
       checks.guardClaims !== false && checks.examples ? { client, budget, request: asked, evidence: `${checks.evidence ?? ''}\n${checks.approved ?? ''}`, examples: checks.examples, notes: completions,
         recheck: (text: string) => checkDraftAsync(name, std, text, checks) } : null),
       judge && checks.guardClaims !== false ? { judge, request: asked, material: checks.evidence ?? '' } : null)) : null,
-    std && nDrafts > 1 ? withSections(selectDraft({ n: nDrafts, name, std, checks, taste, ownBand, signals: store.getSignals(L), profile: steerProfile, trace, ledger, sampling, ...(diverse ? { variant: variantOf, retrievedFor } : {}) }), sectionWriter)
+    std && nDrafts > 1 ? withSections(selectDraft({ n: nDrafts, onDemand: draftsOnDemand, name, std, checks, taste, ownBand, signals: store.getSignals(L), profile: steerProfile, trace, ledger, sampling, ...(diverse ? { variant: variantOf, retrievedFor } : {}) }), sectionWriter)
       : sectionWriter ? { n: 1, write: sectionWriter, choose: () => ({ index: 0, why: '' }) } : null,
     std && checks.guardClaims !== false ? async (text: string) => {
       const r = await checkDraftAsync(name, std, text, checks);
@@ -1119,11 +1123,21 @@ const brokenIn = (r: Awaited<ReturnType<typeof checkDraftAsync>>): string[] =>
  * distance from the author's signals, and style. A count picks it, never a judge's taste: the reader
  * breaks ties between drafts that break the same REQUIRED rules, and never outranks one.
  */
-function selectDraft(c: DraftContext & { readonly n: number; readonly ownBand?: readonly [number, number] | null; readonly signals: ReturnType<typeof store.getSignals>; readonly profile: FidelityProfile | null; readonly trace: FidelityTrace; readonly ledger: readonly Fact[]; readonly variant?: (i: number) => DraftVariant; readonly retrievedFor?: readonly number[][]; readonly sampling?: boolean }) {
-  return { n: c.n, ...(c.variant ? { variant: c.variant } : {}), choose: async (drafts: readonly string[], written?: readonly { readonly index: number; readonly temperatureSent: number | null }[]) => {
+function selectDraft(c: DraftContext & { readonly n: number; readonly onDemand?: boolean; readonly ownBand?: readonly [number, number] | null; readonly signals: ReturnType<typeof store.getSignals>; readonly profile: FidelityProfile | null; readonly trace: FidelityTrace; readonly ledger: readonly Fact[]; readonly variant?: (i: number) => DraftVariant; readonly retrievedFor?: readonly number[][]; readonly sampling?: boolean }) {
+  // CANDIDATES ARE READ BY WHAT DECIDES BETWEEN THEM (core/loop/claim-extract.ts, `candidates`): a claim reader that only
+  // reports is spent on the delivered text, not on every draft that competed.
+  const checks = c.checks.claimSensor?.candidates ? { ...c.checks, claimSensor: c.checks.claimSensor.candidates } : c.checks;
+  // THE FIRST DRAFT NEEDS NO RIVAL when nothing at the top of the drafts' order could be bettered: no REQUIRED rule broken,
+  // no rule the reader acts on read as missed (cli/commands/improve.ts, `enough`).
+  const enough = async (draft: string): Promise<boolean> => {
+    if (brokenIn(await checkDraftAsync(c.name, c.std, draft, checks)).length) return false;
+    if (c.taste?.acts && (await c.taste.misses([draft]))[0] > 0) return false;
+    return true;
+  };
+  return { n: c.n, ...(c.variant ? { variant: c.variant } : {}), ...(c.onDemand ? { enough } : {}), choose: async (drafts: readonly string[], written?: readonly { readonly index: number; readonly temperatureSent: number | null }[]) => {
     if (c.variant && written) c.trace.variants = written.map((w) => ({ index: w.index, temperature: w.temperatureSent, retrieved: c.retrievedFor?.[w.index] ?? [] }));
     const tasteMissed = c.taste?.acts ? await c.taste.misses(drafts) : drafts.map(() => 0);
-    const reports = await Promise.all(drafts.map((d) => checkDraftAsync(c.name, c.std, d, c.checks)));
+    const reports = await Promise.all(drafts.map((d) => checkDraftAsync(c.name, c.std, d, checks)));
     const profile = c.profile;
     const readings = profile ? drafts.map((d) => readFidelity(d, profile)) : [];
     c.trace.drafts.push(...readings);

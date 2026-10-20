@@ -332,7 +332,7 @@ describe('through the binary: discovery builds the profile, invoke steers and re
     // the profile is said once, on the card (the line discovery printed about it is detail under `atelier new`)
     expect(out).toMatch(/features\s+\d+ measured on your pieces, \d+ steer drafts/);
     expect(out).not.toMatch(/Fidelity profile: /);
-    expect(out).toMatch(/Implementation release [0-9a-f]{16}: 2 drafts, up to 0 structural edit\(s\)/);
+    expect(out).toMatch(/Implementation release [0-9a-f]{16}: 2 drafts \(the first alone when it holds every rule\), up to 0 structural edit\(s\)/);
     // the skill's evaluation, printed the moment it is built
     expect(out).toMatch(/── Atelier · skill posts · version [0-9a-f]{8} · standard [0-9a-f]{8}/);
     expect(out).toMatch(/EVERY OUTPUT IS CHECKED BY\n {4}your rules/);
@@ -694,6 +694,38 @@ describe('through the binary: discovery builds the profile, invoke steers and re
     expect(run('invoke', '--skill', 'posts', 'Write a blog post', '--voice', 'incontext')).toMatch(/needs a pair bank of at least 12 pairs/);
     expect(run('fidelity', '--skill', 'posts', '--set', 'voice=incontext')).toMatch(/the voice pass on \(in-context pairs\)/);
     expect(run('fidelity', '--skill', 'posts', '--rollback')).toMatch(/Active implementation release is now/);
+  }, 180_000);
+
+  it('drafts on demand: the release plans two, the first is written alone when it holds every rule the drafts are chosen by; a draft that invents gets its rival; --drafts N writes them all', async () => {
+    const pieceCalls = async (): Promise<number> => {
+      const { bodies } = await (await fetch(`http://127.0.0.1:${port}/__log`)).json() as { bodies: string[] };
+      return bodies.filter((b) => (JSON.parse(b) as { tools?: { function?: { name?: string } }[] }).tools?.[0]?.function?.name === 'emit_piece').length;
+    };
+    interface Rec { invocationId: string; selection?: { drafts: number; chosen: number; written?: number; spared?: number; why: string } }
+    const recordOf = (out: string): Rec => {
+      const id = (JSON.parse(out) as { invocationId: string }).invocationId;
+      return JSON.parse(readFileSync(join(data, 'skills', 'posts', 'invocations', `${id}.json`), 'utf8')) as Rec;
+    };
+    const scriptDraft = (piece: string): Promise<Response> => fetch(`http://127.0.0.1:${port}/__set`, { method: 'POST', body: JSON.stringify({ byTool: {
+      emit_observation: { applicable: true, present: true, why: 'seen' }, emit_piece: { piece } } }) });
+    const brokenOf = (id: string): string => JSON.stringify((JSON.parse(readFileSync(join(data, 'skills', 'posts', 'evals', `${id}.json`), 'utf8')) as { gates: { required: { broken: unknown[] } } }).gates.required.broken);
+    // the release's two drafts, the first in the author's own shape and clean: one written, one spared, said on the record
+    await scriptDraft(authorPiece(13));
+    const before = await pieceCalls();
+    const clean = recordOf(run('invoke', '--skill', 'posts', '--no-taste', '--json', 'write about the cache incident'));
+    const cleanCalls = await pieceCalls() - before;
+    expect(clean.selection, `${JSON.stringify(clean.selection)} broken: ${brokenOf(clean.invocationId)}`).toMatchObject({ drafts: 2, chosen: 0, written: 1, spared: 1 });
+    expect(clean.selection!.why).toContain('the first draft held every rule the drafts are chosen by; 1 planned draft(s) not written');
+    // the same request with the drafts asked for by name: both written, chosen among
+    const asked = recordOf(run('invoke', '--skill', 'posts', '--no-taste', '--json', '--drafts', '2', 'write about the cache incident'));
+    expect(await pieceCalls() - before - cleanCalls).toBe(cleanCalls + 1);
+    expect(asked.selection).toMatchObject({ drafts: 2 }); expect(asked.selection!.spared).toBeUndefined();
+    expect(asked.selection!.why).toContain('the best of 2');
+    // a first draft that invents a source breaks a REQUIRED rule: it wants a rival, and two are written
+    await scriptDraft(`${authorPiece(13)}\n\nAccording to a 2021 Gartner survey, 73% of platform teams had cut their cache budget by a third.`);
+    const invents = recordOf(run('invoke', '--skill', 'posts', '--no-taste', '--json', 'write about the cache incident'));
+    expect(invents.selection).toMatchObject({ drafts: 2 }); expect(invents.selection!.spared).toBeUndefined();
+    expect(invents.selection!.why).toContain('the best of 2');
   }, 180_000);
 });
 

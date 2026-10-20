@@ -188,6 +188,22 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
   not an age plus a breathing rate, and past eighty operands nothing is worked. Replayed on the forty outputs: the
   figures the check could not place fell from 15 a draft to 0.1.
 
+### A run spends what its draft needs: the second draft on demand, the claim reader on the text delivered
+
+- **The second draft is written only when the first wants a rival.** A release plans two drafts and kept the better
+  by count; both were written up front, so a 5,000-word piece paid for two of them every time. Now the first draft is
+  written alone, and the rest only when it breaks a rule the drafts are chosen by at the top of their order (a REQUIRED
+  rule, or a rule the taste reader acts on): what a whole second draft could still better, the repair chain fixes at a
+  fraction of a draft's price. Drafts the person asks for (`--drafts N`), and drafts sampled or varied to keep the
+  author's spread, are all written. The record says what was spared (`selection.spared`), and the build says the plan.
+- **A claim reader that only reports reads the delivered text, not every candidate.** Where the pattern check gates (the
+  reader is not qualified, or has degraded), the drafts that compete for selection are read by the pattern check alone;
+  the reader's warnings are read once, on the text the person gets. A reader that gates reads every candidate, as before.
+- **`atelier eval` says what a usable output costs**: the rated runs' spend over the runs you would ship, beside the
+  median cost of a run; the figure a release is judged by, since a cheaper run that ships less often is not cheaper.
+- Measured on the one long-form run this was built from: writing $0.75 of $1.22 for two drafts of which the first held
+  every rule; the claim reader $0.14 on three texts for warnings shown on one.
+
 ### How often you make each move, and whether a situation explains it, is measured, never a word
 
 - **No count fixed by hand decides anything about your moves now.** Until today a point of the persona was "always"

@@ -292,8 +292,11 @@ three to seven times the human author's rate. Three things catch them, none of t
   it against this author. It is not a universal tell: one author wrote 2.3 per 1,000 words, more than
   most model drafts.
 
-Required machine-tell rules are repaired like any other, and a skill built from a corpus writes two
-drafts by default and keeps the one with fewer machine moves (`--drafts 1` turns this off).
+Required machine-tell rules are repaired like any other, and a skill built from a corpus plans two
+drafts by default and keeps the one with fewer machine moves. The second is written only when the first
+breaks a required rule or a rule the taste reader acts on: what a whole second draft could still better,
+the repair fixes at a fraction of a draft's price. `--drafts N` writes every draft asked for; `--drafts 1`
+turns the choice off.
 
 ### A banned move may not move
 

@@ -56,11 +56,15 @@ export function evaluate(): void {
     const yes = rated.filter((e) => byRun.get(e.invocationId)?.ship).length;
     const conformant = es.filter((e) => e.result.conformant).length;
     const costs = es.map((e) => e.costUsd); const times = es.map((e) => e.durationMs);
+    // WHAT A USABLE OUTPUT COSTS: every dollar the cohort's rated runs spent, over the runs the person would ship. The
+    // economics a release is judged by (a cheaper run that ships less often is not cheaper), null until a run is rated.
+    const ratedCost = rated.reduce((n, e) => n + e.costUsd, 0);
+    const perUsable = yes ? Math.round((ratedCost / yes) * 10000) / 10000 : null;
     // Where each run stood (core/eval/record.ts); a run recorded before the record existed is counted apart.
     const stood = (st: string): number => es.filter((e) => e.record?.state === st).length;
     const states = { verified: stood('VERIFIED'), needsReview: stood('NEEDS_REVIEW'), blocked: stood('BLOCKED'), unrecorded: es.filter((e) => !e.record).length };
     return { release, runs: es.length, states, conformant, rated: rated.length, wouldShip: yes, parted: disagreement(es, (id) => byRun.get(id)?.ship),
-      cost: { p50: quantile(costs, 0.5), p90: quantile(costs, 0.9) }, durationMs: { p50: quantile(times, 0.5), p90: quantile(times, 0.9) } };
+      cost: { p50: quantile(costs, 0.5), p90: quantile(costs, 0.9), perUsable }, durationMs: { p50: quantile(times, 0.5), p90: quantile(times, 0.9) } };
   });
   const brokenCount = new Map<string, number>();
   for (const e of evals) for (const b of e.gates.required.broken) brokenCount.set(b.id, (brokenCount.get(b.id) ?? 0) + 1);
@@ -115,7 +119,7 @@ export function evaluate(): void {
     console.log(`    would ship     ${c.rated ? rate(c.wouldShip, c.rated) : `not rated yet: atelier rate <run> yes|no`}`);
     if (c.parted.verified.rated) console.log(`    said verified, and you would not use it   ${c.parted.verified.wouldNotUse} of ${c.parted.verified.rated} rated`);
     if (c.parted.blocked.rated) console.log(`    blocked, and you would use it             ${c.parted.blocked.wouldUse} of ${c.parted.blocked.rated} rated`);
-    console.log(`    cost           median $${c.cost.p50.toFixed(2)} · 90th $${c.cost.p90.toFixed(2)}`);
+    console.log(`    cost           median $${c.cost.p50.toFixed(2)} · 90th $${c.cost.p90.toFixed(2)}${c.cost.perUsable !== null ? ` · $${c.cost.perUsable.toFixed(2)} per output you would ship` : ''}`);
     console.log(`    time           median ${(c.durationMs.p50 / 1000).toFixed(1)} s · 90th ${(c.durationMs.p90 / 1000).toFixed(1)} s`);
   }
   if (brokenCount.size || reasonCount.size || complaints.size || noRating.length) {

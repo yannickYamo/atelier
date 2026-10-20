@@ -643,6 +643,8 @@ export interface InvocationRecord {
    */
   readonly selection?: { readonly drafts: number; readonly chosen: number; readonly why: string;
     readonly written?: number; readonly failed?: readonly string[];
+    /** planned drafts not written because the first held every rule the drafts are chosen by (cli/commands/improve.ts) */
+    readonly spared?: number;
     readonly unchosen?: readonly string[]; readonly unchosenTruncated?: boolean };
   /** what the run was configured with beyond the binding, so a study arm can be re-run from its record */
   readonly settings?: InvocationSettings;

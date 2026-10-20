@@ -379,7 +379,15 @@ export async function runOnce(
     /** draft i's own variation, when drafts are made to differ (core/fidelity/types.ts, `diversity`) */
     readonly variant?: (i: number) => DraftVariant;
     /** how draft i is written, when not in one call (long form by section, core/fidelity/sections.ts) */
-    readonly write?: (i: number, variant: DraftVariant) => Promise<Written> } | null = null,
+    readonly write?: (i: number, variant: DraftVariant) => Promise<Written>;
+    /**
+     * DRAFTS ON DEMAND. When given, the first draft is written alone and the rest only when it says the draft wants a
+     * rival: a draft that already holds every rule the drafts are chosen by at the top of their order (every REQUIRED
+     * rule, and every rule the taste reader acts on) is delivered as it is, because what a second whole draft could still
+     * improve, the repair chain fixes at a fraction of a draft's price. Absent when the person asked for the drafts
+     * themselves (`--drafts N`) or the outputs are sampled among several to keep the author's spread.
+     */
+    readonly enough?: (draft: string) => Promise<boolean> } | null = null,
   /**
    * THE INVENTED-CLAIM CHECK FOR A STRUCTURED OUTPUT. A contract-shaped answer is never span-rewritten,
    * which used to mean it was never checked for invented claims at all: a report or a contract, the
@@ -408,10 +416,19 @@ export async function runOnce(
   // A FAILED DRAFT CALL COSTS THAT DRAFT, NOT THE RUN. With several drafts, the ones that came back are
   // kept and the choice is made among them; the failure is said and recorded. Only when none came back
   // is there nothing to deliver, and the first error is what the person sees.
-  const settled = await mapLimitSettled(Array.from({ length: n }, (_, i) => i), n, (i) => {
+  const writeOne = (i: number): Promise<Written> => {
     const v = n > 1 ? select?.variant?.(i) ?? {} : {};
     return select?.write && contract === null ? select.write(i, v) : spendOneWithResult(client, budget, servedText, task, contract, '', v);
-  });
+  };
+  // THE FIRST DRAFT ALONE, when the selection can say it needs no rival (`select.enough`); the planned drafts not written
+  // are counted on the record (`spared`), so the cost of a run reads from what it did.
+  let spared = 0;
+  let settled: Awaited<ReturnType<typeof mapLimitSettled<number, Written>>>;
+  if (n > 1 && select?.enough) {
+    const [first] = await mapLimitSettled([0], 1, writeOne);
+    if (first.ok && await select.enough(first.value.piece)) { settled = [first]; spared = n - 1; }
+    else settled = [first, ...await mapLimitSettled(Array.from({ length: n - 1 }, (_, i) => i + 1), n - 1, writeOne)];
+  } else settled = await mapLimitSettled(Array.from({ length: n }, (_, i) => i), n, writeOne);
   // Each draft that came back, with the index it was asked for: a variant recorded for draft i describes the
   // i-th call, and the drafts that failed must not shift it onto another.
   const written = settled.flatMap((x, i) => (x.ok ? [{ ...x.value, index: i }] : []));
@@ -422,7 +439,7 @@ export async function runOnce(
   }
   if (failures.length) process.stderr.write(`atelier: ${failures.length} of ${n} draft call(s) failed (${failures[0]}); choosing among the ${written.length} that came back.\n`);
   const picked = written.length > 1 && select ? await select.choose(written.map((w) => w.piece), written.map((w) => ({ index: w.index, temperatureSent: w.temperatureSent })))
-    : { index: 0, why: n > 1 ? `the only draft of ${n} that came back` : '' };
+    : { index: 0, why: spared ? `the first draft held every rule the drafts are chosen by; ${spared} planned draft(s) not written` : n > 1 ? `the only draft of ${n} that came back` : '' };
   let { piece: draft, reportedModel, schemaSent, servedTask } = written[picked.index];
   let contractRepair: RepairRecord | null = null;
   if (contract !== null && claimGuard) {
@@ -485,7 +502,7 @@ export async function runOnce(
     at, delivery: { ...delivery, outputContract: contractEvidence }, input: task, output,
     ...(refined.repair ? { repair: refined.repair } : {}),
     ...(n > 1 ? { selection: { drafts: n, chosen: picked.index, why: picked.why,
-      ...(failures.length ? { written: written.length, failed: failures } : {}),
+      ...(failures.length ? { written: written.length, failed: failures } : {}), ...(spared ? { written: written.length, spared } : {}),
       ...unchosenFields(written.map((w) => w.piece), picked.index) } } : {}),
     ...(settings ? { settings } : {}),
     ...(fidelity ? { fidelity: fidelity(output) } : {}) };

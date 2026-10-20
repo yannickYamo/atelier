@@ -96,6 +96,13 @@ export interface ClaimSensor {
   readonly degraded: boolean;
   /** what the reader spent, from its own budget; 0 for the pattern check */
   readonly spentUsd: number;
+  /**
+   * THE SENSOR AS A CANDIDATE DRAFT SEES IT. A reader whose findings decide nothing (the pattern check gates: the reader
+   * is not qualified, or has degraded) is not spent on drafts that only compete for selection: the candidates are read
+   * by the instrument that gates, and the reader reads the one text that is delivered, where its warnings are shown.
+   * A reader that gates is consulted on every candidate, as before. Absent on the pattern check itself.
+   */
+  readonly candidates?: ClaimSensor;
 }
 
 export const KINDS = ['FIGURE', 'DATE', 'QUOTATION', 'ATTRIBUTED_CLAIM', 'URL', 'FIRST_PERSON_EVENT', 'SECOND_HAND_EVENT', 'NAMED_FACT'] as const;
@@ -561,6 +568,11 @@ export function modelSensor(client: InferenceClient, budget: Budget, model: stri
   }
   const context = `THE AUTHOR'S MATERIAL (what they supplied; anything here is theirs to use):\n<material>\n${ctx.material.trim() || '(none)'}\n</material>\n\nTHE TASK THEY GAVE:\n<task>\n${ctx.task.trim() || '(none)'}\n</task>`;
   const sensor: ClaimSensor = {
+    get candidates(): ClaimSensor {
+      if (readerGates && !degraded) return sensor;
+      // the gating pattern check reads the candidate; a reading the reader already made of this very text is kept
+      return { ...gatePattern, get gate() { return 'pattern' as const; }, reading: (text) => sensor.reading(text) ?? gatePattern.reading(text) };
+    },
     get instrument() { return degraded ? `pattern check (${named} degraded after it failed: ${failure}; every text is read by the pattern check since)` : live; },
     notes, version: READER_VERSION, qualified,
     get gate() { return readerGates && !degraded ? 'reader' as const : 'pattern' as const; },
