@@ -149,6 +149,21 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 - **A reader that cannot be reached is asked once.** With a key set for a backend that answers nothing, a build waited
   out the retries of every reading in turn; the first failure now turns the rest of that build's readings off, said once.
 
+### With no method note, the method your pieces follow is read off them
+
+- **Structured work always has a method, and the brief had none to work from without a note.** A contract, a
+  report, a price comparison, a code review each take their steps in an order the finished pieces show; without the
+  owner's note, every run had no brief (which steps this request needs, what each asks the writer to decide) and the
+  author's moves had nothing to link to, on the very work where they matter. Now, with no note, the steps are read
+  off the pieces at build (`core/method/infer.ts`): one instruction a step, in the pieces' order, each shown by a
+  quote copied from one piece, then what each asks the writer to decide, read as the owner's steps are. Kept beside
+  the skill per corpus; read again only when the pieces change.
+- **A habit, never a rule.** An inferred step briefs each run as the owner's would ("For this request, my method's
+  steps that apply"), said to the writer as "my usual steps, read from my own pieces and not rules I wrote"; none is
+  a requirement of the standard, none blocks, none is served in the skill itself, and the run records that its brief
+  was inferred. Pieces with no common shape (essays, posts each built their own way) yield none, and the build says
+  so; `--no-infer-method` leaves them out; `atelier method <file>` replaces them with the owner's own.
+
 ### Examples first: the writer served your pieces, your method and your rules, and no description of you
 
 - **`--examples-first` on a run** serves the writer the author's pieces, the method and every rule, with no
@@ -243,6 +258,12 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
   of 20; the counts that move are the abstract habits' (severity named plainly 4 of 12 against 9 of 12). Against the
   small reader's 9 of 20 kinds changed, better and not finished: carrying each cell as a posterior over repeated
   reads is the principled next step, and it multiplies the table's cost by the number of reads.
+- **Studied: Anthropic's skill-creator against the author's own posts pasted, on long-form.** Six held-out posts of
+  one author, two runs each, judged blind: skill-creator read less like the author on every title (−0.25 [−0.42,
+  −0.08] on a 1 to 5 scale, task-paired), invented more and copied 24 six-word runs a post from his writing against
+  0.7, since its skill embeds his fragments. The Atelier arms of that pilot were not run to the end: an Atelier run
+  on a 5,000-word post costs about four times a plain call (two drafts and the taste reader), and the owner moved the
+  larger study elsewhere.
 - **Studied (development evidence, both halves).** On the ten C4 code-review tasks, the measured profile served as
   C2 held the method exactly (checklist 17 of 20, the defect first 20 of 20), placed 17 moves of four kinds the judge
   called the right call 16 times, delivered 20 usable pieces with no invention, and read to the blind judge as the

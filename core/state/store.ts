@@ -20,6 +20,7 @@ import { mkdirSync, readFileSync, existsSync, readdirSync, appendFileSync, rmSyn
 import { writeAtomic } from './fs-atomic.js';
 import type { BuildReceipt } from './receipt.js';
 import type { MoveProfile } from '../compiler/moves.js';
+import type { InferredMethod } from '../method/infer.js';
 import type { DecisionUnit } from './canonical-state.js';
 import { readJson, MalformedStoreFile } from './read-json.js';
 import { join, dirname } from 'node:path';
@@ -155,6 +156,17 @@ export function setMethod(l: StoreLayout, text: string | null): void {
   if (text === null) { if (existsSync(p)) rmSync(p); return; }
   mkdirSync(dirs(l).base, { recursive: true });
   writeAtomic(p, text);
+}
+/** THE METHOD READ OFF THE PIECES when the owner wrote none (core/method/infer.ts): a habit of the pieces, never a rule; the brief uses it, the standard never does. */
+export function getInferredMethod(l: StoreLayout): InferredMethod | null {
+  const p = join(dirs(l).base, 'method-inferred.json');
+  return existsSync(p) ? readJson<InferredMethod>(p, { what: 'the inferred method', requireKeys: ['steps'] }) : null;
+}
+export function setInferredMethod(l: StoreLayout, m: InferredMethod | null): void {
+  const p = join(dirs(l).base, 'method-inferred.json');
+  if (m === null) { if (existsSync(p)) rmSync(p); return; }
+  mkdirSync(dirs(l).base, { recursive: true });
+  writeAtomic(p, JSON.stringify(m, null, 1));
 }
 
 /**

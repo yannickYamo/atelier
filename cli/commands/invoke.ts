@@ -621,8 +621,12 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   // Whether a step is enforced is the plan's to say (core/plan/execution-plan.ts), never read off the rule's own field.
   const enforcedSteps = new Set(std ? planFor(std).rules.filter((p) => p.enforced).map((p) => p.id) : []);
   const unitsOf = store.getUnits(L, sv.standardVersionHash);
-  const briefSteps: BriefStep[] = (std?.requirements ?? []).filter((q) => q.provenance === 'EXPERT_STATED' && q.authority !== 'EXPERT_REJECTED' && !waived.has(q.requirementId))
+  const statedSteps: BriefStep[] = (std?.requirements ?? []).filter((q) => q.provenance === 'EXPERT_STATED' && q.authority !== 'EXPERT_REJECTED' && !waived.has(q.requirementId))
     .map((q, i) => ({ id: q.requirementId, n: i + 1, statement: q.statement, required: enforcedSteps.has(q.requirementId), unit: unitsOf[q.requirementId] ?? null }));
+  // WITH NO NOTE OF THE OWNER'S, the steps read off the pieces at build (core/method/infer.ts) brief the run instead: a habit
+  // of the pieces, none of them required, said to the writer as not confirmed; the standard holds none of them.
+  const inferredMethod = statedSteps.length ? null : store.getInferredMethod(L);
+  const briefSteps: BriefStep[] = statedSteps.length ? statedSteps : (inferredMethod?.steps ?? []).map((st, i) => ({ id: st.id, n: i + 1, statement: st.text, required: false, unit: st.unit }));
   // WHETHER THE REQUEST NEEDS THE METHOD decides the brief, not its word count: "Review this change" with a diff bound is
   // the method's work, and so is "The import stalls. Why?"; "Thanks, that solved it." is not. Material bound is need;
   // otherwise what the request asks for, as the intent reading quoted it from the request (core/loop/task-needs.ts);
@@ -652,7 +656,8 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const placement = brief && profile ? await readContext(MOVE_CASES, { ...given, moves: eligible },
     contextJudgeModel() ? contextReaderClient() : null, contextJudgeModel(), { spentUsd: 0, capUsd: 0.03, maxCalls: 1 }) : null;
   const selection: MoveSelection | null = brief && placement ? selectMoves(placement.value, brief.value, eligible, briefSteps) : null;
-  const briefText = brief ? briefNote(brief.value, briefSteps, material, movesMode === 'serve' ? selection : null) : '';
+  const briefNoteText = brief ? briefNote(brief.value, briefSteps, material, movesMode === 'serve' ? selection : null) : '';
+  const briefText = briefNoteText && inferredMethod ? `(My usual steps, named below, were read from my own pieces and are not rules I wrote: follow them as my habit, not as requirements.)\n${briefNoteText}` : briefNoteText;
   if (selection && profile && placement) report.say(`Moves of mine for this request: ${selection.placed.length} placed (${movesMode === 'serve' ? 'served to the writer' : 'observed, not served'}; about ${selection.budget} a piece), ${selection.standing.length} standing (how I always am, in the skill), ${selection.notPlaced.length} not this case, ${selection.unresolved.length} unresolved and never served; read by ${placement.by === 'model' ? 'the context reader' : placement.by}; profile ${profile.hash}.`);
   // HOW MUCH THE READER MAY READ THIS RUN: nothing on a short request unless asked, four calls on a long one (two
   // batches of twelve rules, the brief's applying steps and the required rules first), every rule under --strict.
@@ -793,6 +798,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
     } : null, settingsFor(checks, taste, nDrafts, carryBlock ? carryNote : '', brief ? { by: brief.by, applies: applyingSteps(brief.value, briefSteps).map((s) => s.id), setAside: setAsideSteps(brief.value, briefSteps).map((s) => s.id),
       unresolved: unresolvedSteps(brief.value, briefSteps).map((s) => s.id), unsupported: brief.value.unsupported.map((u) => u.id), contradicted: brief.value.contradicted.map((c) => c.id),
       ...(examplesFirst ? { served: 'examples-first' as const } : {}),
+      ...(inferredMethod ? { inferred: true as const } : {}),
       ...(selection && profile && placement ? { moves: { by: placement.by, mode: movesMode, profile: profile.hash, placed: selection.placed.map((u) => u.id), standing: selection.standing.map((u) => u.id), notPlaced: selection.notPlaced.map((x) => x.id), unresolved: selection.unresolved, budget: selection.budget } } : {}) } : null),
     // A structured output is JSON, not prose: no reading of it means anything against a prose range.
     fid && std && contractFile === null ? (output: string) => fidelityRecord(fid, output, trace, impl.retrieved, applicability(name, std, output, waived, withheld, checks.context, transfer?.doesNotApply), ledger,

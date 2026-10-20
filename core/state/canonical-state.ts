@@ -578,6 +578,8 @@ export interface InvocationSettings {
       readonly contradicted?: readonly string[];
       /** the writer was served the pieces, the method and the rules with no description of the author (`--examples-first`) */
       readonly served?: 'examples-first';
+      /** the steps were read off the pieces, not written by the owner (core/method/infer.ts): a habit briefed, never a rule */
+      readonly inferred?: true;
       /** the author's moves for this request (core/loop/execution-brief.ts, `selectMoves`): the profile they came from, and the mode they were served under */
       readonly moves?: { readonly by: 'code' | 'model' | 'floor'; readonly mode: 'observe' | 'serve'; readonly profile: string; readonly placed: readonly string[]; readonly standing: readonly string[];
         readonly notPlaced: readonly string[]; readonly unresolved: readonly string[]; readonly budget: number } } };
