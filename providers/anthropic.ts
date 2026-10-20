@@ -72,6 +72,18 @@ const noTemperature = new Set<string>();
  * empty or refused calls, so arms meant to be the same writer were not. Disabled is sent, and learned off on a 400.
  */
 const noThinkingField = new Set<string>();
+/**
+ * Models that take thinking off as `between_tools` rather than `disabled` (the API's own 400 says which: "send
+ * thinking: between_tools instead of disabled"): asked once, then called with that form. The model does not think
+ * before answering either way; the short notes it writes between tool calls come back as thinking blocks, counted
+ * below as any other.
+ */
+const betweenTools = new Set<string>();
+/** Whether an error is the API asking for `between_tools` in place of `disabled`. */
+export const wantsBetweenTools = (e: unknown): boolean => {
+  const f = statusAndBody(e);
+  return f?.status === 400 && /between_tools/i.test(f.body) && /disabled/i.test(f.body);
+};
 
 /**
  * Whether an error is the endpoint refusing the `thinking` FIELD itself (a 400 that names it as an extra, unknown or
@@ -156,6 +168,10 @@ export class AnthropicInferenceClient implements InferenceClient {
         noTemperature.add(this.modelId);
         return this.complete(req);
       }
+      if (wantsBetweenTools(e) && !betweenTools.has(this.modelId)) {
+        betweenTools.add(this.modelId);
+        return this.complete(req);
+      }
       if (refusesThinking(e) && withThinking) {
         noThinkingField.add(this.modelId);
         return this.complete(req);
@@ -178,7 +194,8 @@ export class AnthropicInferenceClient implements InferenceClient {
       model: this.modelId,
       max_tokens: req.maxTokens,
       ...(temperature === undefined ? {} : { temperature }),
-      ...(noThinkingField.has(this.modelId) ? {} : { thinking: { type: 'disabled' as const } }),
+      // `between_tools` is what the newest models take for thinking off; the SDK's type lags the API, so it is cast
+      ...(noThinkingField.has(this.modelId) ? {} : betweenTools.has(this.modelId) ? { thinking: { type: 'between_tools' } as unknown as { type: 'disabled' } } : { thinking: { type: 'disabled' as const } }),
       // STABLE first and cached; VARIABLE second and not. Reversing these still works and costs ~9x.
       //
       // AN EMPTY STABLE BLOCK IS OMITTED, NOT SENT EMPTY. The API rejects `cache_control` on an empty

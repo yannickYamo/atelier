@@ -5,7 +5,7 @@
     "perCaseAtLeast": 4,
     "codeDecidedExact": true
   },
-  "note": "One persona point per case against the pieces it quotes. The label is `trigger status|pieces evidenced`: the status decided by code from what the reading grounds (a trigger is supported only by a second quote from the same piece as the move; none when the point is not a move), the count the distinct pieces the reading quotes the move from, verbatim. No applicability is labelled: the kind is inferred from counts after the table (core/stats/habit.ts), not read. The scope the reading gives is recorded beside each run as `aside` against the case's `aside`, and not judged. v5 (2026-10-19) shows the reading no frequency word and keeps every verbatim quote: run live on claude-haiku-5-5, 2026-10-19: 52/65, two soft cases, one label corrected (see its note).",
+  "note": "One persona point per case against the pieces it quotes. The label is `trigger status|pieces evidenced`: the status decided by code from what the reading grounds (a trigger is supported only by a second quote from the same piece as the move; none when the point is not a move), the count the distinct pieces the reading quotes the move from, verbatim. No applicability is labelled: the kind is inferred from counts after the table (core/stats/habit.ts), not read. The scope the reading gives is recorded beside each run as `aside` against the case's `aside`, and not judged. v5 (2026-10-19) shows the reading no frequency word and keeps every verbatim quote: run live on claude-haiku-5-5, 2026-10-19: 52/65, two soft cases, one label corrected (see its note). `label2`, where set, judges what a counted feature means: quotes (none, or near the habit only) or absent/present (the feature is the habit); set only where one answer is right.",
   "cases": [
     {
       "id": "supported-trigger-two-pieces",
@@ -55,7 +55,8 @@
           "text": "## Summary\nThe migration is reversible and the tests cover it.\n\n## Verdict\nApprove"
         }
       ],
-      "aside": "sentence"
+      "aside": "sentence",
+      "note": "label2 removed 2026-10-19: the reading says the hedge habit is tentativeModal present 3 of 5; harmless, since a quote of 'probably' where the modal count is zero hands the decision back to the quotes (measureAgrees), so the only harmful direction is a feature absent everywhere, judged on the severity case."
     },
     {
       "id": "move-shown-situation-not",
@@ -141,7 +142,8 @@
         }
       ],
       "note": "Labelled none|2 as a standing trait before the live run of v5 (2026-10-19): the reading gave it a situation, 'when the verdict requests changes', shown by a second quote in both pieces, 5 of 5 runs; the pieces bear it out (the reason follows the two Request changes verdicts and none of the others), so the kind the counts give is situational (2 of 2 in, 0 of 3 out). The label follows the reading and the data, not the assumption.",
-      "aside": "sentence"
+      "aside": "sentence",
+      "label2": "quotes"
     },
     {
       "id": "register-is-not-a-move",
@@ -218,7 +220,8 @@
           "text": "## Summary\nThe migration is reversible and the tests cover it.\n\n## Verdict\nApprove"
         }
       ],
-      "aside": "decision"
+      "aside": "decision",
+      "label2": "quotes"
     },
     {
       "id": "terse-verdict",
@@ -243,7 +246,8 @@
           "text": "## Summary\nThe migration is reversible.\n\n## Verdict\nApprove"
         }
       ],
-      "aside": "sentence"
+      "aside": "sentence",
+      "label2": "quotes"
     },
     {
       "id": "one-golden",
@@ -340,6 +344,58 @@
         }
       ],
       "note": "the trigger a reader can see (work added to a hot write path), shown by the inserts-per-second sentence"
+    },
+    {
+      "id": "severity-named-not-exclamation",
+      "label": null,
+      "label2": "quotes",
+      "point": {
+        "aspect": "Severity escalation in plain words",
+        "description": "Names the class of harm in one plain phrase after the mechanism, never raising the temperature.",
+        "frequency": "SOMETIMES",
+        "quote": "This is a privilege escalation affecting every route behind the guard."
+      },
+      "files": [
+        "bench/standing/domains/code-review/examples/e01.md",
+        "bench/standing/domains/code-review/examples/e02.md",
+        "bench/standing/domains/code-review/examples/e03.md",
+        "bench/standing/domains/code-review/examples/e04.md",
+        "bench/standing/domains/code-review/examples/e05.md",
+        "bench/standing/domains/code-review/examples/e06.md",
+        "bench/standing/domains/code-review/examples/e07.md",
+        "bench/standing/domains/code-review/examples/e08.md",
+        "bench/standing/domains/code-review/examples/e09.md",
+        "bench/standing/domains/code-review/examples/e10.md",
+        "bench/standing/domains/code-review/examples/e11.md",
+        "bench/standing/domains/code-review/examples/e12.md"
+      ],
+      "note": "The absence of exclamation marks is consistent with \"never raising the temperature\" and does not measure \"names the class of harm\": the feature, if named, is only near the habit (label2 quotes). On the real build the reading said exclamation:absent and the count gave 12 of 12. The trigger is not judged here (the reading proposes 'when a defect lets one user act with another's privileges', shown by a second quote in piece-9, and that is a fair reading): only what the feature means is."
+    },
+    {
+      "id": "no-exclamation-is-the-feature",
+      "label": "none|3",
+      "label2": "absent",
+      "point": {
+        "aspect": "No exclamation marks",
+        "description": "Never uses an exclamation mark.",
+        "frequency": "ALWAYS",
+        "quote": "Request changes"
+      },
+      "pieces": [
+        {
+          "name": "piece-1",
+          "text": "## Summary\nThe loop stops one short.\n\n## Verdict\nRequest changes"
+        },
+        {
+          "name": "piece-2",
+          "text": "## Summary\nThe handler trusts the body.\n\n## Verdict\nRequest changes"
+        },
+        {
+          "name": "piece-3",
+          "text": "## Summary\nThe migration is reversible.\n\n## Verdict\nRequest changes"
+        }
+      ],
+      "note": "The point names the very thing the feature counts: absent is the habit."
     }
   ]
 }

@@ -250,7 +250,7 @@ export const PERSONA_TABLE_SYSTEM = `You read one author's pieces for the habits
 - move: for a habit made in a passage, the passage where this piece makes the move AS THE POINT DESCRIBES IT, and null when no passage does; a sentence that merely states a finding is not an escalation of severity, not a concession, not an argument from the artifact's own contradiction, and not a judgement of taste, however related its subject. Every piece of this author's contains findings; the question is whether THIS move is made, not whether the piece is on topic. For a habit that is a property of the whole piece, move is null.
 - shows: for a habit that is a property of the whole piece, true when this piece as a whole shows it and false when it does not; null for a habit made in a passage.
 - situation: a passage where the piece is in the habit's situation; null when it is not, or when the habit names no situation.
-Answer null freely: most habits are made in some pieces and not others, and a null where the move is absent is the right answer, not a failure to find. The situation present is not the move made: a piece can be in the situation (input taken unchecked) and never make the move (no sentence from the caller's view); then situation is quoted and move is null. The same passage is never both. A quote that is not verbatim is dropped. Answer for every pair asked.`;
+The example quote is one instance of the habit, not its only form: a move made in other words, or a concession, hedge or judgement phrased otherwise, counts when it does what the point describes; a habit made in a suggestion counts as it does in a finding. Answer null where the move is absent: most habits are made in some pieces and not others, and a null there is the right answer, not a failure to find. For a whole-piece habit, judge the piece as a whole against the point's description, not against the example's wording: a piece shows graded directives when its required items take imperatives and its optional ones softer forms, whatever the words. The situation present is not the move made: a piece can be in the situation (input taken unchecked) and never make the move (no sentence from the caller's view); then situation is quoted and move is null. The same passage is never both. A quote that is not verbatim is dropped. Answer for every pair asked.`;
 
 export const PERSONA_TABLE_SCHEMA: Record<string, unknown> = {
   type: 'object',
@@ -259,7 +259,7 @@ export const PERSONA_TABLE_SCHEMA: Record<string, unknown> = {
 };
 
 export const PERSONA_TABLE: Reading<TableInput, TableOutput> = {
-  id: 'persona-table', version: '3',
+  id: 'persona-table', version: '4',
   system: PERSONA_TABLE_SYSTEM, schema: PERSONA_TABLE_SCHEMA,
   toolName: 'emit_persona_table', toolDescription: 'For each habit and piece asked: a verbatim passage making the move (or, for a whole-piece habit, whether the piece shows it) and one in its situation, or null.',
   maxTokens: 8000, estimateUsd: 0.05,
@@ -275,6 +275,7 @@ export const PERSONA_TABLE: Reading<TableInput, TableOutput> = {
     const byName = new Map(input.pieces.map((p) => [p.name, p]));
     const asked = new Set(input.cells.map((c) => `${c.habit}\n${c.piece}`));
     const whole = new Set(input.habits.filter((h) => h.modality === 'document').map((h) => h.n));
+    const situated = new Set(input.habits.filter((h) => h.situation !== null).map((h) => h.n));
     const seen = new Set<string>(); const out: TableCell[] = [];
     for (const c of r.cells as { habit?: unknown; piece?: unknown; move?: unknown; situation?: unknown; shows?: unknown }[]) {
       const piece = typeof c.piece === 'string' ? byName.get(c.piece) : undefined;
@@ -284,7 +285,7 @@ export const PERSONA_TABLE: Reading<TableInput, TableOutput> = {
       const move = short(c.move, 300); const situation = short(c.situation, 300);
       // a whole-piece habit is judged over the piece: `shows` decides and a passage, if given, only illustrates
       out.push({ habit: c.habit, piece: piece.name, move: move && quoteIsReal(move, piece.text) ? move : null,
-        situation: situation && quoteIsReal(situation, piece.text) && (!move || norm(situation) !== norm(move)) ? situation : null,
+        situation: situated.has(c.habit) && situation && quoteIsReal(situation, piece.text) && (!move || norm(situation) !== norm(move)) ? situation : null,
         shows: whole.has(c.habit) && typeof c.shows === 'boolean' ? c.shows : null });
     }
     return out.length ? out : null;
@@ -335,8 +336,14 @@ export function inferMoves(drafts: readonly MoveDraft[], cells: readonly TableCe
     // count says lacks it (hedges made with "probably" where the feature counts "might") means the feature's events are
     // not the habit's; then the quotes decide and the count is kept as what it is.
     const measureAgrees = measured.length ? !evidence.some((e) => measured.some((m) => m.piece === e.piece && !m.exhibits)) : null;
-    // what makes a piece count: the feature's count where it measures the habit; else, for a whole-piece habit, the piece judged to show it or quoted; else a quote
-    const made = new Set(measured.length && measureAgrees ? measured.filter((x) => x.exhibits).map((x) => x.piece) : [...evidence.map((e) => e.piece), ...judged.filter((j) => j.shows).map((j) => j.piece)]);
+    // WHAT MAKES A PIECE COUNT: a quote of the move in it, or, for a whole-piece habit, the table's judgement that the
+    // piece shows it. A feature's count CONFIRMS and never adds: where the feature measures the habit and agrees with
+    // the quotes, a piece counts only when both the reading and the count say so. A count alone cannot, because the
+    // link from the feature to the habit is itself a reading, and a feature absent from every piece (no exclamation
+    // marks) is consistent with any habit that never raises the temperature without measuring it; the real build read
+    // "severity named plainly" as 12 of 12 that way until the count was made a filter.
+    const read = new Set([...evidence.map((e) => e.piece), ...judged.filter((j) => j.shows).map((j) => j.piece)]);
+    const made = measured.length && measureAgrees ? new Set(measured.filter((x) => x.exhibits && read.has(x.piece)).map((x) => x.piece)) : read;
     const k = made.size;
     const table = d.trigger.text === null ? null : (() => {
       const inSituation = new Set([...evidence.filter((e) => e.situationQuote).map((e) => e.piece), ...situationOnly.map((x) => x.piece)]);
@@ -373,7 +380,7 @@ export function describeMove(u: MoveUnit): string {
   const head = `${u.kind}${u.by === 'floor' ? ' (by the words alone)' : ''}`;
   const when = u.trigger.text ? ` · when: "${u.trigger.text}" (${u.situation ? `${u.situation.explains ? 'explains it' : 'does not explain it'}: ${describeRate(u.situation.in)} in the situation, ${describeRate(u.situation.out)} outside` : u.trigger.status === 'supported' ? 'shown' : 'proposed, the situation not seen on both sides'})` : '';
   const parts = [u.scope !== 'UNKNOWN' ? `scope: ${u.scope}` : null, u.modality === 'document' ? 'over the whole piece' : null, u.link ? `at step ${u.link.step} (${u.link.status})` : null, u.check ? `counted: ${u.check}${u.checkMeans ? ` (${u.checkMeans} in a piece is the habit)` : ' (near the habit, not it)'}` : null, u.forbidden ? `not: ${u.forbidden}` : null].filter((x): x is string => x !== null);
-  const by = u.judged.length && !u.measured.length ? ' judged over each whole piece' : u.measured.length ? (u.measureAgrees ? ` by the count of ${u.check}` : ` by the quotes (the count of ${u.check} disagrees with them in ${u.measured.filter((m) => !m.exhibits && u.evidence.some((e) => e.piece === m.piece)).length} piece(s): it does not measure this habit)`) : '';
+  const by = u.judged.length && !u.measured.length ? ' judged over each whole piece' : u.measured.length ? (u.measureAgrees ? ` by the quotes, confirmed by the count of ${u.check}` : ` by the quotes (the count of ${u.check} disagrees with them in ${u.measured.filter((m) => !m.exhibits && u.evidence.some((e) => e.piece === m.piece)).length} piece(s): it does not measure this habit)`) : '';
   return `${head} · ${u.aspect || u.observed} · ${describeRate(u.rate)}${by}${when}${parts.length ? ` · ${parts.join(' · ')}` : ''}${u.tabled ? '' : ' (not tabled: counts from the first reading alone)'}`;
 }
 /** "20 moves: 9 standing, 4 situational, 7 occasional". */

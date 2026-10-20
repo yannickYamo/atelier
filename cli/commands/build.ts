@@ -64,7 +64,7 @@ import { extract } from '../../core/intake/extract.js';
 
 import { describeMatrix, type Carrier } from '../../core/delivery/carrier-delivery.js';
 import { sha, DATA, die, argv, flag, projectDir, pickHost,
-  loadSession, saveSession, step, runFile, numericFlag, orchestrated, proposerModel, adoptMovedRun, contextReaderModel, contextReaderClient } from '../runtime.js';
+  loadSession, saveSession, step, runFile, numericFlag, orchestrated, proposerModel, adoptMovedRun, contextReaderModel, contextReaderClient, evidenceReaderModel, evidenceReaderClient } from '../runtime.js';
 
 // ── build ────────────────────────────────────────────────────────────────────────────────────
 /** Host is detected or forced. Atelier runs the same either way; only install location differs. */
@@ -371,7 +371,7 @@ async function movesFor(L: store.StoreLayout, voice: Voice | null, methodText: {
   }
   const steps = methodText ? stepsOf(methodText.text).map((st, i) => ({ n: i + 1, text: st.text })) : [];
   const noModel = NO_MODEL();
-  const d = await readContext(PERSONA_MOVES, { points, pieces, steps }, noModel ? null : contextReaderClient(), noModel ? null : contextReaderModel(), { spentUsd: 0, capUsd: 0.3, maxCalls: 1 });
+  const d = await readContext(PERSONA_MOVES, { points, pieces, steps }, noModel ? null : evidenceReaderClient(), noModel ? null : evidenceReaderModel(), { spentUsd: 0, capUsd: 0.6, maxCalls: 1 });
   // A PROFILE A MODEL READ IS NEVER REPLACED BY A FLOOR: where no model could read again, the kept one stays, and the stage says why.
   if (d.by !== 'model' && kept && kept.reader !== null) {
     recordStage('moves', { ran: false, why: `kept from ${stale ? `an earlier reading (${kept.reading})` : `pieces that have changed since (${changed} piece(s) differ)`} and no model to read again: ${describeMoves(kept.units)}` });
@@ -389,13 +389,13 @@ async function movesFor(L: store.StoreLayout, voice: Voice | null, methodText: {
     for (let i = 0; i < habitNs.length; i += perCall) {
       const batch = new Set(habitNs.slice(i, i + perCall));
       const habits = d.value.map((u, n) => ({ n: n + 1, aspect: u.aspect, description: u.observed, quote: points[n]?.quote ?? u.evidence[0]?.quote ?? '', situation: u.trigger.text, modality: u.modality })).filter((h) => batch.has(h.n));
-      const t = await readContext(PERSONA_TABLE, { habits, pieces, cells: asked.filter((c) => batch.has(c.habit)) }, contextReaderClient(), contextReaderModel(), { spentUsd: 0, capUsd: 0.3, maxCalls: 1 });
+      const t = await readContext(PERSONA_TABLE, { habits, pieces, cells: asked.filter((c) => batch.has(c.habit)) }, evidenceReaderClient(), evidenceReaderModel(), { spentUsd: 0, capUsd: 0.6, maxCalls: 1 });
       calls += 1; if (t.by === 'model') { cells.push(...t.value); answered += 1; }
     }
     tabled = habitNs.length === 0 || answered === Math.ceil(habitNs.length / perCall);
   }
   const units = inferMoves(d.value, cells, pieces, tabled);
-  const profile = profileOf(units, personaHash, d.by === 'model' ? contextReaderModel() : null, pieces);
+  const profile = profileOf(units, personaHash, d.by === 'model' ? evidenceReaderModel() : null, pieces);
   store.putMoves(L, personaHash, profile);
   if (d.by === 'model') {
     recordStage('moves', { ran: true, detail: `${describeMoves(profile.units)}${tabled ? '' : ' (not every cell tabled)'}` });

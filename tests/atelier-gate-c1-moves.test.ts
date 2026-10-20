@@ -110,9 +110,16 @@ describe('the reading as a value', () => {
     const measured = PERSONA_MOVES.ground(raw([{ point: 2, trigger: null, evidence: [{ piece: 'piece-1', quote: 'Use `>=` so the state is correct', situationQuote: null }], realisation: 'bare statements', forbidden: null, scope: 'sentence', link: null, check: 'firstPlural', modality: 'document', checkMeans: 'absent' }]), input)!;
     expect(measured[1]).toMatchObject({ modality: 'document', check: 'firstPlural', checkMeans: 'absent' });
     expect(measureHabit('firstPlural', 'absent', pieces).map((m) => [m.piece, m.count, m.exhibits])).toEqual([['piece-1', 0, true], ['piece-2', 0, true], ['piece-3', 0, true]]);
+    // the count confirms and never adds: the quotes (and the own quote, in pieces 1 and 3) say 2 of 3; the count agrees on those and cannot add piece-2 by itself
     const u = inferMoves(measured, [], pieces, true);
-    expect(u[1]).toMatchObject({ kind: 'standing', pieces: 3, corpus: 3 }); expect(u[1].measured).toHaveLength(3);
-    expect(describeMove(u[1])).toBe('standing · Impersonal point of view · in 3 of 3 pieces by the count of firstPlural · scope: sentence · over the whole piece · counted: firstPlural (absent in a piece is the habit)');
+    expect(u[1]).toMatchObject({ kind: 'standing', pieces: 2, corpus: 3 }); expect(u[1].measured).toHaveLength(3);
+    expect(describeMove(u[1])).toBe('standing · Impersonal point of view · in 2 of 3 pieces [0.18, 0.96] by the quotes, confirmed by the count of firstPlural · scope: sentence · over the whole piece · counted: firstPlural (absent in a piece is the habit)');
+    // with the table judging the whole piece shown in piece-2 too, the count confirms all three
+    const u3 = inferMoves(measured, [{ habit: 2, piece: 'piece-2', move: null, situation: null, shows: true }], pieces, true);
+    expect(u3[1]).toMatchObject({ pieces: 3 });
+    // a count that exhibits where nothing was read adds nothing: a feature absent everywhere is consistent with the habit, not evidence of it
+    const silent = PERSONA_MOVES.ground(raw([{ point: 2, trigger: null, evidence: [], realisation: 'x', forbidden: null, scope: 'sentence', link: null, check: 'exclamation', modality: 'passage', checkMeans: 'absent' }]), input)!;
+    expect(inferMoves(silent, [], pieces, true)[1].pieces).toBe(2); // the own quote's two pieces, not three
     // the move cells of a measured habit are still asked of the table: the count decides only where it agrees with the quotes
     expect(cellsToAsk(measured, pieces).filter((c) => c.habit === 2).map((c) => c.piece)).toEqual(['piece-2']); // piece-1 quoted, piece-3 holds the point's own quote
     // a feature that is only near the habit: the quotes decide, and the line says so; a plain-value feature has no events to count
@@ -223,7 +230,7 @@ describe('through the build', () => {
     expect(profile).not.toBeNull();
     expect(receipt.movesHash).toBe(profile.hash);
     expect(profile.reader).toBe('scripted');
-    expect(profile.schema).toBe(2); expect(profile.reading).toBe('persona-moves-7+persona-table-3');
+    expect(profile.schema).toBe(2); expect(profile.reading).toBe('persona-moves-7+persona-table-4');
     expect(profile.units.map((u) => u.kind)).toEqual(['standing', 'occasional']);
     expect(profile.units[0]).toMatchObject({ pieces: 4, corpus: 4, link: { step: '1', status: 'candidate' }, by: 'model', tabled: false, readAs: 'ALWAYS' });
     expect(profile.units[0].rate).toMatchObject({ k: 4, n: 4 }); expect(profile.units[0].rate.pMajority).toBeGreaterThan(0.5);

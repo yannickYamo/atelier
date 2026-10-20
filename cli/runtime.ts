@@ -88,7 +88,7 @@ export const VALUED_OPTIONS: readonly string[] = ['correcting', 'moves',
   'cap', 'cases', 'development', 'expert-consistency', 'key', 'observation', 'observer-kappa', 'out', 'page', 'probe-cap', 'prose', 'standard', 'target',
   'results', 'sealed-at', 'seed', 'suite', 'phase', 'class', 'contrast', 'piece-budget', 'pieces',
   'corpus', 'tasks', 'fires', 'margin', 'enforce', 'observe', 'check', 'floor-cap',
-  'finalists', 'screen-model', 'voice', 'persona', 'add', 'strike', 'probe', 'read', 'label', 'reader-model', 'runs', 'context-reader', 'work-form',
+  'finalists', 'screen-model', 'voice', 'persona', 'add', 'strike', 'probe', 'read', 'label', 'reader-model', 'runs', 'context-reader', 'evidence-reader', 'work-form',
   'questions', 'reason', 'required-n', 'reserve', 'role',
   // `atelier new` with pieces by several authors (cli/commands/composite.ts): who wrote which, what is liked about each, and a conflict's answer
   'authors', 'admire', 'conflict',
@@ -485,6 +485,21 @@ export const contextReaderModel = (): string | null =>
   ?? (providerFor('discovery') === 'anthropic' ? CONTEXT_READER_DEFAULT : flag('--model') ?? process.env.ATELIER_MODEL ?? null);
 export const contextReaderClient = (): InferenceClient | null => {
   const m = contextReaderModel();
+  return m && canReach('discovery') ? clientFor(m) : null;
+};
+/**
+ * WHO READS THE EVIDENCE OF A HABIT (core/compiler/moves.ts: the first reading of each persona point and the table of
+ * every habit against every piece). A reading that decides whether a sentence in a long piece makes an abstract move;
+ * on the hand-labelled corpus the small reader answered it differently from call to call and the mid-size one did
+ * not (bench/readings/cases/persona-table.json, 2026-10-19), so it is Sonnet 5.5 on Anthropic by default, a few calls
+ * per build. --evidence-reader or ATELIER_EVIDENCE_READER names another; on another backend it is the context reader.
+ */
+export const EVIDENCE_READER_DEFAULT = 'claude-sonnet-5-5';
+export const evidenceReaderModel = (): string | null =>
+  flag('--evidence-reader') ?? process.env.ATELIER_EVIDENCE_READER
+  ?? (providerFor('discovery') === 'anthropic' ? EVIDENCE_READER_DEFAULT : contextReaderModel());
+export const evidenceReaderClient = (): InferenceClient | null => {
+  const m = evidenceReaderModel();
   return m && canReach('discovery') ? clientFor(m) : null;
 };
 
