@@ -149,6 +149,15 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 - **A reader that cannot be reached is asked once.** With a key set for a backend that answers nothing, a build waited
   out the retries of every reading in turn; the first failure now turns the rest of that build's readings off, said once.
 
+### Examples first: the writer served your pieces, your method and your rules, and no description of you
+
+- **`--examples-first` on a run** serves the writer the author's pieces, the method and every rule, with no
+  description of how the author sounds, no repertoire and no move in the brief; the moves are read on the work
+  afterwards as they would be and never served, and nothing of the profile authorises a repair. One run's
+  choice, recorded on the run (`served: examples-first`); the build, the skill on disk and every other run are
+  unchanged. It exists to test one thing: whether the author's own text carries their voice better than a
+  description of it does, with the method held by the same checks.
+
 ### A figure worked from the figures you gave is yours, by dimension
 
 - **A worked cost is not an invented figure.** A method step "every figure must be sourced from the price list"

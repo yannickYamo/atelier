@@ -108,3 +108,19 @@ export function withoutReferenceIndex(skillMd: string): string {
   }
   return out.join('\n');
 }
+
+/**
+ * THE SKILL WITHOUT THE DESCRIPTION OF THE AUTHOR, for an examples-first run: the "How I sound" points and the
+ * repertoire of moves are left out of what the writer is served, and the author's pieces, the method and every rule
+ * stay as they are. Each block is a header line ending in a colon and the list that follows it, joined by one
+ * blank line, so both go. A skill with neither is returned as it is. The profile still reads the work afterwards.
+ */
+export function withoutPersonaBlocks(skillMd: string): string {
+  const blocks = skillMd.split('\n\n'); const out: string[] = [];
+  for (let i = 0; i < blocks.length; i++) {
+    const b = blocks[i];
+    if (/^(?:How I sound \(|Moves I make in some pieces, not most \()/.test(b)) { if (b.trimEnd().endsWith(':') && i + 1 < blocks.length && blocks[i + 1].startsWith('- ')) i += 1; continue; }
+    out.push(b);
+  }
+  return out.join('\n\n');
+}

@@ -73,7 +73,7 @@ import { statedLength, statedLengths, againstStated, statedBounds, notHeldBecaus
 import { proseWords } from '../../core/observers/style.js';
 import { isReplyWork } from '../../core/observers/formats.js';
 import { citesLines, numbered, citedLines } from '../../core/loop/locators.js';
-import { composeServed, forThisRequest } from '../served.js';
+import { composeServed, forThisRequest, withoutPersonaBlocks } from '../served.js';
 import { findOwnershipBreaches, describeBreaches } from '../../core/state/output-ownership.js';
 import { assertHistoryNotServed, foldRepairs } from '../../core/architecture/repair-memory.js';
 import type { SkillVersion, InvocationSettings } from '../../core/state/canonical-state.js';
@@ -639,7 +639,11 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const profile = receiptNow?.movesHash ? store.getMovesByHash(L, receiptNow.movesHash) : null;
   const movesFlag = flag('--moves');
   if (movesFlag !== undefined && movesFlag !== 'observe' && movesFlag !== 'serve') die(`--moves is observe or serve, got "${movesFlag}".`);
-  const movesMode: 'observe' | 'serve' = (movesFlag as 'observe' | 'serve' | undefined) ?? runSettings?.moves ?? 'observe';
+  // EXAMPLES FIRST: the writer is served the author's pieces, the method and the rules, and no description of the author
+  // (no "How I sound" points, no repertoire, no move in the brief); the profile reads the work afterwards as it would,
+  // and nothing of it authorises a repair. One run's choice, recorded on the run; nothing in the build changes.
+  const examplesFirst = argv.includes('--examples-first');
+  const movesMode: 'observe' | 'serve' = examplesFirst ? 'observe' : (movesFlag as 'observe' | 'serve' | undefined) ?? runSettings?.moves ?? 'observe';
   const eligible = profile ? eligibleMoves(profile.units) : [];
   const given = { request: asked, material: material.map((m) => ({ name: m.name, head: m.text.slice(0, 600) })) };
   const brief = briefOn ? await readContext(EXECUTION_BRIEF, { ...given, steps: briefSteps },
@@ -714,7 +718,9 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   if (needs && !needsNothing(needs)) report.say(`Read before writing: ${[needs.deliver.length ? `${needs.deliver.length} thing(s) asked for` : '', needs.unknowns.length ? `turns on ${needs.unknowns.map((u) => u.what).join('; ')}` : '', needs.actOn ? `could act on "${needs.actOn}"` : '', needs.irreversible ? `cannot be undone: "${needs.irreversible}"` : ''].filter(Boolean).join(' · ')}.`);
   // The slot shape is said for the run that wants slots (a document, no material bound), never in the skill (SLOT_NOTE).
   const requestNotes = forThisRequest(withheld.filter((w) => !needMaterial.includes(w)), briefText, impl.passages, lengthNote, needsNote(needs), placeholdersOn ? SLOT_NOTE : '');
-  const servedForRun = `${needMaterial.length ? withoutRules(servedText, needMaterial) : servedText}${impl.notes ? `\n\n${impl.notes}` : ''}${carryBlock}${requestNotes}`;
+  const servedBase = examplesFirst ? withoutPersonaBlocks(servedText) : servedText;
+  if (examplesFirst) report.say(`Examples first: served without the description of how I sound or my repertoire${servedBase === servedText ? ' (the skill carried none)' : ''}; my moves are read on the work and never served.`);
+  const servedForRun = `${needMaterial.length ? withoutRules(servedBase, needMaterial) : servedBase}${impl.notes ? `\n\n${impl.notes}` : ''}${carryBlock}${requestNotes}`;
   const deliveryForRun = withheld.length ? { ...delivery, withheldRules: withheld } : delivery;
   // What the person said was wrong with an earlier version (`atelier fix`) goes to the writer whatever shape was asked for.
   const corrected = `${task}${correctionFor(flag('--correcting'))}${transfer?.note ?? ''}`;
@@ -786,6 +792,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
       return (r.checked.find((c) => c.requirementId === 'UNSOURCED' && acts(c))?.result.spans ?? []).map((sp) => sp.text);
     } : null, settingsFor(checks, taste, nDrafts, carryBlock ? carryNote : '', brief ? { by: brief.by, applies: applyingSteps(brief.value, briefSteps).map((s) => s.id), setAside: setAsideSteps(brief.value, briefSteps).map((s) => s.id),
       unresolved: unresolvedSteps(brief.value, briefSteps).map((s) => s.id), unsupported: brief.value.unsupported.map((u) => u.id), contradicted: brief.value.contradicted.map((c) => c.id),
+      ...(examplesFirst ? { served: 'examples-first' as const } : {}),
       ...(selection && profile && placement ? { moves: { by: placement.by, mode: movesMode, profile: profile.hash, placed: selection.placed.map((u) => u.id), standing: selection.standing.map((u) => u.id), notPlaced: selection.notPlaced.map((x) => x.id), unresolved: selection.unresolved, budget: selection.budget } } : {}) } : null),
     // A structured output is JSON, not prose: no reading of it means anything against a prose range.
     fid && std && contractFile === null ? (output: string) => fidelityRecord(fid, output, trace, impl.retrieved, applicability(name, std, output, waived, withheld, checks.context, transfer?.doesNotApply), ledger,

@@ -576,6 +576,8 @@ export interface InvocationSettings {
       readonly unresolved?: readonly string[]; readonly unsupported: readonly string[];
       /** steps the request asked against: they stand, and the writer was told */
       readonly contradicted?: readonly string[];
+      /** the writer was served the pieces, the method and the rules with no description of the author (`--examples-first`) */
+      readonly served?: 'examples-first';
       /** the author's moves for this request (core/loop/execution-brief.ts, `selectMoves`): the profile they came from, and the mode they were served under */
       readonly moves?: { readonly by: 'code' | 'model' | 'floor'; readonly mode: 'observe' | 'serve'; readonly profile: string; readonly placed: readonly string[]; readonly standing: readonly string[];
         readonly notPlaced: readonly string[]; readonly unresolved: readonly string[]; readonly budget: number } } };
