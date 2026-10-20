@@ -149,6 +149,21 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 - **A reader that cannot be reached is asked once.** With a key set for a backend that answers nothing, a build waited
   out the retries of every reading in turn; the first failure now turns the rest of that build's readings off, said once.
 
+### A figure worked from the figures you gave is yours, by dimension
+
+- **A worked cost is not an invented figure.** A method step "every figure must be sourced from the price list"
+  read every worked cost as unsourced: a team's monthly cost (12 × $8 = $96), a rate per head ($350 ÷ 12 =
+  $29.17), the gap between two vendors ($350 − $96), a year of it. Ten price analyses in forty runs were blocked by
+  it in every arm, and the repair against it removed the worked costs from fifteen outputs whose drafts had them.
+  The check now works figures by dimension, chained through the figures the text itself states: money times a
+  count is money, money over a count is money per head, money less money is money, a count less a count named as
+  one of them is that count, a share is of one thing in the same thing, a year is twelve months of an amount of
+  money and only where the words say a year; a span of the calendar ("over twelve months") is no claim. An
+  operation is accepted only where the units make the result, at the figure's own precision, and never through an
+  intermediate the text does not show: a figure built on a number nobody gave is listed with it, a dose is still
+  not an age plus a breathing rate, and past eighty operands nothing is worked. Replayed on the forty outputs: the
+  figures the check could not place fell from 15 a draft to 0.1.
+
 ### How often you make each move, and whether a situation explains it, is measured, never a word
 
 - **No count fixed by hand decides anything about your moves now.** Until today a point of the persona was "always"
