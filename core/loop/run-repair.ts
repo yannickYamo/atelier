@@ -12,9 +12,9 @@ import { spend, processSpendByPurpose, spendBetween, type SpendPurpose, type Spe
 import type { StandardVersion, RepairRecord, RepairEdits, GradedRecord, ControllerDecisionRecord } from '../state/canonical-state.js';
 import { acts, isOmission, verifyText, type VerifyReport, type RuleCheck } from '../observers/verify.js';
 import { planFor } from '../plan/execution-plan.js';
-import { unsourcedClaims, wordCountClaims, claimUnitsOf, statedFigureClaims } from './claims.js';
+import { unsourcedClaims, wordCountClaims, claimUnitsOf, statedFigureClaims, type Claim } from './claims.js';
 import { derivedFromKnown } from './derived.js';
-import { answerWorkClaims, answerSentences, judgedOnly, judgedSituations } from './answer-claims.js';
+import { answerWorkClaims, answerSentences, judgedOnly, judgedSituations, agreedWorkClaims } from './answer-claims.js';
 import { assertMayCut, type CutAuthority } from './cut-authority.js';
 import type { ContextJudge } from './context-judge.js';
 import type { ClaimSensor } from './claim-extract.js';
@@ -226,7 +226,10 @@ export function checkDraft(skill: string, v: StandardVersion, text: string, opts
   // person's environment that the request did not give is cut (./answer-claims.ts); the rest is listed.
   const listOnly = opts.format?.claims === 'list';
   const workClaims = listOnly ? answerWorkClaims(text, opts.evidence ?? opts.material ?? '', claims) : [];
-  const judgeFlags = listOnly ? judgedOnly(text, opts.judge?.workClaims(answerSentences(text)) ?? null, workClaims) : [];
+  const judgedWork = listOnly ? opts.judge?.workClaims(answerSentences(text)) ?? null : null;
+  // Cut where the pattern and the judge agree; the pattern's own reading alone is listed (./answer-claims.ts, `agreedWorkClaims`).
+  const agreed = listOnly ? agreedWorkClaims(text, workClaims, judgedWork) : { cut: [] as Claim[], listed: [] as Claim[] };
+  const judgeFlags = listOnly ? judgedOnly(text, judgedWork, workClaims) : [];
   const situationFlags = opts.judge?.situations ? judgedSituations(text, opts.judge.situations(answerSentences(text)), [...claims, ...workClaims, ...judgeFlags]) : [];
   // ON A KIND OF WORK NOBODY MEASURED, NOTHING IS CUT. The reader's findings and the patterns' are one list
   // for the person to check: on 27 real competitive analyses the cut deleted 32 legitimate sentences of 41.
@@ -234,9 +237,10 @@ export function checkDraft(skill: string, v: StandardVersion, text: string, opts
   // Each finding's own words say what a cut does; here nothing is cut, and the words say so.
   const everyFinding = unmeasured ? [...claims, ...(reading?.gate ? reading.claims.filter((c) => !claims.some((x) => x.start === c.start)) : [])]
     .sort((x, y) => x.start - y.start).map((c) => ({ ...c, why: c.why.replace(/: the sentence is cut; /, ': listed for you to check; ') })) : [];
-  const toCut = unmeasured ? [] : listOnly ? workClaims : claims;
+  const toCut = unmeasured ? [] : listOnly ? agreed.cut : claims;
   const toList = unmeasured ? everyFinding
-    : listOnly ? [...claims.filter((c) => !workClaims.some((w) => w.start === c.start)), ...judgeFlags.filter((j) => !claims.some((c) => c.start === j.start)), ...situationFlags] : [];
+    : listOnly ? [...claims.filter((c) => !agreed.cut.some((w) => w.start === c.start)), ...agreed.listed.filter((l) => !claims.some((c) => c.start === l.start)),
+      ...judgeFlags.filter((j) => !claims.some((c) => c.start === j.start)), ...situationFlags] : [];
   // A COUNT WRITTEN IN WORDS IS LISTED, NEVER CUT. "Nine people", "three of your prospects": the pattern check
   // reads a spelled-out count with less confidence than a figure in digits (./claims.ts, wordCountClaims), and a
   // review found it in true sentences. Whatever the kind of work, these join the list for the person to check

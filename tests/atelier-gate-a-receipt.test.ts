@@ -77,13 +77,15 @@ describe('the receipt of a method build', () => {
     expect(receipt).not.toBeNull();
     expect(receipt!.skillVersionHash).toBe(active);
     expect(receipt!.methodHash).not.toBeNull();
-    expect(receipt!.corpusHash).toBeNull();
+    // the pieces' own hash, which the profile installed on this path is kept under (cli/corpus.ts, corpusHashOf)
+    expect(receipt!.corpusHash).toMatch(/^[0-9a-f]{16}$/);
     const by = Object.fromEntries(receipt!.stages.map((s) => [s.id, s]));
     expect(by.method).toMatchObject({ ran: true });
     expect(by.persona).toMatchObject({ ran: true, detail: '2 points (1 always, 1 often)' });
     expect(by['work-form']).toMatchObject({ ran: true });
     expect(by.scope).toMatchObject({ ran: false });
-    expect(by.profile).toMatchObject({ ran: false });
+    // THE AUTHOR'S RANGE ON THE METHOD PATH: bands from the four pieces alone, installed under the pieces' own hash, with a first release
+    expect(by.profile).toMatchObject({ ran: true }); expect(String((by.profile as { detail?: string }).detail)).toMatch(/\d+ feature\(s\) banded/);
     expect(by.contrast).toMatchObject({ ran: false });
     expect(degradedStages(receipt!)).toEqual([]);
     // the short screen stays as the owner ruled it (nothing about a persona that was not asked for); the whole account
@@ -92,7 +94,7 @@ describe('the receipt of a method build', () => {
     // the same build again decides the same: the receipt hash is stable, the time is not part of it
     const again = run('build', '--name', 'code-review', '--report', ...BACKEND());
     expect(again.code, again.out).toBe(0);
-    expect(again.out).toMatch(/^Stages: method ✓ \(3 step\(s\) served whole\) · counted rules ✓ .* · work form ✓ \(documents\) · persona ✓ \(2 points \(1 always, 1 often\)\) · moves — .* · scope — the work does not answer requests · author profile — .* · signals — .* · model contrast — /m);
+    expect(again.out).toMatch(/^Stages: method ✓ \(3 step\(s\) served whole\) · counted rules ✓ .* · work form ✓ \(documents\) · persona ✓ \(2 points \(1 always, 1 often\)\) · moves — .* · scope — the work does not answer requests · author profile ✓ \(\d+ feature\(s\) banded\) · signals — .* · model contrast — /m);
     expect(store.getReceipt(L(data), store.getActive(L(data))!)!.receiptHash).toBe(receipt!.receiptHash);
   }, 120_000);
 
@@ -109,7 +111,7 @@ describe('the receipt of a method build', () => {
     expect(st.out).toMatch(/built without: persona \(the call failed.*\)\. Repair: atelier build --name code-review --persona auto/);
   }, 120_000);
 
-  it('a profile and signals left in the run folder by another build are set aside, never installed, and the build says so', async () => {
+  it('a profile and signals left in the run folder by another build are never installed: a method rebuild installs the pieces\' own profile and no signals', async () => {
     await setBackend({ byTool: { emit_persona: PERSONA, emit_holds_back: { ids: [] } } });
     const { data, run } = seed(4);
     // a first build makes the run folder; then a stale profile is planted where discovery would have written its own
@@ -117,17 +119,25 @@ describe('the receipt of a method build', () => {
     const rd = runDirOf(data);
     writeFileSync(join(rd, 'fidelity.json'), JSON.stringify({ version: 1, corpusHash: 'deadbeef', bands: [{ id: 'question', cls: 'all', band: [0, 9], median: 3, spread: 1, n: 12, role: 'SIGNAL', auc: 0.9 }], detector: null, hash: 'h', factDensity: 0 }));
     writeFileSync(join(rd, 'signals.json'), JSON.stringify([{ id: 'question', band: [0, 9], authorMedian: 3, modelMedian: 1, auc: 0.9 }]));
+    // a bare `build` installs nothing it cannot name: the planted profile is not from these pieces and is set aside
     const r = run('build', '--name', 'code-review', ...BACKEND());
     expect(r.code, r.out).toBe(0);
-    expect(fstore.getProfile(L(data))).toBeNull();
-    expect(fstore.getActiveRelease(L(data))).toBeNull();
+    expect(fstore.getProfile(L(data))?.corpusHash).not.toBe('deadbeef');
     expect(store.getSignals(L(data))).toEqual([]);
     expect(existsSync(join(rd, 'fidelity.stale.json'))).toBe(true);
-    expect(existsSync(join(rd, 'fidelity.json'))).toBe(false);
     expect(existsSync(join(rd, 'signals.stale.json'))).toBe(true);
     expect(r.out).toContain('a fidelity profile in this project\'s run folder is not from these pieces: set aside as fidelity.stale.json, not installed');
-    const receipt = store.getReceipt(L(data), store.getActive(L(data))!)!;
-    expect(receipt.stages.find((s) => s.id === 'profile')).toMatchObject({ ran: false, why: expect.stringContaining('set aside') });
     expect(readFileSync(join(rd, 'fidelity.stale.json'), 'utf8')).toContain('deadbeef');
+    // the method build again: the pieces' own profile, under their hash, and discovery's leftovers cleared, never installed
+    writeFileSync(join(rd, 'signals.json'), JSON.stringify([{ id: 'question', band: [0, 9], authorMedian: 3, modelMedian: 1, auc: 0.9 }]));
+    const again = run('new', 'examples', '--method', 'method.md', '--name', 'code-review', '--yes', ...BACKEND());
+    expect(again.code, again.out).toBe(0);
+    const prof = fstore.getProfile(L(data))!;
+    expect(prof.corpusHash).toMatch(/^[0-9a-f]{16}$/); expect(prof.bands.length).toBeGreaterThan(0); expect(prof.detector).toBeNull();
+    expect(fstore.getActiveRelease(L(data))).not.toBeNull();
+    expect(store.getSignals(L(data))).toEqual([]);
+    const receipt = store.getReceipt(L(data), store.getActive(L(data))!)!;
+    expect(receipt.stages.find((s) => s.id === 'profile')).toMatchObject({ ran: true });
+    expect(receipt.stages.find((s) => s.id === 'signals')).toMatchObject({ ran: false });
   }, 120_000);
 });

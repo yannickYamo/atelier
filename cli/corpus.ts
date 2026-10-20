@@ -10,6 +10,10 @@ import { inMaterialDir, materialDirOf, staysInside, goldenCase, MATERIAL_TEXT, t
 import { extract, looksLikeUnsplitPair, READABLE, META_NAME } from '../core/intake/extract.js';
 import { walk } from './commands/intake.js';
 import { die, loadSession } from './runtime.js';
+import { createHash } from 'node:crypto';
+
+/** The hash a build names its pieces by when they were never sealed by discovery: the texts, in order, as read. */
+export const corpusHashOf = (texts: readonly string[]): string => createHash('sha256').update(texts.join('\n\x00')).digest('hex').slice(0, 16);
 
 /**
  * Every piece of writing at `path` (a folder, or one file), as intake would read it: files about the work

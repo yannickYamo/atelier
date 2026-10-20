@@ -150,7 +150,10 @@ The evaluation opens with where the work stands:
 - **VERIFIED**: everything required was read in full, and held.
 
 A rule you wrote is required whether or not a check can read it, so work with judgement in it is never VERIFIED by
-a machine: it is yours to finish reading. A rule you stated stays required when your own examples do not follow
+a machine on its own: it is yours to finish reading, until the taste reader has earned a say on that rule. Once your
+labels have qualified the reader on a rule (`atelier taste --skill <name> --label ...`, see TASTE.md), its reading of
+the part no count reads is a qualified observation: read as followed, the rule is verified in full; read as missed, it
+fails. That is the one path by which work with judgement in it reads VERIFIED. A rule you stated stays required when your own examples do not follow
 it. The build never stops for that: the rule is checked and shown on every run, and blocks nothing until you
 confirm it (`--yes`) or change the method. `atelier verify`, `atelier report`,
 `--json` and the MCP check carry the same record (`record`), so they cannot disagree with the card.

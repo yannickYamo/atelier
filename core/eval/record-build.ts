@@ -44,7 +44,15 @@ export interface RecordFacts {
   readonly replaced?: ReadonlySet<string>;
   /** rules read on the draft (broken or held) that the delivered text is too short to read: not measured, never "does not apply" */
   readonly unmeasured?: ReadonlySet<string>;
+  /** the taste reader's reading of the delivered text, by requirement id, with whether the reader may act on that rule */
+  readonly read?: ReadonlyMap<string, RuleReading>;
 }
+
+/**
+ * One rule as the taste reader read it on the delivered text (core/taste/reader.ts), and whether the owner's labels have
+ * earned the reader VETO on that rule (core/taste/calibration.ts): the one case where a reading is a qualified observation.
+ */
+export interface RuleReading { readonly verdict: string; readonly quote?: string; readonly why: string; readonly acts: boolean }
 
 const NOTHING: Observation = { proposition: null, coverage: 'NONE', qualification: 'UNAVAILABLE', evidence: null };
 /** Why a rule was held back because the material it needs was not given: the one reason a REQUIRED rule is held back and still counted. */
@@ -52,8 +60,35 @@ export const MATERIAL_NOT_BOUND = 'the material it needs is not bound';
 /** Why a rule that applies only under a condition, or is not required, was held back for want of material: set aside, as before. */
 export const CONDITIONAL_NOT_BOUND = 'the material it needs is not bound, and it applies only under a condition or is not required';
 
-/** One rule of the standard as it fared: what it is and whether its check may block come from the plan, never from here. */
+/**
+ * A RULE THE CHECK COULD ONLY PARTLY HOLD, READ BY A READER THAT HAS EARNED ITS SAY. VERIFIED is every required rule
+ * established by a qualified observer with full coverage (core/eval/record.ts). A method step with a part no count reads
+ * ("two or three sentences on what the change does") was always left for the person, so a method with one such step
+ * never read VERIFIED, however often it was followed. The taste reader reads that part on every run; once the owner's
+ * labels have earned it VETO on the rule (core/taste/calibration.ts), it is the qualified observer of the part: read as
+ * followed, the rule is established in full; read as missed, the rule is seen to fail. Without VETO its reading is
+ * reported beside the rule, and the entry stands as the check left it. A reading never reaches a rule that is held back
+ * for a reason of the owner's (unconfirmed, disputed by their examples, not required), a rule set aside for the request,
+ * or a rule held back for material the run was not given.
+ */
 function standardEntry(p: PlannedRule, f: RecordFacts): Entry {
+  const e = plannedEntry(p, f);
+  const r = f.read?.get(p.id);
+  if (!r?.acts || p.notEnforced !== null || e.result !== 'UNVERIFIED') return e;
+  const partly = e.reason === 'PARTLY_CHECKED';
+  const unchecked = e.reason === 'NOT_MACHINE_CHECKABLE' && !e.observation.incomplete && e.observation.listed !== true;
+  if (!partly && !unchecked) return e;
+  if (r.verdict !== 'FOLLOWED' && r.verdict !== 'MISSED') return e;
+  const part = e.observation.unchecked ?? p.statement;
+  const quoted = r.quote ? `: "${r.quote}"` : '';
+  const evidence = `${partly ? `${e.observation.evidence ?? ''}; ` : ''}${r.verdict === 'FOLLOWED' ? 'read as followed' : 'read as missed'} by the taste reader on "${part}", which your labels have qualified to act on this rule${quoted}`;
+  return entry({ id: e.id, dimension: e.dimension, source: e.source, statement: e.statement, required: e.required,
+    observation: { proposition: e.observation.proposition ?? p.statement, coverage: 'FULL', qualification: 'QUALIFIED', evidence },
+    verdict: r.verdict === 'FOLLOWED' ? 'MET' : 'VIOLATED' });
+}
+
+/** One rule of the standard as the plan's check left it: what it is and whether its check may block come from the plan, never from here. */
+function plannedEntry(p: PlannedRule, f: RecordFacts): Entry {
   const required = p.role !== 'HABIT';
   const base = { id: p.id, statement: p.statement, dimension: required ? 'STANDARD' as const : 'HABIT' as const, source: p.stated ? 'METHOD' as const : 'EXAMPLE' as const, required };
   const o = p.check;

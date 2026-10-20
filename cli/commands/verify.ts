@@ -110,10 +110,12 @@ export async function verify(): Promise<void> {
   // The reading-based rules, on request (`--taste`): this calls a model, and every count here is free.
   // Read first, so `--json` prints one object holding both.
   let taste: { text: string; failed: boolean; verdicts: unknown[] } | null = null;
+  let tasteRead: { requirementId: string; verdict: string; quote?: string; why: string; acts: boolean }[] | undefined;
   if (argv.includes('--taste')) {
     const budget = { spentUsd: 0, capUsd: numericFlag('--cap', 1), maxCalls: 3 };
     try {
       const { readings, permissions, held } = await recordTaste(L, v, text, flag('--task') ?? null, null, budget);
+      tasteRead = readings.map((r) => ({ requirementId: r.requirementId, verdict: r.verdict, ...(r.quote ? { quote: r.quote } : {}), why: r.why, acts: permissions.veto.has(r.key) }));
       taste = { text: describeTaste(readings, new Map(v.requirements.map((r) => [r.requirementId, r])), permissions.veto, held),
         // A miss on a rule where the reader holds VETO fails the check, as a broken REQUIRED rule does.
         failed: vetoMisses(readings, permissions.veto).length > 0,
@@ -132,7 +134,7 @@ export async function verify(): Promise<void> {
   }), ...store.getSignals(L).map((s) => ({ id: s.id, band: s.band })), ...profileBands(L)];
   const profile = argv.includes('--profile') ? profileOf(text, bands.filter((b, i) => bands.findIndex((x) => x.id === b.id) === i)) : null;
   // THE SAME RECORD A RUN CARRIES (cli/eval-run.ts): this text, under this standard, judged the same way.
-  const record = recordForText({ L, std: v, text, report, sensor: checks.claimSensor, claimsOff: argv.includes('--allow-unsourced'), answers: checks.format?.claims === 'list', unmeasured: checks.listsBecause ?? null });
+  const record = recordForText({ L, std: v, text, report, readings: tasteRead, sensor: checks.claimSensor, claimsOff: argv.includes('--allow-unsourced'), answers: checks.format?.claims === 'list', unmeasured: checks.listsBecause ?? null });
   if (argv.includes('--json')) {
     console.log(JSON.stringify({ ...report, record, ...(profile ? { profile } : {}), failed: record.state === 'BLOCKED' || (taste?.failed ?? false), ...(classNote ? { note: classNote } : {}),
       ...(taste ? { taste: { failed: taste.failed, verdicts: taste.verdicts } } : {}) }, null, 1));

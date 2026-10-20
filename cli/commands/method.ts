@@ -13,7 +13,7 @@
 //
 // Nothing here calls a model (core/method/standard.ts). The build is one call and never stops for a disagreement
 // between the method and the examples; `--yes` confirms the steps the examples dispute, so that they block.
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, statSync, rmSync } from 'node:fs';
 import { basename, resolve } from 'node:path';
 import { DATA, argv, die, flag, positional, loadSession, saveSession, archiveSession, authoredIdAllocator, runFile, sha, canReach, contextReaderClient, contextReaderModel } from '../runtime.js';
 import * as store from '../../core/state/store.js';
@@ -32,10 +32,12 @@ import type { GoldenCase } from '../../core/golden/case.js';
 import { proposalsAcross, countedOffers, tellOffers, grammarOffer, stepsOf, shortFormOffers, type MethodProposal } from '../../core/method/standard.js';
 import { shortFormOptions, type ShortFormOptions } from '../../core/observers/short-form.js';
 import { ensureGrammar } from '../../core/observers/grammar.js';
-import { readCase, corpusFiles } from '../corpus.js';
+import { readCase, corpusFiles, sessionCorpus, corpusHashOf } from '../corpus.js';
+import { buildProfile } from '../../core/fidelity/profile.js';
+import { SELECTION } from '../../core/observers/selection.js';
+import { withoutFrontMatter } from '../../core/composite/authors.js';
 import { shortFormFolder } from './intake.js';
 import { MIN_GOLDEN_CHARS } from '../../core/discovery/chain/corpus-import.js';
-import { withoutFrontMatter } from '../../core/composite/authors.js';
 import { observesOf, propositionOf, type Observes } from '../../core/eval/observes.js';
 import { planFor, describePlan } from '../../core/plan/execution-plan.js';
 import { ratifyClose } from './ratify.js';
@@ -377,6 +379,19 @@ export async function method(): Promise<void> {
   if (!argv.includes('--class') && notePath !== null) store.setDocClass({ root: DATA, skillName: name }, kind);
   // THE BUILD SAYS A GREAT DEAL (the standard's hash, the size of the export, what no instrument measures): all of it
   // true, none of it what a person needs to start. It is kept for --report, and shown whole if the build fails.
+  // THE AUTHOR'S RANGE ON THIS PATH TOO (core/fidelity/profile.ts). A skill built from a method and pieces had no
+  // profile: no band of the author's own features, nothing to choose a draft by or to read an output against, no
+  // release to steer, while a skill from discovery had all of it. The bands need the pieces alone; the detector and the
+  // signals need the model's drafts, which this path never writes, so every band is monitored and none steers until a
+  // discovery or `atelier fidelity` adds them. Written here and installed by build under the pieces' own hash, as a
+  // discovery's is under the sealed corpus's; fewer pieces than a band can be read from leaves none, and the build says.
+  // Discovery's other artefacts (signals, retrieval, typicality) belong to the profile discovery wrote them beside, never to
+  // this one: anything another build left in the run folder is cleared, as discovery clears it before writing its own.
+  for (const f of ['fidelity.json', 'signals.json', 'retrieval.json', 'typicality.json']) rmSync(runFile(f), { force: true });
+  const pieces = folder ? sessionCorpus().map(withoutFrontMatter) : [];
+  if (pieces.length >= SELECTION.minRead) {
+    writeAtomic(runFile('fidelity.json'), JSON.stringify(buildProfile({ read: pieces.map((text, i) => ({ id: `piece-${i + 1}`, text })), held: [], model: [], corpusHash: corpusHashOf(pieces) })));
+  }
   const said: string[] = []; const log = console.log;
   if (!whole) console.log = (...a: unknown[]) => { said.push(a.map(String).join(' ')); };
   try { ratifyClose(); await build(name); } catch (e) { console.log = log; for (const l of said) console.log(l); throw e; } finally { console.log = log; }

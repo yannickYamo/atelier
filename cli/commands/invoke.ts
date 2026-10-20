@@ -866,7 +866,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
     const kept = delivered as Delivered | null;
     const finalReport = !std || contractFile !== null ? null : kept?.output === rec.output ? kept.report
       : await checkDraftAsync(name, std, rec.output, checks).catch(() => null);
-    evaluation = buildRunEval({ L, rec, std, sensor: checks.claimSensor, claimsOff: argv.includes('--allow-unsourced'),
+    evaluation = buildRunEval({ L, rec, std, sensor: checks.claimSensor, claimsOff: argv.includes('--allow-unsourced'), readings: taste?.readingsOf(rec.output),
       answers: checks.format?.claims === 'list', unmeasured: checks.listsBecause ?? null, profile: fid?.profile ?? null,
       format: { words: formatAsked ?? null, shape, withheld: presentationWithheld }, taste: tasteMonitor, moves: movesMonitor, costUsd: spent,
       // Where the cost went (core/inference/client.ts, `SpendPurpose`) and what the writer was sent, in words.
@@ -1059,6 +1059,10 @@ class TasteSession {
     }
   }
 
+  /** The reading of one text, rule by rule, with whether the reader may act on each: what the record takes (cli/eval-run.ts). */
+  readingsOf(text: string): { requirementId: string; verdict: string; quote?: string; why: string; acts: boolean }[] {
+    return (this.readings.get(text) ?? this.taken ?? []).map((r) => ({ requirementId: r.requirementId, verdict: r.verdict, ...(r.quote ? { quote: r.quote } : {}), why: r.why, acts: this.veto.has(r.key) }));
+  }
   /** Recorded on every output, said in one line. */
   async report(report: RunReport, rec: Invocation, name: string): Promise<TasteMonitor | null> {
     return reportTaste(report, { L: this.L, std: this.std, rec, asked: this.asked, budget: this.meter, tasteOn: true,

@@ -188,6 +188,30 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
   not an age plus a breathing rate, and past eighty operands nothing is worked. Replayed on the forty outputs: the
   figures the check could not place fell from 15 a draft to 0.1.
 
+### Three things a review found unfinished, finished
+
+- **VERIFIED was unreachable on a method with judgement in it.** A step like "Open with a Summary: two or three
+  sentences on what the change does" was checked by code for the part a count holds (a Summary section, with
+  something in it) and left for the person on the rest, on every run, however often the taste reader had read the
+  rest as followed: 160 runs of one study, none VERIFIED. The reader's reading now enters the record on a rule where the
+  owner's labels have earned it VETO (`core/eval/record-build.ts`): read as followed, the rule is established in full by
+  a qualified observer; read as missed, it is seen to fail. Without VETO nothing moves, and a rule the owner holds back,
+  set aside for the request, or held for missing material is never reached. `verify --taste` carries the same readings.
+- **Review prose was failed for describing the change under review.** On an answer the pattern's work claims were cut
+  on their own, and on code reviews they read "This change adds a method on the settings" as work the assistant did and
+  "a file claiming 500 rows and supplying 3 is accepted" as a result seen: 14 of 34 blocked reviews in one study, every
+  one a description of the diff. A pattern's work claim is now cut where the context judge read the sentence as work
+  too, and listed for the person where it did not (`core/loop/answer-claims.ts`, `agreedWorkClaims`); with no judge
+  the pattern decides alone, as before, and an identifier from the person's system that nothing given shows stays the
+  pattern's to cut. Replayed with the judge on those reviews: it agreed on none of the 12 work claims, so all 12 are
+  listed and none cut.
+- **A skill built from a method and pieces had no author's range.** Only discovery wrote a fidelity profile, so a
+  method build had no bands, no release, nothing to choose a draft by or to read an output against. The method path now
+  builds the bands from the pieces alone when there are four or more (`cli/commands/method.ts`), installed under the
+  pieces' own hash with a first release; the detector and the signals still need model drafts, so every band monitors
+  and none steers until a discovery adds them. Anything another build left in the run folder is cleared first, as
+  discovery clears it, so a stale profile or signals file is never installed beside it.
+
 ### A run spends what its draft needs: the second draft on demand, the claim reader on the text delivered
 
 - **The second draft is written only when the first wants a rival.** A release plans two drafts and kept the better

@@ -170,6 +170,7 @@ describe('the receipt on one golden, and with no model', () => {
     expect(receipt.models.contextReader).toBe('none');
     expect(receipt.stages.find((s) => s.id === 'persona')).toMatchObject({ ran: false, why: expect.stringContaining('no model read the pieces') });
     expect(receipt.stages.find((s) => s.id === 'work-form')).toMatchObject({ ran: true });
-    expect(receipt.stages.find((s) => s.id === 'profile')).toMatchObject({ ran: false });
+    // the author's range needs no model: four pieces give their bands on this path too (cli/commands/method.ts)
+    expect(receipt.stages.find((s) => s.id === 'profile')).toMatchObject({ ran: true });
   }, 120_000);
 });

@@ -88,6 +88,25 @@ function environmentIdentifier(s: string, known: string): string | null {
 export const answerSentences = (text: string): string[] => claimUnitsOf(text).map((u) => text.slice(u.start, u.end));
 
 /**
+ * THE PATTERN ALONE LISTS; THE PATTERN AND THE JUDGE TOGETHER CUT. On an answer the pattern's work claims were cut on
+ * their own, and on review prose they read "This change adds a method on the settings" as work the assistant did and
+ * "a file claiming 500 rows and supplying 3 is accepted" as a result seen (14 of 34 reviews in a study, every one the
+ * description of the change under review). Where the context judge read the same sentences and did not read them as
+ * work claimed, the pattern's claim is listed for the person and not cut; where both read it so, it is cut as before.
+ * With no judge reading (no model, or not read), the pattern decides alone, as it did. An identifier from the person's
+ * system that nothing given shows stays the pattern's to cut: the judge does not read for that.
+ */
+export function agreedWorkClaims(text: string, workClaims: readonly Claim[], judged: ReadonlySet<number> | null): { readonly cut: Claim[]; readonly listed: Claim[] } {
+  if (judged === null) return { cut: [...workClaims], listed: [] };
+  const units = claimUnitsOf(text);
+  const starts = new Set([...judged].map((i) => units[i]?.start).filter((s): s is number => s !== undefined));
+  const isWork = (c: Claim): boolean => c.why.startsWith('a claim of work done or a result seen');
+  const cut = workClaims.filter((c) => !isWork(c) || starts.has(c.start));
+  const listed = workClaims.filter((c) => !cut.includes(c)).map((c) => ({ ...c, why: `${c.why} (read so by the pattern alone; the context judge did not read it as work claimed: listed for you to check)` }));
+  return { cut, listed };
+}
+
+/**
  * The sentences the context judge read as work done or results that the patterns did not: listed for the
  * person to check, never cut. The judge is not measured (./cut-authority.ts), so it may flag, not delete.
  */

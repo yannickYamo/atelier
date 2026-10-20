@@ -45,6 +45,30 @@ describe('the context judge reads the answer against the request and its materia
   });
 });
 
+describe('a work claim the pattern reads is cut only where the context judge read it so; the pattern alone lists', () => {
+  const REVIEW = 'This change adds a method on the settings service. Checked the handler: it drops the header on retries.';
+  const mkJudge = (work: number[]): ContextJudge => ({ requestIntent: () => Promise.resolve(null), standsAlone: () => Promise.resolve(null),
+    readAnswer: () => Promise.resolve(), workClaims: () => new Set(work), situations: () => new Set() });
+  it('the judge read neither as work: both of the pattern\'s claims are listed for the person, nothing is cut, the draft is not failed', async () => {
+    const r = await checkDraftAsync('d', v, REVIEW, { ...answers, judge: mkJudge([]), context: { request: 'Review this change.' } });
+    expect(r.failed).toBe(false);
+    expect(r.checked.find((c) => c.requirementId === 'UNSOURCED')?.result.verdict).toBe('MET');
+    const listed = r.checked.find((c) => c.requirementId === 'UNSOURCED·check')?.result.spans ?? [];
+    expect(listed.map((x) => x.text)).toContain('Checked the handler: it drops the header on retries.');
+    expect(listed.find((x) => x.text.startsWith('Checked the handler'))?.why).toMatch(/read so by the pattern alone; the context judge did not read it as work claimed/);
+  });
+  it('the judge read the same sentence as work: the pattern\'s claim is cut, as before', async () => {
+    const r = await checkDraftAsync('d', v, REVIEW, { ...answers, judge: mkJudge([1]), context: { request: 'Review this change.' } });
+    const cut = r.checked.find((c) => c.requirementId === 'UNSOURCED')!;
+    expect(cut.result.verdict).toBe('VIOLATED');
+    expect(cut.result.spans.map((x) => x.text)).toEqual(['Checked the handler: it drops the header on retries.']);
+  });
+  it('no judge read: the pattern decides alone, as it did', async () => {
+    const r = await checkDraftAsync('d', v, REVIEW, { ...answers, context: { request: 'Review this change.' } });
+    expect(r.checked.find((c) => c.requirementId === 'UNSOURCED')?.result.spans.map((x) => x.text)).toEqual(['Checked the handler: it drops the header on retries.']);
+  });
+});
+
 describe('a carried-over fact is listed on any kind of work, never cut', () => {
   it('CORS from an example\'s case, said of "Thanks, that solved it."', async () => {
     const examples = 'The request it answered: My frontend can\'t call the API; blocked by CORS policy.\n\nWhat I wrote:\n\nAllow the origin in the CORS config.';

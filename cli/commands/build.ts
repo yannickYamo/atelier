@@ -10,7 +10,8 @@ import { withoutFrontMatter } from '../../core/composite/authors.js';
 import { selectCompositePieces, selectVoicePieces, selectWithinBudget, isExcerpt, usualLength, lengthSpan, compositeLength, PIECE_BUDGET_WORDS, COMPACT_PIECE_BUDGET_WORDS, COMPACT_PIECE_FORM, WRITING_PIECE_BUDGET_WORDS, type PieceForm, type Voice } from '../../core/compiler/voice.js';
 import { derivePersona, reconcilePersona, standardForbids, describeCounts } from '../../core/compiler/persona.js';
 import type { Budget } from '../../core/inference/client.js';
-import { sessionCorpus, sessionPairs, unsplitPairs } from '../corpus.js';
+import { sessionCorpus, sessionPairs, unsplitPairs, corpusHashOf } from '../corpus.js';
+import { SELECTION } from '../../core/observers/selection.js';
 import { splitRequest } from '../../core/intake/extract.js';
 import { standardWordingOf, sharedAmong } from '../../core/observers/overlap.js';
 import { targetOf } from '../../core/observers/obligations.js';
@@ -734,7 +735,10 @@ export async function build(nameArg?: string, opts: { closing?: boolean } = {}):
   // The fidelity profile and the first implementation release (cli/fidelity.ts): what steers drafts toward
   // the author's range, below the standard and never able to move it. Only a profile of this build's sealed corpus:
   // one another build left in the run folder is set aside (`quarantineRunFiles`), and the signals written with it too.
-  const expectCorpus = s.evidence?.corpusHash ?? null;
+  // A profile is installed only for the pieces it names: discovery's under the sealed corpus's hash, a method build's
+  // under the hash of the pieces as read (cli/commands/method.ts, cli/corpus.ts `corpusHashOf`).
+  const unsealed = s.evidence ? [] : sessionCorpus().map(withoutFrontMatter);
+  const expectCorpus = s.evidence?.corpusHash ?? (unsealed.length ? corpusHashOf(unsealed) : null);
   const hadProfile = existsSync(runFile('fidelity.json')); const hadSignals = existsSync(runFile('signals.json'));
   const release = installFidelity(L, v, skill.skillVersionHash, expectCorpus);
   const aside = lastSetAside();
@@ -742,7 +746,8 @@ export async function build(nameArg?: string, opts: { closing?: boolean } = {}):
   if (release) console.log(`Implementation release ${release.id}: ${release.settings.drafts} drafts${release.settings.drafts > 1 ? ' (the first alone when it holds every rule)' : ''}, up to ${release.settings.editBudget} structural edit(s)${release.retrievalHash ? `, ${release.settings.retrievalK} of your passages retrieved per request` : ''}.`);
   const installed = release ? fstore.getProfile(L) : null;
   recordStage('profile', installed ? { ran: true, detail: `${installed.bands.filter((b) => b.cls === 'all').length} feature(s) banded` }
-    : { ran: false, why: hadProfile ? 'a profile in the run folder was not from these pieces: set aside' : s.evidence ? 'discovery wrote no profile' : 'no sealed corpus was read with a model: no bands' });
+    : { ran: false, why: hadProfile ? 'a profile in the run folder was not from these pieces: set aside' : s.evidence ? 'discovery wrote no profile'
+      : unsealed.length && unsealed.length < SELECTION.minRead ? `fewer than ${SELECTION.minRead} pieces: no bands` : unsealed.length ? 'no profile was written for these pieces' : 'no pieces: no bands' });
   // The author's signals, read off their pieces against the model's drafts at discovery (never a rule): installed with
   // the profile they were written beside, never without it.
   if (release && existsSync(runFile('signals.json'))) store.setSignals(L, readJson<StoredSignal[]>(runFile('signals.json'), { what: 'the discovered signals', kind: 'array' }));
