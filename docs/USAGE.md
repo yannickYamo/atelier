@@ -326,14 +326,8 @@ Every run's panel says how typical of you the output is: "as typical as 35% of y
 output as one point over the features that separate you from the model, and compares its distance with your own
 pieces' distances from each other. `atelier fidelity --skill <name> --typicality` asks the question over all your
 runs: can a classifier tell your outputs from your pieces (an AUC of 0.5 means it cannot), and are your outputs as
-varied as you are. `invoke --until-typical 0.3` writes more rounds until an output is at least that typical, and
-never trades a REQUIRED rule for it. `--until-author 0.5` does the same on the style detector: more rounds until it
-reads the output as yours at least half the time. `--select sample` draws among drafts the rules cannot separate by
-how likely each is yours, instead of always taking the most typical one, so your outputs keep your spread.
-`--context local` holds drafts to your range on the request's subject: your pieces nearest the request set it,
-pulled toward your usual range when few are near, and your ratified rules never move. A sealed offline test found
-it told your pieces from the model's no better than the usual range ([result](../studies/CONTEXT_BANDS_RESULT.md)),
-so it is off unless you ask for it.
+varied as you are. The typicality and the detector monitor and record; steering on them is an instrument under
+study (below), off unless you ask for it.
 
 A text farther from your pieces than any of them is from the rest reads "beyond every piece of yours", with both
 distances: the share cannot go below 1 in (your pieces + 1), so past your farthest piece it says nothing. The
@@ -399,6 +393,24 @@ steers and never blocks. `atelier report --skill <name>` shows the grouping, eve
 `atelier fix "<what was wrong>"` changes any of it, and `--admire "<what you like>"` weighs the traits you name up.
 Two writers with three or more pieces each are told apart reliably; three or more may be read as two, and a folder too
 small to tell stays one voice.
+
+### Instruments under study (opt-in)
+
+Everything a run does by default is there because a measured failure asked for it: the brief, drafts on demand,
+the repair of required rules, the claim check, grounding, the request's length. The instruments below exist in the
+code, each behind its own flag on `atelier invoke`, and none has a sealed result that moved it onto the default
+path. `atelier lab` lists them. They stay until a study moves one onto the default path or removes it.
+
+| flag | what it does | what is known |
+|---|---|---|
+| `--fidelity`, `--edits <n>` | structural edits toward your range after the checks | the B6 study kept 0 of 20 whole-text edits; in-range share 0.733 against 0.738 at 3.3 times the cost |
+| `--until-typical <share>`, `--until-author <p>`, `--shape-rounds <n>` | more rounds until an output is as typical of you as that share of your own pieces, or until the detector reads it as yours; a REQUIRED rule is never traded for it | the detector does not carry across model families; typicality misread long texts |
+| `--select sample` | among drafts the rules cannot separate, draw one by how likely it is yours | not studied |
+| `--context local` | your range on the request's subject, from your nearest pieces | a sealed offline test found it no better than the usual range ([result](../studies/CONTEXT_BANDS_RESULT.md)) |
+| `--nearness reader` | your nearest pieces found by subject, read by a small model | not studied on an outcome |
+| `--structure plan`, `--sections` | drafts written against a skeleton of your paragraph moves, or section by section | not studied |
+| `--examples-first` | your pieces, method and rules served with no description of how you sound | the study that would decide it has not run |
+| `--voice incontext` | the voice pass from a pair bank (next section) | whether it moves your voice has not been measured |
 
 ### Voice, and other registers (opt-in)
 
