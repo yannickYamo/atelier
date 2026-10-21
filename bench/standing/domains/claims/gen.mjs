@@ -42,7 +42,7 @@ const memo = (i, ins, place, items, how, [a, b], locked) => {
     `${ins} reported the loss on ${date(i)} [notice of loss].`,
     `The loss occurred at ${place} [notice of loss].`,
     `The items are ${items[0]} and ${items[1]} [invoice 1], [invoice 2].`,
-    k === 'contents' ? `The ${/theft/.test(how) ? 'theft' : 'damage'} was reported to the police on ${reportDate(i)} [police report].` : `The incident was recorded on ${reportDate(i)} [incident report].`,
+    /theft/.test(how) ? `The theft was reported to the police on ${reportDate(i)} [police report].` : `The incident was recorded on ${reportDate(i)} [incident report].`,
     /theft/.test(how) ? `The ${locked ? 'items were in a locked container at the time' : 'items were not in a locked container at the time'} [police report].` : null,
   ].filter(Boolean);
   const coverage = [

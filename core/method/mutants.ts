@@ -46,8 +46,8 @@ export const STEP_MUTANTS_SCHEMA: Record<string, unknown> = {
   required: ['mutants'], additionalProperties: false,
 };
 
-/** A reader numbers the parts of one step 1a, 1b: each is about step 1. */
-export const baseId = (id: unknown): string | null => (typeof id === 'string' ? (/^(\d+)[a-z]?$/i.exec(id.trim())?.[1] ?? null) : null);
+/** A reader numbers the parts of one step 1a, 1-b, 1.c: each is about step 1. */
+export const baseId = (id: unknown): string | null => (typeof id === 'string' ? (/^(\d+)(?:[-.]?[a-z])?$/i.exec(id.trim())?.[1] ?? null) : null);
 
 const occurrences = (hay: string, needle: string): number => { if (!needle) return 0; let n = 0; let at = hay.indexOf(needle); while (at !== -1) { n++; at = hay.indexOf(needle, at + needle.length); } return n; };
 

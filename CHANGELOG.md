@@ -72,8 +72,14 @@ other step's mutant. So every written check reports and blocks nothing, which is
 defects, `atelier verify` offline: the wrong reserve is named by the reserve check ("reserve 2050 does not match invoice
 sum 1850") and by the figure checks; the uncited fact by the citation check; the speculation BLOCKED by the banned
 words; the wrong date only by the strict figure check; the unaddressed exclusion by no check, which is the judgement
-the reader reads under `--taste`. Next: more grounded mutants per step (one is not four), a second repair round, and the
-figure check's strictness; then the two-domain run.
+the reader reads under `--taste`. Three more builds after that: mutants asked for one step at a time (four grounded per step where the reader's edits
+are verbatim), a check that fails the owner's work sent back twice with the examples named, and a fixture fixed (a fire
+claim's memo had cited a police report the file did not hold; the citation check was right). Each build read the steps
+differently: 7, 5 and 7 of 8 checked, the coverage and decision steps written in one build and judgement in the next,
+and the same step's written check passing 9 of 10 examples in one build and 0 of 10 in the next. **No written check
+qualified in any build**, and that is the finding: the reader's one draw is not a standard. Next: draw each written
+check several times and keep the one that qualifies best on the examples and the mutants, as a run keeps the best of its
+drafts; then the two-domain run.
 ### The correction a qualified check supplies, and the certificate on every record
 
 - **A figure the check computed may be put in place by code.** The integrity guard refuses any rewrite that moves a

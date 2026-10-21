@@ -479,8 +479,10 @@ async function qualifyWritten(proposals: readonly MethodProposal[], cases: reado
   const example = cases[lead] ?? cases[0];
   const steps = written.map((p, i) => ({ id: String(i + 1), text: p.statement, means: Array.isArray(p.measurement?.params.means) ? String(p.measurement.params.means[0]) : p.statement }));
   const noModel = !canReach('discovery') || argv.includes('--no-model');
-  const d = await readContext(STEP_MUTANTS, { steps, example: example.reference }, noModel ? null : contextReaderClient(), noModel ? null : contextReaderModel(), { spentUsd: 0, capUsd: 0.2, maxCalls: 1 });
-  if (argv.includes('--report')) console.log(`(edits that break each written check's step: ${d.by === 'model' ? `written by ${contextReaderModel()}` : `none (${d.why ?? 'nothing to read'})`}.)`);
+  // ONE CALL PER STEP: asked for several steps at once, the reader wrote edits for the first and stopped.
+  const read = await Promise.all(steps.map((st) => readContext(STEP_MUTANTS, { steps: [st], example: example.reference }, noModel ? null : contextReaderClient(), noModel ? null : contextReaderModel(), { spentUsd: 0, capUsd: 0.2, maxCalls: 1 })));
+  const d = { by: read.some((r) => r.by === 'model') ? 'model' as const : read[0]?.by ?? 'floor' as const, why: read[0]?.why, value: Object.fromEntries(steps.map((st, i) => [st.id, read[i].value[st.id] ?? []])) };
+  if (argv.includes('--report')) console.log(`(edits that break each written check's step: ${d.by === 'model' ? `written by ${contextReaderModel()}: ${steps.map((st) => `${st.id}: ${d.value[st.id].length}`).join(', ')}` : `none (${d.why ?? 'nothing to read'})`}.)`);
   const context = (c: ExampleCase): { request?: string; material: readonly { name: string; text: string }[] } => ({ ...(c.task ? { request: c.task } : {}), material: c.material });
   const examples = cases.map((c) => ({ text: c.reference, context: context(c) }));
   const mutantsOf = (id: string): { text: string; context: ReturnType<typeof context> }[] => (d.value[id] ?? []).map((m) => ({ text: mutate(example.reference, m), context: context(example) }));
@@ -491,14 +493,16 @@ async function qualifyWritten(proposals: readonly MethodProposal[], cases: reado
     if (!id || !p.measurement) { out.push(p); continue; }
     const own = mutantsOf(id); const others = steps.filter((s) => s.id !== id).flatMap((s) => mutantsOf(s.id));
     let m = p.measurement; let q = qualifyCheck(m, examples, own, others);
-    // A CHECK THAT FAILS THE OWNER'S OWN WORK IS SENT BACK ONCE with the example it failed and what it said of it.
-    if (!q.qualified && q.examples.passed < q.examples.read && !noModel) {
-      const failing = examples.map((x, k) => ({ x, k, r: measure(x.text, m, x.context) })).find((y) => y.r.verdict === 'VIOLATED');
-      if (failing) {
-        const src = Array.isArray(m.params.source) ? m.params.source.join('\n') : '';
-        const r = await readContext(STEP_CHECK_REPAIR, { step: { id, text: p.statement, under: null }, means: steps[Number(id) - 1].means, source: src, problem: `fails the finished example ${cases[failing.k]?.id ?? failing.k + 1}: the check said "${failing.r.detail}"`, example: failing.x.text, material: failing.x.context.material }, contextReaderClient(), contextReaderModel(), { spentUsd: 0, capUsd: 0.1, maxCalls: 1 });
-        if (r.value.source) { m = { ...m, params: { ...m.params, source: r.value.source.split('\n') } }; q = qualifyCheck(m, examples, own, others); }
-      }
+    // A CHECK THAT FAILS THE OWNER'S OWN WORK IS SENT BACK, at most twice, with the examples it failed and what it said of
+    // each: the owner's finished work holds the step by definition, so a check that fails it reads something else.
+    for (let round = 0; round < 2 && !q.qualified && q.examples.passed < q.examples.read && !noModel; round++) {
+      const failing = examples.map((x, k) => ({ x, k, r: measure(x.text, m, x.context) })).filter((y) => y.r.verdict === 'VIOLATED');
+      if (!failing.length) break;
+      const src = Array.isArray(m.params.source) ? m.params.source.join('\n') : '';
+      const problem = `fails ${failing.length} of the ${examples.length} finished examples, which all hold the step. ${failing.slice(0, 2).map((y) => `On ${cases[y.k]?.id ?? y.k + 1} the check said "${y.r.detail}"`).join('; ')}. The check reads something other than the step, or reads the example wrongly: fix the check, not the example.`;
+      const r = await readContext(STEP_CHECK_REPAIR, { step: { id, text: p.statement, under: null }, means: steps[Number(id) - 1].means, source: src, problem, example: failing[0].x.text, material: failing[0].x.context.material }, contextReaderClient(), contextReaderModel(), { spentUsd: 0, capUsd: 0.1, maxCalls: 1 });
+      if (!r.value.source) break;
+      m = { ...m, params: { ...m.params, source: r.value.source.split('\n') } }; q = qualifyCheck(m, examples, own, others);
     }
     out.push({ ...p, measurement: markQualified(m, q), onExample: describeQualification(q) });
   }

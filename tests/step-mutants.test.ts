@@ -11,7 +11,7 @@ const steps = [{ id: '1', text: 'Every fact cites a document in the file.', mean
 describe('grounding the mutants', () => {
   it('keeps an edit whose find occurs once in the piece and changes it; drops the rest; caps the count', () => {
     const v = STEP_MUTANTS.ground({ mutants: [
-      { id: '1a', find: 'on March 5 [police report]', replace: 'on March 5', why: 'the date loses its citation' },
+      { id: '1-a', find: 'on March 5 [police report]', replace: 'on March 5', why: 'the date loses its citation' },
       { id: '1', find: 'not in the piece', replace: 'x', why: '' },
       { id: '1', find: 'invoice', replace: 'bill', why: 'occurs twice' },
       { id: '1', find: 'Two invoices were filed', replace: 'Two invoices were filed', why: 'changes nothing' },
