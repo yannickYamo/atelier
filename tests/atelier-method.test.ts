@@ -5,6 +5,7 @@
 // measured. A step gets a check only when the owner's own example passes it. What is missing from a draft is written
 // again with it named, never patched into a sentence. And an output that follows the easy rules and says nothing is
 // not conformant: it lacks what the method requires the work to contain.
+import { CHECK_DRAWS } from '../cli/commands/method.js';
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { mp } from './helpers/step-plan.js';
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
@@ -279,7 +280,8 @@ describe('through the binary: atelier method, then a run held to the method', ()
     expect(r.out).toMatch(/Judgement: shown to the writer, reported as not measured \(1\)\n {2}- Weigh switching cost before recommending anything\./);
     expect(r.out).toMatch(/Nothing has been built\. To build exactly this: atelier method method\.md --golden acme\.md .*--name analysis/);
     expect(existsSync(join(data, 'skills', 'analysis'))).toBe(false);
-    expect(await count()).toBe(before + 2);
+    // one reading of what each step is, and CHECK_DRAWS of which check it asks for (the draws' agreement is kept)
+    expect(await count()).toBe(before + 1 + CHECK_DRAWS);
   });
 
   it('a step the example does not do stays required, and the disagreement is said once, on the build screen', () => {
@@ -312,11 +314,11 @@ describe('through the binary: atelier method, then a run held to the method', ()
     expect(r.out).not.toMatch(/Standard [0-9a-f]+ minted|EVERY OUTPUT IS CHECKED BY|Kind of work/);
     expect(r.out).toContain('Use it: atelier run "<the task>" --with <file>');
     // three readings of the steps, never a rule: what each step is (a prohibition or a thing to do), which check each asks
-    // for, held against the first (core/method/step-check.ts), then what each asks the writer to decide
-    // (core/method/decision-units.ts). Every step stays the owner's words.
-    expect(await count()).toBe(before + 3);
-    const tools = (await (await fetch(`${url()}/__log`)).json() as { bodies: string[] }).bodies.slice(-3).map((b) => (JSON.parse(b) as { tools?: { function?: { name?: string } }[] }).tools?.[0]?.function?.name);
-    expect(tools).toEqual(['emit_rule_polarity', 'emit_step_checks', 'emit_method_units']);
+    // for, drawn CHECK_DRAWS times and held against the first (core/method/step-check.ts), then what each asks the writer
+    // to decide (core/method/decision-units.ts). Every step stays the owner's words.
+    expect(await count()).toBe(before + 2 + CHECK_DRAWS);
+    const tools = (await (await fetch(`${url()}/__log`)).json() as { bodies: string[] }).bodies.slice(-(2 + CHECK_DRAWS)).map((b) => (JSON.parse(b) as { tools?: { function?: { name?: string } }[] }).tools?.[0]?.function?.name);
+    expect(tools).toEqual(['emit_rule_polarity', ...Array.from({ length: CHECK_DRAWS }, () => 'emit_step_checks'), 'emit_method_units']);
     const skill = readFileSync(join(proj, '.claude', 'skills', 'analysis', 'SKILL.md'), 'utf8');
     for (const step of stepsOf(NOTE)) expect(skill).toContain(step.text.replace(/\.$/, ''));
     expect(readFileSync(join(proj, '.claude', 'skills', 'analysis', 'examples', 'exemplar.md'), 'utf8')).toContain('Borealis wins for a small team');

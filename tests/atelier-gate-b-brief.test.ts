@@ -103,7 +103,10 @@ describe('through a run', () => {
     expect(run('new', 'examples', '--method', 'method.md', '--name', 'review', '--yes', ...BACKEND()).code).toBe(0);
     const r = run('invoke', '--skill', 'review', request, '--with', 'change=change.diff', '--json', ...BACKEND());
     expect(r.code, r.out).toBe(0);
-    const json = JSON.parse(r.out.slice(r.out.indexOf('\n{') + 1)) as { output: string | null; invocationId: string };
+    const json = JSON.parse(r.out.slice(r.out.indexOf('\n{') + 1)) as { output: string | null; invocationId: string; schema: string; state: string; record: unknown; certificate: { errorBound: null } | null };
+    // THE ONE RECORD HEAD (core/eval/certificate.ts): the keys `atelier verify --json` prints too
+    expect(json).toMatchObject({ schema: 'atelier-record/1', state: expect.stringMatching(/^(VERIFIED|NEEDS_REVIEW|BLOCKED)$/) as string, standardVersionHash: expect.stringMatching(/^[0-9a-f]+$/) as string, certificate: { errorBound: null } });
+    expect(json.record).toBeTruthy();
     const prompt = (await promptsFor('emit_piece')).at(-1) ?? '';
     expect(prompt).toContain('For this request only');
     expect(prompt).toContain("For this request, my method's steps that apply: 1, 3. Set aside, not this case: 2 (the request says \"touches nothing else\").");

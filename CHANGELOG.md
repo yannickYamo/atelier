@@ -7,6 +7,45 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+### The reading is drawn three times and code keeps the agreement; a check's standing sits beside the standard; one record head, a hook, and the last word pattern gone
+
+- **Best of three draws** (`cli/commands/method.ts`, `stepPlan`, `CHECK_DRAWS`). The step-check reading varies between
+  draws: the same four examples read 7, 5 and 7 of 8 steps as checked in three builds, and a written check that passed
+  9 of 10 examples in one build passed none in the next. The reading is now drawn three times on a build with a model
+  and code decides: a written check that qualifies on the owner's mutants first, then a listed measurement a majority of
+  draws named, then a written check that reports only, then judgement. Every written candidate is grounded, a
+  non-compiling one sent back once, the best failing one sent back up to twice with the examples it fails; the mutants
+  of a step are read once and shared by its candidates. `--report` says, per step, how many draws agreed. A draw count,
+  as drafts are: no new reading. The same plan serves `atelier skill`: each stated rule's check is read with the
+  proposal (no example to ground on: a measurement where the draws agree, a written check that reports until examples
+  exist, judgement otherwise), shown under the rule, and `--yes` asks nothing more; a grounded rule with a measurement
+  is required, as a stated step with a check is.
+- **What a written check earned is recorded beside the standard, not inside its hash**
+  (`StandardVersion.qualifications`, `core/state/canonical-state.ts`). The hash is what the owner ratified; a machine's
+  measurement of a check changes nothing they said, so a rebuild that qualifies the same check differently leaves the
+  standard's identity where it was. `qualifiedIn(standard, rule)` is the one place the standing is read (the plan, the
+  correction from a check, the certificate); the `qualified` parameter on the check is gone; a supersession carries the
+  standing of the checks it keeps and drops it for a check that was amended.
+- **One record head on every door** (`core/eval/certificate.ts`). `atelier run --json` and `atelier verify --json`
+  open with the same six keys: `schema`, `state`, `standardVersionHash`, `skillVersion`, `certificate`, `record`. The
+  certificate now names the claim instrument that read the output, whether it gated, and the rates it was measured at on
+  the kinds it was measured on, or none: "checked" says no more than the instrument earned.
+- **`atelier verify --hook`.** Verify as a Claude Code PostToolUse or Stop hook: the hook JSON on stdin (a written
+  file's content, or the file at its path, or the last answer), exit 2 with the broken rules on stderr only where
+  something required was seen to fail, which blocks the host and hands the reasons to the model; 0 otherwise, and 0
+  with a note when there is nothing to check, because a guard's own failure never blocks the person.
+- **The output contract is enforced or declared.** A skill whose rules carry an output shape says in SKILL.md where
+  the shape is held (Atelier's runtime, as the response schema) and that a host reading the package as text does not
+  hold it, naming the hook and `verify` as what does. The schema file says the same of itself.
+- **The last word pattern that read a rule's meaning is gone** (`core/observers/rule-polarity.ts`). A statement the
+  polarity reading did not read is a thing to do, in its own words; no list of negative words decides what forbids.
+  In the suite the old pattern lives on only as the test double's answer to the reading.
+- **A rule written as a numbered heading is a step** (`core/method/standard.ts`, `stepsOf`): `### 3. Keep it short`
+  followed by its paragraph is one step with that paragraph; a numbered heading over a list names the list. Form, not
+  meaning: the number is what is read.
+- **One place for the repair pass count** (`REPAIR_PASSES`, `core/loop/run-repair.ts`): `invoke`, `verify --repair`
+  and the blind-reference loop no longer each carry their own `2`.
+
 ### Which check a step asks for is read, not matched: a model names it or writes it, and code holds it
 
 - **The step readers are gone.** A step of a method note was tied to a check by patterns on its wording

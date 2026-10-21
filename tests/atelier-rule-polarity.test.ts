@@ -7,7 +7,7 @@ import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { RULE_POLARITY, polarityByWords } from '../core/observers/rule-polarity.js';
+import { RULE_POLARITY, UNREAD_KIND } from '../core/observers/rule-polarity.js';
 import { readContext } from '../core/inference/reading.js';
 import type { InferenceClient } from '../core/inference/client.js';
 
@@ -16,11 +16,11 @@ const budget = () => ({ spentUsd: 0, capUsd: 1, maxCalls: 5 });
 const input = { statements: [{ id: 'r1', text: 'Then a Suggestions section: improvements that do not block the merge.' }, { id: 'r2', text: 'The word "leverage" is never used.' }] };
 
 describe('the floor', () => {
-  it('a prohibition at the start of the sentence, and nothing else', () => {
-    expect(polarityByWords('Never use "best efforts".')).toBe('BOUNDARY');
-    expect(polarityByWords('No bullet points.')).toBe('BOUNDARY');
-    expect(polarityByWords('Then a Suggestions section: improvements that do not block the merge.')).toBe('GENERATIVE');
-    expect(polarityByWords('The word "leverage" is never used.')).toBe('GENERATIVE');
+  it('reads no words: every unread statement is a thing to do', () => {
+    // THE FLOOR READS NO WORDS: unread, a prohibition and an instruction alike are things to do in their own words.
+    const floor = RULE_POLARITY.floor({ statements: [{ id: 'a', text: 'Never use "best efforts".' }, { id: 'b', text: 'Then a Suggestions section.' }] });
+    expect(floor).toEqual({ a: UNREAD_KIND, b: UNREAD_KIND });
+    expect(UNREAD_KIND).toBe('GENERATIVE');
   });
 });
 

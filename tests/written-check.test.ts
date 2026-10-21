@@ -1,6 +1,6 @@
 // tests/written-check.test.ts — A CHECK WRITTEN FOR ONE STEP RUNS IN A SANDBOX, AND IS ONLY EVER A VERDICT ON THE TEXT.
 import { describe, it, expect } from 'vitest';
-import { compileCheck, runCheck, CHECK, checkQualified, CHECK_TIME_LIMIT_MS } from '../core/observers/written.js';
+import { compileCheck, runCheck, CHECK, qualifiedIn, CHECK_TIME_LIMIT_MS } from '../core/observers/written.js';
 import { measure, validateMeasurement } from '../core/observers/registry.js';
 
 const HEX = `(text) => { const hits = []; const re = /#[0-9a-fA-F]{3,8}\\b/g; let m; while ((m = re.exec(text))) hits.push({ start: m.index, end: m.index + m[0].length, why: 'a colour written as a hex value' }); return { ok: hits.length === 0, detail: hits.length ? hits.length + ' hex colour(s)' : 'no hex colour', spans: hits, value: hits.length }; }`;
@@ -52,10 +52,10 @@ describe('the CHECK observer', () => {
   });
   it('measures through the registry like any observer, and says in words what it checks and whether it is qualified', () => {
     expect(measure('Border #fff.', m).verdict).toBe('VIOLATED');
-    expect(CHECK.describe(m.params)).toBe('no colour written as a hex value (a check written for this step, not yet qualified: it reports and blocks nothing)');
-    expect(checkQualified(m)).toBe(false);
-    const q = { ...m, params: { ...m.params, qualified: 1 } };
-    expect(checkQualified(q)).toBe(true);
-    expect(CHECK.describe(q.params)).toMatch(/qualified on your examples/);
+    expect(CHECK.describe(m.params)).toBe('no colour written as a hex value (a check written for this step)');
+    // its standing is read beside the standard, never from the check itself
+    const req = { requirementId: 'r1', measurement: m } as never;
+    expect(qualifiedIn({ requirements: [req] }, 'r1')).toBe(false);
+    expect(qualifiedIn({ requirements: [req], qualifications: { r1: { examples: { passed: 1, read: 1, of: 1 }, own: { caught: 1, of: 1 }, cross: { fired: 0, of: 0 }, qualified: true, why: null } } }, 'r1')).toBe(true);
   });
 });

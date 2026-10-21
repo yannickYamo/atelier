@@ -14,7 +14,7 @@ import { regressions, readAtLength, featureParamsOf, ruleParamsOf, enforcedNever
 import { answerSentences, judgedSituations } from '../../core/loop/answer-claims.js';
 import { groundCarried } from '../../core/loop/grounding.js';
 import { withoutServedNotes } from '../../core/loop/echo.js';
-import { checkQualified } from '../../core/observers/written.js';
+import { certificateFor, claimStandingOf, recordHead } from '../../core/eval/certificate.js';
 import { SLOT_NOTE } from '../../renderers/agent-skill/render.js';
 import { EXECUTION_BRIEF, briefNote, applyingSteps, setAsideSteps, unresolvedSteps, type BriefStep, selectMoves, type MoveSelection } from '../../core/loop/execution-brief.js';
 import { MOVE_CASES, eligibleMoves } from '../../core/loop/move-cases.js';
@@ -23,7 +23,7 @@ import { MOVE_READER, countOutcomes } from '../../core/taste/move-reader.js';
 const READ_CALLS_DEFAULT = 4;
 import { readContext } from '../../core/inference/reading.js';
 import { needsNote, needsNothing } from '../../core/loop/task-needs.js';
-import { refineToStandard, checkDraft, checkDraftAsync, withWaivers, enforceClaims, heavyCut, listedClaims, brokenByCut, gradedRules, PUBLIC_FACTS, INCONCLUSIVE, UNREAD, type CheckOptions } from '../../core/loop/run-repair.js';
+import { refineToStandard, checkDraft, checkDraftAsync, withWaivers, enforceClaims, heavyCut, listedClaims, brokenByCut, gradedRules, PUBLIC_FACTS, INCONCLUSIVE, UNREAD, REPAIR_PASSES, type CheckOptions } from '../../core/loop/run-repair.js';
 import { signalChecks, displacement, isSignal, ownerWords } from '../../core/loop/graded.js';
 import { steeredShape, steersMiss, shapeLengthAim } from '../../core/loop/shape-steer.js';
 import { signalDistance } from '../../core/observers/selection.js';
@@ -913,6 +913,8 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   if (machine === 'answer' && !refused) process.stdout.write(`${shipped}\n`);
   if (machine === 'json') {
     process.stdout.write(`${JSON.stringify({
+      // THE ONE RECORD HEAD every door prints (core/eval/certificate.ts): the same keys `atelier verify --json` gives.
+      ...recordHead({ state: evaluation?.record?.state ?? null, standardVersionHash: sv.standardVersionHash, skillVersion: sv.skillVersionHash, certificate: rec.settings?.certificate ?? null, record: evaluation?.record ?? null }),
       // `answer` is what --answer-only prints: the output with its list of specifics not found in the material.
       output: refused ? null : rec.output, answer: refused ? null : shipped, ...(strict ? { delivered: !refused } : {}), invocationId: rec.invocationId, skillVersion: sv.skillVersionHash, costUsd: Number(spent.toFixed(4)),
       rulesBroken: rec.repair?.violatedAfter ?? [], cut: rec.repair?.storiesCut ?? [], toCheck: rec.repair?.claimsToCheck ?? [],
@@ -1093,7 +1095,7 @@ export function refineDraft(c: DraftContext & { readonly client: InferenceClient
   return async (draft: string, ledger: StepLedger) => {
     // The counted checks' steps and the taste rewrite are steps on the run's one ledger (core/loop/controller.ts, rule B).
     const checks: Checks = { ...c.checks, controller: { ...c.checks.controller, ledger } };
-    const r = await refineToStandard(c.client, c.budget, c.name, c.std, draft, 2, checks);
+    const r = await refineToStandard(c.client, c.budget, c.name, c.std, draft, REPAIR_PASSES, checks);
     const taste = c.taste;
     if (!taste?.acts) return { output: r.output, repair: r.repair, report: r.report };
     let t: Awaited<ReturnType<typeof refineTaste>>;
@@ -2587,7 +2589,7 @@ function settingsFor(checks: Checks, taste: TasteSession | null, nDrafts: number
   const temperature = flag('--temperature') === undefined ? undefined : Number(flag('--temperature'));
   return {
     atelierVersion: version(),
-    ...(std ? { certificate: certificateFor(std, taste) } : {}),
+    ...(std ? { certificate: certificateFor(std, taste, claimStandingOf(checks.claimSensor)) } : {}),
     claimInstrument: checks.claimSensor?.instrument ?? null,
     // Read when the record is written, after the run: a reader that degraded mid-run says so here.
     get claim() { return claimInstrumentOf(checks); },
@@ -2599,23 +2601,6 @@ function settingsFor(checks: Checks, taste: TasteSession | null, nDrafts: number
     ...(temperature === undefined ? {} : { temperature }),
     flags: { drafts: nDrafts, noTaste: taste === null, allowUnsourced: argv.includes('--allow-unsourced'), placeholders: checks.placeholders ?? false, ...(argv.includes('--test-run') ? { testRun: true } : {}), ...(carryNote ? { carryNoteHash: sha(carryNote) } : {}),
       ...(brief ? { brief } : {}) },
-  };
-}
-
-/**
- * THE CERTIFICATE ON THE RECORD: which standard, which instruments and what each has earned, and the error bound on the
- * owner's labels where one exists. Until an audit sample of their labels drawn like production exists there is none,
- * and the record says so rather than imply one; "checked" never means more than this says.
- */
-export function certificateFor(std: Standard, taste: TasteSession | null): NonNullable<InvocationSettings['certificate']> {
-  const measured = std.requirements.filter((r) => r.authority !== 'EXPERT_REJECTED' && r.measurement);
-  const written = measured.filter((r) => r.measurement?.observer === 'CHECK');
-  return {
-    standardVersionHash: std.standardVersionHash,
-    checks: { total: measured.length, counted: measured.length - written.length, written: written.length, writtenQualified: written.filter((r) => checkQualified(r.measurement)).length },
-    readers: { taste: { veto: [...(taste?.veto ?? [])].sort(), labelledMisses: taste?.pooled.trials ?? 0, falseBlockUpper95: taste && taste.pooled.trials > 0 ? Math.round(taste.pooled.upper95 * 1000) / 1000 : null } },
-    errorBound: null,
-    why: 'no delivered-error bound: it needs an audit sample of your own labels, drawn like the work this skill does; the checks and readers above are what this output was held to',
   };
 }
 

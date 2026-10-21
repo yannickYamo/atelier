@@ -17,7 +17,7 @@
 // Prints "PORT <n>" on stdout once listening.
 
 import { createServer } from 'node:http';
-import { standInChecks } from './step-check-stand-in.mjs';
+import { standInChecks, standInPolarity } from './step-check-stand-in.mjs';
 
 let payload = { rules: [], workType: 'writing' };
 // Per-tool payloads, for commands that make more than one KIND of call (fix: a diagnosis, then a
@@ -66,6 +66,10 @@ const server = createServer((req, res) => {
         const user = (req.messages ?? []).map((m) => (typeof m.content === 'string' ? m.content : '')).join('\n');
         const block = /```json\n([\s\S]*?)\n```/.exec(user);
         if (block) { try { answer = standInChecks(JSON.parse(block[1])); } catch { answer = { checks: [] }; } }
+      }
+      // THE RULE-POLARITY READING (core/observers/rule-polarity.ts), unless scripted: answered as the word pattern once read it.
+      if (tool === 'emit_rule_polarity' && !(byTool && byTool[tool] !== undefined) && !when.some((w) => (w.contains === undefined || body.includes(w.contains)) && (w.containsAll ?? []).every((x) => body.includes(x)))) {
+        answer = standInPolarity((req.messages ?? []).map((m) => (typeof m.content === 'string' ? m.content : '')).join('\n'));
       } }
     const hit = when.find((w) => (w.contains === undefined || body.includes(w.contains)) && (w.containsAll ?? []).every((x) => body.includes(x)));
     // `{ contains, finish: 'content_filter' }` in `when`: that call ends with this finish_reason and no answer, as a

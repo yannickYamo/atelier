@@ -10,13 +10,13 @@
 //   3. it stays quiet on other steps' mutants: an edit that breaks a different step is not this step broken.
 //
 // The bars are stated here, before any check is read: every example passed, at least MUTANT_RECALL of its own mutants
-// caught, at most MUTANT_CROSS of the others' mutants fired on. A check that meets them carries `qualified: 1` in its
-// measurement and may be enforced like any counted rule; one that does not is kept, shown with what it caught and
-// missed, and blocks nothing. Mutation testing, borrowed; the rule that an instrument earns authority by measurement
+// caught, at most MUTANT_CROSS of the others' mutants fired on. A check that meets them is recorded as qualified beside
+// the standard (`StandardVersion.qualifications`, outside its hash) and may be enforced like any counted rule; one that
+// does not is kept, shown with what it caught and missed, and blocks nothing. Mutation testing, borrowed; the rule that an instrument earns authority by measurement
 // is the house's own (docs/decisions/0003-authority-by-measurement.md).
 
 import type { Reading } from '../inference/reading.js';
-import type { Measurement } from '../state/canonical-state.js';
+import type { Measurement, CheckQualification } from '../state/canonical-state.js';
 import { measure, type CheckContext } from '../observers/registry.js';
 import { quoteIsReal } from '../taste/reader.js';
 
@@ -84,17 +84,7 @@ export const STEP_MUTANTS: Reading<MutantsInput, MutantsOutput> = {
 /** The piece with one mutant applied. */
 export const mutate = (example: string, m: Mutant): string => example.replace(m.find, m.replace);
 
-export interface Qualification {
-  /** every example the check passed, of those it could read */
-  readonly examples: { readonly passed: number; readonly read: number; readonly of: number };
-  /** its own mutants caught */
-  readonly own: { readonly caught: number; readonly of: number };
-  /** other steps' mutants it fired on */
-  readonly cross: { readonly fired: number; readonly of: number };
-  readonly qualified: boolean;
-  /** why not, in words, when it is not */
-  readonly why: string | null;
-}
+export type Qualification = CheckQualification;
 
 /**
  * Hold one written check to the three bars. `examples` are the owner's finished pieces with the context each was made
@@ -116,9 +106,6 @@ export function qualifyCheck(check: Measurement, examples: readonly { text: stri
             : null;
   return { examples: { passed, read, of: examples.length }, own: { caught, of: own.length }, cross: { fired, of: others.length }, qualified: whyNot === null, why: whyNot };
 }
-
-/** The check with its qualification written into it, so the plan may enforce it and the standard's hash carries it. */
-export const markQualified = (m: Measurement, q: Qualification): Measurement => (q.qualified ? { ...m, params: { ...m.params, qualified: 1 } } : m);
 
 /** One line for the build screen. */
 export function describeQualification(q: Qualification): string {

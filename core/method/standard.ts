@@ -24,7 +24,7 @@
 // of those readings is handed in; with none, every stated step is a judgement. No pattern on a step's wording decides
 // anything here.
 
-import type { Requirement, Measurement } from '../state/canonical-state.js';
+import type { Requirement, Measurement, CheckQualification } from '../state/canonical-state.js';
 import type { GoldenCase } from '../golden/case.js';
 import { measure, type CheckContext } from '../observers/registry.js';
 import { headingsOf, sectionHeadsOf, sectionBodyOf } from '../observers/structure.js';
@@ -54,8 +54,9 @@ export interface MethodStep {
 
 /**
  * THE STEPS OF A METHOD NOTE, in order. A list item is a step. Where the note has no list, each sentence of its
- * paragraphs is. Headings are not steps: they say what the steps under them are about. Front matter, code and
- * tables are left out.
+ * paragraphs is. A heading says what the steps under it are about, with one exception of form: a NUMBERED heading
+ * followed by prose ("### 3. Keep it short", then a paragraph) is a rule written as a heading, and it is one step with
+ * its paragraph; a numbered heading over a list is the list's name. Front matter, code and tables are left out.
  */
 export function stepsOf(note: string): MethodStep[] {
   const body = (note.charCodeAt(0) === 0xFEFF ? note.slice(1) : note).replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, '').replace(/```[\s\S]*?```/g, '').replace(/<!--[\s\S]*?-->/g, '');
@@ -78,16 +79,26 @@ export function stepsOf(note: string): MethodStep[] {
     && !(lines[firstAt + 1] ?? '').trim() && lines.slice(firstAt + 1).some((l) => l.trim())
     && !/\b(?:must|never|always|do not|don't|required?|shall|only)\b/i.test(first)
     && !/^(?:open|start|begin|lead|end|close|finish|conclude|include|add|write|keep|give|put|use|state|list|name|say|check|make|call|flag|ask|point|prefer|separate|weigh|size|then)\b/i.test(first);
+  // A numbered heading waits for what follows it: prose makes it a step (the heading, then its paragraph), a list
+  // makes it that list's name, and the next heading or a table drops it.
+  let pending: string | null = null;
   for (const [at, line] of lines.entries()) {
     if (titled && at === firstAt) continue;
     const heading = /^#{1,6}\s+(.+?)\s*#*\s*$/.exec(line);
     const item = /^\s*(?:[-*+]|\d+[.)])\s+(.*)$/.exec(line);
-    if (heading) { closeItem(); closePara(); under = heading[1].replace(/[*_`]/g, '').trim(); continue; }
+    if (heading) {
+      closeItem(); closePara(); under = heading[1].replace(/[*_`]/g, '').trim();
+      const numbered = /^\d+[.)]\s+(.+)$/.exec(under);
+      pending = numbered ? numbered[1].trim() : null;
+      continue;
+    }
     // What the work needs before it starts is not a step of it: a list of inputs says what to bind, not what to do.
     if (under !== null && /^(?:required\s+)?(?:inputs?|prerequisites?)$/i.test(under.trim())) continue;
-    if (/^\s*\|/.test(line)) { closeItem(); closePara(); continue; }
-    if (item) { closeItem(); closePara(); open = [item[1]]; continue; }
+    if (/^\s*\|/.test(line)) { closeItem(); closePara(); pending = null; continue; }
+    if (item) { closeItem(); closePara(); pending = null; open = [item[1]]; continue; }
     if (!line.trim()) { closeItem(); closePara(); continue; }
+    // VERBATIM: the heading's words then the paragraph's, nothing added between them, so the step is still a passage of the note.
+    if (pending !== null) { open = [pending]; pending = null; }
     if (open) open.push(line.trim()); else para.push(line.trim());
   }
   closeItem(); closePara();
@@ -155,6 +166,8 @@ export interface MethodProposal {
   readonly byName?: true;
   /** The check was tied to the step by its subject (sources, figures), not by what it asks: near the rule, and not the rule. */
   readonly related?: true;
+  /** A written check's standing on the owner's examples and their mutants (core/method/mutants.ts); recorded beside the standard. */
+  readonly qualification?: CheckQualification;
   /**
    * Counted off the examples and said by no step: how the pieces are written (a sentence length, a paragraph cap, a
    * word never used). A rule of style, not a part of the work: shown, used to choose between drafts, and repaired
@@ -191,7 +204,7 @@ export function methodProposals(note: string, example: Pick<GoldenCase, 'task' |
     const r = read(m);
     claimed.add(m.observer === 'TABLE' ? `TABLE:${(m.params.columns as readonly string[]).join('|')}` : m.observer);
     if (m.observer === 'PRESENCE') for (const sec of ((m.params.sections as readonly string[] | undefined) ?? [])) claimedSections.add(norm(sec));
-    out.push({ statement: step.text, origin: 'STATED', obligation: targetOf(m.observer) === 'BOUND_MATERIAL' ? 'EXECUTION' : 'DELIVERABLE', measurement: m, onExample: unreadable(m) ? 'could not be read on it: it carries no material' : r.detail, conflict: against(r, m), ...(given?.near ? { related: true as const } : {}) });
+    out.push({ statement: step.text, origin: 'STATED', obligation: targetOf(m.observer) === 'BOUND_MATERIAL' ? 'EXECUTION' : 'DELIVERABLE', measurement: m, onExample: unreadable(m) ? 'could not be read on it: it carries no material' : r.detail, conflict: against(r, m), ...(given?.near ? { related: true as const } : {}), ...(given?.qualification ? { qualification: given.qualification } : {}) });
   }
   // WHAT THE NOTE LAYS OUT AS A TEMPLATE: its own section headings and its own tables are the owner saying what the
   // work contains, as plainly as a sentence would. Each is held against the example like any stated step: sections

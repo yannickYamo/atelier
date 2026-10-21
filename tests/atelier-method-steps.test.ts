@@ -589,3 +589,12 @@ describe('what a blind set of method notes showed: a check tied to a step that a
     expect(of('Add a table with the columns Metric, Before, After and Change.')).toEqual({ observer: 'TABLE', params: { columns: ['metric', 'before', 'after', 'change'], minRows: 1 } });
   });
 });
+
+describe('a rule written as a numbered heading', () => {
+  it('is one step with its paragraph; a numbered heading over a list names the list; a bare one is nothing', () => {
+    const note = '# How I review\n\n### 1. Keep it short\n\nOne idea per sentence. Cut the preamble.\n\n### 2. Order\n\n- Verdict first.\n- Then the risks.\n\n### 3. Tone:\nPlain words.\n\n### 4. Empty\n\n## Words to cut\n\nNever write "leverage".\n';
+    // verbatim: the heading's words, then its paragraph's, nothing added between them
+    expect(stepsOf(note).map((s) => s.text)).toEqual(['Keep it short One idea per sentence. Cut the preamble.', 'Verdict first.', 'Then the risks.', 'Tone: Plain words.', 'Never write "leverage".']);
+    expect(stepsOf(note).map((s) => s.under)).toEqual(['1. Keep it short', '2. Order', '2. Order', '3. Tone:', 'Words to cut']);
+  });
+});

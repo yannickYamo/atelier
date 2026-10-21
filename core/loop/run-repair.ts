@@ -686,8 +686,11 @@ export function withGraded(report: VerifyReport, ids: ReadonlySet<string>): Veri
 /** The report with the invented-claim line left out: what a model rewrite may be pointed at. */
 const withoutClaims = (r: VerifyReport): VerifyReport => ({ ...r, checked: r.checked.filter((c) => c.requirementId !== 'UNSOURCED' && c.requirementId !== INCONCLUSIVE && c.requirementId !== UNREAD) });
 
+/** How many rewrite passes a repair may run on one draft: the one place the count is set, for every door (invoke, verify --repair, fix). */
+export const REPAIR_PASSES = 2;
+
 export async function refineToStandard(
-  client: InferenceClient, budget: Budget, skill: string, v: StandardVersion, draft: string, maxPasses = 2,
+  client: InferenceClient, budget: Budget, skill: string, v: StandardVersion, draft: string, maxPasses: number = REPAIR_PASSES,
   opts: CheckOptions = {},
 ): Promise<Refined> {
   // A caller that hands no ledger (verify --repair, fix) runs this refinement as the run: a repair chain of its own, in

@@ -493,8 +493,10 @@ export function ratifyClose(): void {
       + '\n  atelier ratify-close --reason "<why the standard changed>"'
       + '\nA version history without reasons can be counted, not audited.');
   }
+  // A WRITTEN CHECK'S STANDING RIDES BESIDE THE STANDARD, outside the hash (core/state/canonical-state.ts, `qualifications`).
+  const qualifications = Object.fromEntries(Object.entries(s.qualifications ?? {}).filter(([id]) => kept.some((r) => r.requirementId === id)));
   const v: StandardVersion = { standardVersionHash: hash, ...body, authorityState: authorityStateOf(kept), mintedAt: new Date().toISOString(),
-    supersedes, reason };
+    supersedes, reason, ...(Object.keys(qualifications).length ? { qualifications } : {}) };
   s = step(s, 'RATIFIED', { standardVersionHash: v.standardVersionHash, supersedes });
   // The decisions are stamped with the version they produced, and the ledger is written beside the
   // standard rather than inside it. A standard says what is; the ledger says who decided it and what

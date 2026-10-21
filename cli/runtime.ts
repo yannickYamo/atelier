@@ -16,7 +16,7 @@ import * as store from '../core/state/store.js';
 import { readJson } from '../core/state/read-json.js';
 import { createHash } from 'node:crypto';
 import { newRun, transition, type Run } from '../core/state/run-state.js';
-import type { ExpertEvidence, Requirement, StandardVersion } from '../core/state/canonical-state.js';
+import type { ExpertEvidence, Requirement, StandardVersion, CheckQualification, Measurement } from '../core/state/canonical-state.js';
 import { contrastFor, type ContrastPair } from '../core/compiler/contrast-examples.js';
 import type { Reservation } from '../core/golden/reservation.js';
 import type { RatificationLedger } from '../core/ratification/decision-record.js';
@@ -101,7 +101,7 @@ export const VALUED_OPTIONS: readonly string[] = ['correcting', 'moves',
 
 export const BOOLEAN_OPTIONS: readonly string[] = [
   'accept', 'accept-new-binding', 'fix-grammar', 'profile', 'auto-reserve', 'cluster-per-file', 'drop', 'dry-run', 'indifferent',
-  'allow-unsourced', 'answer-only', 'bare', 'clear', 'holdout', 'json', 'list', 'loop', 'no-contrast', 'no-repair', 'no-coverage', 'repair', 'never-this-transition', 'no-negative-probe', 'none', 'public-source',
+  'allow-unsourced', 'answer-only', 'bare', 'clear', 'holdout', 'json', 'list', 'loop', 'no-contrast', 'no-repair', 'no-coverage', 'repair', 'hook', 'never-this-transition', 'no-negative-probe', 'none', 'public-source',
   'ai-assisted', 'blind-expert', 'delivery-proven', 'no-ai-assist', 'per-passage',
   'regenerate',
   'review', 'score', 'skip', 'skip-methods', 'yes', 'baseline', 'qualify', 'promote',
@@ -657,6 +657,8 @@ export interface ProposalSet {
   readonly rules: readonly ProposedRule[];
   /** the form of the work as the proposer read it from what was said (core/observers/work-form.ts); absent when it said none */
   readonly form?: 'REPLY' | 'DOCUMENT';
+  /** which check each stated rule carries, by its statement (core/method/step-check.ts), read with the proposal so `--yes` asks nothing more */
+  readonly checks?: Readonly<Record<string, { readonly how: 'measure' | 'written'; readonly measurement: Measurement; readonly means: string }>>;
 }
 
 // ── session (one active run per PROJECT; a run is a study, not a session) ─────────────────────
@@ -692,6 +694,8 @@ export interface Session {
    * that shipped with the first version and was called by nothing; this field is where it lands.
    */
   ledger?: RatificationLedger | null;
+  /** what each written check earned on the examples, by requirement id; written beside the standard at the close */
+  qualifications?: Readonly<Record<string, CheckQualification>>;
   /**
    * What discovery knew about each proposal that the requirement does not carry: which vantages
    * reached it, how else it was phrased, how often it held in work the proposer never read, and what

@@ -17,7 +17,9 @@ const MATERIAL = [{ name: 'invoice A', text: 'Invoice A: 4,200 dollars.' }, { na
 const RESERVE = `(text, request, material) => { const sum = material.flatMap((m) => [...m.text.matchAll(/(\\d[\\d,]*) dollars/g)].map((x) => Number(x[1].replace(/,/g, '')))).reduce((a, b) => a + b, 0); const m = /reserve is (\\d[\\d,]*) dollars/.exec(text); if (!m || !sum) return null; const stated = Number(m[1].replace(/,/g, '')); const start = m.index + 'reserve is '.length; return { ok: stated === sum, detail: stated === sum ? 'the reserve equals the invoices' : 'the reserve ' + m[1] + ' is not the invoices\\' sum ' + sum.toLocaleString('en-US'), spans: stated === sum ? [] : [{ start, end: start + m[1].length, why: 'the reserve must equal the invoices', replacement: sum.toLocaleString('en-US') }] }; }`;
 const source = [RESERVE];
 const std = (qualified: boolean): StandardVersion => ({ standardVersionHash: 'std', requirements: [aRequirement({ requirementId: 'r1', statement: 'The reserve equals the invoices.', materiality: 'REQUIRED',
-  measurement: { observer: 'CHECK', params: { source, means: ['the reserve equals the invoices'], ...(qualified ? { qualified: 1 } : {}) } } })] } as unknown as StandardVersion);
+  measurement: { observer: 'CHECK', params: { source, means: ['the reserve equals the invoices'] } } })],
+  // THE STANDING IS BESIDE THE STANDARD, not in the check: the hash is what the owner ratified
+  ...(qualified ? { qualifications: { r1: { examples: { passed: 1, read: 1, of: 1 }, own: { caught: 2, of: 2 }, cross: { fired: 0, of: 1 }, qualified: true, why: null } } } : {}) } as unknown as StandardVersion);
 
 describe('a correction supplied by a written check', () => {
   it('the check flags the reserve with the sum it computed from the material', () => {

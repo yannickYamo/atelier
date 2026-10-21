@@ -20,7 +20,7 @@
 // cases in bench/readings/cases/step-check.json.
 
 import type { Reading } from '../inference/reading.js';
-import type { Measurement } from '../state/canonical-state.js';
+import type { Measurement, CheckQualification } from '../state/canonical-state.js';
 import { measure } from '../observers/registry.js';
 import { parseMeasureSpec, MEASURE_MENU } from '../measurement/spec.js';
 import { compileCheck, CHECK_SOURCE_MAX } from '../observers/written.js';
@@ -52,6 +52,10 @@ export interface StepCheck {
   readonly near?: true;
   /** a written check the reader gave that did not compile or threw: kept so the build can send it back once with the problem */
   readonly attempt?: { readonly source: string; readonly problem: string };
+  /** a written check's standing on the owner's examples and their mutants (./mutants.ts); absent where none could be read */
+  readonly qualification?: CheckQualification;
+  /** of the reading's draws, how many gave this check (a reading varies; the build keeps what the draws agree on) */
+  readonly agreed?: { readonly of: number; readonly same: number };
   readonly by: 'model' | 'floor';
 }
 export type StepCheckOutput = Readonly<Record<string, StepCheck>>;
@@ -110,7 +114,10 @@ export const STEP_CHECK: Reading<StepCheckInput, StepCheckOutput> = {
   prompt(input) {
     // The input is also given whole as JSON: what the reader is asked about is exactly what code grounds against.
     const given = { steps: input.steps.map((s) => ({ id: s.id, text: s.text, under: s.under })), example: { sections: input.example.sections, tables: input.example.tables.map((t) => t.header), labels: input.example.labels, hasMaterial: input.example.hasMaterial, request: input.example.request } };
-    return `The steps:\n${input.steps.map((s) => `${s.id}. ${s.under ? `(under "${s.under}") ` : ''}${s.text}`).join('\n')}\n\nThe example's outline:\n${describeOutline(input.example)}\n\nThe example, as far as shown:\n${input.example.head}\n\n\`\`\`json\n${JSON.stringify(given)}\n\`\`\``;
+    // With no finished example (rules a person stated, `atelier skill`), the reader is told so: a listed measurement
+    // is still readable on new work; a written check cannot be qualified here and reports until the owner gives examples.
+    const example = input.example.head.trim() ? `The example's outline:\n${describeOutline(input.example)}\n\nThe example, as far as shown:\n${input.example.head}` : 'No finished example was given: these are rules the person stated. A listed measurement must still read new work of this kind; a written check will report and block nothing until the person gives finished examples it can be qualified on.';
+    return `The steps:\n${input.steps.map((s) => `${s.id}. ${s.under ? `(under "${s.under}") ` : ''}${s.text}`).join('\n')}\n\n${example}\n\n\`\`\`json\n${JSON.stringify(given)}\n\`\`\``;
   },
   decide(input) { return input.steps.length ? null : {}; },
   ground(raw, input) {
@@ -176,6 +183,8 @@ export function stepCheckInput(steps: readonly StepToCheck[], cases: readonly Ex
   const tables: { header: string[] }[] = []; const seenT = new Set<string>();
   for (const { o } of outlines) for (const t of o.tables) { const k = t.header.map(key).join('|'); if (!seenT.has(k)) { seenT.add(k); tables.push({ header: [...t.header] }); } }
   const richest = [...outlines].sort((a, b) => b.o.sections.length + b.o.tables.length - (a.o.sections.length + a.o.tables.length))[0] ?? outlines[0];
+  // No example at all (rules stated with no finished work): an empty outline, said to the reader as such.
+  if (!richest) return { steps, example: { sections: [], tables: [], labels: false, hasMaterial: false, words: 0, head: '', request: null }, material: [] };
   return { steps, example: { sections, tables, labels: outlines.some((x) => x.o.labels), hasMaterial: cases.some((c) => c.material.length > 0),
     words: countWords(richest.c.reference), head: richest.c.reference.slice(0, 6000), request: richest.c.task ?? null }, material: richest.c.material };
 }

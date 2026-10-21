@@ -19,20 +19,19 @@ import { DATA, argv, die, flag, positional, loadSession, saveSession, archiveSes
 import * as store from '../../core/state/store.js';
 import { resetStages } from '../stages.js';
 import { METHOD_UNITS, unitFloor, describeUnit, type DecisionUnit } from '../../core/method/decision-units.js';
-import { STEP_CHECK, STEP_CHECK_REPAIR, planOf, stepCheckInput, heldByPolarity, type StepPlan, type StepToCheck, type StepCheck, type ExampleCase } from '../../core/method/step-check.js';
+import { STEP_CHECK, STEP_CHECK_REPAIR, planOf, stepCheckInput, heldByPolarity, judgement, type StepPlan, type StepToCheck, type StepCheck, type ExampleCase } from '../../core/method/step-check.js';
 import { measure } from '../../core/observers/registry.js';
-import { checkQualified } from '../../core/observers/written.js';
-import { STEP_MUTANTS, mutate, qualifyCheck, markQualified, describeQualification } from '../../core/method/mutants.js';
+import { STEP_MUTANTS, mutate, qualifyCheck, describeQualification } from '../../core/method/mutants.js';
 import { countWords } from '../../core/eval/size.js';
 import { normalizeClass, CLASS_ALIASES } from '../../core/observers/doc-class.js';
 import { unmeasuredKind } from '../../core/loop/claim-extract.js';
 import { skillNameFrom } from '../../renderers/agent-skill/render.js';
-import { RULE_POLARITY, polarityByWords } from '../../core/observers/rule-polarity.js';
+import { RULE_POLARITY, UNREAD_KIND } from '../../core/observers/rule-polarity.js';
 import { readContext } from '../../core/inference/reading.js';
 import { writeAtomic } from '../../core/state/fs-atomic.js';
 import { draftHash, appendDecision, type RatificationLedger } from '../../core/ratification/decision-record.js';
 import { decide } from '../../core/ratification/authority.js';
-import type { Requirement } from '../../core/state/canonical-state.js';
+import type { Requirement, CheckQualification } from '../../core/state/canonical-state.js';
 import type { GoldenCase } from '../../core/golden/case.js';
 import { proposalsAcross, countedOffers, tellOffers, grammarOffer, stepsOf, outlineOf, shortFormOffers, type MethodProposal } from '../../core/method/standard.js';
 import { shortFormOptions, type ShortFormOptions } from '../../core/observers/short-form.js';
@@ -218,14 +217,14 @@ export function nameFor(notePath: string, goldenPath: string, viaNew: boolean): 
  * machine's reading that they approved: a preference until they say otherwise.
  */
 export function decideSteps(proposals: readonly MethodProposal[], nextId: () => string, confirmed = false,
-  /** each statement's kind as read (core/observers/rule-polarity.ts); the word pattern decides a statement not in it */
+  /** each statement's kind as read (core/observers/rule-polarity.ts); a statement not in it is a thing to do */
   kinds: ReadonlyMap<string, 'BOUNDARY' | 'GENERATIVE'> = new Map(),
-): { decided: Requirement[]; ledger: RatificationLedger } {
+): { decided: Requirement[]; ledger: RatificationLedger; qualifications: Record<string, CheckQualification> } {
   const bases: Requirement[] = proposals.map((p) => ({
     requirementId: nextId(), statement: p.statement, appliesWhen: 'GENERAL',
-    // Whether the step forbids or asks for something is read (core/observers/rule-polarity.ts); the anchored word
-    // pattern is the floor ("Then a Suggestions section: improvements that do not block the merge" asks for a section).
-    kind: kinds.get(p.statement) ?? polarityByWords(p.statement),
+    // Whether the step forbids or asks for something is read (core/observers/rule-polarity.ts); unread, it is a thing
+    // to do in its own words ("Then a Suggestions section: improvements that do not block the merge" asks for a section).
+    kind: kinds.get(p.statement) ?? UNREAD_KIND,
     authority: 'DERIVED_UNRATIFIED', provenance: 'MACHINE_DISCOVERED',
     // No evidence is carried: how the example fared on a check is said on the screen, and is not the author's words.
     evidence: null, evidenceItemId: null, wouldBeAbsentIf: null,
@@ -246,13 +245,15 @@ export function decideSteps(proposals: readonly MethodProposal[], nextId: () => 
     // A stated step with a check is required: it is the owner's, and code can hold an output to it. One read off the
     // example is a preference until the owner says otherwise.
     const p = proposals[i];
-    // A written check is not enforced until it is qualified on the owner's examples and their mutants (core/observers/written.ts).
-    const enforce = p.measurement && !base.contested && !base.related && !(p.measurement.observer === 'CHECK' && !checkQualified(p.measurement));
+    // A written check is not enforced until it is qualified on the owner's examples and their mutants (core/method/mutants.ts).
+    const enforce = p.measurement && !base.contested && !base.related && !(p.measurement.observer === 'CHECK' && !p.qualification?.qualified);
     const outcome = decide(base, p.origin === 'STATED' ? { verb: 'STATED', ...(enforce ? { materiality: 'REQUIRED' } : {}) } : { verb: 'APPROVE', materiality: p.required ? 'REQUIRED' : 'PREFERRED' });
     ledger = appendDecision(ledger, base, outcome.ledgerDecision, { decidedAt: new Date().toISOString() });
     return outcome.requirement;
   });
-  return { decided, ledger };
+  // WHAT EACH WRITTEN CHECK EARNED, by the id its rule now carries: kept beside the standard, outside its hash.
+  const qualifications = Object.fromEntries(decided.flatMap((r, i) => { const q = proposals[i].qualification; return q && r.measurement?.observer === 'CHECK' ? [[r.requirementId, q]] : []; }));
+  return { decided, ledger, qualifications };
 }
 
 export async function method(): Promise<void> {
@@ -299,11 +300,11 @@ export async function method(): Promise<void> {
   const stepKindsRead = await stepKinds(stepsOf(note).map((st) => st.text));
   // WHICH CHECK EACH STATED STEP CARRIES, READ ONCE (core/method/step-check.ts): a measurement from the menu, a check the
   // model writes, or judgement; grounded on the owner's examples by code. With no model every step is a judgement.
-  const checksPlan = await stepPlan(note, cases, stepKindsRead);
+  const checksPlan = await stepPlan(stepsOf(note).map((st, i) => ({ id: String(i + 1), text: st.text, under: st.under })), cases, stepKindsRead);
   const across = proposalsAcross(note, cases, checksPlan);
   // A WRITTEN CHECK EARNS ITS SAY (core/method/mutants.ts): it must pass every example and catch the edits that break
-  // only its step; until then it is kept, shown with what it caught, and enforced nowhere.
-  const read = { ...across, proposals: await qualifyWritten(across.proposals, cases, across.lead) };
+  // only its step; until then it is kept, shown with what it caught, and enforced nowhere. Its standing is said beside it.
+  const read = { ...across, proposals: across.proposals.map((p) => (p.qualification ? { ...p, onExample: describeQualification(p.qualification) } : p)) };
   const lead = read.lead;
   // What the pieces show about how they are written, counted: offered beside the method, with no model.
   // WITH NO METHOD, THE ONE THING ASKED IS "LIKE THESE". It is said as the skill's one rule, which no count reads and
@@ -352,11 +353,11 @@ export async function method(): Promise<void> {
   // request selects by it. With no model the words decide: an instruction, applying always unless they say when.
   const units = await decisionUnits(read.proposals.filter((p) => p.origin === 'STATED'), stepsOf(note));
   if (whole && units.size) { console.log('\nWhat each step asks the writer to decide:'); let i = 0; for (const [statement, u] of units) console.log(`  ${++i}. ${statement.slice(0, 90)}\n      ${describeUnit(u)}`); }
-  const { decided, ledger } = decideSteps(proposals, authoredIdAllocator(s), confirmed, kinds);
+  const { decided, ledger, qualifications } = decideSteps(proposals, authoredIdAllocator(s), confirmed, kinds);
   // WHOSE BUILD THIS IS, WRITTEN BEFORE ANYTHING ELSE IS. A build that stops after the standard is stored and before
   // the skill is installed leaves a skill of this name behind: with the name kept here, the same command run again
   // knows the skill as this folder's and finishes it. Without it, the person was told somebody else had built it.
-  s = { ...s, skillName: name, claim: { owned: Boolean(activeNow) }, decided: [...s.decided, ...decided], ledger, ...(folder ? { source: folder } : {}) };
+  s = { ...s, skillName: name, claim: { owned: Boolean(activeNow) }, decided: [...s.decided, ...decided], ledger, qualifications: { ...s.qualifications, ...qualifications }, ...(folder ? { source: folder } : {}) };
   saveSession(s);
 
   // The finished example is installed with the skill as the one worked example: what good looks like, for a writer
@@ -470,76 +471,109 @@ async function decisionUnits(stated: readonly MethodProposal[], steps: readonly 
 }
 
 /**
- * Every written check among the proposals, held to the owner's examples and to mutants of the lead example (one reading
- * for all of them); each comes back marked qualified or not, with the count said beside it.
+ * How many times the step-check reading is drawn on a build with a model. One draw varies: the same four examples read
+ * 7, 5 and 7 of 8 steps as checked in three builds, and a check that passed 9 of 10 examples in one build passed none
+ * in the next. So the reading is drawn CHECK_DRAWS times and code keeps what the draws agree on: a listed measurement
+ * given by a majority of draws, or the written check that qualifies best on the owner's mutants (core/method/mutants.ts).
+ * A draw count, as drafts are: not a reading of its own. With no model there is one draw, and it is the floor.
  */
-async function qualifyWritten(proposals: readonly MethodProposal[], cases: readonly ExampleCase[], lead: number): Promise<MethodProposal[]> {
-  const written = proposals.filter((p) => p.measurement?.observer === 'CHECK');
-  if (!written.length || !cases.length) return [...proposals];
-  const example = cases[lead] ?? cases[0];
-  const steps = written.map((p, i) => ({ id: String(i + 1), text: p.statement, means: Array.isArray(p.measurement?.params.means) ? String(p.measurement.params.means[0]) : p.statement }));
-  const noModel = !canReach('discovery') || argv.includes('--no-model');
-  // ONE CALL PER STEP: asked for several steps at once, the reader wrote edits for the first and stopped.
-  const read = await Promise.all(steps.map((st) => readContext(STEP_MUTANTS, { steps: [st], example: example.reference }, noModel ? null : contextReaderClient(), noModel ? null : contextReaderModel(), { spentUsd: 0, capUsd: 0.2, maxCalls: 1 })));
-  const d = { by: read.some((r) => r.by === 'model') ? 'model' as const : read[0]?.by ?? 'floor' as const, why: read[0]?.why, value: Object.fromEntries(steps.map((st, i) => [st.id, read[i].value[st.id] ?? []])) };
-  if (argv.includes('--report')) console.log(`(edits that break each written check's step: ${d.by === 'model' ? `written by ${contextReaderModel()}: ${steps.map((st) => `${st.id}: ${d.value[st.id].length}`).join(', ')}` : `none (${d.why ?? 'nothing to read'})`}.)`);
-  const context = (c: ExampleCase): { request?: string; material: readonly { name: string; text: string }[] } => ({ ...(c.task ? { request: c.task } : {}), material: c.material });
-  const examples = cases.map((c) => ({ text: c.reference, context: context(c) }));
-  const mutantsOf = (id: string): { text: string; context: ReturnType<typeof context> }[] => (d.value[id] ?? []).map((m) => ({ text: mutate(example.reference, m), context: context(example) }));
-  const byStatement = new Map(written.map((p, i) => [p.statement, String(i + 1)]));
-  const out: MethodProposal[] = [];
-  for (const p of proposals) {
-    const id = p.measurement?.observer === 'CHECK' ? byStatement.get(p.statement) : undefined;
-    if (!id || !p.measurement) { out.push(p); continue; }
-    const own = mutantsOf(id); const others = steps.filter((s) => s.id !== id).flatMap((s) => mutantsOf(s.id));
-    let m = p.measurement; let q = qualifyCheck(m, examples, own, others);
-    // A CHECK THAT FAILS THE OWNER'S OWN WORK IS SENT BACK, at most twice, with the examples it failed and what it said of
-    // each: the owner's finished work holds the step by definition, so a check that fails it reads something else.
-    for (let round = 0; round < 2 && !q.qualified && q.examples.passed < q.examples.read && !noModel; round++) {
-      const failing = examples.map((x, k) => ({ x, k, r: measure(x.text, m, x.context) })).filter((y) => y.r.verdict === 'VIOLATED');
-      if (!failing.length) break;
-      const src = Array.isArray(m.params.source) ? m.params.source.join('\n') : '';
-      const problem = `fails ${failing.length} of the ${examples.length} finished examples, which all hold the step. ${failing.slice(0, 2).map((y) => `On ${cases[y.k]?.id ?? y.k + 1} the check said "${y.r.detail}"`).join('; ')}. The check reads something other than the step, or reads the example wrongly: fix the check, not the example.`;
-      const r = await readContext(STEP_CHECK_REPAIR, { step: { id, text: p.statement, under: null }, means: steps[Number(id) - 1].means, source: src, problem, example: failing[0].x.text, material: failing[0].x.context.material }, contextReaderClient(), contextReaderModel(), { spentUsd: 0, capUsd: 0.1, maxCalls: 1 });
-      if (!r.value.source) break;
-      m = { ...m, params: { ...m.params, source: r.value.source.split('\n') } }; q = qualifyCheck(m, examples, own, others);
-    }
-    out.push({ ...p, measurement: markQualified(m, q), onExample: describeQualification(q) });
-  }
-  return out;
-}
+export const CHECK_DRAWS = 3;
 
-/** The check each stated step asks for, read in one call where a model is set up (core/method/step-check.ts); judgement for every step where none is. */
-async function stepPlan(note: string, cases: readonly ExampleCase[], kinds: ReadonlyMap<string, 'BOUNDARY' | 'GENERATIVE'>): Promise<StepPlan | null> {
-  const steps: StepToCheck[] = stepsOf(note).map((st, i) => ({ id: String(i + 1), text: st.text, under: st.under }));
-  if (!steps.length || !cases.length) return null;
+/**
+ * THE CHECK EACH STATED STEP CARRIES (core/method/step-check.ts), read CHECK_DRAWS times where a model is set up and
+ * decided by code: a qualified written check first, then a measurement a majority of draws named, then a written check
+ * that reports only, then judgement. Every written candidate is grounded on the owner's examples, sent back once when
+ * it did not compile, held to the mutants of its step (one mutant reading per step, shared by its candidates), and the
+ * best unqualified one sent back up to twice with the examples it fails. Judgement for every step where no model is.
+ * Shared by `atelier new --method` (steps from the note, with examples) and `atelier skill` (rules stated, no example).
+ */
+export async function stepPlan(steps: readonly StepToCheck[], cases: readonly ExampleCase[], kinds: ReadonlyMap<string, 'BOUNDARY' | 'GENERATIVE'>): Promise<StepPlan | null> {
+  if (!steps.length) return null;
   const input = stepCheckInput(steps, cases, outlineOf, countWords);
   const noModel = !canReach('discovery') || argv.includes('--no-model');
-  const d = await readContext(STEP_CHECK, input, noModel ? null : contextReaderClient(), noModel ? null : contextReaderModel(), { spentUsd: 0, capUsd: 0.3, maxCalls: 1 });
-  // A WRITTEN CHECK THAT DID NOT COMPILE OR THREW IS SENT BACK ONCE with what went wrong (core/method/step-check.ts).
+  const k = noModel ? 1 : CHECK_DRAWS;
+  const client = noModel ? null : contextReaderClient(); const model = noModel ? null : contextReaderModel();
+  const draws = await Promise.all(Array.from({ length: k }, () => readContext(STEP_CHECK, input, client, model, { spentUsd: 0, capUsd: 0.3, maxCalls: 1 })));
   const lead = input.example;
-  const repaired: Record<string, StepCheck> = {};
+  const context = (c: ExampleCase): { request?: string; material: readonly { name: string; text: string }[] } => ({ ...(c.task ? { request: c.task } : {}), material: c.material });
+  const examples = cases.map((c) => ({ text: c.reference, context: context(c) }));
+  const leadCase = cases.find((c) => c.reference.slice(0, 6000) === lead.head) ?? cases[0];
+  // EVERY DRAW'S ANSWER FOR EACH STEP, grounded: a written check that did not compile is sent back once with the problem;
+  // then the two readings are held against each other (a prohibition keeps no check that requires what it forbids).
+  const candidates = new Map<string, StepCheck[]>();
   for (const st of steps) {
-    const c = d.value[st.id]; if (!c?.attempt || noModel) continue;
-    const r = await readContext(STEP_CHECK_REPAIR, { step: st, means: c.means, source: c.attempt.source, problem: c.attempt.problem, example: lead.head, material: input.material }, contextReaderClient(), contextReaderModel(), { spentUsd: 0, capUsd: 0.1, maxCalls: 1 });
-    if (r.value.source) repaired[st.id] = { how: 'written', measurement: { observer: 'CHECK', params: { source: r.value.source.split('\n'), means: [c.means.replace(/^the written check could not be compiled.*$/, st.text.slice(0, 120))] } }, quote: c.quote, means: st.text.slice(0, 120), by: 'model' };
+    const list: StepCheck[] = [];
+    for (const d of draws) {
+      let c: StepCheck = d.value[st.id] ?? judgement(st, 'floor');
+      if (c.attempt && !noModel) {
+        const r = await readContext(STEP_CHECK_REPAIR, { step: st, means: c.means, source: c.attempt.source, problem: c.attempt.problem, example: lead.head, material: input.material }, client, model, { spentUsd: 0, capUsd: 0.1, maxCalls: 1 });
+        if (r.value.source) c = { how: 'written', measurement: { observer: 'CHECK', params: { source: r.value.source.split('\n'), means: [c.means.replace(/^the written check could not be compiled.*$/, st.text.slice(0, 120))] } }, quote: c.quote, means: st.text.slice(0, 120), by: 'model' };
+      }
+      list.push(heldByPolarity(c, st, kinds.get(st.text)));
+    }
+    candidates.set(st.id, list);
   }
-  // the two readings held against each other: a prohibition keeps no check that requires what it forbids
-  const held = Object.fromEntries(steps.map((st) => [st.id, heldByPolarity(repaired[st.id] ?? d.value[st.id] ?? { how: 'judgement', measurement: null, quote: st.text, means: 'yours to judge', by: 'floor' }, st, kinds.get(st.text))]));
+  // THE MUTANTS OF EVERY STEP WITH A WRITTEN CANDIDATE, one reading per step (asked for several at once, the reader
+  // wrote edits for the first and stopped): what a written check must catch, and what the other steps' checks must not.
+  const writtenSteps = steps.filter((st) => cases.length && (candidates.get(st.id) ?? []).some((c) => c.how === 'written'));
+  const mutantSteps = writtenSteps.map((st) => ({ id: st.id, text: st.text, means: (candidates.get(st.id) ?? []).find((c) => c.how === 'written')?.means ?? st.text }));
+  const mutants = await Promise.all(mutantSteps.map((ms) => readContext(STEP_MUTANTS, { steps: [ms], example: leadCase?.reference ?? '' }, client, model, { spentUsd: 0, capUsd: 0.2, maxCalls: 1 })));
+  const mutantsOf = (id: string): { text: string; context: ReturnType<typeof context> }[] => {
+    const at = mutantSteps.findIndex((ms) => ms.id === id);
+    return at === -1 || !leadCase ? [] : (mutants[at].value[id] ?? []).map((m) => ({ text: mutate(leadCase.reference, m), context: context(leadCase) }));
+  };
+  if (argv.includes('--report') && mutantSteps.length) console.log(`(edits that break each written check's step: ${mutants.some((r) => r.by === 'model') ? `written by ${contextReaderModel()}: ${mutantSteps.map((ms, i) => `${ms.id}: ${(mutants[i].value[ms.id] ?? []).length}`).join(', ')}` : `none (${mutants[0]?.why ?? 'nothing to read'})`}.)`);
+  // WHAT EACH STEP KEEPS, decided by code over the draws.
+  const chosen: Record<string, StepCheck> = {};
+  for (const st of steps) {
+    const list = candidates.get(st.id) ?? [];
+    const key = (c: StepCheck): string => JSON.stringify(c.measurement);
+    const own = mutantsOf(st.id); const others = writtenSteps.filter((o) => o.id !== st.id).flatMap((o) => mutantsOf(o.id));
+    // every distinct written candidate, qualified; the best unqualified one sent back with the examples it fails
+    const written = [...new Map(list.flatMap((c) => (c.how === 'written' && c.measurement ? [[key(c), { c, m: c.measurement }] as const] : []))).values()];
+    const score = (q: CheckQualification): number => (q.qualified ? 1000 : 0) + q.examples.passed * 10 + q.own.caught - q.cross.fired * 5;
+    let qualified = written.map(({ c, m }) => ({ c, m, q: cases.length ? qualifyCheck(m, examples, own, others) : null }));
+    const repairable = qualified.flatMap((x) => (x.q && !x.q.qualified && x.q.examples.passed < x.q.examples.read ? [{ c: x.c, m: x.m, q: x.q }] : []));
+    const best = repairable.sort((a, b) => score(b.q) - score(a.q))[0];
+    if (best && !noModel) {
+      let m = best.m; let q = best.q;
+      for (let round = 0; round < 2 && !q.qualified && q.examples.passed < q.examples.read; round++) {
+        const failing = examples.map((x, i) => ({ x, i, r: measure(x.text, m, x.context) })).filter((y) => y.r.verdict === 'VIOLATED');
+        if (!failing.length) break;
+        const problem = `fails ${failing.length} of the ${examples.length} finished examples, which all hold the step. ${failing.slice(0, 2).map((y) => `On ${cases[y.i]?.id ?? y.i + 1} the check said "${y.r.detail}"`).join('; ')}. The check reads something other than the step, or reads the example wrongly: fix the check, not the example.`;
+        const r = await readContext(STEP_CHECK_REPAIR, { step: st, means: best.c.means, source: Array.isArray(m.params.source) ? m.params.source.join('\n') : '', problem, example: failing[0].x.text, material: failing[0].x.context.material }, client, model, { spentUsd: 0, capUsd: 0.1, maxCalls: 1 });
+        if (!r.value.source) break;
+        m = { ...m, params: { ...m.params, source: r.value.source.split('\n') } }; q = qualifyCheck(m, examples, own, others);
+      }
+      const repaired = { c: { ...best.c, measurement: m }, m, q };
+      qualified = qualified.map((x) => (x.c === best.c ? repaired : x));
+    }
+    const agreed = (c: StepCheck): { of: number; same: number } => ({ of: k, same: list.filter((x) => x.how === c.how && (c.how === 'judgement' || key(x) === key(c))).length });
+    const bestWritten = [...qualified].sort((a, b) => score(b.q ?? { qualified: false, examples: { passed: 0, read: 0, of: 0 }, own: { caught: 0, of: 0 }, cross: { fired: 0, of: 0 }, why: null }) - score(a.q ?? { qualified: false, examples: { passed: 0, read: 0, of: 0 }, own: { caught: 0, of: 0 }, cross: { fired: 0, of: 0 }, why: null }))[0];
+    // a listed measurement a majority of draws named (with one draw, any)
+    const groups = new Map<string, StepCheck[]>();
+    for (const c of list.filter((x) => x.how === 'measure')) { const g = groups.get(key(c)) ?? []; g.push(c); groups.set(key(c), g); }
+    const majority = [...groups.values()].filter((g) => g.length >= Math.ceil(k / 2)).sort((a, b) => b.length - a.length)[0]?.[0];
+    const pick: StepCheck = bestWritten?.q?.qualified ? { ...bestWritten.c, qualification: bestWritten.q }
+      : majority ?? (bestWritten ? { ...bestWritten.c, ...(bestWritten.q ? { qualification: bestWritten.q } : {}) }
+        : list.find((c) => c.how === 'judgement' && c.by === 'model') ?? list[0] ?? judgement(st, 'floor'));
+    chosen[st.id] = { ...pick, agreed: agreed(pick) };
+  }
   if (argv.includes('--report')) {
-    console.log(`(which check each step asks for: ${d.by === 'model' ? `read by ${contextReaderModel()}` : d.by === 'code' ? 'nothing to read' : `none read, every step is yours to judge (${d.why})`}.)`);
+    const d = draws[0];
+    console.log(`(which check each step asks for: ${d.by === 'model' ? `read ${k} time${k === 1 ? '' : 's'} by ${contextReaderModel()}, the draws' agreement kept` : d.by === 'code' ? 'nothing to read' : `none read, every step is yours to judge (${d.why})`}.)`);
     // each step's reading, with the reason where it fell to judgement: what the reader said is the owner's to see
-    for (const st of steps) { const c = held[st.id]; console.log(`   ${st.id}. ${c.how}${c.by === 'floor' && c.how === 'judgement' ? ` (${c.means})` : c.how === 'judgement' ? ` (the reader: ${c.means.slice(0, 120)})` : `: ${c.means.slice(0, 120)}`}`); }
+    for (const st of steps) { const c = chosen[st.id]; console.log(`   ${st.id}. ${c.how}${c.by === 'floor' && c.how === 'judgement' ? ` (${c.means})` : c.how === 'judgement' ? ` (the reader: ${c.means.slice(0, 120)})` : `: ${c.means.slice(0, 120)}`}${c.agreed && k > 1 ? ` [${c.agreed.same} of ${c.agreed.of} draws]` : ''}${c.qualification ? `; ${describeQualification(c.qualification)}` : ''}`); }
   }
-  return planOf(steps, held);
+  return planOf(steps, chosen);
 }
 
-/** The kind of every step the owner wrote or their example showed, read in one call where a model is set up (a rule counted off the pieces is worded by Atelier, and the word pattern decides it); the word pattern where none is, said in --report. */
+/** The kind of every step the owner wrote or their example showed, read in one call where a model is set up; a thing to do where none is, said in --report. */
 async function stepKinds(statements: readonly string[], known: ReadonlyMap<string, 'BOUNDARY' | 'GENERATIVE'> = new Map()): Promise<Map<string, 'BOUNDARY' | 'GENERATIVE'>> {
   const unique = [...new Set(statements.map((t) => t.trim()).filter(Boolean))].filter((t) => !known.has(t));
   const input = { statements: unique.map((text, i) => ({ id: `r${i + 1}`, text })) };
   const noModel = !canReach('discovery') || argv.includes('--no-model');
   const d = await readContext(RULE_POLARITY, input, noModel ? null : contextReaderClient(), noModel ? null : contextReaderModel(), { spentUsd: 0, capUsd: 0.1, maxCalls: 1 });
-  if (argv.includes('--report') && unique.length) console.log(`(what each step is, a prohibition or a thing to do: ${d.by === 'model' ? `read by ${contextReaderModel()}` : d.by === 'code' ? 'nothing to read' : `by the words alone (${d.why})`}.)`);
-  return new Map([...known, ...input.statements.map((s): [string, 'BOUNDARY' | 'GENERATIVE'] => [s.text, d.value[s.id] ?? polarityByWords(s.text)])]);
+  if (argv.includes('--report') && unique.length) console.log(`(what each step is, a prohibition or a thing to do: ${d.by === 'model' ? `read by ${contextReaderModel()}` : d.by === 'code' ? 'nothing to read' : `not read, each taken as a thing to do (${d.why})`}.)`);
+  return new Map([...known, ...input.statements.map((s): [string, 'BOUNDARY' | 'GENERATIVE'] => [s.text, d.value[s.id] ?? UNREAD_KIND])]);
 }

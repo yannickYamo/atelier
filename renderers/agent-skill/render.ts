@@ -639,6 +639,22 @@ ${checkedSteps.map((r) => `- ${r.measurement ? observerFor(r.measurement.observe
   // THE FORM OF THE WORK, IN THE PACKAGE: what frames the served examples at run time (cli/served.ts) is read from this
   // marker, so the text a run is served is a function of the package's files alone, as the card and the delivery check
   // require. A comment: the only frontmatter keys that travel are name and description (`PORTABLE_FRONTMATTER`).
+  // ── THE OUTPUT CONTRACT, ENFORCED OR DECLARED ─────────────────────────────────
+  //
+  // Where the runtime is Atelier's, the schema is passed to the provider as the response schema and a shape that
+  // breaks it never ships (core/delivery/carrier-delivery.ts, ATELIER_CLI_DELIVERY). A host that loads this package as
+  // text (Claude Code, Codex) enforces nothing by loading it: there the contract is declared, with the one mechanism
+  // that does hold it, so "carried as OUTPUT_CONTRACT" never reads as "held" on a surface where it is not.
+  const contractRules = carried.filter((x) => x.carrier === 'OUTPUT_CONTRACT').map((x) => x.r.requirementId);
+  const contractSection = contractRules.length ? `
+## Output contract
+
+\`contracts/output.schema.json\` holds the shape ${contractRules.join(', ')} require${contractRules.length === 1 ? 's' : ''}. Atelier's own
+runtime passes it to the model as the response schema and refuses an output that breaks it. A host that reads this
+file as text does not enforce it: there, run \`atelier verify --skill ${skillId} --hook\` as the host's hook on
+what is written (exit 2 blocks with the broken rules), or \`atelier verify --skill ${skillId} <file>\` on the output
+before it ships. Until one of those runs, the shape is asked for, not held.
+` : '';
   const skillMd = `---
 name: ${skillId}
 description: ${yamlScalar(description)}
@@ -667,7 +683,7 @@ ${genShown.length || !method ? `
 ## What to do
 
 ${genShown.map(line).join('\n\n') || '_(none)_'}
-` : ''}${checkedSection}${avoidSection}${preFinalizeSection}${observeSection}${referenceSection}
+` : ''}${checkedSection}${contractSection}${avoidSection}${preFinalizeSection}${observeSection}${referenceSection}
 ---
 
 <!--
@@ -777,7 +793,7 @@ mintedAt:        ${v.mintedAt}
     contractFiles['contracts/output.schema.json'] = `${JSON.stringify({
       $schema: 'https://json-schema.org/draft/2020-12/schema',
       title: `${skillId} output`,
-      description: 'Enforced by the runtime. The instructions do not restate it.',
+      description: "Enforced by Atelier's runtime as the response schema. A host that reads this package as text does not enforce it: SKILL.md says what does.",
       type: 'object', properties: props,
       required: Object.keys(props), additionalProperties: false,
     }, null, 2)}\n`;

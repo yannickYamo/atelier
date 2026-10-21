@@ -7,7 +7,7 @@
 import { resolveRule } from '../../core/state/rule-key.js';
 import { describeBackup } from '../../adapters/install-tree.js';
 import type { StandardVersion } from '../../core/state/canonical-state.js';
-import { authorityStateOf, assertSupersessionRecorded } from '../../core/state/canonical-state.js';
+import { authorityStateOf, assertSupersessionRecorded, carriedQualifications } from '../../core/state/canonical-state.js';
 import { compileArchitecture, observedBoundaries } from '../../core/architecture/compile.js';
 import { renderAgentSkill, assertPortable, defaultDescription } from '../../renderers/agent-skill/render.js';
 import * as store from '../../core/state/store.js';
@@ -57,7 +57,7 @@ export function confirmBoundary(): void {
   const body = { evidenceId: prev.evidenceId, workType: prev.workType, requirements };
   const minted: StandardVersion = { standardVersionHash: sha(JSON.stringify(body)), ...body,
     authorityState: authorityStateOf(requirements), mintedAt: new Date().toISOString(), supersedes: prev.standardVersionHash,
-    reason: drop ? `author ruled "${target.statement}" is not a rule they hold` : `author confirmed "${target.statement}"` };
+    reason: drop ? `author ruled "${target.statement}" is not a rule they hold` : `author confirmed "${target.statement}"`, ...carriedQualifications(prev, requirements) };
   assertSupersessionRecorded(minted);
   // The same ruling made again (confirm, rollback, confirm) mints the same content: the first mint is
   // the version, and the skill is rendered from it.

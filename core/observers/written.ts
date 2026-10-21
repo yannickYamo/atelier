@@ -12,12 +12,13 @@
 // so (NOT_APPLICABLE), never a verdict.
 //
 // WHAT A WRITTEN CHECK MAY NOT DO. Block. It reports until it is qualified (core/method/mutants.ts): it must pass the
-// owner's own examples and catch edits of them that break only its step. Until then its measurement carries no
-// `qualified` mark, and the plan does not enforce it (core/plan/execution-plan.ts). The owner ratifies it with one
-// pass and one fail example on the build screen, like any rule.
+// owner's own examples and catch edits of them that break only its step. What it earned is recorded beside the standard
+// (`StandardVersion.qualifications`), never inside the check or the standard's hash: the hash is what the owner
+// ratified. Until a check is qualified the plan does not enforce it (core/plan/execution-plan.ts). The owner ratifies
+// it with one pass and one fail example on the build screen, like any rule.
 
 import { createContext, Script, type Context } from 'node:vm';
-import type { Measurement } from '../state/canonical-state.js';
+import type { Measurement, StandardVersion } from '../state/canonical-state.js';
 import type { CheckContext, Observer, ObserverResult, Span } from './registry.js';
 
 /** How long one run of a written check may take, in milliseconds. */
@@ -90,11 +91,11 @@ export function runCheck(fn: CompiledCheck, text: string, context: CheckContext 
 
 /**
  * The check as a measurement: `source` is its code (one line per array element), `means` says in words what it
- * checks, `qualified` is 1 once it passed the owner's examples and caught its mutants (core/method/mutants.ts).
+ * checks. Whether it is qualified is not in it: that is read beside the standard (`qualifiedIn`).
  */
 export const CHECK: Observer = {
   id: 'CHECK',
-  describe: (p) => `${means(p)} (a check written for this step${Array.isArray(p.qualified) || p.qualified === 1 ? ', qualified on your examples' : ', not yet qualified: it reports and blocks nothing'})`,
+  describe: (p) => `${means(p)} (a check written for this step)`,
   validate: (p) => {
     const c = compileCheck(source(p));
     if (!c.fn) return c.problem;
@@ -110,5 +111,6 @@ export const CHECK: Observer = {
   },
 };
 
-/** Whether a written check has been qualified on the owner's examples and its mutants. */
-export const checkQualified = (m: Measurement | null | undefined): boolean => m?.observer === 'CHECK' && (m.params.qualified === 1 || (Array.isArray(m.params.qualified) && m.params.qualified[0] === 1));
+/** Whether this standard's written check for `requirementId` is qualified on the owner's examples and its mutants. */
+export const qualifiedIn = (v: Pick<StandardVersion, 'requirements' | 'qualifications'>, requirementId: string): boolean =>
+  v.requirements.find((r) => r.requirementId === requirementId)?.measurement?.observer === 'CHECK' && v.qualifications?.[requirementId]?.qualified === true;

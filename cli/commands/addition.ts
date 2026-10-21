@@ -9,12 +9,12 @@
 // each from the run's standard would let the second silently drop the first. The complaint's provenance
 // is kept in the version's `reason`; the base is whatever the owner holds now.
 
-import { RULE_POLARITY, polarityByWords, type Polarity } from '../../core/observers/rule-polarity.js';
+import { RULE_POLARITY, UNREAD_KIND, type Polarity } from '../../core/observers/rule-polarity.js';
 import { readContext } from '../../core/inference/reading.js';
 import * as store from '../../core/state/store.js';
 import { decide } from '../../core/ratification/authority.js';
 import { draftHash, appendDecision, stampVersion } from '../../core/ratification/decision-record.js';
-import { authorityStateOf, assertSupersessionRecorded, type Requirement, type StandardVersion } from '../../core/state/canonical-state.js';
+import { authorityStateOf, assertSupersessionRecorded, carriedQualifications, type Requirement, type StandardVersion } from '../../core/state/canonical-state.js';
 import { compileArchitecture } from '../../core/architecture/compile.js';
 import { renderAgentSkill, assertPortable, defaultDescription } from '../../renderers/agent-skill/render.js';
 import { describeBackup } from '../../adapters/install-tree.js';
@@ -31,8 +31,8 @@ export function addRuleToActive(L: store.StoreLayout, name: string, statement: s
   reason: string, fallback: StandardVersion | null = null,
   /** the complaints this rule answers, so `mine` does not offer the same gap again */
   feedbackIds: readonly string[] = [],
-  /** the rule's kind as read (core/observers/rule-polarity.ts, `readPolarityOf`); the word pattern when none read it */
-  kind: 'BOUNDARY' | 'GENERATIVE' = polarityByWords(statement)): Addition {
+  /** the rule's kind as read (core/observers/rule-polarity.ts, `readPolarityOf`); a thing to do when none read it */
+  kind: 'BOUNDARY' | 'GENERATIVE' = UNREAD_KIND): Addition {
   const activeHash = store.getActive(L);
   const activeSv = activeHash ? store.getSkillVersion(L, activeHash) : null;
   const baseStandard = (activeSv && store.getStandard(L, activeSv.standardVersionHash)) ?? fallback
@@ -47,7 +47,7 @@ export function addRuleToActive(L: store.StoreLayout, name: string, statement: s
   const body = { evidenceId: baseStandard.evidenceId, workType: baseStandard.workType, requirements };
   const minted: StandardVersion = { standardVersionHash: sha(JSON.stringify(body)), ...body,
     authorityState: authorityStateOf(requirements), mintedAt: new Date().toISOString(),
-    supersedes: baseStandard.standardVersionHash, reason };
+    supersedes: baseStandard.standardVersionHash, reason, ...carriedQualifications(baseStandard, requirements) };
   assertSupersessionRecorded(minted);
   // The same rule added again after a rollback is the same standard: the first mint is the version.
   const next = store.putStandard(L, minted);
@@ -74,8 +74,8 @@ export function addRuleToActive(L: store.StoreLayout, name: string, statement: s
   return { requirement: outcome.requirement, standard: next, supersedes: baseStandard.standardVersionHash, skillVersionHash: skill.skillVersionHash };
 }
 
-/** One added rule's kind, read by the context reader where one is set up; the word pattern otherwise. */
+/** One added rule's kind, read by the context reader where one is set up; a thing to do otherwise. */
 export async function readPolarityOf(statement: string): Promise<Polarity> {
   const d = await readContext(RULE_POLARITY, { statements: [{ id: 'r1', text: statement }] }, contextReaderClient(), contextReaderModel(), { spentUsd: 0, capUsd: 0.05, maxCalls: 1 });
-  return d.value.r1 ?? polarityByWords(statement);
+  return d.value.r1 ?? UNREAD_KIND;
 }

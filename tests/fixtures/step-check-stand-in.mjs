@@ -40,7 +40,7 @@ const sectionsNamed = (step) => [
   ...step.matchAll(new RegExp(String.raw`\b(${VERB})\w*\b[^.;]*?\b(?:section|heading|part)\s+(?:called|named|titled|headed)\s+${NAME}`, "gu")),
   ...step.matchAll(new RegExp(String.raw`\b([Uu]nder)\s+(?:the\s+|a\s+)?heading\s+${NAME}`, "gu"))
 ].map((m) => ({ verb: m[1].toLowerCase(), name: (m[2] ?? m[3]).trim(), at: m.index })).filter((x) => x.name.length >= 3).sort((a, b) => a.at - b.at);
-const sectionsOutright = (step, sections) => [...step.matchAll(new RegExp("\\b(?:an?|one)\\s+((?:\\p{Lu}[\\w'-]*\\s?){1,4}?)\\s*(?:section|heading)\\b", "gu"))].map((m) => m[1].trim()).filter((n2) => !sections.some((sec) => norm(sec) === norm(n2)));
+const sectionsOutright = (step, sections) => [...step.matchAll(/\b(?:an?|one)\s+((?:\p{Lu}[\w'-]*\s?){1,4}?)\s*(?:section|heading)\b/gu)].map((m) => m[1].trim()).filter((n2) => !sections.some((sec) => norm(sec) === norm(n2)));
 function optionsOf(step) {
   const said = /\b(?:section|heading)\b[^.;]*?\b(?:holds?|is|says?|reads?|gives?|states?|contains?|with)\s+(?:exactly\s+|only\s+)?one of(?: these| the following)?\s*:?\s+([^.;]+)/i.exec(step)?.[1];
   if (!said) return [];
@@ -263,6 +263,14 @@ function standInChecks(given) {
     return { id: st.id, how: "measure", measure: specOf(m), source: null, quote, means: specOf(m), ...how.related ? { near: true } : {} };
   }) };
 }
+function standInPolarity(prompt) {
+  const rules = [];
+  for (const line of prompt.split("\n")) {
+    const m = /^\[([^\]]+)\]\s+(.*)$/.exec(line.trim());
+    if (m) rules.push({ id: m[1], kind: /^\s*(?:never|do not|don't|must not|avoid|no)\b/i.test(m[2]) ? "BOUNDARY" : "GENERATIVE" });
+  }
+  return { rules };
+}
 export {
   FORBIDS_OR_CONDITIONS,
   citesPlaces,
@@ -278,6 +286,7 @@ export {
   sectionsOutright,
   sectionsPlaced,
   standInChecks,
+  standInPolarity,
   statedCount,
   tableColumns
 };

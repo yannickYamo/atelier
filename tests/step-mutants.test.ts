@@ -1,7 +1,7 @@
 // tests/step-mutants.test.ts — A WRITTEN CHECK IS QUALIFIED BY THE OWNER'S EXAMPLES AND BY EDITS THAT BREAK ONLY ITS STEP.
 import { describe, it, expect } from 'vitest';
-import { STEP_MUTANTS, qualifyCheck, markQualified, mutate, describeQualification, MUTANTS_PER_STEP } from '../core/method/mutants.js';
-import { checkQualified } from '../core/observers/written.js';
+import { STEP_MUTANTS, qualifyCheck, mutate, describeQualification, MUTANTS_PER_STEP } from '../core/method/mutants.js';
+import { qualifiedIn } from '../core/observers/written.js';
 
 const EXAMPLE = '## Facts\n\nThe laptop was taken on March 5 [police report]. Two invoices were filed [invoice A], [invoice B].\n\n## Reserve\n\nThe reserve is 6,050 dollars, the sum of the invoices.\n\n## Decision\n\nCovered under clause 4.2 (contents).\n';
 const HEX = { observer: 'CHECK' as const, params: { source: ['(text) => { const h = [...text.matchAll(/#[0-9a-fA-F]{3,8}\\b/g)]; return { ok: h.length === 0, detail: h.length + " hex", spans: h.map((m) => ({ start: m.index, end: m.index + m[0].length })) }; }'], means: ['no colour as a hex value'] } };
@@ -35,7 +35,9 @@ describe('qualifying a written check', () => {
     const others = [{ text: mutate(EXAMPLE, { find: 'Covered under clause 4.2 (contents).', replace: 'Covered: border #ffcc00.', why: '' }), context: ctx }];
     const q = qualifyCheck(CITES, [{ text: EXAMPLE, context: ctx }], own, others);
     expect(q).toMatchObject({ examples: { passed: 1, read: 1, of: 1 }, own: { caught: 2, of: 2 }, cross: { fired: 0, of: 1 }, qualified: true, why: null });
-    expect(checkQualified(markQualified(CITES, q))).toBe(true);
+    // RECORDED BESIDE THE STANDARD, NOT IN THE CHECK: the measurement is unchanged by what it earned
+    expect(qualifiedIn({ requirements: [{ requirementId: 'r1', measurement: CITES } as never], qualifications: { r1: q } }, 'r1')).toBe(true);
+    expect(qualifiedIn({ requirements: [{ requirementId: 'r1', measurement: CITES } as never] }, 'r1')).toBe(false);
     expect(describeQualification(q)).toMatch(/^qualified: passes 1 of 1/);
   });
   it('a check that misses its own mutant, or fires on another step\'s, is not qualified and says why', () => {
@@ -43,7 +45,7 @@ describe('qualifying a written check', () => {
     expect(miss.qualified).toBe(false); expect(miss.why).toMatch(/caught 0 of 1/);
     const cross = qualifyCheck(HEX, [{ text: EXAMPLE }], [{ text: EXAMPLE.replace('(contents)', '(#abc)') }], [{ text: EXAMPLE.replace('6,050', '#6050') }]);
     expect(cross.qualified).toBe(false); expect(cross.why).toMatch(/fired on 1 of 1/);
-    expect(checkQualified(markQualified(HEX, cross))).toBe(false);
+    expect(qualifiedIn({ requirements: [{ requirementId: 'r1', measurement: HEX } as never], qualifications: { r1: cross } }, 'r1')).toBe(false);
   });
   it('a check that fails the owner\'s own example, or reads none of them, is not qualified', () => {
     const fails = qualifyCheck(HEX, [{ text: `${EXAMPLE}\nUse #fff for the border.\n` }], [{ text: EXAMPLE.replace('(contents)', '(#abc)') }], []);

@@ -13,7 +13,7 @@ import { paragraphSentences, wordsOf } from '../observers/text.js';
 import { protectedRanges, grammarFixing } from '../observers/grammar.js';
 import { numbersIn, namesIn } from './integrity.js';
 import type { Span } from '../observers/registry.js';
-import { checkQualified } from '../observers/written.js';
+import { qualifiedIn } from '../observers/written.js';
 
 /**
  * MECHANICAL ERRORS, CORRECTED IN PLACE. Each span the grammar rule flagged with a correction (core/observers/grammar.ts)
@@ -147,7 +147,7 @@ export function splitLongParagraphs(text: string, max: number): string {
  */
 /** A rule whose check is a qualified written check that supplied a correction for a span it flagged (core/observers/written.ts). */
 export const correctingCheck = (v: StandardVersion, c: { readonly requirementId: string; readonly observer?: string; readonly result: { readonly spans: readonly Span[] } }): boolean =>
-  c.observer === 'CHECK' && c.result.spans.some((sp) => sp.replacement !== undefined) && checkQualified(v.requirements.find((r) => r.requirementId === c.requirementId)?.measurement ?? null);
+  c.observer === 'CHECK' && c.result.spans.some((sp) => sp.replacement !== undefined) && qualifiedIn(v, c.requirementId);
 
 export function grammarFixes(v: StandardVersion, report: VerifyReport, text: string, only?: ReadonlySet<string>): { text: string; fixed: string[] } {
   const broken = new Set(report.checked.filter((c) => acts(c) && c.result.verdict === 'VIOLATED').map((c) => c.requirementId));

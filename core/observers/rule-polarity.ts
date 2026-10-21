@@ -8,7 +8,9 @@
 // "Keep the summary to two sentences, not three" asks for two sentences, and "Use no more than one example" is a cap
 // on something to do. So the kind is a reading (core/inference/reading.ts): the reader says, for each statement,
 // whether following it means NOT doing something, or doing something; code keeps only answers for statements it
-// asked about, a statement the reading skipped falls to the floor, and the anchored word pattern is that floor.
+// asked about, and a statement the reading skipped falls to the floor. The floor reads no words: an unread statement
+// is a thing to do, served under "What to do" in its own words, and the build says the kind was not read. (The word
+// pattern that once stood here read meaning, and "no more than one example" was a prohibition by it.)
 
 import type { Reading } from '../inference/reading.js';
 
@@ -16,8 +18,8 @@ export type Polarity = 'BOUNDARY' | 'GENERATIVE';
 export interface PolarityInput { readonly statements: readonly { readonly id: string; readonly text: string }[] }
 export type PolarityReading = Readonly<Record<string, Polarity>>;
 
-/** The floor: a statement that opens with a prohibition is one. Anchored, so a negative clause inside a positive step is not. */
-export const polarityByWords = (statement: string): Polarity => (/^\s*(?:never|do not|don't|must not|avoid|no)\b/i.test(statement) ? 'BOUNDARY' : 'GENERATIVE');
+/** The floor: a statement nothing read is taken as a thing to do, in its own words. No pattern decides it. */
+export const UNREAD_KIND: Polarity = 'GENERATIVE';
 
 export const RULE_POLARITY_SYSTEM = `You read rules a person wrote for how a piece of work is done, one per line with an id. For each, say what following it means:
 
@@ -51,5 +53,5 @@ export const RULE_POLARITY: Reading<PolarityInput, PolarityReading> = {
     // A reading that skipped a statement is no reading of it: the caller's floor decides that one. Nothing valid at all is no reading.
     return Object.keys(out).length ? out : null;
   },
-  floor(input) { return Object.fromEntries(input.statements.map((s) => [s.id, polarityByWords(s.text)])); },
+  floor(input) { return Object.fromEntries(input.statements.map((s) => [s.id, UNREAD_KIND])); },
 };

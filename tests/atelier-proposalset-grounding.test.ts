@@ -16,6 +16,7 @@ import { mkdtempSync, readFileSync, existsSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { groundedInUserText } from '../core/ratification/grounding.js';
+import { CHECK_DRAWS } from '../cli/commands/method.js';
 
 const CLI = resolve('dist/cli/atelier.mjs');
 
@@ -106,7 +107,8 @@ describe('POLARITY 1: --yes ratifies the persisted preview, with zero further mo
     run(data, proj, 'skill', PROMPT);
     const before = await requestCount();
     run(data, proj, 'skill', 'a different sentence about brevity');
-    expect(await requestCount()).toBe(before + 1);
+    // the proposer once, then which check each rule carries, drawn CHECK_DRAWS times (kept with the proposal: --yes asks nothing)
+    expect(await requestCount()).toBe(before + 1 + CHECK_DRAWS);
   });
 });
 

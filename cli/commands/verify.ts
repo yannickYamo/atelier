@@ -8,6 +8,13 @@
 // hook or a host hook as a gate. Rules without a measurement are not counted; `--taste` has the taste
 // reader read them (docs/TASTE.md).
 //
+//   atelier verify --skill house-style --hook        (a Claude Code PostToolUse or Stop hook)
+//
+// `--hook` reads the host's hook JSON on stdin (the written file's content or path, or the last answer), checks it, and
+// exits 2 with the broken rules on stderr where something REQUIRED was seen to fail, which is what blocks the host and
+// hands the reasons back to the model; 0 otherwise. A hook that could not check (no text in the event, no file) says
+// so and exits 0: a guard's own failure never blocks the person's work.
+//
 //   atelier verify --skill house-style draft.md --repair
 //
 // `--repair` is the guard for text written anywhere else: the same check-and-repair loop `invoke` runs
@@ -22,13 +29,14 @@ import { readFileSync, existsSync } from 'node:fs';
 import * as store from '../../core/state/store.js';
 import * as fstore from '../../core/state/fidelity-store.js';
 import { describeVerify } from '../../core/observers/verify.js';
-import { checkDraftAsync, refineToStandard } from '../../core/loop/run-repair.js';
+import { checkDraftAsync, refineToStandard, REPAIR_PASSES } from '../../core/loop/run-repair.js';
 import { checkClass } from '../../core/observers/doc-class.js';
 import { grammarListed, toCheckList } from '../../core/observers/grammar.js';
 import { DATA, argv, flag, positional, assertSkillName, boundMaterial, numericFlag, clientAndBinding, assertReachable } from '../runtime.js';
 import type { InferenceClient } from '../../core/inference/client.js';
 import { describeTaste, vetoMisses, actsAsMiss } from '../../core/taste/reader.js';
-import { recordTaste } from './taste.js';
+import { recordTaste, readerModel } from './taste.js';
+import { certificateFor, tasteStandingFor, claimStandingOf, recordHead } from '../../core/eval/certificate.js';
 import { recordForText } from '../eval-run.js';
 import { stateLine } from '../../core/eval/run-card.js';
 import { partlyChecked, blocks } from '../../core/eval/record.js';
@@ -46,6 +54,7 @@ function profileBands(L: store.StoreLayout): { id: string; band: readonly [numbe
 }
 
 export async function verify(): Promise<void> {
+  hookMode = argv.includes('--hook');
   const name = flag('--skill') ?? fail('--skill <name> required: atelier verify --skill <name> <file>   (or pipe the text in)');
   const L: store.StoreLayout = { root: DATA, skillName: assertSkillName(name) };
   const active = store.getActive(L) ?? fail(`no built skill called "${name}".`);
@@ -61,7 +70,18 @@ export async function verify(): Promise<void> {
   const classNote = short.transfer ? short.transfer.said : cls.ok ? cls.note : null;
   const file = positional([name]);
   let text: string;
-  if (file && file !== '-') {
+  if (hookMode) {
+    // THE HOST'S EVENT, NOT A FILE: what was written (a Write's content, an Edit's result by its path) or what was answered.
+    let data = '';
+    if (!process.stdin.isTTY) for await (const chunk of process.stdin) data += (chunk as Buffer).toString();
+    let event: { tool_input?: { content?: unknown; file_path?: unknown }; last_assistant_message?: unknown } = {};
+    try { event = JSON.parse(data || '{}') as typeof event; } catch { fail('the hook event on stdin is not JSON; nothing was checked'); }
+    const path = typeof event.tool_input?.file_path === 'string' ? event.tool_input.file_path : null;
+    text = typeof event.tool_input?.content === 'string' ? event.tool_input.content
+      : path && existsSync(path) ? readFileSync(path, 'utf8')
+        : typeof event.last_assistant_message === 'string' ? event.last_assistant_message : '';
+    if (!text.trim()) fail('nothing to check in this hook event (no written content, no file at its path, no answer); nothing was checked');
+  } else if (file && file !== '-') {
     if (!existsSync(file)) fail(`there is no file at ${file}.`);
     text = readFileSync(file, 'utf8');
   } else {
@@ -85,7 +105,7 @@ export async function verify(): Promise<void> {
     // an agreement, punctuation) runs with no key, and a key is asked for at the first call that needs one.
     let model: InferenceClient | null = null;
     const client: InferenceClient = { complete: (req) => { if (!model) { assertReachable('target'); model = clientAndBinding('target').client; } return model.complete(req); } };
-    const r = await refineToStandard(client, budget, name, v, text, 2, checks);
+    const r = await refineToStandard(client, budget, name, v, text, REPAIR_PASSES, checks);
     for (const n of checks.claimSensor?.notes ?? []) console.error(`(${n})`);
     // WHAT WAS LISTED, NOT CHANGED: a grammar rule whose findings are only listed is unverified, never held. Its items
     // are said here, in both outputs, so "nothing changed" never reads as "every rule holds".
@@ -93,7 +113,10 @@ export async function verify(): Promise<void> {
       items: c.result.spans.map((s) => ({ text: s.text, start: s.start, end: s.end, why: s.why })) }));
     const slips = listed.flatMap((l) => l.items);
     if (argv.includes('--json')) {
-      console.log(JSON.stringify({ output: r.output, failed: r.report.failed, repair: r.repair, spentUsd: budget.spentUsd,
+      // THE SAME RECORD OF THE REPAIRED TEXT a run carries, under the one record head (core/eval/certificate.ts).
+      const after = recordForText({ L, std: v, text: r.output, report: r.report, sensor: checks.claimSensor, claimsOff: argv.includes('--allow-unsourced'), answers: checks.format?.claims === 'list', unmeasured: checks.listsBecause ?? null });
+      console.log(JSON.stringify({ ...recordHead({ state: after.state, standardVersionHash: v.standardVersionHash, skillVersion: active, certificate: certificateFor(v, tasteStandingFor(L, v, readerModel()), claimStandingOf(checks.claimSensor)), record: after }),
+        output: r.output, failed: r.report.failed, repair: r.repair, spentUsd: budget.spentUsd,
         ...(listed.length ? { unverified: listed.map((l) => l.rule), listed } : {}) }, null, 1));
     } else {
       console.log(r.output);
@@ -135,8 +158,19 @@ export async function verify(): Promise<void> {
   const profile = argv.includes('--profile') ? profileOf(text, bands.filter((b, i) => bands.findIndex((x) => x.id === b.id) === i)) : null;
   // THE SAME RECORD A RUN CARRIES (cli/eval-run.ts): this text, under this standard, judged the same way.
   const record = recordForText({ L, std: v, text, report, readings: tasteRead, sensor: checks.claimSensor, claimsOff: argv.includes('--allow-unsourced'), answers: checks.format?.claims === 'list', unmeasured: checks.listsBecause ?? null });
+  // THE HOOK'S ANSWER: exit 2 and the broken rules on stderr where something required was seen to fail; 0 otherwise.
+  if (hookMode) {
+    const broken = record.entries.filter(blocks);
+    if (broken.length) {
+      console.error(`atelier: this breaks ${broken.length} required rule(s) of the "${name}" standard. Rewrite only what each names, keep everything else as it is:`);
+      for (const e of broken) console.error(`  - ${e.statement.replace(/[.]$/, '')}${e.observation.evidence ? `: ${e.observation.evidence}` : ''}`);
+      process.exitCode = 2;
+    }
+    return;
+  }
   if (argv.includes('--json')) {
-    console.log(JSON.stringify({ ...report, record, ...(profile ? { profile } : {}), failed: record.state === 'BLOCKED' || (taste?.failed ?? false), ...(classNote ? { note: classNote } : {}),
+    console.log(JSON.stringify({ ...recordHead({ state: record.state, standardVersionHash: v.standardVersionHash, skillVersion: active, certificate: certificateFor(v, tasteStandingFor(L, v, readerModel()), claimStandingOf(checks.claimSensor)), record }),
+      ...report, ...(profile ? { profile } : {}), failed: record.state === 'BLOCKED' || (taste?.failed ?? false), ...(classNote ? { note: classNote } : {}),
       ...(taste ? { taste: { failed: taste.failed, verdicts: taste.verdicts } } : {}) }, null, 1));
   } else {
     console.log(describeVerify(report, partlyChecked(record)));
@@ -179,7 +213,9 @@ export async function verify(): Promise<void> {
 
 /**
  * EXIT 2 FOR "COULD NOT CHECK", 1 FOR "CHECKED AND FAILED". A gate that reads exit 1 as a broken rule
- * must not be handed a missing file under the same code.
+ * must not be handed a missing file under the same code. Under --hook, where 2 means "block the host", a guard that
+ * could not check says so and exits 0: its own failure is never the person's.
  */
-const fail = (m: string): never => { console.error(`atelier: ${m}`); process.exit(2); };
+let hookMode = false;
+const fail = (m: string): never => { console.error(`atelier: ${m}`); process.exit(hookMode ? 0 : 2); };
 

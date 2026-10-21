@@ -43,6 +43,7 @@ import type { Requirement } from '../../core/state/canonical-state.js';
 import { create } from './improve.js';
 import { ratifyClose } from './ratify.js';
 import { build } from './build.js';
+import { stepPlan } from './method.js';
 
 export type SkillRoute = 'DIRECT' | 'DISCOVER' | 'HYBRID' | 'NEEDS_INPUT';
 
@@ -202,7 +203,13 @@ export async function skill(): Promise<void> {
     // THE FORM OF THE WORK, read in the same call (no examples exist here: what they said is the whole evidence). Kept
     // with the proposal, so `--yes` asks nothing more; the name of the work is the floor when the reader said none.
     const form = payload.form === 'REPLY' || payload.form === 'DOCUMENT' ? payload.form : undefined;
-    pset = { proposalSetHash: sha(JSON.stringify(rules)), promptHash, workType, rules, ...(form ? { form } : {}) };
+    // WHICH CHECK EACH STATED RULE CARRIES (core/method/step-check.ts, through the same plan `atelier new --method`
+    // builds): read now, kept with the proposal, so `--yes` asks nothing more. With no finished example to ground on, a
+    // listed measurement is kept where the draws agree; a written check reports until the person gives examples it can
+    // be qualified on; judgement otherwise. The rule's words are the person's and are never changed.
+    const plan = await stepPlan(rules.map((p, i) => ({ id: String(i + 1), text: p.statement, under: null })), [], new Map(rules.map((p) => [p.statement, p.kind])));
+    const checks = Object.fromEntries(rules.flatMap((p) => { const c = plan?.get(p.statement); return c && c.how !== 'judgement' && c.measurement ? [[p.statement, { how: c.how, measurement: c.measurement, means: c.means }]] : []; }));
+    pset = { proposalSetHash: sha(JSON.stringify(rules)), promptHash, workType, rules, ...(form ? { form } : {}), ...(Object.keys(checks).length ? { checks } : {}) };
     s = { ...s, proposalSet: pset };
     saveSession(s);
   } else {
@@ -215,7 +222,11 @@ export async function skill(): Promise<void> {
     const cond = p.appliesWhen.trim().toUpperCase() === 'GENERAL' ? '' : `\n      applies when: ${p.appliesWhen}`;
     console.log(`  ${i + 1}. [${p.kind === 'BOUNDARY' ? "don't" : 'do  '}] ${p.statement}${cond}`);
     if (!p.grounded) console.log('      ^ MY READING — these words are not in what you said. It needs your decision.');
+    const c = pset.checks?.[p.statement];
+    if (c) console.log(c.how === 'measure' ? `      checked by code on every output: ${c.means}` : '      a check was written for it: it reports and blocks nothing until you give finished examples it can be qualified on');
   });
+  const byCode = pset.rules.filter((p) => pset.checks?.[p.statement]?.how === 'measure').length;
+  console.log(`\n${byCode} of ${pset.rules.length} checked by code on every output; the rest ${pset.rules.length - byCode === 1 ? 'is' : 'are'} yours to judge.`);
 
   // What was said and became no rule: listed, so a dropped rule is seen before anything binds.
   const dropped = uncarriedSections(prompt ?? '', pset.rules);
@@ -254,10 +265,15 @@ export async function skill(): Promise<void> {
     provenance: 'MACHINE_DISCOVERED',
     evidence: p.sourceSpan || null, evidenceItemId: null, wouldBeAbsentIf: null,
     materiality: null, realizationTolerance: null, outputShape: null,
+    // the check read for it with the proposal; a written one is carried and reports, unqualified, until examples exist
+    ...(pset.checks?.[p.statement] ? { measurement: pset.checks[p.statement].measurement } : {}),
   }));
   let ledger: RatificationLedger = { standardDraftHash: draftHash(bases), records: [] };
   const decidedNow: Requirement[] = bases.map((base, i) => {
-    const outcome = decide(base, { verb: pset.rules[i].grounded ? 'STATED' : 'APPROVE' });
+    // A rule the person stated that code can hold an output to is required, as a stated step with a check is
+    // (cli/commands/method.ts, decideSteps); a written check is not enforced until qualified.
+    const enforce = pset.rules[i].grounded && pset.checks?.[base.statement]?.how === 'measure';
+    const outcome = decide(base, { verb: pset.rules[i].grounded ? 'STATED' : 'APPROVE', ...(enforce ? { materiality: 'REQUIRED' } : {}) });
     ledger = appendDecision(ledger, base, outcome.ledgerDecision, { decidedAt: new Date().toISOString() });
     return outcome.requirement;
   });

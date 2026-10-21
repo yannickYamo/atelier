@@ -475,3 +475,17 @@ export function standInChecks(given: { steps: { id: string; text: string; under:
     return { id: st.id, how: 'measure', measure: specOf(m), source: null, quote, means: specOf(m), ...(how.related ? { near: true } : {}) };
   }) };
 }
+
+/**
+ * THE RULE-POLARITY READING (core/observers/rule-polarity.ts), answered as the word pattern once read it: a statement
+ * that opens with a prohibition is a BOUNDARY. A test double, so scripted builds keep the kinds the suite was written
+ * against; the product's own floor reads no words.
+ */
+export function standInPolarity(prompt: string): { rules: { id: string; kind: 'BOUNDARY' | 'GENERATIVE' }[] } {
+  const rules: { id: string; kind: 'BOUNDARY' | 'GENERATIVE' }[] = [];
+  for (const line of prompt.split('\n')) {
+    const m = /^\[([^\]]+)\]\s+(.*)$/.exec(line.trim());
+    if (m) rules.push({ id: m[1], kind: /^\s*(?:never|do not|don't|must not|avoid|no)\b/i.test(m[2]) ? 'BOUNDARY' : 'GENERATIVE' });
+  }
+  return { rules };
+}
