@@ -121,8 +121,8 @@ You'll still be the one who decides what the broken ones mean. The reading moved
 
 ## Install
 
-The repository is private: access is by invitation, and the license (see [LICENSE](LICENSE)) lets you use and
-redistribute unmodified copies, with changes made only by the authors.
+The repository is public under a source-available license (see [LICENSE](LICENSE)): you may use and redistribute
+unmodified copies; changes are made only by the authors.
 
 ```bash
 git clone https://github.com/yannickYamo/atelier && cd atelier
@@ -165,6 +165,6 @@ What comes next is a closing test by an independent tester. The bar: from a fold
 ## Contributing
 
 Code changes are made by the authors only; the license allows no modification by anyone else. The
-contribution that is open to everyone with access is evidence. Point Atelier at work whose standard you know,
+contribution that is open to everyone is evidence. Point Atelier at work whose standard you know,
 hold some back, and report what it got right, what sounded right and was wrong, and whether pasting the
 examples did as well; negative results stay in. See [CONTRIBUTING](CONTRIBUTING.md) and [AGENTS.md](AGENTS.md).

@@ -12,7 +12,7 @@ standard. It installs the skill for Claude Code (`.claude/skills/<name>/`) or Co
 ## Set it up
 
 ```bash
-git clone https://github.com/yannickYamo/atelier && cd atelier   # private: access by invitation
+git clone https://github.com/yannickYamo/atelier && cd atelier   # source-available: see LICENSE
 npm install && npm run build
 npm link            # optional: puts `atelier` on PATH; otherwise use `node dist/cli/atelier.mjs`
 atelier setup       # adds the Atelier MCP server to the coding agents in this project
