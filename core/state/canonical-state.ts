@@ -370,8 +370,36 @@ export interface CheckQualification {
   readonly why: string | null;
 }
 
+/**
+ * HOW STRICTLY A SKILL'S OUTPUT IS HELD, by the kind of work it does (core/observers/latitude.ts). STRICT: house
+ * language, and a figure, date or citation not in the bound material blocks. GROUNDED: free within the method, and an
+ * untraced fact goes to review. CREATIVE: free composition, and an untraced fact is listed for the author, never cut.
+ * At every level a fact presented as real needs a source; what changes is the action on one that has none.
+ */
+export type LatitudeLevel = 'STRICT' | 'GROUNDED' | 'CREATIVE';
+export const LATITUDE_LEVELS: readonly LatitudeLevel[] = ['STRICT', 'GROUNDED', 'CREATIVE'];
+/** The default where nothing could be read: the middle level. */
+export const DEFAULT_LATITUDE: LatitudeLevel = 'GROUNDED';
+export interface Latitude {
+  readonly level: LatitudeLevel;
+  /** the words of the examples, the method or the purpose the reading stood on; empty when the owner set it or the floor did */
+  readonly evidence: readonly string[];
+  /** who set it: the owner (`--latitude`, `amend --latitude`), the reading, or the floor */
+  readonly by: 'owner' | 'model' | 'floor';
+}
+
 export interface StandardVersion {
   readonly standardVersionHash: string;
+  /**
+   * How strictly output is held (`LatitudeLevel`). The owner's: inside the hash. Absent on a standard minted before
+   * it existed, which is held as GROUNDED.
+   */
+  readonly latitude?: Latitude;
+  /**
+   * Rules the owner accepted as unmeasured, by requirement id: no check reads them, and a run is not sent to review on
+   * their account. Each stays listed on the record and the certificate. The owner's: inside the hash.
+   */
+  readonly acceptedUnmeasured?: readonly string[];
   /** by requirement id, for the written checks of this standard; absent where none was ever qualified. Not hashed. */
   readonly qualifications?: Readonly<Record<string, CheckQualification>>;
   /**
@@ -579,6 +607,13 @@ export interface InvocationSettings {
       readonly claims?: { readonly instrument: string; readonly version: string | null; readonly gate: 'reader' | 'pattern'; readonly qualified: boolean;
         readonly measured: { readonly caught: number; readonly planted: number; readonly leftAlone: number; readonly clean: number; readonly on: string } | null; readonly kinds: readonly string[] } | null;
     };
+    /**
+     * How strictly this output was held: the skill's level, the level the run held it at (stricter where the request
+     * asked for it, quoted), and who set the skill's level. Absent on a certificate written before latitude existed.
+     */
+    readonly latitude?: { readonly skill: LatitudeLevel; readonly run: LatitudeLevel; readonly tightenedBy: string | null; readonly setBy: 'owner' | 'model' | 'floor' | 'default' };
+    /** rules the owner accepted as unmeasured: listed here and on the record, never a reason to send the run to review */
+    readonly acceptedUnmeasured?: readonly { readonly id: string; readonly statement: string }[];
     /** the delivered-error bound on the owner's labels; null, with why, until the audit sample exists */
     readonly errorBound: { readonly alpha: number; readonly n: number } | null;
     readonly why: string | null;
@@ -906,8 +941,35 @@ export function assertFeedbackDidNotMutate(before: StandardVersion, after: Stand
  * every read: a file whose content no longer hashes to its name was edited by hand, and serving it
  * would put words the person never ratified under an identity they did.
  */
-export const standardHashOf = (v: Pick<StandardVersion, 'evidenceId' | 'workType' | 'requirements'>): string =>
-  createHash('sha256').update(JSON.stringify({ evidenceId: v.evidenceId, workType: v.workType, requirements: v.requirements })).digest('hex').slice(0, 16);
+export const standardHashOf = (v: Pick<StandardVersion, 'evidenceId' | 'workType' | 'requirements' | 'latitude' | 'acceptedUnmeasured'>): string =>
+  createHash('sha256').update(hashedBody(v)).digest('hex').slice(0, 16);
+
+/**
+ * The text a standard's hash is taken over. The latitude's level and the rules accepted as unmeasured are the owner's
+ * and are in it; a standard minted before they existed carries neither, and hashes exactly as it did.
+ */
+export const hashedBody = (v: Pick<StandardVersion, 'evidenceId' | 'workType' | 'requirements' | 'latitude' | 'acceptedUnmeasured'>): string =>
+  JSON.stringify({ evidenceId: v.evidenceId, workType: v.workType, requirements: v.requirements,
+    ...(v.latitude ? { latitude: v.latitude.level } : {}), ...(v.acceptedUnmeasured?.length ? { acceptedUnmeasured: [...v.acceptedUnmeasured].sort() } : {}) });
+
+/** What a supersession carries of the owner's settings that sit beside the rules: the latitude, and the accepted rules still in it. */
+export const carriedSettings = (prev: Pick<StandardVersion, 'latitude' | 'acceptedUnmeasured'>, kept: readonly Requirement[]): Pick<StandardVersion, 'latitude' | 'acceptedUnmeasured'> => {
+  const accepted = (prev.acceptedUnmeasured ?? []).filter((id) => kept.some((r) => r.requirementId === id));
+  return { ...(prev.latitude ? { latitude: prev.latitude } : {}), ...(accepted.length ? { acceptedUnmeasured: accepted } : {}) };
+};
+
+/**
+ * WHICH RULES ARE ACCEPTED AS UNMEASURED BY DEFAULT, by the level: on CREATIVE work every rule no check reads (the
+ * owner's judgement) is accepted, so a run is not sent to review for what only a person reads; on GROUNDED and STRICT
+ * work none is. A proposal like the level itself: shown at the build, kept by the owner, `--unmeasured accept|review`
+ * to say otherwise.
+ */
+export const defaultAccepted = (level: LatitudeLevel, kept: readonly Requirement[], said?: 'accept' | 'review'): string[] =>
+  (said === 'review' || (said === undefined && level !== 'CREATIVE')) ? []
+    : kept.filter((r) => r.authority !== 'EXPERT_REJECTED' && !r.measurement).map((r) => r.requirementId);
+
+/** The level a standard is held at: its own, or GROUNDED for one minted before latitude existed. */
+export const latitudeOf = (v: Pick<StandardVersion, 'latitude'> | null | undefined): LatitudeLevel => v?.latitude?.level ?? DEFAULT_LATITUDE;
 
 /** Throws unless `v`'s content hashes to the name it carries. */
 export function assertStandardIntegrity(v: StandardVersion, where = 'standard'): void {

@@ -168,7 +168,7 @@ describe('when material is not bound, the run says so once, and nothing reads a 
     expect(line).toMatch(/^1 rule\(s\) need your real specifics to fire \(p6\)\. Add them: --with actual-figures-incidents=<file>/);
     // nothing is bound, so nothing can be checked against it: listed, not cut
     expect(line).toMatch(/meanwhile a story, source or figure in the draft cannot be checked against anything of yours, and is listed for you, not cut/);
-    expect(materialLine(degraded, true, true, 'posts')).toMatch(/meanwhile any story, source or figure not found in what you bound is cut, or listed where the check is not measured/);
+    expect(materialLine(degraded, true, true, 'posts')).toMatch(/meanwhile any story, source or figure not found in what you bound is blocked, flagged or listed by the skill's latitude, and cut only where you chose that/);
     expect(line?.split('\n')).toHaveLength(1);
   });
   it('with nothing waiting and no notes, one line on the cut; with notes or no claim guard, nothing to say', () => {

@@ -58,7 +58,11 @@ export interface Entry {
   readonly reason: Reason;
 }
 
-export interface EvaluationRecord { readonly schema: 1; readonly state: RunState; readonly entries: readonly Entry[] }
+/**
+ * How strictly the output was held (core/observers/latitude.ts): carried with the record so a reader of it knows what
+ * an untraced specific met. Absent on a record of a standard minted before latitude existed.
+ */
+export interface EvaluationRecord { readonly schema: 1; readonly state: RunState; readonly entries: readonly Entry[]; readonly latitude?: 'STRICT' | 'GROUNDED' | 'CREATIVE' }
 
 export interface Observed {
   /**
@@ -148,4 +152,4 @@ export function entry(e: Omit<Entry, 'result' | 'reason'> & { readonly applies?:
   return { ...rest, ...judge({ applies: applies ?? true, verdict, coverage: e.observation.coverage, qualification: e.observation.qualification, listed: e.observation.listed === true }) };
 }
 
-export const recordOf = (entries: readonly Entry[]): EvaluationRecord => ({ schema: 1, state: stateOf(entries), entries });
+export const recordOf = (entries: readonly Entry[], latitude?: EvaluationRecord['latitude']): EvaluationRecord => ({ schema: 1, state: stateOf(entries), entries, ...(latitude ? { latitude } : {}) });

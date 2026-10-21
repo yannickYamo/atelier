@@ -56,6 +56,8 @@ export interface StepCheck {
   readonly qualification?: CheckQualification;
   /** of the reading's draws, how many gave this check (a reading varies; the build keeps what the draws agree on) */
   readonly agreed?: { readonly of: number; readonly same: number };
+  /** kept from the build that ratified it: the step's words and the examples are unchanged, so it was not read again (./freeze.ts) */
+  readonly frozen?: true;
   readonly by: 'model' | 'floor';
 }
 export type StepCheckOutput = Readonly<Record<string, StepCheck>>;

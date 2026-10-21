@@ -182,14 +182,16 @@ describe('P1-4: a skill for answers is compiled in the words of answers', () => 
     materiality: 'REQUIRED', realizationTolerance: null, outputShape: null, evidence: 'span', evidenceItemId: 'w1' }],
     authorityState: 'RATIFIED', mintedAt: '2026-09-30T00:00:00Z', supersedes: null, reason: null };
   const voice = { passages: ['Run the migration, then restart.'], lengthWords: [100, 100] as const };
-  const md = async (workType: string): Promise<string> => {
+  // The form is read from the examples at the build (core/observers/work-form.ts) and carried with the voice; no word of
+  // the work's name decides it.
+  const md = async (workType: string, form?: 'REPLY' | 'DOCUMENT'): Promise<string> => {
     const { renderAgentSkill } = await import('../renderers/agent-skill/render.js');
     const { compileArchitecture } = await import('../core/architecture/compile.js');
     const std = { ...base, workType } as unknown as StandardVersion;
-    return renderAgentSkill(std, compileArchitecture(std), 'x', 'd', null, [], voice).files['SKILL.md'];
+    return renderAgentSkill(std, compileArchitecture(std), 'x', 'd', null, [], { ...voice, ...(form ? { form } : {}) }).files['SKILL.md'];
   };
   it('answers: no usual length is stated, the request sets it, and the line against invention names results and systems', async () => {
-    const m = await md('answers');
+    const m = await md('answers', 'REPLY');
     // A word count read off short examples won over "unless the request asks for more": no number is a target now.
     expect(m).not.toMatch(/My answers usually run about/);
     expect(m).toContain('How much I write follows the request, never a habit of length.');

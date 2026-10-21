@@ -3,29 +3,33 @@
 // The form decides how a skill is compiled and run. Replies get the voice of someone answering (give what was
 // asked first, state assumptions, name the check), their length follows the request, and specifics are listed for
 // the reader rather than cut. Documents keep the author's shape and length and the method's sections. For a long
-// time the form was read off the skill's NAME by a word pattern (core/observers/formats.ts, `isReplyWork`): "code
+// time the form was read off the skill's NAME by a word pattern, since removed: "code
 // review" matched "reply work", and a skill for sectioned review documents was served a chat assistant's voice no
 // example of the author's carried. The name is the least of the evidence. The examples are the most of it.
 //
 // So the form is a reading (core/inference/reading.ts): code decides where the examples are decisive (every one
 // of them sectioned under headings is a document; nothing in a conversation looks like that), a small model reads
 // the examples otherwise and quotes what shows the form in each, code grounds the quotes and takes the majority,
-// and the word pattern on the name is the floor when no model is set up. Read once at build, stored with the skill
+// and with no model, or no grounded reading, the floor is a document: it reads no words, so a name never makes a reply. Read once at build, stored with the skill
 // (core/state/store.ts, `setWorkForm`), carried with the voice to the renderer, and never read again unless asked.
 
 import type { Reading } from '../inference/reading.js';
 import { quoteIsReal } from '../taste/reader.js';
-import { isReplyWork } from './formats.js';
 
 export type WorkForm = 'REPLY' | 'DOCUMENT';
 
 export interface WorkFormInput {
-  /** what the owner said the skill is for: the floor's whole evidence, the reading's least */
+  /** what the owner said the skill is for: the reading's least evidence */
   readonly workType: string;
   /** the author's pieces, with the request each answered where known */
   readonly examples: readonly { readonly text: string; readonly request: string | null }[];
   /** the owner's method note, when there is one */
   readonly method: string | null;
+  /**
+   * The form the owner's own choices already name, where they name one: a class of work that answers people
+   * (`--class assistant-reply`, which `atelier new --mode respond` sets). The floor where nothing read the examples.
+   */
+  readonly declared?: WorkForm | null;
 }
 
 /** Headings in a piece: ATX only, outside code fences. */
@@ -101,5 +105,6 @@ export const WORK_FORM: Reading<WorkFormInput, WorkForm> = {
     }
     return r.form === 'REPLY' || r.form === 'DOCUMENT' ? r.form : null;
   },
-  floor(input) { return isReplyWork(input.workType) ? 'REPLY' : 'DOCUMENT'; },
+  // The floor reads no words: the form the owner's choices name, or a document, the form that keeps the author's own shape.
+  floor(input) { return input.declared ?? 'DOCUMENT'; },
 };

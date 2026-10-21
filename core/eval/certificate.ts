@@ -8,7 +8,8 @@
 // not to tell. `atelier run --json` and `atelier verify --json` print the same head (`recordHead`), so a host reads one
 // record whichever door the text came through.
 
-import type { StandardVersion, InvocationSettings } from '../state/canonical-state.js';
+import type { StandardVersion, InvocationSettings, LatitudeLevel } from '../state/canonical-state.js';
+import { latitudeOf } from '../state/canonical-state.js';
 import type { EvaluationRecord, RunState } from './record.js';
 import { qualifiedIn } from '../observers/written.js';
 import { QUALIFIED_READERS } from '../loop/claim-extract.js';
@@ -35,7 +36,10 @@ export function tasteStandingFor(L: store.StoreLayout, std: Pick<StandardVersion
 export const claimStandingOf = (s: { readonly instrument: string; readonly version: string | null; readonly gate: 'reader' | 'pattern'; readonly qualified: boolean } | null | undefined): ClaimStanding | null =>
   (s ? { instrument: s.instrument, version: s.version, gate: s.gate, qualified: s.qualified } : null);
 
-export function certificateFor(std: StandardVersion, taste: TasteStanding | null, claims: ClaimStanding | null): Certificate {
+/** The level a run held its output at, where it read one (cli/latitude.ts, `runLatitude`). */
+export interface HeldLatitude { readonly level: LatitudeLevel; readonly quote: string | null }
+
+export function certificateFor(std: StandardVersion, taste: TasteStanding | null, claims: ClaimStanding | null, held: HeldLatitude | null = null): Certificate {
   const measured = std.requirements.filter((r) => r.authority !== 'EXPERT_REJECTED' && r.measurement);
   const written = measured.filter((r) => r.measurement?.observer === 'CHECK');
   // THE CLAIM READER'S HONEST LINE: the rates it was measured at, on the kinds it was measured on, or none.
@@ -49,6 +53,9 @@ export function certificateFor(std: StandardVersion, taste: TasteStanding | null
         measured: known?.measured ? { caught: known.measured.caught, planted: known.measured.planted, leftAlone: known.measured.leftAlone, clean: known.measured.clean, on: known.measured.on } : null,
         kinds: [...(known?.classes ?? [])] } : null,
     },
+    // HOW STRICTLY IT WAS HELD, AND WHAT THE OWNER ACCEPTED UNREAD: carried on every certificate, whichever door.
+    latitude: { skill: latitudeOf(std), run: held?.level ?? latitudeOf(std), tightenedBy: held && held.level !== latitudeOf(std) ? held.quote : null, setBy: std.latitude?.by ?? 'default' },
+    acceptedUnmeasured: (std.acceptedUnmeasured ?? []).flatMap((id) => { const r = std.requirements.find((q) => q.requirementId === id); return r ? [{ id, statement: r.statement }] : []; }),
     errorBound: null,
     why: 'no delivered-error bound: it needs an audit sample of your own labels, drawn like the work this skill does; the checks and readers above are what this output was held to',
   };

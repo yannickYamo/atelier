@@ -117,7 +117,7 @@ export async function verify(): Promise<void> {
     const slips = listed.flatMap((l) => l.items);
     if (argv.includes('--json')) {
       // THE SAME RECORD OF THE REPAIRED TEXT a run carries, under the one record head (core/eval/certificate.ts).
-      const after = recordForText({ L, std: v, text: r.output, report: r.report, sensor: checks.claimSensor, claimsOff: argv.includes('--allow-unsourced'), answers: checks.format?.claims === 'list', unmeasured: checks.listsBecause ?? null });
+      const after = recordForText({ L, std: v, text: r.output, report: r.report, sensor: checks.claimSensor, claimsOff: argv.includes('--allow-unsourced'), answers: checks.format?.claims === 'list', unmeasured: checks.listsBecause ?? null, material: checks.evidence ?? '' });
       console.log(JSON.stringify({ ...recordHead({ state: after.state, standardVersionHash: v.standardVersionHash, skillVersion: active, certificate: certificateFor(v, tasteStandingFor(L, v, readerModel()), claimStandingOf(checks.claimSensor)), record: after }),
         output: r.output, failed: r.report.failed, repair: r.repair, spentUsd: budget.spentUsd,
         ...(listed.length ? { unverified: listed.map((l) => l.rule), listed } : {}) }, null, 1));
@@ -160,7 +160,7 @@ export async function verify(): Promise<void> {
   }), ...store.getSignals(L).map((s) => ({ id: s.id, band: s.band })), ...profileBands(L)];
   const profile = argv.includes('--profile') ? profileOf(text, bands.filter((b, i) => bands.findIndex((x) => x.id === b.id) === i)) : null;
   // THE SAME RECORD A RUN CARRIES (cli/eval-run.ts): this text, under this standard, judged the same way.
-  const record = recordForText({ L, std: v, text, report, readings: tasteRead, sensor: checks.claimSensor, claimsOff: argv.includes('--allow-unsourced'), answers: checks.format?.claims === 'list', unmeasured: checks.listsBecause ?? null });
+  const record = recordForText({ L, std: v, text, report, readings: tasteRead, sensor: checks.claimSensor, claimsOff: argv.includes('--allow-unsourced'), answers: checks.format?.claims === 'list', unmeasured: checks.listsBecause ?? null, material: checks.evidence ?? '' });
   // THE HOOK'S ANSWER: exit 2 and the broken rules on stderr where something required was seen to fail; 0 otherwise.
   if (hookMode) {
     const broken = record.entries.filter(blocks);

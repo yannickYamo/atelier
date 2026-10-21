@@ -93,6 +93,23 @@ export function runCheck(fn: CompiledCheck, text: string, context: CheckContext 
   return { verdict: r.ok ? 'MET' : 'VIOLATED', spans: r.ok ? [] : spans, value: r.value ?? null, detail: r.detail ?? (r.ok ? `${what}: held` : `${what}: not held`) };
 }
 
+/** What a check that reads the material says where none is bound: not applicable, unverified, named (core/eval/record-build.ts). */
+export const MATERIAL_UNREAD = 'reads your material, and none is bound';
+
+/**
+ * DOES THE CHECK READ THE MATERIAL. Read off the check's own code, as code: the name of its third parameter in its
+ * parameter list (a form, `(text, request, material) =>` or `function check(text, request, files)`), and whether its
+ * body uses that name. No meaning is read: a check that never touches the parameter does not read what it holds.
+ */
+export function checkReadsMaterial(src: string): boolean {
+  // FORM: the parameter list of an arrow function or of a function declaration named check.
+  const head = /^\s*(?:function\s+check\s*)?\(([^)]*)\)/.exec(src);
+  const name = head?.[1].split(',')[2]?.replace(/=.*$/s, '').trim();
+  if (!head || !name || !/^[A-Za-z_$][\w$]*$/.test(name)) return false;
+  // FORM: the name as a whole identifier in the rest of the code.
+  return new RegExp(`(?<![\\w$.])${name.replace(/\$/g, '\\$')}(?![\\w$])`).test(src.slice(head[0].length));
+}
+
 /**
  * The check as a measurement: `source` is its code (one line per array element), `means` says in words what it
  * checks. Whether it is qualified is not in it: that is read beside the standard (`qualifiedIn`).
@@ -109,6 +126,8 @@ export const CHECK: Observer = {
     return null;
   },
   observe(text, p, context): ObserverResult {
+    // A CHECK THAT READS THE MATERIAL CANNOT READ WHAT WAS NOT GIVEN: with none bound it is not applicable, never failed.
+    if (!context?.material?.length && checkReadsMaterial(source(p))) return { verdict: 'NOT_APPLICABLE', spans: [], value: null, detail: `${MATERIAL_UNREAD}: ${means(p)} was not checked` };
     const c = compileCheck(source(p));
     if (!c.fn) return { verdict: 'NOT_APPLICABLE', spans: [], value: null, detail: `the check could not run (${c.problem})` };
     return runCheck(c.fn, text, context, means(p));

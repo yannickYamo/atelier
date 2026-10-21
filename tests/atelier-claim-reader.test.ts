@@ -269,10 +269,10 @@ describe('through the binary: the reader runs on the person\'s own backend when 
     };
     run({}, 'add', '--statement', 'Never say leverage.', '--kind', 'BOUNDARY', '--applies-when', 'GENERAL', '--materiality', 'REQUIRED', '--measure', 'LEXICON:leverage');
     run({}, 'ratify-close', '--work-type', 'writing');
-    // the check may cut only on a kind of work it was measured on, with material bound
+    // the check may cut only on a kind of work it was measured on, with material bound, where the owner chose to cut
     run({}, 'build', '--name', 'house', '--class', 'essay');
     writeFileSync(join(proj, 'notes.md'), 'Notes: the cache was changed, and the fix shipped.');
-    run({}, 'material', '--skill', 'house', join(proj, 'notes.md'));
+    run({}, 'material', '--skill', 'house', join(proj, 'notes.md'), '--cut');
     const file = join(proj, 'd.md');
     writeFileSync(file, 'The review took 94 minutes. It ended well.');
     return { run, file };
@@ -557,10 +557,10 @@ describe('the audit of the invented-claim check', () => {
       };
       run({}, 'add', '--statement', 'Never say leverage.', '--kind', 'BOUNDARY', '--applies-when', 'GENERAL', '--materiality', 'REQUIRED', '--measure', 'LEXICON:leverage');
       run({}, 'ratify-close', '--work-type', 'writing');
-      // the check may cut only on a kind of work it was measured on, with material bound
+      // the check may cut only on a kind of work it was measured on, with material bound, where the owner chose to cut
     run({}, 'build', '--name', 'house', '--class', 'essay');
     writeFileSync(join(proj, 'notes.md'), 'Notes: the cache was changed, and the fix shipped.');
-    run({}, 'material', '--skill', 'house', join(proj, 'notes.md'));
+    run({}, 'material', '--skill', 'house', join(proj, 'notes.md'), '--cut');
       const file = join(proj, 'd.md');
       writeFileSync(file, draft);
       return { run, file };

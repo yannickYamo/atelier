@@ -316,9 +316,10 @@ describe('through the binary: atelier method, then a run held to the method', ()
     // three readings of the steps, never a rule: what each step is (a prohibition or a thing to do), which check each asks
     // for, drawn CHECK_DRAWS times and held against the first (core/method/step-check.ts), then what each asks the writer
     // to decide (core/method/decision-units.ts). Every step stays the owner's words.
-    expect(await count()).toBe(before + 2 + CHECK_DRAWS);
-    const tools = (await (await fetch(`${url()}/__log`)).json() as { bodies: string[] }).bodies.slice(-(2 + CHECK_DRAWS)).map((b) => (JSON.parse(b) as { tools?: { function?: { name?: string } }[] }).tools?.[0]?.function?.name);
-    expect(tools).toEqual(['emit_rule_polarity', ...Array.from({ length: CHECK_DRAWS }, () => 'emit_step_checks'), 'emit_method_units']);
+    // and one more reading, of how strictly output is held (core/observers/latitude.ts): a level, never a rule.
+    expect(await count()).toBe(before + 3 + CHECK_DRAWS);
+    const tools = (await (await fetch(`${url()}/__log`)).json() as { bodies: string[] }).bodies.slice(-(3 + CHECK_DRAWS)).map((b) => (JSON.parse(b) as { tools?: { function?: { name?: string } }[] }).tools?.[0]?.function?.name);
+    expect(tools).toEqual(['emit_rule_polarity', ...Array.from({ length: CHECK_DRAWS }, () => 'emit_step_checks'), 'emit_method_units', 'emit_latitude']);
     const skill = readFileSync(join(proj, '.claude', 'skills', 'analysis', 'SKILL.md'), 'utf8');
     for (const step of stepsOf(NOTE)) expect(skill).toContain(step.text.replace(/\.$/, ''));
     expect(readFileSync(join(proj, '.claude', 'skills', 'analysis', 'examples', 'exemplar.md'), 'utf8')).toContain('Borealis wins for a small team');
@@ -362,11 +363,10 @@ describe('through the binary: atelier method, then a run held to the method', ()
     expect(j.report.join('\n')).toMatch(/made from what was given 0 of 1 \(not: x\d+\)/);
   }, 120_000);
 
-  it('the kind of work is recorded with the skill without a question, and said in the whole account', () => {
+  it('the kind of work is never read off the method\'s title: no class is recorded unless --class names one', () => {
     const r = atelier('method', 'asks.md', '--golden', 'acme.md', '--name', 'asks', '--review', '--report', ...BACKEND());
-    expect(r.out).toMatch(/Kind of work: asks \(read from your method; --class <kind> to change it\)\. Sentences not found in your material are listed for you to check, never cut/);
-    expect(atelier('method', 'asks.md', '--golden', 'acme.md', '--name', 'asks', '--review', '--report', '--class', 'essay', ...BACKEND()).out).toMatch(/Kind of work: essay\. With your material bound \(atelier material\), sentences not found in it are cut/);
-    expect(readFileSync(join(data, 'skills', 'analysis', 'class.txt'), 'utf8')).toBe('competitive-analysis');
+    expect(r.out).not.toMatch(/Kind of work/);
+    expect(existsSync(join(data, 'skills', 'analysis', 'class.txt'))).toBe(false);
   });
 
   it('a sentence the claim check cannot find is delivered, never cut, and marked where it stands as one to verify', async () => {
@@ -380,13 +380,12 @@ describe('through the binary: atelier method, then a run held to the method', ()
     expect(quiet.out).not.toContain('needs verification');
   }, 120_000);
 
-  it('strict delivery on a kind of work the claim check is not measured on stops before anything is spent, and says why', async () => {
+  it('strict delivery on a grounded skill is never stopped before it starts: it runs, and its claims are flagged for review', async () => {
     const before = await count();
     const r = atelier('invoke', '--skill', 'analysis', '--task=Compare Cygnus and Dorado on price for a small team.', '--with', 'prices=new-prices.md', '--strict', ...BACKEND());
-    expect(r.code).not.toBe(0);
-    expect(r.err).toContain('Strict delivery needs a claim check that decides, and here the claim check is not measured on competitive-analysis. Nothing was written. Run without --strict to get a draft with unsourced sentences listed.');
-    expect(await count()).toBe(before);
-  });
+    expect(`${r.err}${r.out}`).not.toContain('Strict delivery needs a claim check that decides');
+    expect(await count()).toBeGreaterThan(before);
+  }, 120_000);
 
   it('a second method in the same folder is refused before anything is written: one project, one standard', () => {
     const r = atelier('method', 'method.md', '--golden', 'acme.md', '--name', 'again', '--yes', ...BACKEND());

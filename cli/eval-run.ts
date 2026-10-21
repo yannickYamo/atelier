@@ -10,14 +10,15 @@ import * as fstore from '../core/state/fidelity-store.js';
 import { acts, type VerifyReport, type RuleCheck } from '../core/observers/verify.js';
 import { INCONCLUSIVE, UNREAD, CLAIMS_TO_CHECK, PUBLIC_FACTS } from '../core/loop/run-repair.js';
 import { featureOf } from '../core/observers/features.js';
-import { overlapIndex, STANDARD_WORDING_PIECES } from '../core/observers/overlap.js';
+import { overlapIndex, suppliedWording, STANDARD_WORDING_PIECES } from '../core/observers/overlap.js';
 import { bandsFor } from '../core/fidelity/profile.js';
 import { localiseBands } from '../core/fidelity/context.js';
 import { QUALIFIED_READERS, DISPUTED_WHY, NO_MATERIAL } from '../core/loop/claim-extract.js';
 import type { EvalSummary } from '../core/eval/summary.js';
 import { buildRecord } from '../core/eval/record-build.js';
 import { standingOf, type EvaluationRecord } from '../core/eval/record.js';
-import type { InvocationRecord, StandardVersion } from '../core/state/canonical-state.js';
+import type { InvocationRecord, StandardVersion, LatitudeLevel } from '../core/state/canonical-state.js';
+import { latitudeOf } from '../core/state/canonical-state.js';
 import type { FidelityProfile } from '../core/fidelity/types.js';
 import type { ClaimSensor } from '../core/loop/claim-extract.js';
 import type { RequestCoverage } from '../core/loop/context-judge.js';
@@ -40,6 +41,8 @@ export interface RunEvalInput {
   readonly answers: boolean;
   /** the kind of work, when the claim check was never measured on it (core/loop/claim-extract.ts, `unmeasuredKind`) */
   readonly unmeasured?: string | null;
+  /** what the person supplied for the run (the request and the bound material): wording quoted from it is not copying */
+  readonly material?: string;
   readonly profile: FidelityProfile | null;
   readonly format: { readonly words: string | null; readonly shape: 'SHAPE' | 'BARE' | null; readonly withheld: number };
   readonly taste: EvalSummary['monitors']['taste'];
@@ -104,7 +107,7 @@ export function buildRunEval(x: RunEvalInput): EvalSummary {
   const voice = store.getVoice(x.L);
   const served = copyGuardPieces(voice);
   // Wording found in three or more pieces of the corpus is the author's standard wording, and is not counted.
-  const longest = served.length ? overlapIndex(served, voice?.standardWording ?? [])(rec.output).longestShared : null;
+  const longest = served.length ? overlapIndex(served, [...(voice?.standardWording ?? []), ...suppliedWording(x.material ?? '')])(rec.output).longestShared : null;
   const formatLine = line('FORMAT');
 
   // WITH NO RECORD (a structured output held by its contract, or no standard at all) the engine's own bar stands:
@@ -119,6 +122,7 @@ export function buildRunEval(x: RunEvalInput): EvalSummary {
   if (x.request?.met === false) reasons.push(`the length the request asks for was not met (${x.request.detail})`);
   // THE RECORD (core/eval/record.ts): the same facts, each with what was observed of it, judged in one place.
   const record = x.contract || !std ? undefined : recordForText({ L: x.L, readings: x.readings, std, text: rec.output, report: final, sensor: x.sensor, claimsOff: x.claimsOff, answers: x.answers, unmeasured: x.unmeasured ?? null,
+    level: rec.settings?.certificate?.latitude?.run, material: x.material,
     waived: new Map(x.applicability.filter((a) => a.status === 'WAIVED').map((a) => [a.requirementId, a.why ?? 'set aside for this run'])), request: x.request ?? null, cut: counts.cut,
     lostToLength: rec.repair?.unmeasured ?? [] });
   // THE YES/NO KEPT WITH THE RUN IS THE RECORD'S (core/eval/record.ts, `standingOf`): nothing required was seen to
@@ -218,7 +222,11 @@ export function recordForText(x: { L: store.StoreLayout; std: StandardVersion; t
   /** rules the draft was read on that the text is too short to read (core/state/canonical-state.ts, `RepairRecord.unmeasured`) */
   lostToLength?: readonly string[];
   /** the taste reader's reading of this text, rule by rule, with whether it may act (core/eval/record-build.ts, `RuleReading`) */
-  readings?: readonly RuleReadingOf[] }): EvaluationRecord {
+  readings?: readonly RuleReadingOf[];
+  /** the level the run held the text at, where it tightened the skill's (cli/latitude.ts) */
+  level?: LatitudeLevel;
+  /** what the person supplied for this text (the request and the bound material): wording quoted from it is not copying */
+  material?: string }): EvaluationRecord {
   const line = (id: string): RuleCheck | undefined => x.report?.checked.find((c) => c.requirementId === id);
   const spans = (id: string): number => (line(id)?.result.verdict === 'VIOLATED' ? line(id)?.result.spans.length ?? 0 : 0);
   const state = x.claimsOff ? 'off' as const : !x.report || line(UNREAD) ? 'not-checked' as const : 'checked' as const;
@@ -227,7 +235,8 @@ export function recordForText(x: { L: store.StoreLayout; std: StandardVersion; t
   // (And where the check did fail the text on its gating line, it decided: the record cannot say less than the check.)
   const deciding = !x.unmeasured || spans('UNSOURCED') > 0;
   const voice = store.getVoice(x.L); const served = copyGuardPieces(voice);
-  const shared = served.length ? overlapIndex(served, voice?.standardWording ?? [], { words: true })(x.text) : null;
+  // WHAT THE PERSON SUPPLIED IS NOT COPYING: a transcript quoted as evidence shares runs with every example that quoted it.
+  const shared = served.length ? overlapIndex(served, [...(voice?.standardWording ?? []), ...suppliedWording(x.material ?? '')], { words: true })(x.text) : null;
   return buildRecord({
     requirements: x.std.requirements, waived: x.waived ?? new Map(), request: x.request ?? null,
     checked: x.report ? x.report.checked.filter((c) => !isClaimLine(c.requirementId)).map((c) => ({ id: c.requirementId, statement: c.statement, required: acts(c), verdict: c.result.verdict, detail: c.result.detail })) : null,
@@ -236,6 +245,8 @@ export function recordForText(x: { L: store.StoreLayout; std: StandardVersion; t
     // Wording found in three or more pieces of the corpus is the author's standard wording, and is not counted.
     copying: shared ? { longest: shared.longestShared, limit: copyLimit(voice), tellable: (voice?.lengthPieces ?? voice?.pieces?.length ?? 0) >= STANDARD_WORDING_PIECES, ...(shared.longestWords ? { words: shared.longestWords } : {}) } : null,
     unmeasured: new Set(x.lostToLength ?? []), read: readMap(x.readings),
+    // How strictly it was held, and what the owner accepted unmeasured: from the standard, the run's level where it tightened.
+    ...(x.std.latitude || x.level ? { latitude: x.level ?? latitudeOf(x.std) } : {}), accepted: new Set(x.std.acceptedUnmeasured ?? []),
     replaced: new Set(x.request ? x.std.requirements.filter((r) => x.waived?.has(r.requirementId) && r.measurement?.observer === 'LENGTH' && !r.measurement.params.in).map((r) => r.requirementId) : []),
   });
 }

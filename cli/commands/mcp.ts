@@ -154,7 +154,7 @@ const call = async (name: string, args: Record<string, unknown>): Promise<{ text
     const report = await checkDraftAsync(skill, v, text, checks);
     // The same record a run carries (cli/eval-run.ts): an agent checking its own text is told what was read in full,
     // what in part and what not at all, and never takes "nothing failed" for "verified".
-    const record = recordForText({ L, std: v, text, report, sensor: checks.claimSensor, claimsOff: false, answers: checks.format?.claims === 'list', unmeasured: checks.listsBecause ?? null });
+    const record = recordForText({ L, std: v, text, report, sensor: checks.claimSensor, claimsOff: false, answers: checks.format?.claims === 'list', unmeasured: checks.listsBecause ?? null, material: checks.evidence ?? '' });
     // The reading-based rules, on request: this calls a model, and every other check here is free.
     // A miss on a rule where the reader holds VETO fails the check, as on the command line. A reader that
     // cannot run costs nothing of the counted report: it is said, and the counted result stands.

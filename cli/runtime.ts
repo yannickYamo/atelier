@@ -16,7 +16,7 @@ import * as store from '../core/state/store.js';
 import { readJson } from '../core/state/read-json.js';
 import { createHash } from 'node:crypto';
 import { newRun, transition, type Run } from '../core/state/run-state.js';
-import type { ExpertEvidence, Requirement, StandardVersion, CheckQualification, Measurement } from '../core/state/canonical-state.js';
+import type { ExpertEvidence, Requirement, StandardVersion, CheckQualification, Measurement, Latitude } from '../core/state/canonical-state.js';
 import { contrastFor, type ContrastPair } from '../core/compiler/contrast-examples.js';
 import type { Reservation } from '../core/golden/reservation.js';
 import type { RatificationLedger } from '../core/ratification/decision-record.js';
@@ -92,6 +92,8 @@ export const VALUED_OPTIONS: readonly string[] = ['correcting', 'moves',
   'questions', 'reason', 'required-n', 'reserve', 'role',
   // `atelier new` with pieces by several authors (cli/commands/composite.ts): who wrote which, what is liked about each, and a conflict's answer
   'authors', 'admire', 'conflict',
+  // how strictly output is held (cli/latitude.ts), and whether the rules no check reads are accepted unmeasured
+  'latitude', 'unmeasured',
   'rule', 'set', 'skill', 'source-author', 'statement', 'strict-schema',
   'structured-output', 'supersedes', 'target-backend', 'target-base-url', 'target-model',
   'target-price-in', 'target-price-out', 'target-provider', 'target-strict-schema', 'target-structured-output',
@@ -105,6 +107,7 @@ export const BOOLEAN_OPTIONS: readonly string[] = [
   'ai-assisted', 'blind-expert', 'delivery-proven', 'no-ai-assist', 'per-passage',
   'regenerate',
   'review', 'score', 'skip', 'skip-methods', 'yes', 'baseline', 'qualify', 'promote',
+  'cut', 'no-cut', 'draft-examples',
   'reflect', 'no-reflect', 'report', 'phrase', 'calibrate', 'placeholders', 'no-placeholders', 'no-unsourced-note', 'no-redraft', 'no-model', 'always', 'evaluation', 'learn', 'include-reserved', 'taste', 'no-taste', 'no-brief', 'examples-first', 'no-infer-method', 'voices', 'setup', 'auto', 'no-fidelity', 'fidelity', 'rollback', 'distill', 'next', 'sections', 'panel', 'quiet', 'label', 'typicality', 'read-subjects', 'strict', 'allow-nonconformant', 'full', 'no-index', 'test-run',
 ];
 
@@ -658,7 +661,9 @@ export interface ProposalSet {
   /** the form of the work as the proposer read it from what was said (core/observers/work-form.ts); absent when it said none */
   readonly form?: 'REPLY' | 'DOCUMENT';
   /** which check each stated rule carries, by its statement (core/method/step-check.ts), read with the proposal so `--yes` asks nothing more */
-  readonly checks?: Readonly<Record<string, { readonly how: 'measure' | 'written'; readonly measurement: Measurement; readonly means: string }>>;
+  readonly checks?: Readonly<Record<string, { readonly how: 'measure' | 'written'; readonly measurement: Measurement; readonly means: string;
+    /** a written check's standing on the answers the owner kept (`--draft-examples`, then `atelier rate`); absent with none */
+    readonly qualification?: CheckQualification }>>;
 }
 
 // ── session (one active run per PROJECT; a run is a study, not a session) ─────────────────────
@@ -694,6 +699,8 @@ export interface Session {
    * that shipped with the first version and was called by nothing; this field is where it lands.
    */
   ledger?: RatificationLedger | null;
+  /** how strictly output is held, read at the build or set by the owner (cli/latitude.ts); minted into the standard at the close */
+  latitude?: Latitude | null;
   /** what each written check earned on the examples, by requirement id; written beside the standard at the close */
   qualifications?: Readonly<Record<string, CheckQualification>>;
   /**

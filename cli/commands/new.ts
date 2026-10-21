@@ -26,7 +26,8 @@ import { normalizeClass } from '../../core/observers/doc-class.js';
 import { floorDimensions, proposeMargins, buildContract } from '../../core/distinctiveness/measured.js';
 import { extract } from '../../core/intake/extract.js';
 import { authorship } from '../../core/composite/voices.js';
-import { corpusFiles } from '../corpus.js';
+import { corpusFiles, sessionCorpus } from '../corpus.js';
+import { settleLatitude } from '../latitude.js';
 import { intake, examplePieces } from './intake.js';
 import { discover } from './discover.js';
 import { method } from './method.js';
@@ -213,6 +214,8 @@ export async function newSkill(): Promise<void> {
     // The purpose becomes how a host decides to load the skill at all — from the run, so a second
     // call without the sentence still carries it.
     if (intent && !argv.includes('--description')) argv.push('--description', `Use when asked to: ${intent.replace(/[.\s]+$/, '')}.`);
+    // HOW STRICTLY OUTPUT IS HELD, read from the pieces and what the skill is for (cli/latitude.ts); minted at the close.
+    await settleLatitude({ purpose: intent ?? s.intent?.text ?? null, method: null, examples: sessionCorpus().slice(0, 6) });
     ratifyClose();
     s = loadSession();
   }

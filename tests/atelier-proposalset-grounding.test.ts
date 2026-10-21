@@ -107,8 +107,9 @@ describe('POLARITY 1: --yes ratifies the persisted preview, with zero further mo
     run(data, proj, 'skill', PROMPT);
     const before = await requestCount();
     run(data, proj, 'skill', 'a different sentence about brevity');
-    // the proposer once, then which check each rule carries, drawn CHECK_DRAWS times (kept with the proposal: --yes asks nothing)
-    expect(await requestCount()).toBe(before + 1 + CHECK_DRAWS);
+    // the proposer once, then which check each rule carries, drawn CHECK_DRAWS times, then how strictly output is held
+    // (each kept with the proposal: --yes asks nothing)
+    expect(await requestCount()).toBe(before + 1 + CHECK_DRAWS + 1);
   });
 });
 

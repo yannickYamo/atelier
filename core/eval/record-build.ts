@@ -13,6 +13,7 @@ import type { Requirement } from '../state/canonical-state.js';
 import { planFor, type PlannedRule } from '../plan/execution-plan.js';
 import { entry, recordOf, type Entry, type EvaluationRecord, type Observation } from './record.js';
 import { GRAMMAR_NOT_RUN, GRAMMAR_LISTED } from '../observers/grammar.js';
+import { MATERIAL_UNREAD } from '../observers/written.js';
 
 export interface CheckedLine { readonly id: string; readonly statement?: string; readonly required: boolean; readonly verdict: 'MET' | 'VIOLATED' | 'NOT_APPLICABLE'; readonly detail: string }
 
@@ -46,6 +47,13 @@ export interface RecordFacts {
   readonly unmeasured?: ReadonlySet<string>;
   /** the taste reader's reading of the delivered text, by requirement id, with whether the reader may act on that rule */
   readonly read?: ReadonlyMap<string, RuleReading>;
+  /** how strictly the output was held: the run's level, carried on the record */
+  readonly latitude?: EvaluationRecord['latitude'];
+  /**
+   * Rules the owner accepted as unmeasured (core/state/canonical-state.ts, `acceptedUnmeasured`): a rule no check reads
+   * is listed for them, and the run is not sent to review on its account.
+   */
+  readonly accepted?: ReadonlySet<string>;
 }
 
 /**
@@ -92,6 +100,8 @@ function plannedEntry(p: PlannedRule, f: RecordFacts): Entry {
   const required = p.role !== 'HABIT';
   const base = { id: p.id, statement: p.statement, dimension: required ? 'STANDARD' as const : 'HABIT' as const, source: p.stated ? 'METHOD' as const : 'EXAMPLE' as const, required };
   const o = p.check;
+  // ACCEPTED UNMEASURED BY THE OWNER: no check reads it, and they said a run need not wait on it. Listed, never a review.
+  if (!o && required && f.accepted?.has(p.id)) return entry({ ...base, observation: { ...NOTHING, evidence: 'accepted by you as unmeasured: no check reads it, and the run is not held for it', listed: true }, verdict: null });
   if (!o) return entry({ ...base, observation: NOTHING, verdict: null });
   const line = f.checked?.find((c) => c.id === p.id);
   const why = f.waived.get(p.id);
@@ -113,7 +123,8 @@ function plannedEntry(p: PlannedRule, f: RecordFacts): Entry {
   // The check could not run, or had nothing to read the rule against (no material bound): nothing was observed.
   // Only a check of the text that did not run at all is an evaluation that did not finish. A check that ran and has
   // no line for this rule left it out on purpose (it applies under a condition, which is a judgement): the owner's.
-  if (!line || (line.verdict === 'NOT_APPLICABLE' && o.reads === 'BOUND_MATERIAL')) {
+  // A written check that reads the material, run with none bound (core/observers/written.ts, `MATERIAL_UNREAD`), is the same.
+  if (!line || (line.verdict === 'NOT_APPLICABLE' && (o.reads === 'BOUND_MATERIAL' || line.detail.startsWith(MATERIAL_UNREAD)))) {
     return entry({ ...base, observation: { ...seen(line?.detail ?? 'the check did not run'), coverage: 'NONE', ...(f.checked === null ? { incomplete: `not checked: ${p.id} (the check did not run)` } : {}) }, verdict: null });
   }
   // A check whose engine could not run did not read the text: unverified, with the reason, never "does not apply".
@@ -190,5 +201,5 @@ function evidenceEntries(f: RecordFacts): Entry[] {
 export function buildRecord(f: RecordFacts): EvaluationRecord {
   // A habit with no check is nothing a run can say anything about: it is the writer's to have been shown.
   const rules = planFor({ requirements: f.requirements }).rules.filter((p) => p.role !== 'HABIT' || p.check);
-  return recordOf([...rules.map((p) => standardEntry(p, f)), ...systemEntries(f), ...requestEntries(f), ...evidenceEntries(f)]);
+  return recordOf([...rules.map((p) => standardEntry(p, f)), ...systemEntries(f), ...requestEntries(f), ...evidenceEntries(f)], f.latitude);
 }

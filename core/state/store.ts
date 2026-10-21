@@ -22,11 +22,12 @@ import type { BuildReceipt } from './receipt.js';
 import type { MoveProfile } from '../compiler/moves.js';
 import type { InferredMethod } from '../method/infer.js';
 import type { DecisionUnit } from './canonical-state.js';
+import type { StepCheck } from '../method/step-check.js';
 import { readJson, MalformedStoreFile } from './read-json.js';
 import { join, dirname } from 'node:path';
 import type { Observation } from '../measurement/observation.js';
 import type { ExpertEvidence, StandardVersion, SkillVersion, EvidenceEvent, InvocationRecord, FeedbackRecord } from './canonical-state.js';
-import { assertSupersessionRecorded, assertStandardIntegrity } from './canonical-state.js';
+import { assertSupersessionRecorded, assertStandardIntegrity, hashedBody } from './canonical-state.js';
 import type { SkillArchitecture } from '../architecture/compile.js';
 import type { RatificationLedger } from '../ratification/decision-record.js';
 
@@ -69,8 +70,7 @@ export const getEvidence = (l: StoreLayout): ExpertEvidence | null => {
 };
 
 /** What the hash covers, in the order every minting site hashes it. */
-const hashedContent = (v: StandardVersion): string =>
-  JSON.stringify({ evidenceId: v.evidenceId, workType: v.workType, requirements: v.requirements });
+const hashedContent = (v: StandardVersion): string => hashedBody(v);
 
 /**
  * Write a standard. REFUSES to overwrite an existing hash with different content. Returns the standard
@@ -361,6 +361,46 @@ export function setWorkForm(l: StoreLayout, form: 'REPLY' | 'DOCUMENT' | null): 
   if (form === null) { if (existsSync(p)) rmSync(p); return; }
   mkdirSync(dirs(l).base, { recursive: true });
   writeAtomic(p, form);
+}
+/**
+ * THE OWNER'S CHOICE TO HAVE INVENTED SPECIFICS CUT (`atelier material --cut`): the only way a sentence is deleted for
+ * being untraced, and only where a qualified reader made the finding (core/loop/claim-extract.ts, `claimAction`).
+ * Absent, nothing is cut: what is untraced is blocked, sent to review or listed, by the skill's latitude.
+ */
+export function getClaimsCut(l: StoreLayout): boolean { return existsSync(join(dirs(l).base, 'claims-cut.txt')); }
+export function setClaimsCut(l: StoreLayout, cut: boolean): void {
+  const p = join(dirs(l).base, 'claims-cut.txt');
+  if (!cut) { if (existsSync(p)) rmSync(p); return; }
+  mkdirSync(dirs(l).base, { recursive: true });
+  writeAtomic(p, 'cut');
+}
+/**
+ * THE CHECKS FROZEN AT A BUILD, by the key of their step's words and the examples (core/method/freeze.ts): a rebuild
+ * reuses each, qualification and all, while its step and the examples are unchanged. Merged on each build, never
+ * replaced: a step reworded and then reworded back finds its first check again.
+ */
+export function getFrozenChecks(l: StoreLayout): Readonly<Record<string, StepCheck>> {
+  const p = join(dirs(l).base, 'frozen-checks.json');
+  return existsSync(p) ? readJson<Record<string, StepCheck>>(p, { what: 'the frozen checks' }) : {};
+}
+export function putFrozenChecks(l: StoreLayout, checks: Readonly<Record<string, StepCheck>>): void {
+  if (!Object.keys(checks).length) return;
+  mkdirSync(dirs(l).base, { recursive: true });
+  writeAtomic(join(dirs(l).base, 'frozen-checks.json'), JSON.stringify({ ...getFrozenChecks(l), ...checks }, null, 1));
+}
+
+/**
+ * ANSWERS DRAFTED FOR THE OWNER TO KEEP OR REJECT (core/method/draft-examples.ts, `atelier skill --draft-examples`): each
+ * with an id (`d1`…), the request, the answer, and the owner's ruling once they rate it (`atelier rate d1 yes|no`).
+ */
+export interface DraftedExample { readonly id: string; readonly request: string; readonly answer: string; readonly kept: boolean | null; readonly why?: string | null; readonly rule?: string | null }
+export function getDrafted(l: StoreLayout): DraftedExample[] {
+  const p = join(dirs(l).base, 'drafted-examples.json');
+  return existsSync(p) ? readJson<DraftedExample[]>(p, { kind: 'array', what: 'the drafted examples' }) : [];
+}
+export function setDrafted(l: StoreLayout, drafted: readonly DraftedExample[]): void {
+  mkdirSync(dirs(l).base, { recursive: true });
+  writeAtomic(join(dirs(l).base, 'drafted-examples.json'), JSON.stringify(drafted, null, 1));
 }
 export function getDocClass(l: StoreLayout): string | null {
   const p = join(dirs(l).base, 'class.txt');

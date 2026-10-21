@@ -18,10 +18,11 @@ import { renderRatifyPage } from '../../renderers/ratify-page/render.js';
 import { coverageOf, describeCoverage } from '../../core/coverage/standard-coverage.js';
 import { blindSpotsOf, BLIND_SPOT_QUESTION } from '../../core/coverage/blind-spot.js';
 import type { StandardVersion, Requirement } from '../../core/state/canonical-state.js';
-import { discoveryRecall, declaredGeneralShare, unconfirmedRate, authorityStateOf, isGeneralScope, sourceModeOf } from '../../core/state/canonical-state.js';
+import { standardHashOf, defaultAccepted, discoveryRecall, declaredGeneralShare, unconfirmedRate, authorityStateOf, isGeneralScope, sourceModeOf } from '../../core/state/canonical-state.js';
 import { writeAtomic } from '../../core/state/fs-atomic.js';
-import { sha, die, argv, flag, loadSession, saveSession, step, runFile, orchestrated, authoredIdAllocator, type Session } from '../runtime.js';
+import { die, argv, flag, loadSession, saveSession, step, runFile, orchestrated, authoredIdAllocator, type Session } from '../runtime.js';
 import { existsSync, readFileSync } from 'node:fs';
+import { unmeasuredSaid, latitudeLine } from '../latitude.js';
 import { readJson } from '../../core/state/read-json.js';
 import { decide, type DecisionVerb } from '../../core/ratification/authority.js';
 import { roleFor } from '../../core/architecture/compile.js';
@@ -473,8 +474,14 @@ export function ratifyClose(): void {
   for (const d of s.decided) byId.set(d.requirementId, d);
   const kept = [...byId.values()].filter((d) => d.authority !== 'EXPERT_REJECTED');
   if (!kept.length) die('nothing to compile. A standard with no requirement is not a standard.');
-  const body = { evidenceId: s.evidence?.evidenceId ?? null, workType, requirements: kept };
-  const hash = sha(JSON.stringify(body));
+  // HOW STRICTLY OUTPUT IS HELD, AND WHICH RULES NO CHECK READS THE OWNER ACCEPTS AS UNMEASURED: theirs, so inside the
+  // hash (core/state/canonical-state.ts). The level read or set at this build (cli/latitude.ts); a close with none, as
+  // `atelier add` then `ratify-close` by hand, keeps the previous standard's, or mints none (held as GROUNDED).
+  const priorStd = s.run.standardVersionHash && existsSync(priorPath) ? readJson<Partial<StandardVersion>>(priorPath, { what: 'the previous standard' }) : null;
+  const latitude = s.latitude ?? priorStd?.latitude ?? null;
+  const accepted = latitude ? defaultAccepted(latitude.level, kept, unmeasuredSaid()) : (priorStd?.acceptedUnmeasured ?? []).filter((id) => kept.some((r) => r.requirementId === id));
+  const body = { evidenceId: s.evidence?.evidenceId ?? null, workType, requirements: kept, ...(latitude ? { latitude } : {}), ...(accepted.length ? { acceptedUnmeasured: accepted } : {}) };
+  const hash = standardHashOf(body);
   // ── CLOSING AGAIN IS A SUPERSESSION, NOT A MUTATION ──────────────────────────────────────
   //
   // A run that has already ratified (or built) a standard and closes again with different content
@@ -507,6 +514,7 @@ export function ratifyClose(): void {
   writeAtomic(runFile('pending-standard.json'), JSON.stringify(v, null, 1));
   if (stamped) writeAtomic(runFile('ratification-ledger.json'), JSON.stringify(stamped, null, 1));
   const instructing = reportMinted(v, kept, stamped);
+  console.log(latitudeLine(v));
   if (!orchestrated()) {
     console.log(instructing ? 'Run `atelier build --name <name>`.' : 'Or build it as it stands, knowing that: `atelier build --name <name>`.');
   }

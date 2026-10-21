@@ -68,15 +68,16 @@ describe('the model reads, code grounds', () => {
   });
 });
 
-describe('the floor is the name of the work, and is said to be', () => {
-  it('no model: the old word pattern decides, marked as the floor', async () => {
+describe('the floor reads no words, and is said to be the floor', () => {
+  it('no model: a document, whatever the work is called', async () => {
     const d = await readContext(WORK_FORM, input('code review', [answer('a'), answer('b')]), null, null, budget());
-    expect(d).toMatchObject({ value: 'REPLY', by: 'floor', why: 'no model set up' });
+    expect(d).toMatchObject({ value: 'DOCUMENT', by: 'floor', why: 'no model set up' });
+    expect((await readContext(WORK_FORM, input('support replies', [answer('a')]), null, null, budget())).value).toBe('DOCUMENT');
     expect((await readContext(WORK_FORM, input('blog posts', [answer('a')]), null, null, budget())).value).toBe('DOCUMENT');
   });
   it('a reader that fails is a floor decision with the reason, never an exception', async () => {
     const d = await readContext(WORK_FORM, input('support replies', [answer('a'), answer('b')]), scripted([new Error('HTTP 529 overloaded')]), 'm', budget());
-    expect(d).toMatchObject({ value: 'REPLY', by: 'floor' });
+    expect(d).toMatchObject({ value: 'DOCUMENT', by: 'floor' });
     expect(d.why).toMatch(/could not be asked: HTTP 529/);
   });
 });

@@ -188,6 +188,8 @@ describe('through the binary: class and UNSOURCED on verify, invoke and the MCP 
     run('ratify-close', '--work-type', 'writing');
     const b = run('build', '--name', 'nodrink', '--class', 'Blog Post');
     expect(b.out).toContain('Document class: blog-post');
+    // the owner's choice to have what is not in the material cut (on a kind the claim check is measured on)
+    expect(run('material', '--skill', 'nodrink', '--cut').out).toContain('cut where a qualified claim reader finds them');
     return { data, proj, env, run };
   };
   it('verify refuses a text declared as another class with exit 2, and notes the assumption otherwise', () => {

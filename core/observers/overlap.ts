@@ -109,6 +109,13 @@ export function overlapIndex(corpus: readonly string[], standardWording: readonl
 const gramsOf = (w: readonly string[]): string[] => w.slice(0, Math.max(0, w.length - N + 1)).map((_, i) => w.slice(i, i + N).join(' '));
 
 /**
+ * EVERY SIX-WORD RUN OF A TEXT THE PERSON SUPPLIED (the bound material, the request): wording an output may quote from
+ * what it was given, and so no passage lifted from an example, however long the run it shares with one. Passed beside
+ * the standard wording, it is left out of the count the same way.
+ */
+export const suppliedWording = (text: string): string[] => [...new Set(gramsOf(wordsOf(visible(text))))];
+
+/**
  * The author's standard wording: every six-word run found in STANDARD_WORDING_PIECES or more separate pieces. Read
  * at build over the whole corpus the skill was built from, since the few pieces a skill serves are too few to show
  * what recurs. Pieces are told apart by their text as written, so one piece given twice is one piece, and three

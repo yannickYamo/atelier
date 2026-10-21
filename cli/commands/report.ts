@@ -33,6 +33,15 @@ import { describeComposite } from '../../core/composite/selection.js';
 import { openLine } from './composite.js';
 
 /** The skill a run belongs to: named, or found by its id across the store. */
+/** The skill an answer drafted for the owner belongs to (`d1`…), or null when `id` names none. */
+function draftedById(id: string): { L: store.StoreLayout } | null {
+  if (!/^d\d+$/.test(id)) return null;
+  const named = flag('--skill');
+  const skills = named ? [named] : existsSync(join(DATA, 'skills')) ? readdirSync(join(DATA, 'skills')) : [];
+  for (const s of skills) { const L: store.StoreLayout = { root: DATA, skillName: s }; if (store.getDrafted(L).some((d) => d.id === id)) return { L }; }
+  return null;
+}
+
 function locate(id: string): { L: store.StoreLayout; rec: InvocationRecord } {
   if (!/^[A-Za-z0-9_-]+$/.test(id)) die(`"${id}" is not an invocation id (they look like i40a84c1ab).`);
   const named = flag('--skill');
@@ -146,12 +155,22 @@ export function rate(): void {
   const [id, answer, ...why] = positionals();
   if (!id || !answer) die('usage: atelier rate <invocation> yes|no ["why"]');
   const ship = /^(y|yes|ship|1|true)$/i.test(answer) ? true : /^(n|no|0|false)$/i.test(answer) ? false : die(`answer yes or no: would you ship this as is? (got "${answer}")`);
+  // THE RULE A REJECTED OUTPUT BREAKS, when the owner names it: the output joins that rule's mutants at the next build.
+  const rule = flag('--rule') ?? null;
+  // AN ANSWER DRAFTED FOR THE OWNER (`atelier skill --draft-examples`, ids d1…): kept or rejected, for the next build.
+  const drafted = draftedById(id);
+  if (drafted) {
+    store.setDrafted(drafted.L, store.getDrafted(drafted.L).map((d) => (d.id === id ? { ...d, kept: ship, why: why.join(' ').trim() || null, rule } : d)));
+    const all = store.getDrafted(drafted.L);
+    console.log(`Recorded: ${id} ${ship ? 'kept as finished work of yours' : `rejected${rule ? `, as breaking ${rule}` : ''}`}. ${all.filter((d) => d.kept === null).length} drafted answer(s) left to rate. Build again to qualify the skill's checks on the ones you kept: atelier skill "<your rules>" --yes --name ${drafted.L.skillName}`);
+    return;
+  }
   const { L, rec } = locate(id);
   // optional reasons from the closed list: --reason missing-necessary,too-long
   const said = (flag('--reason') ?? '').split(',').map((x) => x.trim()).filter(Boolean);
   const bad = said.filter((x) => !(REASON_CODES as readonly string[]).includes(x));
   if (bad.length) die(`unknown reason ${bad.join(', ')}: use any of ${REASON_CODES.join(', ')}`);
   const reasons = said as ReasonCode[];
-  putRating(L, { invocationId: rec.invocationId, ship, why: why.join(' ').trim() || null, at: new Date().toISOString(), release: rec.fidelity?.release ?? null, ...(reasons.length ? { reasons } : {}) });
+  putRating(L, { invocationId: rec.invocationId, ship, why: why.join(' ').trim() || null, at: new Date().toISOString(), release: rec.fidelity?.release ?? null, ...(reasons.length ? { reasons } : {}), ...(rule && !ship ? { rule } : {}) });
   console.log(`Recorded: ${ship ? 'yes, you would ship' : 'no, you would not ship'} ${rec.invocationId} as is.${ship ? '' : ' To have it written again: atelier fix "<what was wrong>" (add --always to change the skill for every run)'}`);
 }

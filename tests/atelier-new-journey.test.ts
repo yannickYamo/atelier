@@ -93,7 +93,8 @@ describe('atelier new: a folder and a sentence', () => {
     // the card ends on what is not measured: under `new` the command's own list of what to do next is the only one
     const card = /── Atelier · skill [\s\S]*?\n {2}not measured: .*(?:\n {22}.*)*/.exec(second)?.[0] ?? '';
     expect(second).not.toMatch(/^ {2}next: /m);
-    expect(second.replace(card, '').split(/\s+/).length, second).toBeLessThan(300);
+    // (one line of it says how strictly output is held and how to change it: the owner's to see at every build)
+    expect(second.replace(card, '').split(/\s+/).length, second).toBeLessThan(320);
     const md = readFileSync(join(proj, '.claude', 'skills', 'voice', 'SKILL.md'), 'utf8');
     expect(md).toMatch(/Lead with the decision/);
     // the rule that needs material says so in the skill a host reads

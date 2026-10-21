@@ -7,8 +7,7 @@
 // The drafts below are the three real ones, with the sentences the reader flagged on each.
 import { describe, it, expect } from 'vitest';
 import { checkDraft, enforceClaims, emptyHeadings, brokenByCut, listedClaims, CLAIMS_TO_CHECK } from '../core/loop/run-repair.js';
-import { unmeasuredKind, listsBecause, type ClaimSensor, type ClaimReading } from '../core/loop/claim-extract.js';
-import { kindOfWork } from '../cli/commands/method.js';
+import { unmeasuredKind, claimAction, type ClaimSensor, type ClaimReading } from '../core/loop/claim-extract.js';
 import type { StandardVersion } from '../core/state/canonical-state.js';
 
 const STD = { standardVersionHash: 's', requirements: [] } as unknown as StandardVersion;
@@ -76,38 +75,57 @@ describe('which kinds of work the claim check may cut on', () => {
     expect(unmeasuredKind('Competitive analysis')).toBe('competitive-analysis');
     expect(unmeasuredKind('handover_note')).toBe('handover-note');
   });
-  it('a method names its kind of work in its title, or takes the skill\'s name; --class decides when given', () => {
-    expect(kindOfWork('Competitive analysis — how we do it\n\n- Open with a Verdict section.', 'ca', undefined)).toBe('competitive-analysis');
-    expect(kindOfWork('# Competitive analysis, the way we do it\n\n1. Open with a Verdict section.', 'ca', undefined)).toBe('competitive-analysis');
-    expect(kindOfWork('Market entry brief\n\nThe brief answers one question.', 'me', undefined)).toBe('market-entry-brief');
-    expect(kindOfWork('- Open with a Status section.\n- End with a Next 48 hours section.', 'handover', undefined)).toBe('handover');
-    expect(kindOfWork('How we review a pull request\n\n- Start with a one-line summary.', 'review', undefined)).toBe('review');
-    expect(kindOfWork('Competitive analysis\n\n- Open with a Verdict section.', 'ca', 'Essay')).toBe('essay');
+});
+
+// A DELETION NEEDS THREE THINGS: material bound, a reader qualified on the kind of work, and the owner's choice to cut.
+// Anywhere else the latitude decides: STRICT blocks what code finds missing, GROUNDED sends it to review, CREATIVE lists it.
+describe('what an untraced specific meets is the latitude\'s, and a cut is the owner\'s choice', () => {
+  const act = (x: Parameters<typeof claimAction>[0]): string => claimAction(x).act;
+  it('with no material bound nothing is blocked or cut: it is listed as unverifiable, at every level', () => {
+    for (const level of ['STRICT', 'GROUNDED', 'CREATIVE'] as const) for (const cls of [null, 'essay', 'contract']) {
+      expect(claimAction({ level, cls, bound: false, ownerCut: true }), `${level} ${cls}`).toEqual({ act: 'list', why: 'no material was bound to check against' });
+    }
+  });
+  it('with material bound and no choice to cut: STRICT blocks, GROUNDED reviews, CREATIVE lists; whatever the kind', () => {
+    for (const cls of [null, 'essay', 'competitive-analysis']) {
+      expect(act({ level: 'STRICT', cls, bound: true })).toBe('block');
+      expect(act({ level: 'GROUNDED', cls, bound: true })).toBe('review');
+      expect(act({ level: 'CREATIVE', cls, bound: true })).toBe('list');
+    }
+  });
+  it('the owner\'s cut acts only where a reader is qualified on the kind of work', () => {
+    expect(act({ level: 'CREATIVE', cls: 'essay', bound: true, ownerCut: true })).toBe('cut');
+    expect(act({ level: 'STRICT', cls: 'blog posts', bound: true, ownerCut: true })).toBe('cut');
+    expect(act({ level: 'CREATIVE', cls: 'competitive-analysis', bound: true, ownerCut: true })).toBe('list');
+    expect(act({ level: 'GROUNDED', cls: null, bound: true, ownerCut: true })).toBe('review');
+    expect(act({ level: 'GROUNDED', cls: 'none', bound: true, ownerCut: true })).toBe('review');
+  });
+  it('--placeholders is the person asking for slots: no material needed, the kind still decides', () => {
+    expect(act({ level: 'GROUNDED', cls: null, bound: false, slots: true })).toBe('cut');
+    expect(claimAction({ level: 'GROUNDED', cls: 'handover', bound: false, slots: true })).toEqual({ act: 'list', why: 'the claim check is not measured on handover' });
   });
 });
 
-// A deletion needs both: material bound, and a kind of work a qualification covers. The mini study this pins:
-// twelve explanations, no material and no kind, and the check deleted the author's own kind of analogy.
-describe('the check may delete only with material bound, on a kind it was measured on', () => {
-  it('with no material bound it lists, whatever the kind', () => {
-    for (const cls of [null, '', 'essay', 'blog-post', 'contract', 'competitive-analysis']) expect(listsBecause({ cls, bound: false }), String(cls)).toBe('no material was bound to check against');
+describe('a strict skill blocks what code finds missing, and cuts nothing', () => {
+  const material = 'Invoice 1: 1,200 EUR. Invoice 2: 800 EUR.';
+  const memo = 'The reserve is 2,000 EUR. The adjuster estimated a further 4,750 EUR of damage.\n';
+  it('a figure not in the material fails the check on the claim line, and the repair leaves it in place', async () => {
+    const opts = { material, listsBecause: claimAction({ level: 'STRICT', cls: null, bound: true }).why, claimAct: 'block' as const };
+    const r = checkDraft('s', STD, memo, opts);
+    const line = r.checked.find((c) => c.requirementId === 'UNSOURCED');
+    expect(r.failed).toBe(true);
+    expect(line?.authority).toBe('owner-block');
+    expect(line?.result.spans.map((sp) => sp.text)).toEqual([expect.stringContaining('4,750')]);
+    expect((await enforceClaims('s', STD, memo, opts)).text).toBe(memo);
   });
-  it('with material bound, a skill that names no kind lists, and so does a kind nobody measured', () => {
-    expect(listsBecause({ cls: null, bound: true })).toBe('the skill names no kind of work the claim check was measured on');
-    expect(listsBecause({ cls: 'Competitive analysis', bound: true })).toBe('the claim check is not measured on competitive-analysis');
-  });
-  it('--placeholders is the person asking for slots: no material needed, the kind still decides; "none" names no kind', () => {
-    expect(listsBecause({ cls: null, bound: false, slots: true })).toBeNull();
-    expect(listsBecause({ cls: 'essay', bound: false, slots: true })).toBeNull();
-    expect(listsBecause({ cls: 'handover', bound: false, slots: true })).toBe('the claim check is not measured on handover');
-    expect(listsBecause({ cls: 'none', bound: true })).toBe('the skill names no kind of work the claim check was measured on');
-  });
-  it('with material bound on measured prose or a known format, it may cut', () => {
-    for (const cls of ['essay', 'blog posts', 'white-paper', 'contract', 'assistant-reply']) expect(listsBecause({ cls, bound: true }), cls).toBeNull();
+  it('grounded flags the same sentence for review and fails nothing', () => {
+    const r = checkDraft('s', STD, memo, { material, listsBecause: claimAction({ level: 'GROUNDED', cls: null, bound: true }).why, claimAct: 'review' });
+    expect(r.failed).toBe(false);
+    expect(listedClaims(r)).toEqual([expect.stringContaining('4,750')]);
   });
   it('an analogy the author always makes is kept and listed when nothing was bound', async () => {
     const piece = 'A battery holds chemicals that want to react.\n\nImagine water held behind a dam on a hillside.\n\nIn short, a battery stores energy as a chemical imbalance.\n';
-    const opts = { claimSensor: reader(['Imagine water held behind a dam on a hillside.', 'In short, a battery stores energy as a chemical imbalance.'], 'SOURCE'), listsBecause: listsBecause({ cls: null, bound: false }) };
+    const opts = { claimSensor: reader(['Imagine water held behind a dam on a hillside.', 'In short, a battery stores energy as a chemical imbalance.'], 'SOURCE'), listsBecause: claimAction({ level: 'CREATIVE', cls: null, bound: false }).why };
     const e = await enforceClaims('s', STD, piece, opts);
     expect(e).toMatchObject({ text: piece, cut: [] });
     expect(listedClaims(e.report)).toHaveLength(2);
@@ -223,13 +241,6 @@ describe('where it does cut, no cut leaves a heading over nothing', () => {
 describe('what a review of the first version found', () => {
   it('prose is prose however its kind is spelled', () => {
     for (const cls of ['essays', 'post', 'blogpost', 'blog posts', 'op-ed', 'marketing', 'articles']) expect(unmeasuredKind(cls), cls).toBeNull();
-  });
-  it('a kind read from a title or a name is never a short name for a format', () => {
-    expect(kindOfWork('# X\n\n- Open with a hook.', 'x', undefined)).toBe('x-work');
-    expect(kindOfWork('- Open with a hook.', 'blog', undefined)).toBe('blog-work');
-    expect(kindOfWork('---\ntitle: n\n---\nCompetitive analysis\n\n- Open with a Verdict section.', 'ca', undefined)).toBe('competitive-analysis');
-    expect(kindOfWork('Q3 2026: plan\n\n- Open with a Verdict section.', 'plan', undefined)).toBe('plan');
-    expect(kindOfWork('- Open with a hook.', 'x', 'x')).toBe('x-post');
   });
   it('a heading written with a rule under it, indented, or as a bold line is a heading whose section must not be emptied', async () => {
     expect(emptyHeadings('Risks\n-----\n\nVerdict\n=======\nGo.\n')).toBe(1);

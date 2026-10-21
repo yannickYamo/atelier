@@ -22,9 +22,9 @@ import { METHOD_UNITS, unitFloor, describeUnit, type DecisionUnit } from '../../
 import { STEP_CHECK, STEP_CHECK_REPAIR, planOf, stepCheckInput, heldByPolarity, judgement, type StepPlan, type StepToCheck, type StepCheck, type ExampleCase } from '../../core/method/step-check.js';
 import { measure } from '../../core/observers/registry.js';
 import { STEP_MUTANTS, mutate, qualifyCheck, describeQualification } from '../../core/method/mutants.js';
+import { examplesKey, frozenFor, toFreeze } from '../../core/method/freeze.js';
+import { latestRatings } from '../../core/state/eval-store.js';
 import { countWords } from '../../core/eval/size.js';
-import { normalizeClass, CLASS_ALIASES } from '../../core/observers/doc-class.js';
-import { unmeasuredKind } from '../../core/loop/claim-extract.js';
 import { skillNameFrom } from '../../renderers/agent-skill/render.js';
 import { RULE_POLARITY, UNREAD_KIND } from '../../core/observers/rule-polarity.js';
 import { readContext } from '../../core/inference/reading.js';
@@ -46,6 +46,7 @@ import { MIN_GOLDEN_CHARS } from '../../core/discovery/chain/corpus-import.js';
 import { observesOf, propositionOf, type Observes } from '../../core/eval/observes.js';
 import { planFor, describePlan } from '../../core/plan/execution-plan.js';
 import { ratifyClose } from './ratify.js';
+import { settleLatitude } from '../latitude.js';
 import { build } from './build.js';
 
 const LABEL = { DELIVERABLE: 'the work must contain', EXECUTION: 'the work must be made from', JUDGEMENT: 'judgement' } as const;
@@ -137,25 +138,6 @@ export function shortScreen(ps: readonly MethodProposal[]): string[] {
     ...(habits.length ? [`${habits.length} habit${habits.length === 1 ? '' : 's'}, shown and never blocking`] : [])];
   if (parts.length) out.push('', `Also learned from your examples: ${parts.join('; ')} (see them with --report).`);
   return out;
-}
-
-/**
- * The kind of work a method is for: `--class`, or the note's title when it has one (its first line, when that is
- * not a step, up to a dash or a colon), or the skill's name. A name for the record and the screen; any kind the
- * claim check was not measured on is treated alike.
- */
-export function kindOfWork(note: string, name: string, declared: string | undefined = flag('--class')): string {
-  if (declared?.trim()) return normalizeClass(declared);
-  // Read, not declared, so never by a short name: a note titled "X" or a skill called "blog" is not thereby a post
-  // on X, which carries no character limit unless the owner gives one. Only `--class` takes the short names (../../core/observers/doc-class.ts).
-  const slug = (t: string): string => t.trim().toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-+|-+$/g, '');
-  // (A comment is no title: a template that opens with <!-- QUICK_MODE --> is not work of the kind "quick-mode".)
-  const body = note.replace(/^\uFEFF?---\r?\n[\s\S]*?\r?\n---\r?\n?/, '').replace(/<!--[\s\S]*?-->/g, '');
-  const first = body.split('\n').map((l) => l.trim()).find(Boolean) ?? '';
-  const title = /^(?:[-*+]|\d+[.)])\s/.test(first) ? '' : first.replace(/^#+\s*/, '').split(/\s[—–-]\s|[:,]/)[0].trim();
-  const words = title.split(/\s+/).filter(Boolean);
-  const read = words.length >= 1 && words.length <= 4 && !/[.!?]$/.test(first) && /\p{L}{3}/u.test(title) ? slug(title) : slug(name);
-  return Object.hasOwn(CLASS_ALIASES, read) ? `${read}-work` : read;
 }
 
 /**
@@ -300,7 +282,8 @@ export async function method(): Promise<void> {
   const stepKindsRead = await stepKinds(stepsOf(note).map((st) => st.text));
   // WHICH CHECK EACH STATED STEP CARRIES, READ ONCE (core/method/step-check.ts): a measurement from the menu, a check the
   // model writes, or judgement; grounded on the owner's examples by code. With no model every step is a judgement.
-  const checksPlan = await stepPlan(stepsOf(note).map((st, i) => ({ id: String(i + 1), text: st.text, under: st.under })), cases, stepKindsRead);
+  const planSteps = stepsOf(note).map((st, i) => ({ id: String(i + 1), text: st.text, under: st.under }));
+  const checksPlan = await stepPlan(planSteps, cases, stepKindsRead, { frozen: store.getFrozenChecks(LN), rejected: rejectedOutputs(LN) });
   const across = proposalsAcross(note, cases, checksPlan);
   // A WRITTEN CHECK EARNS ITS SAY (core/method/mutants.ts): it must pass every example and catch the edits that break
   // only its step; until then it is kept, shown with what it caught, and enforced nowhere. Its standing is said beside it.
@@ -328,13 +311,6 @@ export async function method(): Promise<void> {
   // The limits of a corpus of short pieces: one line on the screen, the whole account with --report.
   if (short.brief) { console.log(''); for (const line of whole ? short.limits : [short.brief]) console.log(`Short form: ${line}`); }
 
-  // THE KIND OF WORK, SAID AND RECORDED, NEVER ASKED. It decides one thing: on a kind the claim check was measured on
-  // (essays, posts), a sentence not found in bound material is cut; anywhere else it is listed for the owner to check.
-  // That is the engine's business: said to whoever asks for the whole account, and kept off the screen a person builds from.
-  const kind = kindOfWork(note, name);
-  if (whole && (notePath !== null || flag('--class'))) console.log(`\nKind of work: ${kind}${flag('--class') ? '' : ' (read from your method; --class <kind> to change it)'}. `
-    + (unmeasuredKind(kind) ? 'Sentences not found in your material are listed for you to check, never cut: the claim check is measured on essays and posts, not on this.'
-      : 'With your material bound (atelier material), sentences not found in it are cut, as the claim check is measured to do on this kind of writing; with none bound they are listed.'));
   // `--review` looks and builds nothing. Otherwise the skill is built from exactly what the screen showed: a reading
   // the owner did not mean is corrected by changing the method and building again, which is one command.
   if (looking) { console.log(`\nNothing has been built. To build exactly this: atelier ${typedWithout(['--review'])} --name ${name}`); return; }
@@ -394,9 +370,8 @@ export async function method(): Promise<void> {
   // Three pieces or more are served with the skill, as its own way of writing, and their lengths recorded; with
   // fewer there is no telling a usual piece from an odd one, and the one worked example stands alone.
   if (!argv.includes('--voice') && !(folder && cases.length >= 2)) argv.push('--voice', 'none');
-  // (With no method note nothing names the kind of work: a folder called "posts" or "contract" is not thereby held
-  // as a post or a contract. --class says it.)
-  if (!argv.includes('--class') && notePath !== null) store.setDocClass({ root: DATA, skillName: name }, kind);
+  // (Nothing names the kind of work from its words: a note titled "Contract" is not thereby held as one. How strictly
+  // the work is held is the latitude's, read from the examples and ratified by the owner; --class names a format.)
   // THE BUILD SAYS A GREAT DEAL (the standard's hash, the size of the export, what no instrument measures): all of it
   // true, none of it what a person needs to start. It is kept for --report, and shown whole if the build fails.
   // THE AUTHOR'S RANGE ON THIS PATH TOO (core/fidelity/profile.ts). A skill built from a method and pieces had no
@@ -412,9 +387,14 @@ export async function method(): Promise<void> {
   if (pieces.length >= SELECTION.minRead) {
     writeAtomic(runFile('fidelity.json'), JSON.stringify(buildProfile({ read: pieces.map((text, i) => ({ id: `piece-${i + 1}`, text })), held: [], model: [], corpusHash: corpusHashOf(pieces) })));
   }
+  // HOW STRICTLY OUTPUT IS HELD, read from the examples, the method and what it is for (cli/latitude.ts); minted at the close.
+  await settleLatitude({ purpose: flag('--for') ?? null, method: notePath === null ? null : note, examples: cases.map((c) => c.reference) });
   const said: string[] = []; const log = console.log;
   if (!whole) console.log = (...a: unknown[]) => { said.push(a.map(String).join(' ')); };
   try { ratifyClose(); await build(name); } catch (e) { console.log = log; for (const l of said) console.log(l); throw e; } finally { console.log = log; }
+  // THE CHECKS THIS BUILD RATIFIED ARE FROZEN (core/method/freeze.ts): the next build keeps each while its step and the
+  // examples are unchanged.
+  if (checksPlan) store.putFrozenChecks(LN, toFreeze(planSteps, Object.fromEntries(planSteps.flatMap((st) => { const c = checksPlan.get(st.text); return c ? [[st.id, c]] : []; })), examplesKey(cases)));
   // THE UNITS, BESIDE THE STANDARD THEY WERE READ FROM, never inside it: keyed by requirement id under the standard's
   // hash, so a reading moves no standard and a rebuild under the same standard finds them (core/state/store.ts).
   if (units.size) {
@@ -426,7 +406,7 @@ export async function method(): Promise<void> {
   // words, when a model was there to read: what it read, or why it read nothing. With no model set up the screen stays
   // as it was (`atelier new` has said so once already), and what the owner asked for (--persona none) is not said back.
   // Everything the build said is in --report.
-  if (!whole) for (const l of said.filter((x) => /^(Work form: |Persona: |Scope: |\(no persona: \d|\(the persona could not be derived|\(the examples could not be read for scope|\(a fidelity profile in this project)/.test(x))) console.log(l);
+  if (!whole) for (const l of said.filter((x) => /^(Latitude: |Work form: |Persona: |Scope: |\(no persona: \d|\(the persona could not be derived|\(the examples could not be read for scope|\(a fidelity profile in this project)/.test(x))) console.log(l);
   // Required is what a run is held to. What the example showed is checked and reported, and fails nothing: said apart,
   // so that the count of what is enforced is never larger than it is.
   // The screen above already said what is checked and what is theirs: all that is left to say is that it is ready.
@@ -487,8 +467,18 @@ export const CHECK_DRAWS = 3;
  * best unqualified one sent back up to twice with the examples it fails. Judgement for every step where no model is.
  * Shared by `atelier new --method` (steps from the note, with examples) and `atelier skill` (rules stated, no example).
  */
-export async function stepPlan(steps: readonly StepToCheck[], cases: readonly ExampleCase[], kinds: ReadonlyMap<string, 'BOUNDARY' | 'GENERATIVE'>): Promise<StepPlan | null> {
-  if (!steps.length) return null;
+export async function stepPlan(all: readonly StepToCheck[], cases: readonly ExampleCase[], kinds: ReadonlyMap<string, 'BOUNDARY' | 'GENERATIVE'>,
+  opts: { readonly frozen?: Readonly<Record<string, StepCheck>>; readonly rejected?: ReadonlyMap<string, readonly string[]> } = {}): Promise<StepPlan | null> {
+  if (!all.length) return null;
+  // A CHECK FROZEN AT A BUILD IS KEPT while its step's words and the examples are unchanged (core/method/freeze.ts): only
+  // the other steps are read, and drawn best of three. Rewording one step reads that step again and no other.
+  const exKey = examplesKey(cases);
+  const kept = frozenFor(all, exKey, opts.frozen ?? {});
+  const steps = all.filter((st) => !kept.has(st.id));
+  if (!steps.length) {
+    if (argv.includes('--report')) console.log(`(which check each step asks for: every one kept from the build that ratified it; nothing read.)`);
+    return planOf(all, Object.fromEntries(kept));
+  }
   const input = stepCheckInput(steps, cases, outlineOf, countWords);
   const noModel = !canReach('discovery') || argv.includes('--no-model');
   const k = noModel ? 1 : CHECK_DRAWS;
@@ -518,9 +508,14 @@ export async function stepPlan(steps: readonly StepToCheck[], cases: readonly Ex
   const writtenSteps = steps.filter((st) => cases.length && (candidates.get(st.id) ?? []).some((c) => c.how === 'written'));
   const mutantSteps = writtenSteps.map((st) => ({ id: st.id, text: st.text, means: (candidates.get(st.id) ?? []).find((c) => c.how === 'written')?.means ?? st.text }));
   const mutants = await Promise.all(mutantSteps.map((ms) => readContext(STEP_MUTANTS, { steps: [ms], example: leadCase?.reference ?? '' }, client, model, { spentUsd: 0, capUsd: 0.2, maxCalls: 1 })));
+  // OUTPUTS THE OWNER REJECTED NAMING THIS STEP (`atelier rate <run> no --rule <id>`) are edits that break it, beside the
+  // mutants a model wrote: a written check must catch them too to qualify.
+  const rejectedOf = (st: StepToCheck): { text: string; context: ReturnType<typeof context> }[] => (opts.rejected?.get(st.text) ?? []).map((text) => ({ text, context: { material: [] } }));
   const mutantsOf = (id: string): { text: string; context: ReturnType<typeof context> }[] => {
     const at = mutantSteps.findIndex((ms) => ms.id === id);
-    return at === -1 || !leadCase ? [] : (mutants[at].value[id] ?? []).map((m) => ({ text: mutate(leadCase.reference, m), context: context(leadCase) }));
+    const st = steps.find((x) => x.id === id);
+    const written = at === -1 || !leadCase ? [] : (mutants[at].value[id] ?? []).map((m) => ({ text: mutate(leadCase.reference, m), context: context(leadCase) }));
+    return [...written, ...(st ? rejectedOf(st) : [])];
   };
   if (argv.includes('--report') && mutantSteps.length) console.log(`(edits that break each written check's step: ${mutants.some((r) => r.by === 'model') ? `written by ${contextReaderModel()}: ${mutantSteps.map((ms, i) => `${ms.id}: ${(mutants[i].value[ms.id] ?? []).length}`).join(', ')}` : `none (${mutants[0]?.why ?? 'nothing to read'})`}.)`);
   // WHAT EACH STEP KEEPS, decided by code over the draws.
@@ -565,7 +560,27 @@ export async function stepPlan(steps: readonly StepToCheck[], cases: readonly Ex
     // each step's reading, with the reason where it fell to judgement: what the reader said is the owner's to see
     for (const st of steps) { const c = chosen[st.id]; console.log(`   ${st.id}. ${c.how}${c.by === 'floor' && c.how === 'judgement' ? ` (${c.means})` : c.how === 'judgement' ? ` (the reader: ${c.means.slice(0, 120)})` : `: ${c.means.slice(0, 120)}`}${c.agreed && k > 1 ? ` [${c.agreed.same} of ${c.agreed.of} draws]` : ''}${c.qualification ? `; ${describeQualification(c.qualification)}` : ''}`); }
   }
-  return planOf(steps, chosen);
+  if (argv.includes('--report') && kept.size) console.log(`(${kept.size} step check${kept.size === 1 ? '' : 's'} kept from the build that ratified ${kept.size === 1 ? 'it' : 'them'}: the step and the examples are unchanged.)`);
+  return planOf(all, { ...Object.fromEntries(kept), ...chosen });
+}
+
+/**
+ * THE OUTPUTS THE OWNER REJECTED, BY THE STEP THEY SAID EACH BREAKS: a run rated no with `--rule <id>`, and an answer
+ * drafted for them and rejected the same way (`atelier rate d3 no --rule <id>`). Keyed by the step's words, as the
+ * active standard has them. A rejection that names no rule breaks no step anyone can name, and is not used.
+ */
+export function rejectedOutputs(L: store.StoreLayout): Map<string, string[]> {
+  const active = store.getActive(L); const sv = active ? store.getSkillVersion(L, active) : null;
+  const std = sv ? store.getStandard(L, sv.standardVersionHash) : null;
+  const out = new Map<string, string[]>();
+  const add = (rule: string | null | undefined, text: string | null | undefined): void => {
+    const r = rule ? std?.requirements.find((q) => q.requirementId === rule) : undefined;
+    if (r && text?.trim()) out.set(r.statement, [...(out.get(r.statement) ?? []), text]);
+  };
+  const runs = new Map(store.listLearningInvocations(L).map((x) => [x.invocationId, x]));
+  for (const rating of latestRatings(L)) if (!rating.ship) add(rating.rule, runs.get(rating.invocationId)?.output);
+  for (const d of store.getDrafted(L)) if (d.kept === false) add(d.rule, d.answer);
+  return out;
 }
 
 /** The kind of every step the owner wrote or their example showed, read in one call where a model is set up; a thing to do where none is, said in --report. */

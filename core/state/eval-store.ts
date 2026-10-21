@@ -49,7 +49,9 @@ export function listEvals(l: StoreLayout): EvalSummary[] {
  */
 export const REASON_CODES = ['missing-necessary', 'unnecessary-extra', 'wrong', 'unsafe', 'unsupported-claim', 'voice-off', 'too-long', 'too-short', 'asks-instead-of-acting'] as const;
 export type ReasonCode = typeof REASON_CODES[number];
-export interface Rating { readonly invocationId: string; readonly ship: boolean; readonly why: string | null; readonly at: string; readonly release: string | null; readonly reasons?: readonly ReasonCode[] }
+export interface Rating { readonly invocationId: string; readonly ship: boolean; readonly why: string | null; readonly at: string; readonly release: string | null; readonly reasons?: readonly ReasonCode[];
+  /** the rule the owner said a rejected output breaks (`--rule`): the output then joins that rule's mutants at the next build */
+  readonly rule?: string | null }
 
 export function putRating(l: StoreLayout, r: Rating): void {
   writeAtomic(join(base(l), 'ratings', `${safeId(r.invocationId)}-${r.at.replace(/[^0-9]/g, '')}.json`), JSON.stringify(r, null, 1));

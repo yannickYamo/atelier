@@ -32,7 +32,7 @@
 
 import { existsSync } from 'node:fs';
 import { basename, resolve } from 'node:path';
-import { sha, die, flag, argv, positional, clientFor, proposerModel, loadSession, saveSession, authoredIdAllocator, DATA, type ProposalSet, type ProposedRule } from '../runtime.js';
+import { sha, die, flag, argv, numericFlag, positional, clientFor, proposerModel, loadSession, saveSession, authoredIdAllocator, DATA, type ProposalSet, type ProposedRule } from '../runtime.js';
 import * as store from '../../core/state/store.js';
 import { skillNameFrom } from '../../renderers/agent-skill/render.js';
 import { groundedInUserText, uncarriedSections } from '../../core/ratification/grounding.js';
@@ -42,8 +42,11 @@ import { spend, type Budget } from '../../core/inference/client.js';
 import type { Requirement } from '../../core/state/canonical-state.js';
 import { create } from './improve.js';
 import { ratifyClose } from './ratify.js';
+import { settleLatitude } from '../latitude.js';
+import { readContext } from '../../core/inference/reading.js';
+import { DRAFT_EXAMPLES } from '../../core/method/draft-examples.js';
 import { build } from './build.js';
-import { stepPlan } from './method.js';
+import { stepPlan, rejectedOutputs } from './method.js';
 
 export type SkillRoute = 'DIRECT' | 'DISCOVER' | 'HYBRID' | 'NEEDS_INPUT';
 
@@ -157,6 +160,12 @@ export async function skill(): Promise<void> {
     return;
   }
 
+  // A SKILL ALREADY BUILT HERE FROM RULES: `--draft-examples` drafts answers for its rules, and builds nothing again.
+  const built = { root: DATA, skillName: skillNameFrom(flag('--name') ?? basename(process.cwd())) };
+  const builtVersion = argv.includes('--draft-examples') && loadSession().run.state === 'BUILT' ? store.getActive(built) : null;
+  const builtStd = builtVersion ? store.getStandard(built, store.getSkillVersion(built, builtVersion)?.standardVersionHash ?? '') : null;
+  if (builtStd) { await draftExamples(built, builtStd.workType, builtStd.requirements.filter((r) => r.authority !== 'EXPERT_REJECTED').map((r) => r.statement)); return; }
+
   // ── DIRECT and HYBRID both start from what the person said ───────────────────────────────────
   console.log(`${decision.why}\n`);
 
@@ -166,7 +175,12 @@ export async function skill(): Promise<void> {
   // proposer and compiled whatever came back the second time. The set is now written to the session
   // BEFORE it is shown, a later run with the same prompt reuses it with no call at all, and a
   // different prompt invalidates it — you can only ever accept what you saw.
-  const promptHash = sha(prompt ?? '');
+  // THE ANSWERS THE OWNER KEPT (drafted with --draft-examples, rated with atelier rate): finished work of theirs, which
+  // the checks are read and qualified on. A new set of kept answers is a new proposal, shown again before it is accepted.
+  const LK: store.StoreLayout = built;
+  const keptDrafts = store.getDrafted(LK).filter((d) => d.kept === true);
+  const keptCases = keptDrafts.map((d) => ({ id: d.id, task: d.request, material: [], reference: d.answer }));
+  const promptHash = sha(`${prompt ?? ''}${keptDrafts.length ? `\u0000${keptDrafts.map((d) => d.id).join(',')}` : ''}`);
   let s = loadSession();
   let pset: ProposalSet | null = s.proposalSet?.promptHash === promptHash ? (s.proposalSet ?? null) : null;
 
@@ -207,11 +221,14 @@ export async function skill(): Promise<void> {
     // builds): read now, kept with the proposal, so `--yes` asks nothing more. With no finished example to ground on, a
     // listed measurement is kept where the draws agree; a written check reports until the person gives examples it can
     // be qualified on; judgement otherwise. The rule's words are the person's and are never changed.
-    const plan = await stepPlan(rules.map((p, i) => ({ id: String(i + 1), text: p.statement, under: null })), [], new Map(rules.map((p) => [p.statement, p.kind])));
-    const checks = Object.fromEntries(rules.flatMap((p) => { const c = plan?.get(p.statement); return c && c.how !== 'judgement' && c.measurement ? [[p.statement, { how: c.how, measurement: c.measurement, means: c.means }]] : []; }));
+    const plan = await stepPlan(rules.map((p, i) => ({ id: String(i + 1), text: p.statement, under: null })), keptCases, new Map(rules.map((p) => [p.statement, p.kind])), { rejected: rejectedOutputs(LK) });
+    const checks = Object.fromEntries(rules.flatMap((p) => { const c = plan?.get(p.statement); return c && c.how !== 'judgement' && c.measurement ? [[p.statement, { how: c.how, measurement: c.measurement, means: c.means, ...(c.qualification ? { qualification: c.qualification } : {}) }]] : []; }));
     pset = { proposalSetHash: sha(JSON.stringify(rules)), promptHash, workType, rules, ...(form ? { form } : {}), ...(Object.keys(checks).length ? { checks } : {}) };
-    s = { ...s, proposalSet: pset };
+    s = { ...s, proposalSet: pset, latitude: null };
     saveSession(s);
+    // HOW STRICTLY OUTPUT IS HELD, read with the proposal from what they said (cli/latitude.ts), so `--yes` asks nothing more.
+    await settleLatitude({ purpose: workType, method: rules.map((r) => r.statement).join('\n'), examples: keptCases.map((c) => c.reference) });
+    s = loadSession();
   } else {
     console.log('(using the proposal you were already shown — nothing was re-asked)\n');
   }
@@ -272,12 +289,15 @@ export async function skill(): Promise<void> {
   const decidedNow: Requirement[] = bases.map((base, i) => {
     // A rule the person stated that code can hold an output to is required, as a stated step with a check is
     // (cli/commands/method.ts, decideSteps); a written check is not enforced until qualified.
-    const enforce = pset.rules[i].grounded && pset.checks?.[base.statement]?.how === 'measure';
+    const check = pset.checks?.[base.statement];
+    const enforce = pset.rules[i].grounded && (check?.how === 'measure' || check?.qualification?.qualified === true);
     const outcome = decide(base, { verb: pset.rules[i].grounded ? 'STATED' : 'APPROVE', ...(enforce ? { materiality: 'REQUIRED' } : {}) });
     ledger = appendDecision(ledger, base, outcome.ledgerDecision, { decidedAt: new Date().toISOString() });
     return outcome.requirement;
   });
-  saveSession({ ...s, decided: [...s.decided, ...decidedNow], ledger, proposalSet: null });
+  // What each written check earned on the answers the owner kept, beside the standard (outside its hash).
+  const qualifications = Object.fromEntries(decidedNow.flatMap((q) => { const c = pset.checks?.[q.statement]; return c?.qualification ? [[q.requirementId, c.qualification]] : []; }));
+  saveSession({ ...s, decided: [...s.decided, ...decidedNow], ledger, proposalSet: null, ...(Object.keys(qualifications).length ? { qualifications: { ...s.qualifications, ...qualifications } } : {}) });
 
   if (decision.route === 'HYBRID') {
     console.log('\nNow reading the work for what you did not say.\n');
@@ -292,16 +312,36 @@ export async function skill(): Promise<void> {
   // REPLIES ARE CHECKED AS REPLIES. A skill for answers (a coding assistant, support, review comments)
   // names versions, costs and estimates the person never supplied; cutting each as invented took a
   // technical answer apart. Its specifics are listed for the reader to check (formats.ts, assistant-reply).
-  const form = pset.form ?? (isReplyWork(workType) ? 'REPLY' : 'DOCUMENT');
+  const form = pset.form ?? 'DOCUMENT';
   store.setWorkForm({ root: DATA, skillName: skillNameFrom(flag('--name') ?? basename(process.cwd())) }, form);
   if (!flag('--class') && form === 'REPLY') {
     argv.push('--class', 'assistant-reply');
     console.log(`Checked as assistant replies: specifics not in your material are listed for you to check, not cut. `
       + '(`--class none` to cut them instead.)');
   }
+  // The latitude read with the proposal, or `--latitude` given now: no reading is made at acceptance.
+  await settleLatitude({ purpose: workType, method: pset.rules.map((r) => r.statement).join('\n'), examples: keptCases.map((c) => c.reference) });
   ratifyClose();
   await build(flag('--name') ?? basename(process.cwd()));
+  // BUILT FROM RULES ALONE, IT SAYS SO, AND OFFERS DRAFTS (core/method/draft-examples.ts): with no finished work, a check
+  // written for a rule reports and blocks nothing; ten drafted answers the owner keeps or rejects are what qualifies it.
+  if (argv.includes('--draft-examples')) await draftExamples(LK, workType, pset.rules.map((r) => r.statement));
+  else if (!keptDrafts.length) {
+    console.log(`\nBuilt from your rules alone, with no finished work: a check written for a rule reports and blocks nothing until it is qualified on answers you keep.`
+      + `\n  Ten answers drafted for you to keep or reject: atelier skill ${JSON.stringify(prompt ?? '')} --name ${LK.skillName} --draft-examples`);
+  }
 }
 
-import { isReplyWork } from '../../core/observers/formats.js';
-export { isReplyWork };
+/** Ten answers drafted by the writer, kept for the owner to rate one by one; nothing is kept until they say so. */
+async function draftExamples(L: store.StoreLayout, purpose: string, rules: readonly string[]): Promise<void> {
+  const d = await readContext(DRAFT_EXAMPLES, { purpose, rules, n: 10 }, clientFor(proposerModel()), proposerModel(), { spentUsd: 0, capUsd: numericFlag('--cap', 1), maxCalls: 1 });
+  if (!d.value.length) { console.log(`\nNo answers could be drafted (${d.why ?? 'the writer gave none'}). The skill is built as it stands.`); return; }
+  const before = store.getDrafted(L);
+  const at = before.reduce((n, x) => Math.max(n, Number(x.id.slice(1)) || 0), 0);
+  const drafted = d.value.map((x, i) => ({ id: `d${at + i + 1}`, request: x.request, answer: x.answer, kept: null }));
+  store.setDrafted(L, [...before, ...drafted]);
+  console.log(`\n${drafted.length} answer(s) drafted for you to keep or reject (in ${L.skillName}'s store; nothing is kept until you say so):`);
+  for (const x of drafted) console.log(`\n── ${x.id} · ${x.request.replace(/\s+/g, ' ')}\n${x.answer}`);
+  console.log(`\nRate each: atelier rate <id> yes   ·   atelier rate <id> no "why" [--rule <rule>]`
+    + `\nThen build again: what you kept qualifies the checks; what you reject naming a rule is an edit that breaks it.`);
+}

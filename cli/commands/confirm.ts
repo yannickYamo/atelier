@@ -7,7 +7,7 @@
 import { resolveRule } from '../../core/state/rule-key.js';
 import { describeBackup } from '../../adapters/install-tree.js';
 import type { StandardVersion } from '../../core/state/canonical-state.js';
-import { authorityStateOf, assertSupersessionRecorded, carriedQualifications } from '../../core/state/canonical-state.js';
+import { authorityStateOf, assertSupersessionRecorded, carriedQualifications, carriedSettings, standardHashOf } from '../../core/state/canonical-state.js';
 import { compileArchitecture, observedBoundaries } from '../../core/architecture/compile.js';
 import { renderAgentSkill, assertPortable, defaultDescription } from '../../renderers/agent-skill/render.js';
 import * as store from '../../core/state/store.js';
@@ -54,8 +54,8 @@ export function confirmBoundary(): void {
     ? prev.requirements.filter((r) => r.requirementId !== ruleId)
     : prev.requirements.map((r) => r.requirementId === ruleId ? confirmedReq : r);
 
-  const body = { evidenceId: prev.evidenceId, workType: prev.workType, requirements };
-  const minted: StandardVersion = { standardVersionHash: sha(JSON.stringify(body)), ...body,
+  const body = { evidenceId: prev.evidenceId, workType: prev.workType, requirements, ...carriedSettings(prev, requirements) };
+  const minted: StandardVersion = { standardVersionHash: standardHashOf(body), ...body,
     authorityState: authorityStateOf(requirements), mintedAt: new Date().toISOString(), supersedes: prev.standardVersionHash,
     reason: drop ? `author ruled "${target.statement}" is not a rule they hold` : `author confirmed "${target.statement}"`, ...carriedQualifications(prev, requirements) };
   assertSupersessionRecorded(minted);
