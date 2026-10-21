@@ -21,6 +21,7 @@ import { resetStages } from '../stages.js';
 import { METHOD_UNITS, unitFloor, describeUnit, type DecisionUnit } from '../../core/method/decision-units.js';
 import { STEP_CHECK, planOf, stepCheckInput, heldByPolarity, type StepPlan, type StepToCheck, type ExampleCase } from '../../core/method/step-check.js';
 import { checkQualified } from '../../core/observers/written.js';
+import { STEP_MUTANTS, mutate, qualifyCheck, markQualified, describeQualification } from '../../core/method/mutants.js';
 import { countWords } from '../../core/eval/size.js';
 import { normalizeClass, CLASS_ALIASES } from '../../core/observers/doc-class.js';
 import { unmeasuredKind } from '../../core/loop/claim-extract.js';
@@ -298,7 +299,10 @@ export async function method(): Promise<void> {
   // WHICH CHECK EACH STATED STEP CARRIES, READ ONCE (core/method/step-check.ts): a measurement from the menu, a check the
   // model writes, or judgement; grounded on the owner's examples by code. With no model every step is a judgement.
   const checksPlan = await stepPlan(note, cases, stepKindsRead);
-  const read = proposalsAcross(note, cases, checksPlan);
+  const across = proposalsAcross(note, cases, checksPlan);
+  // A WRITTEN CHECK EARNS ITS SAY (core/method/mutants.ts): it must pass every example and catch the edits that break
+  // only its step; until then it is kept, shown with what it caught, and enforced nowhere.
+  const read = { ...across, proposals: await qualifyWritten(across.proposals, cases, across.lead) };
   const lead = read.lead;
   // What the pieces show about how they are written, counted: offered beside the method, with no model.
   // WITH NO METHOD, THE ONE THING ASKED IS "LIKE THESE". It is said as the skill's one rule, which no count reads and
@@ -462,6 +466,31 @@ async function decisionUnits(stated: readonly MethodProposal[], steps: readonly 
   const d = await readContext(METHOD_UNITS, input, noModel ? null : contextReaderClient(), noModel ? null : contextReaderModel(), { spentUsd: 0, capUsd: 0.2, maxCalls: 1 });
   if (argv.includes('--report')) console.log(`(what each step asks the writer to decide: ${d.by === 'model' ? `read by ${contextReaderModel()}` : d.by === 'code' ? 'nothing to read' : `by the words alone (${d.why})`}.)`);
   return new Map(input.steps.map((st) => [st.text, d.value[st.id] ?? unitFloor(st)]));
+}
+
+/**
+ * Every written check among the proposals, held to the owner's examples and to mutants of the lead example (one reading
+ * for all of them); each comes back marked qualified or not, with the count said beside it.
+ */
+async function qualifyWritten(proposals: readonly MethodProposal[], cases: readonly ExampleCase[], lead: number): Promise<MethodProposal[]> {
+  const written = proposals.filter((p) => p.measurement?.observer === 'CHECK');
+  if (!written.length || !cases.length) return [...proposals];
+  const example = cases[lead] ?? cases[0];
+  const steps = written.map((p, i) => ({ id: String(i + 1), text: p.statement, means: Array.isArray(p.measurement?.params.means) ? String(p.measurement.params.means[0]) : p.statement }));
+  const noModel = !canReach('discovery') || argv.includes('--no-model');
+  const d = await readContext(STEP_MUTANTS, { steps, example: example.reference }, noModel ? null : contextReaderClient(), noModel ? null : contextReaderModel(), { spentUsd: 0, capUsd: 0.2, maxCalls: 1 });
+  if (argv.includes('--report')) console.log(`(edits that break each written check's step: ${d.by === 'model' ? `written by ${contextReaderModel()}` : `none (${d.why ?? 'nothing to read'})`}.)`);
+  const context = (c: ExampleCase): { request?: string; material: readonly { name: string; text: string }[] } => ({ ...(c.task ? { request: c.task } : {}), material: c.material });
+  const examples = cases.map((c) => ({ text: c.reference, context: context(c) }));
+  const mutantsOf = (id: string): { text: string; context: ReturnType<typeof context> }[] => (d.value[id] ?? []).map((m) => ({ text: mutate(example.reference, m), context: context(example) }));
+  const byStatement = new Map(written.map((p, i) => [p.statement, String(i + 1)]));
+  return proposals.map((p) => {
+    const id = p.measurement?.observer === 'CHECK' ? byStatement.get(p.statement) : undefined;
+    if (!id || !p.measurement) return p;
+    const own = mutantsOf(id); const others = steps.filter((s) => s.id !== id).flatMap((s) => mutantsOf(s.id));
+    const q = qualifyCheck(p.measurement, examples, own, others);
+    return { ...p, measurement: markQualified(p.measurement, q), onExample: describeQualification(q) };
+  });
 }
 
 /** The check each stated step asks for, read in one call where a model is set up (core/method/step-check.ts); judgement for every step where none is. */

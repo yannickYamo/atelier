@@ -38,9 +38,29 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
   through the reading's grounding and the sandbox with the model stood in; `tests/written-check.test.ts` and
   `tests/step-check.test.ts` hold the sandbox and the grounding; `bench/readings/cases/step-check.json` holds the first
   labelled cases for the live reading (sixteen steps; the pass line stated in the file).
-- Not in this change, and said so: the mutant qualification that lets a written check block; `atelier skill
+- Not in this change, and said so: `atelier skill
   "<rules>"` still attaches no check; a rule written as a `### n.` heading is still not a step of a note; the
   rule-polarity reading's floor is still a word pattern (`polarityByWords`), the last one on the method path.
+
+### A written check earns its say on the owner's examples and their mutants
+
+- **Mutant qualification** (`core/method/mutants.ts`). Before a written check may be enforced it must pass every finished
+  example the owner gave, catch at least 90% of the edits of the lead example that break only its step (edits a model
+  writes as find-and-replace pairs, each grounded to occur once in the piece; one reading for every written check), and
+  fire on at most 5% of the edits that break other steps. A check that meets the bars carries `qualified: 1` in its
+  measurement, so the standard's hash carries the qualification and the plan may enforce it; one that does not is kept,
+  shown with what it caught and missed, and blocks nothing. With no model no edit is written and no written check
+  qualifies. Bars stated in the file before any check was read. Test: `tests/step-mutants.test.ts`.
+
+### Atelier as an app, through MCP
+
+- **The MCP server is the front door, not only the checker.** Beside the reading tools (`atelier_verify`, `atelier_rules`,
+  `atelier_list_skills`, `atelier_skill_report`) it now serves `atelier_new`, `atelier_run`, `atelier_report`,
+  `atelier_rate` and `atelier_fix`: the same commands a person runs at the terminal, in a child process with the server's
+  environment (the model key, `ATELIER_DATA`, `ATELIER_PROJECT_DIR`), returning the screen or the whole run record. The
+  person still approves the standard: `atelier_new` shows the screen and builds nothing until `approve: true`, which the
+  agent may pass only after the person has seen it; `atelier_rate` records the person's ruling, never the agent's.
+  `atelier setup` installs it as before. Test: `tests/atelier-mcp-app.test.ts`.
 
 ### Studies: the step-check reading on sixteen labelled steps (development evidence, $0.04)
 
