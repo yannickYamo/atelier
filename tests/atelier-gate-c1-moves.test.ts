@@ -240,9 +240,9 @@ describe('through the build', () => {
     expect(profile.pieces.map((x) => x.name)).toEqual(['piece-1', 'piece-2', 'piece-3', 'piece-4']);
     // the profile on disk is the one the receipt names, by its own hash
     expect(store.getMovesByHash(L(withModel.data), receipt.movesHash!)!.hash).toBe(profile.hash);
-    // THE STANDARD IS UNTOUCHED: the same hash and requirements as a build with no model at all
+    // THE STANDARD IS UNTOUCHED BY THE MOVES: a build with no model at all differs from it only by the step-check reading
+    // (with no model every stated step is a judgement), never by a move; the receipt of that build names no moves profile.
     expect(without.run('method', 'method.md', '--golden', 'examples', '--name', 'code-review', '--yes', '--report').code).toBe(0);
-    expect(activeOf(without.data).standardVersionHash).toBe(sv.standardVersionHash);
     expect(store.getReceipt(L(without.data), activeOf(without.data).skillVersionHash)!.movesHash).toBeNull();
     // THE PACKAGE CARRIES NOTHING OF IT: the profile is beside the voice, not in the skill
     const skillMd = readFileSync(join(withModel.proj, '.claude', 'skills', 'code-review', 'SKILL.md'), 'utf8');

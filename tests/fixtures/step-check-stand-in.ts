@@ -1,11 +1,6 @@
-// atelier/core/method/step-readers.ts — WHAT ONE STEP OF A METHOD ASKS FOR, READ FROM ITS OWN WORDS.
-//
-// Each reader takes a step as the owner wrote it and answers one question about it: does it name a table's columns,
-// does it put a section in the work, is it about when, does it state a length. `checkNamedBy` (./standard.ts) asks
-// them in order and holds the answer against the owner's example. A reader that is unsure answers no: a step left
-// to judgement costs a check, and a rule the owner did not write costs their trust.
-
-import type { Measurement } from '../state/canonical-state.js';
+// A TEST DOUBLE: the step readers Atelier once ran on a step's wording, kept only so the scripted backend can answer the step-check reading the way they would have. Not product code.
+import { citesLines } from '../../core/loop/locators.js';
+interface Measurement { observer: string; params: Record<string, any> }
 
 /** A name as it is compared: lower case, letters, digits and % only. */
 export const norm = (s: string): string => s.toLowerCase().replace(/[^a-z0-9% ]+/g, ' ').replace(/\s+/g, ' ').trim();
@@ -368,3 +363,115 @@ const NAMES_A_TEST = new RegExp(String.raw`\b(?:nam(?:e|es|ing)|add(?:s|ed|ing)?
 /** A test that is an experiment or an examination, not one in code: "the A/B test that was run", "a load test", "a blood test". */
 const NOT_A_CODE_TEST = /\b(?:A\/B|AB|split|multivariate|usability|user|load|stress|penetration|pen|blood|driving|taste|beta|market|field|clinical|drug|smell|litmus|acid|stress|eye|hearing|personality|aptitude|IQ)[\s-]+tests?\b/i;
 export const namesTest = (step: string): boolean => NAMES_A_TEST.test(step) && !FORBIDS_OR_CONDITIONS.test(step) && !NOT_A_CODE_TEST.test(step);
+
+
+/** What one finished example shows of its own shape: its sections in order, and its tables. */
+interface Outline { sections: string[]; tables: { header: string[]; rows: number }[]; labels: boolean }
+
+function sectionsCheck(sections: readonly string[], outline: Outline, where: { opens?: boolean; closes?: boolean; options?: readonly string[] } = {}): Measurement {
+  return { observer: 'PRESENCE', params: { sections: [...sections], body: 1, ...(where.opens ? { opens: 1 } : {}), ...(where.closes ? { closes: 1 } : {}), ...(outline.labels ? { labels: 1 } : {}),
+    ...(where.options?.length && sections.length === 1 ? { options: [...where.options] } : {}) } };
+}
+
+const SOURCING = /\b(?:cit(?:e|es|ed|ation)|sourc(?:e|es|ed|ing)|attribut\w+|referenc\w+)\b/i;
+/** A word for a figure itself: what the lookup in the material reads. A claim is not one. */
+const FIGURES = /\b(?:figure|number|statistic|stat|data|metric|price|pricing|revenue|percent\w*|quantit\w+)s?\b/i;
+const ABOUT_FIGURES = /\b(?:figure|number|statistic|stat|data|claim|metric|price|pricing|revenue|percent\w*|quantit\w+)s?\b/i;
+
+/**
+ * The check a stated step names by its own words, or null. A step that names sections the example has is about
+ * those sections; one that speaks of a table is about the example's table whose columns it names (or its only
+ * table); one that speaks of sources for figures is about the material.
+ */
+function checkNamedBy(step: string, outline: Outline, how: { byName?: boolean; related?: boolean } = {}): Measurement | null {
+  const said = ` ${norm(step)} `;
+  // WHAT THE STEP NAMES OUTRIGHT COMES FIRST, whether or not the example has it: "a Risks section", "a table with the
+  // columns A, B and C". Read only from the example, a step that names a column the example lacks was given the
+  // example's own table and marked as held.
+  const columns = tableColumns(step);
+  if (columns.length >= 2) return { observer: 'TABLE', params: { columns, minRows: 1 } };
+  const conditional = isConditional(step);
+  const low = lowered(step);
+  const found = conditional ? [] : sectionsPlaced(step, outline.sections);
+  const named = conditional ? [] : sectionsNamed(step);
+  // The example's own names decide only when they cover everything the step names outright: "open with a Glossary
+  // section and include a Summary section", over an example with no Glossary, is the owner's to settle below.
+  // A section the step names with a capital and the example does not have ("and a Glossary section") is not dropped:
+  // the check asks for it too, the example fails it, and the owner is asked.
+  const outright = sectionsOutright(step, outline.sections);
+  if (found.length && outright.length && !conditional) return sectionsCheck([...found.map((x) => x.sec), ...outright], outline);
+  if (found.length && named.every((x) => found.some((f) => f.name === norm(x.name)))) {
+    // Tied by the example's own name where the step's wording alone would not have said it: a reading, said as one.
+    how.byName = found.some((f) => !named.some((x) => norm(x.name) === f.name));
+    // Where is said by the verb that introduces the name, and by nothing else.
+    const before = (x: { at: number }): string => low.slice(0, x.at + 1);
+    const opens = /\b(?:opens?|starts?|begins?|leads?)(?: with)? $/.test(before(found[0]));
+    const closes = /\b(?:ends?|closes?|finish(?:es)?|concludes?)(?: with)? $/.test(before(found[found.length - 1]));
+    return sectionsCheck(found.map((x) => x.sec), outline, { opens, closes: closes && !(opens && found.length === 1), options: optionsOf(step) });
+  }
+  const sections = named.map((x) => x.name).filter((n, i, all) => all.findIndex((o) => norm(o) === norm(n)) === i);
+  if (sections.length) {
+    // Where is said by the verb, and by nothing else: "listing the first three risks" says nothing of where.
+    const opens = /^(?:open|start|begin|lead)/.test(named[0].verb);
+    const closes = /^(?:end|close|finish|conclude)/.test(named[named.length - 1].verb);
+    return sectionsCheck(sections, outline, { opens, closes: closes && !(opens && sections.length === 1), options: optionsOf(step) });
+  }
+  // A STEP THAT ASKS FOR A TABLE ("include a table of…", "holds one table") is held to the example's. One that speaks
+  // of a table already there ("three to five rows in that table", "right below the table") asks for something else,
+  // which nothing here reads: tied to the table's columns, its check read what the step does not ask.
+  if (/\b(?:an?|one|two|three|\d+)\s+(?:[\w-]+\s+){0,3}tables?\b|\btables?\s+(?:with|of|showing|comparing|listing)\b/i.test(step) && outline.tables.length) {
+    const columnsSaid = (t: (typeof outline.tables)[number]): number => t.header.filter((h) => h.length >= 3 && said.includes(` ${norm(h)} `)).length;
+    const best = [...outline.tables].sort((a, b) => columnsSaid(b) - columnsSaid(a))[0];
+    if (columnsSaid(best) > 0 || outline.tables.length === 1) return { observer: 'TABLE', params: { columns: best.header.filter(Boolean), minRows: 1 } };
+  }
+  // A count in a step that opens on one of the example's sections is that section's. Where it could not be read as
+  // the section's length, it is not thereby the whole work's: it is the owner's to judge.
+  const whole = (m: Measurement | null): Measurement | null => (m?.observer === 'LENGTH' && !m.params.in && sectionsOpening(step, outline.sections).length ? null : m);
+  const counted = sectionLength(step, outline.sections) ?? whole(statedCount(step));
+  // Where the example's sections are labels, a section's length is read between them: the check carries their names.
+  if (counted) return outline.labels && counted.observer === 'LENGTH' && counted.params.in ? { ...counted, params: { ...counted.params, labels: 1, sections: [...outline.sections] } } : counted;
+  // A step that asks for citations of places ("cite each item as path:line", "point to the line", "give the file and
+  // line", "every finding points at the code") is held by looking each one up (./step-readers.ts, `citesPlaces`).
+  // Not where the step forbids the form or asks for it only sometimes ("do not cite as path:line", "where there is
+  // one"). And "each item" is not "at least one": a review with nothing to fix cites nothing, and holds the step.
+  // Where the step asks for one on EVERY finding ("each finding cites its line"), each finding is read for one too:
+  // under the section the step names where it names one of the example's, else under the headings that call their
+  // contents findings. Whether the cited line supports the finding is never read.
+  const cites = citesPlaces(step, citesLines, outline.sections);
+  if (cites) return { observer: 'LINES', params: { min: 0, ...(cites.perItem ? { perItem: 1, ...(cites.sections.length ? { sections: cites.sections } : {}) } : {}) } };
+  // A step that asks the work to name a test ("name the test that would have caught it", "suggest a test") is held
+  // by looking for one: a test file, or a test function or case in backticks. Which test is the right one is not read.
+  if (namesTest(step)) return { observer: 'NAMES_TEST', params: {} };
+  // A STEP THAT SPEAKS OF SOURCES AND OF FIGURES is given the lookup of figures in the material. That is the step's
+  // subject, not what it asks: "name the source the first time I cite a figure" is not broken by a figure the
+  // material lacks. The check is kept, shown, and marked as near the rule: it blocks nothing.
+  // It IS what the step asks where the figures are what the step is about and the source is where they must come
+  // from: "every figure must be sourced from the material", "keep numbers as they appeared at source". Said of
+  // figures first, then of the source. Anything else (a claim, or the source named before the figure) is near it.
+  if (SOURCING.test(step) && ABOUT_FIGURES.test(step)) {
+    const figures = step.search(FIGURES); const source = step.search(SOURCING);
+    how.related = !(figures !== -1 && figures < source);
+    return { observer: 'CITED', params: { allow: 0 } };
+  }
+  return null;
+}
+
+
+/** A measurement as the one-line spec the step-check reading accepts (core/measurement/spec.ts). */
+function specOf(m: Measurement): string {
+  if (m.observer === 'LEXICON') return `LEXICON:${(m.params.terms as string[]).join('|')}`;
+  const kv = Object.entries(m.params).map(([k, v]) => `${k}=${Array.isArray(v) ? (v as unknown[]).join(typeof v[0] === 'number' ? '/' : '|') : String(v)}`);
+  return kv.length ? `${m.observer}:${kv.join(',')}` : m.observer;
+}
+
+/** What the old readers would have answered the step-check reading with, for the input it was shown. */
+export function standInChecks(given: { steps: { id: string; text: string; under: string | null }[]; example: { sections: string[]; tables: string[][]; labels: boolean } }): { checks: any[] } {
+  const outline = { sections: given.example.sections, tables: given.example.tables.map((header) => ({ header, rows: 1 })), labels: given.example.labels } as any;
+  return { checks: given.steps.map((st) => {
+    const how: { byName?: boolean; related?: boolean } = {};
+    const m = checkNamedBy(st.text, outline, how);
+    const quote = st.text.slice(0, 60);
+    if (!m) return { id: st.id, how: 'judgement', measure: null, source: null, quote, means: 'yours to judge' };
+    return { id: st.id, how: 'measure', measure: specOf(m), source: null, quote, means: specOf(m), ...(how.related ? { near: true } : {}) };
+  }) };
+}

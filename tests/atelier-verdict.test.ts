@@ -4,13 +4,14 @@
 // of dashes was a table, "open with" and "end with" said nothing of where, a figure that was the sum of any two
 // numbers in the material was "sourced", and with no material bound the sourcing rule did not run at all. Each is
 // held here by the smallest text that used to pass.
-import { describe, it, expect } from 'vitest';
-import { spawnSync } from 'node:child_process';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { mp } from './helpers/step-plan.js';
+import { spawnSync, spawn, type ChildProcess } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, realpathSync, readdirSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { measure } from '../core/observers/registry.js';
-import { stepsOf, methodProposals } from '../core/method/standard.js';
+import { stepsOf, type methodProposals } from '../core/method/standard.js';
 import { verifyText } from '../core/observers/verify.js';
 import { planRepair } from '../core/loop/repair.js';
 import { spanIntegrity } from '../core/loop/integrity.js';
@@ -224,7 +225,7 @@ describe('what a second review found in sections', () => {
 describe('steps, as the review found them misread', () => {
   const example = { task: 'Review the retry change.', material: [{ name: 'diff.md', text: 'The diff adds a retry loop.' }],
     reference: '## Verdict\n\nSafe to merge once the delay is capped.\n\n## Risks\n\nThe loop can spin for ever.\n\n## Sources\n\nThe diff, and the incident note.\n' };
-  const of = (note: string, re: RegExp): ReturnType<typeof methodProposals>[number] | undefined => methodProposals(note, example).find((p) => re.test(p.statement));
+  const of = (note: string, re: RegExp): ReturnType<typeof methodProposals>[number] | undefined => mp(note, example).find((p) => re.test(p.statement));
   it('an instruction written as a sentence is kept', () => {
     const note = '# Review\n\nMake sure that you never give the verdict before reading the diff. It is important that you always cite the file. State which risks must be fixed before merge.\n\n- Open with a Verdict section.\n';
     expect(stepsOf(note).map((s) => s.text)).toEqual(['Open with a Verdict section.', 'Make sure that you never give the verdict before reading the diff.', 'It is important that you always cite the file.', 'State which risks must be fixed before merge.']);
@@ -272,7 +273,7 @@ describe('a figure the material does not hold is cut, and the rewrite is let to 
 describe('a step is a step when it tells the writer what to do, however its sentence opens', () => {
   const example = { task: 'Review the retry change.', material: [{ name: 'diff.md', text: 'The diff adds a retry loop.' }],
     reference: '## Background\n\nThe change adds a retry loop around the upload call.\n\n## Security\n\nNo new input reaches the shell.\n\n## Assessment\n\nSafe to merge once the delay is capped.\n' };
-  const of = (note: string, re: RegExp): ReturnType<typeof methodProposals>[number] | undefined => methodProposals(note, example).find((p) => re.test(p.statement));
+  const of = (note: string, re: RegExp): ReturnType<typeof methodProposals>[number] | undefined => mp(note, example).find((p) => re.test(p.statement));
   it('a verb that opens the sentence, a name in quotation marks, a section "called" or "on" something', () => {
     const note = '- Include a Background section that says what changed.\n- The review must have a "Security" section.\n- Write an Assessment section last.\n- Add a section called Background before anything else.\n';
     expect(of(note, /^Include a Background/)).toMatchObject({ obligation: 'DELIVERABLE', measurement: { observer: 'PRESENCE', params: { sections: ['Background'], body: 1 } } });
@@ -297,7 +298,7 @@ describe('a step is a step when it tells the writer what to do, however its sent
   });
   it('work whose sections are labels, not headings, is read as it is written', () => {
     const sbar = { task: 'Hand over bed 9.', material: [], reference: 'Situation: Mrs Hale, bed 9, is bleeding again after her procedure.\n\nBackground: She was admitted on Tuesday with a peptic ulcer.\n\nRecommendation: Review within the hour, please.\n' };
-    const p = methodProposals('- Open with a Situation section.\n- End with a Recommendation section.\n', sbar);
+    const p = mp('- Open with a Situation section.\n- End with a Recommendation section.\n', sbar);
     expect(p[0]).toMatchObject({ obligation: 'DELIVERABLE', measurement: { observer: 'PRESENCE', params: { sections: ['Situation'], opens: 1, body: 1, labels: 1 } } });
     expect(p[1]).toMatchObject({ obligation: 'DELIVERABLE', measurement: { params: { sections: ['Recommendation'], closes: 1, labels: 1 } } });
   });
@@ -305,9 +306,20 @@ describe('a step is a step when it tells the writer what to do, however its sent
 
 describe('through the binary: a skill is its owner\'s, and another folder does not replace it', () => {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'atelier-verdict-')));
+  // which check a step asks for is a reading, answered by the scripted backend's stand-in; no key is set
+  let backend: ChildProcess; let port = 0;
+  beforeAll(async () => {
+    backend = spawn(process.execPath, [resolve('tests/fixtures/scripted-backend.mjs')], { stdio: ['ignore', 'pipe', 'inherit'] });
+    port = await new Promise<number>((ok, bad) => {
+      backend.stdout!.on('data', (d: Buffer) => { const m = /PORT (\d+)/.exec(d.toString()); if (m) ok(Number(m[1])); });
+      backend.on('exit', () => { bad(new Error('scripted backend exited before listening')); });
+    });
+  }, 60_000);
+  afterAll(() => { backend?.kill(); });
   const run = (dir: string, ...args: string[]): { code: number; out: string; err: string } => {
     const env = { ...Object.fromEntries(Object.entries(process.env).filter(([k]) => !/^(ATELIER|ANTHROPIC|OPENAI)_/.test(k))), ATELIER_DATA: join(root, 'data'), ATELIER_PROJECT_DIR: dir };
-    const r = spawnSync(process.execPath, [resolve('dist/cli/atelier.mjs'), ...args], { encoding: 'utf8', cwd: dir, env });
+    const reader = args[0] === 'method' || args[0] === 'new' ? ['--provider', 'openai-compatible', '--base-url', `http://127.0.0.1:${port}`, '--model', 'scripted'] : [];
+    const r = spawnSync(process.execPath, [resolve('dist/cli/atelier.mjs'), ...args, ...reader], { encoding: 'utf8', cwd: dir, env });
     return { code: r.status ?? -1, out: r.stdout, err: r.stderr };
   };
   const project = (name: string, step: string): string => {

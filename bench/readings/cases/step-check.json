@@ -1,0 +1,27 @@
+{
+  "reading": "step-check",
+  "pass": "At least 14 of 16 cases agree with their label in 4 of 5 runs, and no case labelled judgement is given a check in any run (a false check is the harmful error).",
+  "example": {
+    "reference": "## Verdict\n\nBorealis wins for a small team, and Acme wins once the team is large enough to clear its minimum.\n\n## The comparison\n\n| Vendor | Price per seat | Minimum |\n|---|---|---|\n| Acme | 12 dollars | 50 seats |\n| Borealis | 15 dollars | none |\n\nAcme is cheaper a seat and dearer in total below its minimum. The migration takes 3 days.\n\n## Risks\n\nEither vendor can change its list price, and switching later means moving every payee again.\n",
+    "task": "Compare Acme and Borealis on price for a small team.",
+    "material": "Acme lists 12 dollars a seat with a 50 seat minimum. Borealis lists 15 dollars a seat with no minimum."
+  },
+  "cases": [
+    { "id": "opens-section", "label": "measure:PRESENCE", "step": "Open with a Verdict section that says who wins, and for whom." },
+    { "id": "ends-section", "label": "measure:PRESENCE", "step": "End with a Risks section." },
+    { "id": "table-columns", "label": "measure:TABLE", "step": "Include a table with the columns Vendor, Price per seat and Minimum." },
+    { "id": "figures-sourced", "label": "measure:CITED", "step": "Every figure must be sourced from the material you were given." },
+    { "id": "banned-words", "label": "measure:LEXICON", "step": "Never use the words leverage, synergy or delve." },
+    { "id": "banned-list-under-heading", "label": "measure:LEXICON", "step": "Banned outright: tapestry, testament, delve, navigate, landscape.", "under": "Words to cut" },
+    { "id": "paragraph-cap", "label": "measure:PARAGRAPH_LENGTH", "step": "Keep each paragraph to four sentences at most." },
+    { "id": "whole-length", "label": "measure:LENGTH", "step": "Between 100 and 230 words." },
+    { "id": "opener-banned", "label": "measure:OPENING", "step": "Never open with \"Great question\" or \"In today's world\"." },
+    { "id": "unit-on-estimate", "label": "written", "step": "Every time estimate carries a unit (minutes, hours, days)." },
+    { "id": "no-hex", "label": "written", "step": "Never write a colour as a hex value; use the token." },
+    { "id": "group-size", "label": "written", "step": "Keep any list to five items or fewer." },
+    { "id": "weigh", "label": "judgement", "step": "Weigh switching cost before recommending anything." },
+    { "id": "forbids-section", "label": "judgement", "step": "Do not end with a Sources section unless asked." },
+    { "id": "conditional-section", "label": "judgement", "step": "Add a Risks section only when the change touches billing." },
+    { "id": "named-in-passing", "label": "judgement", "step": "Give the Risks section a second read before sending." }
+  ]
+}

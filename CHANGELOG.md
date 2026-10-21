@@ -7,6 +7,38 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+### Which check a step asks for is read, not matched: a model names it or writes it, and code holds it
+
+- **The step readers are gone.** A step of a method note was tied to a check by patterns on its wording
+  (`core/method/step-readers.ts`, deleted), and every round of testing found a wording they did not know; a real
+  SKILL.md handed to `--method` got 0 checks from 26 steps. In their place, one reading on the house pattern
+  (`core/method/step-check.ts`, version 1): the model is shown every step, the outline of the owner's examples (every
+  example's sections and tables, joined) and the menu of measurements, and answers for each step with a measurement line,
+  a check it writes, or judgement; code grounds the answer (the quote must be the step's own words, a measurement must
+  parse, validate and run on the example, a written check must compile and run on it) and a step the reading cannot
+  ground is judgement. The floor is judgement: with no model set up every stated step is the owner's to judge, and no
+  pattern on a step's wording decides a check anywhere. The unit floor (`core/method/decision-units.ts`) reads nothing
+  into the words either: an instruction, applying always, until a model reads the condition.
+- **A check a model writes** (`core/observers/written.ts`, observer `CHECK`). One JavaScript function over the text,
+  the request and the material, run in a context with nothing in it (no `require`, no `process`, no network, no clock)
+  under a time limit that holds for every call, and only ever a verdict with the spans it read: a check that throws,
+  runs past its limit or returns the wrong shape has not run. Its source is the measurement's own parameter, so the
+  standard's hash covers it. It reports and blocks nothing until it is qualified on the owner's examples and their
+  mutants (`core/method/mutants.ts`, next): the plan never enforces an unqualified written check.
+- **The one-line measurement grammar is one thing** (`core/measurement/spec.ts`), shared by `--measure` and the reading:
+  names and terms are kept as the owner or their example wrote them (the observers compare without regard to case), a
+  comma inside a list value is the value's own (`starts=In short,|So,`), and `CITED:allow=0` is the ordinary rule.
+- **The run's help names what a run does by default**; the instruments under study (structural edits, the typicality
+  and detector rounds, the voice pass, planned and sectioned drafting, examples-first) are listed under `atelier lab`
+  and in USAGE with what is known of each, none on the default path.
+- Tests: the readers' own expectations became the test double that answers the reading in the suite
+  (`tests/fixtures/step-check-stand-in.ts`, compiled beside it for the scripted backend), so every method test now runs
+  through the reading's grounding and the sandbox with the model stood in; `tests/written-check.test.ts` and
+  `tests/step-check.test.ts` hold the sandbox and the grounding; `bench/readings/cases/step-check.json` holds the first
+  labelled cases for the live reading (sixteen steps; the pass line stated in the file).
+- Not in this change, and said so: the mutant qualification that lets a written check block; `atelier skill
+  "<rules>"` still attaches no check; a rule written as a `### n.` heading is still not a step of a note.
+
 ### The form is not a fact, the notes are not the work, one folder is one voice, and a reader reads where it can act
 
 - **A key of the examples is the form, never a borrowed fact.** The carry-over signal read `video_id` and `safety_score`,

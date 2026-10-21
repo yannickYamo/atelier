@@ -7,8 +7,9 @@
 // The six methods and examples below are the tester's, as their owners wrote them: none uses a markdown heading.
 // What stays a judgement stays one: a name in passing asks for nothing.
 import { describe, it, expect } from 'vitest';
+import { mp, pa } from './helpers/step-plan.js';
 import { readFileSync, existsSync } from 'node:fs';
-import { methodProposals, outlineOf, stepsOf } from '../core/method/standard.js';
+import { outlineOf, stepsOf } from '../core/method/standard.js';
 import { sectionHeadsOf } from '../core/observers/structure.js';
 
 const DIR = 'tests/fixtures/methods/';
@@ -17,7 +18,7 @@ function read(name: string): { steps: Record<string, string>; sections: string[]
   if (!m) throw new Error(`${name}.md has no request`);
   const material = existsSync(`${DIR}${name}.material.md`) ? [{ name: 'sources.md', text: readFileSync(`${DIR}${name}.material.md`, 'utf8') }] : [];
   const steps: Record<string, string> = {};
-  for (const p of methodProposals(readFileSync(`${DIR}${name}.method.md`, 'utf8'), { task: m[1], material, reference: m[2] })) {
+  for (const p of mp(readFileSync(`${DIR}${name}.method.md`, 'utf8'), { task: m[1], material, reference: m[2] })) {
     if (p.origin !== 'STATED') continue;
     const x = p.measurement;
     steps[p.statement.split(/\s+/).slice(0, 5).join(' ')] = p.conflict ? 'to settle' : !x ? 'judgement'
@@ -41,8 +42,7 @@ describe('three methods as their owners wrote them: sections named on a line of 
       'Call out where our own': 'judgement',
       'Include a Pricing section comparing': 'section pricing',
       'End with a Risks section,': 'section risks, closes',
-      'Keep it under two pages.': 'judgement',
-    });
+      'Keep it under two pages.': 'judgement' });
   });
   it('market entry: all six; the title is not a step; a name in passing links to nothing', () => {
     const { steps, sections } = read('me');
@@ -57,8 +57,7 @@ describe('three methods as their owners wrote them: sections named on a line of 
       'State the regulatory constraints in': 'section regulation',
       // "the recommendation" is named and no section is asked for
       'Name the two or three': 'judgement',
-      'End with a Next steps': 'section next steps, closes',
-    });
+      'End with a Next steps': 'section next steps, closes' });
   });
   it('code review: the two headings it names; a summary and a verdict "line" it does not name stay judgement', () => {
     const { steps, sections } = read('cr');
@@ -121,7 +120,7 @@ describe('what is and is not a section when nothing marks it', () => {
 
 describe('a step names a section of the example only by saying it is one', () => {
   const example = { task: 'Write the note.', material: [], reference: 'STATUS: amber, because reconciliation is behind.\n\nOPEN ISSUES:\nThe lag.\n\nSWITCHING COSTS:\nLow.\n' };
-  const check = (step: string): string | null => { const p = methodProposals(`- ${step}\n`, example)[0]; return p.measurement ? (p.measurement.params.sections as string[]).join('+') : null; };
+  const check = (step: string): string | null => { const p = mp(`- ${step}\n`, example)[0]; return p.measurement ? (p.measurement.params.sections as string[]).join('+') : null; };
   it('in any case, after any verb, with the word that says what it is', () => {
     expect(check('Size the problem with an Open issues section.')).toBe('OPEN ISSUES');
     expect(check('Put what is still broken under an open issues heading.')).toBe('OPEN ISSUES');
@@ -151,7 +150,7 @@ describe('the title of a note is not a step', () => {
 // rule for a title, and read a signature, a short answer and a list as sections.
 describe('what a review of the first version found', () => {
   const example = { task: 'Write it.', material: [], reference: '## Summary\nIt works.\n\n## Status\nGreen today.\n\n## Pricing\nTen a seat.\n\n## Open\nNothing is.\n\n## Risks\nA price cut.\n' };
-  const check = (step: string): string | null => { const p = methodProposals(`- ${step}\n`, example)[0]; return p.measurement ? (p.measurement.params.sections as string[]).join('+') : null; };
+  const check = (step: string): string | null => { const p = mp(`- ${step}\n`, example)[0]; return p.measurement ? (p.measurement.params.sections as string[]).join('+') : null; };
   it('a step that leaves a section out, weighs it or replaces it asks for none', () => {
     for (const step of ['Avoid a Summary section.', 'Rather than a Summary section, lead with the decision.', 'Write the verdict without a Summary section above it.', 'Replace a Summary section with one sentence.',
       'Consider a Risks section for larger changes.', 'Sometimes a Risks section is worth adding.', 'Skip a Risks section for small changes.']) expect(check(step), step).toBeNull();
@@ -163,7 +162,7 @@ describe('what a review of the first version found', () => {
   });
   it('a step that names two sections, one the example lacks, is not checked on the other alone', () => {
     for (const step of ['Open with a Glossary section and include a Summary section.', 'Include a Summary section, then end with a Sources section.']) {
-      const p = methodProposals(`- ${step}\n`, example)[0];
+      const p = mp(`- ${step}\n`, example)[0];
       // the owner named both: both are checked, and the example that lacks one is said to
       expect((p.measurement?.params.sections as string[]).length, step).toBe(2);
       expect(p.conflict, step).toMatch(/your example does not do this/);
@@ -203,7 +202,7 @@ describe('what a second review found', () => {
     expect(names('STATUS: amber.\n\nBLOCKERS: none.\n\nCONTACTS: Sam.\n\nAnna Lindqvist\n\nHead of Platform\n')).toEqual(['STATUS', 'BLOCKERS', 'CONTACTS']);
   });
   const example = { task: 'x', material: [], reference: '## Summary\nIt works.\n\n## Background\nWe met.\n\n## Risks\nFew.\n\n## Next steps\nShip.\n' };
-  const check = (step: string): string | null => { const p = methodProposals(`- ${step}\n`, example)[0]; return p.conflict ? 'to settle' : p.measurement ? (p.measurement.params.sections as string[]).join('+') : null; };
+  const check = (step: string): string | null => { const p = mp(`- ${step}\n`, example)[0]; return p.conflict ? 'to settle' : p.measurement ? (p.measurement.params.sections as string[]).join('+') : null; };
   it('"and" joins two sections of a list, not two clauses', () => {
     expect(check('Include a Summary section, then a Risks section.')).toBe('Summary+Risks');
     expect(check('Include a Summary section and a Risks section.')).toBe('Summary+Risks');
@@ -250,13 +249,8 @@ describe('on an output, the sections asked for are looked for by name', () => {
   it('a step that asks for a section only sometimes, or says to leave one out beside one it wants, is not a check', () => {
     const example = { task: 'x', material: [], reference: '## Summary\nIt works.\n\n## Risks\nFew.\n' };
     for (const step of ['It needs a Risks section only for big changes.', 'You rarely need a Risks section.', 'Reviews sometimes need a Risks section.', 'The tone should be a Summary section for executives.']) {
-      expect(methodProposals(`- ${step}\n`, example)[0].measurement, step).toBeNull();
+      expect(mp(`- ${step}\n`, example)[0].measurement, step).toBeNull();
     }
-  });
-  it('a check tied by the example\'s name, where the step\'s own wording would not have said it, is marked as a reading', () => {
-    const example = { task: 'x', material: [], reference: 'STATUS: amber, and why.\n\nOPEN ISSUES:\nThe lag.\n\nNEXT STEPS:\nWatch it.\n' };
-    expect(methodProposals('- Report the state in a Status section.\n', example)[0]).toMatchObject({ byName: true });
-    expect(methodProposals('- Include an Open issues section.\n', example)[0]).toMatchObject({ byName: true });
   });
 });
 
@@ -264,7 +258,7 @@ describe('on an output, the sections asked for are looked for by name', () => {
 describe('a step that gives its place in the order, a closed set, or the form of a citation', () => {
   const example = { task: 'Review this change.', material: [{ name: 'diff', text: '--- a/src/a.js\n+++ b/src/a.js\n@@ -1,0 +1,2 @@\n+const a = 1;\n+run(a);\n' }],
     reference: '## Summary\nIt adds a runner. It is small.\n\n## Must fix\n- src/a.js:2 runs before the check.\n\n## Suggestions\nNone.\n\n## Glossary\nRunner: the thing that runs.\n\n## Verdict\nRequest changes\n' };
-  const first = (step: string) => methodProposals(`- ${step}\n`, example)[0];
+  const first = (step: string) => mp(`- ${step}\n`, example)[0];
   const sections = (step: string): string | null => { const m = first(step).measurement; return m?.observer === 'PRESENCE' ? (m.params.sections as string[]).join('+') : null; };
   it('"Then a Must fix section: ..." asks for the section, and what follows the colon says what goes in it', () => {
     expect(sections('Then a Must fix section: each item is a defect that blocks the merge, most serious first.')).toBe('Must fix');
@@ -310,26 +304,26 @@ describe('a method held against every example', () => {
   it('a step every example holds keeps its check, and says how many it was held in', async () => {
     const { acrossExamples } = await import('../core/method/standard.js');
     const all = cases([piece('Approve'), piece('Request changes'), piece('Comment')]);
-    const ps = acrossExamples(methodProposals(NOTE, all[0]), all.slice(1));
+    const ps = acrossExamples(mp(NOTE, all[0]), all.slice(1));
     expect(ps.filter((p) => p.measurement).map((p) => p.onExample)).toEqual(['held in all 3 of your examples', 'held in all 3 of your examples', 'held in all 3 of your examples']);
   });
   it('a step one example breaks stays the owner\'s rule, checked, with the count and the piece named', async () => {
     const { acrossExamples } = await import('../core/method/standard.js');
     const all = cases([piece('Approve'), piece('Looks fine to me'), piece('Comment')]);
-    const verdict = acrossExamples(methodProposals(NOTE, all[0]), all.slice(1)).find((p) => p.statement.startsWith('End with'));
+    const verdict = acrossExamples(mp(NOTE, all[0]), all.slice(1)).find((p) => p.statement.startsWith('End with'));
     expect(verdict).toMatchObject({ obligation: 'DELIVERABLE', measurement: { observer: 'PRESENCE' }, onExample: 'held in 2 of your 3 examples' });
     expect(verdict?.conflict).toContain('1 of your examples does not do this: e2.md');
   });
   it('what only the first example shows is that piece\'s own, and is dropped', async () => {
     const { acrossExamples } = await import('../core/method/standard.js');
     const all = cases([piece('Approve', '## Risks\nNone seen.\n\n## Rollback\nRevert the commit.\n\n'), piece('Approve'), piece('Comment')]);
-    const lead = methodProposals(NOTE, all[0]);
+    const lead = mp(NOTE, all[0]);
     expect(lead.some((p) => p.origin === 'SHOWN_BY_EXAMPLE')).toBe(true);
     expect(acrossExamples(lead, all.slice(1)).some((p) => p.origin === 'SHOWN_BY_EXAMPLE')).toBe(false);
   });
   it('with one example nothing changes', async () => {
     const { acrossExamples } = await import('../core/method/standard.js');
-    const lead = methodProposals(NOTE, cases([piece('Approve')])[0]);
+    const lead = mp(NOTE, cases([piece('Approve')])[0]);
     expect(acrossExamples(lead, [])).toEqual(lead);
   });
 });
@@ -338,10 +332,10 @@ describe('which example the checks are read from, and which examples a check can
   const piece = (sections: readonly string[]): string => sections.map((x) => `## ${x}\nSomething is said here about it.\n`).join('\n');
   const NOTE = '- Open with a Summary section.\n- Then a Must fix section.\n- End with a Verdict section.\n';
   it('the odd one out, first by name, is not what the checks are read from', async () => {
-    const { proposalsAcross } = await import('../core/method/standard.js');
+    
     const cases = [['Summary', 'Verdict'], ['Summary', 'Must fix', 'Verdict'], ['Summary', 'Must fix', 'Verdict'], ['Summary', 'Must fix', 'Verdict']]
       .map((x, i) => ({ id: `e${i + 1}.md`, task: 'Review this.', material: [], reference: piece(x) }));
-    const { lead, proposals } = proposalsAcross(NOTE, cases);
+    const { lead, proposals } = pa(NOTE, cases);
     expect(lead).toBe(1);
     // the step is a check the first piece fails: it stays required, and the piece is named. Never a silent judgement
     expect(proposals.find((p) => p.statement.startsWith('Then a Must fix'))).toMatchObject({ obligation: 'DELIVERABLE', conflict: expect.stringContaining('e1.md') as string });
@@ -353,7 +347,7 @@ describe('which example the checks are read from, and which examples a check can
     const review = '## Must fix\n- a.js:2 runs too early.\n';
     const withIt = { id: 'e1.md', task: 'Review this.', material: [{ name: 'diff', text: diff }], reference: review };
     const without = { id: 'e2.md', task: 'Review this.', material: [], reference: review };
-    const lines = acrossExamples(methodProposals('- Cite each item as path:line.\n', withIt), [without, { ...withIt, id: 'e3.md' }])[0];
+    const lines = acrossExamples(mp('- Cite each item as path:line.\n', withIt), [without, { ...withIt, id: 'e3.md' }])[0];
     expect(lines).toMatchObject({ obligation: 'EXECUTION', onExample: 'held in all 2 of your 3 examples it can be read on (those that carry their material)' });
   });
 });
@@ -362,7 +356,7 @@ describe('which example the checks are read from, and which examples a check can
 describe('a rule stated as a count or as quoted words', () => {
   const sentence = 'You plug it in and the current pushes the charge across to the far side.';
   const example = { task: 'Explain a battery.', material: [], reference: `${Array.from({ length: 9 }, () => sentence).join(' ')}\n\nImagine a dam holding water uphill.\n\nIn short, a battery stores energy as a chemical gap.\n` };
-  const check = (step: string): unknown => { const p = methodProposals(`- ${step}\n`, example)[0]; return p.conflict ? 'to settle' : p.measurement ? [p.measurement.observer, p.measurement.params] : null; };
+  const check = (step: string): unknown => { const p = mp(`- ${step}\n`, example)[0]; return p.conflict ? 'to settle' : p.measurement ? [p.measurement.observer, p.measurement.params] : null; };
   it('a length, in the unit it was stated in', () => {
     expect(check('Between 100 and 230 words.')).toEqual(['LENGTH', { unit: ['words'], min: 100, max: 230 }]);
     expect(check('Keep it under 2,000 characters.')).toEqual(['LENGTH', { unit: ['characters'], max: 1999 }]);
@@ -395,7 +389,7 @@ describe('a rule stated as a count or as quoted words', () => {
 describe('a count or quoted words are read narrowly', () => {
   const sentence = 'You plug it in and the current pushes the charge across to the far side.';
   const example = { task: 'Explain a battery.', material: [], reference: `${Array.from({ length: 9 }, () => sentence).join(' ')}\n\nImagine a dam holding water uphill.\n\nIn short, a battery stores energy as a chemical gap.\n` };
-  const check = (step: string): unknown => { const p = methodProposals(`- ${step}\n`, example)[0]; return p.conflict ? 'to settle' : p.measurement ? [p.measurement.observer, p.measurement.params] : null; };
+  const check = (step: string): unknown => { const p = mp(`- ${step}\n`, example)[0]; return p.conflict ? 'to settle' : p.measurement ? [p.measurement.observer, p.measurement.params] : null; };
   it('a negation is never read by its comparator alone', () => {
     for (const step of ['Never go over 100 words.', 'Do not write more than 100 words.', 'Never under 100 words.', 'Don\'t write less than 50 words.',
       'The last line never starts with "In conclusion".', 'The first sentence does not begin with "I".', 'The last paragraph cannot begin with "In short,".']) expect(check(step), step).toBeNull();
@@ -478,7 +472,7 @@ describe('how long one section runs', () => {
     expect(sectionLengthsFromExamples(examples.slice(0, 2))).toEqual([]);
   });
   it('a stated length of a section is held of that section, and only in the plain forms', () => {
-    const check = (step: string): unknown => { const p = methodProposals(`- ${step}\n`, examples[0])[0]; return p.conflict ? 'to settle' : p.measurement ? [p.measurement.observer, p.measurement.params] : null; };
+    const check = (step: string): unknown => { const p = mp(`- ${step}\n`, examples[0])[0]; return p.conflict ? 'to settle' : p.measurement ? [p.measurement.observer, p.measurement.params] : null; };
     expect(check('Keep the How it works section under 80 words.')).toEqual(['LENGTH', { unit: ['words'], in: ['How it works'], need: 1, max: 79 }]);
     expect(check('The What it is section is between 20 and 60 words.')).toEqual(['LENGTH', { unit: ['words'], in: ['What it is'], need: 1, min: 20, max: 60 }]);
     expect(check('Keep the How it works section under 40 words.')).toBe('to settle');
@@ -497,7 +491,7 @@ describe('what a review of the section lengths found', () => {
   it('a step about something else that mentions a section states no length of it', () => {
     const example = { task: 'Review.', material: [], reference: `## Summary\n${body(12)}\n\n## Verdict\n${body(8)}\n` };
     for (const step of ['Unlike the Summary section, keep the whole piece under 200 words.', 'After the Summary section write at least 300 words.', 'The Summary section has at most 3 bullets and the piece is under 500 words.',
-      'Each sentence in the Summary section is under 20 words.', 'The Summary section links to a page of at most 500 words.']) expect(methodProposals(`- ${step}\n`, example)[0].measurement, step).toBeNull();
+      'Each sentence in the Summary section is under 20 words.', 'The Summary section links to a page of at most 500 words.']) expect(mp(`- ${step}\n`, example)[0].measurement, step).toBeNull();
   });
   it('sections written as bare names are measured one at a time, not to the end of the work', async () => {
     const { sectionBodyOf } = await import('../core/observers/structure.js');
@@ -523,7 +517,7 @@ describe('what a review of the section lengths found', () => {
     const piece = (id: number, n: number) => ({ id: `e${id}.md`, reference: `## Summary\n${body(n)}\n\n## Verdict\nRequest changes\n` });
     const cases = [piece(1, 20), piece(2, 24), piece(3, 28)];
     expect(sectionLengthsFromExamples(cases).map((p) => p.statement)).toEqual(['The Summary section runs 20 to 28 words in my pieces.']);
-    const stated = methodProposals('- Keep the Summary section under 40 words.\n', { task: 'x', material: [], reference: cases[0].reference });
+    const stated = mp('- Keep the Summary section under 40 words.\n', { task: 'x', material: [], reference: cases[0].reference });
     expect(countedOffers(stated, cases).some((p) => p.statement.startsWith('The Summary section'))).toBe(false);
     const many = (id: number) => ({ id: `m${id}.md`, reference: Array.from({ length: 9 }, (_, k) => `## Part ${'ABCDEFGHI'[k]}\n${body(20 + id + k)}\n`).join('\n') });
     expect(countedOffers([], [many(1), many(2), many(3)]).length).toBeLessThanOrEqual(6);
@@ -538,7 +532,7 @@ describe('what a real template taught the readers', () => {
   });
   it('a table column named after the company the example is about is that piece\'s own, with or without its task', () => {
     const reference = `## Moats\n\nWe looked at how Payloom sells, and what Payloom charges, because Payloom is the buyer here.\n\n| Moat | Significance to Payloom |\n|---|---|\n| Scale | High |\n\n## Next\n\n| Signal | Action |\n|---|---|\n| A loss | Call |\n`;
-    const shown = methodProposals('- Weigh the moats.\n', { task: null, material: [], reference }).filter((p) => p.origin === 'SHOWN_BY_EXAMPLE' && p.measurement?.observer === 'TABLE').map((p) => p.measurement?.params.columns);
+    const shown = mp('- Weigh the moats.\n', { task: null, material: [], reference }).filter((p) => p.origin === 'SHOWN_BY_EXAMPLE' && p.measurement?.observer === 'TABLE').map((p) => p.measurement?.params.columns);
     expect(shown).toEqual([['signal', 'action']]);
   });
   it('a count of characters beside a count of words is a second limit: neither is held as the length of the piece', async () => {
@@ -558,7 +552,7 @@ describe('blanks and names, read more carefully', () => {
   });
   it('a word that is itself a column\'s name is a label, however often the prose capitalises it', () => {
     const reference = `## Findings\n\nWe set the Severity first, then check the Severity again, and the Severity decides the order.\n\n| Finding | Severity | Fix |\n|---|---|---|\n| A leak | High | Patch |\n\n## Plan\n\n| Task | March | April |\n|---|---|---|\n| Ship | x | |\n`;
-    const shown = methodProposals('- Weigh the findings.\n', { task: null, material: [], reference }).filter((p) => p.measurement?.observer === 'TABLE').map((p) => p.measurement?.params.columns);
+    const shown = mp('- Weigh the findings.\n', { task: null, material: [], reference }).filter((p) => p.measurement?.observer === 'TABLE').map((p) => p.measurement?.params.columns);
     expect(shown).toEqual([['finding', 'severity', 'fix'], ['task', 'march', 'april']]);
   });
 });
@@ -567,7 +561,7 @@ describe('blanks and names, read more carefully', () => {
 describe('what a blind set of method notes showed: a check tied to a step that asks for something else', () => {
   // 160 steps written by someone who had not seen the reader (studies/coverage-labels). Two classes of wrong check.
   const EXAMPLE = '## Bottom Line\n\nShip it.\n\n## Who They Sell To\n\nMid-market finance teams of ten to fifty people.\n\n## 6. Term and Termination\n\nStarts 1 May. Two years.\n\n## Numbers\n\n| Metric | Before | After | Change |\n|---|---|---|---|\n| p95 | 900 ms | 300 ms | -67% |\n';
-  const of = (step: string) => methodProposals(`1. ${step}\n`, { task: 't', material: [], reference: EXAMPLE }).find((p) => p.origin === 'STATED')?.measurement ?? null;
+  const of = (step: string) => mp(`1. ${step}\n`, { task: 't', material: [], reference: EXAMPLE }).find((p) => p.origin === 'STATED')?.measurement ?? null;
   it('a length said of a section the example has is that section\'s, with or without the word "section": never the whole work\'s', () => {
     expect(of('Keep Who They Sell To under 70 words.')).toEqual({ observer: 'LENGTH', params: { unit: ['words'], in: ['Who They Sell To'], need: 1, max: 69 } });
     expect(of('Keep the Who They Sell To section under 70 words.')).toEqual({ observer: 'LENGTH', params: { unit: ['words'], in: ['Who They Sell To'], need: 1, max: 69 } });

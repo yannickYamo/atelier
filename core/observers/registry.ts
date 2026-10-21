@@ -22,6 +22,7 @@ import { FEATURE } from './features.js';
 import { TABLE, CITED, LINES, LENGTH, NAMES_TEST } from './obligations.js';
 import { GRAMMAR } from './grammar.js';
 import { SHAPE } from './shape.js';
+import { CHECK } from './written.js';
 import { findPattern, PATTERN_LABEL, PATTERN_IDS, proseWords, styleDistanceDocs, authorSelfMargins, type PatternId } from './style.js';
 
 export interface Span {
@@ -288,6 +289,8 @@ const OBSERVERS: Readonly<Record<ObserverId, Observer>> = {
   SHAPE,
   // ── Mechanical errors: spelling, agreement, punctuation, by an engine the process wires in (./grammar.ts) ──
   GRAMMAR,
+  // ── A check written for one step of a method, run in a sandbox (./written.ts) ──
+  CHECK,
 };
 
 export const observerFor = (id: ObserverId): Observer => OBSERVERS[id];

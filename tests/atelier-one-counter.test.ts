@@ -204,7 +204,8 @@ describe.skipIf(!existsSync(CLI))('end to end: a draft that runs long after two 
     const env: NodeJS.ProcessEnv = { ...process.env, ATELIER_DATA: data, ATELIER_PROJECT_DIR: proj, ATELIER_PRICE_IN: '1', ATELIER_PRICE_OUT: '1' };
     delete env.ANTHROPIC_API_KEY; delete env.ANTHROPIC_AUTH_TOKEN;
     const run = (...args: string[]): string => { try { return execFileSync('node', [CLI, ...args], { encoding: 'utf8', cwd: proj, env, stdio: ['ignore', 'pipe', 'pipe'] }); } catch (e) { return (e as { stdout?: string }).stdout ?? ''; } };
-    run('new', 'goldens', '--method', 'method.md', '--name', 'bake', '--yes');
+    // which check each step asks for is a reading: the scripted backend's stand-in answers it at the build
+    run('new', 'goldens', '--method', 'method.md', '--name', 'bake', '--yes', '--provider', 'openai-compatible', '--base-url', `http://127.0.0.1:${port}`, '--model', 'scripted');
     await fetch(`http://127.0.0.1:${port}/__set`, { method: 'POST', body: readFileSync(join(BAKE, 'runs-long.json'), 'utf8') });
     const log = async (): Promise<string[]> => ((await (await fetch(`http://127.0.0.1:${port}/__log`)).json()) as { bodies: string[] }).bodies;
     const before = (await log()).length;

@@ -11,12 +11,11 @@
 // removes or reweights a requirement: a step read as a template example or an explanation stays a requirement with that
 // kind shown, for the owner to see at the build and in `report`; a condition is kept only as words of the step itself.
 // Code floors: with no model, or a unit code cannot ground, a step is an instruction with no condition, so nothing
-// binding is dropped by a reading. Evaluated in bench/readings/cases/method-units.json.
+// binding is dropped by a reading; no pattern on the step's wording decides anything here. Evaluated in bench/readings/cases/method-units.json.
 
 import type { Reading } from '../inference/reading.js';
 import type { DecisionUnit, UnitKind } from '../state/canonical-state.js';
 import { quoteIsReal } from '../taste/reader.js';
-import { isConditional } from './step-readers.js';
 
 export type { DecisionUnit, UnitKind } from '../state/canonical-state.js';
 
@@ -53,27 +52,12 @@ const short = (s: unknown, max = 200): string | null => (typeof s === 'string' &
 const strings = (x: unknown, max = 8): string[] => (Array.isArray(x) ? x.map((s) => short(s, 120)).filter((s): s is string => s !== null).slice(0, max) : []);
 
 /**
- * WHAT THE WORDS ALONE SAY A STEP IS. A line that opens as an example ("For example:", "e.g.", "A typical table:"), a
- * table row or a quoted line is a template; one that opens by giving a reason ("because", "this section exists because",
- * "the reason") is an explanation; anything else an instruction. The floor, and the reader's grounding of a kind it
- * cannot otherwise place; never a weight.
+ * THE FLOOR FOR ONE STEP: an instruction, applying always, with nothing read into it. No pattern on its wording
+ * decides its kind or its condition (readings, not patterns): with no model, or a unit the reading could not ground,
+ * the step is served whole and the brief sets nothing of it aside.
  */
-export function kindByWords(text: string): UnitKind {
-  const t = text.trim();
-  if (/^(?:for example|for instance|e\.g\.|example:|an? (?:typical|sample) (?:table|reply|answer|line|verdict)|sample:|such as:)/i.test(t) || t.startsWith('|') || /^[“"'].*[”"']\.?$/.test(t)) return 'template';
-  if (/^(?:because|this (?:section|step|rule) exists because|we (?:do|ask|lead with|put) this because|the reason (?:is|for|we)|rationale:)/i.test(t)) return 'explanation';
-  return 'instruction';
-}
-
-/**
- * The floor for one step: what its words say it is, applying always unless its own words, or the heading it stands
- * under, say when ("Escalation (only when the customer asks for a manager)" scopes every step under it).
- */
-/** A heading that says when: a condition word in a short label scopes every step under it. */
-const HEADING_CONDITION = /\b(?:only when|only if|only for|unless|except|when|if|whenever|where|in case of)\b/i;
 export function unitFloor(step: UnitStep): DecisionUnit {
-  const condition = isConditional(step.text) ? step.text : step.under && HEADING_CONDITION.test(step.under) ? step.under : null;
-  return { kind: kindByWords(step.text), decision: null, inputs: [], condition, output: null, exception: null, dependsOn: [], quote: step.text, by: 'floor' };
+  return { kind: 'instruction', decision: null, inputs: [], condition: null, output: null, exception: null, dependsOn: [], quote: step.text, by: 'floor' };
 }
 
 export const METHOD_UNITS: Reading<UnitsInput, UnitsOutput> = {

@@ -28,18 +28,15 @@ describe('the reading as a value', () => {
     const d = await readContext(METHOD_UNITS, { steps }, null, null, { spentUsd: 0, capUsd: 1 });
     expect(d.by).toBe('floor');
     expect(d.value['1']).toMatchObject({ kind: 'instruction', condition: null, by: 'floor' });
-    expect(d.value['2']).toMatchObject({ kind: 'instruction', by: 'floor' });
-    expect(d.value['2'].condition).not.toBeNull();
+    // the floor reads nothing into the words: an instruction, applying always, until a model reads the condition
+    expect(d.value['2']).toMatchObject({ kind: 'instruction', condition: null, by: 'floor' });
     expect(describeUnit(unitFloor(steps[0]))).toBe('instruction (by the words alone)');
   });
-  it('the floor reads a template and an explanation by their words, and a heading\'s condition scopes the steps under it', () => {
-    expect(unitFloor({ id: '1', text: 'For example: "Verdict: Request changes — the retry loop never backs off."', under: 'Verdict' })).toMatchObject({ kind: 'template', condition: null });
-    expect(unitFloor({ id: '2', text: '| Account | Why now | Owner |', under: null })).toMatchObject({ kind: 'template' });
-    expect(unitFloor({ id: '3', text: 'We lead with the riskiest line because reviewers stop reading after the second paragraph.', under: null })).toMatchObject({ kind: 'instruction' });
-    expect(unitFloor({ id: '4', text: 'Because reviewers stop reading after the second paragraph, the riskiest line comes first.', under: null })).toMatchObject({ kind: 'explanation' });
+  it('the floor reads nothing into the words: every step is an instruction with no condition; a model\'s reading of a heading\'s condition is kept', () => {
+    expect(unitFloor({ id: '1', text: 'For example: "Verdict: Request changes — the retry loop never backs off."', under: 'Verdict' })).toMatchObject({ kind: 'instruction', condition: null, by: 'floor' });
+    expect(unitFloor({ id: '4', text: 'Because reviewers stop reading after the second paragraph, the riskiest line comes first.', under: null })).toMatchObject({ kind: 'instruction', condition: null });
     const under = 'Escalation (only when the customer asks for a manager)';
-    expect(unitFloor({ id: '5', text: 'Name who will call the customer back and the hour they will.', under })).toMatchObject({ kind: 'instruction', condition: under });
-    expect(unitFloor({ id: '6', text: 'Name who will call the customer back and the hour they will.', under: 'Routine replies' })).toMatchObject({ condition: null });
+    expect(unitFloor({ id: '5', text: 'Name who will call the customer back and the hour they will.', under })).toMatchObject({ kind: 'instruction', condition: null });
     // a model may quote the heading's condition for a step under it, and it is kept
     const g = METHOD_UNITS.ground({ units: [unit({ id: '1', condition: 'only when the customer asks for a manager', quote: 'Name who will call the customer back' })] },
       { steps: [{ id: '1', text: 'Name who will call the customer back and the hour they will.', under }] })!;
@@ -102,7 +99,7 @@ describe('through the build', () => {
   }, 60_000);
   afterAll(() => { backend.kill(); });
 
-  it('with a model: every stated step carries its unit, said in the whole account; the standard has the same requirements at the same weights as without', () => {
+  it('with a model: every stated step carries its unit, said in the whole account; without one every stated step is a judgement, and no requirement carries a unit', () => {
     const withModel = seed(); const without = seed(true);
     const r = withModel.run('new', 'examples', '--method', 'method.md', '--name', 'review', '--yes', '--report', ...BACKEND());
     expect(r.code, r.out).toBe(0);
@@ -112,19 +109,21 @@ describe('through the build', () => {
     const a = standardOf(withModel.data); const b = standardOf(without.data);
     const stated = a.requirements.filter((q) => q.provenance === 'EXPERT_STATED');
     expect(stated.length).toBe(3);
-    // THE UNITS LIVE BESIDE THE STANDARD, NEVER IN IT: the two standards are the same bytes and the same hash, though one
-    // was read by a model and the other by the words alone. No requirement carries a unit.
-    expect(a.standardVersionHash).toBe(b.standardVersionHash);
-    expect(a.requirements).toEqual(b.requirements);
+    // THE UNITS LIVE BESIDE THE STANDARD, NEVER IN IT. The two standards differ only by what the step-check reading gave
+    // the stated steps: with a model, checks; without one, none (no pattern on a step's wording decides a check).
+    const statedOf = (v: typeof a): string[] => v.requirements.filter((q) => q.provenance === 'EXPERT_STATED').map((q) => q.statement);
+    expect(statedOf(a)).toEqual(statedOf(b));
+    expect(b.requirements.filter((q) => q.provenance === 'EXPERT_STATED').every((q) => !q.measurement)).toBe(true);
     expect(a.requirements.some((q) => 'unit' in q)).toBe(false);
+    expect(b.requirements.some((q) => 'unit' in q)).toBe(false);
     const unitsA = store.getUnits({ root: withModel.data, skillName: 'review' }, a.standardVersionHash);
     const unitsB = store.getUnits({ root: without.data, skillName: 'review' }, b.standardVersionHash);
     expect(stated.map((q) => unitsA[q.requirementId]?.kind)).toEqual(['instruction', 'instruction', 'instruction']);
     expect(unitsA[stated[1].requirementId]).toMatchObject({ condition: 'when the change touches billing', decision: 'whether billing is touched', dependsOn: ['1'], by: 'model' });
-    // without a model the words decide: the billing step is conditional by its own "when", the others apply always
+    // without a model nothing is read into the words: every step is an instruction applying always, the billing step too
     const floors = stated.map((q) => unitsB[q.requirementId]);
     expect(floors.map((u) => u?.by)).toEqual(['floor', 'floor', 'floor']);
-    expect(floors[0]?.condition).toBeNull(); expect(floors[1]?.condition).not.toBeNull(); expect(floors[2]?.condition).toBeNull();
+    expect(floors.map((u) => u?.condition)).toEqual([null, null, null]);
     // rules read off the examples carry no unit
     expect(Object.keys(unitsA).sort()).toEqual(stated.map((q) => q.requirementId).sort());
   }, 180_000);

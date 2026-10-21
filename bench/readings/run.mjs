@@ -22,6 +22,9 @@ import { PERSONA_MOVES, PERSONA_TABLE } from '../../dist/core/compiler/moves.js'
 import { posterior, situationEffect } from '../../dist/core/stats/habit.js';
 import { MOVE_CASES } from '../../dist/core/loop/move-cases.js';
 import { METHOD_INFER } from '../../dist/core/method/infer.js';
+import { STEP_CHECK, stepCheckInput } from '../../dist/core/method/step-check.js';
+import { outlineOf } from '../../dist/core/method/standard.js';
+import { countWords } from '../../dist/core/eval/size.js';
 import { MOVE_READER } from '../../dist/core/taste/move-reader.js';
 import { AnthropicInferenceClient } from '../../dist/providers/anthropic.js';
 import { OpenAICompatibleInferenceClient } from '../../dist/providers/openai-compatible.js';
@@ -67,6 +70,9 @@ const READINGS = {
   // the method the pieces follow, read off them: the label is the headings the steps' quotes fall under, in order, lowercased and joined by >, or none
   'method-infer': { reading: METHOD_INFER, input: (c) => ({ purpose: c.purpose ?? null, pieces: piecesFrom(c) }),
     answer: (v) => { const ps = new Map(); const out = []; for (const st of v) { const text = (ps.get(st.piece) ?? (() => { const t = piecesFrom(spec.cases.find((x) => x.id === current.id)).find((p) => p.name === st.piece)?.text ?? ''; ps.set(st.piece, t); return t; })()); const at = text.indexOf(st.quote); const before = at >= 0 ? text.slice(0, at) : ''; const h = [...before.matchAll(/^#{1,6}\s+(.+)$/gm)].at(-1)?.[1] ?? (/^#{1,6}\s+(.+)$/m.exec(st.quote)?.[1] ?? null); const hh = (h ?? '(no heading)').replace(/\*/g, '').trim().toLowerCase(); if (!out.includes(hh)) out.push(hh); } return out.join('>') || 'none'; } },
+  // one step per case against the file's one example: the label is measure:<OBSERVER> | written | judgement
+  'step-check': { reading: STEP_CHECK, input: (c) => stepCheckInput([{ id: '1', text: c.step, under: c.under ?? null }], [{ id: 'e1', task: spec.example.task ?? null, material: spec.example.material ? [{ name: 'notes', text: spec.example.material }] : [], reference: spec.example.reference }], outlineOf, countWords),
+    answer: (v) => (v['1'] ? (v['1'].how === 'measure' ? `measure:${v['1'].measurement.observer}` : v['1'].how) : null) },
   'method-units': { reading: METHOD_UNITS, input: (c) => ({ steps: [{ id: '1', text: c.step, under: c.under ?? null }] }), answer: (v) => (v['1'] ? `${v['1'].kind}|${v['1'].condition ? 'conditional' : 'always'}` : null) },
 };
 const args = process.argv.slice(2);

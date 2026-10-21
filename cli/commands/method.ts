@@ -19,6 +19,9 @@ import { DATA, argv, die, flag, positional, loadSession, saveSession, archiveSes
 import * as store from '../../core/state/store.js';
 import { resetStages } from '../stages.js';
 import { METHOD_UNITS, unitFloor, describeUnit, type DecisionUnit } from '../../core/method/decision-units.js';
+import { STEP_CHECK, planOf, stepCheckInput, type StepPlan, type StepToCheck, type ExampleCase } from '../../core/method/step-check.js';
+import { checkQualified } from '../../core/observers/written.js';
+import { countWords } from '../../core/eval/size.js';
 import { normalizeClass, CLASS_ALIASES } from '../../core/observers/doc-class.js';
 import { unmeasuredKind } from '../../core/loop/claim-extract.js';
 import { skillNameFrom } from '../../renderers/agent-skill/render.js';
@@ -29,7 +32,7 @@ import { draftHash, appendDecision, type RatificationLedger } from '../../core/r
 import { decide } from '../../core/ratification/authority.js';
 import type { Requirement } from '../../core/state/canonical-state.js';
 import type { GoldenCase } from '../../core/golden/case.js';
-import { proposalsAcross, countedOffers, tellOffers, grammarOffer, stepsOf, shortFormOffers, type MethodProposal } from '../../core/method/standard.js';
+import { proposalsAcross, countedOffers, tellOffers, grammarOffer, stepsOf, outlineOf, shortFormOffers, type MethodProposal } from '../../core/method/standard.js';
 import { shortFormOptions, type ShortFormOptions } from '../../core/observers/short-form.js';
 import { ensureGrammar } from '../../core/observers/grammar.js';
 import { readCase, corpusFiles, sessionCorpus, corpusHashOf } from '../corpus.js';
@@ -241,7 +244,8 @@ export function decideSteps(proposals: readonly MethodProposal[], nextId: () => 
     // A stated step with a check is required: it is the owner's, and code can hold an output to it. One read off the
     // example is a preference until the owner says otherwise.
     const p = proposals[i];
-    const enforce = p.measurement && !base.contested && !base.related;
+    // A written check is not enforced until it is qualified on the owner's examples and their mutants (core/observers/written.ts).
+    const enforce = p.measurement && !base.contested && !base.related && !(p.measurement.observer === 'CHECK' && !checkQualified(p.measurement));
     const outcome = decide(base, p.origin === 'STATED' ? { verb: 'STATED', ...(enforce ? { materiality: 'REQUIRED' } : {}) } : { verb: 'APPROVE', materiality: p.required ? 'REQUIRED' : 'PREFERRED' });
     ledger = appendDecision(ledger, base, outcome.ledgerDecision, { decidedAt: new Date().toISOString() });
     return outcome.requirement;
@@ -288,7 +292,10 @@ export async function method(): Promise<void> {
   const { folder, cases } = readExamples(goldenPath, notePath ?? '');
   // The grammar engine, before the examples are read: their vocabulary and dialect are read off them by it.
   await ensureGrammar();
-  const read = proposalsAcross(note, cases);
+  // WHICH CHECK EACH STATED STEP CARRIES, READ ONCE (core/method/step-check.ts): a measurement from the menu, a check the
+  // model writes, or judgement; grounded on the owner's first example by code. With no model every step is a judgement.
+  const checksPlan = await stepPlan(note, cases);
+  const read = proposalsAcross(note, cases, checksPlan);
   const lead = read.lead;
   // What the pieces show about how they are written, counted: offered beside the method, with no model.
   // WITH NO METHOD, THE ONE THING ASKED IS "LIKE THESE". It is said as the skill's one rule, which no count reads and
@@ -452,6 +459,17 @@ async function decisionUnits(stated: readonly MethodProposal[], steps: readonly 
   const d = await readContext(METHOD_UNITS, input, noModel ? null : contextReaderClient(), noModel ? null : contextReaderModel(), { spentUsd: 0, capUsd: 0.2, maxCalls: 1 });
   if (argv.includes('--report')) console.log(`(what each step asks the writer to decide: ${d.by === 'model' ? `read by ${contextReaderModel()}` : d.by === 'code' ? 'nothing to read' : `by the words alone (${d.why})`}.)`);
   return new Map(input.steps.map((st) => [st.text, d.value[st.id] ?? unitFloor(st)]));
+}
+
+/** The check each stated step asks for, read in one call where a model is set up (core/method/step-check.ts); judgement for every step where none is. */
+async function stepPlan(note: string, cases: readonly ExampleCase[]): Promise<StepPlan | null> {
+  const steps: StepToCheck[] = stepsOf(note).map((st, i) => ({ id: String(i + 1), text: st.text, under: st.under }));
+  if (!steps.length || !cases.length) return null;
+  const input = stepCheckInput(steps, cases, outlineOf, countWords);
+  const noModel = !canReach('discovery') || argv.includes('--no-model');
+  const d = await readContext(STEP_CHECK, input, noModel ? null : contextReaderClient(), noModel ? null : contextReaderModel(), { spentUsd: 0, capUsd: 0.3, maxCalls: 1 });
+  if (argv.includes('--report')) console.log(`(which check each step asks for: ${d.by === 'model' ? `read by ${contextReaderModel()}` : d.by === 'code' ? 'nothing to read' : `none read, every step is yours to judge (${d.why})`}.)`);
+  return planOf(steps, d.value);
 }
 
 /** The kind of every step the owner wrote or their example showed, read in one call where a model is set up (a rule counted off the pieces is worded by Atelier, and the word pattern decides it); the word pattern where none is, said in --report. */

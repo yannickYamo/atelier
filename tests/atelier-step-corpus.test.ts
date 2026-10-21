@@ -5,9 +5,9 @@
 // none of it. The harmful error is a check called FULL that reads less (a tick on a rule nobody read whole). A change
 // may never make one, may never lose an agreement, and a step that newly compiles to a check must be labelled first.
 import { describe, it, expect } from 'vitest';
+import { mp } from './helpers/step-plan.js';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { methodProposals } from '../core/method/standard.js';
 import { observesOf } from '../core/eval/observes.js';
 
 const DIR = join(import.meta.dirname, '..', 'studies', 'coverage-labels');
@@ -19,7 +19,7 @@ function compiled(): { id: string; coverage: string }[] {
   for (const f of readdirSync(DIR).filter((x) => x.endsWith('.note.md')).sort()) {
     const domain = f.replace('.note.md', '');
     const { task, reference } = split(readFileSync(join(DIR, `${domain}.example.md`), 'utf8'));
-    methodProposals(readFileSync(join(DIR, f), 'utf8'), { task, material: [], reference }).filter((p) => p.origin === 'STATED').forEach((p, i) => {
+    mp(readFileSync(join(DIR, f), 'utf8'), { task, material: [], reference }).filter((p) => p.origin === 'STATED').forEach((p, i) => {
       if (!p.measurement) return;
       out.push({ id: `${domain}-${String(i + 1).padStart(2, '0')}`, coverage: observesOf(p.statement, p.measurement, false)?.coverage ?? 'NONE' });
     });
