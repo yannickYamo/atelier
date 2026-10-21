@@ -2,7 +2,7 @@
 // Decidable rules only: the sections in order, every fact cited to a document in the file, the coverage clause cited,
 // every exclusion that could apply addressed, the reserve equal to the invoices, the banned words, no figure the file
 // does not give. Whether the clause is the right one, and whether 7.1 really applies, is judgement and is not here.
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -16,6 +16,13 @@ const sections = (text) => {
     if (h) { cur = { name: h[1].replace(/^\d+[.)]\s*/, '').replace(/[*_]/g, '').trim().toLowerCase(), body: [] }; out.push(cur); } else if (cur) cur.body.push(line);
   }
   return out.map((s) => ({ name: s.name, body: s.body.join('\n').trim() }));
+};
+// THE CLAIM FILE AS GIVEN: the material of an example (examples/ or held-out/<id>.material) or of a task (tasks/<id>).
+// A figure in any file of it is the file's, not invented: the policy number and a report's reference are figures too.
+const materialOf = (id) => {
+  const dirs = id ? [join(HERE, 'examples', `${id}.material`), join(HERE, 'held-out', `${id}.material`), join(HERE, 'tasks', id)] : [];
+  const dir = dirs.find((d) => existsSync(d));
+  return dir ? readdirSync(dir).sort().map((f) => readFileSync(join(dir, f), 'utf8')).join('\n') : '';
 };
 const DOCS = ['notice of loss', 'police report', 'incident report', 'invoice 1', 'invoice 2', 'policy'];
 const num = (s) => Number(String(s).replace(/,/g, ''));
@@ -44,8 +51,9 @@ export function check(text, rec = {}) {
     // R8c a fact cited to the police or incident report carries that report's date, not another document's
     const reportFacts = facts.filter((f) => /\[(?:police|incident) report\]/.test(f) && /\b\d{1,2} (?:January|February|March|April|May|June|July|August|September|October|November|December) 20\d\d\b/.test(f));
     if (reportFacts.some((f) => !f.includes(c.reportDate))) fails.push('R8c the date cited to the report is the report\'s date');
-    // R8 no figure the file does not give
-    const given = new Set([String(c.am[0]), String(c.am[1]), String(c.total), ...[c.date, c.reportDate].flatMap((d) => d.match(/\d+/g)), '4.2', '4.5', '4.7', '4.9', '7.1', '7.3', '7.5', '9.1', '250', '7']);
+    // R8 no figure the file does not give: read against the claim file itself, every file of it
+    const fromFile = (`${materialOf(id)}\n${rec.material ?? ''}`.match(/\d[\d,]*(?:\.\d+)?/g) ?? []).map((n) => n.replace(/,/g, ''));
+    const given = new Set([String(c.am[0]), String(c.am[1]), String(c.total), ...[c.date, c.reportDate].flatMap((d) => d.match(/\d+/g)), '4.2', '4.5', '4.7', '4.9', '7.1', '7.3', '7.5', '9.1', '250', '7', ...fromFile]);
     const figures = (text.replace(/^#{1,4}.*$/gm, '').match(/\b\d[\d,]*(?:\.\d+)?\b/g) ?? []).map((n) => n.replace(/,/g, '').replace(/^(\d+)\.(\d)$/, '$1.$2'));
     const added = figures.filter((n) => !given.has(n) && !given.has(n.replace(/,/g, '')) && !/^[1-9]$/.test(n) && !/^20\d\d$/.test(n));
     if (added.length) fails.push(`R8 figure(s) the file does not give: ${[...new Set(added)].slice(0, 4).join(', ')}`);
