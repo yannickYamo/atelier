@@ -46,6 +46,9 @@ export const STEP_MUTANTS_SCHEMA: Record<string, unknown> = {
   required: ['mutants'], additionalProperties: false,
 };
 
+/** A reader numbers the parts of one step 1a, 1b: each is about step 1. */
+export const baseId = (id: unknown): string | null => (typeof id === 'string' ? (/^(\d+)[a-z]?$/i.exec(id.trim())?.[1] ?? null) : null);
+
 const occurrences = (hay: string, needle: string): number => { if (!needle) return 0; let n = 0; let at = hay.indexOf(needle); while (at !== -1) { n++; at = hay.indexOf(needle, at + needle.length); } return n; };
 
 export const STEP_MUTANTS: Reading<MutantsInput, MutantsOutput> = {
@@ -65,10 +68,11 @@ export const STEP_MUTANTS: Reading<MutantsInput, MutantsOutput> = {
     const ids = new Set(input.steps.map((s) => s.id));
     const out: Record<string, Mutant[]> = {};
     for (const m of r.mutants as { id?: unknown; find?: unknown; replace?: unknown; why?: unknown }[]) {
-      if (typeof m.id !== 'string' || !ids.has(m.id) || typeof m.find !== 'string' || typeof m.replace !== 'string') continue;
+      const id = baseId(m.id);
+      if (!id || !ids.has(id) || typeof m.find !== 'string' || typeof m.replace !== 'string') continue;
       const find = m.find; const replace = m.replace;
       if (!find.trim() || find === replace || occurrences(input.example, find) !== 1 || !quoteIsReal(find, input.example)) continue;
-      const list = out[m.id] ?? (out[m.id] = []);
+      const list = out[id] ?? (out[id] = []);
       if (list.length >= MUTANTS_PER_STEP || list.some((x) => x.find === find)) continue;
       list.push({ find, replace, why: typeof m.why === 'string' ? m.why.slice(0, 160) : '' });
     }

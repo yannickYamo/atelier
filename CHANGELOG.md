@@ -42,6 +42,38 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
   "<rules>"` still attaches no check; a rule written as a `### n.` heading is still not a step of a note; the
   rule-polarity reading's floor is still a word pattern (`polarityByWords`), the last one on the method path.
 
+### Two standing domains for the enterprise wedge, and a written check sent back once
+
+- **Two domains in `bench/standing/domains/`**, made in code (nothing real): `claims`, ten claims assessment memos to an
+  adjuster's eight-step method with their claim files, ten task files, a checker (sections, every fact cited to a
+  document of the file, the clause cited and exclusion 7.1 addressed on a theft, the reserve equal to the invoices, the
+  cited date the report's date, the banned words, no figure or date the file does not give) and five planted defects;
+  `labels`, twelve brand-suitability labels as JSON under a twenty-rule policy and a taxonomy of thirty-nine, with their
+  transcripts (a transcript stands in for a clip), twelve tasks, a checker (taxonomy, spans inside the duration, Firearms
+  never with Floor, evidence verbatim, overall risk, and the label against the gold label) and five planted errors.
+  Every example passes its checker; every planted defect fails on its own rule.
+- **A written check that failed is sent back once** (`STEP_CHECK_REPAIR`): a check that did not compile, threw, or
+  failed the owner's own example is shown to the reader with the failure, written again, and grounded and qualified like
+  the first. The step-check reading's fifth version names arithmetic over the material and the decidable part of a
+  compound step as written checks, and says how material files are named; a reader's sub-numbered answers (3, 3b) are
+  answers about step 3, the written one preferred. `--report` now prints each step's reading and, where it fell to
+  judgement, why.
+
+### Studies: the claims domain built live, and its five planted defects verified (development evidence, about $1.50 in all)
+
+Built five times from the ten memos and the note with `claude-haiku-5-5` reading, as the prompt and the grounding
+changed. First build: 2 of 8 steps checked (the sections, the banned words), the rest judgement. Fifth build: **7 of 8
+steps checked**, four of them written (every fact cited to a document of the file; the coverage conclusion cites a
+clause and each exclusion addressed cites the policy; the reserve equals the invoice amounts in the material; every date,
+name and figure in the material), one judgement (no speculation about intent). None of the four written checks
+qualified: the citation check passed 9 of 10 examples; the coverage and reserve checks passed 10 of 10 but the one
+mutant the reader grounded for each did not break them; the figure check passed 2 of 10 (too strict) and fired on every
+other step's mutant. So every written check reports and blocks nothing, which is the design. On the five planted
+defects, `atelier verify` offline: the wrong reserve is named by the reserve check ("reserve 2050 does not match invoice
+sum 1850") and by the figure checks; the uncited fact by the citation check; the speculation BLOCKED by the banned
+words; the wrong date only by the strict figure check; the unaddressed exclusion by no check, which is the judgement
+the reader reads under `--taste`. Next: more grounded mutants per step (one is not four), a second repair round, and the
+figure check's strictness; then the two-domain run.
 ### The correction a qualified check supplies, and the certificate on every record
 
 - **A figure the check computed may be put in place by code.** The integrity guard refuses any rewrite that moves a

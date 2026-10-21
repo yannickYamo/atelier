@@ -51,6 +51,15 @@ describe('grounding the reading', () => {
     expect(Object.values(d.value).every((c) => c.how === 'judgement' && c.measurement === null)).toBe(true);
     expect(STEP_CHECK.decide({ ...input, steps: [] })).toEqual({});
   });
+  it('the parts of a compound step (3, 3b) are answers about step 3, and a written check wins over a section check and judgement', () => {
+    const v = STEP_CHECK.ground(answer([
+      { id: '2', how: 'measure', measure: 'PRESENCE:sections=Risks,body=1', source: null, quote: 'time estimate', means: 'a section' },
+      { id: '2b', how: 'written', measure: null, source: UNITS, quote: 'carries a unit', means: 'every time estimate has a unit' },
+      { id: '2c', how: 'judgement', measure: null, source: null, quote: 'time estimate', means: 'the rest' },
+    ]), input)!;
+    expect(v['2']).toMatchObject({ how: 'written', means: 'every time estimate has a unit' });
+    expect(v['1']).toMatchObject({ how: 'judgement', by: 'floor' });
+  });
   it('a measurement the reader marks as near the step is carried as related: shown, not enforced', () => {
     const v = STEP_CHECK.ground(answer([{ id: '3', how: 'measure', measure: 'CITED:allow=0', source: null, quote: 'Weigh switching cost', means: 'figures in the material', near: true }]), input)!;
     expect(v['3']).toMatchObject({ how: 'measure', near: true });

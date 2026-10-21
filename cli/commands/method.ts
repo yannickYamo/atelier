@@ -19,7 +19,8 @@ import { DATA, argv, die, flag, positional, loadSession, saveSession, archiveSes
 import * as store from '../../core/state/store.js';
 import { resetStages } from '../stages.js';
 import { METHOD_UNITS, unitFloor, describeUnit, type DecisionUnit } from '../../core/method/decision-units.js';
-import { STEP_CHECK, planOf, stepCheckInput, heldByPolarity, type StepPlan, type StepToCheck, type ExampleCase } from '../../core/method/step-check.js';
+import { STEP_CHECK, STEP_CHECK_REPAIR, planOf, stepCheckInput, heldByPolarity, type StepPlan, type StepToCheck, type StepCheck, type ExampleCase } from '../../core/method/step-check.js';
+import { measure } from '../../core/observers/registry.js';
 import { checkQualified } from '../../core/observers/written.js';
 import { STEP_MUTANTS, mutate, qualifyCheck, markQualified, describeQualification } from '../../core/method/mutants.js';
 import { countWords } from '../../core/eval/size.js';
@@ -484,13 +485,24 @@ async function qualifyWritten(proposals: readonly MethodProposal[], cases: reado
   const examples = cases.map((c) => ({ text: c.reference, context: context(c) }));
   const mutantsOf = (id: string): { text: string; context: ReturnType<typeof context> }[] => (d.value[id] ?? []).map((m) => ({ text: mutate(example.reference, m), context: context(example) }));
   const byStatement = new Map(written.map((p, i) => [p.statement, String(i + 1)]));
-  return proposals.map((p) => {
+  const out: MethodProposal[] = [];
+  for (const p of proposals) {
     const id = p.measurement?.observer === 'CHECK' ? byStatement.get(p.statement) : undefined;
-    if (!id || !p.measurement) return p;
+    if (!id || !p.measurement) { out.push(p); continue; }
     const own = mutantsOf(id); const others = steps.filter((s) => s.id !== id).flatMap((s) => mutantsOf(s.id));
-    const q = qualifyCheck(p.measurement, examples, own, others);
-    return { ...p, measurement: markQualified(p.measurement, q), onExample: describeQualification(q) };
-  });
+    let m = p.measurement; let q = qualifyCheck(m, examples, own, others);
+    // A CHECK THAT FAILS THE OWNER'S OWN WORK IS SENT BACK ONCE with the example it failed and what it said of it.
+    if (!q.qualified && q.examples.passed < q.examples.read && !noModel) {
+      const failing = examples.map((x, k) => ({ x, k, r: measure(x.text, m, x.context) })).find((y) => y.r.verdict === 'VIOLATED');
+      if (failing) {
+        const src = Array.isArray(m.params.source) ? m.params.source.join('\n') : '';
+        const r = await readContext(STEP_CHECK_REPAIR, { step: { id, text: p.statement, under: null }, means: steps[Number(id) - 1].means, source: src, problem: `fails the finished example ${cases[failing.k]?.id ?? failing.k + 1}: the check said "${failing.r.detail}"`, example: failing.x.text, material: failing.x.context.material }, contextReaderClient(), contextReaderModel(), { spentUsd: 0, capUsd: 0.1, maxCalls: 1 });
+        if (r.value.source) { m = { ...m, params: { ...m.params, source: r.value.source.split('\n') } }; q = qualifyCheck(m, examples, own, others); }
+      }
+    }
+    out.push({ ...p, measurement: markQualified(m, q), onExample: describeQualification(q) });
+  }
+  return out;
 }
 
 /** The check each stated step asks for, read in one call where a model is set up (core/method/step-check.ts); judgement for every step where none is. */
@@ -500,9 +512,21 @@ async function stepPlan(note: string, cases: readonly ExampleCase[], kinds: Read
   const input = stepCheckInput(steps, cases, outlineOf, countWords);
   const noModel = !canReach('discovery') || argv.includes('--no-model');
   const d = await readContext(STEP_CHECK, input, noModel ? null : contextReaderClient(), noModel ? null : contextReaderModel(), { spentUsd: 0, capUsd: 0.3, maxCalls: 1 });
-  if (argv.includes('--report')) console.log(`(which check each step asks for: ${d.by === 'model' ? `read by ${contextReaderModel()}` : d.by === 'code' ? 'nothing to read' : `none read, every step is yours to judge (${d.why})`}.)`);
+  // A WRITTEN CHECK THAT DID NOT COMPILE OR THREW IS SENT BACK ONCE with what went wrong (core/method/step-check.ts).
+  const lead = input.example;
+  const repaired: Record<string, StepCheck> = {};
+  for (const st of steps) {
+    const c = d.value[st.id]; if (!c?.attempt || noModel) continue;
+    const r = await readContext(STEP_CHECK_REPAIR, { step: st, means: c.means, source: c.attempt.source, problem: c.attempt.problem, example: lead.head, material: input.material }, contextReaderClient(), contextReaderModel(), { spentUsd: 0, capUsd: 0.1, maxCalls: 1 });
+    if (r.value.source) repaired[st.id] = { how: 'written', measurement: { observer: 'CHECK', params: { source: r.value.source.split('\n'), means: [c.means.replace(/^the written check could not be compiled.*$/, st.text.slice(0, 120))] } }, quote: c.quote, means: st.text.slice(0, 120), by: 'model' };
+  }
   // the two readings held against each other: a prohibition keeps no check that requires what it forbids
-  const held = Object.fromEntries(steps.map((st) => [st.id, heldByPolarity(d.value[st.id] ?? { how: 'judgement', measurement: null, quote: st.text, means: 'yours to judge', by: 'floor' }, st, kinds.get(st.text))]));
+  const held = Object.fromEntries(steps.map((st) => [st.id, heldByPolarity(repaired[st.id] ?? d.value[st.id] ?? { how: 'judgement', measurement: null, quote: st.text, means: 'yours to judge', by: 'floor' }, st, kinds.get(st.text))]));
+  if (argv.includes('--report')) {
+    console.log(`(which check each step asks for: ${d.by === 'model' ? `read by ${contextReaderModel()}` : d.by === 'code' ? 'nothing to read' : `none read, every step is yours to judge (${d.why})`}.)`);
+    // each step's reading, with the reason where it fell to judgement: what the reader said is the owner's to see
+    for (const st of steps) { const c = held[st.id]; console.log(`   ${st.id}. ${c.how}${c.by === 'floor' && c.how === 'judgement' ? ` (${c.means})` : c.how === 'judgement' ? ` (the reader: ${c.means.slice(0, 120)})` : `: ${c.means.slice(0, 120)}`}`); }
+  }
   return planOf(steps, held);
 }
 
