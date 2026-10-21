@@ -7,6 +7,57 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+### The kind of work sets how strictly output is held, the owner ratifies it, and a check once ratified stays put
+
+- **Latitude, read at the build and ratified by the owner** (`core/observers/latitude.ts`, `cli/latitude.ts`). Every
+  skill is held at one of three levels: STRICT (house language; a figure, date or citation not in the bound material
+  stops the work), GROUNDED (free within the method; an untraced fact goes to review) and CREATIVE (free composition,
+  argument, analogy and marked hypotheticals; an untraced fact is listed for the author, never cut). At every level a
+  fact presented as real needs a source. The level is a reading on the house pattern: a small model reads the examples,
+  the method and what the skill is for, names a level and quotes the words it stands on; code keeps the answer only
+  where a quote is in what it was shown; with no model, or nothing grounded, the level is GROUNDED. It is said in one
+  line on the build screen, stored in the standard and inside its hash (it is the owner's), changed with
+  `--latitude strict|grounded|creative` at the build or `atelier amend --latitude <level> --reason "<why>"` after.
+  A standard minted before it existed hashes as it did and is held as GROUNDED.
+- **A request may only tighten the level.** At a run, a reading of the request may hold it stricter than the skill (a
+  figure to publish asked of a creative skill), on the request's own quoted words; never looser. The run's level and
+  the words that tightened it are on the certificate and the record.
+- **The writer is told the level.** One brief builder, three texts, in this request's notes: creative composes freely
+  and sources only facts presented as real; strict uses the house language and invents no analogy, hypothetical or
+  position; grounded sits between. A standard with no latitude is served as before.
+- **What an untraced specific meets is the level's** (`core/loop/claim-extract.ts`, `claimAction`, replacing
+  `listsBecause`). Cut only where the owner chose it (`atelier material --cut`), material is bound and the reader is
+  qualified on the kind of work. Otherwise STRICT blocks a figure, date or citation code finds missing from the material
+  and never cuts it (what only the reader found goes to review), GROUNDED flags for review, CREATIVE lists. With no
+  material bound nothing is blocked for being untraced: every specific, and every bracketed citation, is listed as
+  unverifiable. The "essay or post with material bound is cut" rule is gone, and with it the kind of work read off the
+  method note's title (`kindOfWork`) and the reply form read off the skill's name (`isReplyWork`): the work-form floor is
+  now a document, which reads no words.
+- **Rules the owner accepts as unmeasured** (`StandardVersion.acceptedUnmeasured`, inside the hash). A rule no check
+  reads, accepted by the owner, is listed on the record and the certificate and no longer holds a run at NEEDS REVIEW.
+  The level proposes which: CREATIVE accepts every such rule, GROUNDED and STRICT none; shown on the build screen,
+  `--unmeasured accept|review` to say otherwise. A listed claim still sends a run to review.
+- **A step's check is frozen when the skill is built** (`core/method/freeze.ts`). Keyed by the step's words and the
+  examples, a rebuild reuses each check and its qualification and reads only the steps whose wording or examples
+  changed; best-of-three draws run only there. Rewording one step changes that step's check and no other.
+- **A check that reads the material is not applicable without it** (`core/observers/written.ts`). A written check whose
+  body uses its material parameter, run with none bound (a hook event, a verify with no `--with`), is unverified and
+  named, never failed: the golden memo no longer blocks a hook. A repair that ends with a rule still broken says which,
+  never that every rule holds.
+- **Material is not copying.** Wording the bound material supplies (a transcript quoted as evidence) is left out of the
+  lifted-passage count.
+- **Owner-rejected outputs join the mutants.** `atelier rate <run> no "why" --rule <id>` makes the rejected output an
+  edit that breaks that rule: at the next build, a written check for it must catch it to qualify, beside the mutants a
+  model wrote.
+- **A skill from rules alone says so, and offers drafts.** `atelier skill "<rules>" --yes` with no finished examples
+  says its written checks report until qualified, and `atelier skill "<rules>" --draft-examples` has the writer draft
+  ten answers, printed whole and kept for the owner to rate (`atelier rate d3 yes|no`). The next `atelier skill` build
+  is a new proposal, its written checks read and qualified on the answers kept; a rejected one naming a rule joins that
+  rule's mutants.
+- **Bench.** The claims oracle's R8 reads the claim file itself: a figure in any material file (a policy number, a
+  report reference) is the file's. Each domain keeps one golden held out of every build (`held-out/`), and test 3
+  verifies those, never a served example against itself.
+
 ### The reading is drawn three times and code keeps the agreement; a check's standing sits beside the standard; one record head, a hook, and the last word pattern gone
 
 - **Best of three draws** (`cli/commands/method.ts`, `stepPlan`, `CHECK_DRAWS`). The step-check reading varies between

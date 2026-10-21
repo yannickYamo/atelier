@@ -47,10 +47,30 @@ write.
 Your stories, figures and sources are yours to supply. A small model reads every draft for specifics:
 figures, dates, quotations, attributions, links, and stories told as lived. It says where each one came
 from, and code checks the claim against what you actually gave it: the passage it quotes must be in your
-material, the numbers must be there, and the specific must really be where the reader said it was. Anything
-that doesn't trace is cut and listed, so you can add the real one. That needs your material bound
-(`atelier material`, or `--with`) and a skill whose kind of work is an essay or a post: with no material, or on
-any other kind of work, what doesn't trace is listed and nothing is deleted.
+material, the numbers must be there, and the specific must really be where the reader said it was. What
+doesn't trace meets the skill's latitude (below): on a strict skill a figure, date or citation not in your material
+stops the work, on a grounded one it is flagged for your review, on a creative one it is listed for you. Nothing is
+deleted unless you choose it (`atelier material --skill <name> --cut`), and then only where a reader qualified on
+that kind of work found it. With no material bound, every specific is listed as unverifiable, and a check that looks
+things up in your material says it was not checked.
+
+### How strictly the work is held
+
+Every skill has a latitude, read at the build from your examples, your method and what the skill is for, and said in
+one line:
+
+- **strict** (a contract, a policy, a claims decision, a label): house language and defined terms; a figure, date or
+  citation not in your material stops the work.
+- **grounded** (a report, an analysis, a support answer): free in wording within the method; what doesn't trace goes
+  to your review.
+- **creative** (a post, an essay, a newsletter): the writer composes freely, argues, takes positions and uses marked
+  hypotheticals; only facts presented as real need a source, and those it can't trace are listed for you. The rules
+  no check reads are accepted as unmeasured by default, so a run isn't held for your review on their account.
+
+It is yours: `--latitude strict|grounded|creative` on the build, or `atelier amend --skill <name> --latitude <level>
+--reason "<why>"` after, and `--unmeasured accept|review` for the rules no check reads. A request that needs more care
+than the skill (a figure to publish, asked of a creative skill) is held stricter for that run, on its own words, and
+never looser. The record and the certificate of every run say the level it was held at.
 
 - A figure credited to a study, a quote from a named person, or a link offered as a source is yours to
   supply. It never passes as "general knowledge".
@@ -63,9 +83,9 @@ any other kind of work, what doesn't trace is listed and nothing is deleted.
   left 41 of 48 clean drafts alone ([result](../studies/CLAIM_READER_V3_QUALIFICATION_RESULT.md)). Most of
   its false flags were the author's own true stories, so bind yours with `atelier material`.
 - Headings and tables are read. A claim the reader flagged is still cut if the reader fails partway through.
-- It deletes only in an essay or a post with your material bound (`atelier material --skill <name> <notes>`, or
-  `--with`). Anywhere else it lists what it could not find and deletes nothing. Where it does delete, expect it
-  to cut a true detail now and then: add the detail to your material and it stays.
+- It deletes only where you chose `--cut`, with your material bound, on a kind of work the reader was measured on.
+  Anywhere else it blocks, flags or lists by the latitude and deletes nothing. Where it does delete, expect it to cut
+  a true detail now and then: add the detail to your material and it stays.
 
 ## What it builds: the whole harness
 
@@ -196,7 +216,10 @@ kinds and says, for each check, what it looks for and how your examples fare on 
   citation is looked up, and the material is shown to the writer with its line numbers so that none is counted.
 - **Judgement.** Everything else: shown to the writer, reported as not measured, never called checked.
 
-A check is kept only when every example holds it. A step that a piece of yours does not do is named with the piece
+A check is kept only when every example holds it, and once built it is kept: a rebuild reads a step's check again
+only when the step's wording or the examples changed, so rewording one step changes that step's check and no other.
+An output you reject naming the rule it breaks (`atelier rate <run> no "why" --rule <rule>`) is one more edit a
+written check must catch to qualify. A step that a piece of yours does not do is named with the piece
 and left for you to judge; change the note or the example and build again to have it checked. Building again in
 the same folder makes a new version of the same skill. With three or more
 examples, the pieces are served with the skill and their lengths recorded, so a draft is chosen by how near it runs
@@ -233,8 +256,8 @@ LinkedIn posts, with `--class linkedin-post`, and it also holds each post to wha
 For answers rather than published writing (a coding assistant, support replies, review comments), use
 `--class assistant-reply`; `atelier skill` picks it when its rules are about replies. Its answers name
 versions, costs and estimates you never supplied, so specifics the claim check cannot trace are listed for
-you to check, not cut. In essays and posts with your material bound, an invented story, claim of evidence or quotation is cut; anywhere
-else it is listed.
+you to check, not cut. Elsewhere an invented story, claim of evidence or quotation meets the skill's latitude, and is
+cut only where you chose `atelier material --cut`.
 
 A standard can also say what a piece must contain: `atelier amend --skill <name> --rule <rule> --measure
 "PRESENCE:in=last,starts=next"` makes "end on the next step" a counted rule, and `PRESENCE:sections=…`
