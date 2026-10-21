@@ -133,7 +133,7 @@ The two enterprise examples are standing bench domains in [bench/standing/domain
 | Surface | Today | Next |
 |---|---|---|
 | CLI | `verify`, `run`, one JSON record head, exit codes (1 a required rule broke, 2 could not check) | |
-| Claude Code | `verify --hook` as a PostToolUse or Stop hook; the MCP server through `atelier setup` | the hook installed by `atelier setup` |
+| Claude Code | `verify --hook` as a PostToolUse or Stop hook (a Write's content, an Edit's file, a Stop's last assistant message); the MCP server through `atelier setup` | the hook installed by `atelier setup` |
 | MCP | `atelier_verify`, `atelier_rules`, `atelier_new`, `atelier_run`, `atelier_report`, `atelier_rate`, `atelier_fix`, for Claude Code and Codex | a hosted endpoint |
 | CI | `verify` as a step; a broken required rule fails the check | a pull-request comment |
 | SDK | | `verify(standard, output, material)` in Python and TypeScript |

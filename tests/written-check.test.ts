@@ -6,6 +6,18 @@ import { measure, validateMeasurement } from '../core/observers/registry.js';
 const HEX = `(text) => { const hits = []; const re = /#[0-9a-fA-F]{3,8}\\b/g; let m; while ((m = re.exec(text))) hits.push({ start: m.index, end: m.index + m[0].length, why: 'a colour written as a hex value' }); return { ok: hits.length === 0, detail: hits.length ? hits.length + ' hex colour(s)' : 'no hex colour', spans: hits, value: hits.length }; }`;
 const UNITS = `function check(text) { const nums = [...text.matchAll(/\\b(\\d+)\\s*(min|minutes|h|hours|days?|weeks?)?\\b/g)]; const bare = nums.filter((m) => !m[2]); return { ok: bare.length === 0, detail: bare.length + ' estimate(s) without a unit', spans: bare.map((m) => ({ start: m.index, end: m.index + m[0].length })) }; }`;
 
+describe('nothing of the host reaches a check', () => {
+  it('a check that climbs a host prototype to the process gets nothing: every object it can reach is the context\'s own', () => {
+    const climb = (via: string): string => `(text, request, material) => { const F = ${via}.constructor.constructor; return { ok: false, detail: "leak:" + typeof F("return process")().env }; }`;
+    for (const via of ['material', 'material[0]', 'text', 'request', 'arguments', 'this', 'globalThis']) {
+      const c = compileCheck(climb(via));
+      expect(c.fn, via).toBeTruthy();
+      // the context's Function refuses code from strings, so the climb throws and the check has not run
+      expect(() => c.fn!('x', { request: 'r', material: [{ name: 'a', text: 'b' }] }), via).toThrow(/Code generation from strings disallowed|not a function|Cannot read properties|is not defined/);
+    }
+  });
+});
+
 describe('compiling and running a written check', () => {
   it('an arrow function and a function named check both compile, and give a verdict with the spans they read', () => {
     const hex = compileCheck(HEX); const units = compileCheck(UNITS);

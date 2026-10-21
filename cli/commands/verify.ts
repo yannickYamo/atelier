@@ -10,10 +10,12 @@
 //
 //   atelier verify --skill house-style --hook        (a Claude Code PostToolUse or Stop hook)
 //
-// `--hook` reads the host's hook JSON on stdin (the written file's content or path, or the last answer), checks it, and
-// exits 2 with the broken rules on stderr where something REQUIRED was seen to fail, which is what blocks the host and
-// hands the reasons back to the model; 0 otherwise. A hook that could not check (no text in the event, no file) says
-// so and exits 0: a guard's own failure never blocks the person's work.
+// `--hook` reads the host's hook JSON on stdin (a Write's content, an Edit's file by its path, or on a Stop event the
+// last assistant message of the transcript), checks it, and exits 2 with the broken rules on stderr where something
+// REQUIRED was seen to fail, which is what blocks the host and hands the reasons back to the model; 0 otherwise. An
+// event that carries nothing to check (a Stop with no assistant text yet, an Edit whose file is gone) says so and
+// exits 0. A guard that cannot check AT ALL (no such skill, an event that is not JSON) exits 2 and says why: a
+// misconfigured guard must be seen on its first event, never passed silently.
 //
 //   atelier verify --skill house-style draft.md --repair
 //
@@ -74,13 +76,14 @@ export async function verify(): Promise<void> {
     // THE HOST'S EVENT, NOT A FILE: what was written (a Write's content, an Edit's result by its path) or what was answered.
     let data = '';
     if (!process.stdin.isTTY) for await (const chunk of process.stdin) data += (chunk as Buffer).toString();
-    let event: { tool_input?: { content?: unknown; file_path?: unknown }; last_assistant_message?: unknown } = {};
-    try { event = JSON.parse(data || '{}') as typeof event; } catch { fail('the hook event on stdin is not JSON; nothing was checked'); }
+    let event: { tool_input?: { content?: unknown; file_path?: unknown }; last_assistant_message?: unknown; transcript_path?: unknown } = {};
+    try { event = JSON.parse(data || '{}') as typeof event; } catch { fail('the hook event on stdin is not JSON: the hook is not wired as Claude Code sends it; nothing was checked'); }
     const path = typeof event.tool_input?.file_path === 'string' ? event.tool_input.file_path : null;
     text = typeof event.tool_input?.content === 'string' ? event.tool_input.content
       : path && existsSync(path) ? readFileSync(path, 'utf8')
-        : typeof event.last_assistant_message === 'string' ? event.last_assistant_message : '';
-    if (!text.trim()) fail('nothing to check in this hook event (no written content, no file at its path, no answer); nothing was checked');
+        : typeof event.last_assistant_message === 'string' ? event.last_assistant_message
+          : typeof event.transcript_path === 'string' ? textFromTranscript(event.transcript_path) : '';
+    if (!text.trim()) { console.error('atelier: nothing to check in this hook event (no written content, no file at its path, no assistant text in the transcript)'); return; }
   } else if (file && file !== '-') {
     if (!existsSync(file)) fail(`there is no file at ${file}.`);
     text = readFileSync(file, 'utf8');
@@ -212,10 +215,32 @@ export async function verify(): Promise<void> {
 }
 
 /**
+ * THE LAST ASSISTANT MESSAGE OF A CLAUDE CODE TRANSCRIPT, as text: what a Stop event is about. The transcript is JSON
+ * lines; the last line of type "assistant" holds the message, its content a string or blocks of which the text ones
+ * are taken. Absent, unreadable or malformed is no text, never a crash.
+ */
+export function textFromTranscript(path: string): string {
+  try {
+    if (!existsSync(path)) return '';
+    const lines = readFileSync(path, 'utf8').split('\n');
+    for (let i = lines.length - 1; i >= 0; i--) {
+      if (!lines[i].includes('"type":"assistant"')) continue;
+      const j = JSON.parse(lines[i]) as { type?: string; message?: { content?: unknown } };
+      if (j.type !== 'assistant') continue;
+      const c = j.message?.content;
+      if (typeof c === 'string') return c;
+      if (Array.isArray(c)) return (c as { type?: string; text?: string }[]).filter((b) => b.type === 'text' && typeof b.text === 'string').map((b) => b.text).join('\n');
+      return '';
+    }
+  } catch { /* a malformed transcript is no text */ }
+  return '';
+}
+
+/**
  * EXIT 2 FOR "COULD NOT CHECK", 1 FOR "CHECKED AND FAILED". A gate that reads exit 1 as a broken rule
- * must not be handed a missing file under the same code. Under --hook, where 2 means "block the host", a guard that
- * could not check says so and exits 0: its own failure is never the person's.
+ * must not be handed a missing file under the same code. Under --hook, 2 is also what blocks the host: a guard that
+ * cannot check at all is seen, never passed silently.
  */
 let hookMode = false;
-const fail = (m: string): never => { console.error(`atelier: ${m}`); process.exit(hookMode ? 0 : 2); };
+const fail = (m: string): never => { console.error(`atelier: ${m}`); process.exit(2); };
 

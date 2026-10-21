@@ -51,8 +51,12 @@ export function compileCheck(src: string): { fn: CompiledCheck; problem?: undefi
   const s = src.trim();
   if (!s) return { problem: 'the check has no source' };
   if (s.length > CHECK_SOURCE_MAX) return { problem: `the check's source is longer than ${CHECK_SOURCE_MAX} characters` };
-  // No way out of the sandbox is given: the only names in it are the language's own, and the two this file sets.
-  const sandbox: { __fn?: unknown; __args?: { text: string; request: string; material: { name: string; text: string }[] } } = Object.create(null) as typeof sandbox;
+  // No way out of the sandbox is given: the only names in it are the language's own, and the two this file sets. NOTHING
+  // OF THE HOST'S REALM CROSSES IN: the arguments go in as one JSON string and are parsed inside the context, so no
+  // object the check can reach carries a host prototype (a host array's `constructor.constructor` is the host's
+  // Function, which the context's code-generation ban does not cover, and `("return process")()` from it read the
+  // process environment: confirmed against the built module before this line was written).
+  const sandbox: { __fn?: unknown; __json?: string } = Object.create(null) as typeof sandbox;
   const context: Context = createContext(sandbox, { codeGeneration: { strings: false, wasm: false } });
   try {
     const wrapped = /^\s*function\s+check\b/.test(s) ? `${s}; check` : `(${s})`;
@@ -61,9 +65,9 @@ export function compileCheck(src: string): { fn: CompiledCheck; problem?: undefi
   if (typeof sandbox.__fn !== 'function') return { problem: 'the check is not a function' };
   // EVERY CALL RUNS INSIDE THE TIMED EVALUATION. A function handed out of the context and called from here would run
   // with no limit; so the call is itself a script of the context, and a loop that never ends is stopped there.
-  const call = new Script('__fn(__args.text, __args.request, __args.material)', { filename: 'check-call.js' });
+  const call = new Script('(() => { const __p = JSON.parse(__json); return __fn(__p.text, __p.request, __p.material); })()', { filename: 'check-call.js' });
   const compiled: CompiledCheck = (text, ctx) => {
-    sandbox.__args = { text, request: ctx?.request ?? '', material: (ctx?.material ?? []).map((m) => ({ name: m.name, text: m.text })) };
+    sandbox.__json = JSON.stringify({ text, request: ctx?.request ?? '', material: (ctx?.material ?? []).map((m) => ({ name: m.name, text: m.text })) });
     const r: unknown = call.runInContext(context, { timeout: CHECK_TIME_LIMIT_MS });
     if (r === null || r === undefined) return null;
     if (typeof r !== 'object' || typeof (r as { ok?: unknown }).ok !== 'boolean') throw new Error('the check returned no { ok } object');
