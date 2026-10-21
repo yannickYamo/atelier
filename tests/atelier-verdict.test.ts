@@ -292,9 +292,9 @@ describe('a step is a step when it tells the writer what to do, however its sent
     expect(of(note, /^Never give/)).toMatchObject({ obligation: 'JUDGEMENT', measurement: null });
     expect(of(note, /^Keep the Background/)).toMatchObject({ obligation: 'JUDGEMENT', measurement: null });
   });
-  it('a sentence that describes the work is not an instruction because it holds the word "never"', () => {
+  it('no word decides which sentence instructs: a sentence that describes the work is kept as the owner wrote it, for the units reading to call an explanation', () => {
     const note = '# Handover\n\nIt is read in under two minutes by a registrar who has never met the patient.\n\nNever recommend before the assessment.\n\n- Include a Background section.\n';
-    expect(stepsOf(note).map((s) => s.text)).toEqual(['Include a Background section.', 'Never recommend before the assessment.']);
+    expect(stepsOf(note).map((s) => s.text)).toEqual(['Include a Background section.', 'It is read in under two minutes by a registrar who has never met the patient.', 'Never recommend before the assessment.']);
   });
   it('work whose sections are labels, not headings, is read as it is written', () => {
     const sbar = { task: 'Hand over bed 9.', material: [], reference: 'Situation: Mrs Hale, bed 9, is bleeding again after her procedure.\n\nBackground: She was admitted on Tuesday with a peptic ulcer.\n\nRecommendation: Review within the hour, please.\n' };

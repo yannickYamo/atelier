@@ -103,15 +103,11 @@ export function stepsOf(note: string): MethodStep[] {
   }
   closeItem(); closePara();
   const clean = (s: MethodStep): MethodStep => ({ ...s, text: s.text.replace(/\*\*|__|`/g, '').replace(/^\[[ x]\]\s*/i, '').trim() });
-  // WHERE A NOTE HAS A LIST, ITS PROSE IS MOSTLY EXPLANATION, and a sentence of it is a step only when it says so
-  // (must, never, always, do not, required). Taken whole, a template's description became a dozen judgement steps;
-  // dropped whole, an instruction written as a sentence under a heading was lost.
-  const RULE = /\b(?:must|never|always|do not|don't|required?|shall|only)\b/i;
-  // A sentence that DESCRIBES the work holds those words too ("read by a registrar who has never met the patient"):
-  // inside a clause about someone or something else, the word instructs nobody.
-  const DESCRIBES = /\b(?:(?:who|whom|whose)\s+(?:\w+\s+){0,3}|(?:which|that)\s+(?:has|have|had|is|are|was|were)\s+(?:\w+\s+){0,2})(?:never|always|only|must|shall)\b/i;
-  const instructs = (t: string): boolean => RULE.test(t) && !(DESCRIBES.test(t) && !RULE.test(t.replace(DESCRIBES, ' ')));
-  const steps = items.length ? [...items, ...prose.filter((s) => instructs(s.text))] : prose;
+  // EVERY SENTENCE OF THE NOTE IS THE OWNER'S, list or prose. Which of them instructs is not read off its words (a list of
+  // "must", "never", "always" once decided it, and called "read by a registrar who has never met the patient" a step): each
+  // is kept as a step, and what it is (an instruction, an explanation, a template, a criterion) is the units reading's
+  // (./decision-units.ts), shown at the build and set aside from the writer's brief where it is no instruction.
+  const steps = [...items, ...prose];
   const seen = new Set<string>();
   // A TEMPLATE'S BLANKS ARE NOT STEPS. "> One-line: [What this competitor is, who they serve] > Evidence ceiling:
   // [Decision-grade / Usable]" is a form to fill in: where the bracketed blanks are most of a line, it instructs nobody.

@@ -106,6 +106,7 @@ if (arg('--only') !== 'packets') {
         try { out = execFileSync('node', [CLI, 'invoke', '--skill', c.skill, req, '--json', '--cap', String(RUN_CAP), ...FLAGS, ...PASS_THROUGH],
           { encoding: 'utf8', cwd: c.project, env: { ...process.env, ATELIER_DATA: c.data, ATELIER_PROJECT_DIR: c.project }, maxBuffer: 64 * 1024 * 1024, stdio: ['pipe', 'pipe', 'pipe'] }); } catch (e) { out = `${e.stdout ?? ''}`; err = `${e.stderr ?? ''}`; }
         let j = null; try { j = JSON.parse(out.slice(out.indexOf('{'))); } catch { /* a failed run */ }
+        if (j?.state === 'ERROR') j = null;   // a run that stopped before its record
         if (!j) {
           const said = err.split('\n').filter(Boolean).slice(-2).join(' ') || 'no output';
           // A RUN THAT NEVER REACHED A MODEL STOPS THE STUDY AND IS NOT CACHED: the CLI could not be loaded, or it

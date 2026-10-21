@@ -286,7 +286,8 @@ describe('through the binary: the reader runs on the person\'s own backend when 
     // An unmeasured pair (a model on the person's own backend) warns: the pattern check gates.
     const byReader = run({ ATELIER_CLAIMS: 'model', ATELIER_CLAIMS_MODEL: 'my-small-model' }, 'verify', '--skill', 'house', file, ...remote(port));
     expect(byReader.code).toBe(0);
-    expect(byReader.out).toMatch(/warn {2}UNSOURCED·reader/);
+    // where it may not cut (no qualified reader), the owner's cut gives way to the level: what the reader found is flagged for review
+    expect(byReader.out).toMatch(/warn {2}UNSOURCED·check[\s\S]*94 minutes/);
     expect(byReader.out).toMatch(/ok {4}UNSOURCED {2}Never/);
     expect(byReader.out).toContain('claim reader (my-small-model');
     expect(byReader.out).toMatch(/not qualified/);
@@ -567,15 +568,16 @@ describe('the audit of the invented-claim check', () => {
     };
     const remote = (): string[] => ['--provider', 'openai-compatible', '--base-url', `http://127.0.0.1:${port}`, '--model', 'writer'];
 
-    it('1: verify fails an invented figure in a heading, and --repair cuts the heading line whole', async () => {
+    it('1: an invented figure in a heading, with only the pattern check reading: flagged for review, never cut, though the owner chose cut', async () => {
       const { run, file } = setup('# According to a survey, 43% of operators agree\n\nWe changed the cache.\n');
       const checked = run({ ATELIER_CLAIMS: 'pattern' }, 'verify', '--skill', 'house', file);
-      expect(checked.code).toBe(1);
+      expect(checked.code).toBe(0);
       expect(checked.out).toContain('According to a survey, 43% of operators agree');
+      expect(checked.out).toContain('the skill is held grounded');
       await script({ byTool: { emit_replacements: { replacements: [{ id: 1, text: 'According to a survey, 43% of operators agree' }] } } });
       const repaired = run({ ATELIER_CLAIMS: 'pattern' }, 'verify', '--skill', 'house', file, '--repair', '--json', ...remote());
       const j = JSON.parse(repaired.out) as { output: string; failed: boolean };
-      expect(j.output.trim()).toBe('We changed the cache.');
+      expect(j.output).toContain('# According to a survey, 43% of operators agree');
       expect(j.failed).toBe(false);
     });
 

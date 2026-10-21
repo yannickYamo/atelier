@@ -18,9 +18,10 @@
 
 import { coverageOf, describeCoverage } from '../../core/taste/dimensions.js';
 import { createInterface } from 'node:readline';
-import { die, argv, flagAll, loadSession, orchestrated, type Session } from '../runtime.js';
+import { die, argv, flagAll, loadSession, orchestrated, canReach, contextReaderClient, contextReaderModel, type Session } from '../runtime.js';
 import { isGeneralScope, type Requirement } from '../../core/state/canonical-state.js';
-import { suggestAll, modeFromIntent, type Suggestion, type SkillMode } from '../../core/ratification/suggest.js';
+import { suggestAll, type Suggestion, type SkillMode } from '../../core/ratification/suggest.js';
+import { intentModeOf } from '../intent.js';
 import { applyDecisions, type RatificationDecision } from './ratify.js';
 import { describeMeasurement } from './verify.js';
 
@@ -75,7 +76,10 @@ export interface ReviewOptions { readonly continueWith?: string; readonly shownB
  */
 export async function review(opts: ReviewOptions = {}): Promise<boolean> {
   const s = loadSession();
-  const rows = pendingRows(s);
+  // What the skill is for, as the intent reading says it (cli/intent.ts).
+  const off = !canReach('discovery') || argv.includes('--no-model');
+  const mode = await intentModeOf(s.intent, off ? null : contextReaderClient(), off ? null : contextReaderModel());
+  const rows = pendingRows(s, mode);
   if (!rows.length) {
     console.log(s.proposals.length ? 'Nothing is waiting for a ruling.' : 'Discovery proposed no rules, so there is nothing to rule on. Nothing was compiled.');
     return s.decided.length > 0;
@@ -86,7 +90,7 @@ export async function review(opts: ReviewOptions = {}): Promise<boolean> {
   const changes = fromFlags.changes;
 
   let accepted = argv.includes('--accept');
-  if (!accepted || !opts.shownBefore) printScreen(s, rows);
+  if (!accepted || !opts.shownBefore) printScreen(s, rows, mode);
   if (!accepted && process.stdin.isTTY) accepted = await promptForChanges(rows, ids, changes);
   if (!accepted) {
     // The example names a rule that is on this screen: one that is not would be refused when copied.
@@ -102,9 +106,8 @@ export async function review(opts: ReviewOptions = {}): Promise<boolean> {
 }
 
 /** The proposals still waiting for a ruling, each with its suggestion, strongest evidence first. */
-function pendingRows(s: Session): Row[] {
+function pendingRows(s: Session, mode: SkillMode): Row[] {
   const done = new Set(s.decided.map((d) => d.requirementId));
-  const mode: SkillMode = s.intent?.mode ?? modeFromIntent(s.intent?.text ?? '').mode;
   // Suggested together, so the rules suggested as required are ones the author's own pieces meet (suggestAll).
   const pending = s.proposals.filter((p) => !done.has(p.requirementId));
   const { suggestions } = suggestAll(pending, s.proposalMeta, mode);
@@ -118,7 +121,7 @@ function pendingRows(s: Session): Row[] {
  * what the rules cover. Rejections suggested on strong evidence are among the weakest, so every
  * suggestion that removes or binds something is read in full before Enter.
  */
-function printScreen(s: Session, rows: readonly Row[]): void {
+function printScreen(s: Session, rows: readonly Row[], mode: SkillMode): void {
   const intent = s.intent?.text ?? null;
   const instructs = rows.filter((r) => r.s.decision === 'APPROVE' && r.s.materiality === 'REQUIRED');
   const weakest = rows.filter((r) => !instructs.includes(r) && r.s.strength === 0);
@@ -149,7 +152,7 @@ function printScreen(s: Session, rows: readonly Row[]): void {
   // HOW THE AUTHOR'S OWN PIECES FARE against what will instruct as required: said on the screen the rules are
   // accepted from, with what was moved to "shown" to get there (core/ratification/suggest.ts, `suggestAll`).
   const done = new Set(s.decided.map((d) => d.requirementId));
-  const standing = suggestAll(s.proposals.filter((p) => !done.has(p.requirementId)), s.proposalMeta, s.intent?.mode ?? modeFromIntent(s.intent?.text ?? '').mode).corpus;
+  const standing = suggestAll(s.proposals.filter((p) => !done.has(p.requirementId)), s.proposalMeta, mode).corpus;
   if (standing && (standing.required || standing.moved.length)) {
     if (standing.required) console.log(`Your own pieces: ${standing.passing} of ${standing.pieces} meet every counted rule suggested as required.`);
     // Why each was moved, here, since a rule only shown is listed in one line above and its reason is not.

@@ -247,7 +247,7 @@ export function recordForText(x: { L: store.StoreLayout; std: StandardVersion; t
     copying: shared ? { longest: shared.longestShared, limit: copyLimit(voice), tellable: (voice?.lengthPieces ?? voice?.pieces?.length ?? 0) >= STANDARD_WORDING_PIECES, ...(shared.longestWords ? { words: shared.longestWords } : {}) } : null,
     unmeasured: new Set(x.lostToLength ?? []), read: readMap(x.readings),
     // How strictly it was held, and what the owner accepted unmeasured: from the standard, the run's level where it tightened.
-    ...(x.std.latitude || x.level ? { latitude: x.level ?? latitudeOf(x.std) } : {}), accepted: new Set(x.std.acceptedUnmeasured ?? []),
+    ...(x.std.latitude ? { latitude: x.level ?? latitudeOf(x.std) } : {}), accepted: new Set(x.std.acceptedUnmeasured ?? []),
     replaced: new Set(x.request ? x.std.requirements.filter((r) => x.waived?.has(r.requirementId) && r.measurement?.observer === 'LENGTH' && !r.measurement.params.in).map((r) => r.requirementId) : []),
   });
 }

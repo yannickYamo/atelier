@@ -7,6 +7,40 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+### A clean run can be verified, a skill built again keeps what the owner decided, and every door says what it did
+
+- **VERIFIED with material bound.** The claim check decides from what it does at the level and the instrument that
+  gates (`claimDecides`, cli/eval-run.ts): with material bound, a check that cuts, blocks or flags decides when the pattern
+  check or a qualified reader gates, so a run in which every specific was found reads VERIFIED; review only where
+  something is listed or open. A creative skill, which only lists, and a run with nothing bound decide nothing. A standard
+  minted before latitude existed reads VERIFIED again on a clean run, and its record carries no latitude.
+- **A skill built again is decided again.** Building a method again, even from a copied project that took a copy of the
+  run, starts its decisions afresh: no rule twice. The owner's latitude and the rules they accepted unmeasured are kept
+  (found by the rule's words); a level that only proposed its default gives way to a new level's. `atelier amend
+  --measure` moves a rule out of the accepted list when it gains a check, and gives one that loses its check the level's
+  default. What each step is (a prohibition or a thing to do) is frozen with its check, so an unchanged method reads
+  nothing again and mints the same standard. A step's frozen check is read again once an output is rejected naming it.
+- **A skill from rules, built again on the answers kept.** `atelier skill --yes --name <name>` keeps the rules accepted,
+  reads only their checks again on the kept answers, replaces the decisions and records why the version changed; `atelier
+  rate` prints that command. `--rule` is resolved in the standard the output was made under and kept by its words; a rule
+  it does not hold is refused with the ones it does.
+- **The owner's cut is a qualified reader's.** Where the pattern check gates (no qualified reader, or one whose read
+  failed), an owner-chosen cut falls back to the level's action and nothing is deleted.
+- **Repair.** A banned word's hedge may go when the rewrite takes its whole clause out ("and may be a scam"); a hedge
+  elsewhere is held. A written check that names the sentences it fails on has them rewritten, and a citation naming a
+  document of the bound material is no slot left to fill.
+- **What each door says.** `verify --hook` names the required rules it could not read on the event, and blocks nothing
+  on their account. `verify --json` lists what blocked the text under `violated`, from the record its state comes from.
+  The keys of a JSON output and values the examples share are its form, not a lifted passage. `invoke --json` that stops
+  before its record prints `{schema, state: "ERROR", error}`. A written check qualified under the old in-check marker
+  keeps its standing.
+- **Readings, not word lists.** Whether a composite rule bans is its kind (the polarity reading), never a negative word
+  found in it. Every sentence of a method note is a step, beside a list or not: which instruct is the units reading's,
+  shown at the build. What a skill is for is read by the intent reading wherever `review` and the composite path ask.
+- **Provider.** Calls side by side refused for `thinking: disabled` are each sent again with `between_tools`; a reply
+  under `tool_choice: auto` that ends with no tool call is asked for once more; the proposer's token limit grows with the
+  corpus (4,000 up to eight pieces, at most 12,000).
+
 ### The kind of work sets how strictly output is held, the owner ratifies it, and a check once ratified stays put
 
 - **Latitude, read at the build and ratified by the owner** (`core/observers/latitude.ts`, `cli/latitude.ts`). Every

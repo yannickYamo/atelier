@@ -242,7 +242,8 @@ export function checkDraft(skill: string, v: StandardVersion, text: string, opts
   // ON A KIND OF WORK NOBODY MEASURED, NOTHING IS CUT. The reader's findings and the patterns' are one list
   // for the person to check: on 27 real competitive analyses the cut deleted 32 legitimate sentences of 41.
   // THE OWNER'S CUT IS A QUALIFIED READER'S: where the pattern check gates this text, the level's action stands instead.
-  const instead = opts.claimAct === 'cut' && opts.cutOtherwise && (!opts.claimSensor?.qualified || opts.claimSensor.gate !== 'reader' || Boolean(reading?.gate)) ? opts.cutOtherwise : null;
+  // (An unqualified reader the owner made gate, ATELIER_CLAIMS_GATE=reader, is their word: it fails the check and deletes nothing.)
+  const instead = opts.claimAct === 'cut' && opts.cutOtherwise && (!opts.claimSensor || opts.claimSensor.gate === 'pattern' || Boolean(reading?.gate)) ? opts.cutOtherwise : null;
   const act = instead?.act ?? opts.claimAct;
   const why = opts.listsBecause ?? instead?.why ?? null;
   const unmeasured = !listOnly && why ? why : null;
@@ -304,7 +305,7 @@ export function checkDraft(skill: string, v: StandardVersion, text: string, opts
       : listed.length === words.length ? 'Counts written in words that are not in the material supplied: listed for you to check, never cut; the pattern check reads them with less confidence than a figure in digits.'
         : 'Not shown by your request or the material supplied: listed for you to check, never cut.',
     materiality: 'PREFERRED', phase: 'ACCURACY' as const,
-    result: { verdict: 'VIOLATED' as const, spans: [...listed], value: listed.length, detail: `${listed.length} specific(s) to check [${by}]` } }] : [];
+    result: { verdict: 'VIOLATED' as const, spans: [...listed], value: listed.length, detail: `${listed.length} specific(s) to check [${unmeasured && reading?.gate ? `${by}; ${reading.instrument} reporting` : by}]` } }] : [];
   const readerOnly = reading?.gate && !unmeasured ? reading : null;
   const readerLine = readerOnly ? [{ requirementId: READER_REPORT, statement,
     materiality: 'PREFERRED', phase: 'ACCURACY' as const,

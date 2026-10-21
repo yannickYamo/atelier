@@ -70,7 +70,11 @@ one line:
 It is yours: `--latitude strict|grounded|creative` on the build, or `atelier amend --skill <name> --latitude <level>
 --reason "<why>"` after, and `--unmeasured accept|review` for the rules no check reads. A request that needs more care
 than the skill (a figure to publish, asked of a creative skill) is held stricter for that run, on its own words, and
-never looser. The record and the certificate of every run say the level it was held at.
+never looser. The record and the certificate of every run say the level it was held at. A level you set, and the rules
+you accepted unmeasured, stay when the skill is built again; a rule given a check leaves the accepted list.
+
+With your material bound, a run in which every specific is found in it reads VERIFIED at any level (where everything
+else required was read in full and held); what is blocked, flagged or listed by the level is what keeps it from that.
 
 - A figure credited to a study, a quote from a named person, or a link offered as a source is yours to
   supply. It never passes as "general knowledge".
@@ -176,7 +180,11 @@ the part no count reads is a qualified observation: read as followed, the rule i
 fails. That is the one path by which work with judgement in it reads VERIFIED. A rule you stated stays required when your own examples do not follow
 it. The build never stops for that: the rule is checked and shown on every run, and blocks nothing until you
 confirm it (`--yes`) or change the method. `atelier verify`, `atelier report`,
-`--json` and the MCP check carry the same record (`record`), so they cannot disagree with the card.
+`--json` and the MCP check carry the same record (`record`), so they cannot disagree with the card; `verify --json`
+lists what blocked the text under `violated`, from that record. A run asked for `--json` that stops before its record
+prints `{"schema", "state": "ERROR", "error"}`, never nothing. As a hook, `verify --hook` names any required rule it
+could not read on the event (a check that reads your material, where the event binds none) and blocks nothing on its
+account.
 
 `atelier fix "<what was wrong>"` goes one of three ways, and you choose by saying so:
 
@@ -219,7 +227,11 @@ kinds and says, for each check, what it looks for and how your examples fare on 
 A check is kept only when every example holds it, and once built it is kept: a rebuild reads a step's check again
 only when the step's wording or the examples changed, so rewording one step changes that step's check and no other.
 An output you reject naming the rule it breaks (`atelier rate <run> no "why" --rule <rule>`) is one more edit a
-written check must catch to qualify. A step that a piece of yours does not do is named with the piece
+written check must catch to qualify, and that step's check is read again at the next build. The rule is named in the
+standard the output was made under and kept by its words, so building again with the steps renumbered does not move
+it. Every sentence of your note is a step, beside a list or not; which are instructions and which explain is read and
+shown at the build. A skill from rules alone, built again after you rated drafted answers, keeps the rules you
+accepted: `atelier skill --yes --name <name>`. A step that a piece of yours does not do is named with the piece
 and left for you to judge; change the note or the example and build again to have it checked. Building again in
 the same folder makes a new version of the same skill. With three or more
 examples, the pieces are served with the skill and their lengths recorded, so a draft is chosen by how near it runs
