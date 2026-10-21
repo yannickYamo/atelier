@@ -61,7 +61,7 @@ reaches the provider. `tests/atelier-reachability.test.ts` walks the import grap
 a module go dark without someone writing down why. `tests/atelier-documented-claims.test.ts` holds
 this file to what the code actually does, which is why the commands above are the commands that exist.
 
-MIT.
+Source-available: see LICENSE. Unmodified copies may be used and redistributed; changes are made only by the authors.
 
 ---
 

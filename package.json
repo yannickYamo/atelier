@@ -28,7 +28,7 @@
   "optionalDependencies": {
     "harper.js": "2.10.0"
   },
-  "license": "MIT",
+  "license": "SEE LICENSE IN LICENSE",
   "publishConfig": {
     "access": "public"
   },

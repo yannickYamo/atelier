@@ -45,6 +45,8 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
   meaning: the number is what is read.
 - **One place for the repair pass count** (`REPAIR_PASSES`, `core/loop/run-repair.ts`): `invoke`, `verify --repair`
   and the blind-reference loop no longer each carry their own `2`.
+- **License.** Atelier is source-available: unmodified copies may be used and redistributed, and changes are made only
+  by the authors (LICENSE). The repository is private, with access by invitation. It was MIT before this change.
 
 ### Which check a step asks for is read, not matched: a model names it or writes it, and code holds it
 
