@@ -1,170 +1,198 @@
 # Atelier
 
+### Your standard, held on every AI output.
+
+**Atelier turns the standard your experts hold work to into checks, runs every output through them, repairs what breaks a measurable rule, escalates what needs judgment, and records what was checked and what was not.**
+
 [![CI](https://github.com/yannickYamo/atelier/actions/workflows/ci.yml/badge.svg)](https://github.com/yannickYamo/atelier/actions/workflows/ci.yml)
 [![license](https://img.shields.io/badge/license-source--available-blue)](LICENSE)
 [![node](https://img.shields.io/badge/node-%3E%3D22-brightgreen)](package.json)
 
-## What is Atelier?
+[Quickstart](#quickstart) · [How it works](#how-it-works) · [Examples](#examples) · [What is measured](#what-is-measured) · [FAQ](#faq) · [Documentation](#documentation)
 
-**Atelier takes the standard your experts already hold work to - a method note, a policy, a folder of finished examples - and turns it into checks that run on every output. It fixes what breaks a measurable rule, hands what needs judgment to a person, and records what was checked and what wasn't. The aim is narrow: output quality held to one standard, repeatable from run to run.**
+A model writes a claims memo, a code review, a contract clause, a brand-safety label, a blog post. Someone has a written standard for that work. Atelier is the step between the model and the reader: the standard, compiled into checks, applied to this output, now, with the passage as evidence and a record of the result.
 
-I'll say up front what this isn't, because the category is crowded and most of what's in it works on a different part of the problem.
+## The problem
 
-## It isn't an eval, and it isn't an optimizer
+Thousands of outputs a day are produced against a written standard, and a sample is reviewed. The rest ships on the assumption that the model held the standard as well on the thousandth output as on the first. Three things go wrong in that gap:
 
-Evals and optimizers improve the average over many runs. You measure a set, you tune, the distribution moves. That's useful work and I'm not arguing against it.
+- **Drift without a witness.** The tenth answer breaks a rule the first one held, and nothing says which answer, which rule, or why.
+- **Instructions mistaken for enforcement.** A skill file, a system prompt or a policy document asks for a shape. Nothing checks that the shape arrived.
+- **Verdicts without error rates.** A guardrail or a judge model says "pass" with no statement of how often it is wrong on the organisation's own work.
 
-Atelier looks at this output, now, before it ships. Which rules held, which broke, the passage as evidence, and what happens next. Upstream tools make the model more likely to be right. Atelier catches the one that isn't, and names which output, which rule, and why.
+Atelier addresses the gap directly. Every output is checked against the standard before it ships. What a check can decide, code decides. What needs judgment is read by a model and reported, with a measured error rate, before it is allowed to block. What the compiler could not capture is quoted back to the owner of the standard rather than silently dropped.
 
-**Those are different jobs and you want both.** An optimizer that lifts your pass rate has done something real, and the outputs it still misses go to a customer.
+## How it is different
 
-## It isn't a guardrail or a schema check
+| Approach | What it improves | Where Atelier differs |
+|---|---|---|
+| **Prompt and trace optimizers** (GEPA, DSPy, SkillOpt) | The average quality of future outputs | Atelier inspects the output that exists now, rule by rule, with the passage as evidence. Both are useful; they act on different steps. |
+| **Skill creators** | The instructions a coding agent follows | A skill is an instruction. Atelier compiles the same method into checks that run on every output and reports which rules it can only read. |
+| **Evals** | Knowledge of how a system performs on a set | An eval scores a set after the fact. Atelier gates each output before delivery and records the result. |
+| **Guardrails** | Enforcement of rules a developer wrote | Atelier compiles the rules the experts hold, from the documents they already have, and states which rules it can measure, which it can only read, and which it could not capture. |
+| **Schema checks** | The shape of structured output | A schema is one of Atelier's checks. Atelier also checks content: figures that reconcile, specifics traced to supplied material, cited evidence that exists, banned terms, required sections, judgment rules read by a model. |
 
-A guardrail checks a rule a developer wrote. Someone sat down, decided banned terms matter, and typed them in.
-
-Atelier compiles the rules your experts actually hold, out of documents you already have. Before anything runs, you get a compile report in three columns:
-
-- **measurable** - checked by code on every output
-- **needs judgment** - read by a model, reported
-- **not captured** - quoted back to you verbatim, with the question attached
-
-The third column is the honest one. If your policy says "the tone should match the account's seniority," Atelier doesn't pretend to have operationalized that. It hands the sentence back and asks what you meant.
-
-**A rule a model reads never blocks until it has proved its error rate on your own labels.** A counted rule - a banned term, a required section, a length - blocks from day one. Code decides it, no label needed. I want to say that plainly because the two get conflated and the trust you extend should be different.
-
-## What it checks
-
-The counted layer: required sections and fields, allowed values, lengths and counts, banned terms, a cited line that exists in the material, every specific traced back to material you supplied.
-
-Then the step-specific layer. Figures that reconcile, cross-field rules - a check a model writes for that step, grounded on your examples. It reports until it's qualified on edits of your own examples that break only that step. Only then may it block.
-
-Then judgment rules: "the span supports the label," "severity matches the evidence." A model reads these and quotes the passage back. Reported until qualified on your labels.
-
-And then what it couldn't read at all, shown verbatim, for you.
-
-## How outputs change
-
-A rewrite happens only where a measurable rule broke. The rewrite is kept only if it re-verifies clean on every rule it touched. **A rewrite that changes a claim or a figure is refused** - I'd rather hand you a blocked output than a quietly edited number.
-
-An omission is a different animal. A missing section isn't something you repair in place; the work is written again, in a run. In verify it stays blocked and says so.
-
-Judgment goes to a person, with the passage. Their rulings qualify the reader. The standard itself never changes unless you change it.
-
-## Who decides what good means
-
-You do. Every rule is approved before it binds. Rules are versioned by content, apart from the model, so a model's reading cannot alter what you ratified.
-
-A new reader model starts unqualified: it reports only, until your labels qualify it. A new writer model is held to the same standard on every output. What doesn't exist yet is a gate that re-verifies a new model against your labels before it goes live. I'd like that. It isn't built.
-
-## Where it plugs in today
-
-**CLI.** `verify` and `run`, with one JSON record head on both: schema, state, standard, skill version, certificate, record. Exit 1 when a required rule broke, exit 2 when it couldn't check.
-
-**Claude Code hook.** `verify --hook` reads the hook event and exits 2 with the broken rules, only when something required failed. Otherwise 0 - including when it couldn't check.
-
-**MCP.** `atelier_verify`, `atelier_rules`, `atelier_new`, `atelier_run`, `atelier_report`, `atelier_rate`, `atelier_fix`, for Claude Code and Codex.
-
-**CI.** `verify` as a step. A broken required rule fails the check.
-
-One caveat worth stating rather than burying: verify takes one file at a time. A folder is a shell loop. I'm not going to call that "a folder of outputs in one call," because it isn't.
-
-Not built, and not available: a Python or TypeScript SDK, a hosted endpoint, a labeling queue, asynchronous reading. Those are next.
-
-On latency: counted checks run offline in milliseconds. The invented-claim reader and the judgment reader are model calls in the request path when a key is set. There's no asynchronous path yet.
-
-## Two modes for skill authors
-
-**Portable.** The exported skill carries your method into Claude Code or Codex. It cannot guarantee the agent obeyed it.
-
-**Guarded.** Verify runs on every output - in `run`, in CI, through the hook, or through the MCP tool - and the record says what held.
-
-```bash
-atelier new ./examples --method how-we-do-it.md --name my-skill   # from your method and your work
-atelier skill "lead with the action, number the steps"            # from rules you state
-atelier run "write the release notes for v2.1"                    # drafted, checked, repaired, recorded
-atelier verify --skill my-skill draft.md --repair                 # check or fix any text
-atelier verify --skill my-skill --hook                            # as a Claude Code hook: exit 2 blocks
-atelier fix "the opening was too abstract"                        # correct a piece, or the skill
+```mermaid
+flowchart LR
+    A[What goes in<br/>documents, data] --> B[How it is asked<br/>prompt, context, tools]
+    B --> C[The model writes]
+    C --> D[Atelier<br/>checks the output against your standard]
+    D -->|every rule holds| E[Delivered, with a record]
+    D -->|a measurable rule broke| F[Repaired, checked again]
+    D -->|a judgment rule is in doubt| G[A person, with the evidence]
 ```
 
-## Voice
+Everything upstream makes the model more likely to be right. Atelier is the fourth step: it catches the output that is not, and says which output, which rule, and why.
 
-Voice is where I want to be most careful, because it's where the temptation to oversell is strongest.
+## How it works
 
-Atelier holds your method. It keeps every specific traced to your material. It holds your counted habits - the contraction rate, the dash rate, the things you do without noticing. It keeps machine tells out.
+**Once: the standard becomes checks.** Atelier reads a method note, a policy, or finished examples, and produces a compile report in three columns before anything runs.
 
-What it does not yet do is make a model sound like you from a few pieces. We tested that. I'd rather say it than claim otherwise.
+```mermaid
+flowchart LR
+    S[Your method, policy<br/>or finished examples] --> C[Compile]
+    C --> M[Measurable<br/>checked by code on every output]
+    C --> J[Needs judgment<br/>read by a model, reported]
+    C --> N[Not captured<br/>quoted back to you]
+    M --> R[Your standard<br/>approved rule by rule]
+    J --> R
+```
 
-## What is measured
+**Every output: checked, repaired, or escalated, and recorded.**
 
-Every figure below comes from a study in `studies/`, with the design and the failures kept alongside it. Most of this is development evidence, not sealed.
+```mermaid
+flowchart LR
+    O[Output from any model] --> V[Verify against your standard]
+    V -->|every rule holds| D[Deliver with a record]
+    V -->|a measurable rule broke| R[Repair only the span,<br/>check again]
+    R --> V
+    V -->|a judgment rule is in doubt| E[Escalate to a person<br/>with the passage]
+    E --> L[Ruling recorded]
+```
 
-| claim | result | status |
-|---|---|---|
-| Nothing invented | 0 invented claims in 60 outputs across two corpora; the other arms carried 37 to 67 flagged specifics per corpus | sealed |
-| The method holds | code review: checklist 7 of 10, defect cited 9 of 10, every other arm 0 of 10; contracts: 10 of 10, matched by one skill creator's skill | development |
-| Counted rules hold | 31% of answers broke a counted rule, against 76% for a hand-written skill never shown the rules | development |
-| Invented specifics caught | 46 of 46 planted inventions; clean drafts left alone 39 of 48 and 35 of 38 | sealed |
-| Sounds like the author | ranked first blind on single pieces; the pre-registered gate failed | closed, not claimed |
+**Over time: checks earn authority without the standard changing.**
 
-A few readings worth pulling out. On the code review arm, the planted defect was cited within two lines 9 times in 10, and every other arm scored 0 of 10 on the checklist. On the contracts arm, ten term sheets came back 10 of 10 - and so did a skill creator's skill, which is the comparison I'd want to see if I were you.
+```mermaid
+flowchart LR
+    A[Shadow<br/>reports only] --> B[Approve<br/>rules, one by one]
+    B --> C[Label<br/>escalations, blind]
+    C --> D[Qualify<br/>a check may block once it has earned it]
+    D --> E[Enforce<br/>on one workflow]
+    E --> F[Learn<br/>rulings feed the next qualification]
+    F --> C
+```
 
-The invented-specifics run used product essays no test had touched. All 46 planted inventions were caught. A pattern check on the same material caught 11. Clean drafts were left alone 39 times in 48.
+Three rules hold throughout:
 
-What isn't established: a sealed win against a hand-written skill, error bounds on a real customer stream, and the compile front door on arbitrary SKILL.md files. That last one is in progress.
+1. Only the owner changes the standard. A model's reading never does. Standards are versioned by content, apart from the model.
+2. A rule a model reads never blocks until it has proved its error rate on the owner's own labels. A counted rule, such as a banned term or a required section, is decided by code and blocks from the first run.
+3. The record never says a rule was checked when it was only read.
 
-## The offer
+## Quickstart
 
-Send one policy and the last thousand outputs of one workflow, in whatever form they're in. Back comes how many broke your own rules, rule by rule, with the passage. The first report costs nothing.
-
-You'll still be the one who decides what the broken ones mean. The reading moved; the answering didn't.
-
-## Install
-
-The repository is public under a source-available license (see [LICENSE](LICENSE)): you may use and redistribute
-unmodified copies; changes are made only by the authors.
+Node 22 or later. Steps that call a model need `ANTHROPIC_API_KEY` or any OpenAI-compatible backend; checking text against an existing skill needs no key.
 
 ```bash
 git clone https://github.com/yannickYamo/atelier && cd atelier
-npm install && npm run build && npm link   # puts `atelier` on your PATH
-atelier setup                              # gives the coding agents in this project the Atelier MCP server
+npm install && npm run build && npm link      # puts `atelier` on your PATH
+atelier check                                  # tests the model backend before anything is spent
+atelier setup                                  # registers the Atelier MCP server with the coding agents in this project
 ```
 
-`atelier setup` finds Claude Code, Cursor, VS Code and Codex, adds one entry to each agent's config, and never
-replaces what is there. The npm package (`@yannickyamo/atelier`) is not published yet: once it is,
-`npm install -g @yannickyamo/atelier` replaces the first two lines, and `npx @yannickyamo/atelier setup` needs
-nothing installed.
+Build a standard from your own work, run it, and check anything against it:
 
-Node 22 or later. In Claude Code: `/plugin marketplace add yannickYamo/atelier`, then
-`/plugin install atelier@atelier`. For any agent that reads skills, `npx skills add yannickYamo/atelier`
-([skills.sh](https://skills.sh)); for one with no skill folder, `atelier export --skill <name> --out skill.md`.
-Steps that call a model need `ANTHROPIC_API_KEY` or any OpenAI-compatible backend, and `atelier check` tests
-yours before anything is spent. Standards and outputs stay under `~/.atelier`, with no account and no
-telemetry. [examples/blog](examples/blog/README.md) has a six-post corpus to try, and [USAGE](docs/USAGE.md)
-has every command.
+```bash
+atelier new ./examples --method how-we-do-it.md --name my-skill   # your method and finished examples become checks
+atelier run "write the release notes for v2.1"                    # drafted, checked, repaired, recorded
+atelier verify --skill my-skill draft.md                          # check any text; exit 1 if a required rule broke
+atelier verify --skill my-skill draft.md --repair                 # repair only the spans that broke a required rule
+atelier verify --skill my-skill --hook                            # as a Claude Code hook: exit 2 blocks with the reasons
+atelier fix "the opening was too abstract"                        # correct a piece, or the standard, in your words
+```
 
-## Where it's going
+`atelier new` shows the compile report and builds nothing until the rules are approved. `atelier run` prints the work and, under it, the evaluation rule by rule, opening with where it stands: VERIFIED, NEEDS REVIEW or BLOCKED. `atelier run --json` and `atelier verify --json` return the same record head: schema, state, standard version, skill version, certificate, record.
 
-**More of what a team ships is written by agents: docs, release notes, support replies, review comments, reports. Each kind needs rules someone approved.**
+Standards and records stay under `~/.atelier`. No account, no telemetry.
 
-Models change every few months. The rules shouldn't change with them.
+## Examples
 
-What comes next is a closing test by an independent tester. The bar: from a folder of examples and a prompt, you get a better skill than a hand-crafted one. It is tested against [i-have-adhd](https://github.com/ayghri/i-have-adhd) on coding answers and [stop-slop](https://github.com/hardikpandya/stop-slop) on writing, with delivery under `--strict` across several kinds of work and one last blind read of voice. Each claim is tested once, with its pass and fail sentences written first ([the closing rules](docs/decisions/0012-the-closing-rules.md), [the brief](studies/INDEPENDENT_TEST_BRIEF.md)). Until each is in, it isn't claimed. Before that test, one measured weakness is being worked on: an exported Atelier skill ran 16 to 38 times the size of a hand-written one, and on the one skill measured part by part most of it is your own pieces served whole. One study selected a smaller default for a skill that writes: passages from your pieces within 3,000 words in place of whole pieces within 9,000, an export of 7,121 words against 12,555, 34% cheaper a run, with no loss of quality measured on five titles; `--pieces whole --piece-budget default` serves them whole ([decision 0014](docs/decisions/0014-the-smallest-realization-that-holds-the-standard.md)). The head-to-head against GEPA and SkillOpt is optional: it can run at any time, is reported either way, and never delays or reopens a claim. The rest of the plan is in [ROADMAP](docs/ROADMAP.md).
+**Contract drafting.** A method note of eight steps and ten finished term sheets. Required sections, defined terms used as defined, a clause count within the house range, no "best efforts": all checked by code on every draft. Whether a limitation of liability is drafted "in the firm's posture" is read by a model, reported, and escalated when in doubt.
 
-## Learn more
+**Code review.** A review method and finished reviews of real diffs. The Summary, Must fix and Verdict sections, a verdict from the allowed set, a line reference for every defect named: checked by code. Whether the review weighed risk before style: judgment, read and reported.
 
-- [USAGE](docs/USAGE.md): commands, settings, and what Atelier builds around a skill
-- [RESULTS](docs/RESULTS.md) and [studies/](studies/README.md): every study, pass or fail
-- [LESSONS](docs/LESSONS.md): what building it taught, each with its evidence
-- [ARCHITECTURE](docs/ARCHITECTURE.md): how a standard becomes a skill
-- [INSTRUMENTS](docs/INSTRUMENTS.md): every instrument, what it was validated on, and whether it may steer, gate or only report
-- [MEASURED-RULES](docs/MEASURED-RULES.md), [FORMATS](docs/FORMATS.md) and [TASTE](docs/TASTE.md): the counted checks, the formats, and the reader for everything else
-- [decisions/](docs/decisions/README.md): the choices the code depends on, and why
-- [MEASUREMENTS.md](MEASUREMENTS.md): every figure quoted in the code, and what it rests on
+**Writing.** A folder of posts and a note on how they are written. The method holds; every specific is traced to material the author supplied, and anything invented is cut when the material is bound; the author's counted habits are held and machine tells kept out. Atelier does not yet make a model sound like an author from a few pieces, and says so.
+
+**Claims memos at volume.** A claims policy and the memos adjusters sign. Every fact cited to a document in the file, the cited document present, the reserve equal to the invoices, the coverage decision naming a clause, no speculative language: checks on every memo, with the passage as evidence where one fails. The exclusion decision itself is escalated with the file.
+
+**Brand-safety labels.** A taxonomy, a labelling policy and labelled clips. Every label a valid category, every flagged category with a timecode inside the clip's duration and evidence copied verbatim from the transcript, overall risk equal to the highest flagged, no High without the depiction the policy requires: checked on every label, in the JSON the pipeline already emits.
+
+The two enterprise examples are standing bench domains in [bench/standing/domains](https://github.com/yannickYamo/atelier/tree/main/bench/standing/domains), each with its policy, examples, material and planted defects. [examples/blog](examples/blog/README.md) is a six-post corpus to try.
+
+## Where it plugs in
+
+| Surface | Today | Next |
+|---|---|---|
+| CLI | `verify`, `run`, one JSON record head, exit codes (1 a required rule broke, 2 could not check) | |
+| Claude Code | `verify --hook` as a PostToolUse or Stop hook; the MCP server through `atelier setup` | the hook installed by `atelier setup` |
+| MCP | `atelier_verify`, `atelier_rules`, `atelier_new`, `atelier_run`, `atelier_report`, `atelier_rate`, `atelier_fix`, for Claude Code and Codex | a hosted endpoint |
+| CI | `verify` as a step; a broken required rule fails the check | a pull-request comment |
+| SDK | | `verify(standard, output, material)` in Python and TypeScript |
+| Hosted | | shadow reports, the labelling queue, the record per output |
+
+## What is measured
+
+Every figure comes from a study in [studies/](studies/) with its design and its failures kept. Most are development evidence, not sealed results; the table says which.
+
+| Claim | Result | Status |
+|---|---|---|
+| Nothing invented | 0 invented claims in 60 outputs across two corpora; plain prompting and pasted examples carried 37 to 67 flagged specifics per corpus | sealed |
+| The method holds | Code review: checklist 7 of 10, the planted defect cited within two lines 9 of 10, every other approach 0 of 10. Contracts: 10 of 10, matched by one skill creator's skill | development |
+| Counted rules hold | 31% of answers broke a counted rule, against 76% for a hand-written skill never shown the rules | development |
+| Invented specifics caught | 46 of 46 planted inventions caught; clean drafts left alone 39 of 48 and 35 of 38; a pattern check on the same material caught 11 of 46 | sealed |
+| Sounds like the author | Ranked first on blind reads of single pieces; the pre-registered gate as a whole failed | closed, not claimed |
+
+Not yet established: a sealed win against a hand-written skill; error bounds on a real customer stream; the compile front door on arbitrary SKILL.md files, which is in progress. Details in [RESULTS](docs/RESULTS.md) and the CHANGELOG under Studies.
+
+## FAQ
+
+**What does Atelier check?**
+Whatever the standard says: required sections and fields, allowed values, lengths and counts, banned terms, figures that reconcile, every specific traced to material the owner supplied, cited evidence that exists in the material, cross-field rules, and judgment rules read by a model and quoted back. The compile report shows which is which before anything runs.
+
+**How is it different from an eval or an optimizer?**
+Evals and optimizers improve the average over many runs. Atelier inspects this output, now, before it ships: which rules it held, which it broke, with the passage as evidence, and what happens next.
+
+**How is it different from a guardrail or a schema check?**
+A guardrail checks a rule a developer wrote. Atelier compiles the rules the experts hold, from their own documents, and states which it can measure, which it can only read, and which it could not capture. A rule a model reads never blocks until it has proved its error rate on the owner's labels.
+
+**Does Atelier change outputs automatically?**
+Only where a measurable rule broke, and only the span that broke it. A repair is kept only if it re-verifies clean on every rule it touched; a rewrite that changes a claim or a figure is refused. A missing section is not a repair: in a run the work is written again; in `verify` it stays blocked and says so. Anything that needs judgment goes to a person with the evidence.
+
+**Who decides what "good" means?**
+The owner of the standard. Every rule is approved before it binds, versioned by content apart from the model, and a model's reading cannot alter it. A new reader model starts unqualified and reports until the owner's labels qualify it.
+
+**Does it add latency?**
+Counted checks run offline in milliseconds. The invented-claim reader and the judgment reader are model calls in the request path when a key is set. There is no asynchronous path yet.
+
+**How do I connect a pipeline?**
+Today: the CLI (`verify` on a file, with the JSON record), the Claude Code hook, the MCP tools, or a CI step. `verify` takes one file per call; a folder is a loop. An SDK and a hosted endpoint are next.
+
+**What happens when I change models?**
+The standard stays. A new writer model is held to the same checks on every output. A new reader model starts unqualified and reports until qualified on the owner's labels. There is no gate yet that re-verifies a new model against labels before it goes live.
+
+**How quickly can I see results?**
+Nothing needs integrating first. One policy and the last outputs of one workflow, in whatever form they are in, come back as findings rule by rule with the passage behind each, and a statement of which rules can be enforced from the first run.
+
+## Documentation
+
+- [USAGE](docs/USAGE.md): every command.
+- [AGENTS.md](AGENTS.md): instructions for coding agents using Atelier.
+- [ARCHITECTURE](docs/ARCHITECTURE.md), [MEASUREMENTS](MEASUREMENTS.md), [RESULTS](docs/RESULTS.md), [COMPARISON](docs/COMPARISON.md), [ROADMAP](docs/ROADMAP.md).
+- [docs/decisions](docs/decisions): the decision records, including [the closing rules](docs/decisions/0012-the-closing-rules.md).
 
 ## Contributing
 
-Code changes are made by the authors only; the license allows no modification by anyone else. The
-contribution that is open to everyone is evidence. Point Atelier at work whose standard you know,
-hold some back, and report what it got right, what sounded right and was wrong, and whether pasting the
-examples did as well; negative results stay in. See [CONTRIBUTING](CONTRIBUTING.md) and [AGENTS.md](AGENTS.md).
+Code changes are made by the authors. The contribution open to everyone is evidence: point Atelier at work whose standard you know, hold some of it back, and report what it got right, what sounded right and was wrong, and whether pasting the examples did as well. Negative results are kept. See [CONTRIBUTING](CONTRIBUTING.md).
+
+## License
+
+Source-available. Unmodified copies may be used and redistributed; modification is reserved to the authors. See [LICENSE](LICENSE).
