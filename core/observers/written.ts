@@ -28,7 +28,9 @@ export const CHECK_SOURCE_MAX = 4000;
 export interface CheckOutcome {
   readonly ok: boolean;
   readonly detail?: string;
-  readonly spans?: readonly { readonly start: number; readonly end: number; readonly why?: string }[];
+  readonly spans?: readonly { readonly start: number; readonly end: number; readonly why?: string;
+    /** the text that corrects the span in place (the value the check computed): applied by code once the check is qualified */
+    readonly replacement?: string }[];
   /** the measured quantity, where the check counts one */
   readonly value?: number;
 }
@@ -65,9 +67,10 @@ export function compileCheck(src: string): { fn: CompiledCheck; problem?: undefi
     if (r === null || r === undefined) return null;
     if (typeof r !== 'object' || typeof (r as { ok?: unknown }).ok !== 'boolean') throw new Error('the check returned no { ok } object');
     const x = r as { ok: boolean; detail?: unknown; spans?: unknown; value?: unknown };
-    const isSpan = (sp: unknown): sp is { start: number; end: number; why?: string } => typeof sp === 'object' && sp !== null && Number.isInteger((sp as { start?: unknown }).start) && Number.isInteger((sp as { end?: unknown }).end);
-    const spans: { start: number; end: number; why?: string }[] = Array.isArray(x.spans) ? (x.spans as unknown[]).filter(isSpan) : [];
-    return { ok: x.ok, ...(typeof x.detail === 'string' ? { detail: x.detail.slice(0, 300) } : {}), spans: spans.map((sp) => ({ start: sp.start, end: sp.end, ...(typeof sp.why === 'string' ? { why: sp.why.slice(0, 200) } : {}) })),
+    const isSpan = (sp: unknown): sp is { start: number; end: number; why?: string; replacement?: unknown } => typeof sp === 'object' && sp !== null && Number.isInteger((sp as { start?: unknown }).start) && Number.isInteger((sp as { end?: unknown }).end);
+    const spans: { start: number; end: number; why?: string; replacement?: unknown }[] = Array.isArray(x.spans) ? (x.spans as unknown[]).filter(isSpan) : [];
+    return { ok: x.ok, ...(typeof x.detail === 'string' ? { detail: x.detail.slice(0, 300) } : {}), spans: spans.map((sp) => ({ start: sp.start, end: sp.end, ...(typeof sp.why === 'string' ? { why: sp.why.slice(0, 200) } : {}),
+      ...(typeof sp.replacement === 'string' && sp.replacement.length <= 400 ? { replacement: sp.replacement } : {}) })),
       ...(typeof x.value === 'number' && Number.isFinite(x.value) ? { value: x.value } : {}) };
   };
   return { fn: compiled };
@@ -81,7 +84,7 @@ export function runCheck(fn: CompiledCheck, text: string, context: CheckContext 
   }
   if (r === null) return { verdict: 'NOT_APPLICABLE', spans: [], value: null, detail: `${what}: nothing in this text to read it on` };
   const spans: Span[] = (r.spans ?? []).filter((sp) => sp.start >= 0 && sp.end > sp.start && sp.end <= text.length)
-    .map((sp) => ({ start: sp.start, end: sp.end, text: text.slice(sp.start, sp.end), why: sp.why ?? what }));
+    .map((sp) => ({ start: sp.start, end: sp.end, text: text.slice(sp.start, sp.end), why: sp.why ?? what, ...(sp.replacement !== undefined ? { replacement: sp.replacement } : {}) }));
   return { verdict: r.ok ? 'MET' : 'VIOLATED', spans: r.ok ? [] : spans, value: r.value ?? null, detail: r.detail ?? (r.ok ? `${what}: held` : `${what}: not held`) };
 }
 

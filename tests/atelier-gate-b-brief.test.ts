@@ -113,6 +113,8 @@ describe('through a run', () => {
     // the brief did not touch the standard; the record carries it; the set-aside step is set aside in the evaluation
     const rec = store.listInvocations({ root: data, skillName: 'review' }).find((i) => i.invocationId === json.invocationId)!;
     expect(rec.settings!.flags.brief).toMatchObject({ by: 'model', setAside: [expect.stringMatching(/./)], unsupported: [] });
+    // the certificate: what the output was held to, and that no error bound is claimed until the owner's audit labels exist
+    expect(rec.settings!.certificate).toMatchObject({ standardVersionHash: expect.stringMatching(/^[0-9a-f]+$/), checks: { total: expect.any(Number), writtenQualified: 0 }, readers: { taste: { labelledMisses: 0, falseBlockUpper95: null } }, errorBound: null });
     expect(rec.settings!.flags.brief!.applies).toHaveLength(2);
     const L = { root: data, skillName: 'review' };
     expect(store.getStandard(L, store.getSkillVersion(L, store.getActive(L)!)!.standardVersionHash)!.requirements.filter((q) => q.provenance === 'EXPERT_STATED')).toHaveLength(3);

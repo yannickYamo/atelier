@@ -547,6 +547,21 @@ export function assertRequestBound(r: RequestBinding, resolvedTask: string): voi
 export interface InvocationSettings {
   /** the Atelier package version that ran */
   readonly atelierVersion: string;
+  /**
+   * THE CERTIFICATE: what this output was held to and by what, so a reader later can see which standard, which
+   * instruments, and at what measured error. The error bound is null until an audit sample of the owner's own
+   * labels, drawn like production, exists; until then the record says so rather than imply one.
+   */
+  readonly certificate?: {
+    readonly standardVersionHash: string;
+    /** the measured rules: counted by a built-in observer, or a written check, qualified or not */
+    readonly checks: { readonly total: number; readonly counted: number; readonly written: number; readonly writtenQualified: number };
+    /** the readers and what they have earned: VETO on these rules, from this many labelled misses at this false-block bound */
+    readonly readers: { readonly taste: { readonly veto: readonly string[]; readonly labelledMisses: number; readonly falseBlockUpper95: number | null } };
+    /** the delivered-error bound on the owner's labels; null, with why, until the audit sample exists */
+    readonly errorBound: { readonly alpha: number; readonly n: number } | null;
+    readonly why: string | null;
+  };
   /** the invented-claim instrument, as it names itself; null when the check was off */
   readonly claimInstrument: string | null;
   /**

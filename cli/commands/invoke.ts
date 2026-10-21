@@ -14,6 +14,7 @@ import { regressions, readAtLength, featureParamsOf, ruleParamsOf, enforcedNever
 import { answerSentences, judgedSituations } from '../../core/loop/answer-claims.js';
 import { groundCarried } from '../../core/loop/grounding.js';
 import { withoutServedNotes } from '../../core/loop/echo.js';
+import { checkQualified } from '../../core/observers/written.js';
 import { SLOT_NOTE } from '../../renderers/agent-skill/render.js';
 import { EXECUTION_BRIEF, briefNote, applyingSteps, setAsideSteps, unresolvedSteps, type BriefStep, selectMoves, type MoveSelection } from '../../core/loop/execution-brief.js';
 import { MOVE_CASES, eligibleMoves } from '../../core/loop/move-cases.js';
@@ -811,7 +812,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
       unresolved: unresolvedSteps(brief.value, briefSteps).map((s) => s.id), unsupported: brief.value.unsupported.map((u) => u.id), contradicted: brief.value.contradicted.map((c) => c.id),
       ...(examplesFirst ? { served: 'examples-first' as const } : {}),
       ...(inferredMethod ? { inferred: true as const } : {}),
-      ...(selection && profile && placement ? { moves: { by: placement.by, mode: movesMode, profile: profile.hash, placed: selection.placed.map((u) => u.id), standing: selection.standing.map((u) => u.id), notPlaced: selection.notPlaced.map((x) => x.id), unresolved: selection.unresolved, budget: selection.budget } } : {}) } : null),
+      ...(selection && profile && placement ? { moves: { by: placement.by, mode: movesMode, profile: profile.hash, placed: selection.placed.map((u) => u.id), standing: selection.standing.map((u) => u.id), notPlaced: selection.notPlaced.map((x) => x.id), unresolved: selection.unresolved, budget: selection.budget } } : {}) } : null, std),
     // A structured output is JSON, not prose: no reading of it means anything against a prose range.
     fid && std && contractFile === null ? (output: string) => fidelityRecord(fid, output, trace, impl.retrieved, applicability(name, std, output, waived, withheld, checks.context, transfer?.doesNotApply), ledger,
       { ...(runSettings ?? fid.release.settings), drafts: nDrafts, editBudget, ...(voiceMode === 'incontext' ? { voice: 'incontext' as const } : { voice: undefined }),
@@ -1015,6 +1016,8 @@ class TasteSession {
   private constructor(
     private readonly L: store.StoreLayout, private readonly std: Standard, readonly asked: string,
     private readonly waiting: ReadonlySet<string>, readonly veto: ReadonlySet<string>,
+    /** what the reader has earned across its rules: labelled misses so far and the bound on its false blocks */
+    readonly pooled: { readonly trials: number; readonly upper95: number },
   ) {}
 
   /** A session when the standard has reading-based rules; null when there is nothing to read. */
@@ -1022,7 +1025,7 @@ class TasteSession {
     const rules = tasteRules(std);
     if (!rules.length) return null;
     const earned = tastePermissions(rules, store.readEvents(L), readerModel());
-    return new TasteSession(L, std, asked, waiting, withoutWaiting(earned.veto, rules, waiting));
+    return new TasteSession(L, std, asked, waiting, withoutWaiting(earned.veto, rules, waiting), { trials: earned.pooled.trials, upper95: earned.pooled.upper95 });
   }
 
   /** Whether the reader has earned the right to act on any rule this run. */
@@ -2580,10 +2583,11 @@ function draftScore(r: Awaited<ReturnType<typeof checkDraftAsync>>, std: Standar
 
 /** What this run was configured with, beyond the binding and the package: enough to re-run a study arm from its record. */
 type BriefFlag = NonNullable<InvocationSettings['flags']['brief']>;
-function settingsFor(checks: Checks, taste: TasteSession | null, nDrafts: number, carryNote = '', brief: BriefFlag | null = null): InvocationSettings {
+function settingsFor(checks: Checks, taste: TasteSession | null, nDrafts: number, carryNote = '', brief: BriefFlag | null = null, std: Standard | null = null): InvocationSettings {
   const temperature = flag('--temperature') === undefined ? undefined : Number(flag('--temperature'));
   return {
     atelierVersion: version(),
+    ...(std ? { certificate: certificateFor(std, taste) } : {}),
     claimInstrument: checks.claimSensor?.instrument ?? null,
     // Read when the record is written, after the run: a reader that degraded mid-run says so here.
     get claim() { return claimInstrumentOf(checks); },
@@ -2595,6 +2599,23 @@ function settingsFor(checks: Checks, taste: TasteSession | null, nDrafts: number
     ...(temperature === undefined ? {} : { temperature }),
     flags: { drafts: nDrafts, noTaste: taste === null, allowUnsourced: argv.includes('--allow-unsourced'), placeholders: checks.placeholders ?? false, ...(argv.includes('--test-run') ? { testRun: true } : {}), ...(carryNote ? { carryNoteHash: sha(carryNote) } : {}),
       ...(brief ? { brief } : {}) },
+  };
+}
+
+/**
+ * THE CERTIFICATE ON THE RECORD: which standard, which instruments and what each has earned, and the error bound on the
+ * owner's labels where one exists. Until an audit sample of their labels drawn like production exists there is none,
+ * and the record says so rather than imply one; "checked" never means more than this says.
+ */
+export function certificateFor(std: Standard, taste: TasteSession | null): NonNullable<InvocationSettings['certificate']> {
+  const measured = std.requirements.filter((r) => r.authority !== 'EXPERT_REJECTED' && r.measurement);
+  const written = measured.filter((r) => r.measurement?.observer === 'CHECK');
+  return {
+    standardVersionHash: std.standardVersionHash,
+    checks: { total: measured.length, counted: measured.length - written.length, written: written.length, writtenQualified: written.filter((r) => checkQualified(r.measurement)).length },
+    readers: { taste: { veto: [...(taste?.veto ?? [])].sort(), labelledMisses: taste?.pooled.trials ?? 0, falseBlockUpper95: taste && taste.pooled.trials > 0 ? Math.round(taste.pooled.upper95 * 1000) / 1000 : null } },
+    errorBound: null,
+    why: 'no delivered-error bound: it needs an audit sample of your own labels, drawn like the work this skill does; the checks and readers above are what this output was held to',
   };
 }
 

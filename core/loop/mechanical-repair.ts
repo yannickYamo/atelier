@@ -13,6 +13,7 @@ import { paragraphSentences, wordsOf } from '../observers/text.js';
 import { protectedRanges, grammarFixing } from '../observers/grammar.js';
 import { numbersIn, namesIn } from './integrity.js';
 import type { Span } from '../observers/registry.js';
+import { checkQualified } from '../observers/written.js';
 
 /**
  * MECHANICAL ERRORS, CORRECTED IN PLACE. Each span the grammar rule flagged with a correction (core/observers/grammar.ts)
@@ -22,8 +23,9 @@ import type { Span } from '../observers/registry.js';
  * corrections themselves, and its figures and names are the same after as before (./integrity.ts). Returns the text,
  * how many spans were corrected, and each change as it was made ("recieve" → "receive"), so every one is recorded.
  */
-export function correctMechanicalErrors(text: string, spans: readonly Span[]): { text: string; corrected: number; changes: string[] } {
-  const guarded = protectedRanges(text);
+export function correctMechanicalErrors(text: string, spans: readonly Span[], opts: { readonly figuresMayChange?: boolean } = {}): { text: string; corrected: number; changes: string[] } {
+  // a figure a qualified check computed is the one correction allowed to touch a figure: the rest of the guard stands
+  const guarded = protectedRanges(text, { figures: !opts.figuresMayChange });
   const fixable = spans.filter((s) => s.replacement !== undefined && s.end > s.start && s.end <= text.length && text.slice(s.start, s.end) === s.text
     && !guarded.some((g) => s.start < g.end && s.end > g.start)).sort((a, b) => b.start - a.start);
   let out = text; let corrected = 0; let lastStart = Infinity; let allowed = 0; const changes: string[] = [];
@@ -47,7 +49,9 @@ export function correctMechanicalErrors(text: string, spans: readonly Span[]): {
   // correction lint by lint; this holds the sum of them to the same line, so nothing they claimed can move.
   const figures = (t: string): string => [...numbersIn(t)].sort().join('|');
   const kept = new Set(namesIn(out));
-  if (figures(out) !== figures(text) || namesIn(text).some((n) => !kept.has(n))) return { text, corrected: 0, changes: [] };
+  // A CORRECTION A QUALIFIED CHECK SUPPLIED may move a figure, and only inside the span it flagged: the text outside
+  // the spans is kept as it was by construction, and the value inside is the one the check computed from the material.
+  if ((!opts.figuresMayChange && figures(out) !== figures(text)) || namesIn(text).some((n) => !kept.has(n))) return { text, corrected: 0, changes: [] };
   return { text: out, corrected, changes };
 }
 
@@ -141,14 +145,20 @@ export function splitLongParagraphs(text: string, max: number): string {
  * under `--fix-grammar` (core/observers/grammar.ts, `grammarFixing`): by default nothing is changed. Each change is
  * recorded by name: "<rule>: N mechanical error(s) corrected: "recieve" → "receive", …".
  */
+/** A rule whose check is a qualified written check that supplied a correction for a span it flagged (core/observers/written.ts). */
+export const correctingCheck = (v: StandardVersion, c: { readonly requirementId: string; readonly observer?: string; readonly result: { readonly spans: readonly Span[] } }): boolean =>
+  c.observer === 'CHECK' && c.result.spans.some((sp) => sp.replacement !== undefined) && checkQualified(v.requirements.find((r) => r.requirementId === c.requirementId)?.measurement ?? null);
+
 export function grammarFixes(v: StandardVersion, report: VerifyReport, text: string, only?: ReadonlySet<string>): { text: string; fixed: string[] } {
-  if (!grammarFixing()) return { text, fixed: [] };
   const broken = new Set(report.checked.filter((c) => acts(c) && c.result.verdict === 'VIOLATED').map((c) => c.requirementId));
   let out = text; const fixed: string[] = [];
   for (const c of report.checked) {
-    if (!broken.has(c.requirementId) || c.observer !== 'GRAMMAR' || (only && !only.has(c.requirementId)) || !v.requirements.some((r) => r.requirementId === c.requirementId)) continue;
-    const g = correctMechanicalErrors(out, c.result.spans);
-    if (g.corrected) { out = g.text; fixed.push(`${c.requirementId}: ${g.corrected} mechanical error(s) corrected: ${g.changes.join(', ')}`); }
+    if (!broken.has(c.requirementId) || (only && !only.has(c.requirementId)) || !v.requirements.some((r) => r.requirementId === c.requirementId)) continue;
+    // a grammar correction only under --fix-grammar; a qualified written check's correction always
+    const fromCheck = correctingCheck(v, c);
+    if (!fromCheck && !(c.observer === 'GRAMMAR' && grammarFixing())) continue;
+    const g = correctMechanicalErrors(out, c.result.spans, { figuresMayChange: fromCheck });
+    if (g.corrected) { out = g.text; fixed.push(`${c.requirementId}: ${g.corrected} ${fromCheck ? 'value(s) corrected by its check' : 'mechanical error(s) corrected'}: ${g.changes.join(', ')}`); }
     // One rule's spans index the text as it was: after a correction moves offsets, the next rule waits for a re-check.
     if (g.corrected) break;
   }

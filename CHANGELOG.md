@@ -42,6 +42,20 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
   "<rules>"` still attaches no check; a rule written as a `### n.` heading is still not a step of a note; the
   rule-polarity reading's floor is still a word pattern (`polarityByWords`), the last one on the method path.
 
+### The correction a qualified check supplies, and the certificate on every record
+
+- **A figure the check computed may be put in place by code.** The integrity guard refuses any rewrite that moves a
+  figure, so a reserve that did not equal the invoices could only be BLOCKED. A written check now supplies the
+  correction for a span it flags (`replacement`, the value it computed from the material); once the check is qualified,
+  the correction is applied in code in the same step as a grammar correction, the figure allowed to change only inside
+  the span the check flagged, and the text re-checked. An unqualified check's correction is shown and never applied.
+  Test: `tests/check-correction.test.ts`.
+- **Every run's record carries a certificate** (`settings.certificate`): the standard's hash; how many rules are checked,
+  by a built-in observer or by a written check, and how many written checks are qualified; what the judgement reader
+  has earned (the rules it holds VETO on, the labelled misses so far, the bound on its false blocks); and the
+  delivered-error bound, which is null with the reason until an audit sample of the owner's own labels, drawn like the
+  work, exists. "Checked" on a record never says more than this block does.
+
 ### A written check earns its say on the owner's examples and their mutants
 
 - **Mutant qualification** (`core/method/mutants.ts`). Before a written check may be enforced it must pass every finished
