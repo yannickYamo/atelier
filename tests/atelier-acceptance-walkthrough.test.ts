@@ -1,7 +1,7 @@
 // tests/atelier-acceptance-walkthrough.test.ts — WHAT A PERSON SEES, IN THE SITUATIONS THAT MATTER, BEFORE PHASE F.
 //
 // One file, one scenario each, read as the person would meet it. Every expected value is read off the scenario, never
-// off the code under test. These close the round of fixes (~/atelier-internal FIX_ROUND_PRE_F.md, F15); the scenarios
+// off the code under test. These close a round of fixes; the scenarios
 // that need a model or a judge (an absent capability asserted about a competitor) are on the roadmap, not here.
 import { describe, it, expect } from 'vitest';
 import { applyStep } from '../core/loop/repair.js';

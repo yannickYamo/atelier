@@ -65,10 +65,15 @@ export function compileCheck(src: string): { fn: CompiledCheck; problem?: undefi
   if (typeof sandbox.__fn !== 'function') return { problem: 'the check is not a function' };
   // EVERY CALL RUNS INSIDE THE TIMED EVALUATION. A function handed out of the context and called from here would run
   // with no limit; so the call is itself a script of the context, and a loop that never ends is stopped there.
-  const call = new Script('(() => { const __p = JSON.parse(__json); return __fn(__p.text, __p.request, __p.material); })()', { filename: 'check-call.js' });
+  // THE RESULT CROSSES BACK AS ONE JSON STRING, MADE INSIDE THE TIMED SCRIPT. An object handed out of the context would
+  // be read by the host after the time limit ended: a getter or a Proxy trap on `ok` ran context code with no limit and
+  // hung the host (confirmed with `get ok() { while (true) {} }` before this line). Serialised inside, every getter runs
+  // under the limit, and the host only ever reads plain data.
+  const call = new Script('(() => { const __p = JSON.parse(__json); const __r = __fn(__p.text, __p.request, __p.material); return __r === undefined ? "null" : JSON.stringify(__r); })()', { filename: 'check-call.js' });
   const compiled: CompiledCheck = (text, ctx) => {
     sandbox.__json = JSON.stringify({ text, request: ctx?.request ?? '', material: (ctx?.material ?? []).map((m) => ({ name: m.name, text: m.text })) });
-    const r: unknown = call.runInContext(context, { timeout: CHECK_TIME_LIMIT_MS });
+    const out: unknown = call.runInContext(context, { timeout: CHECK_TIME_LIMIT_MS });
+    const r: unknown = typeof out === 'string' ? JSON.parse(out) : null;
     if (r === null || r === undefined) return null;
     if (typeof r !== 'object' || typeof (r as { ok?: unknown }).ok !== 'boolean') throw new Error('the check returned no { ok } object');
     const x = r as { ok: boolean; detail?: unknown; spans?: unknown; value?: unknown };

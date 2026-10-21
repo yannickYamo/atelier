@@ -1,4 +1,4 @@
-$ atelier new /home/yamo/atelier-g/bench/standing/domains/claims/examples --method /home/yamo/atelier-g/bench/standing/domains/claims/method.md --name claims --yes --report --model claude-sonnet-5-5
+$ atelier new <repo>/bench/standing/domains/claims/examples --method <repo>/bench/standing/domains/claims/method.md --name claims --yes --report --model claude-sonnet-5-5
 
 (what each step is, a prohibition or a thing to do: read by claude-haiku-5-5.)
 (edits that break each written check's step: written by claude-haiku-5-5: 2: 4, 3: 4, 4: 2, 5: 4, 8: 4.)

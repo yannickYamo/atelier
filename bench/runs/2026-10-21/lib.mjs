@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
 
 export const HERE = dirname(fileURLToPath(import.meta.url));
-export const ROOT = '/home/yamo/atelier-g';
+export const ROOT = join(HERE, '..', '..', '..');
 export const CLI = join(ROOT, 'dist/cli/atelier.mjs');
 export const DOMAINS = join(ROOT, 'bench/standing/domains');
 export const SCRATCH = process.env.STUDY_SCRATCH ?? join(tmpdir(), 'atelier-study-2026-10-21');

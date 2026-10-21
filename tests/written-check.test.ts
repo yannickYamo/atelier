@@ -7,6 +7,14 @@ const HEX = `(text) => { const hits = []; const re = /#[0-9a-fA-F]{3,8}\\b/g; le
 const UNITS = `function check(text) { const nums = [...text.matchAll(/\\b(\\d+)\\s*(min|minutes|h|hours|days?|weeks?)?\\b/g)]; const bare = nums.filter((m) => !m[2]); return { ok: bare.length === 0, detail: bare.length + ' estimate(s) without a unit', spans: bare.map((m) => ({ start: m.index, end: m.index + m[0].length })) }; }`;
 
 describe('nothing of the host reaches a check', () => {
+  it('a check whose result runs code when read is held to the time limit: a getter that never ends does not hang the host', () => {
+    for (const src of ['(text) => ({ get ok() { while (true) {} } })', '(text) => new Proxy({}, { get() { while (true) {} } })', '(text) => ({ ok: true, get detail() { while (true) {} } })']) {
+      const c = compileCheck(src);
+      expect(c.fn, src).toBeTruthy();
+      expect(() => c.fn!('x', { material: [] }), src).toThrow(/timed out|Script execution/);
+    }
+  });
+
   it('a check that climbs a host prototype to the process gets nothing: every object it can reach is the context\'s own', () => {
     const climb = (via: string): string => `(text, request, material) => { const F = ${via}.constructor.constructor; return { ok: false, detail: "leak:" + typeof F("return process")().env }; }`;
     for (const via of ['material', 'material[0]', 'text', 'request', 'arguments', 'this', 'globalThis']) {
