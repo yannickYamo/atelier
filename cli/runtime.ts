@@ -664,6 +664,10 @@ export interface ProposalSet {
   readonly checks?: Readonly<Record<string, { readonly how: 'measure' | 'written'; readonly measurement: Measurement; readonly means: string;
     /** a written check's standing on the answers the owner kept (`--draft-examples`, then `atelier rate`); absent with none */
     readonly qualification?: CheckQualification }>>;
+  /** what was said, kept so the skill can be built again with no need to type it again (`atelier skill --yes`) */
+  readonly said?: string;
+  /** the answers the owner kept that the checks were read and qualified on, as one key */
+  readonly casesKey?: string;
 }
 
 // ── session (one active run per PROJECT; a run is a study, not a session) ─────────────────────
@@ -685,7 +689,7 @@ export interface Session {
    */
   projectDir?: string;
   proposals: Requirement[]; decided: Requirement[];
-  /** the front door's pending proposal, awaiting the person's yes. Cleared on acceptance. */
+  /** the front door's proposal: awaiting the person's yes, then kept with the run it built, so a rebuild reuses the rules they accepted */
   proposalSet?: ProposalSet | null;
   /** frozen at intake. Discovery must never read these; `reservedIds` is what the filter consults. */
   reservation?: Reservation | null;

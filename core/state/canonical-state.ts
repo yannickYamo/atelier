@@ -968,6 +968,29 @@ export const defaultAccepted = (level: LatitudeLevel, kept: readonly Requirement
   (said === 'review' || (said === undefined && level !== 'CREATIVE')) ? []
     : kept.filter((r) => r.authority !== 'EXPERT_REJECTED' && !r.measurement).map((r) => r.requirementId);
 
+/**
+ * THE RULES ACCEPTED AS UNMEASURED IN A NEW VERSION. What the owner said now (`--unmeasured`) decides; otherwise a rule the
+ * previous version knew as unmeasured keeps the standing it had there (found by its words, or by its id where its words
+ * changed), and a rule that was not unmeasured there (new, or one whose check was taken away) gets the level's default.
+ * A rule with a check is never accepted unmeasured.
+ */
+export function acceptedCarried(level: LatitudeLevel, kept: readonly Requirement[], said: 'accept' | 'review' | undefined,
+  prior: Pick<StandardVersion, 'requirements' | 'acceptedUnmeasured' | 'latitude'> | null | undefined): string[] {
+  const fresh = new Set(defaultAccepted(level, kept, said));
+  if (said !== undefined || !prior) return [...fresh];
+  const was = new Set(prior.acceptedUnmeasured ?? []);
+  // What the previous level proposed and nobody changed is that level's default, not a choice: a new level proposes its own.
+  const proposed = defaultAccepted(latitudeOf(prior), prior.requirements);
+  if (latitudeOf(prior) !== level && proposed.length === was.size && proposed.every((id) => was.has(id))) return [...fresh];
+  const words = new Set(kept.map((r) => r.statement));
+  const priorOf = (r: Requirement): Requirement | undefined => prior.requirements.find((p) => p.statement === r.statement)
+    ?? prior.requirements.find((p) => p.requirementId === r.requirementId && !words.has(p.statement));
+  return kept.filter((r) => r.authority !== 'EXPERT_REJECTED' && !r.measurement).filter((r) => {
+    const p = priorOf(r);
+    return p && !p.measurement ? was.has(p.requirementId) : fresh.has(r.requirementId);
+  }).map((r) => r.requirementId);
+}
+
 /** The level a standard is held at: its own, or GROUNDED for one minted before latitude existed. */
 export const latitudeOf = (v: Pick<StandardVersion, 'latitude'> | null | undefined): LatitudeLevel => v?.latitude?.level ?? DEFAULT_LATITUDE;
 

@@ -162,7 +162,7 @@ export function rate(): void {
   if (drafted) {
     store.setDrafted(drafted.L, store.getDrafted(drafted.L).map((d) => (d.id === id ? { ...d, kept: ship, why: why.join(' ').trim() || null, rule } : d)));
     const all = store.getDrafted(drafted.L);
-    console.log(`Recorded: ${id} ${ship ? 'kept as finished work of yours' : `rejected${rule ? `, as breaking ${rule}` : ''}`}. ${all.filter((d) => d.kept === null).length} drafted answer(s) left to rate. Build again to qualify the skill's checks on the ones you kept: atelier skill "<your rules>" --yes --name ${drafted.L.skillName}`);
+    console.log(`Recorded: ${id} ${ship ? 'kept as finished work of yours' : `rejected${rule ? `, as breaking ${rule}` : ''}`}. ${all.filter((d) => d.kept === null).length} drafted answer(s) left to rate. Build again to qualify the skill's checks on the ones you kept: atelier skill --yes --name ${drafted.L.skillName}`);
     return;
   }
   const { L, rec } = locate(id);

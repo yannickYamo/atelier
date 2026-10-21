@@ -13,7 +13,7 @@ import { featureOf } from '../core/observers/features.js';
 import { overlapIndex, suppliedWording, STANDARD_WORDING_PIECES } from '../core/observers/overlap.js';
 import { bandsFor } from '../core/fidelity/profile.js';
 import { localiseBands } from '../core/fidelity/context.js';
-import { QUALIFIED_READERS, DISPUTED_WHY, NO_MATERIAL } from '../core/loop/claim-extract.js';
+import { QUALIFIED_READERS, DISPUTED_WHY, NO_MATERIAL, type ClaimAct } from '../core/loop/claim-extract.js';
 import type { EvalSummary } from '../core/eval/summary.js';
 import { buildRecord } from '../core/eval/record-build.js';
 import { standingOf, type EvaluationRecord } from '../core/eval/record.js';
@@ -39,8 +39,10 @@ export interface RunEvalInput {
   readonly claimsOff: boolean;
   /** answers list specifics by design; the patterns decide work and result claims */
   readonly answers: boolean;
-  /** the kind of work, when the claim check was never measured on it (core/loop/claim-extract.ts, `unmeasuredKind`) */
+  /** why the claim check does not cut (core/loop/claim-extract.ts, `claimAction`), or null where it does */
   readonly unmeasured?: string | null;
+  /** what an untraced specific met on this run (core/loop/claim-extract.ts, `claimAction`) */
+  readonly claimAct?: ClaimAct;
   /** what the person supplied for the run (the request and the bound material): wording quoted from it is not copying */
   readonly material?: string;
   readonly profile: FidelityProfile | null;
@@ -101,7 +103,7 @@ export function buildRunEval(x: RunEvalInput): EvalSummary {
   // The measured rates belong to one model at one prompt version, and only when it is the one deciding (not in an
   // answer, where patterns decide what is cut): no borrowed rates for an unqualified reader or the pattern check.
   const version = x.sensor?.version ?? null;
-  const deciding = x.sensor?.qualified && x.sensor.gate === 'reader' && !x.sensor.degraded && !x.answers && !x.unmeasured;
+  const deciding = x.sensor?.qualified && x.sensor.gate === 'reader' && !x.sensor.degraded && !x.answers && claimDecides(x.claimAct, x.unmeasured ?? null, x.sensor);
   const q = deciding && version ? QUALIFIED_READERS.find((r) => r.version === version && r.measured && (x.sensor?.instrument.includes(r.model) ?? false)) : undefined;
   // COPYING: the longest run of words shared with a piece of the author's the skill serves.
   const voice = store.getVoice(x.L);
@@ -121,7 +123,7 @@ export function buildRunEval(x: RunEvalInput): EvalSummary {
   if (longest !== null && longest >= copyLimit(voice)) reasons.push(`a ${longest}-word run copied from your pieces`);
   if (x.request?.met === false) reasons.push(`the length the request asks for was not met (${x.request.detail})`);
   // THE RECORD (core/eval/record.ts): the same facts, each with what was observed of it, judged in one place.
-  const record = x.contract || !std ? undefined : recordForText({ L: x.L, readings: x.readings, std, text: rec.output, report: final, sensor: x.sensor, claimsOff: x.claimsOff, answers: x.answers, unmeasured: x.unmeasured ?? null,
+  const record = x.contract || !std ? undefined : recordForText({ L: x.L, readings: x.readings, std, text: rec.output, report: final, sensor: x.sensor, claimsOff: x.claimsOff, answers: x.answers, unmeasured: x.unmeasured ?? null, act: x.claimAct,
     level: rec.settings?.certificate?.latitude?.run, material: x.material,
     waived: new Map(x.applicability.filter((a) => a.status === 'WAIVED').map((a) => [a.requirementId, a.why ?? 'set aside for this run'])), request: x.request ?? null, cut: counts.cut,
     lostToLength: rec.repair?.unmeasured ?? [] });
@@ -218,7 +220,7 @@ const isClaimLine = (id: string): boolean => id.startsWith('UNSOURCED') || CLAIM
  * about the same words under the same standard.
  */
 export function recordForText(x: { L: store.StoreLayout; std: StandardVersion; text: string; report: VerifyReport | null; sensor: ClaimSensor | undefined; claimsOff: boolean; answers: boolean;
-  unmeasured: string | null; waived?: ReadonlyMap<string, string>; request?: { asked: string; met: boolean | null; detail: string } | null; cut?: number;
+  unmeasured: string | null; /** what an untraced specific met (core/loop/claim-extract.ts, `claimAction`) */ act?: ClaimAct; waived?: ReadonlyMap<string, string>; request?: { asked: string; met: boolean | null; detail: string } | null; cut?: number;
   /** rules the draft was read on that the text is too short to read (core/state/canonical-state.ts, `RepairRecord.unmeasured`) */
   lostToLength?: readonly string[];
   /** the taste reader's reading of this text, rule by rule, with whether it may act (core/eval/record-build.ts, `RuleReading`) */
@@ -230,10 +232,9 @@ export function recordForText(x: { L: store.StoreLayout; std: StandardVersion; t
   const line = (id: string): RuleCheck | undefined => x.report?.checked.find((c) => c.requirementId === id);
   const spans = (id: string): number => (line(id)?.result.verdict === 'VIOLATED' ? line(id)?.result.spans.length ?? 0 : 0);
   const state = x.claimsOff ? 'off' as const : !x.report || line(UNREAD) ? 'not-checked' as const : 'checked' as const;
-  // WHETHER THE CLAIM CHECK MAY DECIDE IS DECIDED ONCE (core/loop/claim-extract.ts, `listsBecause`): where it may,
-  // what it finds lands on the gating line and fails the text; where it may not, it is listed. The record says the same.
-  // (And where the check did fail the text on its gating line, it decided: the record cannot say less than the check.)
-  const deciding = !x.unmeasured || spans('UNSOURCED') > 0;
+  // WHETHER THE CLAIM CHECK DECIDES (`claimDecides`); where the check did fail the text on its gating line, it decided:
+  // the record cannot say less than the check.
+  const deciding = claimDecides(x.act, x.unmeasured, x.sensor) || spans('UNSOURCED') > 0;
   const voice = store.getVoice(x.L); const served = copyGuardPieces(voice);
   // WHAT THE PERSON SUPPLIED IS NOT COPYING: a transcript quoted as evidence shares runs with every example that quoted it.
   const shared = served.length ? overlapIndex(served, [...(voice?.standardWording ?? []), ...suppliedWording(x.material ?? '')], { words: true })(x.text) : null;
@@ -249,6 +250,19 @@ export function recordForText(x: { L: store.StoreLayout; std: StandardVersion; t
     ...(x.std.latitude || x.level ? { latitude: x.level ?? latitudeOf(x.std) } : {}), accepted: new Set(x.std.acceptedUnmeasured ?? []),
     replaced: new Set(x.request ? x.std.requirements.filter((r) => x.waived?.has(r.requirementId) && r.measurement?.observer === 'LENGTH' && !r.measurement.params.in).map((r) => r.requirementId) : []),
   });
+}
+
+/**
+ * DOES THE CLAIM CHECK DECIDE ON THIS TEXT? Its action at the level (core/loop/claim-extract.ts, `claimAction`) says what
+ * a finding meets, not whether a text with none can be trusted: with material bound, a check that cuts, blocks or flags
+ * decides, provided the instrument gating is one a result stands behind (the pattern check, or a qualified reader; never
+ * an unqualified reader made to gate). A check that only lists (creative) decides nothing, nor does one with nothing
+ * bound. What it finds open still sends the run to review (core/eval/record-build.ts).
+ */
+export function claimDecides(act: ClaimAct | undefined, why: string | null, sensor: Pick<ClaimSensor, 'gate' | 'qualified'> | undefined): boolean {
+  if (why === NO_MATERIAL) return false;
+  if ((act ?? (why ? 'list' : 'cut')) === 'list') return false;
+  return !sensor || sensor.gate === 'pattern' || sensor.qualified;
 }
 
 /** Flags on the public-facts line that only one of the two reads raised. */

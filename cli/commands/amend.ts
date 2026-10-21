@@ -16,7 +16,7 @@ import { selectForProbing, prepareProbe, foldAnswer } from '../../core/discovery
 import type { Budget } from '../../core/inference/client.js';
 import type { Measurement, Requirement, StandardVersion } from '../../core/state/canonical-state.js';
 import { fitToCorpus, piecesBreaking, restateLimits } from '../../core/observers/derive.js';
-import { authorityStateOf, assertSupersessionRecorded, carriedQualifications, carriedSettings, standardHashOf, defaultAccepted, latitudeOf } from '../../core/state/canonical-state.js';
+import { authorityStateOf, assertSupersessionRecorded, carriedQualifications, carriedSettings, standardHashOf, acceptedCarried, latitudeOf } from '../../core/state/canonical-state.js';
 import { parseLatitude } from '../../core/observers/latitude.js';
 import { unmeasuredSaid, latitudeLine } from '../latitude.js';
 import { compileArchitecture } from '../../core/architecture/compile.js';
@@ -82,7 +82,8 @@ export function amend(): void {
   const level = latitudeAsked === undefined ? null : parseLatitude(latitudeAsked) ?? die(`--latitude takes strict, grounded or creative, not "${latitudeAsked}".`);
   const kept = carriedSettings(prev, requirements);
   const latitude = level ? { level, evidence: [], by: 'owner' as const } : kept.latitude;
-  const accepted = unmeasuredAsked !== undefined || level ? defaultAccepted(latitudeOf({ latitude }), requirements, unmeasuredAsked) : kept.acceptedUnmeasured ?? [];
+  // What the owner accepted unmeasured is carried; a rule that gains a check leaves it, one that loses its check gets the level's default.
+  const accepted = acceptedCarried(latitudeOf({ latitude }), requirements, unmeasuredAsked, prev);
   const body = { evidenceId: prev.evidenceId, workType: prev.workType, requirements, ...(latitude ? { latitude } : {}), ...(accepted.length ? { acceptedUnmeasured: accepted } : {}) };
   if (settingOnly) console.log(latitudeLine(body));
   // An amended check is a new check: its standing is not carried; the others keep theirs.

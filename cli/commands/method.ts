@@ -22,7 +22,7 @@ import { METHOD_UNITS, unitFloor, describeUnit, type DecisionUnit } from '../../
 import { STEP_CHECK, STEP_CHECK_REPAIR, planOf, stepCheckInput, heldByPolarity, judgement, type StepPlan, type StepToCheck, type StepCheck, type ExampleCase } from '../../core/method/step-check.js';
 import { measure } from '../../core/observers/registry.js';
 import { STEP_MUTANTS, mutate, qualifyCheck, describeQualification } from '../../core/method/mutants.js';
-import { examplesKey, frozenFor, toFreeze } from '../../core/method/freeze.js';
+import { examplesKey, frozenFor, toFreeze, frozenKinds } from '../../core/method/freeze.js';
 import { latestRatings } from '../../core/state/eval-store.js';
 import { countWords } from '../../core/eval/size.js';
 import { skillNameFrom } from '../../renderers/agent-skill/render.js';
@@ -279,11 +279,14 @@ export async function method(): Promise<void> {
   await ensureGrammar();
   // WHAT EACH STATED STEP IS, READ ONCE (core/observers/rule-polarity.ts): a prohibition or a thing to do. Read first, so
   // the check reading can be held against it: a prohibition is never given a check that requires what it forbids.
-  const stepKindsRead = await stepKinds(stepsOf(note).map((st) => st.text));
+  // Frozen with each step's check (core/method/freeze.ts): a step whose words and examples are unchanged is not read again.
+  const frozenNow = store.getFrozenChecks(LN);
+  const kindsKept = frozenKinds(stepsOf(note), examplesKey(cases), frozenNow);
+  const stepKindsRead = await stepKinds(stepsOf(note).map((st) => st.text), kindsKept);
   // WHICH CHECK EACH STATED STEP CARRIES, READ ONCE (core/method/step-check.ts): a measurement from the menu, a check the
   // model writes, or judgement; grounded on the owner's examples by code. With no model every step is a judgement.
   const planSteps = stepsOf(note).map((st, i) => ({ id: String(i + 1), text: st.text, under: st.under }));
-  const checksPlan = await stepPlan(planSteps, cases, stepKindsRead, { frozen: store.getFrozenChecks(LN), rejected: rejectedOutputs(LN) });
+  const checksPlan = await stepPlan(planSteps, cases, stepKindsRead, { frozen: frozenNow, rejected: rejectedOutputs(LN) });
   const across = proposalsAcross(note, cases, checksPlan);
   // A WRITTEN CHECK EARNS ITS SAY (core/method/mutants.ts): it must pass every example and catch the edits that break
   // only its step; until then it is kept, shown with what it caught, and enforced nowhere. Its standing is said beside it.
@@ -318,7 +321,10 @@ export async function method(): Promise<void> {
   // built with it: checked and shown on every run, blocking nothing until they confirm it (--yes) or change the
   // method. A mismatch between a method and its examples is the ordinary state of someone's working notes.
   const disputed = proposals.filter((p) => p.origin === 'STATED' && p.conflict); const confirmed = argv.includes('--yes');
-  if (again) { archiveSession(); s = loadSession(); }
+  // THE SAME SKILL BUILT AGAIN IS A NEW SET OF DECISIONS, NEVER ADDED TO THE LAST ONE'S. The run set aside may come back
+  // (a project copied with its store takes a copy of the run that built the skill: cli/runtime.ts, `adoptMovedRun`); its
+  // decisions and their standing are the previous version's, and the steps are decided again below, every one of them.
+  if (again) { archiveSession(); s = { ...loadSession(), proposals: [], decided: [], qualifications: {} }; }
 
   // ── THE OWNER'S STEPS AS THEIR OWN, WHAT THE EXAMPLE SHOWS AS APPROVED AND SHOWN ──────
   // WHAT EACH STEP IS, READ ONCE: a prohibition or a thing to do. The reader sees every step in one call; without a
@@ -394,7 +400,7 @@ export async function method(): Promise<void> {
   try { ratifyClose(); await build(name); } catch (e) { console.log = log; for (const l of said) console.log(l); throw e; } finally { console.log = log; }
   // THE CHECKS THIS BUILD RATIFIED ARE FROZEN (core/method/freeze.ts): the next build keeps each while its step and the
   // examples are unchanged.
-  if (checksPlan) store.putFrozenChecks(LN, toFreeze(planSteps, Object.fromEntries(planSteps.flatMap((st) => { const c = checksPlan.get(st.text); return c ? [[st.id, c]] : []; })), examplesKey(cases)));
+  if (checksPlan) store.putFrozenChecks(LN, toFreeze(planSteps, Object.fromEntries(planSteps.flatMap((st) => { const c = checksPlan.get(st.text); return c ? [[st.id, c]] : []; })), examplesKey(cases), stepKindsRead.byModel));
   // THE UNITS, BESIDE THE STANDARD THEY WERE READ FROM, never inside it: keyed by requirement id under the standard's
   // hash, so a reading moves no standard and a rebuild under the same standard finds them (core/state/store.ts).
   if (units.size) {
@@ -583,12 +589,17 @@ export function rejectedOutputs(L: store.StoreLayout): Map<string, string[]> {
   return out;
 }
 
-/** The kind of every step the owner wrote or their example showed, read in one call where a model is set up; a thing to do where none is, said in --report. */
-async function stepKinds(statements: readonly string[], known: ReadonlyMap<string, 'BOUNDARY' | 'GENERATIVE'> = new Map()): Promise<Map<string, 'BOUNDARY' | 'GENERATIVE'>> {
+/**
+ * The kind of every step the owner wrote or their example showed, read in one call where a model is set up; a thing to do
+ * where none is, said in --report. `byModel` is what a model read now, with `known` (kept from a build where one did): what may be frozen.
+ */
+async function stepKinds(statements: readonly string[], known: ReadonlyMap<string, 'BOUNDARY' | 'GENERATIVE'> = new Map()): Promise<Map<string, 'BOUNDARY' | 'GENERATIVE'> & { byModel: Map<string, 'BOUNDARY' | 'GENERATIVE'> }> {
   const unique = [...new Set(statements.map((t) => t.trim()).filter(Boolean))].filter((t) => !known.has(t));
   const input = { statements: unique.map((text, i) => ({ id: `r${i + 1}`, text })) };
   const noModel = !canReach('discovery') || argv.includes('--no-model');
   const d = await readContext(RULE_POLARITY, input, noModel ? null : contextReaderClient(), noModel ? null : contextReaderModel(), { spentUsd: 0, capUsd: 0.1, maxCalls: 1 });
   if (argv.includes('--report') && unique.length) console.log(`(what each step is, a prohibition or a thing to do: ${d.by === 'model' ? `read by ${contextReaderModel()}` : d.by === 'code' ? 'nothing to read' : `not read, each taken as a thing to do (${d.why})`}.)`);
-  return new Map([...known, ...input.statements.map((s): [string, 'BOUNDARY' | 'GENERATIVE'] => [s.text, d.value[s.id] ?? UNREAD_KIND])]);
+  const read = input.statements.map((s): [string, 'BOUNDARY' | 'GENERATIVE'] => [s.text, d.value[s.id] ?? UNREAD_KIND]);
+  const byModel = new Map([...known, ...(d.by === 'model' ? read : [])]);
+  return Object.assign(new Map([...known, ...read]), { byModel });
 }

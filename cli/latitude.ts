@@ -4,7 +4,8 @@
 // kept in the run until the close mints it into the standard; said in one line with how to change it. A continuation
 // keeps what was read. At a run: the skill's level, tightened by the request where the reading quotes the request.
 
-import { argv, flag, loadSession, saveSession, canReach, contextReaderClient, contextReaderModel } from './runtime.js';
+import { DATA, argv, flag, loadSession, saveSession, canReach, contextReaderClient, contextReaderModel } from './runtime.js';
+import * as store from '../core/state/store.js';
 import { readContext } from '../core/inference/reading.js';
 import { LATITUDE, REQUEST_LATITUDE, parseLatitude, type LatitudeInput } from '../core/observers/latitude.js';
 import type { Latitude, LatitudeLevel, StandardVersion } from '../core/state/canonical-state.js';
@@ -22,8 +23,11 @@ export async function settleLatitude(input: LatitudeInput): Promise<Latitude> {
   const owned = parseLatitude(asked);
   if (asked !== undefined && !owned) console.log(`(--latitude takes strict, grounded or creative; "${asked}" is none of them, so the level is read from your work.)`);
   let lat: Latitude;
+  // THE OWNER'S LEVEL OUTLIVES THE RUN THAT SET IT: the skill built again keeps it (a level read by a model is read again).
+  const set = builtStandard(s.skillName)?.latitude;
   if (owned) lat = { level: owned, evidence: [], by: 'owner' };
   else if (s.latitude) return s.latitude;
+  else if (set?.by === 'owner') lat = set;
   else {
     const off = noModel();
     const d = await readContext(LATITUDE, input, off ? null : contextReaderClient(), off ? null : contextReaderModel(), { spentUsd: 0, capUsd: 0.05, maxCalls: 1 });
@@ -33,6 +37,14 @@ export async function settleLatitude(input: LatitudeInput): Promise<Latitude> {
   }
   saveSession({ ...loadSession(), latitude: lat });
   return lat;
+}
+
+/** The standard the skill of this name is built on now, or null before its first build. */
+export function builtStandard(skillName: string | null | undefined): StandardVersion | null {
+  if (!skillName) return null;
+  const L = { root: DATA, skillName }; const active = store.getActive(L);
+  const sv = active ? store.getSkillVersion(L, active) : null;
+  return sv ? store.getStandard(L, sv.standardVersionHash) : null;
 }
 
 /** The unmeasured-rules choice the owner typed, if any. */

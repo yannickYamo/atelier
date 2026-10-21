@@ -58,6 +58,8 @@ export interface StepCheck {
   readonly agreed?: { readonly of: number; readonly same: number };
   /** kept from the build that ratified it: the step's words and the examples are unchanged, so it was not read again (./freeze.ts) */
   readonly frozen?: true;
+  /** what the step is, a prohibition or a thing to do, as the reading that was frozen with the check said (./freeze.ts) */
+  readonly kind?: 'BOUNDARY' | 'GENERATIVE';
   readonly by: 'model' | 'floor';
 }
 export type StepCheckOutput = Readonly<Record<string, StepCheck>>;

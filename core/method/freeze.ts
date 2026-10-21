@@ -25,12 +25,23 @@ export function frozenFor(steps: readonly StepToCheck[], examples: string, froze
   return new Map(steps.flatMap((st) => { const f = frozen[freezeKey(st.text, examples)]; return f ? [[st.id, { ...f, frozen: true as const }]] : []; }));
 }
 
-/** What a build freezes: every check a model read, by its key. A floor check is left to be read again. */
-export function toFreeze(steps: readonly StepToCheck[], chosen: Readonly<Record<string, StepCheck>>, examples: string): Record<string, StepCheck> {
+/**
+ * What a build freezes: every check a model read, by its key, with what the step is (a prohibition or a thing to do) where
+ * a model read that too: the kind is in the standard and its hash, so read again it moved the hash of an unchanged
+ * method. A floor check is left to be read again.
+ */
+export function toFreeze(steps: readonly StepToCheck[], chosen: Readonly<Record<string, StepCheck>>, examples: string,
+  kinds: ReadonlyMap<string, 'BOUNDARY' | 'GENERATIVE'> = new Map()): Record<string, StepCheck> {
   return Object.fromEntries(steps.flatMap((st) => {
     const c = chosen[st.id];
     if (c?.by !== 'model') return [];
     const { frozen: _f, ...kept } = c; void _f;
-    return [[freezeKey(st.text, examples), kept]];
+    const kind = kinds.get(st.text.trim());
+    return [[freezeKey(st.text, examples), { ...kept, ...(kind ? { kind } : {}) }]];
   }));
+}
+
+/** The kinds frozen with the checks of steps whose words and examples are unchanged, by the step's words. */
+export function frozenKinds(steps: readonly { readonly text: string }[], examples: string, frozen: Readonly<Record<string, StepCheck>>): Map<string, 'BOUNDARY' | 'GENERATIVE'> {
+  return new Map(steps.flatMap((st) => { const k = frozen[freezeKey(st.text, examples)]?.kind; return k ? [[st.text.trim(), k] as const] : []; }));
 }

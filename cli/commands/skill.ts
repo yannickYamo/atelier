@@ -143,7 +143,10 @@ interface Proposed {
 }
 
 export async function skill(): Promise<void> {
-  const prompt = flag('--want') ?? positional([]) ?? null;
+  // BUILT AGAIN WITH NOTHING SAID: the rules the person accepted for this skill, kept with the run that built it.
+  const before = loadSession();
+  const keptSaid = before.run.state === 'BUILT' && before.skillName === skillNameFrom(flag('--name') ?? basename(process.cwd())) ? before.proposalSet?.said ?? null : null;
+  const prompt = flag('--want') ?? positional([]) ?? keptSaid;
   const corpus = flag('--from') ?? null;
   const decision = routeFor(prompt, corpus);
 
@@ -180,9 +183,18 @@ export async function skill(): Promise<void> {
   const LK: store.StoreLayout = built;
   const keptDrafts = store.getDrafted(LK).filter((d) => d.kept === true);
   const keptCases = keptDrafts.map((d) => ({ id: d.id, task: d.request, material: [], reference: d.answer }));
-  const promptHash = sha(`${prompt ?? ''}${keptDrafts.length ? `\u0000${keptDrafts.map((d) => d.id).join(',')}` : ''}`);
+  // THE RULES ARE KEYED BY WHAT WAS SAID; THE CHECKS BY THE ANSWERS KEPT. A rule set accepted is never proposed again for the
+  // same words: answers kept since change which check each rule carries, read again here, and never the rules.
+  const promptHash = sha(prompt ?? '');
+  const casesKey = sha(keptDrafts.map((d) => `${d.id}\u0000${d.answer}`).join('\u0001'));
   let s = loadSession();
   let pset: ProposalSet | null = s.proposalSet?.promptHash === promptHash ? (s.proposalSet ?? null) : null;
+  if (pset && (pset.casesKey ?? sha('')) !== casesKey) {
+    const rules = pset.rules;
+    console.log(`(the rules you accepted, kept; which check each carries is read again on the ${keptCases.length} answer(s) you kept)\n`);
+    pset = { ...pset, checks: await checksFor(rules, keptCases, LK), casesKey };
+    s = { ...s, proposalSet: pset }; saveSession(s);
+  }
 
   if (!pset) {
     const client = clientFor(proposerModel());
@@ -221,9 +233,8 @@ export async function skill(): Promise<void> {
     // builds): read now, kept with the proposal, so `--yes` asks nothing more. With no finished example to ground on, a
     // listed measurement is kept where the draws agree; a written check reports until the person gives examples it can
     // be qualified on; judgement otherwise. The rule's words are the person's and are never changed.
-    const plan = await stepPlan(rules.map((p, i) => ({ id: String(i + 1), text: p.statement, under: null })), keptCases, new Map(rules.map((p) => [p.statement, p.kind])), { rejected: rejectedOutputs(LK) });
-    const checks = Object.fromEntries(rules.flatMap((p) => { const c = plan?.get(p.statement); return c && c.how !== 'judgement' && c.measurement ? [[p.statement, { how: c.how, measurement: c.measurement, means: c.means, ...(c.qualification ? { qualification: c.qualification } : {}) }]] : []; }));
-    pset = { proposalSetHash: sha(JSON.stringify(rules)), promptHash, workType, rules, ...(form ? { form } : {}), ...(Object.keys(checks).length ? { checks } : {}) };
+    const checks = await checksFor(rules, keptCases, LK);
+    pset = { proposalSetHash: sha(JSON.stringify(rules)), promptHash, workType, rules, ...(form ? { form } : {}), ...(checks ? { checks } : {}), said: prompt ?? '', casesKey };
     s = { ...s, proposalSet: pset, latitude: null };
     saveSession(s);
     // HOW STRICTLY OUTPUT IS HELD, read with the proposal from what they said (cli/latitude.ts), so `--yes` asks nothing more.
@@ -273,7 +284,9 @@ export async function skill(): Promise<void> {
   // `decide`. An ungrounded one is the machine's reading the person just approved — ratified, and
   // under the source-aware default it is shown, not instructed, until they declare it. Every ruling
   // lands in the ledger, one record per rule.
-  const nextId = authoredIdAllocator(s);
+  // A SKILL BUILT AGAIN IS DECIDED AGAIN, EVERY RULE: this acceptance replaces the last one's decisions, never adds to them.
+  const again = s.run.state === 'BUILT';
+  const nextId = authoredIdAllocator(again ? { ...s, proposals: [], decided: [] } : s);
   const bases: Requirement[] = pset.rules.map((p) => ({
     requirementId: nextId(), statement: p.statement,
     appliesWhen: p.appliesWhen,
@@ -297,7 +310,7 @@ export async function skill(): Promise<void> {
   });
   // What each written check earned on the answers the owner kept, beside the standard (outside its hash).
   const qualifications = Object.fromEntries(decidedNow.flatMap((q) => { const c = pset.checks?.[q.statement]; return c?.qualification ? [[q.requirementId, c.qualification]] : []; }));
-  saveSession({ ...s, decided: [...s.decided, ...decidedNow], ledger, proposalSet: null, ...(Object.keys(qualifications).length ? { qualifications: { ...s.qualifications, ...qualifications } } : {}) });
+  saveSession({ ...s, decided: again ? decidedNow : [...s.decided, ...decidedNow], ledger, proposalSet: pset, qualifications: { ...(again ? {} : s.qualifications), ...qualifications } });
 
   if (decision.route === 'HYBRID') {
     console.log('\nNow reading the work for what you did not say.\n');
@@ -321,6 +334,8 @@ export async function skill(): Promise<void> {
   }
   // The latitude read with the proposal, or `--latitude` given now: no reading is made at acceptance.
   await settleLatitude({ purpose: workType, method: pset.rules.map((r) => r.statement).join('\n'), examples: keptCases.map((c) => c.reference) });
+  // Built again, the new version says why it supersedes the last, unless the person said it themselves.
+  if (again && !argv.includes('--reason')) argv.push('--reason', keptDrafts.length ? 'built again on the answers you kept' : 'built again from your rules');
   ratifyClose();
   await build(flag('--name') ?? basename(process.cwd()));
   // BUILT FROM RULES ALONE, IT SAYS SO, AND OFFERS DRAFTS (core/method/draft-examples.ts): with no finished work, a check
@@ -330,6 +345,13 @@ export async function skill(): Promise<void> {
     console.log(`\nBuilt from your rules alone, with no finished work: a check written for a rule reports and blocks nothing until it is qualified on answers you keep.`
       + `\n  Ten answers drafted for you to keep or reject: atelier skill ${JSON.stringify(prompt ?? '')} --name ${LK.skillName} --draft-examples`);
   }
+}
+
+/** Which check each stated rule carries (core/method/step-check.ts, the plan `atelier new --method` builds), read on the answers kept. */
+async function checksFor(rules: readonly ProposedRule[], cases: readonly { id: string; task: string; material: never[]; reference: string }[], L: store.StoreLayout): Promise<ProposalSet['checks']> {
+  const plan = await stepPlan(rules.map((p, i) => ({ id: String(i + 1), text: p.statement, under: null })), cases, new Map(rules.map((p) => [p.statement, p.kind])), { rejected: rejectedOutputs(L) });
+  const checks = Object.fromEntries(rules.flatMap((p) => { const c = plan?.get(p.statement); return c && c.how !== 'judgement' && c.measurement ? [[p.statement, { how: c.how, measurement: c.measurement, means: c.means, ...(c.qualification ? { qualification: c.qualification } : {}) }]] : []; }));
+  return Object.keys(checks).length ? checks : undefined;
 }
 
 /** Ten answers drafted by the writer, kept for the owner to rate one by one; nothing is kept until they say so. */

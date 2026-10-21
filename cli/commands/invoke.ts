@@ -874,7 +874,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
     const finalReport = !std || contractFile !== null ? null : kept?.output === rec.output ? kept.report
       : await checkDraftAsync(name, std, rec.output, checks).catch(() => null);
     evaluation = buildRunEval({ L, rec, std, sensor: checks.claimSensor, claimsOff: argv.includes('--allow-unsourced'), readings: taste?.readingsOf(rec.output),
-      answers: checks.format?.claims === 'list', unmeasured: checks.listsBecause ?? null, material: checks.evidence ?? '', profile: fid?.profile ?? null,
+      answers: checks.format?.claims === 'list', unmeasured: checks.listsBecause ?? null, claimAct: checks.claimAct, material: checks.evidence ?? '', profile: fid?.profile ?? null,
       format: { words: formatAsked ?? null, shape, withheld: presentationWithheld }, taste: tasteMonitor, moves: movesMonitor, costUsd: spent,
       // Where the cost went (core/inference/client.ts, `SpendPurpose`) and what the writer was sent, in words.
       spend: spentBy,
