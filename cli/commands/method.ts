@@ -19,7 +19,7 @@ import { DATA, argv, die, flag, positional, loadSession, saveSession, archiveSes
 import * as store from '../../core/state/store.js';
 import { resetStages } from '../stages.js';
 import { METHOD_UNITS, unitFloor, describeUnit, type DecisionUnit } from '../../core/method/decision-units.js';
-import { STEP_CHECK, planOf, stepCheckInput, type StepPlan, type StepToCheck, type ExampleCase } from '../../core/method/step-check.js';
+import { STEP_CHECK, planOf, stepCheckInput, heldByPolarity, type StepPlan, type StepToCheck, type ExampleCase } from '../../core/method/step-check.js';
 import { checkQualified } from '../../core/observers/written.js';
 import { countWords } from '../../core/eval/size.js';
 import { normalizeClass, CLASS_ALIASES } from '../../core/observers/doc-class.js';
@@ -292,9 +292,12 @@ export async function method(): Promise<void> {
   const { folder, cases } = readExamples(goldenPath, notePath ?? '');
   // The grammar engine, before the examples are read: their vocabulary and dialect are read off them by it.
   await ensureGrammar();
+  // WHAT EACH STATED STEP IS, READ ONCE (core/observers/rule-polarity.ts): a prohibition or a thing to do. Read first, so
+  // the check reading can be held against it: a prohibition is never given a check that requires what it forbids.
+  const stepKindsRead = await stepKinds(stepsOf(note).map((st) => st.text));
   // WHICH CHECK EACH STATED STEP CARRIES, READ ONCE (core/method/step-check.ts): a measurement from the menu, a check the
-  // model writes, or judgement; grounded on the owner's first example by code. With no model every step is a judgement.
-  const checksPlan = await stepPlan(note, cases);
+  // model writes, or judgement; grounded on the owner's examples by code. With no model every step is a judgement.
+  const checksPlan = await stepPlan(note, cases, stepKindsRead);
   const read = proposalsAcross(note, cases, checksPlan);
   const lead = read.lead;
   // What the pieces show about how they are written, counted: offered beside the method, with no model.
@@ -338,7 +341,7 @@ export async function method(): Promise<void> {
   // ── THE OWNER'S STEPS AS THEIR OWN, WHAT THE EXAMPLE SHOWS AS APPROVED AND SHOWN ──────
   // WHAT EACH STEP IS, READ ONCE: a prohibition or a thing to do. The reader sees every step in one call; without a
   // model (none set up, or --no-model) the word pattern decides, and the whole account says so.
-  const kinds = await stepKinds([...likeThese, ...read.proposals].map((p) => p.statement));
+  const kinds = await stepKinds([...likeThese, ...read.proposals].map((p) => p.statement), stepKindsRead);
   // WHAT EACH STATED STEP ASKS THE WRITER TO DECIDE, read once (core/method/decision-units.ts): kind, decision, inputs,
   // condition in the step's own words, output, exception, dependencies. Said in the whole account; the brief for one
   // request selects by it. With no model the words decide: an instruction, applying always unless they say when.
@@ -462,22 +465,24 @@ async function decisionUnits(stated: readonly MethodProposal[], steps: readonly 
 }
 
 /** The check each stated step asks for, read in one call where a model is set up (core/method/step-check.ts); judgement for every step where none is. */
-async function stepPlan(note: string, cases: readonly ExampleCase[]): Promise<StepPlan | null> {
+async function stepPlan(note: string, cases: readonly ExampleCase[], kinds: ReadonlyMap<string, 'BOUNDARY' | 'GENERATIVE'>): Promise<StepPlan | null> {
   const steps: StepToCheck[] = stepsOf(note).map((st, i) => ({ id: String(i + 1), text: st.text, under: st.under }));
   if (!steps.length || !cases.length) return null;
   const input = stepCheckInput(steps, cases, outlineOf, countWords);
   const noModel = !canReach('discovery') || argv.includes('--no-model');
   const d = await readContext(STEP_CHECK, input, noModel ? null : contextReaderClient(), noModel ? null : contextReaderModel(), { spentUsd: 0, capUsd: 0.3, maxCalls: 1 });
   if (argv.includes('--report')) console.log(`(which check each step asks for: ${d.by === 'model' ? `read by ${contextReaderModel()}` : d.by === 'code' ? 'nothing to read' : `none read, every step is yours to judge (${d.why})`}.)`);
-  return planOf(steps, d.value);
+  // the two readings held against each other: a prohibition keeps no check that requires what it forbids
+  const held = Object.fromEntries(steps.map((st) => [st.id, heldByPolarity(d.value[st.id] ?? { how: 'judgement', measurement: null, quote: st.text, means: 'yours to judge', by: 'floor' }, st, kinds.get(st.text))]));
+  return planOf(steps, held);
 }
 
 /** The kind of every step the owner wrote or their example showed, read in one call where a model is set up (a rule counted off the pieces is worded by Atelier, and the word pattern decides it); the word pattern where none is, said in --report. */
-async function stepKinds(statements: readonly string[]): Promise<Map<string, 'BOUNDARY' | 'GENERATIVE'>> {
-  const unique = [...new Set(statements.map((t) => t.trim()).filter(Boolean))];
+async function stepKinds(statements: readonly string[], known: ReadonlyMap<string, 'BOUNDARY' | 'GENERATIVE'> = new Map()): Promise<Map<string, 'BOUNDARY' | 'GENERATIVE'>> {
+  const unique = [...new Set(statements.map((t) => t.trim()).filter(Boolean))].filter((t) => !known.has(t));
   const input = { statements: unique.map((text, i) => ({ id: `r${i + 1}`, text })) };
   const noModel = !canReach('discovery') || argv.includes('--no-model');
   const d = await readContext(RULE_POLARITY, input, noModel ? null : contextReaderClient(), noModel ? null : contextReaderModel(), { spentUsd: 0, capUsd: 0.1, maxCalls: 1 });
   if (argv.includes('--report') && unique.length) console.log(`(what each step is, a prohibition or a thing to do: ${d.by === 'model' ? `read by ${contextReaderModel()}` : d.by === 'code' ? 'nothing to read' : `by the words alone (${d.why})`}.)`);
-  return new Map(input.statements.map((s) => [s.text, d.value[s.id] ?? polarityByWords(s.text)]));
+  return new Map([...known, ...input.statements.map((s): [string, 'BOUNDARY' | 'GENERATIVE'] => [s.text, d.value[s.id] ?? polarityByWords(s.text)])]);
 }

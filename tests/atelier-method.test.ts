@@ -268,7 +268,7 @@ describe('through the binary: atelier method, then a run held to the method', ()
   }, 60_000);
   afterAll(() => { backend.kill(); });
 
-  it('--review shows the owner their steps by kind and builds nothing; it spends one reading of which check each step asks for', async () => {
+  it('--review shows the owner their steps by kind and builds nothing; it spends two readings: what each step is, and which check it asks for', async () => {
     const before = await count();
     const r = atelier('method', 'method.md', '--golden', 'acme.md', '--name', 'analysis', '--review', '--report', ...BACKEND());
     expect(r.code, r.err).toBe(0);
@@ -279,7 +279,7 @@ describe('through the binary: atelier method, then a run held to the method', ()
     expect(r.out).toMatch(/Judgement: shown to the writer, reported as not measured \(1\)\n {2}- Weigh switching cost before recommending anything\./);
     expect(r.out).toMatch(/Nothing has been built\. To build exactly this: atelier method method\.md --golden acme\.md .*--name analysis/);
     expect(existsSync(join(data, 'skills', 'analysis'))).toBe(false);
-    expect(await count()).toBe(before + 1);
+    expect(await count()).toBe(before + 2);
   });
 
   it('a step the example does not do stays required, and the disagreement is said once, on the build screen', () => {
@@ -311,12 +311,12 @@ describe('through the binary: atelier method, then a run held to the method', ()
     expect(r.out).toMatch(/You judge these yourself \(1\):/);
     expect(r.out).not.toMatch(/Standard [0-9a-f]+ minted|EVERY OUTPUT IS CHECKED BY|Kind of work/);
     expect(r.out).toContain('Use it: atelier run "<the task>" --with <file>');
-    // three readings of the steps, never a rule: which check each asks for (core/method/step-check.ts), what each step is
-    // (a prohibition or a thing to do), then what each asks the writer to decide (core/method/decision-units.ts). Every step
-    // stays the owner's words.
+    // three readings of the steps, never a rule: what each step is (a prohibition or a thing to do), which check each asks
+    // for, held against the first (core/method/step-check.ts), then what each asks the writer to decide
+    // (core/method/decision-units.ts). Every step stays the owner's words.
     expect(await count()).toBe(before + 3);
     const tools = (await (await fetch(`${url()}/__log`)).json() as { bodies: string[] }).bodies.slice(-3).map((b) => (JSON.parse(b) as { tools?: { function?: { name?: string } }[] }).tools?.[0]?.function?.name);
-    expect(tools).toEqual(['emit_step_checks', 'emit_rule_polarity', 'emit_method_units']);
+    expect(tools).toEqual(['emit_rule_polarity', 'emit_step_checks', 'emit_method_units']);
     const skill = readFileSync(join(proj, '.claude', 'skills', 'analysis', 'SKILL.md'), 'utf8');
     for (const step of stepsOf(NOTE)) expect(skill).toContain(step.text.replace(/\.$/, ''));
     expect(readFileSync(join(proj, '.claude', 'skills', 'analysis', 'examples', 'exemplar.md'), 'utf8')).toContain('Borealis wins for a small team');

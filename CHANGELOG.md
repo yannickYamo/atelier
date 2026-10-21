@@ -17,7 +17,9 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
   a check it writes, or judgement; code grounds the answer (the quote must be the step's own words, a measurement must
   parse, validate and run on the example, a written check must compile and run on it) and a step the reading cannot
   ground is judgement. The floor is judgement: with no model set up every stated step is the owner's to judge, and no
-  pattern on a step's wording decides a check anywhere. The unit floor (`core/method/decision-units.ts`) reads nothing
+  pattern on a step's wording decides a check anywhere. Two readings are held against each other by code: a step the
+  rule-polarity reading calls a prohibition keeps no presence or table check, which would require the very thing it
+  forbids (`heldByPolarity`). The unit floor (`core/method/decision-units.ts`) reads nothing
   into the words either: an instruction, applying always, until a model reads the condition.
 - **A check a model writes** (`core/observers/written.ts`, observer `CHECK`). One JavaScript function over the text,
   the request and the material, run in a context with nothing in it (no `require`, no `process`, no network, no clock)
@@ -37,7 +39,19 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
   `tests/step-check.test.ts` hold the sandbox and the grounding; `bench/readings/cases/step-check.json` holds the first
   labelled cases for the live reading (sixteen steps; the pass line stated in the file).
 - Not in this change, and said so: the mutant qualification that lets a written check block; `atelier skill
-  "<rules>"` still attaches no check; a rule written as a `### n.` heading is still not a step of a note.
+  "<rules>"` still attaches no check; a rule written as a `### n.` heading is still not a step of a note; the
+  rule-polarity reading's floor is still a word pattern (`polarityByWords`), the last one on the method path.
+
+### Studies: the step-check reading on sixteen labelled steps (development evidence, $0.04)
+
+`bench/readings/cases/step-check.json`, `claude-haiku-5-5`, the pass line stated in the file (14 of 16 cases at 4 of 5
+runs, and no step labelled judgement given a check). Version 1: 11 of 16, model agreement 34 of 48; the reader said
+"written" and left the function out, read "never open with X" as a lexicon, and gave a forbidden section a presence
+check. Version 2 (a worked written check in the prompt, place words): 11 of 16. Version 3 (the source field described,
+the figure rule named) with the polarity cross-check: **15 of 16 at 5 of 5, model agreement 75 of 80 (0.94, 95% CI
+0.86 to 0.98), no judgement step given a check**. The one miss: "every figure must be sourced from the material" is
+given a written figure check rather than CITED in every run; it holds the step by code the reader wrote instead of
+code Atelier tested, and is reported as a miss. The harness's own overall line reads this as not passed on that case.
 
 ### The form is not a fact, the notes are not the work, one folder is one voice, and a reader reads where it can act
 

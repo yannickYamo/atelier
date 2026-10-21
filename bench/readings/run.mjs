@@ -22,7 +22,7 @@ import { PERSONA_MOVES, PERSONA_TABLE } from '../../dist/core/compiler/moves.js'
 import { posterior, situationEffect } from '../../dist/core/stats/habit.js';
 import { MOVE_CASES } from '../../dist/core/loop/move-cases.js';
 import { METHOD_INFER } from '../../dist/core/method/infer.js';
-import { STEP_CHECK, stepCheckInput } from '../../dist/core/method/step-check.js';
+import { STEP_CHECK, stepCheckInput, heldByPolarity } from '../../dist/core/method/step-check.js';
 import { outlineOf } from '../../dist/core/method/standard.js';
 import { countWords } from '../../dist/core/eval/size.js';
 import { MOVE_READER } from '../../dist/core/taste/move-reader.js';
@@ -72,6 +72,8 @@ const READINGS = {
     answer: (v) => { const ps = new Map(); const out = []; for (const st of v) { const text = (ps.get(st.piece) ?? (() => { const t = piecesFrom(spec.cases.find((x) => x.id === current.id)).find((p) => p.name === st.piece)?.text ?? ''; ps.set(st.piece, t); return t; })()); const at = text.indexOf(st.quote); const before = at >= 0 ? text.slice(0, at) : ''; const h = [...before.matchAll(/^#{1,6}\s+(.+)$/gm)].at(-1)?.[1] ?? (/^#{1,6}\s+(.+)$/m.exec(st.quote)?.[1] ?? null); const hh = (h ?? '(no heading)').replace(/\*/g, '').trim().toLowerCase(); if (!out.includes(hh)) out.push(hh); } return out.join('>') || 'none'; } },
   // one step per case against the file's one example: the label is measure:<OBSERVER> | written | judgement
   'step-check': { reading: STEP_CHECK, input: (c) => stepCheckInput([{ id: '1', text: c.step, under: c.under ?? null }], [{ id: 'e1', task: spec.example.task ?? null, material: spec.example.material ? [{ name: 'notes', text: spec.example.material }] : [], reference: spec.example.reference }], outlineOf, countWords),
+    // held against the rule-polarity reading as the build holds it: a prohibition keeps no check that requires what it forbids
+    after: async (v, c, input) => { const k = await readContext(RULE_POLARITY, { statements: [{ id: 'r1', text: c.step }] }, client, model, budget); return { '1': heldByPolarity(v['1'], input.steps[0], k.value.r1) }; },
     answer: (v) => (v['1'] ? (v['1'].how === 'measure' ? `measure:${v['1'].measurement.observer}` : v['1'].how) : null) },
   'method-units': { reading: METHOD_UNITS, input: (c) => ({ steps: [{ id: '1', text: c.step, under: c.under ?? null }] }), answer: (v) => (v['1'] ? `${v['1'].kind}|${v['1'].condition ? 'conditional' : 'always'}` : null) },
 };
@@ -98,7 +100,8 @@ for (const c of spec.cases) {
   const input = entry.input(c);
   const got = [];
   for (let r = 0; r < runs; r++) {
-    const d = await readContext(reading, input, client, model, budget);
+    const read = await readContext(reading, input, client, model, budget);
+    const d = entry.after && read.by !== 'floor' ? { ...read, value: await entry.after(read.value, c, input) } : read;
     got.push({ value: entry.answer(d.value), value2: entry.answer2 && c.label2 !== undefined ? entry.answer2(d.value) : undefined, by: d.by, why: d.why ?? null, aside: entry.aside ? entry.aside(d.value) : undefined });
     if (d.by === 'code') break; // deterministic: one run is every run
   }

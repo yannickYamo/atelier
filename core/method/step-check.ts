@@ -58,9 +58,12 @@ export const STEP_CHECK_SYSTEM = `You read the steps of one person's working met
 Answer one of three ways for each step:
 
 - how "measure": the step asks for something one of the listed measurements counts. Give the measurement as one line exactly in the listed form, with the names the EXAMPLE uses (its section names, its table's columns, its phrases), lower-cased where the form says so. A step that names a section the example has ("Open with a Verdict section", "then a Risks heading") is PRESENCE:sections=... with opens=1 or closes=1 only where the step says where. A step that bans words or phrases is LEXICON. A step about a count the list holds (sentences per paragraph, words in the opening) is that measurement.
-- how "written": the step asks for something code can decide on the text, the request or the material, and no listed measurement holds it (a unit after every time estimate, no colour written as a hex value, no group of more than five items, every finding opens with a verb, a date in ISO form). Write the check as one JavaScript arrow function (text, request, material) => ({ ok, detail, spans }) where ok is true when the step is held, detail is one short sentence, and spans lists {start, end, why} for each place the text breaks it. material is an array of {name, text}. The function must be pure: no imports, no I/O, no randomness, no state outside it, under ${CHECK_SOURCE_MAX} characters, and it must return ok:true on the example's own text. Return null when the text has nothing the step speaks of.
+- how "written": the step asks for something code can decide on the text, the request or the material, and no listed measurement holds it: a unit after every time estimate, no colour written as a hex value, no list of more than five items, every finding opening with a verb, a date in ISO form, a figure with its currency. These are NOT judgement: a person could check them with a ruler, so write the check. Write it as one JavaScript arrow function (text, request, material) => ({ ok, detail, spans }) where ok is true when the step is held, detail is one short sentence, and spans lists {start, end, why} for each place the text breaks it. material is an array of {name, text}. The function must be pure: no imports, no I/O, no randomness, no state outside it, under ${CHECK_SOURCE_MAX} characters, and it must return ok:true on the example's own text. Return null when the text has nothing the step speaks of. Put the whole function in the "source" field: a "written" answer with no source is no check at all. For example, for "Keep any list to five items or fewer":
+  (text) => { const bad = []; let run = 0, start = -1; const lines = text.split('\\n'); let at = 0; for (const l of lines) { if (/^\\s*(?:[-*+]|\\d+[.)])\\s/.test(l)) { if (run === 0) start = at; run++; if (run === 6) bad.push({ start, end: at + l.length, why: 'a list of more than five items' }); } else run = 0; at += l.length + 1; } return { ok: bad.length === 0, detail: bad.length ? bad.length + ' list(s) over five items' : 'no list over five items', spans: bad }; }
 - near: true when the measurement you name reads something NEAR the step and not the step itself ("name the source the first time I cite a figure" is near CITED, which only looks figures up in the material): such a check is shown beside the step and never blocks.
-- how "judgement": the step asks for a decision no code can make on the text alone (weigh the risks, keep the tone warm, name the real cause). Most steps about why, when or how well are judgement. A step that forbids a section, or asks for one only under a condition, is judgement.
+- how "judgement": the step asks for a decision no code can make on the text alone (weigh the risks, keep the tone warm, name the real cause). Most steps about why, when or how well are judgement. A step that FORBIDS a section ("Do not end with a Sources section unless asked"), asks for one only under a condition ("Add a Risks section only when the change touches billing"), or names a section in passing ("Give the Risks section a second read") is judgement, never PRESENCE: PRESENCE would require the very section the step forbids or conditions.
+
+A step that says every figure must come from, be sourced from or be found in the material or the request is CITED:allow=0: code looks each figure up there, which is exactly what the step asks. Place matters: "Never open with X" is OPENING:avoid=X (the first paragraph), not LEXICON (which bans X everywhere); "never end with X" is CLOSING:avoid=X; "never use X" anywhere is LEXICON.
 
 Never give a step a check its words do not ask for: a section named in passing, a thing the step says to leave out, a step about when. A wrong check is enforced on every output from then on; "judgement" costs nothing. For every step, quote: a short phrase copied exactly from the step that your reading stands on; means: what the check reads, in plain words.
 
@@ -71,7 +74,9 @@ export const STEP_CHECK_SCHEMA: Record<string, unknown> = {
   type: 'object',
   properties: { checks: { type: 'array', items: { type: 'object', properties: {
     id: { type: 'string' }, how: { type: 'string', enum: ['measure', 'written', 'judgement'] },
-    measure: { type: ['string', 'null'] }, source: { type: ['string', 'null'] }, quote: { type: 'string' }, means: { type: 'string' }, near: { type: 'boolean' },
+    measure: { type: ['string', 'null'], description: 'for how "measure": the one measurement line, exactly in a listed form; null otherwise' },
+    source: { type: ['string', 'null'], description: 'for how "written": the whole JavaScript function, (text, request, material) => ({ ok, detail, spans }); null otherwise. A "written" answer with no source is no check.' },
+    quote: { type: 'string' }, means: { type: 'string' }, near: { type: 'boolean' },
   }, required: ['id', 'how', 'measure', 'source', 'quote', 'means'], additionalProperties: false } } },
   required: ['checks'], additionalProperties: false,
 };
@@ -95,7 +100,7 @@ const inStep = (quote: string, step: StepToCheck): boolean => {
 export const judgement = (step: StepToCheck, by: 'model' | 'floor', means = 'yours to judge'): StepCheck => ({ how: 'judgement', measurement: null, quote: step.text.slice(0, 120), means, by });
 
 export const STEP_CHECK: Reading<StepCheckInput, StepCheckOutput> = {
-  id: 'step-check', version: '1',
+  id: 'step-check', version: '3',
   system: STEP_CHECK_SYSTEM, schema: STEP_CHECK_SCHEMA,
   toolName: 'emit_step_checks', toolDescription: 'For every numbered step: how code checks it (a listed measurement, a written check, or judgement), with a quote from the step and what the check reads.',
   maxTokens: 8000, estimateUsd: 0.04,
@@ -166,6 +171,19 @@ export function stepCheckInput(steps: readonly StepToCheck[], cases: readonly Ex
   const richest = [...outlines].sort((a, b) => b.o.sections.length + b.o.tables.length - (a.o.sections.length + a.o.tables.length))[0] ?? outlines[0];
   return { steps, example: { sections, tables, labels: outlines.some((x) => x.o.labels), hasMaterial: cases.some((c) => c.material.length > 0),
     words: countWords(richest.c.reference), head: richest.c.reference.slice(0, 6000), request: richest.c.task ?? null }, material: richest.c.material };
+}
+
+/**
+ * A PROHIBITION IS NOT HELD BY A CHECK THAT REQUIRES THE THING IT FORBIDS. The rule-polarity reading says whether a
+ * step forbids or asks for something; a step read as a prohibition ("Do not end with a Sources section unless asked")
+ * that the check reading gave a presence or a table check would be required to contain the very thing it forbids.
+ * Two readings, held against each other by code: such a step is judgement, and says why.
+ */
+export function heldByPolarity(c: StepCheck, step: StepToCheck, kind: 'BOUNDARY' | 'GENERATIVE' | undefined): StepCheck {
+  const m = c.measurement;
+  if (kind !== 'BOUNDARY' || !m) return c;
+  const requires = m.observer === 'TABLE' || (m.observer === 'PRESENCE' && Array.isArray(m.params.sections) && m.params.sections.length > 0);
+  return requires ? judgement(step, 'floor', 'the step forbids or conditions what the check would require, so it is yours to judge') : c;
 }
 
 /** The plan a build hands the method standard: each stated step's check, by the step's text. */
