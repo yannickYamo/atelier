@@ -1,0 +1,12 @@
+{
+ "fixture": "adhd",
+ "arm": "plain",
+ "task": "real-ambiguity",
+ "run": 3,
+ "text": "Reply with the branch or commit to deploy, and the word \"confirm\" to approve production.\n\nI need two things first:\n1. **What to deploy:** branch or commit (e.g. `main` at `a1b2c3d`)\n2. **How you deploy:** command or pipeline (e.g. `npm run deploy`, GitHub Actions, Vercel)\n\nProduction is hard to undo, so I won't run anything until you confirm.\n\nNext: paste the branch name and deploy command.",
+ "costUsd": 0.008892,
+ "stop": "end_turn",
+ "error": null,
+ "meterUsd": 0.008892000000000344,
+ "seconds": 3.578
+}

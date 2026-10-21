@@ -1,0 +1,12 @@
+{
+ "fixture": "adhd",
+ "arm": "plain",
+ "task": "multi-step-progress",
+ "run": 3,
+ "text": "Run this to size the backfill:\n\n```sql\nSELECT COUNT(*) FROM <table> WHERE <new_column> IS NULL;\n```\n\n**Step 3 of 5 done:** schema updated, new column exists.\n**Step 4 now:** backfill.\n\n1. Run the count query above.\n2. Backfill in batches, not one big `UPDATE`:\n   ```sql\n   UPDATE <table>\n   SET <new_column> = <value_expr>\n   WHERE id IN (\n     SELECT id FROM <table>\n     WHERE <new_column> IS NULL\n     LIMIT 10000\n   );\n   ```\n3. Repeat step 2 until the count from step 1 returns 0.\n\n**Time:** about 5 minutes under 1M rows, an hour or more past 50M.\n\nNext: run the count query and paste the number. I'll fill in `<value_expr>` once I know where the values come from.",
+ "costUsd": 0.01827,
+ "stop": "end_turn",
+ "error": null,
+ "meterUsd": 0.01827000000000023,
+ "seconds": 10.363
+}

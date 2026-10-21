@@ -1,0 +1,15 @@
+```json
+{
+  "clip": "c13",
+  "duration": "00:58",
+  "overall": "Low",
+  "categories": [
+    {
+      "category": "Alcohol – reference",
+      "span": "00:04–00:40",
+      "risk": "Low",
+      "evidence": "The old brewery, now a museum. They brewed a dark ale here until 1960."
+    }
+  ]
+}
+```

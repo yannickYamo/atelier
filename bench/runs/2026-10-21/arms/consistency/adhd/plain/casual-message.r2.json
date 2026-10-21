@@ -1,0 +1,12 @@
+{
+ "fixture": "adhd",
+ "arm": "plain",
+ "task": "casual-message",
+ "run": 2,
+ "text": "Fixed. Nothing left open on my side.",
+ "costUsd": 0.007056,
+ "stop": "end_turn",
+ "error": null,
+ "meterUsd": 0.007056000000000395,
+ "seconds": 2.589
+}

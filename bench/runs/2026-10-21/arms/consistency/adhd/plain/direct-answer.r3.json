@@ -1,0 +1,12 @@
+{
+ "fixture": "adhd",
+ "arm": "plain",
+ "task": "direct-answer",
+ "run": 3,
+ "text": "**102**",
+ "costUsd": 0.005502,
+ "stop": "end_turn",
+ "error": null,
+ "meterUsd": 0.005501999999999896,
+ "seconds": 1.492
+}

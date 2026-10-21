@@ -1,0 +1,19 @@
+{
+  "clip": "c19",
+  "duration": "01:01",
+  "overall": "Medium",
+  "categories": [
+    {
+      "category": "Firearms – depiction",
+      "risk": "Medium",
+      "span": "00:04–00:25",
+      "evidence": "The officer holds up the evidence bag with the pistol inside."
+    },
+    {
+      "category": "Crime – reference",
+      "risk": "Medium",
+      "span": "00:04–00:09",
+      "evidence": "We recovered a pistol from the car."
+    }
+  ]
+}

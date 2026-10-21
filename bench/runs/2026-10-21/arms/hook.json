@@ -1,0 +1,50 @@
+[
+ {
+  "label": "write:speculation",
+  "exit": 2,
+  "seconds": 0.86,
+  "stderr": "atelier: this breaks 2 required rule(s) of the \"claims\" standard. Rewrite only what each names, keep everything else as it is:\n  - Then a Facts section. Every fact cites the document in the file it comes from, in square brackets: [notice of loss], [police report], [invoice 1]: 5 uncited or unmatched fact(s)\n  - Never use the words \"fraud\", \"scam\", \"liar\" or \"suspicious\": 2 use(s): suspicious, scam\n"
+ },
+ {
+  "label": "stop:speculation",
+  "exit": 2,
+  "seconds": 0.87,
+  "stderr": "atelier: this breaks 2 required rule(s) of the \"claims\" standard. Rewrite only what each names, keep everything else as it is:\n  - Then a Facts section. Every fact cites the document in the file it comes from, in square brackets: [notice of loss], [police report], [invoice 1]: 5 uncited or unmatched fact(s)\n  - Never use the words \"fraud\", \"scam\", \"liar\" or \"suspicious\": 2 use(s): suspicious, scam\n"
+ },
+ {
+  "label": "write:uncited",
+  "exit": 2,
+  "seconds": 0.86,
+  "stderr": "atelier: this breaks 1 required rule(s) of the \"claims\" standard. Rewrite only what each names, keep everything else as it is:\n  - Then a Facts section. Every fact cites the document in the file it comes from, in square brackets: [notice of loss], [police report], [invoice 1]: 5 uncited or unmatched fact(s)\n"
+ },
+ {
+  "label": "stop:uncited",
+  "exit": 2,
+  "seconds": 0.86,
+  "stderr": "atelier: this breaks 1 required rule(s) of the \"claims\" standard. Rewrite only what each names, keep everything else as it is:\n  - Then a Facts section. Every fact cites the document in the file it comes from, in square brackets: [notice of loss], [police report], [invoice 1]: 5 uncited or unmatched fact(s)\n"
+ },
+ {
+  "label": "write:reserve",
+  "exit": 2,
+  "seconds": 0.87,
+  "stderr": "atelier: this breaks 1 required rule(s) of the \"claims\" standard. Rewrite only what each names, keep everything else as it is:\n  - Then a Facts section. Every fact cites the document in the file it comes from, in square brackets: [notice of loss], [police report], [invoice 1]: 5 uncited or unmatched fact(s)\n"
+ },
+ {
+  "label": "stop:reserve",
+  "exit": 2,
+  "seconds": 0.88,
+  "stderr": "atelier: this breaks 1 required rule(s) of the \"claims\" standard. Rewrite only what each names, keep everything else as it is:\n  - Then a Facts section. Every fact cites the document in the file it comes from, in square brackets: [notice of loss], [police report], [invoice 1]: 5 uncited or unmatched fact(s)\n"
+ },
+ {
+  "label": "write:golden-e01",
+  "exit": 2,
+  "seconds": 0.86,
+  "stderr": "atelier: this breaks 1 required rule(s) of the \"claims\" standard. Rewrite only what each names, keep everything else as it is:\n  - Then a Facts section. Every fact cites the document in the file it comes from, in square brackets: [notice of loss], [police report], [invoice 1]: 5 uncited or unmatched fact(s)\n"
+ },
+ {
+  "label": "not-json",
+  "exit": 0,
+  "seconds": 0.14,
+  "stderr": "atelier: nothing to check in this hook event (no written content, no file at its path, no assistant text in the transcript)\n"
+ }
+]

@@ -1,0 +1,12 @@
+{
+ "fixture": "labels",
+ "arm": "plainx",
+ "task": "t4",
+ "run": 3,
+ "text": "{\n  \"clip\": \"c17\",\n  \"duration\": \"00:52\",\n  \"overall\": \"Medium\",\n  \"categories\": [\n    {\n      \"category\": \"Disaster – news\",\n      \"risk\": \"Medium\",\n      \"span\": \"00:05–00:50\",\n      \"evidence\": \"Two people died when the bridge gave way.\"\n    },\n    {\n      \"category\": \"Death – reference\",\n      \"risk\": \"Medium\",\n      \"span\": \"00:05–00:10\",\n      \"evidence\": \"Two people died\"\n    }\n  ]\n}",
+ "costUsd": 0.015216,
+ "stop": "end_turn",
+ "error": null,
+ "meterUsd": 0.015215999999999674,
+ "seconds": 6.189
+}

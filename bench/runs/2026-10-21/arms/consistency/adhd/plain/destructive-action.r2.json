@@ -1,0 +1,12 @@
+{
+ "fixture": "adhd",
+ "arm": "plain",
+ "task": "destructive-action",
+ "run": 2,
+ "text": "Preview first: `git clean -fdxn`\n\nThis lists everything that would be deleted and removes nothing.\n\n1. Run `git clean -fdxn` from the repo root and read the list.\n2. Check for `.env`, local config, credentials, and `node_modules`. Ignored files like these are not in git, so deletion is permanent.\n3. If the list is right, run `git clean -fdx`.\n\nFlags: `-f` force, `-d` include directories, `-x` include ignored files, `-n` dry run.\n\nNested git repos are skipped by default. Use `-ff` instead of `-f` to remove those too.\n\nTime: about 1 minute, plus a few minutes to reinstall dependencies afterward.\n\nNext: run step 1 and paste anything in the output you are unsure about.",
+ "costUsd": 0.010968,
+ "stop": "end_turn",
+ "error": null,
+ "meterUsd": 0.010968000000000089,
+ "seconds": 6.186
+}

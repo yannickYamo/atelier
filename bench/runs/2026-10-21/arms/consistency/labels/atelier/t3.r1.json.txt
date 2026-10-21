@@ -1,0 +1,13 @@
+{
+  "clip": "c16",
+  "duration": "01:06",
+  "overall": "Floor",
+  "categories": [
+    {
+      "category": "Floor – all brands",
+      "risk": "Floor",
+      "span": null,
+      "evidence": "The church was built in 1450."
+    }
+  ]
+}

@@ -1,0 +1,48 @@
+{
+ "fixture": "adhd",
+ "arm": "atelier",
+ "task": "multi-step-progress",
+ "run": 3,
+ "text": "Step 3 of 5 is in progress, with no backfill code written yet. The schema change from step 2 is done.\n\n1. Run the backfill in batches of 1,000 rows, committing after each batch so a failure loses at most one batch. The table and column names below are placeholders, so swap in yours:\n\n```sql\nUPDATE your_table\nSET new_column = <value_expression>\nWHERE id IN (\n  SELECT id FROM your_table\n  WHERE new_column IS NULL\n  LIMIT 1000\n);\n```\n\n2. Repeat until it reports 0 rows updated, then confirm nothing is left:\n\n```sql\nSELECT COUNT(*) FROM your_table WHERE new_column IS NULL;\n```\n\nExpect 0. Each 1,000-row batch usually takes 1-5 seconds, so a 1,000,000-row table takes roughly 17-85 minutes.\n\nStep 3 of 5 done: schema change complete, backfill queued. Next: run the first batch.\n\nRun the first batch against a staging copy now and note how many seconds it takes (under 2 minutes).",
+ "state": "NEEDS_REVIEW",
+ "costUsd": 0.009,
+ "exit": 0,
+ "standard": "03fcfcea922b8e6a",
+ "headKeys": [
+  "schema",
+  "state",
+  "standardVersionHash",
+  "skillVersion",
+  "certificate",
+  "record"
+ ],
+ "certificate": {
+  "standardVersionHash": "03fcfcea922b8e6a",
+  "checks": {
+   "total": 6,
+   "counted": 0,
+   "written": 6,
+   "writtenQualified": 0
+  },
+  "readers": {
+   "taste": {
+    "veto": [],
+    "labelledMisses": 0,
+    "falseBlockUpper95": null
+   },
+   "claims": {
+    "instrument": "pattern check (no material bound: a model reading of specifics could only list them)",
+    "version": null,
+    "gate": "pattern",
+    "qualified": false,
+    "measured": null,
+    "kinds": []
+   }
+  },
+  "errorBound": null,
+  "why": "no delivered-error bound: it needs an audit sample of your own labels, drawn like the work this skill does; the checks and readers above are what this output was held to"
+ },
+ "stderr": "No notes of yours are bound, so a story, source or figure in the draft cannot be checked against anything of yours, and is listed for you, not cut. Add yours: --with notes=<file>, or atelier material --skill i-have-adhd <file>.\nJudgement reader: not run (reporting only until your labels qualify it; --taste reads this run and records readings to label: atelier taste --skill i-have-adhd --calibrate)",
+ "meterUsd": 0.008967879999999262,
+ "seconds": 12.384
+}

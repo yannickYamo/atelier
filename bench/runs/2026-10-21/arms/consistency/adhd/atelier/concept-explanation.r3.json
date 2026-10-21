@@ -1,0 +1,48 @@
+{
+ "fixture": "adhd",
+ "arm": "atelier",
+ "task": "concept-explanation",
+ "run": 3,
+ "text": "Default to `git merge` when in doubt; use `git rebase` only on branches that only you have pushed.\n\n```\ngit merge main      # on your feature branch: bring main's changes in\ngit rebase main     # on your feature branch: replay your commits on top of main\n```\n\n**What each one does**\n\n- **Merge** joins two branches by creating a new \"merge commit\" with two parents. Your commits and their timestamps stay exactly as they were. History shows the branch and the join.\n- **Rebase** takes your branch's commits and re-creates them, one by one, on top of the target branch. The result is a straight line with no merge commit. The re-created commits get new hashes, so they are technically new commits.\n\n**Why the choice matters**\n\n- Merge never rewrites history, so it is safe on any branch, shared or not. The cost is a busier history with extra merge commits.\n- Rebase gives a clean, linear history that is easier to read and bisect. The cost is that it rewrites commits, which breaks anyone else who already has the old versions.\n\n**Safe rules**\n\n1. Never rebase a branch that others have pulled or work on (`main`, shared feature branches).\n2. Rebasing your own local or solo feature branch before opening a pull request is fine.\n3. After a rebase of an already-pushed branch, you must force-push. Use `git push --force-with-lease`, not `--force`; it refuses to overwrite work you haven't seen.\n4. If a rebase goes wrong, `git rebase --abort` returns you to where you started. If a merge goes wrong, `git merge --abort` does the same.\n\n**Conflicts**\n\n- Merge: you resolve conflicts once, then commit.\n- Rebase: you may resolve conflicts once per replayed commit. Fix the files, `git add` them, then run `git rebase --continue`.\n\n**Quick chooser**\n\n- Updating a shared branch or merging a finished feature into `main` → merge.\n- Tidying your own unpushed (or solo) branch to sit on latest `main` → rebase.\n- Unsure, or the branch has other contributors → merge.\n\nStep 1 of 1 done: explained rebase vs merge. Next: in a scratch repo, make a branch with two commits, run `git rebase main`, then `git log --oneline --graph` to see the straight line (about 2 minutes).",
+ "state": "NEEDS_REVIEW",
+ "costUsd": 0.0097,
+ "exit": 0,
+ "standard": "03fcfcea922b8e6a",
+ "headKeys": [
+  "schema",
+  "state",
+  "standardVersionHash",
+  "skillVersion",
+  "certificate",
+  "record"
+ ],
+ "certificate": {
+  "standardVersionHash": "03fcfcea922b8e6a",
+  "checks": {
+   "total": 6,
+   "counted": 0,
+   "written": 6,
+   "writtenQualified": 0
+  },
+  "readers": {
+   "taste": {
+    "veto": [],
+    "labelledMisses": 0,
+    "falseBlockUpper95": null
+   },
+   "claims": {
+    "instrument": "pattern check (no material bound: a model reading of specifics could only list them)",
+    "version": null,
+    "gate": "pattern",
+    "qualified": false,
+    "measured": null,
+    "kinds": []
+   }
+  },
+  "errorBound": null,
+  "why": "no delivered-error bound: it needs an audit sample of your own labels, drawn like the work this skill does; the checks and readers above are what this output was held to"
+ },
+ "stderr": "No notes of yours are bound, so a story, source or figure in the draft cannot be checked against anything of yours, and is listed for you, not cut. Add yours: --with notes=<file>, or atelier material --skill i-have-adhd <file>.\nJudgement reader: not run (reporting only until your labels qualify it; --taste reads this run and records readings to label: atelier taste --skill i-have-adhd --calibrate)",
+ "meterUsd": 0.009654480000000909,
+ "seconds": 12.358
+}

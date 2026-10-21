@@ -1,0 +1,48 @@
+{
+ "fixture": "claims",
+ "arm": "atelier",
+ "task": "t1",
+ "run": 1,
+ "text": "## Summary\n\nWayfarer Fintech Ltd: theft from an unlocked desk of camera body and lens at the insured's office on Harbour Lane. Declined under exclusion 7.1.\n\n## Facts\n\nWayfarer Fintech Ltd reported the loss on 10 September 2026 [notice of loss]. The loss occurred at the insured's office on Harbour Lane [notice of loss]. The items are a camera body and a lens [invoice 1], [invoice 2]. The theft was reported to the police on 12 September 2026 [police report]. The items were not in a locked container at the time [police report].\n\n## Coverage analysis\n\nThe loss falls under clause 4.2 of the policy, which covers theft of or damage to business contents in the insured's custody [policy]. Exclusion 7.1 applies: the items were unattended in a shared space and not in a locked container [police report], [policy]. Exclusion 7.5 does not apply: the loss was reported to the police within seven days [police report], [policy].\n\n## Decision\n\nNot covered: exclusion 7.1 applies. The claim is declined, and the insured is told why in the terms of the policy.\n\n## Reserve\n\nNo reserve is set: the claim is declined.",
+ "state": "NEEDS_REVIEW",
+ "costUsd": 0.0177,
+ "exit": 0,
+ "standard": "8e9fa261657f5f22",
+ "headKeys": [
+  "schema",
+  "state",
+  "standardVersionHash",
+  "skillVersion",
+  "certificate",
+  "record"
+ ],
+ "certificate": {
+  "standardVersionHash": "8e9fa261657f5f22",
+  "checks": {
+   "total": 14,
+   "counted": 9,
+   "written": 5,
+   "writtenQualified": 1
+  },
+  "readers": {
+   "taste": {
+    "veto": [],
+    "labelledMisses": 0,
+    "falseBlockUpper95": null
+   },
+   "claims": {
+    "instrument": "pattern check, with claim reader (claude-haiku-4-5, prompt 47d18891) reporting only: not qualified",
+    "version": "47d18891",
+    "gate": "pattern",
+    "qualified": false,
+    "measured": null,
+    "kinds": []
+   }
+  },
+  "errorBound": null,
+  "why": "no delivered-error bound: it needs an audit sample of your own labels, drawn like the work this skill does; the checks and readers above are what this output was held to"
+ },
+ "stderr": "Judgement reader: not run (reporting only until your labels qualify it; --taste reads this run and records readings to label: atelier taste --skill claims --calibrate).\nMethod: contains 3 of 3 thing(s) it must · 1 judgement step(s) not measured.\nGrammar, listed for you to check and never changed (1): \"## Coverage analysis\" (the checker proposes a change this rule does not make).\nChecked: every REQ",
+ "meterUsd": 0.029676039999999793,
+ "seconds": 15.307
+}

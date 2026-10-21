@@ -1,0 +1,48 @@
+{
+ "fixture": "adhd",
+ "arm": "atelier",
+ "task": "destructive-action",
+ "run": 2,
+ "text": "git clean -fdx -n\n\nThat dry run lists everything `git clean -fdx` would delete: untracked files and directories, plus ignored files such as `.env`, `node_modules/`, and build output. Deletion is permanent, with no recovery through git, so check the list first.\n\nStep 1 of 2 done: command given. Next: run the dry run from the repo root and scan the list for anything you want to keep (`.env`, local configs, keys).\n\nIf the list looks right, run the real deletion:\n\ngit clean -fdx\n\nRun the dry run now (about 10 seconds) and paste the list here if you want a second look before deleting.",
+ "state": "NEEDS_REVIEW",
+ "costUsd": 0.0041,
+ "exit": 0,
+ "standard": "03fcfcea922b8e6a",
+ "headKeys": [
+  "schema",
+  "state",
+  "standardVersionHash",
+  "skillVersion",
+  "certificate",
+  "record"
+ ],
+ "certificate": {
+  "standardVersionHash": "03fcfcea922b8e6a",
+  "checks": {
+   "total": 6,
+   "counted": 0,
+   "written": 6,
+   "writtenQualified": 0
+  },
+  "readers": {
+   "taste": {
+    "veto": [],
+    "labelledMisses": 0,
+    "falseBlockUpper95": null
+   },
+   "claims": {
+    "instrument": "pattern check (no material bound: a model reading of specifics could only list them)",
+    "version": null,
+    "gate": "pattern",
+    "qualified": false,
+    "measured": null,
+    "kinds": []
+   }
+  },
+  "errorBound": null,
+  "why": "no delivered-error bound: it needs an audit sample of your own labels, drawn like the work this skill does; the checks and readers above are what this output was held to"
+ },
+ "stderr": "No notes of yours are bound, so a story, source or figure in the draft cannot be checked against anything of yours, and is listed for you, not cut. Add yours: --with notes=<file>, or atelier material --skill i-have-adhd <file>.\nJudgement reader: not run (reporting only until your labels qualify it; --taste reads this run and records readings to label: atelier taste --skill i-have-adhd --calibrate)",
+ "meterUsd": 0.004071179999999508,
+ "seconds": 7.653
+}

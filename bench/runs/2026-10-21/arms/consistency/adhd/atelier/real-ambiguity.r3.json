@@ -1,0 +1,48 @@
+{
+ "fixture": "adhd",
+ "arm": "atelier",
+ "task": "real-ambiguity",
+ "run": 3,
+ "text": "Run your project's deploy command from the repo root, on the branch you want live:\n\n```\ngit push origin main\n```\n\nThat only triggers a deploy if CI/CD is wired to `main`. \"It\" isn't named in your request, so I can't confirm the right command or target.\n\nStep 1 of 3 done: gave the default deploy command. Next: confirm what \"it\" is.\n\n1. Run `git remote -v && git log -1 --oneline` to confirm the repo and the commit you're shipping.\n2. Check for a deploy script: `ls .github/workflows Makefile package.json 2>/dev/null`. If one exists, use its deploy target instead of the push above.\n3. After the deploy finishes, open your production URL and check that the change is live.\n\nNext action (under 2 minutes): paste the output of step 2 here, and I'll give you the exact deploy command for your setup.",
+ "state": "NEEDS_REVIEW",
+ "costUsd": 0.0047,
+ "exit": 0,
+ "standard": "03fcfcea922b8e6a",
+ "headKeys": [
+  "schema",
+  "state",
+  "standardVersionHash",
+  "skillVersion",
+  "certificate",
+  "record"
+ ],
+ "certificate": {
+  "standardVersionHash": "03fcfcea922b8e6a",
+  "checks": {
+   "total": 6,
+   "counted": 0,
+   "written": 6,
+   "writtenQualified": 0
+  },
+  "readers": {
+   "taste": {
+    "veto": [],
+    "labelledMisses": 0,
+    "falseBlockUpper95": null
+   },
+   "claims": {
+    "instrument": "pattern check (no material bound: a model reading of specifics could only list them)",
+    "version": null,
+    "gate": "pattern",
+    "qualified": false,
+    "measured": null,
+    "kinds": []
+   }
+  },
+  "errorBound": null,
+  "why": "no delivered-error bound: it needs an audit sample of your own labels, drawn like the work this skill does; the checks and readers above are what this output was held to"
+ },
+ "stderr": "No notes of yours are bound, so a story, source or figure in the draft cannot be checked against anything of yours, and is listed for you, not cut. Add yours: --with notes=<file>, or atelier material --skill i-have-adhd <file>.\nJudgement reader: not run (reporting only until your labels qualify it; --taste reads this run and records readings to label: atelier taste --skill i-have-adhd --calibrate)",
+ "meterUsd": 0.004744690000000773,
+ "seconds": 9.499
+}

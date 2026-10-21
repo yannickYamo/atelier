@@ -1,0 +1,12 @@
+{
+ "fixture": "claims",
+ "arm": "plainx",
+ "task": "t2",
+ "run": 2,
+ "text": "## Summary\n\nYewtree Biotech AS: water damage from a burst pipe of two monitors and a desktop workstation at a client site in Kilburn. Covered under clause 4.7; reserve 6,986 dollars.\n\n## Facts\n\nYewtree Biotech AS reported the loss on 15 March 2026 under policy CC-1444 [notice of loss]. The loss occurred at a client site in Kilburn [notice of loss]. The items are two monitors and a desktop workstation [invoice 1], [invoice 2]. The incident was recorded on 17 March 2026 under reference IR/2026/4156 [incident report]. The cause was water damage from a burst pipe, and no third party was involved [incident report]. The two monitors are invoiced at 4,244 dollars [invoice 1], and the desktop workstation at 2,742 dollars [invoice 2].\n\n## Coverage analysis\n\nThe loss falls under clause 4.7 of the policy, which covers damage to contents caused by water escaping from any fixed pipe, tank or appliance [policy]. The file records damage from a burst pipe [incident report].\n\n- Exclusion 7.1 does not apply: no theft is alleged [notice of loss], [incident report], [policy].\n- Exclusion 7.3 does not apply: the file records damage from a burst pipe, not gradual deterioration [incident report], [policy].\n- Exclusion 7.5 does not apply: it operates only where theft is alleged, and no theft is alleged [notice of loss], [incident report], [policy].\n\n## Decision\n\nCovered under clause 4.7. The claim is accepted.\n\n## Reserve\n\nThe reserve is 6,986 dollars, the sum of the two invoices (4,244 dollars and 2,742 dollars) [invoice 1], [invoice 2]. Clause 9.1 deducts an excess only where the policy schedule shows one, and none applies where the schedule shows none [policy]. The policy schedule is not in the file, so no excess is shown and none is deducted. If the schedule is later added to the file and shows an excess, the reserve should be revised under clause 9.1.",
+ "costUsd": 0.023636,
+ "stop": "end_turn",
+ "error": null,
+ "meterUsd": 0.02363599999999977,
+ "seconds": 8.753
+}

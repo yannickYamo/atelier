@@ -1,0 +1,478 @@
+{
+ "schema": "atelier-record/1",
+ "state": "NEEDS_REVIEW",
+ "standardVersionHash": "03fcfcea922b8e6a",
+ "skillVersion": "77b115bfafb01560",
+ "certificate": {
+  "standardVersionHash": "03fcfcea922b8e6a",
+  "checks": {
+   "total": 6,
+   "counted": 0,
+   "written": 6,
+   "writtenQualified": 0
+  },
+  "readers": {
+   "taste": {
+    "veto": [],
+    "labelledMisses": 0,
+    "falseBlockUpper95": null
+   },
+   "claims": {
+    "instrument": "pattern check (no material bound: a model reading of specifics could only list them)",
+    "version": null,
+    "gate": "pattern",
+    "qualified": false,
+    "measured": null,
+    "kinds": []
+   }
+  },
+  "errorBound": null,
+  "why": "no delivered-error bound: it needs an audit sample of your own labels, drawn like the work this skill does; the checks and readers above are what this output was held to"
+ },
+ "record": {
+  "schema": 1,
+  "state": "NEEDS_REVIEW",
+  "entries": [
+   {
+    "id": "x3",
+    "statement": "Write a numbered list where each step is one bounded action, with no step containing \"and then\" twice.",
+    "dimension": "HABIT",
+    "source": "EXAMPLE",
+    "required": false,
+    "observation": {
+     "proposition": "Each numbered list item contains \"and then\" at most once. Whether each step is one bounded action is left to the person. (a check written for this step)",
+     "coverage": "NONE",
+     "qualification": "DETERMINISTIC",
+     "evidence": "the check did not run",
+     "unchecked": "how much of this rule the check reads is not known"
+    },
+    "result": "UNVERIFIED",
+    "reason": "NOT_MACHINE_CHECKABLE"
+   },
+   {
+    "id": "x7",
+    "statement": "Restate where things stand every turn, for example \"Step 3 of 5 done: X. Next: Y.\"",
+    "dimension": "HABIT",
+    "source": "EXAMPLE",
+    "required": false,
+    "observation": {
+     "proposition": "The reply carries a status line of the form 'Step N of M done: ... Next: ...'. The example form is given, so this is checked as presence. (a check written for this step)",
+     "coverage": "PARTIAL",
+     "qualification": "DETERMINISTIC",
+     "evidence": "status line present",
+     "unchecked": "how much of this rule the check reads is not known"
+    },
+    "result": "UNVERIFIED",
+    "reason": "PARTLY_CHECKED"
+   },
+   {
+    "id": "x8",
+    "statement": "Give time estimates in concrete units, not vague phrases.",
+    "dimension": "HABIT",
+    "source": "EXAMPLE",
+    "required": false,
+    "observation": {
+     "proposition": "No vague time phrase such as a few moments or shortly appears without a concrete unit. (a check written for this step)",
+     "coverage": "NONE",
+     "qualification": "DETERMINISTIC",
+     "evidence": "the check did not run",
+     "unchecked": "how much of this rule the check reads is not known"
+    },
+    "result": "UNVERIFIED",
+    "reason": "NOT_MACHINE_CHECKABLE"
+   },
+   {
+    "id": "x10",
+    "statement": "State the cause and the fix in a matter-of-fact tone; never use \"Uh oh,\" \"Oh no,\" or \"There seems to be a problem.\"",
+    "dimension": "HABIT",
+    "source": "EXAMPLE",
+    "required": false,
+    "observation": {
+     "proposition": "None of the three banned phrases appear. Whether the cause and fix are stated matter-of-factly is left to the person. (a check written for this step)",
+     "coverage": "NONE",
+     "qualification": "DETERMINISTIC",
+     "evidence": "the check did not run",
+     "unchecked": "how much of this rule the check reads is not known"
+    },
+    "result": "UNVERIFIED",
+    "reason": "NOT_MACHINE_CHECKABLE"
+   },
+   {
+    "id": "x11",
+    "statement": "Group related items, rank the most relevant first, and show no more than five items per group, keeping the rest available for when the user asks or they become next.",
+    "dimension": "HABIT",
+    "source": "EXAMPLE",
+    "required": false,
+    "observation": {
+     "proposition": "No run of list items exceeds five in a row. Ranking by relevance is left to the person. (a check written for this step)",
+     "coverage": "NONE",
+     "qualification": "DETERMINISTIC",
+     "evidence": "the check did not run",
+     "unchecked": "how much of this rule the check reads is not known"
+    },
+    "result": "UNVERIFIED",
+    "reason": "NOT_MACHINE_CHECKABLE"
+   },
+   {
+    "id": "x12",
+    "statement": "No preamble, no recap, no closing pleasantries: start with the answer and end when it is done.",
+    "dimension": "HABIT",
+    "source": "EXAMPLE",
+    "required": false,
+    "observation": {
+     "proposition": "No opening preamble and no closing pleasantry at the ends of the text. Whether a recap is present is left to the person. (a check written for this step)",
+     "coverage": "PARTIAL",
+     "qualification": "DETERMINISTIC",
+     "evidence": "no preamble or closing pleasantry",
+     "unchecked": "how much of this rule the check reads is not known"
+    },
+    "result": "UNVERIFIED",
+    "reason": "PARTLY_CHECKED"
+   },
+   {
+    "id": "FORMAT",
+    "dimension": "STANDARD",
+    "source": "SYSTEM",
+    "statement": "What an assistant reply holds.",
+    "required": true,
+    "observation": {
+     "proposition": "What an assistant reply holds.",
+     "coverage": "FULL",
+     "qualification": "DETERMINISTIC",
+     "evidence": "within what an assistant reply holds"
+    },
+    "result": "PASS",
+    "reason": "MET"
+   },
+   {
+    "id": "specifics",
+    "dimension": "EVIDENCE",
+    "source": "SYSTEM",
+    "statement": "Every specific in the work is found in what you supplied",
+    "required": true,
+    "observation": {
+     "proposition": "each figure, name, date and quotation, looked for in the request and the material",
+     "coverage": "NONE",
+     "qualification": "UNAVAILABLE",
+     "evidence": "no material was supplied to look them up in: 3 listed for you"
+    },
+    "result": "UNVERIFIED",
+    "reason": "NOT_MACHINE_CHECKABLE"
+   }
+  ]
+ },
+ "output": "Add the header to the test request:\n\n```\nAuthorization: Bearer <token>\n```\n\nExample (supertest/JS style):\n\n```js\nawait request(app).get('/your-route').set('Authorization', `Bearer ${token}`).expect(200);\n```\n\n**Cause:** the endpoint requires auth, the request sends none, so the server correctly returns 401. The test is wrong, not the server.\n\n**Check that settles the scheme (about 10 seconds):** open the auth middleware, or run `curl -i <url>` and read the `WWW-Authenticate` response header. If it says `Basic` or names an API-key header, swap the header format to match. Bearer is the assumption here.\n\nStep 1 of 1 done: diagnosis and fix given. Next: run `curl -i <url>` against your endpoint and read the `WWW-Authenticate` header.",
+ "answer": "Add the header to the test request:\n\n```\nAuthorization: Bearer <token>\n```\n\nExample (supertest/JS style):\n\n```js\nawait request(app).get('/your-route').set('Authorization', `Bearer ${token}`).expect(200);\n```\n\n**Cause:** the endpoint requires auth, the request sends none, so the server correctly returns 401. The test is wrong, not the server.\n\n**Check that settles the scheme (about 10 seconds):** open the auth middleware, or run `curl -i <url>` and read the `WWW-Authenticate` response header. If it says `Basic` or names an API-key header, swap the header format to match. Bearer is the assumption here.\n\nStep 1 of 1 done: diagnosis and fix given. Next: run `curl -i <url>` against your endpoint and read the `WWW-Authenticate` header.",
+ "invocationId": "i0cfa4d9bee",
+ "costUsd": 0.0059,
+ "rulesBroken": [],
+ "cut": [],
+ "toCheck": [
+  "Add the header to the test request:",
+  "**Check that settles the scheme (about 10 seconds):** open the auth middleware, or run                 and read the                    response header.",
+  "Step 1 of 1 done: diagnosis and fix given."
+ ],
+ "rules": {
+  "checked": [
+   {
+    "id": "x7",
+    "statement": "Restate where things stand every turn, for example \"Step 3 of 5 done: X. Next: Y.\"",
+    "materiality": null,
+    "verdict": "MET",
+    "detail": "status line present"
+   },
+   {
+    "id": "x12",
+    "statement": "No preamble, no recap, no closing pleasantries: start with the answer and end when it is done.",
+    "materiality": null,
+    "verdict": "MET",
+    "detail": "no preamble or closing pleasantry"
+   },
+   {
+    "id": "UNSOURCED",
+    "statement": "Never claim work done, a result seen, or a detail of the person's own system that the request did not give.",
+    "materiality": "REQUIRED",
+    "verdict": "MET",
+    "detail": "no unsourced stories, quotations or specifics [pattern check (no material bound: a model reading of specifics could only list them)]"
+   },
+   {
+    "id": "UNSOURCED·check",
+    "statement": "Specifics not in the material supplied: listed for you to check, never cut in this format.",
+    "materiality": "PREFERRED",
+    "verdict": "VIOLATED",
+    "detail": "3 specific(s) to check [pattern check (no material bound: a model reading of specifics could only list them)]"
+   },
+   {
+    "id": "FORMAT",
+    "statement": "What an assistant reply holds.",
+    "materiality": "REQUIRED",
+    "verdict": "MET",
+    "detail": "within what an assistant reply holds"
+   }
+  ],
+  "unchecked": [
+   {
+    "id": "x1",
+    "statement": "Lead with the next action: make the first line something the reader can do, not context or a plan."
+   },
+   {
+    "id": "x2",
+    "statement": "If the answer is a command, path, or snippet, put it first and put prose after, if at all."
+   },
+   {
+    "id": "x4",
+    "statement": "Use the fewest steps that still work: cut any step the reader does not need and fold trivial steps into the one before."
+   },
+   {
+    "id": "x5",
+    "statement": "End with ONE concrete next action the reader can do in under two minutes."
+   },
+   {
+    "id": "x6",
+    "statement": "Finish the first issue, then offer any second issue as a separate question instead of mixing it in."
+   },
+   {
+    "id": "x9",
+    "statement": "Show what now works in concrete terms and say how to try it, instead of burying wins in a recap."
+   }
+  ]
+ },
+ "withheld": [],
+ "report": [
+  "No notes of yours are bound, so a story, source or figure in the draft cannot be checked against anything of yours, and is listed for you, not cut. Add yours: --with notes=<file>, or atelier material --skill i-have-adhd <file>.",
+  "Judgement reader: not run (reporting only until your labels qualify it; --taste reads this run and records readings to label: atelier taste --skill i-have-adhd --calibrate).",
+  "Read before writing: 1 thing(s) asked for · turns on whether the endpoint is meant to require auth.",
+  "checked against the standard: 0 REQUIRED rule(s) broken in the draft (); 0 rewrite pass(es) of only the spans that broke them; nothing to repair.",
+  "Checked: every REQUIRED measured rule holds.",
+  "invented-claim check: pattern check (no material bound: a model reading of specifics could only list them).",
+  "3 specific(s) are not in your material: left in for you to check before you use this (listed in the details).",
+  "    check: \"Add the header to the test request:\"",
+  "    check: \"**Check that settles the scheme (about 10 seconds):** open the auth middleware, or run                 and read the                    response header.\"",
+  "    check: \"Step 1 of 1 done: diagnosis and fix given.\"",
+  "(checked as assistant-reply, the class this standard measures; declare --class if the text is something else)",
+  "invocation i0cfa4d9bee  ·  SkillVersion 77b115bfafb01560  ·  $0.0059"
+ ],
+ "eval": {
+  "schema": 1,
+  "invocationId": "i0cfa4d9bee",
+  "skill": "i-have-adhd",
+  "skillVersion": "77b115bfafb01560",
+  "at": "2026-10-21T17:00:41.721Z",
+  "release": null,
+  "model": "claude-sonnet-5-5",
+  "drafts": 1,
+  "costUsd": 0.0059,
+  "spend": [
+   {
+    "purpose": "writing",
+    "usd": 0.005385,
+    "calls": 1,
+    "inputTokens": 2441,
+    "outputTokens": 422,
+    "cacheReadTokens": 2065
+   },
+   {
+    "purpose": "context judge",
+    "usd": 0.000491,
+    "calls": 3,
+    "inputTokens": 4730,
+    "outputTokens": 527,
+    "cacheReadTokens": 2728
+   }
+  ],
+  "sent": {
+   "skill": 911,
+   "added": 124,
+   "request": 21
+  },
+  "durationMs": 9388,
+  "result": {
+   "conformant": true,
+   "reasons": []
+  },
+  "record": {
+   "schema": 1,
+   "state": "NEEDS_REVIEW",
+   "entries": [
+    {
+     "id": "x3",
+     "statement": "Write a numbered list where each step is one bounded action, with no step containing \"and then\" twice.",
+     "dimension": "HABIT",
+     "source": "EXAMPLE",
+     "required": false,
+     "observation": {
+      "proposition": "Each numbered list item contains \"and then\" at most once. Whether each step is one bounded action is left to the person. (a check written for this step)",
+      "coverage": "NONE",
+      "qualification": "DETERMINISTIC",
+      "evidence": "the check did not run",
+      "unchecked": "how much of this rule the check reads is not known"
+     },
+     "result": "UNVERIFIED",
+     "reason": "NOT_MACHINE_CHECKABLE"
+    },
+    {
+     "id": "x7",
+     "statement": "Restate where things stand every turn, for example \"Step 3 of 5 done: X. Next: Y.\"",
+     "dimension": "HABIT",
+     "source": "EXAMPLE",
+     "required": false,
+     "observation": {
+      "proposition": "The reply carries a status line of the form 'Step N of M done: ... Next: ...'. The example form is given, so this is checked as presence. (a check written for this step)",
+      "coverage": "PARTIAL",
+      "qualification": "DETERMINISTIC",
+      "evidence": "status line present",
+      "unchecked": "how much of this rule the check reads is not known"
+     },
+     "result": "UNVERIFIED",
+     "reason": "PARTLY_CHECKED"
+    },
+    {
+     "id": "x8",
+     "statement": "Give time estimates in concrete units, not vague phrases.",
+     "dimension": "HABIT",
+     "source": "EXAMPLE",
+     "required": false,
+     "observation": {
+      "proposition": "No vague time phrase such as a few moments or shortly appears without a concrete unit. (a check written for this step)",
+      "coverage": "NONE",
+      "qualification": "DETERMINISTIC",
+      "evidence": "the check did not run",
+      "unchecked": "how much of this rule the check reads is not known"
+     },
+     "result": "UNVERIFIED",
+     "reason": "NOT_MACHINE_CHECKABLE"
+    },
+    {
+     "id": "x10",
+     "statement": "State the cause and the fix in a matter-of-fact tone; never use \"Uh oh,\" \"Oh no,\" or \"There seems to be a problem.\"",
+     "dimension": "HABIT",
+     "source": "EXAMPLE",
+     "required": false,
+     "observation": {
+      "proposition": "None of the three banned phrases appear. Whether the cause and fix are stated matter-of-factly is left to the person. (a check written for this step)",
+      "coverage": "NONE",
+      "qualification": "DETERMINISTIC",
+      "evidence": "the check did not run",
+      "unchecked": "how much of this rule the check reads is not known"
+     },
+     "result": "UNVERIFIED",
+     "reason": "NOT_MACHINE_CHECKABLE"
+    },
+    {
+     "id": "x11",
+     "statement": "Group related items, rank the most relevant first, and show no more than five items per group, keeping the rest available for when the user asks or they become next.",
+     "dimension": "HABIT",
+     "source": "EXAMPLE",
+     "required": false,
+     "observation": {
+      "proposition": "No run of list items exceeds five in a row. Ranking by relevance is left to the person. (a check written for this step)",
+      "coverage": "NONE",
+      "qualification": "DETERMINISTIC",
+      "evidence": "the check did not run",
+      "unchecked": "how much of this rule the check reads is not known"
+     },
+     "result": "UNVERIFIED",
+     "reason": "NOT_MACHINE_CHECKABLE"
+    },
+    {
+     "id": "x12",
+     "statement": "No preamble, no recap, no closing pleasantries: start with the answer and end when it is done.",
+     "dimension": "HABIT",
+     "source": "EXAMPLE",
+     "required": false,
+     "observation": {
+      "proposition": "No opening preamble and no closing pleasantry at the ends of the text. Whether a recap is present is left to the person. (a check written for this step)",
+      "coverage": "PARTIAL",
+      "qualification": "DETERMINISTIC",
+      "evidence": "no preamble or closing pleasantry",
+      "unchecked": "how much of this rule the check reads is not known"
+     },
+     "result": "UNVERIFIED",
+     "reason": "PARTLY_CHECKED"
+    },
+    {
+     "id": "FORMAT",
+     "dimension": "STANDARD",
+     "source": "SYSTEM",
+     "statement": "What an assistant reply holds.",
+     "required": true,
+     "observation": {
+      "proposition": "What an assistant reply holds.",
+      "coverage": "FULL",
+      "qualification": "DETERMINISTIC",
+      "evidence": "within what an assistant reply holds"
+     },
+     "result": "PASS",
+     "reason": "MET"
+    },
+    {
+     "id": "specifics",
+     "dimension": "EVIDENCE",
+     "source": "SYSTEM",
+     "statement": "Every specific in the work is found in what you supplied",
+     "required": true,
+     "observation": {
+      "proposition": "each figure, name, date and quotation, looked for in the request and the material",
+      "coverage": "NONE",
+      "qualification": "UNAVAILABLE",
+      "evidence": "no material was supplied to look them up in: 3 listed for you"
+     },
+     "result": "UNVERIFIED",
+     "reason": "NOT_MACHINE_CHECKABLE"
+    }
+   ]
+  },
+  "gates": {
+   "required": {
+    "held": 1,
+    "applicable": 1,
+    "broken": []
+   },
+   "claims": {
+    "state": "checked",
+    "delivered": 0,
+    "unconfirmed": 0,
+    "cut": 0,
+    "listed": 3,
+    "disputed": 0,
+    "agreement": null,
+    "instrument": "pattern check (no material bound: a model reading of specifics could only list them)",
+    "answers": true,
+    "unmeasured": "no material was bound to check against",
+    "measured": null
+   },
+   "copying": null,
+   "format": {
+    "kind": "none",
+    "words": null,
+    "withheld": 0,
+    "held": true
+   },
+   "applicability": {
+    "applied": 12,
+    "notApplicable": 0,
+    "waived": []
+   }
+  },
+  "fidelity": null,
+  "monitors": {
+   "detector": null,
+   "taste": null,
+   "coverage": {
+    "asked": 2,
+    "given": 1,
+    "missing": [],
+    "unclear": 1
+   }
+  },
+  "notMeasured": [
+   "argument, stance and content (read by the taste reader, a monitor)",
+   "your range (this skill has no fidelity profile: build it from a corpus)"
+  ]
+ },
+ "model": "claude-sonnet-5-5",
+ "thinking": "disabled",
+ "thinkingBlocks": 0,
+ "maxTokens": 12000,
+ "steering": "all"
+}

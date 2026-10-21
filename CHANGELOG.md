@@ -48,6 +48,44 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 - **License.** Atelier is source-available: unmodified copies may be used and redistributed, and changes are made only
   by the authors (LICENSE). It was MIT before this change.
 
+### Studies: the acceptance tests on two enterprise domains and one public skill (about $5.90 in all)
+
+Claims memos, brand-safety labels and the public `i-have-adhd` skill, each built three times with `claude-sonnet-5-5`
+as the writer and the default readers; every table, count and output is in `bench/runs/2026-10-21/` (RESULTS.md).
+
+- **The build is not yet reproducible.** Three builds from the same inputs gave three standard hashes on every fixture.
+  Claims kept 7 of 8 steps in the same column across builds, labels 18 of 20; the step that moved went between a
+  written check and judgement. Qualification moved more: on labels 2, 6 and 4 written checks qualified, and no step's
+  check qualified in all three builds. Best-of-three draws narrowed the variance, it did not remove it.
+- **Planted defects are named more often than they are blocked.** Of five planted defects per domain, the defect's own
+  step named it with its passage in 2, 5 and 4 claims builds and 2, 3 and 3 labels builds; it blocked where a counted
+  rule or a qualified check held the step: 1, 2, 1 and 0, 1, 2. "High without an explicit depiction" and "a category
+  outside the taxonomy" were named in no build.
+- **Goldens.** No claims example was blocked (0 of 30 verifies). 30 of 36 labels examples were blocked by the copying
+  check: a short JSON label shares a run of more than twelve words with itself. That is a false block of the owner's
+  own work, and the test fails on it.
+- **Repair is safe and did nothing.** On the five claims defects, `verify --repair` changed no figure, added, dropped or
+  negated no sentence, and fixed none: the speculation rewrite was refused for adding a negation, and the other four
+  rules were unqualified or omissions. One repair record read "every REQUIRED measured rule now holds" while its state
+  was BLOCKED; that sentence is wrong.
+- **Grounding on a memo.** An invented figure and an invented citation were both listed with the material bound and
+  neither was cut; without material the figure was listed and the citation was not.
+- **Record and certificate.** All six head keys on 95 of 95 `run` and `verify --repair` outputs; error bound null with
+  its reason on 191 of 191 certificates, each naming the claim instrument and its gate.
+- **Hook.** `verify --hook` exits 2 on a planted defect in 0.86 to 0.88 seconds, on a Write event and on a Stop event
+  read from a transcript. It also blocks a golden memo: a hook event carries no material, and the qualified citation
+  check needs it.
+- **Authority.** No standard changed at run time; the hash recomputed from the ratified fields equals each file's name,
+  and qualifications sit beside them, outside it.
+- **Consistency, 10 tasks by 3 runs.** Claims: every oracle rule held in 29 of 30 Atelier memos against 0 of 30 from the
+  model given the method alone (difference 96.7 points, interval 90.2 to 100). Given the method and the examples as well,
+  the model held 25 of 30 once the oracle's figure rule is read against the material (the oracle counts the policy
+  number as invented): Atelier's margin is 16.7 points, interval 3.3 to 30.0. Labels: 30 of 30 against 24 of 30 with the
+  method alone (evidence copied from the transcript), and 30 of 30 for both with the examples. i-have-adhd: the one
+  rule code decided differently was "restate where things stand", which the compiled skill met by writing "Step 1 of 1
+  done" into replies to "thanks, that solved it" and "what is 17 times 6"; that is not counted as a gain, and the six
+  rules no code checks were not scored. Every Atelier run ended NEEDS REVIEW.
+
 ### Which check a step asks for is read, not matched: a model names it or writes it, and code holds it
 
 - **The step readers are gone.** A step of a method note was tied to a check by patterns on its wording

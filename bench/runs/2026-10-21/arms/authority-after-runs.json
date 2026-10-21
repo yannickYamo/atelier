@@ -1,0 +1,32 @@
+{
+ "claims": {
+  "build": 2,
+  "standardAtBuild": "8e9fa261657f5f22",
+  "activeAfterRuns": "8e9fa261657f5f22",
+  "standardFiles": 1,
+  "recomputed": "8e9fa261657f5f22",
+  "sameAsBuild": true,
+  "fileByteIdenticalToBuildCopy": true,
+  "qualificationsInFile": true
+ },
+ "labels": {
+  "build": 2,
+  "standardAtBuild": "d0f9945acba80cad",
+  "activeAfterRuns": "d0f9945acba80cad",
+  "standardFiles": 1,
+  "recomputed": "d0f9945acba80cad",
+  "sameAsBuild": true,
+  "fileByteIdenticalToBuildCopy": true,
+  "qualificationsInFile": true
+ },
+ "adhd": {
+  "build": 1,
+  "standardAtBuild": "03fcfcea",
+  "activeAfterRuns": "03fcfcea922b8e6a",
+  "standardFiles": 1,
+  "recomputed": "03fcfcea922b8e6a",
+  "sameAsBuild": true,
+  "fileByteIdenticalToBuildCopy": null,
+  "qualificationsInFile": false
+ }
+}

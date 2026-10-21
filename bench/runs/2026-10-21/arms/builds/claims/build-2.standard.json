@@ -1,0 +1,554 @@
+{
+ "standardVersionHash": "8e9fa261657f5f22",
+ "evidenceId": null,
+ "workType": "claims",
+ "requirements": [
+  {
+   "requirementId": "x1",
+   "statement": "Open with a Summary section: one paragraph on who, what, where, and the decision.",
+   "appliesWhen": "GENERAL",
+   "kind": "GENERATIVE",
+   "authority": "EXPERT_AUTHORED",
+   "provenance": "EXPERT_STATED",
+   "evidence": null,
+   "evidenceItemId": null,
+   "wouldBeAbsentIf": null,
+   "materiality": "REQUIRED",
+   "realizationTolerance": null,
+   "outputShape": null,
+   "obligation": "DELIVERABLE",
+   "measurement": {
+    "observer": "PRESENCE",
+    "params": {
+     "sections": [
+      "Summary",
+      "Facts",
+      "Coverage analysis",
+      "Decision",
+      "Reserve"
+     ],
+     "body": 1,
+     "opens": 1
+    }
+   }
+  },
+  {
+   "requirementId": "x2",
+   "statement": "Then a Facts section. Every fact cites the document in the file it comes from, in square brackets: [notice of loss], [police report], [invoice 1].",
+   "appliesWhen": "GENERAL",
+   "kind": "GENERATIVE",
+   "authority": "EXPERT_AUTHORED",
+   "provenance": "EXPERT_STATED",
+   "evidence": null,
+   "evidenceItemId": null,
+   "wouldBeAbsentIf": null,
+   "materiality": "REQUIRED",
+   "realizationTolerance": null,
+   "outputShape": null,
+   "obligation": "DELIVERABLE",
+   "measurement": {
+    "observer": "CHECK",
+    "params": {
+     "source": [
+      "(text, request, material) => { const names = material.map(m => m.name.toLowerCase().replace(/\\.[^.]*$/, '').replace(/[-_]/g, ' ').trim()); const factSec = text.split(/^## /m).find(s => /^Facts/i.test(s)); if (!factSec) return { ok: true, detail: 'no Facts section', spans: [] }; const body = factSec.replace(/^Facts[^\\n]*\\n/, ''); const sentences = body.split(/(?<=[.!?])\\s+/).filter(s => s.trim()); const bad = []; let pos = text.indexOf(body); for (const s of sentences) { const idx = text.indexOf(s, pos); const cites = [...s.matchAll(/\\[([^\\]]+)\\]/g)].map(m => m[1].toLowerCase().trim()); if (!/\\d|[A-Za-z]/.test(s)) continue; if (cites.length === 0) { bad.push({ start: idx, end: idx + s.length, why: 'fact without a document citation' }); } else if (cites.some(c => !names.some(n => n === c || n.includes(c) || c.includes(n)))) { bad.push({ start: idx, end: idx + s.length, why: 'citation not a document in the file' }); } if (idx >= 0) pos = idx + s.length; } return { ok: bad.length === 0, detail: bad.length ? bad.length + ' uncited or unmatched fact(s)' : 'every fact cites a file document', spans: bad }; }"
+     ],
+     "means": [
+      "Every sentence in the Facts section carries a bracketed citation naming a document in the material."
+     ]
+    }
+   }
+  },
+  {
+   "requirementId": "x3",
+   "statement": "Then a Coverage analysis section. The coverage conclusion cites the policy clause it rests on, and every exclusion that could apply is addressed and cited.",
+   "appliesWhen": "GENERAL",
+   "kind": "GENERATIVE",
+   "authority": "EXPERT_AUTHORED",
+   "provenance": "EXPERT_STATED",
+   "evidence": null,
+   "evidenceItemId": null,
+   "wouldBeAbsentIf": null,
+   "materiality": null,
+   "realizationTolerance": null,
+   "outputShape": null,
+   "obligation": "DELIVERABLE",
+   "measurement": {
+    "observer": "CHECK",
+    "params": {
+     "source": [
+      "(text, request, material) => { const m = text.match(/^#+\\s*Coverage analysis\\b[\\s\\S]*?(?=^#+\\s|$)/im); if (!m) return null; const sec = m[0]; const start = m.index; const hasClause = /\\bclause\\s+\\d+(\\.\\d+)*|\\b(section|exclusion)\\s+\\d+(\\.\\d+)*/i.test(sec); const hasCite = /\\[[^\\]]+\\]/.test(sec); const ok = hasClause && hasCite; return { ok, detail: ok ? 'coverage section cites a clause and a source' : 'coverage section lacks a cited policy clause or source', spans: ok ? [] : [{ start, end: start + sec.length, why: 'no cited policy clause in coverage analysis' }] }; }"
+     ],
+     "means": [
+      "The Coverage analysis section names a policy clause number and cites a source. Whether every applicable exclusion is addressed is judgement."
+     ]
+    }
+   }
+  },
+  {
+   "requirementId": "x4",
+   "statement": "Then a Decision section: covered or not covered, and under which clause.",
+   "appliesWhen": "GENERAL",
+   "kind": "GENERATIVE",
+   "authority": "EXPERT_AUTHORED",
+   "provenance": "EXPERT_STATED",
+   "evidence": null,
+   "evidenceItemId": null,
+   "wouldBeAbsentIf": null,
+   "materiality": null,
+   "realizationTolerance": null,
+   "outputShape": null,
+   "obligation": "DELIVERABLE",
+   "measurement": {
+    "observer": "CHECK",
+    "params": {
+     "source": [
+      "(text, request, material) => { const m = text.match(/^#+\\s*Decision\\b[\\s\\S]*?(?=^#+\\s|$)/im); if (!m) return null; const sec = m[0]; const start = m.index; const ok = /\\b(covered|not covered|declined|accepted)\\b/i.test(sec) && /\\bclause\\s+\\d+(\\.\\d+)*/i.test(sec); return { ok, detail: ok ? 'decision states covered or not covered under a clause' : 'decision lacks outcome or clause', spans: ok ? [] : [{ start, end: start + sec.length, why: 'decision missing outcome or clause' }] }; }"
+     ],
+     "means": [
+      "The Decision section states covered or not covered and names a clause number."
+     ]
+    }
+   }
+  },
+  {
+   "requirementId": "x5",
+   "statement": "End with a Reserve section. The reserve equals the sum of the invoices in the file, less any excess the schedule applies, and cites the invoices.",
+   "appliesWhen": "GENERAL",
+   "kind": "GENERATIVE",
+   "authority": "EXPERT_AUTHORED",
+   "provenance": "EXPERT_STATED",
+   "evidence": null,
+   "evidenceItemId": null,
+   "wouldBeAbsentIf": null,
+   "materiality": null,
+   "realizationTolerance": null,
+   "outputShape": null,
+   "obligation": "DELIVERABLE",
+   "measurement": {
+    "observer": "CHECK",
+    "params": {
+     "source": [
+      "(text, request, material) => {",
+      "  const secs = text.split(/^## /m);",
+      "  const sec = secs.find(s => /^Reserve/i.test(s));",
+      "  if (!sec) return { ok: false, detail: 'no Reserve section', spans: [] };",
+      "  const start = text.indexOf(sec);",
+      "  const body = sec.replace(/^Reserve[^\\n]*\\n/i, '');",
+      "  const numRe = /([0-9]{1,3}(?:,[0-9]{3})+|[0-9]+(?:\\.[0-9]+)?)/g;",
+      "  const amounts = [];",
+      "  for (const m of material) {",
+      "    if (!/invoice/i.test(m.name) && !/invoice/i.test(m.text)) continue;",
+      "    const mm = m.text.match(/(?:amount|total|subtotal|due)\\s*[:=]?\\s*\\$?\\s*([0-9]{1,3}(?:,[0-9]{3})+|[0-9]+(?:\\.[0-9]+)?)/i);",
+      "    if (mm) amounts.push(parseFloat(mm[1].replace(/,/g, '')));",
+      "  }",
+      "  if (!amounts.length) return { ok: true, detail: 'no invoice amounts in material; nothing to compare', spans: [] };",
+      "  const sumAll = amounts.reduce((a, b) => a + b, 0);",
+      "  const figs = [...body.matchAll(numRe)].map(x => ({ v: parseFloat(x[1].replace(/,/g, '')), i: x.index }));",
+      "  if (!figs.length) {",
+      "    if (/no reserve|not set|declined/i.test(body)) return { ok: true, detail: 'reserve declined; no figure stated', spans: [] };",
+      "    return { ok: false, detail: 'no reserve figure in Reserve section', spans: [] };",
+      "  }",
+      "  const stated = figs[0];",
+      "  const ok = Math.abs(stated.v - sumAll) < 0.01 || amounts.some(a => Math.abs(a - stated.v) < 0.01);",
+      "  const pos = start + (sec.length - body.length) + stated.i;",
+      "  return {",
+      "    ok,",
+      "    detail: ok ? 'reserve matches material amounts' : 'reserve ' + stated.v + ' does not match invoice sum ' + sumAll,",
+      "    spans: ok ? [] : [{ start: pos, end: pos + String(stated.v).length, why: 'reserve figure not equal to invoice sum' }]",
+      "  };",
+      "}"
+     ],
+     "means": [
+      "The first figure in the Reserve section equals the sum of the invoice amounts found in the material, or one of them."
+     ]
+    }
+   }
+  },
+  {
+   "requirementId": "x6",
+   "statement": "Never speculate about the insured's intent or honesty.",
+   "appliesWhen": "GENERAL",
+   "kind": "BOUNDARY",
+   "authority": "EXPERT_AUTHORED",
+   "provenance": "EXPERT_STATED",
+   "evidence": null,
+   "evidenceItemId": null,
+   "wouldBeAbsentIf": null,
+   "materiality": null,
+   "realizationTolerance": null,
+   "outputShape": null,
+   "obligation": "JUDGEMENT"
+  },
+  {
+   "requirementId": "x7",
+   "statement": "Never use the words \"fraud\", \"scam\", \"liar\" or \"suspicious\".",
+   "appliesWhen": "GENERAL",
+   "kind": "BOUNDARY",
+   "authority": "EXPERT_AUTHORED",
+   "provenance": "EXPERT_STATED",
+   "evidence": null,
+   "evidenceItemId": null,
+   "wouldBeAbsentIf": null,
+   "materiality": "REQUIRED",
+   "realizationTolerance": null,
+   "outputShape": null,
+   "obligation": "DELIVERABLE",
+   "measurement": {
+    "observer": "LEXICON",
+    "params": {
+     "terms": [
+      "fraud",
+      "scam",
+      "liar",
+      "suspicious"
+     ]
+    }
+   }
+  },
+  {
+   "requirementId": "x8",
+   "statement": "Take every date, name and figure from the file: add none of your own.",
+   "appliesWhen": "GENERAL",
+   "kind": "BOUNDARY",
+   "authority": "EXPERT_AUTHORED",
+   "provenance": "EXPERT_STATED",
+   "evidence": null,
+   "evidenceItemId": null,
+   "wouldBeAbsentIf": null,
+   "materiality": null,
+   "realizationTolerance": null,
+   "outputShape": null,
+   "obligation": "DELIVERABLE",
+   "measurement": {
+    "observer": "CHECK",
+    "params": {
+     "source": [
+      "(text, request, material) => {",
+      "  const corpus = (request || '') + '\\n' + material.map(m => m.text).join('\\n');",
+      "  const body = corpus.replace(/,/g, '');",
+      "  const bodyLower = body.toLowerCase();",
+      "  const months = 'January|February|March|April|May|June|July|August|September|October|November|December';",
+      "  const dateRe = new RegExp('\\\\b\\\\d{1,2} (?:' + months + ') \\\\d{4}\\\\b', 'g');",
+      "  const figRe = /(?<![\\w.\\/-])\\d{1,3}(?:,\\d{3})*(?:\\.\\d+)?(?![\\w.\\/-])|(?<![\\w.\\/-])\\d+(?:\\.\\d+)?(?![\\w.\\/-])/g;",
+      "  const cleanText = text.replace(/\\[[^\\]]*\\]/g, m => ' '.repeat(m.length));",
+      "  const found = [];",
+      "  const dateSpans = [];",
+      "  for (const m of cleanText.matchAll(dateRe)) {",
+      "    found.push({ v: m[0], i: m.index, kind: 'date' });",
+      "    dateSpans.push([m.index, m.index + m[0].length]);",
+      "  }",
+      "  for (const m of cleanText.matchAll(figRe)) {",
+      "    const inDate = dateSpans.some(([s, e]) => m.index >= s && m.index < e);",
+      "    if (!inDate) found.push({ v: m[0], i: m.index, kind: 'figure' });",
+      "  }",
+      "  const bad = found.filter(f => {",
+      "    if (f.kind === 'date') return !bodyLower.includes(f.v.toLowerCase());",
+      "    return !body.includes(f.v.replace(/,/g, ''));",
+      "  }).map(f => ({ start: f.i, end: f.i + f.v.length, why: f.kind + ' not in the file or request' }));",
+      "  return {",
+      "    ok: bad.length === 0,",
+      "    detail: bad.length ? bad.length + ' date(s) or figure(s) not in the file' : 'every date and figure is in the file',",
+      "    spans: bad",
+      "  };",
+      "}"
+     ],
+     "means": [
+      "Every date and figure in the memo appears in the request or the material."
+     ]
+    }
+   }
+  },
+  {
+   "requirementId": "x9",
+   "statement": "Every figure in the work is one the request or the material gives.",
+   "appliesWhen": "GENERAL",
+   "kind": "BOUNDARY",
+   "authority": "EXPERT_RATIFIED",
+   "provenance": "MACHINE_DISCOVERED",
+   "evidence": null,
+   "evidenceItemId": null,
+   "wouldBeAbsentIf": null,
+   "materiality": "PREFERRED",
+   "realizationTolerance": null,
+   "outputShape": null,
+   "obligation": "EXECUTION",
+   "wordedFromCheck": true,
+   "measurement": {
+    "observer": "CITED",
+    "params": {
+     "allow": 0
+    }
+   }
+  },
+  {
+   "requirementId": "x10",
+   "statement": "I keep paragraphs to 5 sentences at most.",
+   "appliesWhen": "GENERAL",
+   "kind": "GENERATIVE",
+   "authority": "EXPERT_RATIFIED",
+   "provenance": "MACHINE_DISCOVERED",
+   "evidence": null,
+   "evidenceItemId": null,
+   "wouldBeAbsentIf": null,
+   "materiality": "PREFERRED",
+   "realizationTolerance": null,
+   "outputShape": null,
+   "wordedFromCheck": true,
+   "measurement": {
+    "observer": "PARAGRAPH_LENGTH",
+    "params": {
+     "maxSentences": 5
+    }
+   }
+  },
+  {
+   "requirementId": "x11",
+   "statement": "I hedge rarely: at most 2 hedging words per thousand.",
+   "appliesWhen": "GENERAL",
+   "kind": "GENERATIVE",
+   "authority": "EXPERT_RATIFIED",
+   "provenance": "MACHINE_DISCOVERED",
+   "evidence": null,
+   "evidenceItemId": null,
+   "wouldBeAbsentIf": null,
+   "materiality": "PREFERRED",
+   "realizationTolerance": null,
+   "outputShape": null,
+   "wordedFromCheck": true,
+   "measurement": {
+    "observer": "HEDGE_RATE",
+    "params": {
+     "maxPer1000": 2
+    }
+   }
+  },
+  {
+   "requirementId": "x12",
+   "statement": "The Summary section runs 25 to 33 words in my pieces.",
+   "appliesWhen": "GENERAL",
+   "kind": "GENERATIVE",
+   "authority": "EXPERT_RATIFIED",
+   "provenance": "MACHINE_DISCOVERED",
+   "evidence": null,
+   "evidenceItemId": null,
+   "wouldBeAbsentIf": null,
+   "materiality": "PREFERRED",
+   "realizationTolerance": null,
+   "outputShape": null,
+   "obligation": "DELIVERABLE",
+   "wordedFromCheck": true,
+   "measurement": {
+    "observer": "LENGTH",
+    "params": {
+     "unit": [
+      "words"
+     ],
+     "in": [
+      "Summary"
+     ],
+     "min": 16,
+     "max": 42
+    }
+   }
+  },
+  {
+   "requirementId": "x13",
+   "statement": "The Facts section runs 47 to 65 words in my pieces.",
+   "appliesWhen": "GENERAL",
+   "kind": "GENERATIVE",
+   "authority": "EXPERT_RATIFIED",
+   "provenance": "MACHINE_DISCOVERED",
+   "evidence": null,
+   "evidenceItemId": null,
+   "wouldBeAbsentIf": null,
+   "materiality": "PREFERRED",
+   "realizationTolerance": null,
+   "outputShape": null,
+   "obligation": "DELIVERABLE",
+   "wordedFromCheck": true,
+   "measurement": {
+    "observer": "LENGTH",
+    "params": {
+     "unit": [
+      "words"
+     ],
+     "in": [
+      "Facts"
+     ],
+     "min": 29,
+     "max": 83
+    }
+   }
+  },
+  {
+   "requirementId": "x14",
+   "statement": "Write none of the moves that mark text as machine-written (announcing an insight others \"miss\", grading your own list, \"the single most\", announcing candour, \"that's the whole game\", reading the reader's mind, one thing \"wearing another's clothes\", a contrastive verdict as the opening line, an em dash, a run of three or more very short sentences).",
+   "appliesWhen": "GENERAL",
+   "kind": "GENERATIVE",
+   "authority": "EXPERT_RATIFIED",
+   "provenance": "MACHINE_DISCOVERED",
+   "evidence": null,
+   "evidenceItemId": null,
+   "wouldBeAbsentIf": null,
+   "materiality": "REQUIRED",
+   "realizationTolerance": null,
+   "outputShape": null,
+   "wordedFromCheck": true,
+   "measurement": {
+    "observer": "PATTERN_RATE",
+    "params": {
+     "pattern": [
+      "MACHINE_TELL"
+     ],
+     "maxPer1000": 0.3,
+     "never": [
+      "INSIGHT_CLAIM",
+      "RETRO_EMPHASIS",
+      "SUPERLATIVE",
+      "EPOCH",
+      "CANDOUR",
+      "TOTALISER",
+      "MIND_READING",
+      "COSTUME",
+      "GOES_TO_DIE",
+      "STACCATO_NOT",
+      "REFRAME_ANNOUNCE",
+      "RECURRING_THOUGHT",
+      "AWKWARD_SIZE",
+      "EM_DASH",
+      "STACCATO_RUN",
+      "VERDICT_OPENER"
+     ],
+     "role": [
+      "machine-tell"
+     ]
+    }
+   }
+  },
+  {
+   "requirementId": "x15",
+   "statement": "No mechanical errors: spelling, agreement, punctuation.",
+   "appliesWhen": "GENERAL",
+   "kind": "GENERATIVE",
+   "authority": "EXPERT_RATIFIED",
+   "provenance": "MACHINE_DISCOVERED",
+   "evidence": null,
+   "evidenceItemId": null,
+   "wouldBeAbsentIf": null,
+   "materiality": "REQUIRED",
+   "realizationTolerance": null,
+   "outputShape": null,
+   "wordedFromCheck": true,
+   "measurement": {
+    "observer": "GRAMMAR",
+    "params": {
+     "vocabulary": [
+      "fenwick",
+      "fraud",
+      "kilburn",
+      "liar",
+      "mossbank",
+      "oy",
+      "rushmere",
+      "saltmarsh",
+      "scam",
+      "suspicious",
+      "thornfield",
+      "tindall"
+     ]
+    }
+   }
+  }
+ ],
+ "authorityState": "RATIFIED",
+ "mintedAt": "2026-10-21T06:53:20.838Z",
+ "supersedes": null,
+ "reason": null,
+ "qualifications": {
+  "x2": {
+   "examples": {
+    "passed": 10,
+    "read": 10,
+    "of": 10
+   },
+   "own": {
+    "caught": 4,
+    "of": 4
+   },
+   "cross": {
+    "fired": 0,
+    "of": 13
+   },
+   "qualified": true,
+   "why": null
+  },
+  "x3": {
+   "examples": {
+    "passed": 0,
+    "read": 10,
+    "of": 10
+   },
+   "own": {
+    "caught": 4,
+    "of": 4
+   },
+   "cross": {
+    "fired": 13,
+    "of": 13
+   },
+   "qualified": false,
+   "why": "it fails 10 of the 10 examples it can read"
+  },
+  "x4": {
+   "examples": {
+    "passed": 0,
+    "read": 10,
+    "of": 10
+   },
+   "own": {
+    "caught": 1,
+    "of": 1
+   },
+   "cross": {
+    "fired": 16,
+    "of": 16
+   },
+   "qualified": false,
+   "why": "it fails 10 of the 10 examples it can read"
+  },
+  "x5": {
+   "examples": {
+    "passed": 10,
+    "read": 10,
+    "of": 10
+   },
+   "own": {
+    "caught": 1,
+    "of": 4
+   },
+   "cross": {
+    "fired": 0,
+    "of": 13
+   },
+   "qualified": false,
+   "why": "it caught 1 of 4 edits that break the step (needs 4)"
+  },
+  "x8": {
+   "examples": {
+    "passed": 2,
+    "read": 10,
+    "of": 10
+   },
+   "own": {
+    "caught": 4,
+    "of": 4
+   },
+   "cross": {
+    "fired": 13,
+    "of": 13
+   },
+   "qualified": false,
+   "why": "it fails 8 of the 10 examples it can read"
+  }
+ }
+}

@@ -1,0 +1,12 @@
+{
+ "fixture": "labels",
+ "arm": "plain",
+ "task": "t2",
+ "run": 3,
+ "text": "```json\n{\n  \"clip\": \"c15\",\n  \"duration\": \"00:42\",\n  \"overall\": \"Low\",\n  \"categories\": [\n    {\n      \"category\": \"Violence – minor\",\n      \"span\": \"00:20–00:38\",\n      \"risk\": \"Low\",\n      \"evidence\": \"The sparring partner lands a jab; the boy shakes it off and grins.\"\n    }\n  ]\n}\n```",
+ "costUsd": 0.010076,
+ "stop": "end_turn",
+ "error": null,
+ "meterUsd": 0.010075999999999752,
+ "seconds": 6.119
+}

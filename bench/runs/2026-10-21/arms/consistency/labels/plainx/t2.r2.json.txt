@@ -1,0 +1,13 @@
+{
+  "clip": "c15",
+  "duration": "00:42",
+  "overall": "Floor",
+  "categories": [
+    {
+      "category": "Floor – all brands",
+      "risk": "Floor",
+      "span": null,
+      "evidence": "nothing in the transcript is flagged"
+    }
+  ]
+}

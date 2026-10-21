@@ -1,0 +1,30 @@
+{"task":"t0","run":1,"state":null,"fails":[]}
+{"task":"t0","run":2,"state":null,"fails":["R17 evidence is copied from the transcript"]}
+{"task":"t0","run":3,"state":null,"fails":["R17 evidence is copied from the transcript"]}
+{"task":"t1","run":1,"state":null,"fails":[]}
+{"task":"t1","run":2,"state":null,"fails":[]}
+{"task":"t1","run":3,"state":null,"fails":[]}
+{"task":"t2","run":1,"state":null,"fails":[]}
+{"task":"t2","run":2,"state":null,"fails":[]}
+{"task":"t2","run":3,"state":null,"fails":[]}
+{"task":"t3","run":1,"state":null,"fails":[]}
+{"task":"t3","run":2,"state":null,"fails":[]}
+{"task":"t3","run":3,"state":null,"fails":[]}
+{"task":"t4","run":1,"state":null,"fails":["R17 evidence is copied from the transcript"]}
+{"task":"t4","run":2,"state":null,"fails":["R17 evidence is copied from the transcript"]}
+{"task":"t4","run":3,"state":null,"fails":["R17 evidence is copied from the transcript"]}
+{"task":"t5","run":1,"state":null,"fails":[]}
+{"task":"t5","run":2,"state":null,"fails":[]}
+{"task":"t5","run":3,"state":null,"fails":[]}
+{"task":"t6","run":1,"state":null,"fails":[]}
+{"task":"t6","run":2,"state":null,"fails":[]}
+{"task":"t6","run":3,"state":null,"fails":["R17 evidence is copied from the transcript"]}
+{"task":"t7","run":1,"state":null,"fails":[]}
+{"task":"t7","run":2,"state":null,"fails":[]}
+{"task":"t7","run":3,"state":null,"fails":[]}
+{"task":"t8","run":1,"state":null,"fails":[]}
+{"task":"t8","run":2,"state":null,"fails":[]}
+{"task":"t8","run":3,"state":null,"fails":[]}
+{"task":"t9","run":1,"state":null,"fails":[]}
+{"task":"t9","run":2,"state":null,"fails":[]}
+{"task":"t9","run":3,"state":null,"fails":[]}

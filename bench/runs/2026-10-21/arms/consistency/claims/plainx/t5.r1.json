@@ -1,0 +1,12 @@
+{
+ "fixture": "claims",
+ "arm": "plainx",
+ "task": "t5",
+ "run": 1,
+ "text": "## Summary\n\nBramble Hill Dental: theft from an unattended bag of a projector and a sound bar at the insured's van, parked overnight. Declined under exclusion 7.1.\n\n## Facts\n\nBramble Hill Dental reported the loss on 6 September 2026 under policy CC-1555 [notice of loss]. The loss occurred at the insured's van, parked overnight [notice of loss]. The items are a projector and a sound bar [invoice 1], [invoice 2]. The theft was reported to the police on 8 September 2026 under reference CR/2026/4195 [police report]. The items were left unattended in a shared area and were not in a locked container [police report].\n\n## Coverage analysis\n\nThe loss falls under clause 4.2 of the policy, which covers theft of or damage to business contents at other premises while in the insured's custody [policy]. Exclusion 7.1 applies: the items were unattended in a shared area and not in a locked container [police report], [policy]. Exclusion 7.5 is not engaged on the file: the police report is dated 8 September 2026, two days after the loss was reported on 6 September 2026 [police report], [notice of loss]. The file does not state the date of the theft itself, and the decision does not rest on exclusion 7.5 [policy]. Exclusion 7.3 does not apply: the loss is a theft, not gradual deterioration [notice of loss], [policy].\n\n## Decision\n\nNot covered: exclusion 7.1 applies. The claim is declined, and the insured is told why in the terms of the policy.\n\n## Reserve\n\nNo reserve is set: the claim is declined.",
+ "costUsd": 0.028036,
+ "stop": "end_turn",
+ "error": null,
+ "meterUsd": 0.028036000000000172,
+ "seconds": 12.361
+}

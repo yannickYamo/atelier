@@ -1,0 +1,12 @@
+{
+ "fixture": "adhd",
+ "arm": "plain",
+ "task": "debugging-cause",
+ "run": 2,
+ "text": "Add the header to the test request:\n\n```js\n.set('Authorization', `Bearer ${token}`)\n```\n\nExample with supertest:\n\n```js\nconst res = await request(app)\n  .get('/your-route')\n  .set('Authorization', `Bearer ${token}`);\nexpect(res.status).toBe(200);\n```\n\n**Cause:** the route requires auth. With no `Authorization` header, the middleware rejects the request with 401 before the handler runs.\n\n**Time:** about 2 minutes if the test suite already has a token helper. About 10 minutes if you need to generate a valid token.\n\n**Exception:** if this route should be public, the bug is in the app, not the test. Check whether the auth middleware is applied to it.\n\nNext: run the test again and paste the first line of output if it still fails.",
+ "costUsd": 0.010754,
+ "stop": "end_turn",
+ "error": null,
+ "meterUsd": 0.010754000000000374,
+ "seconds": 6.011
+}

@@ -1,0 +1,21 @@
+```json
+{
+  "clip": "c14",
+  "duration": "01:20",
+  "overall": "High",
+  "categories": [
+    {
+      "category": "Medical – procedure",
+      "span": "00:05–00:30",
+      "risk": "Medium",
+      "evidence": "The surgeon opens the chest."
+    },
+    {
+      "category": "Medical – graphic",
+      "span": "00:30–01:10",
+      "risk": "High",
+      "evidence": "Blood is suctioned as the graft is placed."
+    }
+  ]
+}
+```

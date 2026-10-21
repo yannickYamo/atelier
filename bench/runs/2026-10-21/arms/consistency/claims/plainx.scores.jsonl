@@ -1,0 +1,30 @@
+{"task":"t0","run":1,"state":null,"fails":["R8 figure(s) the file does not give: 1370, 4130"]}
+{"task":"t0","run":2,"state":null,"fails":["R8 figure(s) the file does not give: 1370, 4130"]}
+{"task":"t0","run":3,"state":null,"fails":["R2 every fact cites a document in the file","R8 figure(s) the file does not give: 1370, 4130"]}
+{"task":"t1","run":1,"state":null,"fails":["R3 the coverage conclusion cites the policy clause","R3c the clause the loss falls under (4.2)","R8 figure(s) the file does not give: 1407"]}
+{"task":"t1","run":2,"state":null,"fails":["R8 figure(s) the file does not give: 1407, 4143"]}
+{"task":"t1","run":3,"state":null,"fails":["R8 figure(s) the file does not give: 1407, 4143"]}
+{"task":"t2","run":1,"state":null,"fails":["R8 figure(s) the file does not give: 1444, 4156"]}
+{"task":"t2","run":2,"state":null,"fails":["R8 figure(s) the file does not give: 1444, 4156"]}
+{"task":"t2","run":3,"state":null,"fails":["R8 figure(s) the file does not give: 1444, 4156"]}
+{"task":"t3","run":1,"state":null,"fails":["R8 figure(s) the file does not give: 1481, 4169"]}
+{"task":"t3","run":2,"state":null,"fails":["R8 figure(s) the file does not give: 1481, 4169"]}
+{"task":"t3","run":3,"state":null,"fails":["R2b a citation names a document that is not in the file","R8 figure(s) the file does not give: 1481, 4169"]}
+{"task":"t4","run":1,"state":null,"fails":["R8 figure(s) the file does not give: 1518, 4182"]}
+{"task":"t4","run":2,"state":null,"fails":["R8 figure(s) the file does not give: 1518, 4182"]}
+{"task":"t4","run":3,"state":null,"fails":["R8 figure(s) the file does not give: 1518, 4182"]}
+{"task":"t5","run":1,"state":null,"fails":["R8 figure(s) the file does not give: 1555, 4195"]}
+{"task":"t5","run":2,"state":null,"fails":[]}
+{"task":"t5","run":3,"state":null,"fails":["R8 figure(s) the file does not give: 4195"]}
+{"task":"t6","run":1,"state":null,"fails":["R8 figure(s) the file does not give: 1592, 4208"]}
+{"task":"t6","run":2,"state":null,"fails":["R8 figure(s) the file does not give: 1592, 4208"]}
+{"task":"t6","run":3,"state":null,"fails":["R8 figure(s) the file does not give: 1592, 4208"]}
+{"task":"t7","run":1,"state":null,"fails":["R8 figure(s) the file does not give: 1629, 4221"]}
+{"task":"t7","run":2,"state":null,"fails":["R2 every fact cites a document in the file","R8 figure(s) the file does not give: 1629, 4221"]}
+{"task":"t7","run":3,"state":null,"fails":["R8 figure(s) the file does not give: 1629, 4221"]}
+{"task":"t8","run":1,"state":null,"fails":["R8 figure(s) the file does not give: 4234"]}
+{"task":"t8","run":2,"state":null,"fails":["R8 figure(s) the file does not give: 4234"]}
+{"task":"t8","run":3,"state":null,"fails":["R8 figure(s) the file does not give: 4234, 3004","R8* (re-read) a figure R8 names that is in no material file"]}
+{"task":"t9","run":1,"state":null,"fails":["R8 figure(s) the file does not give: 1703, 4247"]}
+{"task":"t9","run":2,"state":null,"fails":["R8 figure(s) the file does not give: 1703, 4247"]}
+{"task":"t9","run":3,"state":null,"fails":["R8 figure(s) the file does not give: 1703, 4247"]}

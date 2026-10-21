@@ -1,0 +1,21 @@
+```json
+{
+  "clip": "c17",
+  "duration": "00:52",
+  "overall": "Medium",
+  "categories": [
+    {
+      "category": "Disaster – news",
+      "span": "00:05–00:52",
+      "risk": "Medium",
+      "evidence": "Two people died when the bridge gave way. Rescue teams worked through the night. The cause is not known."
+    },
+    {
+      "category": "Death – reference",
+      "span": "00:05–00:25",
+      "risk": "Medium",
+      "evidence": "Two people died when the bridge gave way."
+    }
+  ]
+}
+```

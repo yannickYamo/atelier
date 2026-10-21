@@ -1,0 +1,12 @@
+{
+ "fixture": "adhd",
+ "arm": "plain",
+ "task": "destructive-action",
+ "run": 1,
+ "text": "Preview first: `git clean -ndx`\n\n1. Run `git clean -ndx` to list what will be deleted (nothing is removed).\n2. Check the list for `.env`, local configs, secrets, or IDE settings. Ignored files are not in git, so deletion is permanent.\n3. Run `git clean -fdx` to delete untracked and ignored files and directories.\n\nTakes under a minute. `node_modules` and build output will need a reinstall or rebuild, which is about 2 to 10 minutes depending on the project.\n\nTo keep something, add `-e <pattern>`: `git clean -fdx -e .env`\n\nNext: run step 1 and paste the output here if anything looks unfamiliar.",
+ "costUsd": 0.010148,
+ "stop": "end_turn",
+ "error": null,
+ "meterUsd": 0.010148000000000046,
+ "seconds": 6.057
+}

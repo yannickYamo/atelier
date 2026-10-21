@@ -1,0 +1,48 @@
+{
+ "fixture": "adhd",
+ "arm": "atelier",
+ "task": "casual-message",
+ "run": 2,
+ "text": "Glad it's fixed.",
+ "state": "NEEDS_REVIEW",
+ "costUsd": 0.0019,
+ "exit": 0,
+ "standard": "03fcfcea922b8e6a",
+ "headKeys": [
+  "schema",
+  "state",
+  "standardVersionHash",
+  "skillVersion",
+  "certificate",
+  "record"
+ ],
+ "certificate": {
+  "standardVersionHash": "03fcfcea922b8e6a",
+  "checks": {
+   "total": 6,
+   "counted": 0,
+   "written": 6,
+   "writtenQualified": 0
+  },
+  "readers": {
+   "taste": {
+    "veto": [],
+    "labelledMisses": 0,
+    "falseBlockUpper95": null
+   },
+   "claims": {
+    "instrument": "pattern check (no material bound: a model reading of specifics could only list them)",
+    "version": null,
+    "gate": "pattern",
+    "qualified": false,
+    "measured": null,
+    "kinds": []
+   }
+  },
+  "errorBound": null,
+  "why": "no delivered-error bound: it needs an audit sample of your own labels, drawn like the work this skill does; the checks and readers above are what this output was held to"
+ },
+ "stderr": "No notes of yours are bound, so a story, source or figure in the draft cannot be checked against anything of yours, and is listed for you, not cut. Add yours: --with notes=<file>, or atelier material --skill i-have-adhd <file>.\nChecked: every REQUIRED measured rule holds.\n$0.00 · everything this run checked: $STUDY_SCRATCH/data/build-adh",
+ "meterUsd": 0.001943089999999259,
+ "seconds": 6.279
+}

@@ -1,0 +1,13 @@
+{
+  "clip": "c18",
+  "duration": "00:38",
+  "overall": "Floor",
+  "categories": [
+    {
+      "category": "Floor – all brands",
+      "risk": "Floor",
+      "span": null,
+      "evidence": "Unboxing the new drone."
+    }
+  ]
+}

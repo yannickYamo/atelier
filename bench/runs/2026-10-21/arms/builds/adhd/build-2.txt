@@ -1,0 +1,101 @@
+$ atelier skill <SKILL.md text> --name i-have-adhd --yes --model claude-sonnet-5-5
+
+you can state what you want, so nothing needs to be read.
+
+12 rule(s) from what you said, for ADHD-friendly responses:
+
+  1. [do  ] Lead with the next action: the first line is something the reader can do, and any command, path, or snippet goes first, with prose after, if at all.
+      ^ MY READING — these words are not in what you said. It needs your decision.
+      a check was written for it: it reports and blocks nothing until you give finished examples it can be qualified on
+  2. [do  ] Write a numbered list where each step is one bounded action, using the fewest steps that still work.
+      applies when: the work takes more than one step
+      ^ MY READING — these words are not in what you said. It needs your decision.
+  3. [do  ] End with one concrete next action the reader can do in under two minutes.
+      applies when: anything is left open
+      ^ MY READING — these words are not in what you said. It needs your decision.
+  4. [don't] Finish the first issue, then offer any second issue as a separate question instead of mixing it in.
+      applies when: a second issue exists beyond the one being worked on
+      ^ MY READING — these words are not in what you said. It needs your decision.
+  5. [do  ] Restate where things stand every turn: which step is done, what is next, and ask whether to proceed.
+      ^ MY READING — these words are not in what you said. It needs your decision.
+  6. [do  ] Give time estimates in concrete units, not vague phrases.
+      applies when: giving a time estimate
+      ^ MY READING — these words are not in what you said. It needs your decision.
+      a check was written for it: it reports and blocks nothing until you give finished examples it can be qualified on
+  7. [do  ] Show what now works in concrete terms, with how to try it, and do not bury wins in a recap.
+      applies when: work has been completed
+      ^ MY READING — these words are not in what you said. It needs your decision.
+  8. [don't] State cause and fix in a matter-of-fact tone, never using "Uh oh," "Oh no," or "There seems to be a problem."
+      applies when: reporting an error
+      ^ MY READING — these words are not in what you said. It needs your decision.
+      a check was written for it: it reports and blocks nothing until you give finished examples it can be qualified on
+  9. [do  ] Group related items and rank the most relevant first, showing no more than five items per group, while retaining the rest internally and displaying them only when asked or when they become the next items to address.
+      applies when: the final response has a long list
+      ^ MY READING — these words are not in what you said. It needs your decision.
+  10. [don't] Do not open with preamble such as "Great question," "Let me...", "I'll...", "Sure!", "Looking at your...", or "To answer your question..."; start with the answer.
+      ^ MY READING — these words are not in what you said. It needs your decision.
+      a check was written for it: it reports and blocks nothing until you give finished examples it can be qualified on
+  11. [don't] Do not recap what was just done, e.g. "I've now done X, Y, and Z, which means..."
+      applies when: after a completed task
+      ^ MY READING — these words are not in what you said. It needs your decision.
+      a check was written for it: it reports and blocks nothing until you give finished examples it can be qualified on
+  12. [don't] Do not use closing pleasantries such as "Let me know if you need anything else," "Hope this helps," "Happy to clarify," or "Feel free to ask"; end when the answer is done.
+      ^ MY READING — these words are not in what you said. It needs your decision.
+      a check was written for it: it reports and blocks nothing until you give finished examples it can be qualified on
+
+0 of 12 checked by code on every output; the rest are yours to judge.
+
+Not carried by any rule above (5): say it again, or add it with `atelier amend` after accepting:
+  - "i-have-adhd"
+  - "Persistence"
+  - "What ADHD changes about reading"
+  - "When to break the rules"
+  - "Pre-send check"
+
+0 of these are yours, in your own words. 12 are my readings: accepted, they are SHOWN to the model without instructing it, until you declare them required.
+Checked as assistant replies: specifics not in your material are listed for you to check, not cut. (`--class none` to cut them instead.)
+
+  NOTHING HERE INSTRUCTS THE MODEL YET. A skill built now would show these rules and instruct none.
+  You marked none of them REQUIRED, and a rule instructs only when it is. After building, make one REQUIRED with:
+    atelier amend --skill <name> --rule <id> --materiality REQUIRED --reason "<why>"
+Document class: assistant-reply. A text declared as another class is refused by verify and invoke.
+What each rule became, and why: $STUDY_SCRATCH/data/build-adhd-2-tiNElk/runs/project-dcebe95c3f09d84b/proposal.md
+
+Preview installed — it INSTRUCTS NOTHING until you rule.
+
+  Every kept rule is shown, not instructed. Declare what binds:  "materiality":"REQUIRED" on a ratify decision
+
+  /i-have-adhd <your task>
+
+Installed for claude-code at $STUDY_SCRATCH/data/build-adhd-2-tiNElk/project/.claude/skills/i-have-adhd
+StandardVersion da6e9d17d41bf71b · architecture 69ffb3e4d8a7a58d · package 7fd274ec6f5c79f5
+
+Carrier delivery on claude-code (invoked as /i-have-adhd <your task>)
+
+  PROSE             DELIVERED                SKILL.md is the skill; this host loads it to invoke at all
+
+5 pattern(s) you seem to avoid are watched, not enforced: x4, x8, x10, x11, x12. Confirm one: atelier confirm --skill i-have-adhd --rule <id>   (or --drop)
+
+── Atelier · skill i-have-adhd · version 59f9d315 · standard da6e9d17 ────────────────────────────────────────
+
+  EVERY OUTPUT IS CHECKED BY
+    your rules        12 in force (0 written by you, 12 read from your work): 0 required
+                      6 counted on every output · 6 read by the taste reader · 8 apply only under a condition
+    invented claims   pattern check, with claim reader (claude-haiku-4-5, prompt 47d18891) reporting only:
+                      not qualified: no material is stored with the skill (bind it with atelier material, or
+                      --with on a run); what it finds is listed, never cut
+                      answers: work and results by pattern, other specifics listed
+  TASTE READER  6 rule(s) only a reading can check
+                      not validated: 0 label(s) so far (atelier taste --skill i-have-adhd --calibrate)
+
+  SIZE  stored 1,021 words in 2 files · exported 887 words (5,234 bytes)
+    the export        rules and instructions 887
+    per run           what a run sent, and what it cost by purpose: atelier report <run>
+
+  not measured: the reading-based rules, until the taste reader is validated by your labels; your range
+                      (built without a corpus: no profile)
+  next: atelier invoke --skill i-have-adhd "<task>" · atelier report <run> · atelier rate <run> yes|no
+                      atelier eval --skill i-have-adhd · atelier taste --skill i-have-adhd --calibrate
+
+
+--- stderr ---

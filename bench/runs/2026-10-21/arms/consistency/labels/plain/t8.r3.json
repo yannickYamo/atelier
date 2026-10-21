@@ -1,0 +1,12 @@
+{
+ "fixture": "labels",
+ "arm": "plain",
+ "task": "t8",
+ "run": 3,
+ "text": "```json\n{\n  \"clip\": \"c21\",\n  \"duration\": \"01:13\",\n  \"overall\": \"Medium\",\n  \"categories\": [\n    {\n      \"category\": \"Violence – minor\",\n      \"span\": \"00:30–01:00\",\n      \"risk\": \"Medium\",\n      \"evidence\": \"A bottle is thrown; an officer is struck on the helmet and falls; colleagues drag him back.\"\n    },\n    {\n      \"category\": \"Crime – reference\",\n      \"span\": \"01:00–01:13\",\n      \"risk\": \"Low\",\n      \"evidence\": \"Six arrests were made.\"\n    }\n  ]\n}\n```",
+ "costUsd": 0.012472,
+ "stop": "end_turn",
+ "error": null,
+ "meterUsd": 0.012471999999999817,
+ "seconds": 6.062
+}

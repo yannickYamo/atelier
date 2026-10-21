@@ -1,0 +1,48 @@
+{
+ "fixture": "adhd",
+ "arm": "atelier",
+ "task": "destructive-action",
+ "run": 1,
+ "text": "Run the dry run first, from the repository root:\n\n```\ngit clean -ndx\n```\n\nThis lists every untracked and ignored file that would be deleted, and removes nothing. Ignored files often include `.env`, local config, `node_modules`, and build output, and none of them can be recovered from git once deleted.\n\nIf the list is what you want gone, run:\n\n```\ngit clean -fdx\n```\n\n- `-f` forces the deletion\n- `-d` includes untracked directories\n- `-x` includes ignored files\n\nStep 1 of 2 done: command prepared. Next: run `git clean -ndx` and scan the list for anything you need to keep (under 2 minutes).",
+ "state": "NEEDS_REVIEW",
+ "costUsd": 0.0041,
+ "exit": 0,
+ "standard": "03fcfcea922b8e6a",
+ "headKeys": [
+  "schema",
+  "state",
+  "standardVersionHash",
+  "skillVersion",
+  "certificate",
+  "record"
+ ],
+ "certificate": {
+  "standardVersionHash": "03fcfcea922b8e6a",
+  "checks": {
+   "total": 6,
+   "counted": 0,
+   "written": 6,
+   "writtenQualified": 0
+  },
+  "readers": {
+   "taste": {
+    "veto": [],
+    "labelledMisses": 0,
+    "falseBlockUpper95": null
+   },
+   "claims": {
+    "instrument": "pattern check (no material bound: a model reading of specifics could only list them)",
+    "version": null,
+    "gate": "pattern",
+    "qualified": false,
+    "measured": null,
+    "kinds": []
+   }
+  },
+  "errorBound": null,
+  "why": "no delivered-error bound: it needs an audit sample of your own labels, drawn like the work this skill does; the checks and readers above are what this output was held to"
+ },
+ "stderr": "No notes of yours are bound, so a story, source or figure in the draft cannot be checked against anything of yours, and is listed for you, not cut. Add yours: --with notes=<file>, or atelier material --skill i-have-adhd <file>.\nJudgement reader: not run (reporting only until your labels qualify it; --taste reads this run and records readings to label: atelier taste --skill i-have-adhd --calibrate)",
+ "meterUsd": 0.004137779999999758,
+ "seconds": 9.272
+}
