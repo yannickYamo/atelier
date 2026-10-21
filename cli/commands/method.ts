@@ -280,13 +280,13 @@ export async function method(): Promise<void> {
   // WHAT EACH STATED STEP IS, READ ONCE (core/observers/rule-polarity.ts): a prohibition or a thing to do. Read first, so
   // the check reading can be held against it: a prohibition is never given a check that requires what it forbids.
   // Frozen with each step's check (core/method/freeze.ts): a step whose words and examples are unchanged is not read again.
-  const frozenNow = store.getFrozenChecks(LN);
-  const kindsKept = frozenKinds(stepsOf(note), examplesKey(cases), frozenNow);
+  const frozenNow = store.getFrozenChecks(LN); const rejected = rejectedOutputs(LN);
+  const kindsKept = frozenKinds(stepsOf(note), examplesKey(cases), frozenNow, rejected);
   const stepKindsRead = await stepKinds(stepsOf(note).map((st) => st.text), kindsKept);
   // WHICH CHECK EACH STATED STEP CARRIES, READ ONCE (core/method/step-check.ts): a measurement from the menu, a check the
   // model writes, or judgement; grounded on the owner's examples by code. With no model every step is a judgement.
   const planSteps = stepsOf(note).map((st, i) => ({ id: String(i + 1), text: st.text, under: st.under }));
-  const checksPlan = await stepPlan(planSteps, cases, stepKindsRead, { frozen: frozenNow, rejected: rejectedOutputs(LN) });
+  const checksPlan = await stepPlan(planSteps, cases, stepKindsRead, { frozen: frozenNow, rejected });
   const across = proposalsAcross(note, cases, checksPlan);
   // A WRITTEN CHECK EARNS ITS SAY (core/method/mutants.ts): it must pass every example and catch the edits that break
   // only its step; until then it is kept, shown with what it caught, and enforced nowhere. Its standing is said beside it.
@@ -400,7 +400,7 @@ export async function method(): Promise<void> {
   try { ratifyClose(); await build(name); } catch (e) { console.log = log; for (const l of said) console.log(l); throw e; } finally { console.log = log; }
   // THE CHECKS THIS BUILD RATIFIED ARE FROZEN (core/method/freeze.ts): the next build keeps each while its step and the
   // examples are unchanged.
-  if (checksPlan) store.putFrozenChecks(LN, toFreeze(planSteps, Object.fromEntries(planSteps.flatMap((st) => { const c = checksPlan.get(st.text); return c ? [[st.id, c]] : []; })), examplesKey(cases), stepKindsRead.byModel));
+  if (checksPlan) store.putFrozenChecks(LN, toFreeze(planSteps, Object.fromEntries(planSteps.flatMap((st) => { const c = checksPlan.get(st.text); return c ? [[st.id, c]] : []; })), examplesKey(cases), stepKindsRead.byModel, rejected));
   // THE UNITS, BESIDE THE STANDARD THEY WERE READ FROM, never inside it: keyed by requirement id under the standard's
   // hash, so a reading moves no standard and a rebuild under the same standard finds them (core/state/store.ts).
   if (units.size) {
@@ -479,7 +479,7 @@ export async function stepPlan(all: readonly StepToCheck[], cases: readonly Exam
   // A CHECK FROZEN AT A BUILD IS KEPT while its step's words and the examples are unchanged (core/method/freeze.ts): only
   // the other steps are read, and drawn best of three. Rewording one step reads that step again and no other.
   const exKey = examplesKey(cases);
-  const kept = frozenFor(all, exKey, opts.frozen ?? {});
+  const kept = frozenFor(all, exKey, opts.frozen ?? {}, opts.rejected);
   const steps = all.filter((st) => !kept.has(st.id));
   if (!steps.length) {
     if (argv.includes('--report')) console.log(`(which check each step asks for: every one kept from the build that ratified it; nothing read.)`);
@@ -573,19 +573,20 @@ export async function stepPlan(all: readonly StepToCheck[], cases: readonly Exam
 /**
  * THE OUTPUTS THE OWNER REJECTED, BY THE STEP THEY SAID EACH BREAKS: a run rated no with `--rule <id>`, and an answer
  * drafted for them and rejected the same way (`atelier rate d3 no --rule <id>`). Keyed by the step's words, as the
- * active standard has them. A rejection that names no rule breaks no step anyone can name, and is not used.
+ * standard it was rated under had them. A rejection that names no rule breaks no step anyone can name, and is not used.
  */
 export function rejectedOutputs(L: store.StoreLayout): Map<string, string[]> {
   const active = store.getActive(L); const sv = active ? store.getSkillVersion(L, active) : null;
   const std = sv ? store.getStandard(L, sv.standardVersionHash) : null;
   const out = new Map<string, string[]>();
-  const add = (rule: string | null | undefined, text: string | null | undefined): void => {
-    const r = rule ? std?.requirements.find((q) => q.requirementId === rule) : undefined;
-    if (r && text?.trim()) out.set(r.statement, [...(out.get(r.statement) ?? []), text]);
+  // The rule's words as recorded when it was rated (`atelier rate`); a rating recorded before they were is read by its id.
+  const add = (rule: string | null | undefined, words: string | null | undefined, text: string | null | undefined): void => {
+    const statement = words ?? (rule ? std?.requirements.find((q) => q.requirementId === rule)?.statement : undefined);
+    if (statement && text?.trim()) out.set(statement, [...(out.get(statement) ?? []), text]);
   };
   const runs = new Map(store.listLearningInvocations(L).map((x) => [x.invocationId, x]));
-  for (const rating of latestRatings(L)) if (!rating.ship) add(rating.rule, runs.get(rating.invocationId)?.output);
-  for (const d of store.getDrafted(L)) if (d.kept === false) add(d.rule, d.answer);
+  for (const rating of latestRatings(L)) if (!rating.ship) add(rating.rule, rating.ruleStatement, runs.get(rating.invocationId)?.output);
+  for (const d of store.getDrafted(L)) if (d.kept === false) add(d.rule, d.ruleStatement, d.answer);
   return out;
 }
 

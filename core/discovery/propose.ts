@@ -76,6 +76,12 @@ export const PROPOSER_SCHEMA: Record<string, unknown> = {
 export interface CorpusItem { readonly id: string; readonly text: string }
 
 /**
+ * Room for the answer: each rule quotes its evidence from a piece, so a larger corpus is answered at more length. 4,000
+ * tokens up to eight pieces, then 250 more a piece, at most 12,000: a 17-post corpus stopped at 4,000 with nothing recorded.
+ */
+export const proposerMaxTokens = (pieces: number): number => Math.min(12_000, 4000 + 250 * Math.max(0, pieces - 8));
+
+/**
  * Propose rules from a corpus.
  *
  * The corpus goes in the VARIABLE block and the instructions in the STABLE one, which is the opposite
@@ -94,7 +100,7 @@ export async function proposeRules(
     const r = await client.complete({
       stableBlock: proposerSystemFor(framing), variableBlock, userMessage: 'Produce the rules now.',
       toolName: 'emit_rules', toolDescription: 'Emit the inferred decision rules.',
-      schema: PROPOSER_SCHEMA, maxTokens: 4000,
+      schema: PROPOSER_SCHEMA, maxTokens: proposerMaxTokens(corpus.length),
     });
     return { value: r, cost: r.cost };
   });

@@ -280,11 +280,13 @@ export const NO_MATERIAL = 'no material was bound to check against';
  */
 export type ClaimAct = 'cut' | 'block' | 'review' | 'list';
 export function claimAction(ctx: { readonly level: LatitudeLevel; readonly bound: boolean; readonly ownerCut?: boolean; readonly cls?: string | null; readonly slots?: boolean },
-  list: readonly QualifiedReader[] = QUALIFIED_READERS): { readonly act: ClaimAct; readonly why: string | null } {
+  list: readonly QualifiedReader[] = QUALIFIED_READERS): { readonly act: ClaimAct; readonly why: string | null; readonly otherwise?: { readonly act: ClaimAct; readonly why: string | null } } {
   if (ctx.slots) { const k = unmeasuredKind(ctx.cls, list); return k ? { act: 'list', why: `the claim check is not measured on ${k}` } : { act: 'cut', why: null }; }
   if (!ctx.bound) return { act: 'list', why: NO_MATERIAL };
   const qualified = Boolean(ctx.cls?.trim()) && ctx.cls?.trim().toLowerCase() !== 'none' && !unmeasuredKind(ctx.cls, list);
-  if (ctx.ownerCut && qualified) return { act: 'cut', why: null };
+  // A cut is the qualified reader's: where the pattern check gates the text (no qualified reader, or one that failed a
+  // read), the level's action stands in its place (./run-repair.ts).
+  if (ctx.ownerCut && qualified) return { act: 'cut', why: null, otherwise: claimAction({ ...ctx, ownerCut: false }, list) };
   if (ctx.level === 'STRICT') return { act: 'block', why: 'the skill is held strict: a figure, date or citation not in your material stops the work, and nothing is cut' };
   if (ctx.level === 'GROUNDED') return { act: 'review', why: 'the skill is held grounded: what is not in your material is flagged for your review, never cut' };
   return { act: 'list', why: 'the skill is held creative: what is not in your material is listed for you, never cut' };

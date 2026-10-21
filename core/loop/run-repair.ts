@@ -147,6 +147,8 @@ export interface CheckOptions {
    * check on what code finds missing from the material (a figure, a date, a citation) and never deletes it.
    */
   readonly claimAct?: ClaimAct;
+  /** what an owner-chosen cut becomes where no qualified reader gates the text (./claim-extract.ts, `claimAction`) */
+  readonly cutOtherwise?: { readonly act: ClaimAct; readonly why: string | null };
   /**
    * THE BOUNDED CONTROLLER (./controller.ts): the release's settings for it (absent: its defaults), whether a draft can
    * be written again by the caller when it asks for one (`withRedraft` in cli/commands/invoke.ts; absent: it cannot,
@@ -239,10 +241,14 @@ export function checkDraft(skill: string, v: StandardVersion, text: string, opts
   const situationFlags = opts.judge?.situations ? judgedSituations(text, opts.judge.situations(answerSentences(text)), [...claims, ...workClaims, ...judgeFlags]) : [];
   // ON A KIND OF WORK NOBODY MEASURED, NOTHING IS CUT. The reader's findings and the patterns' are one list
   // for the person to check: on 27 real competitive analyses the cut deleted 32 legitimate sentences of 41.
-  const unmeasured = !listOnly && opts.listsBecause ? opts.listsBecause : null;
+  // THE OWNER'S CUT IS A QUALIFIED READER'S: where the pattern check gates this text, the level's action stands instead.
+  const instead = opts.claimAct === 'cut' && opts.cutOtherwise && (!opts.claimSensor?.qualified || opts.claimSensor.gate !== 'reader' || Boolean(reading?.gate)) ? opts.cutOtherwise : null;
+  const act = instead?.act ?? opts.claimAct;
+  const why = opts.listsBecause ?? instead?.why ?? null;
+  const unmeasured = !listOnly && why ? why : null;
   // STRICT (./claim-extract.ts, `claimAction`): a figure, a date or a citation code finds missing from the bound material
   // stops the work. It is never cut (the line's authority says so); what only a reader found joins the list, for review.
-  const blocking = unmeasured && opts.claimAct === 'block'
+  const blocking = unmeasured && act === 'block'
     ? [...unsourcedClaims(text, opts.material ?? '', false).filter((c) => c.kind === 'SOURCE'), ...statedFigureClaims(text, opts.material ?? '', (x) => derivedFromKnown(x, opts.material ?? ''))]
       .filter((c, i, all) => !all.slice(0, i).some((b) => b.start < c.end && c.start < b.end)).sort((x, y) => x.start - y.start)
       .map((c) => ({ ...c, why: `${c.kind === 'SOURCE' ? 'a quotation, attribution or citation' : 'a figure or date'} not in your material: the work stops here, and nothing is cut; if it is yours, add it to your material (atelier material)` }))
@@ -253,7 +259,7 @@ export function checkDraft(skill: string, v: StandardVersion, text: string, opts
   const unverifiable = unmeasured === NO_MATERIAL ? bracketCitations(text).filter((c) => !claims.some((x) => x.start < c.end && c.start < x.end)) : [];
   const everyFinding = unmeasured ? [...claims, ...unverifiable, ...(reading?.gate ? reading.claims.filter((c) => ![...claims, ...unverifiable].some((x) => x.start === c.start)) : [])]
     .filter((c) => !blocking.some((b) => b.start < c.end && c.start < b.end))
-    .sort((x, y) => x.start - y.start).map((c) => ({ ...c, why: c.why.replace(/: the sentence is cut; /, opts.claimAct === 'review' ? ': flagged for your review; ' : ': listed for you to check; ') })) : [];
+    .sort((x, y) => x.start - y.start).map((c) => ({ ...c, why: c.why.replace(/: the sentence is cut; /, act === 'review' ? ': flagged for your review; ' : ': listed for you to check; ') })) : [];
   const toCut = unmeasured ? [] : listOnly ? agreed.cut : claims;
   const toList = unmeasured ? everyFinding
     : listOnly ? [...claims.filter((c) => !agreed.cut.some((w) => w.start === c.start)), ...agreed.listed.filter((l) => !claims.some((c) => c.start === l.start)),
@@ -291,7 +297,7 @@ export function checkDraft(skill: string, v: StandardVersion, text: string, opts
     materiality: 'REQUIRED', phase: 'ACCURACY' as const, authority,
     result: { verdict: toCut.length || blocking.length ? 'VIOLATED' as const : 'MET' as const, spans: [...toCut, ...blocking], value: toCut.length + blocking.length,
       detail: `${blocking.length ? `${blocking.length} figure(s), date(s) or citation(s) not in your material: the work stops here, nothing cut${listed.length ? `; ${listed.length} more listed for review` : ''}`
-        : unmeasured ? `${unmeasured}: ${listed.length ? `${listed.length} sentence(s) ${opts.claimAct === 'review' ? 'flagged for review' : 'listed to check'}, none cut` : 'nothing found, and nothing would be cut'}`
+        : unmeasured ? `${unmeasured}: ${listed.length ? `${listed.length} sentence(s) ${act === 'review' ? 'flagged for review' : 'listed to check'}, none cut` : 'nothing found, and nothing would be cut'}`
         : toCut.length ? `${toCut.length} claim(s) not in the material supplied` : 'no unsourced stories, quotations or specifics'} [${by}]` } };
   const checkLine = listed.length ? [{ requirementId: CLAIMS_TO_CHECK, statement: unmeasured ? `Not found in what you supplied: listed for you to check, never cut, because ${unmeasured}.`
     : listOnly ? 'Specifics not in the material supplied: listed for you to check, never cut in this format.'
@@ -852,7 +858,7 @@ async function refineOnLedger(client: InferenceClient, budget: Budget, skill: st
     const grammar = r.checked.filter((c) => acts(c) && c.result.verdict === 'VIOLATED' && (correctingCheck(v, c) || (grammarFixing() && c.observer === 'GRAMMAR' && !isGrammarNote(c)
       && c.result.spans.some((sp) => sp.replacement !== undefined)))).map((c) => c.requirementId);
     const enforced: EnforcedMiss[] = r.checked.filter((c) => acts(c) && c.result.verdict === 'VIOLATED' && !CLAIM_LINES.has(c.requirementId) && !grammar.includes(c.requirementId))
-      .map((c) => ({ id: c.requirementId, kind: isOmission(c) || !c.result.spans.length ? 'omission' as const : 'span' as const }));
+      .map((c) => ({ id: c.requirementId, kind: (isOmission(c) && c.observer !== 'CHECK') || !c.result.spans.length ? 'omission' as const : 'span' as const }));
     // one miss per feature: a rule and a signal on the same feature are one target, the further out of the two
     const byFeature = new Map<string, GradedMiss>();
     for (const c of gradedOff(r)) {
@@ -1066,9 +1072,11 @@ async function refineOnLedger(client: InferenceClient, budget: Budget, skill: st
     type Rewritten = Proposed & { readonly targets: readonly RepairTarget[] };
     const s = await step<Rewritten>({ ...d, forEnforced: enforcedStep ? d.targets : [] }, async () => {
       const plannable = focus(withGraded(withoutClaims(report), gradedIds), ids);
-      const accuracy = accuracyTried || d.action !== 'rewrite' ? [] : planRepair(text, plannable, { phase: 'ACCURACY' });
-      const accuracyPass = accuracy.length > 0 && planRepair(text, plannable, { phase: 'STYLE' }).length > 0;
-      targets = accuracyPass ? accuracy : planRepair(text, plannable);
+      // The documents of the bound material: a rewrite may cite one in brackets (./repair.ts, `cites`).
+      const cites = (opts.context?.material ?? []).map((m) => m.name);
+      const accuracy = accuracyTried || d.action !== 'rewrite' ? [] : planRepair(text, plannable, { phase: 'ACCURACY', cites });
+      const accuracyPass = accuracy.length > 0 && planRepair(text, plannable, { phase: 'STYLE', cites }).length > 0;
+      targets = accuracyPass ? accuracy : planRepair(text, plannable, { cites });
       if (d.action === 'rewrite') accuracyTried = true;
       // SIZED TO THE MISS: k carrier sentences of each feature, k = ceil(|error|), at most three (./controller.ts, `carriersFor`).
       if (d.carriers) {

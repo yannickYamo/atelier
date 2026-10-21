@@ -51,7 +51,9 @@ export const REASON_CODES = ['missing-necessary', 'unnecessary-extra', 'wrong', 
 export type ReasonCode = typeof REASON_CODES[number];
 export interface Rating { readonly invocationId: string; readonly ship: boolean; readonly why: string | null; readonly at: string; readonly release: string | null; readonly reasons?: readonly ReasonCode[];
   /** the rule the owner said a rejected output breaks (`--rule`): the output then joins that rule's mutants at the next build */
-  readonly rule?: string | null }
+  readonly rule?: string | null;
+  /** the words of that rule in the standard the run was made under: ids move between builds, words do not */
+  readonly ruleStatement?: string | null }
 
 export function putRating(l: StoreLayout, r: Rating): void {
   writeAtomic(join(base(l), 'ratings', `${safeId(r.invocationId)}-${r.at.replace(/[^0-9]/g, '')}.json`), JSON.stringify(r, null, 1));

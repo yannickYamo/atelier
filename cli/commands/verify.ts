@@ -30,7 +30,8 @@ import { checksFor, shortFormRequest } from '../checks.js';
 import { readFileSync, existsSync } from 'node:fs';
 import * as store from '../../core/state/store.js';
 import * as fstore from '../../core/state/fidelity-store.js';
-import { describeVerify } from '../../core/observers/verify.js';
+import { describeVerify, acts } from '../../core/observers/verify.js';
+import { MATERIAL_UNREAD } from '../../core/observers/written.js';
 import { checkDraftAsync, refineToStandard, REPAIR_PASSES } from '../../core/loop/run-repair.js';
 import { checkClass } from '../../core/observers/doc-class.js';
 import { grammarListed, toCheckList } from '../../core/observers/grammar.js';
@@ -41,9 +42,13 @@ import { recordTaste, readerModel } from './taste.js';
 import { certificateFor, tasteStandingFor, claimStandingOf, recordHead } from '../../core/eval/certificate.js';
 import { recordForText } from '../eval-run.js';
 import { stateLine } from '../../core/eval/run-card.js';
-import { partlyChecked, blocks } from '../../core/eval/record.js';
+import { partlyChecked, blocks, type EvaluationRecord } from '../../core/eval/record.js';
 
 export { verifyText, describeVerify, describeMeasurement } from '../../core/observers/verify.js';
+
+/** What blocked the text, from the record its state is read from: the rule lines and the record's own checks alike (copying, the request). */
+const violatedOf = (record: EvaluationRecord): { id: string; statement: string; required: boolean; evidence: string | null }[] =>
+  record.entries.filter(blocks).map((e) => ({ id: e.id, statement: e.statement, required: e.required, evidence: e.observation.evidence ?? null }));
 
 /**
  * The author's range as the skill card counts it (core/eval/skill-card.ts): the features of the fidelity profile the
@@ -119,7 +124,7 @@ export async function verify(): Promise<void> {
       // THE SAME RECORD OF THE REPAIRED TEXT a run carries, under the one record head (core/eval/certificate.ts).
       const after = recordForText({ L, std: v, text: r.output, report: r.report, sensor: checks.claimSensor, claimsOff: argv.includes('--allow-unsourced'), answers: checks.format?.claims === 'list', unmeasured: checks.listsBecause ?? null, act: checks.claimAct, material: checks.evidence ?? '' });
       console.log(JSON.stringify({ ...recordHead({ state: after.state, standardVersionHash: v.standardVersionHash, skillVersion: active, certificate: certificateFor(v, tasteStandingFor(L, v, readerModel()), claimStandingOf(checks.claimSensor)), record: after }),
-        output: r.output, failed: r.report.failed, repair: r.repair, spentUsd: budget.spentUsd,
+        output: r.output, failed: after.state === 'BLOCKED', violated: violatedOf(after), repair: r.repair, spentUsd: budget.spentUsd,
         ...(listed.length ? { unverified: listed.map((l) => l.rule), listed } : {}) }, null, 1));
     } else {
       console.log(r.output);
@@ -168,12 +173,21 @@ export async function verify(): Promise<void> {
       console.error(`atelier: this breaks ${broken.length} required rule(s) of the "${name}" standard. Rewrite only what each names, keep everything else as it is:`);
       for (const e of broken) console.error(`  - ${e.statement.replace(/[.]$/, '')}${e.observation.evidence ? `: ${e.observation.evidence}` : ''}`);
       process.exitCode = 2;
+      return;
+    }
+    // WHAT WAS NOT READ IS SAID, AND BLOCKS NOTHING: a required rule whose check could not read this text (one that reads
+    // the material, on an event that binds none) is named, so a pass is never mistaken for every rule holding.
+    const unread = report.checked.filter((c) => acts(c) && c.result.verdict === 'NOT_APPLICABLE' && c.result.detail.startsWith(MATERIAL_UNREAD));
+    if (unread.length) {
+      console.error(`atelier: ${unread.length} required rule(s) of the "${name}" standard were not read on this text, so nothing was blocked on ${unread.length === 1 ? 'its' : 'their'} account:`);
+      for (const c of unread) console.error(`  - ${c.statement.replace(/[.]$/, '')}: ${c.result.detail}`);
+      if (!named.length) console.error(`  To have the material read, bind it to the skill: atelier material --skill ${name} <file>`);
     }
     return;
   }
   if (argv.includes('--json')) {
     console.log(JSON.stringify({ ...recordHead({ state: record.state, standardVersionHash: v.standardVersionHash, skillVersion: active, certificate: certificateFor(v, tasteStandingFor(L, v, readerModel()), claimStandingOf(checks.claimSensor)), record }),
-      ...report, ...(profile ? { profile } : {}), failed: record.state === 'BLOCKED' || (taste?.failed ?? false), ...(classNote ? { note: classNote } : {}),
+      ...report, ...(profile ? { profile } : {}), failed: record.state === 'BLOCKED' || (taste?.failed ?? false), violated: violatedOf(record), ...(classNote ? { note: classNote } : {}),
       ...(taste ? { taste: { failed: taste.failed, verdicts: taste.verdicts } } : {}) }, null, 1));
   } else {
     console.log(describeVerify(report, partlyChecked(record)));

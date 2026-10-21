@@ -21,7 +21,7 @@ import { acts, isOmission, type RuleCheck, type VerifyReport } from '../observer
 import { errorAtLength, featureWordCount } from '../observers/features.js';
 import type { StandardVersion } from '../state/canonical-state.js';
 import { displacedFamilies } from '../observers/style.js';
-import { spanIntegrity, namesIn, numbersIn, addedFigures, workLost } from './integrity.js';
+import { spanIntegrity, namesIn, numbersIn, addedFigures, workLost, hedgesIn } from './integrity.js';
 import { isGrammarNote } from '../observers/grammar.js';
 import { processSpendByPurpose, spendBetween, type SpendPurpose } from '../inference/client.js';
 import type { PlannedStep, StepLedger } from './controller.js';
@@ -80,6 +80,10 @@ export interface RepairTarget {
   readonly mixed?: boolean;
   /** a machine-writing move: the sentence may be cut outright when it carries no figure and no name */
   readonly cuttable?: boolean;
+  /** the clauses banned words stand in: a hedge of one may go where the rewrite takes the whole clause out */
+  readonly clauses?: readonly Clause[];
+  /** the documents of the bound material, by file name: a bracketed citation naming one is no slot left to fill */
+  readonly cites?: readonly string[];
 }
 
 /**
@@ -88,11 +92,11 @@ export interface RepairTarget {
  * Overlapping targets merge, so one sentence is rewritten once for every reason it broke a rule.
  */
 export function planRepair(text: string, report: VerifyReport,
-  opts: { readonly requiredOnly?: boolean; readonly phase?: 'ACCURACY' | 'STYLE' } = {}): RepairTarget[] {
+  opts: { readonly requiredOnly?: boolean; readonly phase?: 'ACCURACY' | 'STYLE'; readonly cites?: readonly string[] } = {}): RepairTarget[] {
   const requiredOnly = opts.requiredOnly ?? true;
   const sentences = sentencesOf(text);
   const paragraphs = paragraphsOf(text);
-  const raw: { start: number; end: number; reason: string; rid: string; drop: string | null; swap: string | null; specifics: boolean; whole: boolean; claim: string | null; recase: boolean; cuttable: boolean }[] = [];
+  const raw: { start: number; end: number; reason: string; rid: string; clauses: readonly Clause[]; drop: string | null; swap: string | null; specifics: boolean; whole: boolean; claim: string | null; recase: boolean; cuttable: boolean }[] = [];
   for (const c of report.checked) {
     if (c.result.verdict !== 'VIOLATED') continue;
     if (requiredOnly && !acts(c)) continue;
@@ -106,7 +110,8 @@ export function planRepair(text: string, report: VerifyReport,
     // Nor is a citation that is no line of the material: the right number is on the page the writer was given, not
     // in the sentence, and a rewrite that only has the sentence can drop the citation or guess another. Nor is a
     // test the work never named: an omission has no span to rewrite.
-    if (isOmission(c)) continue;
+    // (A written check that names the sentences it fails on is the exception: those sentences are the repair's to rewrite.)
+    if (isOmission(c) && !(c.observer === 'CHECK' && c.result.spans.length)) continue;
     // What the grammar checker was unsure of is listed for the person and rewritten by nobody.
     if (isGrammarNote(c)) continue;
     for (const sp of c.result.spans) {
@@ -120,7 +125,10 @@ export function planRepair(text: string, report: VerifyReport,
       const start = para ? para.start : sent ? Math.min(sent.start, sp.start) : sp.start;
       const end = para ? para.end : Math.max(sent?.end ?? sp.end, last?.end ?? sp.end, sp.end);
       const move = c.pattern ? MOVE_HINT[c.pattern] : c.observer === 'GRAMMAR' ? GRAMMAR_HINT : undefined;
-      raw.push({ start, end, reason: `${c.requirementId}: ${c.statement} (${sp.why})${move ? `. ${move}` : ''}`, rid: c.requirementId,
+      // A BANNED WORD TAKES ITS HEDGE WITH IT when its whole clause goes: "and may be a scam" cannot lose "scam" and keep
+      // "may". The clause is read by form (./repair.ts, `clauseAround`); whether it went is read on the rewrite (`applyRepair`).
+      const clauses = c.observer && REMOVES_SPAN.has(c.observer) && sent ? [{ text: clauseAround(text, sent, sp), banned: sp.text }] : [];
+      raw.push({ start, end, reason: `${c.requirementId}: ${c.statement} (${sp.why})${move ? `. ${move}` : ''}`, rid: c.requirementId, clauses,
         // Only a PART of a sentence is licensed to go. A span that is the whole sentence ("sentences
         // opening That's") asks for the sentence to be recast, not for its claims to be dropped. A MOVE
         // is the exception: the negation in "not X. It's Y" is the move itself, and a guard that kept
@@ -138,7 +146,7 @@ export function planRepair(text: string, report: VerifyReport,
   // `specifics` stays "carries an unsourced claim" (what the loop reports as cut); `pure` is whether every
   // part merged into the span is one. It was ORed into the one flag the meaning check read, so a style
   // span that happened to overlap an invented figure skipped every check: its hedges and names could go.
-  const merged: { start: number; end: number; reasons: string[]; rids: string[]; drops: string[]; swaps: string[]; specifics: boolean; pure: boolean; allClaims: boolean; anyWhole: boolean; claims: string[]; recase: boolean; cuttable: boolean }[] = [];
+  const merged: { start: number; end: number; reasons: string[]; rids: string[]; drops: string[]; clauses: Clause[]; swaps: string[]; specifics: boolean; pure: boolean; allClaims: boolean; anyWhole: boolean; claims: string[]; recase: boolean; cuttable: boolean }[] = [];
   for (const r of raw) {
     const last = merged[merged.length - 1];
     if (last && r.start < last.end) {
@@ -146,19 +154,54 @@ export function planRepair(text: string, report: VerifyReport,
       if (!last.reasons.includes(r.reason)) last.reasons.push(r.reason);
       if (!last.rids.includes(r.rid)) last.rids.push(r.rid);
       if (r.drop && !last.drops.includes(r.drop)) last.drops.push(r.drop);
+      last.clauses.push(...r.clauses);
       if (r.swap && !last.swaps.includes(r.swap)) last.swaps.push(r.swap);
       if (r.claim && !last.claims.includes(r.claim)) last.claims.push(r.claim);
       last.specifics ||= r.specifics; last.allClaims &&= r.specifics; last.anyWhole ||= r.whole;
       // The whole may go when a part of the span is an invented story and every other part is a claim too: a figure
       // inside an invented sentence goes with the sentence.
       last.pure = last.allClaims && last.anyWhole; last.recase ||= r.recase; last.cuttable &&= r.cuttable;
-    } else merged.push({ start: r.start, end: r.end, reasons: [r.reason], rids: [r.rid], drops: r.drop ? [r.drop] : [], swaps: r.swap ? [r.swap] : [],
+    } else merged.push({ start: r.start, end: r.end, reasons: [r.reason], rids: [r.rid], drops: r.drop ? [r.drop] : [], clauses: [...r.clauses], swaps: r.swap ? [r.swap] : [],
       specifics: r.specifics, pure: r.whole, allClaims: r.specifics, anyWhole: r.whole, claims: r.claim ? [r.claim] : [], recase: r.recase, cuttable: r.cuttable });
   }
   return merged.map((m, i) => ({ id: i + 1, start: m.start, end: m.end, text: text.slice(m.start, m.end),
     reasons: m.reasons, requirementIds: m.rids, drops: m.drops, swaps: m.swaps, specifics: m.specifics, recase: m.recase, cuttable: m.cuttable,
-    ...(m.specifics && !m.pure ? { claims: m.claims, mixed: true } : {}) }));
+    ...(m.specifics && !m.pure ? { claims: m.claims, mixed: true } : {}), ...(opts.cites?.length ? { cites: opts.cites } : {}), ...(m.clauses.length ? { clauses: m.clauses } : {}) }));
 }
+
+/** The clause a banned word stands in, and the word: its hedges may go where the whole clause does. */
+export interface Clause { readonly text: string; readonly banned: string }
+
+/**
+ * THE CLAUSE AROUND A SPAN, by form: from the last comma, colon, semicolon or coordinating "and", "but", "or" before it
+ * in its sentence, to the next one after it or the sentence's end. A form parser of punctuation and three function words.
+ */
+function clauseAround(text: string, sent: { start: number; end: number }, sp: { start: number; end: number }): string {
+  const s = text.slice(sent.start, sent.end);
+  const at = sp.start - sent.start; const to = sp.end - sent.start;
+  const BREAK = /[,;:]|\s(?:and|but|or)\s/gi;
+  let from = 0; let till = s.length;
+  for (const m of s.matchAll(BREAK)) {
+    const i = m.index;
+    if (i + m[0].length <= at) from = i + m[0].length;
+    else if (i >= to) { till = i; break; }
+  }
+  return s.slice(from, till).trim();
+}
+
+/** The hedges a rewrite may drop: those of a banned word's clause that the rewrite took out whole (no other word of it left). */
+function hedgesGone(clauses: readonly Clause[], replacement: string): string[] {
+  const kept = new Set(replacement.toLowerCase().match(/[\p{L}\p{N}'’]+/gu) ?? []);
+  return clauses.flatMap((c) => {
+    const hedges = hedgesIn(c.text);
+    const banned = new Set(c.banned.toLowerCase().match(/[\p{L}\p{N}'’]+/gu) ?? []);
+    const rest = (c.text.toLowerCase().match(/[\p{L}\p{N}'’]+/gu) ?? []).filter((w) => w.length >= 3 && !banned.has(w) && !hedges.includes(w));
+    return rest.every((w) => !kept.has(w)) ? hedges : [];
+  });
+}
+
+/** A document's name as a citation reads it: lower case, no extension, "-", "_" and spaces alike. */
+const citeKey = (s: string): string => s.toLowerCase().replace(/\.[a-z0-9]{1,5}$/, '').replace(/[-_\s]+/g, ' ').trim();
 
 export const REPAIR_SYSTEM = `You revise marked spans of a draft so that each one meets the rules it broke.
 
@@ -194,7 +237,8 @@ export const REPAIR_SCHEMA: Record<string, unknown> = {
 
 export function repairPrompt(text: string, targets: readonly RepairTarget[]): string {
   const list = targets.map((t) => `SPAN ${t.id}\n"""${t.text}"""\nbroke:\n${t.reasons.map((r) => `  - ${r}`).join('\n')}`).join('\n\n');
-  return `THE DRAFT\n"""\n${text}\n"""\n\nTHE SPANS TO REVISE\n\n${list}\n\nReturn one replacement per span.`;
+  const cites = [...new Set(targets.flatMap((t) => t.cites ?? []).map(citeKey))];
+  return `THE DRAFT\n"""\n${text}\n"""\n\nTHE SPANS TO REVISE\n\n${list}\n\n${cites.length ? `The documents in the material, which a citation in square brackets may name: ${cites.join(', ')}.\n\n` : ''}Return one replacement per span.`;
 }
 
 /**
@@ -242,7 +286,7 @@ export function applyRepair(text: string, targets: readonly RepairTarget[], repl
     }
     // Only a span that is purely an unsourced claim skips the meaning check; a merged one is checked on
     // everything outside its claims.
-    const integrity = spanIntegrity(t.text, rep, new Set(t.drops ?? []), (t.specifics ?? false) && !t.mixed, new Set(t.swaps ?? []), t.recase ?? false,
+    const integrity = spanIntegrity(t.text, rep, new Set([...(t.drops ?? []), ...hedgesGone(t.clauses ?? [], rep)]), (t.specifics ?? false) && !t.mixed, new Set(t.swaps ?? []), t.recase ?? false,
       t.mixed ? t.claims ?? [] : []);
     if (!integrity.ok) { reverted.push({ id: t.id, kind: 'MEANING', lost: integrity.lost }); continue; }
     // A banned move may not move: a replacement that lowers one spelling of a move and raises another
@@ -251,7 +295,9 @@ export function applyRepair(text: string, targets: readonly RepairTarget[], repl
     const moved = displacedFamilies(t.text, rep);
     if (moved.length) { reverted.push({ id: t.id, kind: 'MOVE', lost: [`the move, recast as its sibling (${moved.join('; ')})`] }); continue; }
     // No slot the person has to fill ships unless they asked for slots.
-    const slots = (x: string): number => (x.match(/\[[^\]\n]{3,200}\](?!\()/g) ?? []).length;
+    // A citation naming a document of the bound material is the work's own reference, never a slot.
+    const named = new Set((t.cites ?? []).map(citeKey));
+    const slots = (x: string): number => (x.match(/\[[^\]\n]{3,200}\](?!\()/g) ?? []).filter((b) => !named.has(citeKey(b.slice(1, -1)))).length;
     if (!placeholders && slots(rep) > slots(t.text)) { reverted.push({ id: t.id, kind: 'SLOT', lost: ['the text: it left a bracketed slot for the person to fill'] }); continue; }
     // The seams: a replacement that repeats the words just after it (or just before it) left a stutter.
     const seam = seamRepeat(out.slice(0, t.start), rep.trim(), out.slice(t.end), t.text);

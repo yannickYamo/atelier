@@ -139,6 +139,14 @@ export const CHECK: Observer = {
   },
 };
 
-/** Whether this standard's written check for `requirementId` is qualified on the owner's examples and its mutants. */
-export const qualifiedIn = (v: Pick<StandardVersion, 'requirements' | 'qualifications'>, requirementId: string): boolean =>
-  v.requirements.find((r) => r.requirementId === requirementId)?.measurement?.observer === 'CHECK' && v.qualifications?.[requirementId]?.qualified === true;
+/**
+ * Whether this standard's written check for `requirementId` is qualified on the owner's examples and its mutants. The
+ * standing beside the standard decides; a standard minted while it was marked on the check itself (`qualified: 1`) has none
+ * beside it, and the mark stands.
+ */
+export const qualifiedIn = (v: Pick<StandardVersion, 'requirements' | 'qualifications'>, requirementId: string): boolean => {
+  const m = v.requirements.find((r) => r.requirementId === requirementId)?.measurement;
+  if (m?.observer !== 'CHECK') return false;
+  const beside = v.qualifications?.[requirementId];
+  return beside ? beside.qualified : m.params.qualified === 1;
+};

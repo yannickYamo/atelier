@@ -393,7 +393,9 @@ export function putFrozenChecks(l: StoreLayout, checks: Readonly<Record<string, 
  * ANSWERS DRAFTED FOR THE OWNER TO KEEP OR REJECT (core/method/draft-examples.ts, `atelier skill --draft-examples`): each
  * with an id (`d1`…), the request, the answer, and the owner's ruling once they rate it (`atelier rate d1 yes|no`).
  */
-export interface DraftedExample { readonly id: string; readonly request: string; readonly answer: string; readonly kept: boolean | null; readonly why?: string | null; readonly rule?: string | null }
+export interface DraftedExample { readonly id: string; readonly request: string; readonly answer: string; readonly kept: boolean | null; readonly why?: string | null; readonly rule?: string | null;
+  /** the words of that rule in the standard the answer was rejected under: ids move between builds, words do not */
+  readonly ruleStatement?: string | null }
 export function getDrafted(l: StoreLayout): DraftedExample[] {
   const p = join(dirs(l).base, 'drafted-examples.json');
   return existsSync(p) ? readJson<DraftedExample[]>(p, { kind: 'array', what: 'the drafted examples' }) : [];

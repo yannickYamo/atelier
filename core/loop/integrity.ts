@@ -147,6 +147,9 @@ export function namesIn(s: string): string[] {
   return [...out];
 }
 
+/** The qualifiers and soft modals a stretch of text carries: the hedge words a rewrite is otherwise held to keep. */
+export const hedgesIn = (s: string): string[] => [...QUALIFIERS.filter((q) => termCount(s, q) > 0), ...WEAK_MODALS.filter((m) => modalCount(s, m) > 0)];
+
 /** Whether a rewrite kept what its span claimed; `lost` names each figure, negation, qualifier, name or slot it dropped. */
 export interface Integrity { readonly ok: boolean; readonly lost: readonly string[] }
 

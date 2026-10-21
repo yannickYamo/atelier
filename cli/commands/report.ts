@@ -24,7 +24,8 @@ import { skillCardFor } from '../skill-card.js';
 import { reproductionFile } from './reproduce.js';
 import { renderReproduction, type ReproductionRecord } from '../../core/eval/reproduce.js';
 import { featureOf } from '../../core/observers/features.js';
-import type { InvocationRecord } from '../../core/state/canonical-state.js';
+import type { InvocationRecord, StandardVersion, Requirement } from '../../core/state/canonical-state.js';
+import { resolveRule } from '../../core/state/rule-key.js';
 import type { EvalSummary } from '../../core/eval/summary.js';
 import { DATA, die, argv, flag, positional, positionals, runFile } from '../runtime.js';
 import { readJson } from '../../core/state/read-json.js';
@@ -151,16 +152,31 @@ export function traceOf(rec: InvocationRecord): [string, string[]][] {
   return out;
 }
 
+/** A rule named by its id, key or number in a standard, with its words; or, where none is, the rules it could name. */
+export function ruleNamed(requirements: readonly Requirement[], ref: string): { id: string; statement: string } | { error: string } {
+  const r = resolveRule(requirements, ref);
+  if ('rule' in r) return { id: r.rule.requirementId, statement: r.rule.statement };
+  return { error: `no rule "${ref}" in the standard this was made under. Name one of:\n${requirements.map((q) => `  ${q.requirementId}: ${q.statement}`).join('\n')}` };
+}
+
 export function rate(): void {
   const [id, answer, ...why] = positionals();
   if (!id || !answer) die('usage: atelier rate <invocation> yes|no ["why"]');
   const ship = /^(y|yes|ship|1|true)$/i.test(answer) ? true : /^(n|no|0|false)$/i.test(answer) ? false : die(`answer yes or no: would you ship this as is? (got "${answer}")`);
   // THE RULE A REJECTED OUTPUT BREAKS, when the owner names it: the output joins that rule's mutants at the next build.
-  const rule = flag('--rule') ?? null;
+  // Named in the standard the output was made under, and kept by its words: ids move when the skill is built again.
+  const ref = flag('--rule') ?? null;
+  const named = (std: StandardVersion | null): { rule: string | null; ruleStatement: string | null } => {
+    if (ref === null || !std) return { rule: ref, ruleStatement: null };
+    const r = ruleNamed(std.requirements.filter((q) => q.authority !== 'EXPERT_REJECTED'), ref);
+    return 'error' in r ? die(r.error) : { rule: r.id, ruleStatement: r.statement };
+  };
   // AN ANSWER DRAFTED FOR THE OWNER (`atelier skill --draft-examples`, ids d1…): kept or rejected, for the next build.
   const drafted = draftedById(id);
   if (drafted) {
-    store.setDrafted(drafted.L, store.getDrafted(drafted.L).map((d) => (d.id === id ? { ...d, kept: ship, why: why.join(' ').trim() || null, rule } : d)));
+    const active = store.getActive(drafted.L); const sv = active ? store.getSkillVersion(drafted.L, active) : null;
+    const { rule, ruleStatement } = named(sv ? store.getStandard(drafted.L, sv.standardVersionHash) : null);
+    store.setDrafted(drafted.L, store.getDrafted(drafted.L).map((d) => (d.id === id ? { ...d, kept: ship, why: why.join(' ').trim() || null, rule, ruleStatement } : d)));
     const all = store.getDrafted(drafted.L);
     console.log(`Recorded: ${id} ${ship ? 'kept as finished work of yours' : `rejected${rule ? `, as breaking ${rule}` : ''}`}. ${all.filter((d) => d.kept === null).length} drafted answer(s) left to rate. Build again to qualify the skill's checks on the ones you kept: atelier skill --yes --name ${drafted.L.skillName}`);
     return;
@@ -171,6 +187,8 @@ export function rate(): void {
   const bad = said.filter((x) => !(REASON_CODES as readonly string[]).includes(x));
   if (bad.length) die(`unknown reason ${bad.join(', ')}: use any of ${REASON_CODES.join(', ')}`);
   const reasons = said as ReasonCode[];
-  putRating(L, { invocationId: rec.invocationId, ship, why: why.join(' ').trim() || null, at: new Date().toISOString(), release: rec.fidelity?.release ?? null, ...(reasons.length ? { reasons } : {}), ...(rule && !ship ? { rule } : {}) });
+  const madeUnder = store.getSkillVersion(L, rec.skillVersionHash);
+  const { rule, ruleStatement } = ship ? { rule: null, ruleStatement: null } : named(madeUnder ? store.getStandard(L, madeUnder.standardVersionHash) : null);
+  putRating(L, { invocationId: rec.invocationId, ship, why: why.join(' ').trim() || null, at: new Date().toISOString(), release: rec.fidelity?.release ?? null, ...(reasons.length ? { reasons } : {}), ...(rule ? { rule, ...(ruleStatement ? { ruleStatement } : {}) } : {}) });
   console.log(`Recorded: ${ship ? 'yes, you would ship' : 'no, you would not ship'} ${rec.invocationId} as is.${ship ? '' : ' To have it written again: atelier fix "<what was wrong>" (add --always to change the skill for every run)'}`);
 }

@@ -160,15 +160,18 @@ export class AnthropicInferenceClient implements InferenceClient {
     const withTemperature = !noTemperature.has(this.modelId) && (req.temperature ?? this.defaultTemperature) !== undefined;
     const forced = !noForcedChoice.has(this.modelId);
     const withThinking = !noThinkingField.has(this.modelId);
+    const withBetween = betweenTools.has(this.modelId);
     try {
       res = await this.create(req, forced);
+      // ASKED IN WORDS, ANSWERED IN WORDS: a reply under `auto` that ended with no tool call is asked for once more.
+      if (!forced && res.stop_reason === 'end_turn' && !res.content.some((c) => c.type === 'tool_use')) res = await this.create(req, forced);
     } catch (e) {
       // A model that takes no temperature: remembered, and the same call sent again without one.
       if (refusesTemperature(e) && withTemperature) {
         noTemperature.add(this.modelId);
         return this.complete(req);
       }
-      if (wantsBetweenTools(e) && !betweenTools.has(this.modelId)) {
+      if (wantsBetweenTools(e) && !withBetween) {
         betweenTools.add(this.modelId);
         return this.complete(req);
       }

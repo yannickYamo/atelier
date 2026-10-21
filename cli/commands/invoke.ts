@@ -6,7 +6,7 @@
 
 import { wordsOf as overlapWords } from '../../core/observers/overlap.js';
 import { inRepairChain, stepGuarded, outOfStepCalls } from '../../core/inference/step-guard.js';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeSync } from 'node:fs';
 import { methodReading, methodLine } from '../../core/eval/obligations.js';
 import type { CheckContext } from '../../core/observers/registry.js';
 import { checksFor, claimInstrumentOf, contextJudgeFor, contextJudgeModel, smallReaderFor, CLAIMS_MODEL_DEFAULT, shortFormRequest } from '../checks.js';
@@ -14,7 +14,7 @@ import { regressions, readAtLength, featureParamsOf, ruleParamsOf, enforcedNever
 import { answerSentences, judgedSituations } from '../../core/loop/answer-claims.js';
 import { groundCarried } from '../../core/loop/grounding.js';
 import { withoutServedNotes } from '../../core/loop/echo.js';
-import { certificateFor, claimStandingOf, recordHead } from '../../core/eval/certificate.js';
+import { certificateFor, claimStandingOf, recordHead, RECORD_SCHEMA } from '../../core/eval/certificate.js';
 import { runLatitude, type RunLatitude } from '../latitude.js';
 import { latitudeBrief } from '../../core/observers/latitude.js';
 import { SLOT_NOTE } from '../../renderers/agent-skill/render.js';
@@ -68,7 +68,7 @@ import { checkClass } from '../../core/observers/doc-class.js';
 import { readTaste, tasteRules, describeTaste, applicabilityFor, vetoMisses, readCoverage, type TasteReading, type ReadBounds } from '../../core/taste/reader.js';
 import { tastePermissions } from '../../core/taste/calibration.js';
 import { refineTaste } from '../../core/taste/repair.js';
-import { overlapIndex, sentencesKept, sentencesAdded } from '../../core/observers/overlap.js';
+import { overlapIndex, formTokensOut, sentencesKept, sentencesAdded } from '../../core/observers/overlap.js';
 import { recordTaste, readerModel, readerClient as readerClientFor } from './taste.js';
 import { processSpentUsd, processSpendByPurpose, spendBetween, type Budget, type InferenceClient, type SpendPurpose } from '../../core/inference/client.js';
 import { countWords, wordsWritten } from '../../core/eval/size.js';
@@ -323,8 +323,22 @@ export async function invoke(): Promise<void> {
   const machine = argv.includes('--json') ? 'json' as const : argv.includes('--answer-only') ? 'answer' as const : null;
   const log = console.log;
   if (machine) console.log = (...a: unknown[]) => { console.error(...a); };
-  try { await invokeRun(machine); } finally { console.log = log; }
+  // A RUN ASKED FOR JSON THAT STOPS BEFORE ITS RECORD IS WRITTEN still answers with one object: the record head, the
+  // state ERROR, and why. Said on the way out, so a stop anywhere (a refusal, a provider that cannot be reached) is covered.
+  let why: string | null = null;
+  const err = console.error;
+  const onExit = (code: number): void => {
+    if (machine !== 'json' || jsonWritten || code === 0) return;
+    writeSync(1, `${JSON.stringify({ schema: RECORD_SCHEMA, state: 'ERROR', error: why ?? 'the run stopped before its record was written' })}\n`);
+  };
+  if (machine === 'json') {
+    console.error = (...a: unknown[]) => { const m = a.map(String).join(' '); if (m.startsWith('atelier: ')) why = m.slice('atelier: '.length).trim(); err(...a); };
+    process.on('exit', onExit);
+  }
+  try { await invokeRun(machine); } catch (e) { why = (e as Error).message.split('\n')[0]; throw e; } finally { console.log = log; console.error = err; }
 }
+/** Set once the run's JSON object is on stdout: nothing more is said there. */
+let jsonWritten = false;
 
 async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const started = Date.now();
@@ -911,6 +925,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   if (showPanel && evaluation) console.log(`\n${renderPanel(evaluation, { width: process.stdout.columns || 110, color: !process.env.NO_COLOR && process.stdout.isTTY && !machine })}\n`);
   if (machine === 'answer' && !refused) process.stdout.write(`${shipped}\n`);
   if (machine === 'json') {
+    jsonWritten = true;
     process.stdout.write(`${JSON.stringify({
       // THE ONE RECORD HEAD every door prints (core/eval/certificate.ts): the same keys `atelier verify --json` gives.
       ...recordHead({ state: evaluation?.record?.state ?? null, standardVersionHash: sv.standardVersionHash, skillVersion: sv.skillVersionHash, certificate: rec.settings?.certificate ?? null, record: evaluation?.record ?? null }),
@@ -2911,7 +2926,7 @@ function reportIntegrity(report: RunReport, rec: Invocation, classNote: string |
   const voice = store.getVoice(L);
   const served = copyGuardPieces(voice);
   if (served.length) {
-    const overlap = overlapIndex(served, voice?.standardWording ?? [])(rec.output); const lifted = overlap.longestShared;
+    const overlap = overlapIndex(served, voice?.standardWording ?? [])(formTokensOut(rec.output, served, '')); const lifted = overlap.longestShared;
     if (overlap.standard) report.detail(`(${overlap.standard} six-word run(s) shared with three or more of your pieces: your standard wording, not counted as copying)`);
     // ONE LIMIT, ONE WORDING: the evaluation's (cli/eval-run.ts, `copyLimit`; core/eval/record-build.ts, the lifted entry).
     const line = liftedLine(lifted, copyLimit(voice));

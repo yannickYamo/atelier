@@ -113,6 +113,30 @@ const gramsOf = (w: readonly string[]): string[] => w.slice(0, Math.max(0, w.len
  * what it was given, and so no passage lifted from an example, however long the run it shares with one. Passed beside
  * the standard wording, it is left out of the count the same way.
  */
+/**
+ * A STRUCTURED OUTPUT'S FORM IS NOT A PASSAGE. A JSON label carries the same keys as every example and a category name
+ * from a fixed list; counted as words, "ticket category billing priority level high" was a lifted passage. Where the text
+ * parses as JSON (form parse: JSON.parse, a code fence around it allowed), its keys, and the string values the material
+ * or every example also carries, are put out of the count: each is replaced by a word no piece holds, so no run crosses
+ * it. Free text inside a value is counted as ever. Any other text is returned as it is.
+ */
+export function formTokensOut(text: string, pieces: readonly string[], material: string): string {
+  const body = text.trim().replace(/^```(?:json)?\s*\n([\s\S]*?)\n```$/, '$1');
+  let parsed: unknown;
+  try { parsed = JSON.parse(body); } catch { return text; }
+  if (typeof parsed !== 'object' || parsed === null) return text;
+  const keys = new Set<string>(); const values = new Set<string>();
+  const walk = (x: unknown): void => {
+    if (Array.isArray(x)) { x.forEach(walk); return; }
+    if (typeof x === 'object' && x !== null) { for (const [k, v] of Object.entries(x)) { keys.add(k); walk(v); } return; }
+    if (typeof x === 'string' && x.trim()) values.add(x);
+  };
+  walk(parsed);
+  const has = (hay: string, v: string): boolean => hay.toLowerCase().includes(v.toLowerCase());
+  const fixed = [...values].filter((v) => has(material, v) || (pieces.length > 0 && pieces.every((p) => has(p, v))));
+  return [...keys, ...fixed].sort((a, b) => b.length - a.length).reduce((t, tok) => t.split(JSON.stringify(tok)).join(' xformx '), text);
+}
+
 export const suppliedWording = (text: string): string[] => [...new Set(gramsOf(wordsOf(visible(text))))];
 
 /**

@@ -183,7 +183,7 @@ export function checksFor(L: store.StoreLayout, opts: {
   // WHAT AN UNTRACED SPECIFIC MEETS, by the latitude (core/loop/claim-extract.ts, `claimAction`): cut only where the owner
   // chose it and a qualified reader found it; otherwise blocked, sent to review or listed.
   const action = claimAction({ level: opts.level ?? latitudeOf(activeStandard(L)), bound, ownerCut: store.getClaimsCut(L), cls: opts.cls ?? flag('--class') ?? store.getDocClass(L), slots: placeholders });
-  return { material, evidence, ...(examples ? { examples } : {}), ...(approved ? { approved } : {}), guardClaims, placeholders, format, ...(action.why ? { listsBecause: action.why } : {}), claimAct: action.act, ...(opts.context ? { context: opts.context } : {}), ...(judge ? { judge } : {}),
+  return { material, evidence, ...(examples ? { examples } : {}), ...(approved ? { approved } : {}), guardClaims, placeholders, format, ...(action.why ? { listsBecause: action.why } : {}), claimAct: action.act, ...(action.otherwise ? { cutOtherwise: action.otherwise } : {}), ...(opts.context ? { context: opts.context } : {}), ...(judge ? { judge } : {}),
     learnedTells: store.activeTells(store.getTells(L)),
     ...(guardClaims ? { claimSensor: sensor() } : {}) };
 }

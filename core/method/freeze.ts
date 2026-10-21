@@ -17,12 +17,19 @@ const sha = (s: string): string => createHash('sha256').update(s).digest('hex').
 export const examplesKey = (cases: readonly ExampleCase[]): string =>
   sha(JSON.stringify(cases.map((c) => [c.reference, c.task ?? null, c.material.map((m) => [m.name, m.text])])));
 
-/** The key a step's check is frozen under: the step's own words, and the examples. */
-export const freezeKey = (stepText: string, examples: string): string => sha(`${stepText.trim()}\u0000${examples}`);
+/**
+ * The key a step's check is frozen under: the step's own words, the examples, and the outputs the owner rejected naming the
+ * step (a check must catch those to qualify, so a new rejection reads the step again). With none, the key is as it was.
+ */
+export const freezeKey = (stepText: string, examples: string, rejected: readonly string[] = []): string =>
+  sha(`${stepText.trim()}\u0000${examples}${rejected.length ? `\u0000${sha(JSON.stringify(rejected))}` : ''}`);
 
-/** The frozen checks, by step id, of the steps whose words and examples are unchanged. */
-export function frozenFor(steps: readonly StepToCheck[], examples: string, frozen: Readonly<Record<string, StepCheck>>): Map<string, StepCheck> {
-  return new Map(steps.flatMap((st) => { const f = frozen[freezeKey(st.text, examples)]; return f ? [[st.id, { ...f, frozen: true as const }]] : []; }));
+/** Rejected outputs, by the words of the step each breaks (cli/commands/method.ts, `rejectedOutputs`). */
+type Rejected = ReadonlyMap<string, readonly string[]>;
+
+/** The frozen checks, by step id, of the steps whose words, examples and rejected outputs are unchanged. */
+export function frozenFor(steps: readonly StepToCheck[], examples: string, frozen: Readonly<Record<string, StepCheck>>, rejected: Rejected = new Map()): Map<string, StepCheck> {
+  return new Map(steps.flatMap((st) => { const f = frozen[freezeKey(st.text, examples, rejected.get(st.text) ?? [])]; return f ? [[st.id, { ...f, frozen: true as const }]] : []; }));
 }
 
 /**
@@ -31,17 +38,17 @@ export function frozenFor(steps: readonly StepToCheck[], examples: string, froze
  * method. A floor check is left to be read again.
  */
 export function toFreeze(steps: readonly StepToCheck[], chosen: Readonly<Record<string, StepCheck>>, examples: string,
-  kinds: ReadonlyMap<string, 'BOUNDARY' | 'GENERATIVE'> = new Map()): Record<string, StepCheck> {
+  kinds: ReadonlyMap<string, 'BOUNDARY' | 'GENERATIVE'> = new Map(), rejected: Rejected = new Map()): Record<string, StepCheck> {
   return Object.fromEntries(steps.flatMap((st) => {
     const c = chosen[st.id];
     if (c?.by !== 'model') return [];
     const { frozen: _f, ...kept } = c; void _f;
     const kind = kinds.get(st.text.trim());
-    return [[freezeKey(st.text, examples), { ...kept, ...(kind ? { kind } : {}) }]];
+    return [[freezeKey(st.text, examples, rejected.get(st.text) ?? []), { ...kept, ...(kind ? { kind } : {}) }]];
   }));
 }
 
 /** The kinds frozen with the checks of steps whose words and examples are unchanged, by the step's words. */
-export function frozenKinds(steps: readonly { readonly text: string }[], examples: string, frozen: Readonly<Record<string, StepCheck>>): Map<string, 'BOUNDARY' | 'GENERATIVE'> {
-  return new Map(steps.flatMap((st) => { const k = frozen[freezeKey(st.text, examples)]?.kind; return k ? [[st.text.trim(), k] as const] : []; }));
+export function frozenKinds(steps: readonly { readonly text: string }[], examples: string, frozen: Readonly<Record<string, StepCheck>>, rejected: Rejected = new Map()): Map<string, 'BOUNDARY' | 'GENERATIVE'> {
+  return new Map(steps.flatMap((st) => { const k = frozen[freezeKey(st.text, examples, rejected.get(st.text) ?? [])]?.kind; return k ? [[st.text.trim(), k] as const] : []; }));
 }

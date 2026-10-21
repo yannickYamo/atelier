@@ -10,7 +10,7 @@ import * as fstore from '../core/state/fidelity-store.js';
 import { acts, type VerifyReport, type RuleCheck } from '../core/observers/verify.js';
 import { INCONCLUSIVE, UNREAD, CLAIMS_TO_CHECK, PUBLIC_FACTS } from '../core/loop/run-repair.js';
 import { featureOf } from '../core/observers/features.js';
-import { overlapIndex, suppliedWording, STANDARD_WORDING_PIECES } from '../core/observers/overlap.js';
+import { overlapIndex, suppliedWording, formTokensOut, STANDARD_WORDING_PIECES } from '../core/observers/overlap.js';
 import { bandsFor } from '../core/fidelity/profile.js';
 import { localiseBands } from '../core/fidelity/context.js';
 import { QUALIFIED_READERS, DISPUTED_WHY, NO_MATERIAL, type ClaimAct } from '../core/loop/claim-extract.js';
@@ -109,7 +109,7 @@ export function buildRunEval(x: RunEvalInput): EvalSummary {
   const voice = store.getVoice(x.L);
   const served = copyGuardPieces(voice);
   // Wording found in three or more pieces of the corpus is the author's standard wording, and is not counted.
-  const longest = served.length ? overlapIndex(served, [...(voice?.standardWording ?? []), ...suppliedWording(x.material ?? '')])(rec.output).longestShared : null;
+  const longest = served.length ? overlapIndex(served, [...(voice?.standardWording ?? []), ...suppliedWording(x.material ?? '')])(formTokensOut(rec.output, served, x.material ?? '')).longestShared : null;
   const formatLine = line('FORMAT');
 
   // WITH NO RECORD (a structured output held by its contract, or no standard at all) the engine's own bar stands:
@@ -237,7 +237,7 @@ export function recordForText(x: { L: store.StoreLayout; std: StandardVersion; t
   const deciding = claimDecides(x.act, x.unmeasured, x.sensor) || spans('UNSOURCED') > 0;
   const voice = store.getVoice(x.L); const served = copyGuardPieces(voice);
   // WHAT THE PERSON SUPPLIED IS NOT COPYING: a transcript quoted as evidence shares runs with every example that quoted it.
-  const shared = served.length ? overlapIndex(served, [...(voice?.standardWording ?? []), ...suppliedWording(x.material ?? '')], { words: true })(x.text) : null;
+  const shared = served.length ? overlapIndex(served, [...(voice?.standardWording ?? []), ...suppliedWording(x.material ?? '')], { words: true })(formTokensOut(x.text, served, x.material ?? '')) : null;
   return buildRecord({
     requirements: x.std.requirements, waived: x.waived ?? new Map(), request: x.request ?? null,
     checked: x.report ? x.report.checked.filter((c) => !isClaimLine(c.requirementId)).map((c) => ({ id: c.requirementId, statement: c.statement, required: acts(c), verdict: c.result.verdict, detail: c.result.detail })) : null,
