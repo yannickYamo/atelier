@@ -8,6 +8,7 @@
 // THIS FILE IS FROZEN. A test here changes only when the owner changes what the product promises. A new bug becomes
 // a test of the parser or the observer it was in; it does not become a new case here.
 import { stepLedger } from '../core/loop/controller.js';
+import { mp, pa } from './helpers/step-plan.js';
 import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync, statSync, mkdtempSync } from 'node:fs';
 import { join } from 'node:path';
@@ -17,7 +18,7 @@ import { buildRecord, type RecordFacts, type CheckedLine } from '../core/eval/re
 import { observesOf } from '../core/eval/observes.js';
 import { renderRunCard, stateLine } from '../core/eval/run-card.js';
 import { renderPanel, type EvalSummary } from '../core/eval/summary.js';
-import { methodProposals, acrossExamples, proposalsAcross } from '../core/method/standard.js';
+import { acrossExamples } from '../core/method/standard.js';
 import { enforceClaims, checkDraft } from '../core/loop/run-repair.js';
 import { describeVerify } from '../core/observers/verify.js';
 import type { ClaimSensor, ClaimReading } from '../core/loop/claim-extract.js';
@@ -46,20 +47,20 @@ describe('1 · automation never mutates owner authority', () => {
   const NOTE = '- Keep the whole piece between 150 and 230 words.\n- Open with a Summary section.\n';
   it('a rule the owner stated keeps its check when every one of their examples breaks it', () => {
     const cases = [300, 320, 340].map((n, i) => ({ id: `e${i + 1}.md`, task: 'Explain it.', material: [], reference: piece(n) }));
-    const rule = proposalsAcross(NOTE, cases).proposals.find((p) => p.statement.startsWith('Keep the whole piece'));
+    const rule = pa(NOTE, cases).proposals.find((p) => p.statement.startsWith('Keep the whole piece'));
     expect(rule).toMatchObject({ origin: 'STATED', obligation: 'DELIVERABLE', measurement: { observer: 'LENGTH', params: { min: 150, max: 230 } } });
     expect(rule?.conflict).toMatch(/^3 of your examples do not do this: /);
   });
   it('no stated step is ever dropped, or loses its check, by being held against more examples', () => {
     const lead = { id: 'a.md', task: 'Explain it.', material: [], reference: piece(200) };
-    const before = methodProposals(NOTE, lead).filter((p) => p.origin === 'STATED');
-    const after = acrossExamples(methodProposals(NOTE, lead), [{ id: 'b.md', task: 't', material: [], reference: '## Other\nfour words in all.\n' }], 'a.md').filter((p) => p.origin === 'STATED');
+    const before = mp(NOTE, lead).filter((p) => p.origin === 'STATED');
+    const after = acrossExamples(mp(NOTE, lead), [{ id: 'b.md', task: 't', material: [], reference: '## Other\nfour words in all.\n' }], 'a.md').filter((p) => p.origin === 'STATED');
     expect(after.map((p) => [p.statement, p.measurement])).toEqual(before.map((p) => [p.statement, p.measurement]));
   });
   it('a stated step its examples break is built with its check, is the owner\'s in every record, and blocks once they confirm it', async () => {
     const { decideSteps } = await import('../cli/commands/method.js');
     const cases = [300, 320].map((n, i) => ({ id: `e${i + 1}.md`, task: 'Explain it.', material: [], reference: piece(n) }));
-    const built = (confirmed: boolean): Requirement => { let n = 0; return decideSteps(proposalsAcross(NOTE, cases).proposals, () => `x${(n += 1)}`, confirmed).decided.find((r) => r.statement.startsWith('Keep the whole piece'))!; };
+    const built = (confirmed: boolean): Requirement => { let n = 0; return decideSteps(pa(NOTE, cases).proposals, () => `x${(n += 1)}`, confirmed).decided.find((r) => r.statement.startsWith('Keep the whole piece'))!; };
     // never dropped, never without its check, never a habit: before the owner confirms it, and after
     for (const r of [built(false), built(true)]) {
       expect(r).toMatchObject({ authority: 'EXPERT_AUTHORED', measurement: { observer: 'LENGTH', params: { min: 150, max: 230 } } });
@@ -102,7 +103,7 @@ describe('2 · example suggestions never block before adoption', () => {
   });
   it('what only some examples show is never built as a rule', () => {
     const withRisks = { id: 'a.md', task: 't', material: [], reference: '## Summary\nSomething here.\n\n## Risks\nNone seen.\n\n## Rollback\nRevert it.\n' };
-    const lead = methodProposals('- Open with a Summary section.\n', withRisks);
+    const lead = mp('- Open with a Summary section.\n', withRisks);
     expect(lead.some((p) => p.origin === 'SHOWN_BY_EXAMPLE')).toBe(true);
     expect(acrossExamples(lead, [{ id: 'b.md', task: 't', material: [], reference: '## Summary\nSomething else.\n' }]).some((p) => p.origin === 'SHOWN_BY_EXAMPLE')).toBe(false);
   });
@@ -139,7 +140,7 @@ describe('3 · a partial observation never passes', () => {
     // Each of these was once read in full. Through the real readers: where a step becomes a check at all, a check
     // that reads less than the step says never covers it.
     const example = { task: null, material: [], reference: '## Summary\n\nOne two three four five.\n\n## Risks\n\nNone seen here.\n\n## Verdict\n\nApprove\n\n## Sources\n\nA list.\n\n| Vendor | Price |\n|---|---|\n| a | 1 |\n' };
-    const read = (step: string): string => { const p = methodProposals(`- ${step}\n`, example)[0]; return p.measurement ? observesOf(p.statement, p.measurement, false)?.coverage ?? 'NONE' : 'JUDGEMENT'; };
+    const read = (step: string): string => { const p = mp(`- ${step}\n`, example)[0]; return p.measurement ? observesOf(p.statement, p.measurement, false)?.coverage ?? 'NONE' : 'JUDGEMENT'; };
     for (const step of ['Include a Sources section at the end.', 'Include a Summary section first.', 'Add a Sources section last.', 'Open with a Summary section, one paragraph.', 'Finish with a Sources section, one line.',
       'Include a Verdict section that holds exactly one sentence.', 'Include a Risks section after the opening paragraph.', 'Include a Summary section under the first heading.', 'Write a Summary section in one sentence.',
       'Add a table with at least 5 rows and the columns Vendor and Price.', 'Include a Risks section with 3 risks.', 'Include a Risks section and a Summary section, Summary first.',
@@ -223,7 +224,7 @@ describe('5 · what the request asks is not replaced by what the examples tend t
     const short = Array.from({ length: 187 }, () => 'word').join(' ');
     expect(requestLength(short, asked!)).toMatchObject({ asked: '400 words', met: false });
     // and a draft that misses it is one more thing to write again for: said as the request's, never as the examples'
-    const unmet = unmetReader(std, null, asked)?.({ output: short, report: { checked: [], unchecked: [], failed: false } as never });
+    const unmet = unmetReader(std, asked)?.({ output: short, report: { checked: [], unchecked: [], failed: false } as never });
     expect(unmet).toEqual([expect.objectContaining({ id: LENGTH_ID, of: 'request', statement: 'Write it at the length the request asks for: 400 words' })]);
   });
   it('a length is held only where the request can be read one way; otherwise it is shown as not counted, never guessed', () => {

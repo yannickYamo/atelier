@@ -8,7 +8,7 @@
 // The standard is never touched here. A release names the standard's hash and the skill version, and
 // every change below the standard is a new release with a parent.
 
-import { existsSync } from 'node:fs';
+import { existsSync, renameSync, rmSync } from 'node:fs';
 import * as store from '../core/state/store.js';
 import * as fstore from '../core/state/fidelity-store.js';
 import { makeRelease, assertSameStandard } from '../core/fidelity/release.js';
@@ -63,10 +63,15 @@ export function ratifiedProfile(p: FidelityProfile, v: StandardVersion): Fidelit
  * first implementation release for this skill version. Returns the release, or null for a skill built
  * without a corpus (a standard written by hand has no author's range to steer toward).
  */
-export function installFidelity(L: store.StoreLayout, v: StandardVersion, skillVersionHash: string): ImplementationRelease | null {
+export function installFidelity(L: store.StoreLayout, v: StandardVersion, skillVersionHash: string, expectCorpusHash: string | null = null): ImplementationRelease | null {
   const profileFile = runFile('fidelity.json'); const indexFile = runFile('retrieval.json');
   if (!existsSync(profileFile)) return null;
-  const profile = ratifiedProfile(readJson<FidelityProfile>(profileFile, { what: 'the fidelity profile' }), v);
+  const read = readJson<FidelityProfile>(profileFile, { what: 'the fidelity profile' });
+  // ONLY A PROFILE OF THESE PIECES. The run folder is the project's, so a profile discovery wrote for one corpus was
+  // installed by any later build in that folder (a method build, a skill from stated rules) for pieces it never
+  // measured. A profile is installed only for the sealed corpus it names; anything else is set aside, kept, and said.
+  if (expectCorpusHash === null || read.corpusHash !== expectCorpusHash) { quarantineRunFiles(); return null; }
+  const profile = ratifiedProfile(read, v);
   fstore.setProfile(L, profile);
   const index = existsSync(indexFile) ? readJson<RetrievalIndex>(indexFile, { what: 'the retrieval index' }) : null;
   if (index) fstore.setRetrievalIndex(L, index);
@@ -93,6 +98,25 @@ export function installFidelity(L: store.StoreLayout, v: StandardVersion, skillV
   return release;
 }
 
+/** The discovery artifacts set aside at the last `installFidelity`, by name; empty when none was. */
+let setAside: string[] = [];
+export const lastSetAside = (): readonly string[] => setAside;
+/**
+ * A PROFILE THAT IS NOT THIS BUILD'S IS SET ASIDE, NOT DELETED: renamed beside itself (`fidelity.stale.json`) with the
+ * signals, index and calibration written with it, so what was there can still be read, and so no later build in this
+ * folder installs it either. Said once by the caller.
+ */
+export function quarantineRunFiles(): readonly string[] {
+  setAside = [];
+  for (const f of ['fidelity', 'signals', 'retrieval', 'typicality']) {
+    const from = runFile(`${f}.json`);
+    if (!existsSync(from)) continue;
+    const to = runFile(`${f}.stale.json`);
+    rmSync(to, { force: true }); renameSync(from, to); setAside.push(`${f}.stale.json`);
+  }
+  return setAside;
+}
+
 /**
  * THE FIRST RELEASE'S SETTINGS: 0.7's cost (DEFAULT_SETTINGS, ../core/fidelity/types.ts), whatever the profile
  * holds; the loop is opt-in until a study shows it pays. Retrieval only with an index to retrieve from.
@@ -106,9 +130,20 @@ export function firstSettings(_profile: FidelityProfile, hasIndex: boolean): Imp
  * child release when the skill has moved since (a `fix` or a promotion), never across a change of standard.
  * Null when the skill has no profile.
  */
-export function releaseFor(L: store.StoreLayout, sv: { skillVersionHash: string; standardVersionHash: string }): { release: ImplementationRelease; profile: FidelityProfile; index: RetrievalIndex | null; typicality: TypicalityCalibration | null } | null {
-  let active = fstore.getActiveRelease(L)?.release ?? null;
+export function releaseFor(L: store.StoreLayout, sv: { skillVersionHash: string; standardVersionHash: string },
+  /** a stored release to run instead of the active one (`invoke --try-release`): it is run, never made active */
+  tryRelease: string | null = null): { release: ImplementationRelease; profile: FidelityProfile; index: RetrievalIndex | null; typicality: TypicalityCalibration | null } | null {
+  let active = (tryRelease ? fstore.getRelease(L, tryRelease) : null) ?? fstore.getActiveRelease(L)?.release ?? null;
+  if (tryRelease && active?.id !== tryRelease) throw new Error(`no release ${tryRelease} in this skill: atelier fidelity --skill ${L.skillName} lists them`);
   if (!active) return null;
+  if (tryRelease) {
+    // TRIED, NOT ADOPTED: run as stored, under the standard it was made for; nothing here moves the active release.
+    assertSameStandard(active, sv.standardVersionHash);
+    const p = active.profileHash ? fstore.getProfile(L, active.profileHash) : fstore.getProfile(L);
+    if (!p) return null;
+    const ix = active.retrievalHash ? fstore.getRetrievalIndex(L, active.retrievalHash) : null;
+    return { release: active, profile: p, index: ix?.hash === active.retrievalHash ? ix : null, typicality: fstore.getTypicality(L, p.hash) };
+  }
   // A NEW STANDARD STARTS A NEW LINE; IT DOES NOT LOSE THE AUTHOR. What the loop learned under one standard (settings,
   // notes) says nothing about another, so none of it carries. The author's pieces do: the profile, re-ratified against
   // the new rules, the retrieval index, the typicality calibration and the structure read. Returning nothing here, as
@@ -153,8 +188,9 @@ function wasLoopByDefault(L: store.StoreLayout, r: ImplementationRelease): boole
   return !fstore.releaseChain(L, r.id).some((x) => /^(settings set by hand|the settings search)/.test(x.why));
 }
 
-const withoutId = (r: ImplementationRelease): Omit<ImplementationRelease, 'id'> => {
-  const { id: _id, ...rest } = r;
+/** A release's fields to make a child from: never its id, and never its candidate mark (a child is its own proposal). */
+const withoutId = (r: ImplementationRelease): Omit<ImplementationRelease, 'id' | 'candidate'> => {
+  const { id: _id, candidate: _c, ...rest } = r;
   return rest;
 };
 
@@ -162,13 +198,15 @@ const withoutId = (r: ImplementationRelease): Omit<ImplementationRelease, 'id'> 
  * What a release adds to the served skill for one request: the author's passages closest to it, and the
  * experience notes. Both are implementation, fenced and named as such, and both are recorded with the run.
  */
-export function implementationBlock(release: ImplementationRelease, index: RetrievalIndex | null, task: string, near: Nearness | null = null): { text: string; retrieved: number[] } {
+export function implementationBlock(release: ImplementationRelease, index: RetrievalIndex | null, task: string, near: Nearness | null = null): { retrieved: number[]; notes: string; passages: string } {
   const retrieved = index && release.settings.retrievalK > 0 ? retrieveNear(index, task, release.settings.retrievalK, near) : [];
-  const parts = [retrieved.length && index ? renderRetrieved(index, retrieved) : '',
-    // Every stored note is held to today's grammar before it is served: a note distilled under 0.8 that the
-    // grammar now refuses is never served (core/fidelity/experience.ts, noteProblem).
-    release.settings.notesCap > 0 && release.notes.length ? renderNotes(release.notes.filter((n) => noteProblem(n.text) === null).slice(0, release.settings.notesCap)) : ''].filter(Boolean);
-  return { text: parts.length ? `\n\n${parts.join('\n\n')}` : '', retrieved };
+  const passages = retrieved.length && index ? renderRetrieved(index, retrieved) : '';
+  // Every stored note is held to today's grammar before it is served: a note distilled under 0.8 that the
+  // grammar now refuses is never served (core/fidelity/experience.ts, noteProblem).
+  const notes = release.settings.notesCap > 0 && release.notes.length ? renderNotes(release.notes.filter((n) => noteProblem(n.text) === null).slice(0, release.settings.notesCap)) : '';
+  // The notes are the release's, the same on every request; the passages are chosen for this one (`passages`, said
+  // after the skill: ./served.ts, `forThisRequest`).
+  return { retrieved, notes, passages };
 }
 
 /**
@@ -183,10 +221,12 @@ export function withMeasuredEffects(settings: ImplementationSettings, runs: read
 }
 
 /** A new release under `from` with changed settings: the only way settings change. */
-export function releaseWithSettings(L: store.StoreLayout, from: ImplementationRelease, settings: ImplementationSettings, why: string): ImplementationRelease {
+export function releaseWithSettings(L: store.StoreLayout, from: ImplementationRelease, settings: ImplementationSettings, why: string,
+  /** stored as a candidate and left inactive: a proposal of the settings search or of distilled notes */
+  opts: { readonly candidate?: boolean } = {}): ImplementationRelease {
   const measured = withMeasuredEffects(settings, store.listLearningInvocations(L), from.standardVersionHash);
-  const r = fstore.putRelease(L, makeRelease({ ...withoutId(from), parent: from.id, settings: measured, createdAt: new Date().toISOString(), why }));
-  fstore.setActiveRelease(L, r.id);
+  const r = fstore.putRelease(L, makeRelease({ ...withoutId(from), parent: from.id, settings: measured, createdAt: new Date().toISOString(), why, ...(opts.candidate ? { candidate: true as const } : {}) }));
+  if (!opts.candidate) fstore.setActiveRelease(L, r.id);
   return r;
 }
 

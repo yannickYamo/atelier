@@ -1,0 +1,4 @@
+INVOICE 2
+Supplier: Crane & Sons Electronics
+Item: a barcode scanner
+Amount: 2,778 dollars

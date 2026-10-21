@@ -7,6 +7,1008 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+### The reading is drawn three times and code keeps the agreement; a check's standing sits beside the standard; one record head, a hook, and the last word pattern gone
+
+- **Best of three draws** (`cli/commands/method.ts`, `stepPlan`, `CHECK_DRAWS`). The step-check reading varies between
+  draws: the same four examples read 7, 5 and 7 of 8 steps as checked in three builds, and a written check that passed
+  9 of 10 examples in one build passed none in the next. The reading is now drawn three times on a build with a model
+  and code decides: a written check that qualifies on the owner's mutants first, then a listed measurement a majority of
+  draws named, then a written check that reports only, then judgement. Every written candidate is grounded, a
+  non-compiling one sent back once, the best failing one sent back up to twice with the examples it fails; the mutants
+  of a step are read once and shared by its candidates. `--report` says, per step, how many draws agreed. A draw count,
+  as drafts are: no new reading. The same plan serves `atelier skill`: each stated rule's check is read with the
+  proposal (no example to ground on: a measurement where the draws agree, a written check that reports until examples
+  exist, judgement otherwise), shown under the rule, and `--yes` asks nothing more; a grounded rule with a measurement
+  is required, as a stated step with a check is.
+- **What a written check earned is recorded beside the standard, not inside its hash**
+  (`StandardVersion.qualifications`, `core/state/canonical-state.ts`). The hash is what the owner ratified; a machine's
+  measurement of a check changes nothing they said, so a rebuild that qualifies the same check differently leaves the
+  standard's identity where it was. `qualifiedIn(standard, rule)` is the one place the standing is read (the plan, the
+  correction from a check, the certificate); the `qualified` parameter on the check is gone; a supersession carries the
+  standing of the checks it keeps and drops it for a check that was amended.
+- **One record head on every door** (`core/eval/certificate.ts`). `atelier run --json` and `atelier verify --json`
+  open with the same six keys: `schema`, `state`, `standardVersionHash`, `skillVersion`, `certificate`, `record`. The
+  certificate now names the claim instrument that read the output, whether it gated, and the rates it was measured at on
+  the kinds it was measured on, or none: "checked" says no more than the instrument earned.
+- **`atelier verify --hook`.** Verify as a Claude Code PostToolUse or Stop hook: the hook JSON on stdin (a written
+  file's content, or the file at its path, or the last answer), exit 2 with the broken rules on stderr only where
+  something required was seen to fail, which blocks the host and hands the reasons to the model; 0 otherwise, and 0
+  with a note when there is nothing to check, because a guard's own failure never blocks the person.
+- **The output contract is enforced or declared.** A skill whose rules carry an output shape says in SKILL.md where
+  the shape is held (Atelier's runtime, as the response schema) and that a host reading the package as text does not
+  hold it, naming the hook and `verify` as what does. The schema file says the same of itself.
+- **The last word pattern that read a rule's meaning is gone** (`core/observers/rule-polarity.ts`). A statement the
+  polarity reading did not read is a thing to do, in its own words; no list of negative words decides what forbids.
+  In the suite the old pattern lives on only as the test double's answer to the reading.
+- **A rule written as a numbered heading is a step** (`core/method/standard.ts`, `stepsOf`): `### 3. Keep it short`
+  followed by its paragraph is one step with that paragraph; a numbered heading over a list names the list. Form, not
+  meaning: the number is what is read.
+- **One place for the repair pass count** (`REPAIR_PASSES`, `core/loop/run-repair.ts`): `invoke`, `verify --repair`
+  and the blind-reference loop no longer each carry their own `2`.
+- **License.** Atelier is source-available: unmodified copies may be used and redistributed, and changes are made only
+  by the authors (LICENSE). It was MIT before this change.
+
+### Which check a step asks for is read, not matched: a model names it or writes it, and code holds it
+
+- **The step readers are gone.** A step of a method note was tied to a check by patterns on its wording
+  (`core/method/step-readers.ts`, deleted), and every round of testing found a wording they did not know; a real
+  SKILL.md handed to `--method` got 0 checks from 26 steps. In their place, one reading on the house pattern
+  (`core/method/step-check.ts`, version 1): the model is shown every step, the outline of the owner's examples (every
+  example's sections and tables, joined) and the menu of measurements, and answers for each step with a measurement line,
+  a check it writes, or judgement; code grounds the answer (the quote must be the step's own words, a measurement must
+  parse, validate and run on the example, a written check must compile and run on it) and a step the reading cannot
+  ground is judgement. The floor is judgement: with no model set up every stated step is the owner's to judge, and no
+  pattern on a step's wording decides a check anywhere. Two readings are held against each other by code: a step the
+  rule-polarity reading calls a prohibition keeps no presence or table check, which would require the very thing it
+  forbids (`heldByPolarity`). The unit floor (`core/method/decision-units.ts`) reads nothing
+  into the words either: an instruction, applying always, until a model reads the condition.
+- **A check a model writes** (`core/observers/written.ts`, observer `CHECK`). One JavaScript function over the text,
+  the request and the material, run in a context with nothing in it (no `require`, no `process`, no network, no clock)
+  under a time limit that holds for every call, and only ever a verdict with the spans it read: a check that throws,
+  runs past its limit or returns the wrong shape has not run. Its source is the measurement's own parameter, so the
+  standard's hash covers it. It reports and blocks nothing until it is qualified on the owner's examples and their
+  mutants (`core/method/mutants.ts`, next): the plan never enforces an unqualified written check.
+- **The one-line measurement grammar is one thing** (`core/measurement/spec.ts`), shared by `--measure` and the reading:
+  names and terms are kept as the owner or their example wrote them (the observers compare without regard to case), a
+  comma inside a list value is the value's own (`starts=In short,|So,`), and `CITED:allow=0` is the ordinary rule.
+- **The run's help names what a run does by default**; the instruments under study (structural edits, the typicality
+  and detector rounds, the voice pass, planned and sectioned drafting, examples-first) are listed under `atelier lab`
+  and in USAGE with what is known of each, none on the default path.
+- Tests: the readers' own expectations became the test double that answers the reading in the suite
+  (`tests/fixtures/step-check-stand-in.ts`, compiled beside it for the scripted backend), so every method test now runs
+  through the reading's grounding and the sandbox with the model stood in; `tests/written-check.test.ts` and
+  `tests/step-check.test.ts` hold the sandbox and the grounding; `bench/readings/cases/step-check.json` holds the first
+  labelled cases for the live reading (sixteen steps; the pass line stated in the file).
+- Not in this change, and said so: `atelier skill
+  "<rules>"` still attaches no check; a rule written as a `### n.` heading is still not a step of a note; the
+  rule-polarity reading's floor is still a word pattern (`polarityByWords`), the last one on the method path.
+
+### Two standing domains for the enterprise wedge, and a written check sent back once
+
+- **Two domains in `bench/standing/domains/`**, made in code (nothing real): `claims`, ten claims assessment memos to an
+  adjuster's eight-step method with their claim files, ten task files, a checker (sections, every fact cited to a
+  document of the file, the clause cited and exclusion 7.1 addressed on a theft, the reserve equal to the invoices, the
+  cited date the report's date, the banned words, no figure or date the file does not give) and five planted defects;
+  `labels`, twelve brand-suitability labels as JSON under a twenty-rule policy and a taxonomy of thirty-nine, with their
+  transcripts (a transcript stands in for a clip), twelve tasks, a checker (taxonomy, spans inside the duration, Firearms
+  never with Floor, evidence verbatim, overall risk, and the label against the gold label) and five planted errors.
+  Every example passes its checker; every planted defect fails on its own rule.
+- **A written check that failed is sent back once** (`STEP_CHECK_REPAIR`): a check that did not compile, threw, or
+  failed the owner's own example is shown to the reader with the failure, written again, and grounded and qualified like
+  the first. The step-check reading's fifth version names arithmetic over the material and the decidable part of a
+  compound step as written checks, and says how material files are named; a reader's sub-numbered answers (3, 3b) are
+  answers about step 3, the written one preferred. `--report` now prints each step's reading and, where it fell to
+  judgement, why.
+
+### Studies: the claims domain built live, and its five planted defects verified (development evidence, about $1.50 in all)
+
+Built five times from the ten memos and the note with `claude-haiku-5-5` reading, as the prompt and the grounding
+changed. First build: 2 of 8 steps checked (the sections, the banned words), the rest judgement. Fifth build: **7 of 8
+steps checked**, four of them written (every fact cited to a document of the file; the coverage conclusion cites a
+clause and each exclusion addressed cites the policy; the reserve equals the invoice amounts in the material; every date,
+name and figure in the material), one judgement (no speculation about intent). None of the four written checks
+qualified: the citation check passed 9 of 10 examples; the coverage and reserve checks passed 10 of 10 but the one
+mutant the reader grounded for each did not break them; the figure check passed 2 of 10 (too strict) and fired on every
+other step's mutant. So every written check reports and blocks nothing, which is the design. On the five planted
+defects, `atelier verify` offline: the wrong reserve is named by the reserve check ("reserve 2050 does not match invoice
+sum 1850") and by the figure checks; the uncited fact by the citation check; the speculation BLOCKED by the banned
+words; the wrong date only by the strict figure check; the unaddressed exclusion by no check, which is the judgement
+the reader reads under `--taste`. Three more builds after that: mutants asked for one step at a time (four grounded per step where the reader's edits
+are verbatim), a check that fails the owner's work sent back twice with the examples named, and a fixture fixed (a fire
+claim's memo had cited a police report the file did not hold; the citation check was right). Each build read the steps
+differently: 7, 5 and 7 of 8 checked, the coverage and decision steps written in one build and judgement in the next,
+and the same step's written check passing 9 of 10 examples in one build and 0 of 10 in the next. **No written check
+qualified in any build**, and that is the finding: the reader's one draw is not a standard. Next: draw each written
+check several times and keep the one that qualifies best on the examples and the mutants, as a run keeps the best of its
+drafts; then the two-domain run.
+### The correction a qualified check supplies, and the certificate on every record
+
+- **A figure the check computed may be put in place by code.** The integrity guard refuses any rewrite that moves a
+  figure, so a reserve that did not equal the invoices could only be BLOCKED. A written check now supplies the
+  correction for a span it flags (`replacement`, the value it computed from the material); once the check is qualified,
+  the correction is applied in code in the same step as a grammar correction, the figure allowed to change only inside
+  the span the check flagged, and the text re-checked. An unqualified check's correction is shown and never applied.
+  Test: `tests/check-correction.test.ts`.
+- **Every run's record carries a certificate** (`settings.certificate`): the standard's hash; how many rules are checked,
+  by a built-in observer or by a written check, and how many written checks are qualified; what the judgement reader
+  has earned (the rules it holds VETO on, the labelled misses so far, the bound on its false blocks); and the
+  delivered-error bound, which is null with the reason until an audit sample of the owner's own labels, drawn like the
+  work, exists. "Checked" on a record never says more than this block does.
+
+### A written check earns its say on the owner's examples and their mutants
+
+- **Mutant qualification** (`core/method/mutants.ts`). Before a written check may be enforced it must pass every finished
+  example the owner gave, catch at least 90% of the edits of the lead example that break only its step (edits a model
+  writes as find-and-replace pairs, each grounded to occur once in the piece; one reading for every written check), and
+  fire on at most 5% of the edits that break other steps. A check that meets the bars carries `qualified: 1` in its
+  measurement, so the standard's hash carries the qualification and the plan may enforce it; one that does not is kept,
+  shown with what it caught and missed, and blocks nothing. With no model no edit is written and no written check
+  qualifies. Bars stated in the file before any check was read. Test: `tests/step-mutants.test.ts`.
+
+### Atelier as an app, through MCP
+
+- **The MCP server is the front door, not only the checker.** Beside the reading tools (`atelier_verify`, `atelier_rules`,
+  `atelier_list_skills`, `atelier_skill_report`) it now serves `atelier_new`, `atelier_run`, `atelier_report`,
+  `atelier_rate` and `atelier_fix`: the same commands a person runs at the terminal, in a child process with the server's
+  environment (the model key, `ATELIER_DATA`, `ATELIER_PROJECT_DIR`), returning the screen or the whole run record. The
+  person still approves the standard: `atelier_new` shows the screen and builds nothing until `approve: true`, which the
+  agent may pass only after the person has seen it; `atelier_rate` records the person's ruling, never the agent's.
+  `atelier setup` installs it as before. Test: `tests/atelier-mcp-app.test.ts`.
+
+### Studies: the step-check reading on sixteen labelled steps (development evidence, $0.04)
+
+`bench/readings/cases/step-check.json`, `claude-haiku-5-5`, the pass line stated in the file (14 of 16 cases at 4 of 5
+runs, and no step labelled judgement given a check). Version 1: 11 of 16, model agreement 34 of 48; the reader said
+"written" and left the function out, read "never open with X" as a lexicon, and gave a forbidden section a presence
+check. Version 2 (a worked written check in the prompt, place words): 11 of 16. Version 3 (the source field described,
+the figure rule named) with the polarity cross-check: **15 of 16 at 5 of 5, model agreement 75 of 80 (0.94, 95% CI
+0.86 to 0.98), no judgement step given a check**. The one miss: "every figure must be sourced from the material" is
+given a written figure check rather than CITED in every run; it holds the step by code the reader wrote instead of
+code Atelier tested, and is reported as a miss. The harness's own overall line reads this as not passed on that case.
+
+### The form is not a fact, the notes are not the work, one folder is one voice, and a reader reads where it can act
+
+- **A key of the examples is the form, never a borrowed fact.** The carry-over signal read `video_id` and `safety_score`,
+  which every example assessment carries and a described video never says, as facts of one example's case, and the
+  grounding step's rewrite dropped the keys from 22 of 40 delivered assessments (the v6 study). A term the examples hold
+  as a key or a column heading is the shape of the work (`formTerms`, read from where the term stands, no list of keys
+  kept), and a unit that is structure (a record of keys and values, a table row) is listed and never spliced.
+- **The brief is never printed into the work.** A line of this request's notes that the writer put in the draft is
+  removed by code before any check reads it, and said; the person's own lines are never touched (`core/loop/echo.ts`).
+- **One folder is one voice.** Voices read in the writing are said and recorded, and built apart only with `--voices`;
+  declared authors (front matter, a folder per author, `--authors`) are built apart as before. Built as two, a blog of 24
+  posts lost its long-form usable rate (75% to 30%, the rc.g2 retest).
+- **A reader that can change nothing is not run unasked.** The judgement reader reads by default only on a skill where
+  the labels have given it VETO; before that `--taste` runs it and records readings to label, and the run says so in one
+  line. The moves' placement and the reading of them on the work run under `--moves observe` or `--moves serve`. On
+  short work the readings had doubled the cost per output without changing the text (the v6 study).
+
+### Studies: seven real-user scenarios against five alternatives (external test of rc.g2, about $195)
+
+An independent tester used rc.g2 as a person would: one or two examples and one sentence, `atelier new --accept`,
+default settings, no method file; against the bare model, the examples pasted into one chat, Anthropic's skill-creator,
+the pasted chat with one self-review pass, and a hand-written skill where one exists. Ten tasks a scenario (twenty for
+brand safety), three judge families each picking one output blind and reading every head-to-head pair in both orders.
+
+- **Where it wins.** Market entry from one 4,900-word strategy: the judges' top pick, head to head 17–2 bare, 15–6
+  pasted, 16–2 skill-creator, 9–6 self-review; the only arm usable 10 of 10 after edits and closest to the example (65%);
+  the pasted arms copied runs of 30 to 36 words of the example into other companies' playbooks, Atelier 12. Competitive
+  analysis: most picked, ties the pasted and self-reviewed arms, beats skill-creator 13–6. Against the bare model it wins
+  every scenario but brand safety; against the hand-written skills 24–1 and 27–0.
+- **Where it loses.** Contracts (0 picks; 91% close and the least copying, but clauses the new situation did not ask
+  for), pricing memos (arithmetic and consistency flags, slots left in the memo, 9 of 20 BLOCKED), code review against
+  the simple alternatives (3–19 to skill-creator, while 27–0 against the expert's own skill), and brand safety, where
+  the grounding step stripped `video_id` and `safety_score` from 22 of 40 assessments whose verdicts were all correct;
+  `verify` caught none of 20 planted errors, since a skill built from two JSON examples compiles no schema check.
+- **Blog from two liked posts:** tied with the pasted prompt, the most picked by one vote, the closest to the posts; usable
+  near zero for every arm. **Cost:** 1.5 to 3 times the pasted prompt per output, about self-review's.
+- **The tester's reading, which we accept:** the advantage over the simple alternatives grows with the complexity of the
+  example (rank correlation 0.75 on seven scenarios); short one-off work does not need Atelier; strict structured output
+  at volume is a second wedge that needs schema, vocabulary, rule-table and timestamp checks compiled from the examples
+  and the policy. The three product causes named (keys stripped, the brief in the work, the folder split in two) are the
+  entries above; the figure path on numeric memos and the one-example contract are the next two.
+
+### The method, executed: what each step asks, which steps this request needs, and a reader that reports
+
+- **A reading never moves the standard.** The decision units are kept beside the standard version they were read from,
+  keyed by requirement id, never inside the requirement: a skill built with a model and one built without read the
+  same steps to the same standard hash. (A first cut stored them in the requirement, and a model's reading would have
+  minted a new standard.)
+- **The need for the method decides the brief, not the word count.** "Review this change" with a diff bound, and "The
+  import stalls. Why?" when the intent reading quotes what it asks for, are the method's work; a bare thank-you is not.
+  The same need decides whether the judgement reader reads.
+- **An unknown is never a silent yes, and a contradiction is never a silent no.** A step the reading could not place is
+  said to the writer as held applying, and recorded; a step the request asks against in so many words is surfaced
+  ("the request says …, which is against step n: my method stands") and never set aside; set-aside needs the request's
+  own words. The record carries applying, set aside, unresolved, unsupported and contradicted apart.
+- **A heading's condition scopes the steps under it**, by the words (the floor) and by the reading; a line that opens as an
+  example or a table row is a template, one that opens by giving a reason an explanation, and either stays a requirement
+  with its kind shown.
+- **An approved term is not approved evidence.** The method's terms may be named; whether this person's stall is the
+  OCR pass is a decision, and the brief marks it unsupported when nothing given supports it, so the writer is told to
+  say what is missing and decide nothing. The count bands of short pieces (longest sentence, counts) widen as the
+  length bands do: never narrower than a quarter of the largest value.
+
+- **What each step asks the writer to decide, read once at build.** A method note is not seventy flat rules. Each step
+  the owner stated is compiled for execution beside the step: its kind (an instruction, a template example, an
+  explanation, a criterion), the decision it asks for, what it consults, when it applies in the step's own words, what
+  it puts in the work, what changes the default, and which steps come first. Read by the context reader, grounded step
+  by step (a quote or condition not in the step's words drops that unit to the floor: an instruction, applying always
+  unless its words say when). Never a requirement of its own and never a weight: the standard is the same with the
+  reading as without it. Said in the whole account.
+- **The execution brief, before the draft.** For each request, which stated steps apply: a step with no condition
+  applies by code and is never read; a conditional one is read against the request and its material, and set aside
+  only on the request's own words; one the reading could not place applies. The writer gets step numbers and one line
+  each after the cached skill: what applies, what is set aside and why, the decisions in dependency order, what was
+  given, and which decisions nothing given supports, to be left open rather than invented. A set-aside step is withheld
+  by name and marked set aside in the evaluation, where a required one keeps the run at NEEDS REVIEW. A short request
+  gets no brief. `--no-brief` leaves it out.
+- **The judgement reader reports by default, bounded.** Wherever a model can be reached, the delivered text is read
+  against every rule no count checks, in reporting mode: what it finds is shown, counted toward the labels that earn
+  it a say, and never counted as held (a FOLLOWED leaves the rule yours to confirm; only a MISSED where your labels
+  gave it VETO fails a rule). Read in batches of twelve rules, each twice, the request's enforced applying steps first;
+  a long request makes four reading calls at most by default and says what the cap left unread as not read, never as
+  unclear; a short request is not read unless `--taste` asks; `--strict` reads every rule; `--no-taste` turns it off.
+  A pass that returns nothing for a rule leaves it not read.
+- **The method's terms are approved, never borrowed.** The method note and the standard's statements travel to the
+  carry-over signal and grounding as given, so "the OCR pass" of a method about scanned imports is terminology the
+  writer may name; a term only the goldens hold still is not.
+- **Pieces of one length are not a preference one word wide.** The band read from the author's lengths is the spread
+  and never less than a quarter of the longest piece: three replies of 231 characters gave 230 to 232, and a band read
+  from a few pieces is descriptive.
+
+### What a build ran, what it lost, and what it was built from
+
+- **A receipt beside every skill version.** What the build read and with what (persona, work form, scope, counted rules,
+  author profile, signals, model contrast), each stage ran with its detail or not with its reason, keyed by the version's
+  hash and never inside it: two builds that emit the same files are the same version, and the receipt says how each was
+  made. `atelier build --report` says the stages in one line; `atelier status --skill <name>` shows them.
+- **A lost reading is said with its repair.** A persona lost to a failed call used to be one line in the build log and
+  nothing else. It is now recorded as a degraded build, said on the short screen with the command that reads it later
+  (`atelier build --name <name> --persona auto`), and shown by `status` until a build repairs it. The build never fails
+  for it.
+- **A profile of other pieces is never installed.** The project's run folder is shared by every build in that folder, so
+  a fidelity profile discovery wrote for one corpus was installed by any later build there (a method, stated rules), for
+  pieces it never measured. A profile is installed only for the sealed corpus it names; anything else is set aside as
+  `fidelity.stale.json` with the signals, index and calibration written with it, kept, and said. The active pointer
+  moves last, after everything the version needs is in place.
+- **One owner of what is required.** The standard is the owner's statements, ratifications and amendments; the pieces,
+  the counts and a model's readings are evidence. The rules between them are stated in one place and tried
+  adversarially: only an owner event adopts or rejects; a rejected item returns only by being presented again; a reading
+  raises no evidence and passes no requirement; a provisional range records, a soft one notes, only a binding one
+  redrafts or blocks; a step a reading could not place is held as applying. A rule no check measures says so in the
+  skill ("Read, not counted"), as a measured one says "Checked".
+- **The served examples are framed by the form of the work.** A document's own pieces were served inside a frame
+  written for support replies ("a separate, earlier conversation with someone else"). The package now carries the
+  form it was compiled for; replies keep their frame, and a document's pieces are framed as the author's whole pieces,
+  read for how they are written, their subjects and facts their own. The slot shape (`[link: …]`) leaves the skill: it
+  is said in the request's notes only where slots are on, since shown in every skill it was taken as the safe answer.
+  The case the frame is for is tested end to end: after goldens about a PDF import, "Thanks, that solved it." gets a
+  short reply with no PDF in it.
+
+### The author's own clause survives the trim, and a document writes concretely
+
+- **A cut for length never removes the house's own wording.** Asked to bring a draft under a required cap, the cutter
+  was shown the draft alone and named the "includes, without limitation" list that every one of the author's
+  contracts carries. A sentence carrying a six-word run the author's pieces share is never cut; the cut falls on what
+  else was named. And under a required cap on words, the skill states the span the pieces run as the aim and the cap
+  as the limit, without the hedge ("not how long an answer must be") that licensed 10 of 10 drafts to overshoot.
+  Told to aim at the span itself (405 to 419 under a cap of 420), the writer still landed at 429 to 452 on 10 of 10:
+  a draft lands a few percent longer than it was aimed, so the stated aim ends at least a twentieth under the cap.
+- **One frame around your pieces, said positively.** Four separate instructions told the writer what never to take from
+  your pieces, and a writer told four times to keep its distance wrote abstractly where you write in links, named
+  products, figures and scenes. The skill now says once: write the way these are written, concreteness included; the
+  facts come from the request; what the piece needs and the request did not give is written in your shape and marked as
+  a slot for you to fill (`[link: …]`, `[product: …]`, `[figure: …]`), said for the run that wants slots. For a document written with no material bound,
+  an invented story, source or figure becomes such a slot by default rather than being listed (`--no-placeholders`
+  asks for the listing). Where material is bound (a diff, a term sheet) a specific not in it is listed for you, as before: the facts
+  are the material's, and a finding is never replaced by a slot. Because the skill's own text shows the slot shape,
+  a writer with material bound is told to leave none (one code review named "[person: who owns the shipping policy]"
+  as a Must fix).
+- **Two false alarms in the verdict.** A six-word run two pieces of a corpus of four or more share is the house's
+  wording, not a lifted passage (7 of 10 good contracts were BLOCKED as lifted). And a `path:line` that names a line
+  inside the bound diff's hunks traces to the diff: the line number is not written in a diff, so every citation of one
+  was called invented, and once a Must fix finding was cut down to "Await it.". This is claim decision 4, a changed
+  instrument: until the study that measures it, no shipped claim reader cuts; it reads, lists, and the pattern check
+  gates, as for any unmeasured reader.
+
+### What kind of work it is, read from your pieces, not off its name
+
+- **Whether a skill writes replies or documents is read from the examples.** It was read off the skill's name by a word
+  pattern: "code review" matched the pattern for replies, and a skill for review documents written under sections was
+  served the voice of a chat assistant (state your assumptions, name the check, never shorten) that no example of the
+  author's carried. Now code decides where the examples are decisive (every one written under sections is a document),
+  a small model reads the examples otherwise and quotes what shows the form in each, code keeps only quotes that are in
+  the pieces and takes the majority, and the name decides only when no model is set up. Read once at build, kept with
+  the skill, said on the screen with who decided; `--work-form reply|document` says otherwise. A skill from rules you
+  state (`atelier skill`) has no examples: its one proposal call reads the form from what you said, and `--yes` asks
+  nothing more.
+- **One way to read context, evaluated before it decides anything.** Every decision that turns on what words mean (not
+  on what can be counted) goes through one mechanism: code where the evidence is decisive, a reader (`claude-haiku-5-5`
+  by default; `--context-reader <model>` or `ATELIER_CONTEXT_READER` names another) otherwise, the old word pattern as
+  the floor, and the record says which. Each reading has labelled cases in `bench/readings/` run several times each,
+  with the pass line stated before the run (`node bench/readings/run.mjs work-form`).
+- **Whether a rule forbids or asks is read, not matched.** A rule's kind (a prohibition, repaired by cutting and served
+  under what not to do; or a thing to do) was decided by three different word patterns in three places, and a negative
+  word inside a positive step ("improvements that do not block the merge") could file it under what not to do. The
+  steps you write for a method are read in one call, and a rule added by `fix --always` or `mine` in one; a step the
+  reading skipped, or any rule with no model set up, falls to the anchored word pattern. Rules Atelier words from a
+  count keep the pattern. Cases: `bench/readings/cases/rule-polarity.json`.
+- **What you want the skill for is read from your sentence.** Producing new work, guarding work to a standard, or
+  answering people inside a policy (which moves only the default weight of a rule) was read by four word lists and
+  their order. The sentence is read once at intake and kept with the run; `--mode` still says it outright; the word
+  lists are the floor without a model. Cases: `bench/readings/cases/intent-mode.json`.
+- **The context judge reads the request's shape too, on the current small model.** Whether a stated format is a shape
+  (code, JSON, a number, one line, a list: the author's presentation rules are withheld) or only strips the wrapping
+  ("return only the post": the piece keeps its standard) was a word list on the judge's own answer. The judge says it
+  in the same reading; the list stands in only where it did not. The judge runs on the context reader's model
+  (`claude-haiku-5-5`), apart from the claim reader, which stays on the model it was qualified on.
+- **A reading that the model had made is no longer overruled by the word pattern.** Which moves hold back what was asked
+  was `the reading OR the pattern`, so a move the model had read as giving what was asked could still be carried as one
+  that holds back. Likewise the request's length and format: a judge that read the request and found none asked was
+  overruled by the pattern. The reading decides where it read; the pattern where nothing did.
+- **A reader that cannot be reached is asked once.** With a key set for a backend that answers nothing, a build waited
+  out the retries of every reading in turn; the first failure now turns the rest of that build's readings off, said once.
+
+### With no method note, the method your pieces follow is read off them
+
+- **Structured work always has a method, and the brief had none to work from without a note.** A contract, a
+  report, a price comparison, a code review each take their steps in an order the finished pieces show; without the
+  owner's note, every run had no brief (which steps this request needs, what each asks the writer to decide) and the
+  author's moves had nothing to link to, on the very work where they matter. Now, with no note, the steps are read
+  off the pieces at build (`core/method/infer.ts`): one instruction a step, in the pieces' order, each shown by a
+  quote copied from one piece, then what each asks the writer to decide, read as the owner's steps are. Kept beside
+  the skill per corpus; read again only when the pieces change.
+- **A habit, never a rule.** An inferred step briefs each run as the owner's would ("For this request, my method's
+  steps that apply"), said to the writer as "my usual steps, read from my own pieces and not rules I wrote"; none is
+  a requirement of the standard, none blocks, none is served in the skill itself, and the run records that its brief
+  was inferred. Pieces with no common shape (essays, posts each built their own way) yield none, and the build says
+  so; `--no-infer-method` leaves them out; `atelier method <file>` replaces them with the owner's own.
+
+### Examples first: the writer served your pieces, your method and your rules, and no description of you
+
+- **`--examples-first` on a run** serves the writer the author's pieces, the method and every rule, with no
+  description of how the author sounds, no repertoire and no move in the brief; the moves are read on the work
+  afterwards as they would be and never served, and nothing of the profile authorises a repair. One run's
+  choice, recorded on the run (`served: examples-first`); the build, the skill on disk and every other run are
+  unchanged. It exists to test one thing: whether the author's own text carries their voice better than a
+  description of it does, with the method held by the same checks.
+
+### A figure worked from the figures you gave is yours, by dimension
+
+- **A worked cost is not an invented figure.** A method step "every figure must be sourced from the price list"
+  read every worked cost as unsourced: a team's monthly cost (12 × $8 = $96), a rate per head ($350 ÷ 12 =
+  $29.17), the gap between two vendors ($350 − $96), a year of it. Ten price analyses in forty runs were blocked by
+  it in every arm, and the repair against it removed the worked costs from fifteen outputs whose drafts had them.
+  The check now works figures by dimension, chained through the figures the text itself states: money times a
+  count is money, money over a count is money per head, money less money is money, a count less a count named as
+  one of them is that count, a share is of one thing in the same thing, a year is twelve months of an amount of
+  money and only where the words say a year; a span of the calendar ("over twelve months") is no claim. An
+  operation is accepted only where the units make the result, at the figure's own precision, and never through an
+  intermediate the text does not show: a figure built on a number nobody gave is listed with it, a dose is still
+  not an age plus a breathing rate, and past eighty operands nothing is worked. Replayed on the forty outputs: the
+  figures the check could not place fell from 15 a draft to 0.1.
+
+### Three things a review found unfinished, finished
+
+- **VERIFIED was unreachable on a method with judgement in it.** A step like "Open with a Summary: two or three
+  sentences on what the change does" was checked by code for the part a count holds (a Summary section, with
+  something in it) and left for the person on the rest, on every run, however often the taste reader had read the
+  rest as followed: 160 runs of one study, none VERIFIED. The reader's reading now enters the record on a rule where the
+  owner's labels have earned it VETO (`core/eval/record-build.ts`): read as followed, the rule is established in full by
+  a qualified observer; read as missed, it is seen to fail. Without VETO nothing moves, and a rule the owner holds back,
+  set aside for the request, or held for missing material is never reached. `verify --taste` carries the same readings.
+- **Review prose was failed for describing the change under review.** On an answer the pattern's work claims were cut
+  on their own, and on code reviews they read "This change adds a method on the settings" as work the assistant did and
+  "a file claiming 500 rows and supplying 3 is accepted" as a result seen: 14 of 34 blocked reviews in one study, every
+  one a description of the diff. A pattern's work claim is now cut where the context judge read the sentence as work
+  too, and listed for the person where it did not (`core/loop/answer-claims.ts`, `agreedWorkClaims`); with no judge
+  the pattern decides alone, as before, and an identifier from the person's system that nothing given shows stays the
+  pattern's to cut. Replayed with the judge on those reviews: it agreed on none of the 12 work claims, so all 12 are
+  listed and none cut.
+- **A skill built from a method and pieces had no author's range.** Only discovery wrote a fidelity profile, so a
+  method build had no bands, no release, nothing to choose a draft by or to read an output against. The method path now
+  builds the bands from the pieces alone when there are four or more (`cli/commands/method.ts`), installed under the
+  pieces' own hash with a first release; the detector and the signals still need model drafts, so every band monitors
+  and none steers until a discovery adds them. Anything another build left in the run folder is cleared first, as
+  discovery clears it, so a stale profile or signals file is never installed beside it.
+
+### A run spends what its draft needs: the second draft on demand, the claim reader on the text delivered
+
+- **The second draft is written only when the first wants a rival.** A release plans two drafts and kept the better
+  by count; both were written up front, so a 5,000-word piece paid for two of them every time. Now the first draft is
+  written alone, and the rest only when it breaks a rule the drafts are chosen by at the top of their order (a REQUIRED
+  rule, or a rule the taste reader acts on): what a whole second draft could still better, the repair chain fixes at a
+  fraction of a draft's price. Drafts the person asks for (`--drafts N`), and drafts sampled or varied to keep the
+  author's spread, are all written. The record says what was spared (`selection.spared`), and the build says the plan.
+- **A claim reader that only reports reads the delivered text, not every candidate.** Where the pattern check gates (the
+  reader is not qualified, or has degraded), the drafts that compete for selection are read by the pattern check alone;
+  the reader's warnings are read once, on the text the person gets. A reader that gates reads every candidate, as before.
+- **`atelier eval` says what a usable output costs**: the rated runs' spend over the runs you would ship, beside the
+  median cost of a run; the figure a release is judged by, since a cheaper run that ships less often is not cheaper.
+- Measured on the one long-form run this was built from: writing $0.75 of $1.22 for two drafts of which the first held
+  every rule; the claim reader $0.14 on three texts for warnings shown on one.
+
+### How often you make each move, and whether a situation explains it, is measured, never a word
+
+- **No count fixed by hand decides anything about your moves now.** Until today a point of the persona was "always"
+  or "sometimes" by the reading's word, a move was general only when seen in three pieces, a quote under three words
+  was not evidence, a "not" line had to match a pattern of negation, the persona was asked for twelve to twenty
+  points, and what met none of these was unknown and served to no run. Each of those was a number or a category
+  someone picked. They are gone. The persona is asked for as many points as the pieces show. Every verbatim quote is
+  kept at any length; whether it shows the move is the reading's judgement, measured by its eval, never a word count.
+  The "not" line is kept as read.
+- **Every habit is counted against every piece.** After the first reading, a second (`persona-table`) is asked, for
+  each habit and each piece the first left, for one verbatim passage making the move and one in its situation, or
+  none; the calls are sized by the answer budget and the corpus, never by a fixed number of habits. From the cells:
+  in k of n pieces the move is made; where the habit has a situation, a and b pieces in it with and without the move,
+  c and d outside.
+- **From the counts, a posterior and a decision** (`core/stats/habit.ts`). The rate of a move is θ ~ Beta(k+½, n−k+½),
+  the Jeffreys posterior: its mean, a 95% credible interval, and P(θ > ½), the probability the habit holds in most
+  pieces. Whether a situation explains a habit is the Bayes factor of two rates (in and out of the situation) against
+  one, by closed-form Beta-Binomial marginal likelihoods, with P(θ_in > θ_out) saying which way. The kind is the more
+  probable hypothesis: *situational* when two rates beat one and the move is likelier in the situation; else
+  *standing* when a majority is more probable than not; else *occasional*. Nothing is unknown: one piece of one has a
+  posterior and an interval that says what it knows. Three pieces and forty get the same arithmetic. The only
+  constants are the prior, the pivot ½ ("most pieces" means a majority) and equal prior odds between the models.
+- **The skill and the record say the count, never the word.** "How I sound" carries what more probably holds in most
+  pieces than not, each point "in 11 of 12 pieces [0.66, 0.99]"; the repertoire carries the rest the same way; the
+  reading's own word is kept on the profile as what was read and decides nothing. A situational move is placed by
+  the brief when its situation is read in the request; a standing one stands; an occasional one is description. The
+  budget of moves a piece gets is the sum of the situational moves' posterior means, rounded, never a floor of
+  pieces; candidates are ordered by their posterior in the situation. The profile's schema is 2; a run built on the
+  earlier schema keeps its profile by the receipt.
+- The evals, run on `claude-haiku-5-5`: `persona-moves` v5 52 of 65 runs over 13 cases, two soft (a move whose
+  situation is in its own sentence has no second quote to give; a competing-explanation case the reading quotes
+  from one or two pieces), one label corrected after the run (a point labelled as standing that the reading gave a
+  situation, "when the verdict requests changes", and the pieces bear out: 2 of 2 in, 0 of 3 out). `persona-table`
+  v1 took a situation present (input from the query string, unchecked) for the move made, five of five; v2 says the
+  situation present is not the move made, and reads 30 of 30. The labels are what code decides from what the
+  reading grounds (the trigger's status and the pieces quoted), never a kind.
+- **The move reader (v4) reads a supposed situation as absent.** On the piece of the C4 miss, v3 still read the
+  speculative attacker ("if any of the three builders reads stamps from request data") as realised, five of five:
+  the piece supposed its situation and the reader granted it. v4 says a situation the piece only supposes is not one
+  it is in, and that a passage the move's "not" line forbids is misapplied whatever else it does well: 50 of 50 on
+  ten cases, the two formerly soft ones included.
+- **A profile read by an earlier reading is read again** where a model is there, as one read from changed pieces
+  is; with no model, a profile a model read is kept over a floor, and the stage says why.
+- **A habit is observed in a passage or over the whole piece, and a counted feature stands in for the quote only
+  where it measures the habit.** The first reading now says, per point, whether the move is made in a passage a
+  reader could quote or is a property of the whole piece, and, where it names a counted feature, whether the habit
+  is that feature present in a piece, absent from it, or only near it. In the first two cases the feature's count
+  over each whole piece fills the cell, by code and with no threshold (present is one or more, absent is none), and
+  the count is kept; a count that disagrees with a verbatim quote does not measure the habit, so the quotes decide
+  and the line says so. A whole-piece habit with no feature is judged over the piece by the table, a passage only
+  illustrating. The table is told each habit's modality and that a finding on topic is not the move (v3; four hard
+  negatives modelled on real over-counts join its eval, 44 of 50).
+- **The evidence of a habit is read by a mid-size model, on an eval labelled by hand from the corpus.** Twelve
+  habits of the public code-review corpus (bench/standing/domains/code-review) were labelled piece by piece by a
+  person and joined the table reading's eval, with the ambiguous pieces marked soft. On them the small reader
+  answered the abstract habits differently from call to call and moved with the prompt's wording (a crisp habit
+  every piece shows went from 12 of 12 to none between two wordings); the mid-size reader did not, and its extras
+  were the pieces the labeller had marked as borderline. The two evidence readings (each point compiled, every habit
+  tabled) run on Sonnet 5.5 by default, a few calls per build; `--evidence-reader` or `ATELIER_EVIDENCE_READER`
+  names another, and on another backend they take the context reader. The client takes the `between_tools` form of
+  thinking off where the API asks for it, and the price table has the 5.5 models.
+- **A counted feature confirms a reading and never adds to it.** A feature absent from every piece (no exclamation
+  marks) is consistent with any habit that never raises the temperature and measures none of them; the reading
+  linked it to "severity named plainly" and the count made that 12 of 12. Now a piece counts for a measured habit
+  only when the reading found the habit in it and the count agrees; the inference carries a version of its own, so
+  a profile inferred under an earlier rule is read again.
+- Two reads of the real persona on the final instrument agree on the kind of 18 of 20 habits and on the count of 9
+  of 20; the counts that move are the abstract habits' (severity named plainly 4 of 12 against 9 of 12). Against the
+  small reader's 9 of 20 kinds changed, better and not finished: carrying each cell as a posterior over repeated
+  reads is the principled next step, and it multiplies the table's cost by the number of reads.
+- **Studied: Anthropic's skill-creator against the author's own posts pasted, on long-form.** Six held-out posts of
+  one author, two runs each, judged blind: skill-creator read less like the author on every title (−0.25 [−0.42,
+  −0.08] on a 1 to 5 scale, task-paired), invented more and copied 24 six-word runs a post from his writing against
+  0.7, since its skill embeds his fragments. The Atelier arms of that pilot were not run to the end: an Atelier run
+  on a 5,000-word post costs about four times a plain call (two drafts and the taste reader), and the owner moved the
+  larger study elsewhere.
+- **Studied (development evidence, both halves).** On the ten C4 code-review tasks, the measured profile served as
+  C2 held the method exactly (checklist 17 of 20, the defect first 20 of 20), placed 17 moves of four kinds the judge
+  called the right call 16 times, delivered 20 usable pieces with no invention, and read to the blind judge as the
+  same author to the same degree as the frozen profile (0.00 [−0.37, 0.37] by task). On ten fresh price-analysis
+  tasks with their price lists as material, against the Gate B skill and the pasted method: no likeness gain (−0.20
+  [−0.70, 0.17] by task), a loss on structure the judge reads as real (−0.63 [−1.03, −0.27]), the one placed move the
+  right call 13 of 13 times, no invention, and every Atelier run in both arms blocked by the owner's step "every
+  figure must be sourced from the price list" read as a count: a worked cost is a figure not in the material, a
+  product defect in the figure rule and not in the moves. The method-only arm is the ceiling on likeness in both
+  domains. The records: `STUDY_2026-10-19_step4.md`, `STUDY_2026-10-19_step5.md` (internal).
+- On the real persona of twenty points that C4 ran on, three reads of the same twelve pieces under the small reader gave 9, 16 and 11
+  standing moves, 6, 2 and 4 situational, 5, 2 and 5 occasional: nine of twenty kinds changed between two reads on
+  identical pieces. The arithmetic is deterministic; the table reading that feeds it is not yet an instrument on
+  long pieces with many findings, over-counting abstract habits (a plain finding read as a severity escalation) under
+  one prompt and under-counting plain ones (every piece's "Add tests for…" paragraph read as absent) under the next.
+  Where a feature measured the habit the count was right and stable (no "we" in any piece; every piece opening
+  "This change adds…"). The audit, the cells of each read and an offline replay of the profile through the brief's
+  selection are recorded with the study; no judged run uses these builds.
+
+### A review's finding is not a result seen; the reader judges the situation from the piece
+
+- **A cited line is not a figure of progress.** "orders.py:42 — the status is written straight onto the column" carries
+  a result word and a number, and the pattern that catches "1.1M rows written" read it as a result the assistant saw,
+  blocking nine of twenty reviews in every arm of a study on the grounding gate. A line reference, a number inside a
+  name, and a line inside a hunk the material shows are not figures of result now. A real claim of progress still is.
+- **The move reader judges the situation from the piece, never from the list.** A move placed for a request and made
+  in a piece that is not in its situation (an attacker named for code nothing reaches) read as realised; it is
+  misapplied, and the reader is told so. Two case forms join its eval, the listed-but-absent situation and the move
+  named without being made; the live run of that eval waits for the next spend.
+- On a real persona of twenty points, eleven read "always" and one became general under the old fixed counts: the
+  reading quoted most from one or two pieces, so they fell to unknown as uncollected rather than rare. That finding
+  led to the table and the measured rates above, which replace the fixed counts outright.
+
+### A run uses the profile its build named; a profile read from pieces that changed is read again
+
+- **A run takes the move profile from the receipt of the version it serves**, never from a lookup by the persona on
+  disk, which a later build may have moved to another profile. A version built before profiles were kept has none.
+- **A kept profile whose pieces have changed is read again** where a model is there: the profile names each piece by
+  the hash of its text, and a build whose readable pieces differ reads the moves anew (the old profile stays on disk
+  for the receipt that named it). With no model it is kept, and the stage says how many pieces differ.
+
+### What the work did with your moves, read after the draft and never counted
+
+- **Each move placed or standing for a request is read on the delivered text**, by a small read of its own after the
+  draft, apart from the taste reader's, so the reader's coverage of your method's steps is never spent on a move.
+  Five outcomes, because presence is not realisation: realised (the piece is in the move's situation and makes the
+  move as you make it, with the passage quoted), misapplied (made where it does not fit, or as its own "not" line
+  forbids, quoted), missing (the situation is there and the move is not), not applicable (the piece never reaches
+  the situation), not read. A sentence that challenges an assumption without saying why it misleads does not realise
+  a move whose point is the why.
+- **A reading, never a gate.** Nothing redrafts on it, nothing counts it as held; it is said in the run's panel under
+  the monitors ("my moves: 1 realised · 0 misapplied · 1 missing · 0 not applicable (observed, not served)"), kept
+  with the run as an event, and summed by `atelier eval` per move: in how many runs it was placed, and what the
+  pieces did with it. The reader's agreement with a blind judge is a study's to measure before any of it steers.
+  `--no-taste` skips it with the taste reader; a short request, which gets no brief, gets no reading.
+
+### Which of your moves this request calls for, read with the brief and recorded
+
+- **Your moves are placed for each request as your steps are, by a reading of their own.** For each situational move
+  of the profile (never an occasional one; a standing one stands by itself), a second small read,
+  beside the one that places the method's conditional steps, says whether the move's situation is named by this
+  request or its material, quoting the words that name it. A move is placed only on such a quote; "does not hold"
+  needs none, since not placing is the safe direction; an unresolved move is never placed, the reverse of a step,
+  because a move steers and a step binds. The read runs only on a request that has a conditional move, and costs a
+  fraction of a cent.
+- **Which placed moves one piece gets is decided by code, in this order:** not at a step set aside for this request;
+  shown in two of your pieces at least; one move per scope at a step; within your own rate (about as many such moves
+  as your pieces carry, the better-evidenced first, frequency only breaking ties, so a rare move the request calls for
+  outranks a frequent one it does not). Zero is an ordinary result, and a short request gets none, by the same need
+  that withholds the brief. A general move stands by itself: it is how you always are, served in the skill already,
+  and is never said again in the brief.
+- **Observed by default, served by your word.** Under `observe` the selection is read, made and recorded with the run
+  (the profile it came from, what was placed, what was not and why, what was unresolved) and the writer is served
+  nothing of it. Under `serve` (`--moves serve` on a run, or `moves: serve` in the skill's release settings) the placed
+  moves are said to the writer after the steps: "How I would make this, as myself: at step 1: where input is
+  untrusted: one sentence from the abusive caller, as in "…" (3 of 12 of my pieces). Not: never an attacker the diff
+  does not expose." The run's report says what was placed and under which mode. The standard is untouched either way.
+
+### Your moves, compiled: when you make each one, and whether that is known
+
+- **Each point of the persona is now compiled for execution, not only described.** A build with a model reads, for
+  every point, the situation in which you make the move, how it may show, what it is not, what it governs (a
+  wording, a paragraph, the shape of an argument, a decision), the step of your method it realises, and the counted
+  feature that measures it where one does. Every claim is grounded in your pieces: each quote must be verbatim in the
+  piece it names, and a situation counts as shown only by a second quote from the same piece as the move, because a
+  quote proves the move and not why you made it.
+- **Whether a move is general, conditional or unknown is decided by code, never by the reading.** General needs a
+  habit marked "always" shown in three distinct pieces (or in every piece of a corpus under three, said as
+  provisional); conditional needs a situation shown; everything else is unknown, including everything a build
+  without a model produces. An unknown move is served to no run as a rule: the no-model floor cannot turn an unknown
+  trigger into "always".
+- **The profile is immutable and beside the voice.** Named by its content, keyed by the persona it was read from, so a
+  rebuild with the same persona reads nothing again; the build receipt names it; the standard and the package are
+  the same bytes with and without it. `--report` lists each move with its applicability, its situation and how many
+  pieces show it; the stage line says "moves ✓ (20 moves: 9 general, 4 conditional, 7 unknown)". A step link is a
+  candidate until you confirm it; a "what it is not" line is guidance, kept only as a negation, never a requirement.
+  Which moves fit one request is not yet said to the writer.
+- **A profile once written is never overwritten, and names its pieces.** Each profile is kept under its own content
+  hash, so the receipt of an earlier build resolves after a later reading replaces what the persona currently has;
+  the pieces its evidence names are recorded by the hash of their text, so "piece 3" traces to a file of your corpus.
+- **A persona kept from an earlier build is held to your current standard.** A point that describes a move your
+  standard has since ruled out (a boundary added, a rule rejected) was dropped only when the persona was first read;
+  kept through a rebuild, it came back, and the moves were read from it. It is dropped on every build now, before the
+  skill is written and before the moves are read.
+
+### Every move the persona read of you is served, each as what it is
+
+- **A habit of some of your pieces now reaches the writer.** The persona reads every point with how often it holds.
+  The skill served only the points that hold in most or all pieces, on the claim that the moves section carried the
+  rest; that section lists your standard's rated rules and never read the persona, so every point marked "sometimes"
+  or "rarely" reached no writer. On a code-review skill of twelve pieces those were four of twenty points, and the
+  four that made the author recognisable: reasoning from the abusive caller where input is untrusted, hedging only
+  under real uncertainty, one flat adjective on an awkward name, a side benefit tacked on. The format and register
+  the checklist already holds were what survived.
+- **Served apart, so a conditional habit never reads as how you always are.** What holds in most or all pieces stays
+  under "How I sound", each point with its quote. What you do in some pieces, or rarely, is served under "Moves I make
+  in some pieces, not most" as one descriptive line each, the aspect first ("Quiet naming judgements: calls a choice
+  awkward in one flat adjective, then proposes a clearer name"), marked "in some pieces" or "rarely", with no quote
+  and no instruction: the block says none of these is a rule and no piece of yours carries many of them. Which of
+  them fit one request is not yet said to the writer; that is the next step, and the quotes stay in the record.
+- **The build says how many of each it read.** The stage line and the whole account give the persona as "20 points
+  (11 always, 5 often, 4 sometimes)". A skill built before this serves the points it has once built again.
+
+### How you sound is read on every path that has your pieces
+
+- **A skill built from your method and examples, or from two or three pieces, now carries how you sound.** Those builds
+  called no model, so they had no persona (the description of how you write, each point quoted from your pieces with how
+  often it holds) and, for work that answers requests, no reading of how much you add beyond what was asked. The skill
+  stated "too few of any one kind" about examples that were all of one kind. With a model set up, both are read at
+  build; without one, the build is as it was. The persona steers and never blocks, so it needs no held-out pieces, unlike
+  a rule. A build from a method still serves every one of your pieces whole: the model reads them, it never chooses
+  which are shown.
+- **The build says what it read about you, or why it read nothing.** One line for the persona and one for the scope on the
+  short screen when a model was there to read, and the one reason you can act on (fewer than three pieces); the others
+  (no model set up, `--persona none`) are in `--report`. `--no-model` skips the reading. A skill built before this
+  carries no persona until it is built again with `atelier build --name <name> --persona auto`, which keeps its pieces
+  served whole.
+- **Building a skill again that serves the same files no longer fails.** The record kept beside a package (your voice,
+  the pairs, the method) was written with its keys in a different order on a rebuild and refused as a second body under
+  one hash. A package is its served files: only files that differ are refused now.
+- Evidence: in the three-context study below, every skill that scored last on "sounds like the author" was built on one
+  of these paths and had no persona; every skill that tied or won had one.
+
+### Answers grounded in the request in hand
+
+- **Your examples' facts stay in their case.** Every example is served with what it was written from, and the skill
+  says once, for every kind of work, that facts in your examples and in your method's examples belong to their case:
+  the writer states of the request only what it and its material show, and gives anything else as an assumption or a
+  check. The skill's own rules are instructions to the claim check, never evidence: a figure in a rule may be repeated
+  as written, and nothing about the request in hand rests on them.
+- **A fact borrowed from an example's case is corrected where it stands.** A sentence that states, of your case, a
+  distinctive term (an acronym, an identifier, a header, a line of code) that your examples hold and the request never
+  names is rewritten to state only what the request gives, or to say it as an assumption. Never deleted: the rewrite is
+  kept only when code accepts it (no borrowed fact still stated as fact, nothing new borrowed, its code and links
+  unchanged) and the whole text, checked again, breaks no rule that held. Otherwise the sentence stays as written,
+  listed for you to check and marked unresolved, and the run says which. A line of code the request names by its first
+  word (`Authorization: …` when the request names the Authorization header) is the request's. With a claim reader set
+  up, the delivered text is read beside the request and its material, and a cause, a setting or a state of your system
+  it states without their support is listed: that reading is not measured, so it never rewrites.
+- **Your examples are other conversations.** The served examples are said once to be separate, earlier conversations
+  with someone else: nothing in them was said by the person you are answering or is true of their case, and whether an
+  example asked first, acted or confirmed first was decided by its own request; for the one in hand, the method and
+  that request decide.
+- **The skill is sent the same on every request.** It is cached once and read from the cache after. A rule a request
+  sets aside (its own length or format) is named after the request instead of cut out of the skill, so one request's
+  exceptions no longer cost every other request a fresh cache write. A rule that needs material nobody supplied is
+  still left out of the skill, as measured.
+- **One reading of a reply.** The situations a reply states and what the request asks for are read in one small-model
+  call where they were two, and the text delivered is not read again when it is the one already read.
+- **Code is never taken apart.** A link, a hashtag or an emoji inside code is the code's: it is not counted against
+  your pieces and is never removed. No repair step empties a code block or removes a URL from code, and a step that
+  edits sentences leaves code as it was. A link that is a word of its sentence is left for the rewrite instead of cut
+  out of it.
+- **What a request needs is read before the first draft.** In the same small call that reads a request's format: what
+  it asks for, what the answer turns on that it does not say, something named the assistant could act on itself, and
+  an action that cannot be undone, each tied to the request's own words. The writer is told, after the skill and
+  uncached and in the request's own words, each line deferring to your method: assume and say so what reasoning can
+  settle; for what only a check can settle, give what can be given and name the check; act on what could be found
+  directly; confirm before what cannot be undone. Nothing else is required: an example, an alternative or background is
+  not a need. Never for a request that names a document to write ("a technical paper", "a post"): a piece of writing
+  has no asker to answer, and its form is the author's. No call is added and the cached skill is unchanged.
+- **Every part of a request is read after writing too.** A request of more than a line is read for each thing it asks;
+  a part left out is listed for you, and under `--strict` the reply is written once more to give it, following the
+  method on when to act, confirm first or state an assumption (`--no-coverage` turns this off). A part the reply holds back for one of the method's two reasons, to
+  have an action that cannot be undone confirmed first or to ask which target when the request names none, is the
+  method's call: it is said, and never written again for. Asking for what it could find itself, or handing the work
+  back, is a part left out, and the reply is written again to act. Saying "one" of something ("in one edit") is not a
+  figure a draft written again is refused for. Each extra draft is recorded as kept or not, with why.
+- **Habits are said as a record.** What your examples never did is said as "in none of my examples (0 of 3)", not as
+  a rule never to do it.
+
+### A change to how the skill runs is a candidate until your ratings say otherwise
+
+- `atelier fidelity --next` and `--distill` make a candidate release and leave the active one running: features in
+  your range and inventions found are diagnostics, not evidence the answers are better. `atelier invoke --try-release
+  <id>` runs a candidate without adopting it.
+- `atelier fidelity --promote-release <id> --margin <points>` makes it active only on your own ratings, paired by
+  request against the active release it was proposed from: no worse beyond the margin you state (at most 20 points) at
+  the lower end of a 95% interval, with no more rules broken or claims invented, and at least ten paired requests.
+  Anything short of that leaves it a candidate. `--set` is your own choice and takes effect at once.
+- `atelier rate` takes optional reasons from a closed list (necessary part missing, unnecessary extra, wrong, unsafe,
+  unsupported claim, asks instead of acting, too long, too short, voice off).
+
+### Studies: the author's moves served, against Gate B, on fresh code-review tasks (development evidence, $12)
+
+Ten code-review tasks no arm had seen, five with a change in the author's adversarial situation (untrusted input);
+twenty outputs per arm, the same writer and diff; a blind judge. Arms: Gate B frozen; all frequencies served as
+description with the moves observed; the moves served; the moves served and read; the method note with the goldens
+pasted.
+
+| | Gate B | described only | served | served and read | method only |
+|---|---|---|---|---|---|
+| method checklist | 16/20 | 14/20 | 17/20 | 16/20 | 9/20 |
+| planted defect cited first | 19/20 | 16/20 | 20/20 | 20/20 | 20/20 |
+| usable | 17/20 | 16/20 | 18/20 | 18/20 | 20/20 |
+| sounds like the author (1–5) | 4.20 | 4.35 | 4.40 | 4.35 | 4.55 |
+| within-task variation (sd) | 0.35 | 0.46 | 0.23 | 0.66 | 0.12 |
+| cost per usable output | $0.107 | $0.074 | $0.074 | $0.130 | $0.115 |
+
+Against Gate B, serving the placed moves lost no method adherence, cited the defect first on every output, lifted
+fewer runs from the goldens (1 against 4), varied least between runs of one task, and read as more the author's (4.20
+to 4.40; by independent task +0.27 with an interval that includes zero). Describing the conditional habits without
+placing them read as the author's about as much (+0.30 by task) and cost the method (checklist 14, defect first 16,
+usable 16): what placing them adds is the method recovered at that likeness. The gap to the method-only ceiling went
+from 0.8 in the last study to 0.15; method-only leads with the defect on every output and fails the method's rules
+of form (the exact line, weak citations). The brief placed the adversarial move on every task in that situation and
+once on the five others; a blind judge called 15 of the 16 placed moves the right call. The reader agreed with the
+judge on 14 of 16 and read the one off-situation placement as realised where the judge saw it made badly: not
+qualified to detect misapplication, reporting only. Every run in every arm delivered its text; the blocked verdicts
+(9 to 11 of 20 in each Atelier arm, Gate B included) are the claim check reading a review's statements of what the
+code does as results seen, a false positive of that check on review prose, to be fixed apart from this work. No
+fabricated name, figure or event in 100 outputs. Development evidence on one domain; the documents half is prepared
+and not run.
+
+### Studies: the move cases read apart from the brief (development evidence, $0.05)
+
+The move cases were first added to the brief's own reading, and the two could not share a prompt. One sentence in the
+system prompt about "the author's own moves" turned a step's supported decision into "unsupported" on every run of a
+request that had no move at all; with the sentence moved into the per-request prompt, the model answered a step's case
+under the moves' field and seven step cases fell to the floor; a field renamed and a purely structural sentence brought
+the first shift back. The brief's reading is back to its text of the day before, byte for byte, and the move cases are
+read on their own (`move-cases`), evaluated on five cases, five runs each: placement right on every case from the
+first version; the second version sharpens "does not hold" (the request's own words rule the situation out) against
+"unresolved" (the request does not say), and refuses a situation that would have to be worked out from figures or
+consequences. The compiler's reading (`persona-moves`, version 4) now asks for a trigger a reader could see in a
+request, never the author's own judgement ("when the fix costs more than it saves" names no situation): 60 of 65.
+
+### Studies: the reading of your moves, live (development evidence, $0.03)
+
+The reading that compiles each persona point into a move (`persona-moves`) was evaluated on `claude-haiku-5-5`,
+twelve cases, five runs each, before it decided anything in a build. The label is the applicability and the trigger
+status, both decided by code from what the reading grounds.
+
+- Version 1 (36 of 60): the reading quoted bare verdict lines ("Approve") of pieces where the move was not made as
+  evidence of "the verdict carries its reason after a dash", and a habit of two pieces in five came out general in
+  two runs of five. The prompt had said what evidence is, not what it is not.
+- Version 2 (43 of 60): the prompt says a piece in which the author did not make the move is no evidence, and code
+  refused any quote under three words. That refused the one move that is a two-word line by nature, "ends on a terse
+  verdict line", on every run.
+- Version 3 (56 of 60, pass): the floor yields where the point's own quote is that short, so a short-line move is
+  evidenced at its own grain. The one case that still fails is by design and marked so: a move whose situation lives in
+  the same sentence as the move ("which also removes the retry" is both the side benefit and the fix that has one)
+  grounds to a proposed trigger and stays unknown until you confirm it. The scope the reading gives (sentence,
+  paragraph, section, decision) is a judgement that agreed with the case on 51 of 60 runs; it is recorded beside each
+  move and used by nothing yet.
+
+### Studies: the readings of Gate B live, and the brief against no brief on code review (development evidence, $4.30)
+
+Two readings were evaluated live on `claude-haiku-5-5`, five runs per case, before either decided anything in a run.
+
+- **What each step asks (method-units)**, 19 steps: version 2 failed (84/95): "Open with a Summary section: two or
+  three sentences on what the change does" was read as a template 5/5, the prompt having defined a template as "an
+  example of what the work can look like". Version 3 defines a template as text shown as it would appear and an
+  instruction as something to do or decide even when it describes what a part holds: 90/95 (CI .88–.98), pass. The one
+  case left is soft: "We lead with the riskiest line because reviewers stop reading" is read as an instruction, which a
+  stated practice with its reason is. Heading-scoped conditions and templates under headings read 5/5.
+- **Which steps this request needs (execution-brief)**, 17 cases: version 1 failed (42/60) on prohibitions with
+  exceptions, the reader deciding the step's polarity and getting it backwards ("do not end with sources unless
+  asked" was set aside when the request said no references were needed). Version 3 asks only whether the named case
+  holds and lets code decide which way a holding case cuts ("when" keeps the step, "unless" lifts it): 50/60, zero
+  false set-asides in 60 readings, three soft cases read as unresolved where unresolved is held as applying. Version 4
+  added the missing-fact check and failed it the other way: an unresolved case was also named a missing fact, and a
+  recommendation from given notes was called unsupported 3/5. Version 5 names a missing fact only where the decision
+  cannot be made at all without it, and never on an unresolved case: 60/75, pass; zero false set-asides, one false
+  "unsupported" in 25.
+- **Why the reading had to pass first.** The brief built on version 3 was run on the ten code-review tasks before
+  version 5 existed: it named five of six decisions "unsupported" (the diff "supports" nothing, by that reading) and
+  told the writer to decide nothing, so nine verdicts came out as "Comment" with a paragraph of hedging and the
+  method's verdict rule failed 9/10, against 7/10 passing with no brief. The reading's eval reproduced the defect in
+  miniature, and the fix was measured there for $0.01 before the arm was written again for $1.21.
+- **The comparison, code review, ten tasks, same writer (claude-opus-5), same blind judge as before:**
+
+  | | no brief, no reader (Gate A) | brief + reporting reader (Gate B) | method-only prompt |
+  |---|---|---|---|
+  | method checklist passed | 7/10 | **8/10** | 0/10 |
+  | planted defect found (±2 lines) | 10/10 | **10/10** | 4/10 |
+  | usable (blind judge) | 8/10 | **9/10** | 9/10 |
+  | invented specifics per output | 0.0 | **0.0** | 0.1 |
+  | sounds like the author (1–5) | 4.00 | 3.80 [3.4, 4.2] | **4.80** |
+  | $ per output / per usable | 0.113 / 0.141 | 0.121 / **0.134** | 0.120 / 0.133 |
+
+  The brief holds every step applying on these requests (one conditional step unresolved, held, on all ten), names no
+  missing fact, and the reader reads the one judgement step on each run (three readings held back blind for labels),
+  no miss. The method-only prompt writes in the author's voice and reads as usable, and misses the planted defect six
+  times in ten while failing the method's citation rules on every output. Atelier executes the method; its style gap
+  is the open front. Ten tasks, one run each: development evidence, not a claim of superiority.
+
+### Studies: the same three kinds of work, after the closing fixes (development evidence, about $9)
+
+The three-context study a third time, the Atelier arm rebuilt with the cutter that spares the house's wording, the
+one positive frame with slots, and the two verdict fixes; same tasks, writer, material and blind judge as before.
+
+- **Contract: the clause survives, the length does not.** "Includes, without limitation" present 10/10 (from 0/10);
+  BLOCKED as lifted 0/10 (from 7/10). But every draft overshot the 420-word cap (429 to 452 words), so the checklist
+  fell to 1/10 and 9 were BLOCKED for length: the span-as-aim line told the writer to aim at 405 to 419, and a draft
+  lands a few percent over its aim. The aim now ends a twentieth under the cap; that rebuild was not run, the key
+  having no credit left.
+- **Code review: style up again, usable down.** Sounds-like 3.1 → 3.7 → 3.8 (CI 3.4–4.3); checklist 6/10 → 8/10;
+  every planted defect found; invented specifics 0.3. Usable 7/10 → 4/10, on the judge's reading of the content: a
+  finding that contradicts itself, line numbers off, four or five Must fix items where the author writes three, and
+  one literal slot ("[person: who owns the shipping policy]") in a review with the diff bound, which the no-slot
+  line above answers. The paired gap to the hand-written skill stays at −0.56 (0 wins, 5 ties, 4 losses).
+- **Blog: unchanged** (2.67; rank 3rd of 4; usable 0/6, every post carrying slots in place of the links and products
+  the author names). Counted against the author's own posts per thousand words, Atelier's are the least concrete arm:
+  links 1.2 against 14, named products 0 against 18, figures 1.3 against 19, parentheticals 1.2 against 11.7,
+  one-sentence paragraphs 1.3 against 7.7, questions 0.7 against 5.7. 4 of 6 were BLOCKED by the model-tells rule on
+  genuine tells ("I want to be careful here", "I keep circling back to"). The cause has moved from the frame to the
+  claim machinery: a draft that names public products and figures is flagged by a claim reader that does not
+  distinguish a public, checkable name from an invented one (next entry), and the writer, shown slots as the safe
+  shape, leaves slots.
+- **Claim reader, version 4, qualification battery** ([pre-registration and result](studies/CLAIM_READER_V4_QUALIFICATION_PREREGISTRATION.md),
+  $7.43): sensitivity 44/44, specificity 9/48. **FAIL.** `claude-haiku-5-5` on the qualified prompt flags idiom,
+  rhetorical questions, vague time and public names as unsupported specifics in 39 of 48 clean paraphrases of the
+  authors' essays. Nothing changes in what ships: no claim reader cuts, the pattern check gates, the default reader
+  stays `claude-haiku-4-5`. The next reader has to tell public from private from invented, and its battery has to
+  plant public names as clean controls.
+
+### Studies: the same three kinds of work, after the readings (development evidence, $5.28)
+
+The morning's three-context study, re-run with the Atelier arm rebuilt on this version: same tasks, writer, material and
+blind judge; the other arms' outputs are the morning's, and the strongest of them was re-judged in the same session to
+measure drift (0.1 at most). What changed in the build: a persona on every path, the form of the work read from the
+examples instead of the name, rule polarity and intent read instead of matched.
+
+- **Code review moved.** Sounds-like-the-author 3.1 → 3.7 (95% CI 3.4–4.0); usable 4/10 → 7/10; every planted defect
+  found (10/10, from 9); text after the Verdict 3/10 → 0; "what I could not check" notes 7/10 → 0; length 451 → 397
+  words. The paired gap to the hand-written skill is −0.56 (CI −1.22 to 0.00; 1 win, 4 ties, 4 losses), from −1.11.
+  The checklist slipped 7/10 → 6/10 on summary length, a rule the skill checks only in part.
+- **Contract did not move** (4.1 → 4.1; checklist 10/10 both): the loss is in the length trim, which still cuts the
+  one clause every example carries. That fix is next.
+- **Blog barely moved** (2.5 → 2.7; rank 3rd of 4 both times): the posts are still abstract (no links, no named
+  products), though first-person presence doubled. The positive frame around the pieces and concreteness with
+  marked slots are next.
+- **The readings, live on claude-haiku-5-5, five runs per case:** intent-mode 75/75; rule-polarity 70/80 with two
+  cases read the other way every time and relabelled as ambiguous; work-form 21/30 on its first prompt, which read a
+  corpus of explainers as replies, and 25/30 on the second (a piece written to a request is a document when it
+  addresses no particular person). The claim reader was not re-qualified: the drafts of its last qualification are
+  gone, so a fresh battery would be a new population.
+- **Not measurable this round:** where outputs sit on the measured feature set. Feature bands exist only for skills
+  built on the full discovery path; a skill built from a method, or from fewer than four pieces, has none.
+
+### Studies: three kinds of work, and whether the style result fell since the method work (development evidence)
+
+Three contexts, every arm on the same writer model and the same tasks, scored by the domain's own checklist (code
+written before any output), by `atelier verify` as a person sees it, and by one blind judge reading three of the
+author's pieces: usable, invented specifics, six style dimensions and "sounds exactly like the author" (1-5).
+
+- **Contract** (rule-heavy, ten term sheets): Atelier and a skill creator's skill both passed the checklist 10 of 10;
+  the method page with the examples passed 0 of 10 and the examples pasted 0 of 5 (every one over the word limit). All
+  usable, none invented. Sounds like the author: Atelier 4.1, the others 4.8 to 5.0: it dropped the "includes" list and
+  the standard-of-care sentence the examples carry, to stay inside the limit. Its own verdict blocked 8 of 10 for
+  clauses shared with the examples, which is how house contracts are written. The API refused the bare model's
+  drafts 10 of 10 and the pasted arm's 5 of 10 as cyber content.
+- **Code review** (structure-heavy, ten diffs, one planted defect each): Atelier passed the checklist 7 of 10 and cited
+  the defect within two lines 9 of 10; every other arm passed 0 of 10 and found it 0 to 5 of 10 (lines counted from the
+  top of the diff). Sounds like the author: Atelier 3.1 against 4.2 to 4.8, and the judge called 4 of 10 usable against
+  9: its reviews ran a third longer, 5 of 10 added a line on what could not be settled from the diff, 3 of 10 added
+  text after the verdict, and in one the claim check cut the most serious finding down to "Await it.". Its own
+  verdict blocked 7 of 10 for specifics the diff holds.
+- **Blog** (creative, three posts read, three held-out titles, two runs each): with three pieces Atelier reads no
+  rules and serves the examples. Sounds like the author: a skill creator's skill 4.0, the posts pasted 3.2, Atelier 2.5,
+  a bare model 1.3; ranked against the author's real post on the same title, the skill creator's came first 5 of 6,
+  Atelier third of four. Atelier invented the fewest specifics (1.7 a post against 7.0 and 3.5); the judge called its
+  posts abstract: no links, images, named products or demos, which is how this author writes.
+- **Since the method work:** on the technical-paper study, the release before any method work (1.1.0) against this
+  build, judged head to head in both orders: 5 to 5. 1.1.0 lost 10 of 10 to the skill creator's skill. The style gap
+  predates the method work; the extra notes in code review come from it.
+
+### Studies: one author's style on a new subject, built as a person builds it (development evidence)
+
+The one-article study above was built without a model, so no rule was read and no range measured. Run again as a person
+runs the product (a model key set, `atelier new`, the rules accepted as shown, `atelier invoke` with its defaults), and
+in two forms. With the one article alone, Atelier proposes no rule read by a model and says to add four pieces or more;
+with what a request needs no longer said for a document, it scored 43 and 43 on style and form (37 and 35 before),
+against 73 and 77 for a skill creator's skill and 53 and 55 for the article pasted. With nine of the author's articles
+(42 rules read and checked on pieces the proposer never saw, 53 measured features, a style detector), every arm built
+from the same nine and judged against the same one article: style and form, Atelier 47 and 41, a skill creator's skill
+46 and 45, the nine pasted 42 and 35, a bare model 11 and 19; no arm was judged the author in more than one paper in
+five. Atelier's lead on style is within chance and its form trails the skill creator's (by 5 points, outside chance);
+it invented the fewest specifics (2.4 a paper against 5.0 and 5.3) and used no em dash where the author uses a few.
+It cost $0.42 a paper against $0.18 (two drafts). Atelier's own reading of how typical a text is of the author ranked
+the bare model's long academic papers highest, so it is not evidence of style on texts this long.
+
+### Studies: the twenty-four fresh requests, all judged, with this release (development evidence)
+
+All 24 requests judged for every arm, each answer alone by three judges. Usable as written: the hand-written method
+skill 9 of 24, a skill creator's skill 9, an optimised prompt 11, one example 10, a bare model 9; Atelier 9 with this
+release (8 and 9 with the two builds before it). No arm differs from another beyond chance at this size. Atelier still
+holds the method (86% of checks) and the author's traits (88%) best, and its cost per usable answer fell to the lowest
+of its three builds. What a request needs, read before writing, turned three answers usable (it now says what it would
+check first) and two unusable; with it the writer more often assumed a specific (a config key, a database) without
+saying it was an assumption, and the judges counted those as invented (.56 per answer against .43).
+
+### Studies: reproducing one technical article's style on a new subject, from that article alone (development evidence)
+
+One published technical article by an engineer, a first-person write-up of the author's own capacity model, as the
+only example; no method. Each arm wrote "a technical paper" on another satellite subject five times; each paper was
+judged alone, blind, against the example. Style and form closeness (0-100): a skill made with a skill creator 73 and
+77, the example pasted into the prompt 53 and 55, Atelier 37 and 35, a bare model 11 and 19. Judged a plausible new
+piece by the same author: 80%, 60%, 0% and 0%. Atelier wrote the most accurate papers (technical soundness 4.0 of 5,
+the highest) and invented the least: 2.1 fabricated specifics per paper against 4.9 to 7.9, and 0.9 invented
+first-hand facts against 3.3 and 4.9 for the two arms that read as the author. Most of the gap is the example's form:
+a personal project write-up cannot be reproduced on a new subject without inventing the author's projects, and the
+arms judged closest did exactly that. Part is Atelier's own: built from one piece without a model, it had no measured
+range to steer toward; it carried none of the example's figures or its walk-through of a model; and what a request
+needs, said to the writer, came out in three of five papers as an out-of-voice note on its assumptions.
+
+### Studies: twenty-four fresh requests, where the unusable answers went wrong (development evidence)
+
+Twenty-four requests generated fresh and frozen before any arm answered them, six arms, one answer each, each answer
+judged alone by three judges, on the 18 requests judged for every arm. Atelier held the method best (88% of checks) and
+the author's traits best (88%), but was judged usable on 5 of 18 against 8 or 9 for the other arms; a build from before
+this release scored 8 of 18 on the same requests, and no step of either build accounts for the difference: each wrote a
+different first draft. Every one of the 13 unusable answers was already so in its first draft: no step of the loop
+touched them (20 of 24 runs took no step at all; the only text any step changed was punctuation). Nine were marked
+down for something the request never asked for (a usage example, an alternative), four needed tools no arm had, six
+held a writer's factual error, and one stated a fact of the person's setup the request did not give (listed, and
+delivered as written). What a reply needs is now read before it is written. Whether the judges' extras are what a person
+would want is a question for people's ratings, not the judges'.
+
+### Studies: why unchanged answers scored differently between two judgings (development evidence, $0)
+
+The five arms whose answers did not change were judged twice, in sessions identical but for Atelier's answer (the same
+letters in the same order). On those identical answers the three judges changed their "usable" verdict 16% (the
+smallest judge), 14% and 4% (the largest) of the time, most often toward unusable; across the three, an arm's majority
+verdict changed on 0 to 4 of its 28 answers. The changes do not follow Atelier's: per session, the change in Atelier's
+verdict and the mean change in the others' correlate at r = +.13 (permutation p = .27). The drift is the judges'
+sampling at their default temperature, mostly the two smaller ones, not the answers being read against each other. Both
+readouts are kept; the next comparison judges each answer on its own and takes people's acceptance as its outcome.
+
+### Studies: the carry-over signal, re-measured after the code-span rule (development evidence, $0)
+
+The 2,135 hand-labelled sentences read again with a line of code named by its first word counted as the request's:
+the same 7 of 53 unsupported sentences found, the same 7 of the 15 carried from an example, and none of the 2,082
+sound ones flagged. In a scripted run the rule removed one false finding (a request naming the Authorization header,
+answered with the header line). A capitalised word that is not a name of code or an acronym ("Redis") is not a
+distinctive term, so a fact carried in such words is left to the unmeasured reading, which lists it.
+
+### Studies: the fourteen-request comparison, before and after grounding (development evidence)
+
+The same fourteen requests, twice each, the same writer and settings, the same frozen criteria and the same three
+blind judges; only Atelier's answers were written again, and every request was judged afresh with all six arms side by
+side. The five unchanged arms moved by up to 11 points on "usable" between the two judgings, so a comparison is read
+within one judging. Atelier, before → after: statements the judges counted as invented per answer .55 → .26 (now the
+fewest of the six; the method alone .45, a skill creator's .76); usable 54% → 68% (level with the method alone and the
+skill creator's skill, ahead of the optimised prompt's 61%); method checks followed 90% → 91% and golden traits 89%
+(both the highest); run-to-run spread the lowest. Answers judged unusable fell from 13 to 9 of 28. A stated cause the
+request did not support and the empty code block are gone. The thank-you that named the subject of an example's case
+was still written in both runs, and was listed for the person both times: the instruction did not prevent it. Cost per
+usable answer held level ($.033 → $.035) while the cost per run rose 36%: a reading of each delivered text, the reading
+of longer requests for what they ask, and four drafts written again for a missed part, two of them not kept.
+
+### Studies: finding a fact carried from an example's case (development evidence, $0)
+
+Fourteen requests, each answered twice by six arms (a bare model, one example, the method alone, a skill made by a
+skill creator, a prompt-optimised skill, and Atelier), split into 2,135 sentences and labelled by hand against the
+request each answered: 53 state something the request does not support, 15 of them a fact of an example's case. The
+term signal finds 7 of the 53, 7 of the 15, and flags none of the 2,082 sound sentences (precision 7/7; plain
+hyphenated words and "e.g." are not read as names). Reading word pairs as well found 21 but flagged 60 sound sentences
+(precision .26), so only terms are read. Seven findings bound precision only above .65, under the .9 a cut needs, so
+the signal lists and never cuts. The other unsupported sentences (a cause or a setting stated in plain
+words) are what the situational reading is for; it is not yet measured, and lists only.
+
+### Your method and your examples reach the writer whole
+
+- **The method is served as written.** Its headings, steps in order, exceptions, worked examples and final checks
+  reach the writer word for word, first, in the installed skill and in every run. The steps still decide what code
+  checks; they no longer decide what the writer is told. A step the method already says is not said twice.
+- **Each example once, with the request it answered.** A finished example is served beside the request it was written
+  for (`request:` front matter), and never twice. A habit only counted off your pieces is checked, not handed to the
+  writer as a card.
+- **The task sets the length.** A run writes one draft by default and never chooses between drafts by how near they
+  run to your examples. A length learned from your pieces is said as how they ran, and no draft is written again only
+  to move toward it; a length or a shape the request states ("one line") is held.
+- **Writing skills see whole pieces.** A skill that writes from your pieces serves whole pieces within 8,000 words by
+  default; `--pieces excerpts --piece-budget 3000` serves passages from more of them in less.
+- **Findings are tied to what you gave.** With material bound, a claim the material does not show is marked where it
+  stands as one to verify. A figure in code or in the skill's own rules counts only as written, never as something to
+  work a new figure out of.
+- **Fewer calls.** With no material bound, specifics are read by the pattern check: a model reading could only list
+  them. A short acknowledgement takes one writer call and one small reading of the request.
+- **Two or three examples build a skill**, with or without a model set up, and say what is proposed rather than
+  checked. The skill's description is your method's own when it has one.
+
 ### This release, by area
 
 The release Phase F tests. Each area below is detailed in the sections that follow.

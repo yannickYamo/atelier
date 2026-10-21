@@ -67,7 +67,11 @@ describe('the voices are found in the writing', () => {
     expect(authorship(one)).toEqual({ authors: null, voices: null });
     const two = pieces(FIVE_VOICES).map((p, i) => ({ ...p, text: `---\nauthor: ${i % 2 ? 'Bea' : 'Ada'}\n---\n${p.text}` }));
     expect(authorship(two).authors).toMatchObject({ how: 'FRONT_MATTER', names: ['Ada', 'Bea'] });
-    expect(authorship(pieces(FIVE_VOICES)).authors).toMatchObject({ how: 'INFERRED', names: ['voice 1', 'voice 2', 'voice 3', 'voice 4', 'voice 5'] });
+    // VOICES READ IN THE WRITING ARE RECORDED, AND BUILT APART ONLY WHEN ASKED (--voices): one folder is one voice
+    const read = authorship(pieces(FIVE_VOICES));
+    expect(read.authors).toBeNull();
+    expect(read.voices!.groups.length).toBeGreaterThan(1);
+    expect(authorship(pieces(FIVE_VOICES), null, true).authors).toMatchObject({ how: 'INFERRED', names: ['voice 1', 'voice 2', 'voice 3', 'voice 4', 'voice 5'] });
   });
 });
 

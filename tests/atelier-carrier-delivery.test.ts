@@ -265,7 +265,12 @@ describe('SKILL.md points at its reference material', () => {
     // prose describing a shape is the weaker version of it. Worse: on a host that cannot enforce the
     // schema, the surviving prose is a silent degradation the delivery matrix reports as UNSUPPORTED.
     expect(md).not.toContain(statement);
-    expect(md).not.toContain('contracts/output.schema.json');
+    expect(md).not.toContain('confidence');
+    // THE CONTRACT IS DECLARED, NOT RESTATED: the one section that names the schema file says where it is enforced
+    // (Atelier's runtime) and that a host reading this package as text does not enforce it, and what does.
+    expect(md).toContain('## Output contract');
+    expect(md).toContain('A host that reads this\nfile as text does not enforce it: there, run `atelier verify --skill skill --hook`');
+    expect(md.split('contracts/output.schema.json').length - 1).toBe(1);
   });
 
   it('so a contract-only standard instructs the model in nothing, and that is the honest result', () => {

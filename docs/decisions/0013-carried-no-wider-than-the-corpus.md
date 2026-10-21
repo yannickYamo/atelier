@@ -22,7 +22,9 @@ sometimes make", and a built-in paragraph. Other moves were read off one or two 
 4. **A move is served with its example, or not at all.** A new package serves every example file when no context is
    named; the reference index names a file only when the file shows something.
 5. **A trait is what holds across pieces.** A persona point marked "sometimes" or "rarely" is not served under "How I
-   sound".
+   sound". Since 2026-10-19 it is served apart, as a descriptive line under "Moves I make in some pieces, not most",
+   with no quote and no instruction: dropped, it reached no writer, and those points were the author's conditional
+   moves.
 6. **The built-in guidance gives what was asked first:** against stated assumptions when something was not shown,
    with the safe path when the action is destructive, and a question in place of an answer only when acting on the
    wrong target would do damage.

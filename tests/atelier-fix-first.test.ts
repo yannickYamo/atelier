@@ -40,16 +40,21 @@ describe('P0-2: an answer may not make up the person\'s system or its own work',
     expect(cut('Run `npm install jsonwebtoken@latest`, then rerun the tests.', 'Upgrade jsonwebtoken.')).toBe(false);
     expect(cut('Open `src/auth.ts` and replace verifyToken.', 'My src/auth.ts verifyToken fails.')).toBe(false);
   });
-  it('the context judge may flag work done, never cut it: its flags are listed; the patterns alone cut (cut-authority)', async () => {
+  it('the context judge may flag work done, never cut it: its flags are listed; a pattern\'s work claim is cut where the judge agrees, listed where it does not', async () => {
     const judge: ContextJudge = { requestIntent: () => Promise.resolve(null), standsAlone: () => Promise.resolve(null),
       readAnswer: () => Promise.resolve(), workClaims: () => new Set([0]) };
     const t = 'The queue drained after the restart.';
     const r = await checkDraftAsync('d', v, t, { material: 'The queue is stuck.', ...answers, judge });
     expect(r.checked.find((c) => c.requirementId === 'UNSOURCED')?.result.verdict).toBe('MET');
     expect(r.checked.find((c) => c.requirementId === 'UNSOURCED·check')?.result.spans[0].why).toMatch(/context judge, not measured/);
-    // polarity: a pattern-found work claim is still cut, whatever the judge says
+    // a pattern-found work claim the judge did not read as work is listed for the person, not cut (answer-claims.ts, agreedWorkClaims)
     const none: ContextJudge = { ...judge, workClaims: () => new Set() };
-    expect((await checkDraftAsync('d', v, 'Checked: the header is set.', { material: 'x', ...answers, judge: none })).failed).toBe(true);
+    const alone = await checkDraftAsync('d', v, 'Checked: the header is set.', { material: 'x', ...answers, judge: none });
+    expect(alone.failed).toBe(false);
+    expect(alone.checked.find((c) => c.requirementId === 'UNSOURCED·check')?.result.spans[0].why).toMatch(/read so by the pattern alone/);
+    // where the judge read it as work too, the pattern's claim is cut; with no judge at all the pattern decides alone
+    expect((await checkDraftAsync('d', v, 'Checked: the header is set.', { material: 'x', ...answers, judge })).failed).toBe(true);
+    expect((await checkDraftAsync('d', v, 'Checked: the header is set.', { material: 'x', ...answers })).failed).toBe(true);
   });
 });
 
@@ -202,7 +207,7 @@ describe('P1-4: a skill for answers is compiled in the words of answers', () => 
   });
   it('polarity: writing keeps the essay wording', async () => {
     const m = await md('writing');
-    expect(m).toContain('My pieces of this kind run about 100 words when the request names no length. A request that names one, or asks for more or less, sets it.');
+    expect(m).toContain('My pieces of this kind run about 100 words when a request asks for a piece like mine and names no length. That is how my pieces ran, not how long an answer must be');
     expect(m).toContain('a story of mine you were not given is not yours to tell');
   });
 });

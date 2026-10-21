@@ -17,6 +17,7 @@
 // Prints "PORT <n>" on stdout once listening.
 
 import { createServer } from 'node:http';
+import { standInChecks, standInPolarity } from './step-check-stand-in.mjs';
 
 let payload = { rules: [], workType: 'writing' };
 // Per-tool payloads, for commands that make more than one KIND of call (fix: a diagnosis, then a
@@ -58,6 +59,18 @@ const server = createServer((req, res) => {
       if (tool && byTool[tool] !== undefined) answer = byTool[tool];
     }
     { const tool = JSON.parse(body || '{}')?.tools?.[0]?.function?.name; if (tool && emptyNext[tool] > 0) { emptyNext[tool] -= 1; answer = {}; } }
+    // THE STEP-CHECK READING (core/method/step-check.ts), unless a test scripts it: answered the way the step readers once
+    // read a step's wording, from the JSON block the reading puts in its prompt. The readers are a test double here.
+    { const req = JSON.parse(body || '{}'); const tool = req?.tools?.[0]?.function?.name;
+      if (tool === 'emit_step_checks' && !(byTool && byTool[tool] !== undefined) && !when.some((w) => (w.contains === undefined || body.includes(w.contains)) && (w.containsAll ?? []).every((x) => body.includes(x)))) {
+        const user = (req.messages ?? []).map((m) => (typeof m.content === 'string' ? m.content : '')).join('\n');
+        const block = /```json\n([\s\S]*?)\n```/.exec(user);
+        if (block) { try { answer = standInChecks(JSON.parse(block[1])); } catch { answer = { checks: [] }; } }
+      }
+      // THE RULE-POLARITY READING (core/observers/rule-polarity.ts), unless scripted: answered as the word pattern once read it.
+      if (tool === 'emit_rule_polarity' && !(byTool && byTool[tool] !== undefined) && !when.some((w) => (w.contains === undefined || body.includes(w.contains)) && (w.containsAll ?? []).every((x) => body.includes(x)))) {
+        answer = standInPolarity((req.messages ?? []).map((m) => (typeof m.content === 'string' ? m.content : '')).join('\n'));
+      } }
     const hit = when.find((w) => (w.contains === undefined || body.includes(w.contains)) && (w.containsAll ?? []).every((x) => body.includes(x)));
     // `{ contains, finish: 'content_filter' }` in `when`: that call ends with this finish_reason and no answer, as a
     // provider's filter does.

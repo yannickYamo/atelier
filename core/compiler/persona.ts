@@ -27,8 +27,13 @@ export type Frequency = 'ALWAYS' | 'OFTEN' | 'SOMETIMES' | 'RARELY';
 export interface PersonaPoint {
   readonly aspect: string;
   readonly description: string;
+  /** the reading's own word for how often: kept as what was read; where a rate is measured, the rate decides */
   readonly frequency: Frequency;
   readonly quote: string;
+  /** the measured rate of the habit over the pieces (core/stats/habit.ts), attached from the move profile for rendering */
+  readonly rate?: { readonly k: number; readonly n: number; readonly mean: number; readonly lo: number; readonly hi: number; readonly pMajority: number };
+  /** the composer's decision for the habit, from its counts */
+  readonly kind?: 'standing' | 'situational' | 'occasional';
 }
 export interface Persona {
   readonly points: readonly PersonaPoint[];
@@ -58,7 +63,7 @@ whether they help: when to hold back is not a trait. Word each point to match it
 pieces is never written as an absolute ("and nothing else", "never", "only").
 
 Never describe the author's topics, facts, figures, names, employers, projects or life story, and never
-suggest reusing their sentences or coined terms. Twelve to twenty points.`;
+suggest reusing their sentences or coined terms. As many points as the pieces show, each a different habit; none that is not shown.`;
 
 export const PERSONA_SCHEMA: Record<string, unknown> = {
   type: 'object',
@@ -101,7 +106,40 @@ const WORD: Readonly<Record<Frequency, string>> = { ALWAYS: 'always', OFTEN: 'of
 
 /** The persona as the skill states it: one line per point, its frequency first, its quote as evidence. */
 export function describePersona(p: Persona): string {
-  return p.points.map((x) => `- (${WORD[x.frequency]}) ${x.description} e.g. "${x.quote}"`).join('\n');
+  return p.points.map((x) => `- (${rateWord(x)}) ${x.description} e.g. "${x.quote}"`).join('\n');
+}
+
+// WHAT HOLDS AND WHAT IS CONDITIONAL. A point of most or all pieces is how the author sounds; a point of some
+// pieces, or of few, is a move they make when a piece calls for it. Served apart (renderers/agent-skill/render.ts):
+// under "How I sound" a conditional habit reads as how the author always is, and dropped it reaches no writer at
+// all, which is what happened to every SOMETIMES and RARELY point until 2026-10-19.
+// BY THE MEASURED RATE WHERE THERE IS ONE: a point stands when it more probably holds in most pieces than not; by the
+// reading's word only where no rate was measured (a composite, a build with no model).
+const stands = (x: PersonaPoint): boolean => (x.rate ? x.rate.pMajority > 0.5 && x.kind !== 'situational' : x.frequency === 'ALWAYS' || x.frequency === 'OFTEN');
+export const standingPoints = (p: Persona): PersonaPoint[] => p.points.filter(stands);
+export const conditionalPoints = (p: Persona): PersonaPoint[] => p.points.filter((x) => !stands(x));
+const rateWord = (x: PersonaPoint): string => (x.rate ? `in ${x.rate.k} of ${x.rate.n} piece${x.rate.n === 1 ? '' : 's'}${x.rate.k === x.rate.n && x.rate.n >= 3 ? '' : ` [${x.rate.lo.toFixed(2)}, ${x.rate.hi.toFixed(2)}]`}` : WORD[x.frequency]);
+export function countByFrequency(p: Persona): Record<Frequency, number> {
+  const n: Record<Frequency, number> = { ALWAYS: 0, OFTEN: 0, SOMETIMES: 0, RARELY: 0 };
+  for (const x of p.points) n[x.frequency] += 1;
+  return n;
+}
+/** "20 points (11 always, 5 often, 4 sometimes)": the build's stage line and the whole account. */
+export function describeCounts(p: Persona): string {
+  if (p.points.some((x) => x.kind)) { const c = (k: string): number => p.points.filter((x) => x.kind === k).length; return `${p.points.length} point${p.points.length === 1 ? '' : 's'} (${c('standing')} standing, ${c('situational')} situational, ${c('occasional')} occasional)`; }
+  const n = countByFrequency(p);
+  const parts = (['ALWAYS', 'OFTEN', 'SOMETIMES', 'RARELY'] as const).filter((f) => n[f] > 0).map((f) => `${n[f]} ${WORD[f]}`);
+  return `${p.points.length} point${p.points.length === 1 ? '' : 's'}${parts.length ? ` (${parts.join(', ')})` : ''}`;
+}
+/**
+ * The repertoire: the author's conditional moves, one descriptive line each, the aspect first, with no quote and no
+ * instruction. What the author does in some pieces, said as that; never a rate for the writer to hit (the moves
+ * section's "use about N" turned habits of some pieces into a template), and never the quote, which belongs to the
+ * record (`report`) and, placed for one request, to the brief.
+ */
+export function describeRepertoire(points: readonly PersonaPoint[]): string {
+  const lower = (s: string): string => (/^[A-Z][a-z]/.test(s) && !/^I\b/.test(s) ? s[0].toLowerCase() + s.slice(1) : s);
+  return points.map((x) => `- (${x.rate ? rateWord(x) : x.frequency === 'RARELY' ? 'rarely' : 'in some pieces'}) ${x.aspect ? `${x.aspect}: ${lower(x.description)}` : x.description}`).join('\n');
 }
 
 /**

@@ -1,0 +1,649 @@
+{
+  "reading": "persona-table",
+  "pass": {
+    "runs": 5,
+    "perCaseAtLeast": 4,
+    "codeDecidedExact": true
+  },
+  "note": "One habit against the pieces the first reading left. The label is `moves|situations`: the pieces that should yield a verbatim quote making the move, and those that should yield one in the habit's situation (none when the habit names no situation), each sorted and joined by +. Every cell becomes a count (core/compiler/moves.ts inferMoves), so a false move here raises a rate and a false situation moves the 2×2. v1 live on claude-haiku-5-5, 2026-10-19: 25/30; the one failure took a situation present (input from the query string unchecked) for the move made, 5 of 5, and found the situation nowhere; v2 says the situation present is not the move made. v3 (2026-10-19) tells the reading each habit's modality and that a finding on topic is not the move; four hard negatives modelled on the over-counts seen on the real persona (severity, consistency, concession) and one whole-piece habit. The `real-*` cases read the public code-review corpus (bench/standing/domains/code-review/examples, twelve pieces) with labels set by hand from the pieces on 2026-10-19; they are the cases that failed on the real build. v3 live on the real cases (2026-10-19): the all-twelve habits read 12 of 12 five times of five (demand for tests, mechanism-consequence, neutral openings), severity 7+9 (+3), consistency 2+5; the under-counts are on concessions made in suggestions, hedged instructions, and whole-piece judgements, which v4 addresses in words.",
+  "cases": [
+    {
+      "id": "impersonal-in-all",
+      "label": "piece-2+piece-3|none",
+      "habit": {
+        "aspect": "Impersonal point of view",
+        "description": "Never says I or you; a finding is a bare statement about the artifact.",
+        "quote": "The loop stops one short",
+        "situation": null
+      },
+      "ask": [
+        "piece-2",
+        "piece-3"
+      ],
+      "pieces": [
+        {
+          "name": "piece-1",
+          "text": "## Summary\nThe loop stops one short. Use a range to the length.\n\n## Verdict\nRequest changes"
+        },
+        {
+          "name": "piece-2",
+          "text": "## Summary\nThe handler trusts the body. Validate the amount before the charge.\n\n## Verdict\nRequest changes"
+        },
+        {
+          "name": "piece-3",
+          "text": "## Summary\nThe migration is reversible and the tests cover it.\n\n## Verdict\nApprove"
+        }
+      ]
+    },
+    {
+      "id": "habit-absent-in-one",
+      "label": "piece-2|none",
+      "habit": {
+        "aspect": "Finding closed with a prescribed fix",
+        "description": "Nearly every criticism ends with a specific remedy.",
+        "quote": "Use a range to the length",
+        "situation": null
+      },
+      "ask": [
+        "piece-2",
+        "piece-3"
+      ],
+      "pieces": [
+        {
+          "name": "piece-1",
+          "text": "## Summary\nThe loop stops one short. Use a range to the length.\n\n## Verdict\nRequest changes"
+        },
+        {
+          "name": "piece-2",
+          "text": "## Summary\nThe handler trusts the body. Validate the amount before the charge.\n\n## Verdict\nRequest changes"
+        },
+        {
+          "name": "piece-3",
+          "text": "## Summary\nThe migration is reversible and the tests cover it.\n\n## Verdict\nApprove"
+        }
+      ]
+    },
+    {
+      "id": "similar-subject-not-habit",
+      "label": "none|none",
+      "habit": {
+        "aspect": "Concession before critique",
+        "description": "Grants what is defensible before pressing the point, with 'which is safe but'.",
+        "quote": "which is safe on its own, but",
+        "situation": null
+      },
+      "ask": [
+        "piece-2",
+        "piece-3"
+      ],
+      "pieces": [
+        {
+          "name": "piece-1",
+          "text": "## Must fix\nThe handler now checks the amount, which is safe on its own, but the check runs after the charge.\n\n## Verdict\nRequest changes"
+        },
+        {
+          "name": "piece-2",
+          "text": "## Must fix\nThe check runs after the charge, so a bad amount is charged and then refused.\n\n## Verdict\nRequest changes"
+        },
+        {
+          "name": "piece-3",
+          "text": "## Summary\nThe migration is reversible.\n\n## Verdict\nApprove"
+        }
+      ]
+    },
+    {
+      "id": "terse-verdict-everywhere",
+      "label": "piece-2+piece-3+piece-4|none",
+      "habit": {
+        "aspect": "Abrupt closing",
+        "description": "Ends on a terse verdict line with no sign-off.",
+        "quote": "Request changes",
+        "situation": null
+      },
+      "ask": [
+        "piece-2",
+        "piece-3",
+        "piece-4"
+      ],
+      "pieces": [
+        {
+          "name": "piece-1",
+          "text": "## Summary\nThe loop stops one short.\n\n## Verdict\nRequest changes"
+        },
+        {
+          "name": "piece-2",
+          "text": "## Summary\nThe handler trusts the body.\n\n## Verdict\nRequest changes"
+        },
+        {
+          "name": "piece-3",
+          "text": "## Summary\nThe migration is reversible.\n\n## Verdict\nApprove"
+        },
+        {
+          "name": "piece-4",
+          "text": "## Summary\nThe rename keeps its tests.\n\n## Verdict\nComment"
+        }
+      ]
+    },
+    {
+      "id": "situation-and-move-where-both",
+      "label": "piece-2|piece-2+piece-4",
+      "habit": {
+        "aspect": "Adversarial framing",
+        "description": "Where input is untrusted, writes one sentence from the abusive caller's view, saying what they can do.",
+        "quote": "A caller can refund more than the order total",
+        "situation": "where input comes from the caller unchecked"
+      },
+      "ask": [
+        "piece-2",
+        "piece-3",
+        "piece-4"
+      ],
+      "pieces": [
+        {
+          "name": "piece-1",
+          "text": "## Summary\nThe handler takes the amount from the request body without checking it. A caller can refund more than the order total.\n\n## Verdict\nRequest changes"
+        },
+        {
+          "name": "piece-2",
+          "text": "## Summary\nThe count comes straight from the form. A caller can pass a negative count and the loop never ends.\n\n## Verdict\nRequest changes"
+        },
+        {
+          "name": "piece-3",
+          "text": "## Summary\nThis change renames a module and keeps its tests.\n\n## Verdict\nApprove"
+        },
+        {
+          "name": "piece-4",
+          "text": "## Summary\nThe id is read from the query string and used in the lookup as it is. The lookup is fine otherwise.\n\n## Verdict\nComment"
+        }
+      ]
+    },
+    {
+      "id": "situation-absent-everywhere",
+      "label": "none|none",
+      "habit": {
+        "aspect": "Concession clause",
+        "description": "When part of a change is defensible, grants it in the finding's first clause before pressing the defect.",
+        "quote": "which is safe on its own, but",
+        "situation": "when part of the change is defensible"
+      },
+      "ask": [
+        "piece-2",
+        "piece-3"
+      ],
+      "pieces": [
+        {
+          "name": "piece-1",
+          "text": "## Must fix\nThe handler now checks the amount against the order, which is safe on its own, but the check runs after the charge.\n\n## Verdict\nRequest changes"
+        },
+        {
+          "name": "piece-2",
+          "text": "## Summary\nThe loop stops one short. Use a range to the length.\n\n## Verdict\nRequest changes"
+        },
+        {
+          "name": "piece-3",
+          "text": "## Summary\nThe migration drops a column nothing reads.\n\n## Verdict\nApprove"
+        }
+      ]
+    },
+    {
+      "id": "severity-escalation-not-a-finding",
+      "label": "piece-3|piece-3",
+      "habit": {
+        "aspect": "Severity escalation in plain words",
+        "description": "Names the class of harm in one plain phrase after the mechanism (a privilege escalation, a cross-account leak), never raising the temperature.",
+        "quote": "This is a privilege escalation affecting every route behind the guard.",
+        "situation": "when a defect lets one user act with another's privileges or data",
+        "modality": "passage"
+      },
+      "ask": [
+        "piece-1",
+        "piece-2",
+        "piece-3",
+        "piece-4"
+      ],
+      "pieces": [
+        {
+          "name": "piece-1",
+          "text": "## Must fix\n- **src/orders/refund.js:56** — The refund amount is never checked against what was paid, so a caller can refund more than the order total.\n\n## Suggestions\n- Use `>=` so the state is correct even if totals drift.\n\n## Verdict\nRequest changes"
+        },
+        {
+          "name": "piece-2",
+          "text": "## Must fix\n- **src/mail/digest.py:65** — The loop `range(len(messages) - 1)` stops one short, so the most recent message in every thread is silently dropped.\n\n## Suggestions\n- Consider documenting the contract in the docstring above `render_thread()`.\n\n## Verdict\nRequest changes"
+        },
+        {
+          "name": "piece-3",
+          "text": "## Must fix\n- **src/perm/roles.js:151** — The admin check uses `||` where `&&` is required. As written, any active user is treated as an admin. This is a privilege escalation affecting every route behind the guard.\n\n## Verdict\nRequest changes"
+        },
+        {
+          "name": "piece-4",
+          "text": "## Must fix\n- **src/rate/limiter.js:109** — `release` performs a read-modify-write of `bucket.count` outside `withLock`, contradicting the class comment that all counter access is guarded.\n\n## Verdict\nRequest changes"
+        }
+      ],
+      "note": "Modelled on a live over-count (2026-10-19): the table quoted a plain finding in every piece as the escalation. Only piece-3 names the class of harm; piece-1 is in a situation of sorts (a caller over-refunds) but names no class, so situation is null there too by this habit's wording."
+    },
+    {
+      "id": "internal-consistency-not-a-defect",
+      "label": "piece-4|none",
+      "habit": {
+        "aspect": "Internal-consistency arguments",
+        "description": "Argues from the artifact's own comment or declared contract disagreeing with its code.",
+        "quote": "contradicting the class comment that all counter access is guarded",
+        "situation": "when the artifact's own comment or declared contract disagrees with its code",
+        "modality": "passage"
+      },
+      "ask": [
+        "piece-1",
+        "piece-2",
+        "piece-3",
+        "piece-4"
+      ],
+      "pieces": [
+        {
+          "name": "piece-1",
+          "text": "## Must fix\n- **src/orders/refund.js:56** — The refund amount is never checked against what was paid, so a caller can refund more than the order total.\n\n## Suggestions\n- Use `>=` so the state is correct even if totals drift.\n\n## Verdict\nRequest changes"
+        },
+        {
+          "name": "piece-2",
+          "text": "## Must fix\n- **src/mail/digest.py:65** — The loop `range(len(messages) - 1)` stops one short, so the most recent message in every thread is silently dropped.\n\n## Suggestions\n- Consider documenting the contract in the docstring above `render_thread()`.\n\n## Verdict\nRequest changes"
+        },
+        {
+          "name": "piece-3",
+          "text": "## Must fix\n- **src/perm/roles.js:151** — The admin check uses `||` where `&&` is required. As written, any active user is treated as an admin. This is a privilege escalation affecting every route behind the guard.\n\n## Verdict\nRequest changes"
+        },
+        {
+          "name": "piece-4",
+          "text": "## Must fix\n- **src/rate/limiter.js:109** — `release` performs a read-modify-write of `bucket.count` outside `withLock`, contradicting the class comment that all counter access is guarded.\n\n## Verdict\nRequest changes"
+        }
+      ],
+      "note": "Live over-count: every defect sentence read as a consistency argument. Only piece-4 argues from the comment. The situation and the move are one clause in piece-4, and a situation quote must be distinct from the move's, so situation is none there: a habit whose situation is inside the move's own sentence shows its situation nowhere apart, and the counts say so."
+    },
+    {
+      "id": "concession-not-a-consider",
+      "label": "none|none",
+      "habit": {
+        "aspect": "Measured concessions before critique",
+        "description": "Grants what is defensible in the finding's first clause before pressing the defect.",
+        "quote": "which is safe but silent",
+        "situation": "when part of a change is defensible",
+        "modality": "passage"
+      },
+      "ask": [
+        "piece-1",
+        "piece-2",
+        "piece-3"
+      ],
+      "pieces": [
+        {
+          "name": "piece-1",
+          "text": "## Must fix\n- **src/orders/refund.js:56** — The refund amount is never checked against what was paid, so a caller can refund more than the order total.\n\n## Suggestions\n- Use `>=` so the state is correct even if totals drift.\n\n## Verdict\nRequest changes"
+        },
+        {
+          "name": "piece-2",
+          "text": "## Must fix\n- **src/mail/digest.py:65** — The loop `range(len(messages) - 1)` stops one short, so the most recent message in every thread is silently dropped.\n\n## Suggestions\n- Consider documenting the contract in the docstring above `render_thread()`.\n\n## Verdict\nRequest changes"
+        },
+        {
+          "name": "piece-3",
+          "text": "## Must fix\n- **src/perm/roles.js:151** — The admin check uses `||` where `&&` is required. As written, any active user is treated as an admin. This is a privilege escalation affecting every route behind the guard.\n\n## Verdict\nRequest changes"
+        }
+      ],
+      "note": "Live over-count: \"Consider documenting…\" read as a concession. None of these grants anything."
+    },
+    {
+      "id": "document-habit-shown-whole",
+      "label": "piece-1+piece-2+piece-3+piece-4|none",
+      "habit": {
+        "aspect": "Economy over elaboration",
+        "description": "Says each finding once, with no restatement, analogy or digression.",
+        "quote": "Use `>=` so the state is correct even if totals drift.",
+        "situation": null,
+        "modality": "document"
+      },
+      "ask": [
+        "piece-1",
+        "piece-2",
+        "piece-3",
+        "piece-4"
+      ],
+      "pieces": [
+        {
+          "name": "piece-1",
+          "text": "## Must fix\n- **src/orders/refund.js:56** — The refund amount is never checked against what was paid, so a caller can refund more than the order total.\n\n## Suggestions\n- Use `>=` so the state is correct even if totals drift.\n\n## Verdict\nRequest changes"
+        },
+        {
+          "name": "piece-2",
+          "text": "## Must fix\n- **src/mail/digest.py:65** — The loop `range(len(messages) - 1)` stops one short, so the most recent message in every thread is silently dropped.\n\n## Suggestions\n- Consider documenting the contract in the docstring above `render_thread()`.\n\n## Verdict\nRequest changes"
+        },
+        {
+          "name": "piece-3",
+          "text": "## Must fix\n- **src/perm/roles.js:151** — The admin check uses `||` where `&&` is required. As written, any active user is treated as an admin. This is a privilege escalation affecting every route behind the guard.\n\n## Verdict\nRequest changes"
+        },
+        {
+          "name": "piece-4",
+          "text": "## Must fix\n- **src/rate/limiter.js:109** — `release` performs a read-modify-write of `bucket.count` outside `withLock`, contradicting the class comment that all counter access is guarded.\n\n## Verdict\nRequest changes"
+        }
+      ],
+      "note": "A whole-piece habit: each piece as a whole shows it, and one characteristic passage is quoted. A document habit is judged over the piece, not found in a passage. Live (v3, 2026-10-19): pieces 1 and 4 judged to show it 5 of 5; pieces 2 and 3 vary between runs (a 'Consider…' line and a restated harm can each be read as elaboration). Soft: a whole-piece judgement carries a variance of its own that the counts do not show; recorded, and the question for a study.",
+      "soft": true
+    },
+    {
+      "id": "real-severity-named-plainly",
+      "label": "piece-7+piece-9|none",
+      "habit": {
+        "aspect": "Severity escalation in plain words",
+        "description": "Names the class of harm in one plain phrase after the mechanism (a privilege escalation, a cross-account data leak), never raising the temperature.",
+        "quote": "This is a privilege escalation affecting every route behind the guard.",
+        "situation": null,
+        "modality": "passage"
+      },
+      "note": "Hand-labelled 2026-10-19 on the public corpus: only e07 (\"a cross-account data leak\") and e09 name the class of harm; every other piece states findings and consequences without a class label. The over-count of 12 of 12 seen on the real build must not recur. v3 live: 7+9 in every run, 3 added in four of five ('an attacker who sees a few tokens can forge others', a consequence that a reader can take as the class named). Soft on that piece; the 12-of-12 over-count did not recur.",
+      "files": [
+        "bench/standing/domains/code-review/examples/e01.md",
+        "bench/standing/domains/code-review/examples/e02.md",
+        "bench/standing/domains/code-review/examples/e03.md",
+        "bench/standing/domains/code-review/examples/e04.md",
+        "bench/standing/domains/code-review/examples/e05.md",
+        "bench/standing/domains/code-review/examples/e06.md",
+        "bench/standing/domains/code-review/examples/e07.md",
+        "bench/standing/domains/code-review/examples/e08.md",
+        "bench/standing/domains/code-review/examples/e09.md",
+        "bench/standing/domains/code-review/examples/e10.md",
+        "bench/standing/domains/code-review/examples/e11.md",
+        "bench/standing/domains/code-review/examples/e12.md"
+      ],
+      "soft": true
+    },
+    {
+      "id": "real-internal-consistency",
+      "label": "piece-2+piece-5+piece-8|none",
+      "habit": {
+        "aspect": "Internal-consistency arguments",
+        "description": "Argues from the artifact's own comment, docstring or declared contract disagreeing with its code.",
+        "quote": "contradicting the class comment that all counter access is guarded",
+        "situation": null,
+        "modality": "passage"
+      },
+      "note": "e02 (the header contradicts the list), e05 (the class comment), e08 (the documented maximum exceeded). e12's sibling inconsistency is code against code, not comment against code, and is labelled out; e03 and e04 are not consistency arguments. v3 live: 2+5 in every run, 8 never (the documented maximum exceeded: an argument from a contract to this labeller, a plain defect to the reading, five times of five). Soft on that piece.",
+      "files": [
+        "bench/standing/domains/code-review/examples/e01.md",
+        "bench/standing/domains/code-review/examples/e02.md",
+        "bench/standing/domains/code-review/examples/e03.md",
+        "bench/standing/domains/code-review/examples/e04.md",
+        "bench/standing/domains/code-review/examples/e05.md",
+        "bench/standing/domains/code-review/examples/e06.md",
+        "bench/standing/domains/code-review/examples/e07.md",
+        "bench/standing/domains/code-review/examples/e08.md",
+        "bench/standing/domains/code-review/examples/e09.md",
+        "bench/standing/domains/code-review/examples/e10.md",
+        "bench/standing/domains/code-review/examples/e11.md",
+        "bench/standing/domains/code-review/examples/e12.md"
+      ],
+      "soft": true
+    },
+    {
+      "id": "real-measured-concessions",
+      "label": "piece-2+piece-3+piece-4+piece-12|none",
+      "soft": true,
+      "habit": {
+        "aspect": "Measured concessions before critique",
+        "description": "Grants what is defensible in the finding's first clause before pressing the defect.",
+        "quote": "which is safe but silent",
+        "situation": null,
+        "modality": "passage"
+      },
+      "note": "e02 (\"that is probably intended, but\", \"which guarantees that today, but\"), e03, e04 (\"this works under absolute imports but\"), e12 (\"which is defensible, but\"). Soft: e05 grants after pressing (\"even though Map iteration tolerates deletion\") and may be read either way. \"Consider…\" lines are not concessions.",
+      "files": [
+        "bench/standing/domains/code-review/examples/e01.md",
+        "bench/standing/domains/code-review/examples/e02.md",
+        "bench/standing/domains/code-review/examples/e03.md",
+        "bench/standing/domains/code-review/examples/e04.md",
+        "bench/standing/domains/code-review/examples/e05.md",
+        "bench/standing/domains/code-review/examples/e06.md",
+        "bench/standing/domains/code-review/examples/e07.md",
+        "bench/standing/domains/code-review/examples/e08.md",
+        "bench/standing/domains/code-review/examples/e09.md",
+        "bench/standing/domains/code-review/examples/e10.md",
+        "bench/standing/domains/code-review/examples/e11.md",
+        "bench/standing/domains/code-review/examples/e12.md"
+      ]
+    },
+    {
+      "id": "real-demand-for-tests",
+      "label": "piece-1+piece-2+piece-3+piece-4+piece-5+piece-6+piece-7+piece-8+piece-9+piece-10+piece-11+piece-12|none",
+      "habit": {
+        "aspect": "Standing demand for missing verification",
+        "description": "Names the missing test for added behaviour, as a concrete case to add.",
+        "quote": "Add a unit test for `isAdmin` covering an active non-admin user",
+        "situation": null,
+        "modality": "passage"
+      },
+      "note": "Every piece names a test to add. The under-count of 2 of 12 seen on the real build (table v3) must not recur.",
+      "files": [
+        "bench/standing/domains/code-review/examples/e01.md",
+        "bench/standing/domains/code-review/examples/e02.md",
+        "bench/standing/domains/code-review/examples/e03.md",
+        "bench/standing/domains/code-review/examples/e04.md",
+        "bench/standing/domains/code-review/examples/e05.md",
+        "bench/standing/domains/code-review/examples/e06.md",
+        "bench/standing/domains/code-review/examples/e07.md",
+        "bench/standing/domains/code-review/examples/e08.md",
+        "bench/standing/domains/code-review/examples/e09.md",
+        "bench/standing/domains/code-review/examples/e10.md",
+        "bench/standing/domains/code-review/examples/e11.md",
+        "bench/standing/domains/code-review/examples/e12.md"
+      ]
+    },
+    {
+      "id": "real-demand-for-tests-situation",
+      "label": "piece-1+piece-2+piece-3+piece-4+piece-5+piece-6+piece-7+piece-8+piece-9+piece-10+piece-11+piece-12|piece-1+piece-2+piece-3+piece-4+piece-5+piece-6+piece-8+piece-9+piece-10+piece-11+piece-12",
+      "soft": true,
+      "habit": {
+        "aspect": "Standing demand for missing verification",
+        "description": "Names the missing test for added behaviour, as a concrete case to add.",
+        "quote": "Add a unit test for `isAdmin` covering an active non-admin user",
+        "situation": "when a change adds behaviour with no accompanying test",
+        "modality": "passage"
+      },
+      "note": "The situation is stated in eleven pieces (\"No tests accompany…\", \"None of this new behaviour is currently covered\"); e07 names tests to add without saying none exist. Soft on that one piece.",
+      "files": [
+        "bench/standing/domains/code-review/examples/e01.md",
+        "bench/standing/domains/code-review/examples/e02.md",
+        "bench/standing/domains/code-review/examples/e03.md",
+        "bench/standing/domains/code-review/examples/e04.md",
+        "bench/standing/domains/code-review/examples/e05.md",
+        "bench/standing/domains/code-review/examples/e06.md",
+        "bench/standing/domains/code-review/examples/e07.md",
+        "bench/standing/domains/code-review/examples/e08.md",
+        "bench/standing/domains/code-review/examples/e09.md",
+        "bench/standing/domains/code-review/examples/e10.md",
+        "bench/standing/domains/code-review/examples/e11.md",
+        "bench/standing/domains/code-review/examples/e12.md"
+      ]
+    },
+    {
+      "id": "real-hedges",
+      "label": "piece-2+piece-11|none",
+      "habit": {
+        "aspect": "Hedged words reserved for genuine uncertainty",
+        "description": "Hedges (\"probably\", \"confirm that\") only where the code cannot settle the fact.",
+        "quote": "that is probably intended",
+        "situation": null,
+        "modality": "passage"
+      },
+      "note": "e02 (\"that is probably intended\") and e11 (\"confirm the stale timeout and header state do not leak\"). No other piece hedges; a conditional (\"if now drifts\") is not a hedge. v3 live: 2 in every run, 11 never ('confirm the stale timeout… do not leak' read as an instruction, not a hedge, five of five). Soft on that piece.",
+      "files": [
+        "bench/standing/domains/code-review/examples/e01.md",
+        "bench/standing/domains/code-review/examples/e02.md",
+        "bench/standing/domains/code-review/examples/e03.md",
+        "bench/standing/domains/code-review/examples/e04.md",
+        "bench/standing/domains/code-review/examples/e05.md",
+        "bench/standing/domains/code-review/examples/e06.md",
+        "bench/standing/domains/code-review/examples/e07.md",
+        "bench/standing/domains/code-review/examples/e08.md",
+        "bench/standing/domains/code-review/examples/e09.md",
+        "bench/standing/domains/code-review/examples/e10.md",
+        "bench/standing/domains/code-review/examples/e11.md",
+        "bench/standing/domains/code-review/examples/e12.md"
+      ],
+      "soft": true
+    },
+    {
+      "id": "real-side-benefit",
+      "label": "piece-3|none",
+      "habit": {
+        "aspect": "Secondary benefits noted in passing",
+        "description": "Tacks a side payoff of the fix on with \"which also\", in the same sentence.",
+        "quote": "which also makes the declared `TOKEN_BYTES` constant meaningful instead of unused",
+        "situation": null,
+        "modality": "passage"
+      },
+      "note": "One piece only.",
+      "files": [
+        "bench/standing/domains/code-review/examples/e01.md",
+        "bench/standing/domains/code-review/examples/e02.md",
+        "bench/standing/domains/code-review/examples/e03.md",
+        "bench/standing/domains/code-review/examples/e04.md",
+        "bench/standing/domains/code-review/examples/e05.md",
+        "bench/standing/domains/code-review/examples/e06.md",
+        "bench/standing/domains/code-review/examples/e07.md",
+        "bench/standing/domains/code-review/examples/e08.md",
+        "bench/standing/domains/code-review/examples/e09.md",
+        "bench/standing/domains/code-review/examples/e10.md",
+        "bench/standing/domains/code-review/examples/e11.md",
+        "bench/standing/domains/code-review/examples/e12.md"
+      ]
+    },
+    {
+      "id": "real-ordering-and-containment",
+      "label": "piece-1+piece-3+piece-8|piece-1+piece-3+piece-8",
+      "soft": true,
+      "habit": {
+        "aspect": "Risk handled by ordering and containment",
+        "description": "Answers an operation that can half-fail with a sequencing or reconciliation fix, never a bare warning.",
+        "quote": "Persist an intent first, or reconcile on failure.",
+        "situation": "when an operation can half-fail and leave state inconsistent",
+        "modality": "passage"
+      },
+      "note": "e01 (credit before save), e03 (remove before issue), e08 (pop before handle). Soft: e04's leaked handle on the error path is a half-failure of a kind, and the `with` block a containment; it may be read in.",
+      "files": [
+        "bench/standing/domains/code-review/examples/e01.md",
+        "bench/standing/domains/code-review/examples/e02.md",
+        "bench/standing/domains/code-review/examples/e03.md",
+        "bench/standing/domains/code-review/examples/e04.md",
+        "bench/standing/domains/code-review/examples/e05.md",
+        "bench/standing/domains/code-review/examples/e06.md",
+        "bench/standing/domains/code-review/examples/e07.md",
+        "bench/standing/domains/code-review/examples/e08.md",
+        "bench/standing/domains/code-review/examples/e09.md",
+        "bench/standing/domains/code-review/examples/e10.md",
+        "bench/standing/domains/code-review/examples/e11.md",
+        "bench/standing/domains/code-review/examples/e12.md"
+      ]
+    },
+    {
+      "id": "real-mechanism-then-consequence",
+      "label": "piece-1+piece-2+piece-3+piece-4+piece-5+piece-6+piece-7+piece-8+piece-9+piece-10+piece-11+piece-12|none",
+      "habit": {
+        "aspect": "Mechanism-then-consequence sentence shape",
+        "description": "States the mechanism, then its consequence, joined by \"so\" or a comma, in one sentence.",
+        "quote": "The loop `range(len(messages) - 1)` stops one short, so the most recent message in every thread is silently dropped",
+        "situation": null,
+        "modality": "passage"
+      },
+      "note": "A control: every piece does this.",
+      "files": [
+        "bench/standing/domains/code-review/examples/e01.md",
+        "bench/standing/domains/code-review/examples/e02.md",
+        "bench/standing/domains/code-review/examples/e03.md",
+        "bench/standing/domains/code-review/examples/e04.md",
+        "bench/standing/domains/code-review/examples/e05.md",
+        "bench/standing/domains/code-review/examples/e06.md",
+        "bench/standing/domains/code-review/examples/e07.md",
+        "bench/standing/domains/code-review/examples/e08.md",
+        "bench/standing/domains/code-review/examples/e09.md",
+        "bench/standing/domains/code-review/examples/e10.md",
+        "bench/standing/domains/code-review/examples/e11.md",
+        "bench/standing/domains/code-review/examples/e12.md"
+      ]
+    },
+    {
+      "id": "real-neutral-openings",
+      "label": "piece-1+piece-2+piece-3+piece-4+piece-5+piece-6+piece-7+piece-8+piece-9+piece-10+piece-11+piece-12|none",
+      "habit": {
+        "aspect": "Neutral, descriptive openings",
+        "description": "Opens the summary with a neutral description of what the change adds, no judgement.",
+        "quote": "This change adds a refund module that validates order state",
+        "situation": null,
+        "modality": "passage"
+      },
+      "note": "A control: every piece opens \"This change adds…\".",
+      "files": [
+        "bench/standing/domains/code-review/examples/e01.md",
+        "bench/standing/domains/code-review/examples/e02.md",
+        "bench/standing/domains/code-review/examples/e03.md",
+        "bench/standing/domains/code-review/examples/e04.md",
+        "bench/standing/domains/code-review/examples/e05.md",
+        "bench/standing/domains/code-review/examples/e06.md",
+        "bench/standing/domains/code-review/examples/e07.md",
+        "bench/standing/domains/code-review/examples/e08.md",
+        "bench/standing/domains/code-review/examples/e09.md",
+        "bench/standing/domains/code-review/examples/e10.md",
+        "bench/standing/domains/code-review/examples/e11.md",
+        "bench/standing/domains/code-review/examples/e12.md"
+      ]
+    },
+    {
+      "id": "real-naming-judgements",
+      "label": "piece-4+piece-12|none",
+      "soft": true,
+      "habit": {
+        "aspect": "Quiet aesthetic and naming judgements",
+        "description": "Calls a name or a construction awkward, confusing or needless in one flat word, then gives the clearer form.",
+        "quote": "`ImportError_` with a trailing underscore is awkward. `CSVImportError` reads better",
+        "situation": null,
+        "modality": "passage"
+      },
+      "note": "e04 (awkward, confusing), e12 (\"adds nothing\"). Soft: e10 (\"which is misleading; return nothing\") and e06 (\"would make the intent clearer\") are near it; performance remarks (e08, e09) are not.",
+      "files": [
+        "bench/standing/domains/code-review/examples/e01.md",
+        "bench/standing/domains/code-review/examples/e02.md",
+        "bench/standing/domains/code-review/examples/e03.md",
+        "bench/standing/domains/code-review/examples/e04.md",
+        "bench/standing/domains/code-review/examples/e05.md",
+        "bench/standing/domains/code-review/examples/e06.md",
+        "bench/standing/domains/code-review/examples/e07.md",
+        "bench/standing/domains/code-review/examples/e08.md",
+        "bench/standing/domains/code-review/examples/e09.md",
+        "bench/standing/domains/code-review/examples/e10.md",
+        "bench/standing/domains/code-review/examples/e11.md",
+        "bench/standing/domains/code-review/examples/e12.md"
+      ]
+    },
+    {
+      "id": "real-graded-directives-whole-piece",
+      "label": "piece-1+piece-2+piece-3+piece-4+piece-5+piece-6+piece-7+piece-8+piece-9+piece-10+piece-11+piece-12|none",
+      "soft": true,
+      "habit": {
+        "aspect": "Graded directive strength",
+        "description": "Gives a required fix an imperative and an optional one a softer form (\"Consider\", \"would be\"), so the strength of the verb grades the item.",
+        "quote": "Consider `Object.freeze` on the table and its arrays.",
+        "situation": null,
+        "modality": "document"
+      },
+      "note": "A whole-piece habit: every piece has imperatives under Must fix and softer forms under Suggestions. Soft: judged over the piece, which the reading did differently between calls on small pieces.",
+      "files": [
+        "bench/standing/domains/code-review/examples/e01.md",
+        "bench/standing/domains/code-review/examples/e02.md",
+        "bench/standing/domains/code-review/examples/e03.md",
+        "bench/standing/domains/code-review/examples/e04.md",
+        "bench/standing/domains/code-review/examples/e05.md",
+        "bench/standing/domains/code-review/examples/e06.md",
+        "bench/standing/domains/code-review/examples/e07.md",
+        "bench/standing/domains/code-review/examples/e08.md",
+        "bench/standing/domains/code-review/examples/e09.md",
+        "bench/standing/domains/code-review/examples/e10.md",
+        "bench/standing/domains/code-review/examples/e11.md",
+        "bench/standing/domains/code-review/examples/e12.md"
+      ]
+    }
+  ]
+}

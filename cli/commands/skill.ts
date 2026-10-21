@@ -32,7 +32,9 @@
 
 import { existsSync } from 'node:fs';
 import { basename, resolve } from 'node:path';
-import { sha, die, flag, argv, positional, clientFor, proposerModel, loadSession, saveSession, authoredIdAllocator, type ProposalSet, type ProposedRule } from '../runtime.js';
+import { sha, die, flag, argv, positional, clientFor, proposerModel, loadSession, saveSession, authoredIdAllocator, DATA, type ProposalSet, type ProposedRule } from '../runtime.js';
+import * as store from '../../core/state/store.js';
+import { skillNameFrom } from '../../renderers/agent-skill/render.js';
 import { groundedInUserText, uncarriedSections } from '../../core/ratification/grounding.js';
 import { draftHash, appendDecision, type RatificationLedger } from '../../core/ratification/decision-record.js';
 import { decide } from '../../core/ratification/authority.js';
@@ -41,6 +43,7 @@ import type { Requirement } from '../../core/state/canonical-state.js';
 import { create } from './improve.js';
 import { ratifyClose } from './ratify.js';
 import { build } from './build.js';
+import { stepPlan } from './method.js';
 
 export type SkillRoute = 'DIRECT' | 'DISCOVER' | 'HYBRID' | 'NEEDS_INPUT';
 
@@ -96,6 +99,10 @@ Also report workType: two or three words for the kind of work this governs, as a
 it — "writing", "code review", "customer email". This is DESCRIPTIVE, not part of the standard: it
 becomes the skill's description, which is how a host decides whether to load the skill at all.
 
+Also report form: "REPLY" when the work is turns in a conversation (answers to someone who asked: chat,
+support, review comments), "DOCUMENT" when it is self-standing pieces (articles, posts, reports, memos,
+contracts, reviews written up under their own sections). Judge from what they said, not from the name.
+
 THE FAITHFUL FIELD IS THE IMPORTANT ONE, and getting it right matters more than being helpful.
 "lead with the action" separates faithfully. "make it sound less like AI" does not: any concrete rule
 you write for it is your invention, so mark those false. Do not refuse to propose them — mark them.
@@ -123,6 +130,7 @@ const PROPOSER_SCHEMA: Record<string, unknown> = {
       },
     },
     workType: { type: 'string' },
+    form: { type: ['string', 'null'], enum: ['REPLY', 'DOCUMENT', null] },
   },
   required: ['rules', 'workType'], additionalProperties: false,
 };
@@ -175,7 +183,7 @@ export async function skill(): Promise<void> {
       return { value: x, cost: x.cost };
     });
 
-    const payload = r.json as { rules?: Proposed[]; workType?: string };
+    const payload = r.json as { rules?: Proposed[]; workType?: string; form?: unknown };
     // An EMPTY string must fall through, not be accepted — a work type of "" would become a skill
     // description of "". The person's flag beats the model's guess: the flag is a decision, the
     // guess is a reading, and the old order let the reading win.
@@ -192,7 +200,16 @@ export async function skill(): Promise<void> {
       return { statement: p.statement.trim(), kind: p.kind, appliesWhen: p.appliesWhen.trim() || 'GENERAL',
         sourceSpan: p.sourceSpan ?? '', faithful: p.faithful, grounded: g.grounded, groundingWhy: g.why };
     });
-    pset = { proposalSetHash: sha(JSON.stringify(rules)), promptHash, workType, rules };
+    // THE FORM OF THE WORK, read in the same call (no examples exist here: what they said is the whole evidence). Kept
+    // with the proposal, so `--yes` asks nothing more; the name of the work is the floor when the reader said none.
+    const form = payload.form === 'REPLY' || payload.form === 'DOCUMENT' ? payload.form : undefined;
+    // WHICH CHECK EACH STATED RULE CARRIES (core/method/step-check.ts, through the same plan `atelier new --method`
+    // builds): read now, kept with the proposal, so `--yes` asks nothing more. With no finished example to ground on, a
+    // listed measurement is kept where the draws agree; a written check reports until the person gives examples it can
+    // be qualified on; judgement otherwise. The rule's words are the person's and are never changed.
+    const plan = await stepPlan(rules.map((p, i) => ({ id: String(i + 1), text: p.statement, under: null })), [], new Map(rules.map((p) => [p.statement, p.kind])));
+    const checks = Object.fromEntries(rules.flatMap((p) => { const c = plan?.get(p.statement); return c && c.how !== 'judgement' && c.measurement ? [[p.statement, { how: c.how, measurement: c.measurement, means: c.means }]] : []; }));
+    pset = { proposalSetHash: sha(JSON.stringify(rules)), promptHash, workType, rules, ...(form ? { form } : {}), ...(Object.keys(checks).length ? { checks } : {}) };
     s = { ...s, proposalSet: pset };
     saveSession(s);
   } else {
@@ -205,7 +222,11 @@ export async function skill(): Promise<void> {
     const cond = p.appliesWhen.trim().toUpperCase() === 'GENERAL' ? '' : `\n      applies when: ${p.appliesWhen}`;
     console.log(`  ${i + 1}. [${p.kind === 'BOUNDARY' ? "don't" : 'do  '}] ${p.statement}${cond}`);
     if (!p.grounded) console.log('      ^ MY READING — these words are not in what you said. It needs your decision.');
+    const c = pset.checks?.[p.statement];
+    if (c) console.log(c.how === 'measure' ? `      checked by code on every output: ${c.means}` : '      a check was written for it: it reports and blocks nothing until you give finished examples it can be qualified on');
   });
+  const byCode = pset.rules.filter((p) => pset.checks?.[p.statement]?.how === 'measure').length;
+  console.log(`\n${byCode} of ${pset.rules.length} checked by code on every output; the rest ${pset.rules.length - byCode === 1 ? 'is' : 'are'} yours to judge.`);
 
   // What was said and became no rule: listed, so a dropped rule is seen before anything binds.
   const dropped = uncarriedSections(prompt ?? '', pset.rules);
@@ -244,10 +265,15 @@ export async function skill(): Promise<void> {
     provenance: 'MACHINE_DISCOVERED',
     evidence: p.sourceSpan || null, evidenceItemId: null, wouldBeAbsentIf: null,
     materiality: null, realizationTolerance: null, outputShape: null,
+    // the check read for it with the proposal; a written one is carried and reports, unqualified, until examples exist
+    ...(pset.checks?.[p.statement] ? { measurement: pset.checks[p.statement].measurement } : {}),
   }));
   let ledger: RatificationLedger = { standardDraftHash: draftHash(bases), records: [] };
   const decidedNow: Requirement[] = bases.map((base, i) => {
-    const outcome = decide(base, { verb: pset.rules[i].grounded ? 'STATED' : 'APPROVE' });
+    // A rule the person stated that code can hold an output to is required, as a stated step with a check is
+    // (cli/commands/method.ts, decideSteps); a written check is not enforced until qualified.
+    const enforce = pset.rules[i].grounded && pset.checks?.[base.statement]?.how === 'measure';
+    const outcome = decide(base, { verb: pset.rules[i].grounded ? 'STATED' : 'APPROVE', ...(enforce ? { materiality: 'REQUIRED' } : {}) });
     ledger = appendDecision(ledger, base, outcome.ledgerDecision, { decidedAt: new Date().toISOString() });
     return outcome.requirement;
   });
@@ -266,7 +292,9 @@ export async function skill(): Promise<void> {
   // REPLIES ARE CHECKED AS REPLIES. A skill for answers (a coding assistant, support, review comments)
   // names versions, costs and estimates the person never supplied; cutting each as invented took a
   // technical answer apart. Its specifics are listed for the reader to check (formats.ts, assistant-reply).
-  if (!flag('--class') && isReplyWork(workType)) {
+  const form = pset.form ?? (isReplyWork(workType) ? 'REPLY' : 'DOCUMENT');
+  store.setWorkForm({ root: DATA, skillName: skillNameFrom(flag('--name') ?? basename(process.cwd())) }, form);
+  if (!flag('--class') && form === 'REPLY') {
     argv.push('--class', 'assistant-reply');
     console.log(`Checked as assistant replies: specifics not in your material are listed for you to check, not cut. `
       + '(`--class none` to cut them instead.)');

@@ -16,7 +16,7 @@ import { selectForProbing, prepareProbe, foldAnswer } from '../../core/discovery
 import type { Budget } from '../../core/inference/client.js';
 import type { Measurement, Requirement, StandardVersion } from '../../core/state/canonical-state.js';
 import { fitToCorpus, piecesBreaking, restateLimits } from '../../core/observers/derive.js';
-import { authorityStateOf, assertSupersessionRecorded } from '../../core/state/canonical-state.js';
+import { authorityStateOf, assertSupersessionRecorded, carriedQualifications } from '../../core/state/canonical-state.js';
 import { compileArchitecture } from '../../core/architecture/compile.js';
 import { renderAgentSkill, assertPortable, defaultDescription } from '../../renderers/agent-skill/render.js';
 import * as store from '../../core/state/store.js';
@@ -71,9 +71,10 @@ export function amend(): void {
   catch (e) { return void die((e as Error).message); }
   const requirements = prev.requirements.map((r) => r.requirementId === ruleId ? amended.requirement : r);
   const body = { evidenceId: prev.evidenceId, workType: prev.workType, requirements };
+  // An amended check is a new check: its standing is not carried; the others keep theirs.
   const minted: StandardVersion = { standardVersionHash: sha(JSON.stringify(body)), ...body,
     authorityState: authorityStateOf(requirements), mintedAt: new Date().toISOString(),
-    supersedes: prev.standardVersionHash, reason };
+    supersedes: prev.standardVersionHash, reason, ...carriedQualifications(prev, requirements.filter((r) => r.requirementId !== ruleId || measurement === undefined)) };
   assertSupersessionRecorded(minted);
 
   // THE HASH IS THE IDENTITY, SO THE FIRST MINT WINS. `mintedAt`, `supersedes` and `reason` sit outside
@@ -86,7 +87,7 @@ export function amend(): void {
   const arch = compileArchitecture(next);
   const desc = flag('--description') ?? sv.description ?? defaultDescription(next.workType);
   const carried = carriedFrom(L, sv.skillVersionHash, next);
-  const pkg = renderAgentSkill(next, arch, name, desc, carried.exemplar, carried.contrast, carried.voice);
+  const pkg = renderAgentSkill(next, arch, name, desc, carried.exemplar, carried.contrast, carried.voice, carried.method);
   assertPortable(pkg);
   const skill = { skillVersionHash: sha(`${arch.architectureHash}|${pkg.packageHash}`), skillName: name,
     standardVersionHash: next.standardVersionHash, architectureHash: arch.architectureHash,

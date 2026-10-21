@@ -96,6 +96,13 @@ export interface ClaimSensor {
   readonly degraded: boolean;
   /** what the reader spent, from its own budget; 0 for the pattern check */
   readonly spentUsd: number;
+  /**
+   * THE SENSOR AS A CANDIDATE DRAFT SEES IT. A reader whose findings decide nothing (the pattern check gates: the reader
+   * is not qualified, or has degraded) is not spent on drafts that only compete for selection: the candidates are read
+   * by the instrument that gates, and the reader reads the one text that is delivered, where its warnings are shown.
+   * A reader that gates is consulted on every candidate, as before. Absent on the pattern check itself.
+   */
+  readonly candidates?: ClaimSensor;
 }
 
 export const KINDS = ['FIGURE', 'DATE', 'QUOTATION', 'ATTRIBUTED_CLAIM', 'URL', 'FIRST_PERSON_EVENT', 'SECOND_HAND_EVENT', 'NAMED_FACT'] as const;
@@ -162,8 +169,10 @@ const sha = (s: string): string => createHash('sha256').update(s).digest('hex').
  *      with markdown stripped and across adjacent sentences of one paragraph; a number is a phrase
  *      ("twenty-five", "two hundred", "3 million", "a dozen"), and a lone "one" counts only where it
  *      quantifies. Qualified on product essays: see QUALIFIED_READERS
+ *   4  a path:line that names a line inside the bound material's hunks is supported: the line number is not written
+ *      in a diff, and the reader called every citation of one invented
  */
-export const DECISION_VERSION = 3;
+export const DECISION_VERSION = 4;
 /** The reader's version: the hash of what it is told and how its answer is decided. Recorded with every reading. */
 export const READER_VERSION = sha(`${EXTRACT_SYSTEM}|${JSON.stringify(EXTRACT_SCHEMA)}|decision ${DECISION_VERSION}`).slice(0, 8);
 
@@ -356,10 +365,23 @@ const WHY: Readonly<Record<Claim['kind'], { readonly cut: string; readonly slot:
 export function decideSpecifics(text: string, specifics: readonly ExtractedSpecific[], material: string, task: string, placeholders: boolean,
   instrument: string,
   /** a format where every specific must trace to the person (a white paper, a report, a contract): nothing passes as public */
-  strict = false): ClaimReading {
+  strict = false,
+  /** the skill's own approved rules: instructions, never evidence. A specific repeated from one as written traces to it; nothing else does */
+  rules = ''): ClaimReading {
   const ss = claimUnitsOf(text);
   const known = `${material}\n\n${task}`;
+  const ruleNumbers = new Set(numbersIn(rules));
+  const ruleAndKnownWords = new Set(contentWords(`${known}\n\n${rules}`));
   const knownNumbers = new Set(numbersIn(known));
+  // A LINE OF THE MATERIAL IS IN THE MATERIAL. "src/audit/log.js:90" names a line of a diff the person bound; the
+  // number is not written in the diff, so the reader called it invented and the code cut a Must fix finding down to
+  // "Await it.". A path the material holds, at a line inside the hunks it shows, traces to it (decision 4).
+  const hunkEnds = [...known.matchAll(/^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/gm)].map((m) => Number(m[1]) + Number(m[2] ?? '1'));
+  const lastShownLine = hunkEnds.length ? Math.max(...hunkEnds) : 0;
+  const namesShownLine = (t: string): boolean => {
+    const m = /([\w./-]+\.\w{1,6}):(\d+)\b/.exec(t);
+    return m !== null && known.includes(m[1]) && Number(m[2]) <= lastShownLine;
+  };
   const bySentence = new Map<number, Claim>();
   const publicFacts: { start: number; end: number; text: string; why: string }[] = [];
   const rank: Readonly<Record<Claim['kind'], number>> = { EXPERIENCE: 3, SOURCE: 2, FIGURE: 1 };
@@ -391,7 +413,15 @@ export function decideSpecifics(text: string, specifics: readonly ExtractedSpeci
     // IN THE MATERIAL, WHATEVER THE READER SAID. A specific whose own words and numbers are in what the
     // person supplied traces to them; the reader calling it NONE, or quoting a weak support, does not
     // make it invented. Code checks the trace both ways.
-    const tracedItself = numbersOk && supportIsIn(sp.text, known);
+    // A RULE LICENSES ONLY ITS OWN WORDS. "Under two minutes" from a rule may be repeated; a story, a quotation, or a fact
+    // about this request is never supported by what the skill's rules or examples say (the source roles: evidence is the
+    // request and its material, the standard is instruction).
+    // One figure from a rule beside the request's own ("30 users in under 2 minutes", 30 from the request, 2 from the rule)
+    // traces too: each number is one or the other's, and the words are in them.
+    const fromRule = !lived && rules.length > 0 && numbersIn(sp.text).some((n) => ruleNumbers.has(n))
+      && numbersIn(sp.text).every((n) => ruleNumbers.has(n) || knownNumbers.has(n))
+      && (supportIsIn(sp.text, rules) || contentWords(sp.text).every((w) => ruleAndKnownWords.has(w)));
+    const tracedItself = (numbersOk && supportIsIn(sp.text, known)) || fromRule || namesShownLine(sp.text);
     let supported: boolean;
     if (tracedItself) {
       supported = true;
@@ -426,6 +456,9 @@ export function decideSpecifics(text: string, specifics: readonly ExtractedSpeci
  * the same list, or a specific would be located in the wrong place.
  */
 export const numbered = (text: string): string => claimUnitsOf(text).map((s, i) => `[${i + 1}] ${s.text}`).join('\n');
+
+/** The material with the skill's rules beside it, fenced, for the figure-only checks: a figure in a rule counts only as written (./derived.ts reads no arithmetic out of a fence). */
+export const withRules = (material: string, rules: string): string => [material, ...(rules.trim() ? [`\`\`\`\n${rules.trim()}\n\`\`\``] : [])].filter(Boolean).join('\n\n');
 
 /** The pattern check, behind the same seam: what runs when no reader model is configured. */
 export function patternSensor(material: string, placeholders: boolean, why = 'pattern check'): Omit<ClaimSensor, 'reading'> & { reading(text: string): ClaimReading } {
@@ -463,6 +496,8 @@ export function patternSensor(material: string, placeholders: boolean, why = 'pa
  */
 export function modelSensor(client: InferenceClient, budget: Budget, model: string,
   ctx: { readonly material: string; readonly task: string; readonly placeholders: boolean; readonly strict?: boolean
+    /** the skill's own rules, kept apart from the evidence: they license a specific only as written (`decideSpecifics`) */
+    readonly rules?: string
     /** the pairs a qualification stands behind: QUALIFIED_READERS, unless a test passes its own */
     readonly qualifiedReaders?: readonly QualifiedReader[];
     /** ATELIER_CLAIMS_GATE=reader: an unqualified reader gates anyway */
@@ -482,7 +517,7 @@ export function modelSensor(client: InferenceClient, budget: Budget, model: stri
      */
     readonly reads?: 1 | 2 }): ClaimSensor {
   const cache = new Map<string, ClaimReading>();
-  const diskKey = (text: string): string => sha(JSON.stringify([model, READER_VERSION, text, ctx.material, ctx.task, ctx.placeholders, ctx.strict ?? false]));
+  const diskKey = (text: string): string => sha(JSON.stringify([model, READER_VERSION, text, ctx.material, ctx.task, ctx.placeholders, ctx.strict ?? false, ctx.rules ?? '']));
   const reads = ctx.reads ?? 1;
   const asSpecifics = (raw: unknown): ExtractedSpecific[] | null => (Array.isArray(raw) ? raw.filter((x): x is ExtractedSpecific => typeof x === 'object' && x !== null
     && typeof (x as ExtractedSpecific).sentence === 'number' && typeof (x as ExtractedSpecific).text === 'string') : null);
@@ -502,7 +537,7 @@ export function modelSensor(client: InferenceClient, budget: Budget, model: stri
   };
   /** One reading from one or two reads: flags both raise, and the ones only one raised listed to check. */
   const resolve = (text: string, each: readonly (readonly ExtractedSpecific[])[]): ClaimReading => {
-    const [a, b] = each.map((sp) => decideSpecifics(text, sp, ctx.material, ctx.task, ctx.placeholders, named, ctx.strict ?? false));
+    const [a, b] = each.map((sp) => decideSpecifics(text, sp, ctx.material, ctx.task, ctx.placeholders, named, ctx.strict ?? false, ctx.rules ?? ''));
     if (!b) return a;
     const at = (c: { start: number; end: number }): string => `${c.start}:${c.end}`;
     const both = new Set(b.claims.map(at));
@@ -511,8 +546,10 @@ export function modelSensor(client: InferenceClient, budget: Budget, model: stri
     return { ...a, claims: agreed, agreement: { both: agreed.length, either: agreed.length + disputed.length }, publicFacts: [...a.publicFacts,
       ...disputed.map((c) => ({ start: c.start, end: c.end, text: c.text, why: DISPUTED_WHY }))] };
   };
-  const fallback = patternSensor(ctx.material, ctx.placeholders, 'pattern check (the claim reader could not run)');
-  const gatePattern = patternSensor(ctx.material, ctx.placeholders, 'pattern check (the gate: the claim reader is not qualified)');
+  // The pattern check reads figures only, and a figure in a rule may be repeated as written: it reads the rules beside the material.
+  const patternMaterial = withRules(ctx.material, ctx.rules ?? '');
+  const fallback = patternSensor(patternMaterial, ctx.placeholders, 'pattern check (the claim reader could not run)');
+  const gatePattern = patternSensor(patternMaterial, ctx.placeholders, 'pattern check (the gate: the claim reader is not qualified)');
   const qualified = isQualified(model, READER_VERSION, ctx.qualifiedReaders ?? QUALIFIED_READERS);
   const readerGates = qualified || (ctx.gateAnyway ?? false);
   // The prompt's hash is part of the instrument's name: a reading from a changed prompt is a reading
@@ -531,6 +568,11 @@ export function modelSensor(client: InferenceClient, budget: Budget, model: stri
   }
   const context = `THE AUTHOR'S MATERIAL (what they supplied; anything here is theirs to use):\n<material>\n${ctx.material.trim() || '(none)'}\n</material>\n\nTHE TASK THEY GAVE:\n<task>\n${ctx.task.trim() || '(none)'}\n</task>`;
   const sensor: ClaimSensor = {
+    get candidates(): ClaimSensor {
+      if (readerGates && !degraded) return sensor;
+      // the gating pattern check reads the candidate; a reading the reader already made of this very text is kept
+      return { ...gatePattern, get gate() { return 'pattern' as const; }, reading: (text) => sensor.reading(text) ?? gatePattern.reading(text) };
+    },
     get instrument() { return degraded ? `pattern check (${named} degraded after it failed: ${failure}; every text is read by the pattern check since)` : live; },
     notes, version: READER_VERSION, qualified,
     get gate() { return readerGates && !degraded ? 'reader' as const : 'pattern' as const; },

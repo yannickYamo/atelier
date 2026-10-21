@@ -1,0 +1,90 @@
+{
+  "reading": "intent-mode",
+  "pass": {
+    "runs": 5,
+    "perCaseAtLeast": 4,
+    "codeDecidedExact": true
+  },
+  "cases": [
+    {
+      "id": "voice",
+      "intent": "always write in my voice",
+      "label": "GENERATE"
+    },
+    {
+      "id": "newsletter",
+      "intent": "Write me a newsletter every week",
+      "label": "GENERATE"
+    },
+    {
+      "id": "post-for-customers",
+      "intent": "write a blog post for all our customers",
+      "label": "GENERATE"
+    },
+    {
+      "id": "support-article",
+      "intent": "write a support article",
+      "label": "GENERATE"
+    },
+    {
+      "id": "explain-like-me",
+      "intent": "explain technical topics the way I do on my blog",
+      "label": "GENERATE"
+    },
+    {
+      "id": "support-answer",
+      "intent": "customer support needs to always answer this way",
+      "label": "RESPOND"
+    },
+    {
+      "id": "tickets",
+      "intent": "reply to support tickets like our best agent",
+      "label": "RESPOND"
+    },
+    {
+      "id": "draft-replies",
+      "intent": "draft replies to customer emails",
+      "label": "RESPOND"
+    },
+    {
+      "id": "coding-assistant",
+      "intent": "a coding assistant that answers like our senior engineer",
+      "label": "RESPOND"
+    },
+    {
+      "id": "help-people",
+      "intent": "help people who message us about billing, in our tone",
+      "label": "RESPOND"
+    },
+    {
+      "id": "ensure",
+      "intent": "ensure all content outputs follow the corpus",
+      "label": "GUARD"
+    },
+    {
+      "id": "check-draft",
+      "intent": "check every draft against our house style",
+      "label": "GUARD"
+    },
+    {
+      "id": "make-sure",
+      "intent": "make sure every email follows our tone",
+      "label": "GUARD"
+    },
+    {
+      "id": "review-tone",
+      "intent": "review drafts for tone",
+      "label": "GUARD"
+    },
+    {
+      "id": "gate",
+      "intent": "nothing ships that breaks these rules",
+      "label": "GUARD"
+    },
+    {
+      "id": "empty",
+      "intent": "",
+      "label": "GENERATE"
+    }
+  ]
+}

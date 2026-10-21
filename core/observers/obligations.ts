@@ -258,6 +258,55 @@ function derived(f: Figure, given: readonly Figure[]): boolean {
   return false;
 }
 
+/** What a figure counts, for arithmetic: money, a percentage, a thing named beside it, or nothing. */
+type Kind = 'money' | 'percent' | 'count' | 'bare';
+const kindOf = (f: Figure): Kind => (f.percent ? 'percent' : f.unit === 'dollar' || f.unit === 'euro' || f.unit === 'pound' ? 'money' : f.unit !== null ? 'count' : 'bare');
+/** `x` at the precision `shown` is written with: "$29.17" from 29.1666…, "$96" from 96. */
+const atShownPrecision = (x: number, shown: string): number => { const dec = /\.(\d+)/.exec(shown.replace(/[,\s]/g, ''))?.[1].length ?? 0; return Number(x.toFixed(dec)); };
+/** Words beside a figure that say it is a year's worth of a monthly or weekly amount: the only constants the arithmetic takes, and only then. */
+const A_YEAR = /\b(?:per|a|each|every|the|one)\s+year\b|\byear(?:ly)?\b|\bannual(?:ly)?\b|\bp\.?a\.?\b/i;
+/** The most figures the arithmetic is tried over: past this, almost any number is some pair's product. */
+const MAX_OPERANDS = 80;
+
+/**
+ * A FIGURE WORKED FROM WHAT WAS GIVEN, BY DIMENSION. A total is a count times a rate; a rate per head is money over
+ * a count; a gap is money less money; a year is a month twelve times. The operands are the given figures and the
+ * output's own figures already found to be sourced, so a chain runs only through figures the text states, and the
+ * reader can check each step. An operation is accepted only where the units make the result: money times a count is
+ * money, money over a count is money, money less money is money, a count less a count of the same name (or of no name)
+ * is that count, a percentage of an amount is that amount; a dose cannot be an age plus a breathing rate, and that
+ * stays blocked here as it was. Exact at the figure's own precision. No search past one operation: an unstated
+ * intermediate is not worked from, and a figure the text does not show its way to is listed as before.
+ */
+function workedByDimension(f: Figure, operands: readonly Figure[], sentence: string): boolean {
+  if (!Number.isFinite(f.value) || operands.length > MAX_OPERANDS) return false;
+  const want = kindOf(f); const same = (x: number): boolean => Number.isFinite(x) && Math.abs(atShownPrecision(x, f.raw) - f.value) < 1e-9;
+  const pool = operands.filter((o) => Number.isFinite(o.value));
+  // a year of a monthly or weekly AMOUNT OF MONEY: the one conversion the words allow; a headcount has no year
+  if (want === 'money' && (A_YEAR.test(sentence) || /\b(?:twelve|12)\s+months\b|\b(?:52|fifty-two)\s+weeks\b/i.test(sentence))) for (const o of pool) if (kindOf(o) === 'money' && (same(o.value * 12) || same(o.value * 52))) return true;
+  for (const a of pool) for (const b of pool) {
+    if (a === b) continue;
+    const ka = kindOf(a), kb = kindOf(b);
+    if (want === 'money') {
+      if (ka === 'money' && kb === 'count' && same(a.value * b.value)) return true;                          // 12 people × $8
+      if (ka === 'money' && kb === 'count' && b.value !== 0 && same(a.value / b.value)) return true;         // $350 ÷ 12 people
+      if (ka === 'money' && kb === 'money' && (same(a.value + b.value) || same(a.value - b.value))) return true; // $350 − $96
+      if (ka === 'money' && kb === 'percent' && same((a.value * b.value) / 100)) return true;                    // 20% of $350
+      if (ka === 'money' && kb === 'percent' && same(a.value * (1 - b.value / 100))) return true;               // $350 less 20%
+    } else if (want === 'count' || want === 'bare') {
+      // a count less a count, named as one of them: 25 seats less 12 people are 13 seats; two numbers that count nothing add up to nothing
+      const fits = (x: Figure): boolean => kindOf(x) === 'count';
+      if (fits(a) && fits(b) && f.unit !== null && (a.unit === f.unit || b.unit === f.unit) && (same(a.value + b.value) || same(a.value - b.value))) return true;
+      if (ka === 'count' && kb === 'count' && a.unit === b.unit && b.value !== 0 && same(a.value / b.value)) return true;   // 300 boxes ÷ 12 boxes
+      if (ka === 'money' && kb === 'money' && b.value !== 0 && same(a.value / b.value)) return true;                        // $950 ÷ $96, times
+    } else if (want === 'percent') {
+      // a share, or a change, of one thing in the same thing
+      if (ka === kb && (ka === 'money' || (ka === 'count' && a.unit === b.unit)) && b.value !== 0 && (same((a.value / b.value) * 100) || same(((a.value - b.value) / b.value) * 100))) return true;
+    }
+  }
+  return false;
+}
+
 /**
  * EVERY FIGURE IS ONE THE WRITER WAS GIVEN. A figure in the output must be in the request or in the bound material,
  * as the same quantity, or follow from two given figures by one step of arithmetic. `allow` figures may be the
@@ -284,8 +333,21 @@ export const CITED: Observer = {
       const ends = ['\n', '. ', '! ', '? '].map((e) => text.indexOf(e, f.end)).filter((i) => i !== -1);
       return text.slice(from + 1, ends.length ? Math.min(...ends) + 1 : text.length);
     };
-    const missing = stated.filter((f) => !given.has(f.key) && !inGivenTable(f, givenFigures) && !roundsGiven(f, givenFigures) && !derived(f, givenFigures)
-      && !workedFromMaterial(sentenceAt(f), f.value, source));
+    // A SPAN OF THE CALENDAR IS NOT A CLAIM: "over twelve months", "52 weeks", "365 days" state no quantity of the subject.
+    const calendar = (f: Figure): boolean => !f.percent && ((f.unit === 'month' && f.value === 12) || (f.unit === 'week' && f.value === 52) || (f.unit === 'day' && (f.value === 7 || f.value === 365)));
+    const found = (f: Figure): boolean => given.has(f.key) || calendar(f) || inGivenTable(f, givenFigures) || roundsGiven(f, givenFigures) || derived(f, givenFigures) || workedFromMaterial(sentenceAt(f), f.value, source);
+    const sourced = new Set<Figure>(stated.filter(found));
+    // WORKED THROUGH THE TEXT'S OWN FIGURES, to a fixed point: a per-head rate from a total the text states and a count
+    // it was given; a gap from two totals; a year from a month. Each pass may source a figure the last pass could not.
+    for (let changed = true; changed;) {
+      changed = false;
+      for (const f of stated) {
+        if (sourced.has(f)) continue;
+        const operands = [...givenFigures, ...stated.filter((g) => g !== f && sourced.has(g) && g.key !== f.key)];
+        if (workedByDimension(f, operands, sentenceAt(f))) { sourced.add(f); changed = true; }
+      }
+    }
+    const missing = stated.filter((f) => !sourced.has(f));
     const allow = num(p, 'allow') ?? 0;
     const where = material.length ? `the request or the material (${material.map((m) => m.name).join(', ')})` : 'the request (no material was bound)';
     const detail = `${stated.length - missing.length} of ${stated.length} figure(s) are in ${where}`;

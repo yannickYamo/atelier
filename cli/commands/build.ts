@@ -7,21 +7,29 @@
 import type { StoredSignal } from '../../core/observers/selection.js';
 import { compositeVoiceOf, pieceLengthOpen, type CompositeRecord } from '../../core/composite/selection.js';
 import { withoutFrontMatter } from '../../core/composite/authors.js';
-import { selectCompositePieces, selectVoicePieces, selectWithinBudget, isExcerpt, usualLength, lengthSpan, compositeLength, PIECE_BUDGET_WORDS, COMPACT_PIECE_BUDGET_WORDS, COMPACT_PIECE_FORM, type PieceForm, type Voice } from '../../core/compiler/voice.js';
-import { derivePersona, reconcilePersona, standardForbids } from '../../core/compiler/persona.js';
+import { selectCompositePieces, selectVoicePieces, selectWithinBudget, isExcerpt, usualLength, lengthSpan, compositeLength, PIECE_BUDGET_WORDS, COMPACT_PIECE_BUDGET_WORDS, COMPACT_PIECE_FORM, WRITING_PIECE_BUDGET_WORDS, type PieceForm, type Voice } from '../../core/compiler/voice.js';
+import { derivePersona, reconcilePersona, standardForbids, describeCounts } from '../../core/compiler/persona.js';
 import type { Budget } from '../../core/inference/client.js';
-import { sessionCorpus, sessionPairs, unsplitPairs } from '../corpus.js';
+import { sessionCorpus, sessionPairs, unsplitPairs, corpusHashOf } from '../corpus.js';
+import { SELECTION } from '../../core/observers/selection.js';
+import { splitRequest } from '../../core/intake/extract.js';
 import { standardWordingOf, sharedAmong } from '../../core/observers/overlap.js';
 import { targetOf } from '../../core/observers/obligations.js';
 
 /** Set by a command that builds from what the owner wrote and promised no model call (cli/commands/method.ts). */
 const NO_MODEL = (): boolean => process.env.ATELIER_BUILD_NO_MODEL === '1';
+/** A build whose pieces are served whole, every one (`atelier method`, cli/commands/method.ts): the model reads them, it never chooses which are shown. */
+const WHOLE_PIECES = (): boolean => process.env.ATELIER_BUILD_WHOLE_PIECES === '1';
 const QUIET = 'no model was asked';
 import { deriveScope, groundScope, spreadByKind, type ScopeProfile } from '../../core/compiler/scope.js';
 
 /** The words of example answers a skill that answers shows by default: enough for one of each kind of request and a few more. */
 const ANSWER_EXAMPLE_WORDS = 1200;
-import { isReplyWork } from '../../core/observers/formats.js';
+import { WORK_FORM, type WorkForm } from '../../core/observers/work-form.js';
+import { readContext } from '../../core/inference/reading.js';
+import { METHOD_INFER, noteOf, type InferredMethod } from '../../core/method/infer.js';
+import { METHOD_UNITS } from '../../core/method/decision-units.js';
+import { PERSONA_MOVES, PERSONA_TABLE, cellsToAsk, habitsPerCall, inferMoves, profileOf, currentReading, personaHashOf, describeMoves, describeMove, pointsWithRates, type MoveProfile, type TableCell } from '../../core/compiler/moves.js';
 import { isGeneralScope } from '../../core/state/canonical-state.js';
 import { moveEvidence, readHoldsBack, ownerWrote, HOLDS_BACK } from '../../core/compiler/applicability.js';
 import { normalizeClass } from '../../core/observers/doc-class.js';
@@ -46,7 +54,12 @@ import { buildProposal, renderProposal, unconfirmedIn } from '../../core/compile
 import { defaultPlan, maintenanceMap, describeMaintenance } from '../../core/coverage/observation.js';
 import { planImprovement, describeImprovement, type UndoRecord } from '../../core/compiler/apply.js';
 import type { AdaptedComponent } from '../../core/intake/package.js';
-import { installFidelity } from '../fidelity.js';
+import { installFidelity, lastSetAside } from '../fidelity.js';
+import * as fstore from '../../core/state/fidelity-store.js';
+import { recordStage, stagesSoFar, resetStages } from '../stages.js';
+import { createHash } from 'node:crypto';
+import { receiptOf, describeStages } from '../../core/state/receipt.js';
+import { stepsOf } from '../../core/method/standard.js';
 import { skillCardFor } from '../skill-card.js';
 import { renderSkillCard } from '../../core/eval/skill-card.js';
 import * as store from '../../core/state/store.js';
@@ -54,7 +67,7 @@ import { extract } from '../../core/intake/extract.js';
 
 import { describeMatrix, type Carrier } from '../../core/delivery/carrier-delivery.js';
 import { sha, DATA, die, argv, flag, projectDir, pickHost,
-  loadSession, saveSession, step, runFile, numericFlag, orchestrated, proposerModel, adoptMovedRun } from '../runtime.js';
+  loadSession, saveSession, step, runFile, numericFlag, orchestrated, proposerModel, adoptMovedRun, contextReaderModel, contextReaderClient, evidenceReaderModel, evidenceReaderClient } from '../runtime.js';
 
 // ── build ────────────────────────────────────────────────────────────────────────────────────
 /** Host is detected or forced. Atelier runs the same either way; only install location differs. */
@@ -98,7 +111,7 @@ export function revert(): void {
  * author's pieces for the first time and told nothing about them, serves passages within 3,000 words, and that
  * choice is stored as an explicit one is: a later rebuild chooses the same whatever the default becomes. A skill
  * that already holds a voice keeps what it holds, so a rebuild of a skill built before is the same bytes. A skill
- * that answers, one built from a method (`atelier method`, no model), and `--voice none` are as they were:
+ * that answers, one built from a method (`atelier method`, every piece whole), and `--voice none` are as they were:
  * `--pieces whole --piece-budget default` is the whole serving, for a first build too.
  */
 /**
@@ -121,7 +134,7 @@ export function pieceFlags(): { readonly budget: number | null | undefined; read
   return { budget: b === undefined ? undefined : b === 'default' ? null : Number(b), form: f as PieceForm | undefined };
 }
 
-async function chooseVoice(L: store.StoreLayout, v: StandardVersion): Promise<Voice | null> {
+async function chooseVoice(L: store.StoreLayout, v: StandardVersion, workForm: WorkForm): Promise<Voice | null> {
   const choice = (name: string): 'none' | 'auto' | undefined => {
     const x = flag(name)?.trim().toLowerCase();
     if (x !== undefined && x !== 'none' && x !== 'auto') die(`${name} takes none or auto`);
@@ -130,11 +143,13 @@ async function chooseVoice(L: store.StoreLayout, v: StandardVersion): Promise<Vo
   const voiceFlag = choice('--voice'); const personaFlag = choice('--persona');
   const asked = pieceFlags();
   const reselect = asked.budget !== undefined || asked.form !== undefined;
-  const answers = isReplyWork(v.workType);
+  const answers = workForm === 'REPLY';
   // Answers are short and are shown whole: an opening and a middle passage of a forty-word answer is the answer.
   if (answers && asked.form === 'excerpts') die('--pieces excerpts applies to a skill that writes: the answers this skill shows are short, and are shown whole. Use --piece-budget to show fewer of them.');
   if (voiceFlag === 'none') {
     if (reselect) die('--voice none serves none of your pieces, so --piece-budget and --pieces have nothing to choose from: drop one of them.');
+    recordStage('persona', { ran: false, why: 'no pieces served (--voice none, or one example alone)' });
+    recordStage('scope', { ran: false, why: 'no pieces served' });
     return null;
   }
   const stored = store.getVoice(L);
@@ -143,24 +158,24 @@ async function chooseVoice(L: store.StoreLayout, v: StandardVersion): Promise<Vo
   // `--voice auto` included (it chooses the pieces again, it does not forget what it was told about them).
   // `--piece-budget default` is how the budget is given up.
   // The compact default applies to a first build alone, of a skill that writes, with no flag given about the pieces
-  // (a build from a method calls no model and keeps the whole serving); what it chooses is stored as a flag would be.
-  const compact = !stored && !answers && !reselect && !NO_MODEL();
-  const wordBudget = asked.budget === undefined ? (compact ? COMPACT_PIECE_BUDGET_WORDS : stored?.pieceBudget) : asked.budget ?? undefined;
-  const form: PieceForm = asked.form ?? (compact ? COMPACT_PIECE_FORM : stored?.pieceForm ?? 'whole');
+  // (a build from a method keeps the whole serving, `WHOLE_PIECES`); what it chooses is stored as a flag would be.
+  const compact = !stored && !answers && !reselect && !NO_MODEL() && !WHOLE_PIECES();
+  const wordBudget = asked.budget === undefined ? (compact ? WRITING_PIECE_BUDGET_WORDS : stored?.pieceBudget) : asked.budget ?? undefined;
+  const form: PieceForm = asked.form ?? (compact ? 'whole' : stored?.pieceForm ?? 'whole');
   // A persona is derived (one model call) only for a voice chosen in this run, or when asked for: choosing the
   // pieces again must never spend, nor bring back a persona the owner turned off.
   const derivesPersona = !voice || personaFlag === 'auto';
   // This run's pieces: the run being built is this skill's, whatever name it is built under.
   const readable = derivesPersona || reselect ? sessionCorpus().map(withoutFrontMatter) : [];
   // A budget or a form with no pieces to apply it to is refused, with or without a stored voice: never ignored.
-  if (reselect && readable.length < 3) {
+  if (reselect && readable.length < 2) {
     die(loadSession().source
-      ? '--piece-budget and --pieces choose from the pieces this skill was built from, and fewer than three can be read here. Run it from the project the skill was built in, with its folder of pieces in place.'
+      ? '--piece-budget and --pieces choose from the pieces this skill was built from, and fewer than two can be read here. Run it from the project the skill was built in, with its folder of pieces in place.'
       : '--piece-budget and --pieces choose among your own pieces, and this skill was built from rules you stated, with no pieces to choose from.');
   }
   // A skill that answers shows examples spread over the kinds of request (`spreadExamples`), so no whole pieces are
   // chosen for it here when that spread will replace them.
-  const spreads = (x: Voice | null): boolean => answers && Boolean(x?.scope?.kinds) && voiceFlag === undefined && !argv.includes('--full');
+  const spreads = (x: Voice | null): boolean => answers && Boolean(x?.scope?.kinds) && voiceFlag === undefined && !argv.includes('--full') && !WHOLE_PIECES() && !x?.servedWhole;
   // The default choice when no budget is set (as it has always been made); a budget the owner set is a ceiling.
   const choose = (): string[] => (wordBudget === undefined && form === 'whole' ? selectVoicePieces(readable) : selectWithinBudget(readable, wordBudget ?? PIECE_BUDGET_WORDS, form));
   const said = (pieces: readonly string[]): string => {
@@ -178,20 +193,22 @@ async function chooseVoice(L: store.StoreLayout, v: StandardVersion): Promise<Vo
   if (comp && (!voice || (reselect && voice.composite))) {
     // `--piece-budget default` gives the budget up: one whole piece from each writer, as for a single author.
     const whole = asked.budget === null;
-    const made = compositeVoice(comp, v, whole ? null : wordBudget ?? COMPACT_PIECE_BUDGET_WORDS, asked.form ?? (whole ? 'whole' : stored?.pieceForm ?? COMPACT_PIECE_FORM));
+    // A composite keeps its own serving (one piece from each writer, compact): the larger default is for one author's writing.
+    const made = compositeVoice(comp, v, whole ? null : asked.budget ?? stored?.pieceBudget ?? COMPACT_PIECE_BUDGET_WORDS, asked.form ?? (whole ? 'whole' : stored?.pieceForm ?? COMPACT_PIECE_FORM));
     if (made) {
       const by = made.composite?.pieceAuthors ?? [];
       console.log(`Voice: a composite of ${made.composite?.authors.length ?? 0} writer(s); ${by.length ? `one piece each from ${by.join(', ')}` : 'none of their pieces fits the budget'}, served as theirs. Turn off with --voice none.`);
       return made;
     }
   }
-  if (!voice && readable.length >= 3) {
+  if (!voice && readable.length >= 2) {
     const pieces = choose();
-    voice = { passages: [], lengthWords: usualLength(readable), pieces, ...(prefs.pieceForm ? { pieceForm: prefs.pieceForm } : {}), ...(wordBudget === undefined ? {} : { pieceBudget: wordBudget }) };
+    // A method build's whole serving is kept with the voice: a later `atelier build --persona auto` must not spread it.
+    voice = { passages: [], lengthWords: usualLength(readable), pieces, ...(prefs.pieceForm ? { pieceForm: prefs.pieceForm } : {}), ...(wordBudget === undefined ? {} : { pieceBudget: wordBudget }), ...(WHOLE_PIECES() ? { servedWhole: true as const } : {}) };
     if (pieces.length) console.log(`Voice: ${said(pieces)}. Turn off with --voice none.`);
     else if (wordBudget !== undefined && !answers) console.log(`Voice: ${none()}.`);
     if (!voice.lengthWords && !answers) console.log('Length: your pieces vary too much in length to hold one, so none is set; a request that names one sets it.');
-    if (compact) console.log(`(pieces served compact by default: ${COMPACT_PIECE_BUDGET_WORDS.toLocaleString('en-US')} words of excerpts, kept by later builds; --pieces whole --piece-budget default serves them whole.)`);
+    if (compact) console.log(`(whole pieces served by default, within ${WRITING_PIECE_BUDGET_WORDS.toLocaleString('en-US')} words, kept by later builds; --pieces excerpts --piece-budget ${COMPACT_PIECE_BUDGET_WORDS} serves passages from more of them in less.)`);
   } else if (voice && reselect) {
     // A skill built before keeps its pieces until the owner asks for others, and then they are chosen again from
     // the pieces it was built from: a budget cannot be met by cutting the ones already stored.
@@ -201,14 +218,28 @@ async function chooseVoice(L: store.StoreLayout, v: StandardVersion): Promise<Vo
       // your pieces" over them would be false, and removing them could not be undone by `--piece-budget default`.
       if (wordBudget === 0 && voice.passages.length) die('this skill was built by an early version and serves passages of yours inline, which --piece-budget does not reach. Choose its voice again first: atelier build --name <name> --voice auto, then set the budget.');
       const pieces = choose();
-      voice = { ...voice, pieces, ...prefs };
+      // Chosen again: the requests of the pieces before are not these pieces' (read again below).
+      const { pieceRequests: _stale, ...kept } = voice; void _stale;
+      voice = { ...kept, pieces, ...prefs };
       console.log(`Voice: ${pieces.length ? said(pieces) : none()}.`);
     }
   }
   if (!voice) return null;
+  // EACH PIECE WITH THE REQUEST IT ANSWERED, where its file carried one: matched by text, so a piece shown as passages
+  // (an excerpt) carries none. Read again on every build from the pieces at hand; kept from the stored voice otherwise.
+  if (voice.pieces?.length) {
+    const flatText = (t: string): string => withoutFrontMatter(t).replace(/\s+/g, ' ').trim();
+    const asked = new Map(sessionPairs().filter((p) => p.request).map((p) => [flatText(p.text), p.request ?? ""]));
+    // Kept from before only while it still lines up with the pieces (one entry each); read again where the pieces are at hand.
+    const pieceRequests = asked.size ? voice.pieces.map((t) => asked.get(flatText(t)) ?? null)
+      : voice.pieceRequests?.length === voice.pieces.length ? voice.pieceRequests : undefined;
+    const { pieceRequests: _was, ...rest } = voice; void _was;
+    voice = { ...rest, ...(pieceRequests?.some(Boolean) ? { pieceRequests } : {}) };
+  }
   // HOW MUCH THE AUTHOR WRITES FOR WHAT WAS ASKED (core/compiler/scope.ts), for a skill that answers requests: read
   // once from the examples, with the request each one answers when its file carries it. A failure costs the reading,
   // never the build: the profile is then counts alone, and states no habit nobody read.
+  recordStage('scope', answers ? (voice.scope ? { ran: true, detail: `${voice.scope.examples} example(s), kept` } : { ran: false, why: 'fewer than 3 request-and-answer pairs' }) : { ran: false, why: 'the work does not answer requests' });
   if (answers && (!voice.scope || personaFlag === 'auto')) {
     const pairs = sessionPairs();
     // Said once, by name: such a file's request was learned as the author's writing by every reading before this one.
@@ -221,15 +252,16 @@ async function chooseVoice(L: store.StoreLayout, v: StandardVersion): Promise<Vo
         // A build that promised to call no model (`atelier method`) states the counts alone, and says nothing.
         if (NO_MODEL()) throw new Error(QUIET);
         scope = await onCorpusReader((c) => deriveScope(c, scopeBudget, pairs, proposerModel()));
+        recordStage('scope', { ran: true, detail: `${scope.examples} example(s)` });
         console.log(`Scope: what ${scope.examples} example(s) add beyond what was asked, ${scope.paired} of them read with the request they answer`
           + (scope.dropped ? ` (${scope.dropped} finding(s) dropped: not quoted from the answer)` : '')
           + `${scope.unread ? ` (${scope.unread} example(s) not read${scope.beyond.length ? '' : ': too many to state a habit from the rest'})` : ''}; $${scopeBudget.spentUsd.toFixed(3)}. No usual length is stated: the request sets it.`);
       } catch (e) {
         scope = groundScope(pairs, null, null);
-        if ((e as Error).message !== QUIET) console.log(`(the examples could not be read for scope: ${(e as Error).message.split('\n')[0]}; the skill states that the request sets the length, and no habit.)`);
+        if ((e as Error).message === QUIET) recordStage('scope', { ran: false, why: 'no model read the examples' }); else { recordStage('scope', { ran: false, why: `the call failed: ${(e as Error).message.split('\n')[0]}`, degraded: true }); console.log(`(the examples could not be read for scope: ${(e as Error).message.split('\n')[0]}; the skill states that the request sets the length, and no habit.)`); }
       }
       voice = { ...voice, scope };
-      if (voiceFlag === undefined) voice = spreadExamples(voice, pairs);
+      if (voiceFlag === undefined && !WHOLE_PIECES() && !voice.servedWhole) voice = spreadExamples(voice, pairs);
     }
   }
   // A skill that answers, built before, asked for another budget: its examples are spread again over the kinds its
@@ -240,7 +272,7 @@ async function chooseVoice(L: store.StoreLayout, v: StandardVersion): Promise<Vo
   // reader (the word pattern is its floor) and stay examples until the owner rules on them. Said at build, move by
   // move, so the owner sees what was stated, what was shown, and the one question that is theirs.
   const moves = v.requirements.filter((r) => !r.measurement && !r.realizes && r.materiality !== 'REQUIRED' && r.kind === 'GENERATIVE' && r.authority !== 'EXPERT_REJECTED');
-  if (moves.length && isReplyWork(v.workType)) {
+  if (moves.length && answers) {
     const pieces = loadSession().run?.heldOutPieces ?? voice.corpusPieces ?? null;
     const moveBudget: Budget = { spentUsd: 0, capUsd: 0.2, maxCalls: 1 };
     // READ ONCE, THEN KEPT. Which moves hold back what was asked used to be read by a model on every build, so a
@@ -252,10 +284,12 @@ async function chooseVoice(L: store.StoreLayout, v: StandardVersion): Promise<Vo
     const reuse = voice.holdsBack !== undefined && personaFlag !== 'auto' && moves.every((r) => covered.has(r.requirementId));
     const read = reuse ? voice.holdsBack ?? [] : NO_MODEL() ? null : await onCorpusReader((c) => readHoldsBack(c, moveBudget, moves.map((r) => ({ id: r.requirementId, statement: r.statement })))).catch(() => null);
     if (!reuse && read === null && !NO_MODEL()) console.log('(which moves hold back what was asked could not be read by a model: the word pattern decided, and the next build will read again.)');
-    const holdsBack = moves.filter((r) => (read ? read.includes(r.requirementId) : false) || (!reuse && HOLDS_BACK.test(r.statement))).map((r) => r.requirementId);
+    // THE READING DECIDES WHERE IT READ. This was `read || pattern`: a move the model had read as giving what was asked
+    // was still marked as holding back because a word in it matched. The pattern decides only when nothing read it.
+    const holdsBack = moves.filter((r) => (read ? read.includes(r.requirementId) : HOLDS_BACK.test(r.statement))).map((r) => r.requirementId);
     // A reading that could not be made is not recorded as one: the pattern's answer is used for this build only.
     voice = { ...voice, ...(pieces ? { corpusPieces: pieces } : {}), holdsBack, holdsBackOf: reuse || read !== null ? moves.map((r) => r.requirementId) : [] };
-    const carried = moves.map((r) => ({ r, e: moveEvidence(r.observedRate, pieces, { answers: isReplyWork(v.workType), general: isGeneralScope(r.appliesWhen), holdsBack: holdsBack.includes(r.requirementId), ownerRuled: ownerWrote(r) }) }));
+    const carried = moves.map((r) => ({ r, e: moveEvidence(r.observedRate, pieces, { answers, general: isGeneralScope(r.appliesWhen), holdsBack: holdsBack.includes(r.requirementId), ownerRuled: ownerWrote(r) }) }));
     const n = (c: string): number => carried.filter((x) => x.e.carrier === c).length;
     // One line, not one per move: what the owner needs is the count and the question below. `atelier plan` lists every rule.
     console.log(`Moves: ${n('general')} stated as something I do, ${n('conditional')} stated only with their condition, ${n('exemplar')} shown as an example and never stated.`);
@@ -267,19 +301,39 @@ async function chooseVoice(L: store.StoreLayout, v: StandardVersion): Promise<Vo
       for (const x of asks) console.log(`  ${x.r.requirementId}  "${x.r.statement.trim().slice(0, 140)}"\n      To make it a rule, say when it applies in your own words: atelier amend --skill ${skillNameFrom(flag('--name') ?? loadSession().skillName ?? 'name')} --rule ${x.r.requirementId} --applies-when "<the cases where you hold back>" --reason "<why>"`);
     }
   }
-  if (personaFlag === 'none') return { ...voice, persona: undefined };
+  // WHEN THERE IS NO PERSONA, THE BUILD SAYS WHY. Three skills were built with none and nothing in their logs said so;
+  // the gap was found by reading their stored voice. Nothing is said for a voice kept from an earlier build (its
+  // persona is kept with it) or for a composite (said where the composite is built).
+  const kept = voice;
+  const noPersona = (why: string): Voice => { console.log(`(no persona: ${why})`); recordStage('persona', { ran: false, why }); return kept; };
+  if (personaFlag === 'none') { console.log('(no persona: --persona none.)'); recordStage('persona', { ran: false, why: '--persona none' }); return { ...voice, persona: undefined }; }
   // A composite has no persona: one read over several authors' pieces describes their average (see above).
-  if (!derivesPersona || voice.composite || readable.length < 3 || (personaFlag !== 'auto' && voice.persona)) return voice;
+  // A KEPT PERSONA IS RECONCILED AGAIN. The standard may have changed since it was read (a rule rejected, a boundary
+  // added): a point that describes a move the standard now rules out is dropped here, as it would be at derivation,
+  // so no rejected behaviour comes back through a persona kept from an earlier build, or through the moves read from it.
+  const reconciled = (vc: Voice): Voice => (vc.persona ? { ...vc, persona: reconcilePersona(vc.persona, standardForbids(v)) } : vc);
+  const held = (why: string): Voice => { const r = reconciled(voice); recordStage('persona', r.persona ? { ran: true, detail: describeCounts(r.persona) } : { ran: false, why }); return r; };
+  if (!derivesPersona || voice.composite || (personaFlag !== 'auto' && voice.persona)) return held(voice.composite ? 'a composite voice has no persona' : 'kept from an earlier build');
+  // A persona already held is kept where it cannot be read again (--persona auto from a folder without the pieces, or with no model).
+  if (voice.persona && (readable.length < 3 || NO_MODEL())) return held('kept');
+  // Three pieces at least: a habit's frequency is read across pieces, and across two there is no "most".
+  if (readable.length < 3) return noPersona(`${readable.length} piece(s) can be read here; three or more are needed to say how often a habit holds.`);
+  if (NO_MODEL()) return noPersona('no model read the pieces (none is set up, or --no-model); how the author sounds is read by one.');
   const budget: Budget = { spentUsd: 0, capUsd: numericFlag('--cap', 1.5), maxCalls: 1 };
   try {
     const persona = reconcilePersona(await onCorpusReader((c) => derivePersona(c, budget, readable)), standardForbids(v));
     // Nothing to say about a persona with no point in it: it adds nothing to the skill.
-    if (persona.points.length) console.log(`Persona: ${persona.points.length} point(s) on how the author sounds, each with how often and a quote from their pieces`
+    recordStage('persona', { ran: true, detail: describeCounts(persona) });
+    if (persona.points.length) console.log(`Persona: ${describeCounts(persona)} on how the author sounds, each with how often and a quote from their pieces`
       + (persona.dropped ? ` (${persona.dropped} dropped: their quote was not in the pieces)` : '')
       + `${persona.conflicting ? ` (${persona.conflicting} dropped: they describe a move your standard rules out)` : ''}; $${budget.spentUsd.toFixed(3)}. Turn off with --persona none.`);
     return { ...voice, persona };
   } catch (e) {
-    console.log(`(the persona could not be derived: ${(e as Error).message.split('\n')[0]}; the skill is built without it.)`);
+    // SAID WITH THE WAY BACK, AND RECORDED: a skill built without its persona on a failed call is a degraded build, not
+    // a build without a persona; the receipt says so and `status` shows it until a later build reads it.
+    const why = (e as Error).message.split('\n')[0];
+    console.log(`(the persona could not be derived: ${why}; the skill is built without it. Read it later: atelier build --name ${L.skillName} --persona auto.)`);
+    recordStage('persona', { ran: false, why: `the call failed: ${why}`, degraded: true });
     return voice;
   }
 }
@@ -289,6 +343,99 @@ async function chooseVoice(L: store.StoreLayout, v: StandardVersion): Promise<Vo
  * each, labelled with whose they are; the traits taken from each, for "how I sound"; and every piece of every author
  * in the folder for the copying check alone (never served). Null when no author's pieces can be read here.
  */
+/**
+ * THE AUTHOR'S MOVES (core/compiler/moves.ts): each persona point compiled for execution, with its trigger grounded in a
+ * situation quote from the same piece, its scope and its candidate step; then every habit tabled against every piece
+ * the first reading left, in calls sized by the token budget; then its rate and its situation's effect inferred from
+ * the counts (core/stats/habit.ts), and its kind decided from them. Read once per persona and kept by the persona's
+ * hash, so a rebuild with the same persona spends nothing; a floor profile (no model) is read again when a model is
+ * there. Nothing here is a requirement; an occasional habit is served to no run as a placement.
+ */
+async function movesFor(L: store.StoreLayout, voice: Voice | null, methodText: { text: string } | null): Promise<MoveProfile | null> {
+  const points = voice?.persona?.points ?? [];
+  if (!points.length) { recordStage('moves', { ran: false, why: voice?.persona ? 'the persona has no point' : 'no persona' }); return null; }
+  const personaHash = personaHashOf(points);
+  const kept = store.getMoves(L, personaHash);
+  const pieces = sessionCorpus().map(withoutFrontMatter).map((text, i) => ({ name: `piece-${i + 1}`, text }));
+  // STALE AGAINST THE PIECES: a profile's evidence names pieces by the hash of their text; when the pieces readable now
+  // differ, the profile is read again where a model is there, and kept and said so where none is (never served as if
+  // read from these pieces: the receipt names it, and the stage says what changed).
+  const pieceHashes = pieces.map((x) => createHash('sha256').update(x.text).digest('hex').slice(0, 16));
+  const changed = kept && pieces.length ? kept.pieces.filter((x) => !pieceHashes.includes(x.sha)).length + pieceHashes.filter((h) => !kept.pieces.some((x) => x.sha === h)).length : 0;
+  // STALE AGAINST THE READINGS: a profile read by an earlier version of either reading (or of an earlier schema) is read
+  // again where a model is there; with none it is kept and said so.
+  const stale = kept !== null && (kept.schema !== 2 || kept.reading !== currentReading());
+  if (kept && ((kept.reader !== null && !changed && !stale) || NO_MODEL())) {
+    if (kept.reader !== null && !changed && !stale) recordStage('moves', { ran: true, detail: `${describeMoves(kept.units)} (kept)` });
+    else if (kept.reader !== null && stale) recordStage('moves', { ran: false, why: `kept from an earlier reading (${kept.reading}) and no model to read again: ${describeMoves(kept.units)}` });
+    else if (kept.reader !== null) recordStage('moves', { ran: false, why: `kept from pieces that have changed since (${changed} piece(s) differ) and no model to read them again: ${describeMoves(kept.units)}` });
+    else recordStage('moves', { ran: false, why: `by the words alone, kept: ${describeMoves(kept.units)}` });
+    return kept;
+  }
+  const steps = methodText ? stepsOf(methodText.text).map((st, i) => ({ n: i + 1, text: st.text })) : [];
+  const noModel = NO_MODEL();
+  const d = await readContext(PERSONA_MOVES, { points, pieces, steps }, noModel ? null : evidenceReaderClient(), noModel ? null : evidenceReaderModel(), { spentUsd: 0, capUsd: 0.6, maxCalls: 1 });
+  // A PROFILE A MODEL READ IS NEVER REPLACED BY A FLOOR: where no model could read again, the kept one stays, and the stage says why.
+  if (d.by !== 'model' && kept && kept.reader !== null) {
+    recordStage('moves', { ran: false, why: `kept from ${stale ? `an earlier reading (${kept.reading})` : `pieces that have changed since (${changed} piece(s) differ)`} and no model to read again: ${describeMoves(kept.units)}` });
+    return kept;
+  }
+  // THE TABLE (core/compiler/moves.ts): every cell the first reading left (a piece with no quote for the move, or none
+  // for its situation) is asked once, in calls that hold as many habits as the answer budget allows for this corpus.
+  // Every cell is then a count, and the counts are what the kinds are inferred from.
+  const cells: TableCell[] = []; let tabled = false; let calls = 0;
+  if (d.by === 'model') {
+    const asked = cellsToAsk(d.value, pieces);
+    const perCall = habitsPerCall(PERSONA_TABLE.maxTokens, pieces.length);
+    const habitNs = [...new Set(asked.map((c) => c.habit))];
+    let answered = 0;
+    for (let i = 0; i < habitNs.length; i += perCall) {
+      const batch = new Set(habitNs.slice(i, i + perCall));
+      const habits = d.value.map((u, n) => ({ n: n + 1, aspect: u.aspect, description: u.observed, quote: points[n]?.quote ?? u.evidence[0]?.quote ?? '', situation: u.trigger.text, modality: u.modality })).filter((h) => batch.has(h.n));
+      const t = await readContext(PERSONA_TABLE, { habits, pieces, cells: asked.filter((c) => batch.has(c.habit)) }, evidenceReaderClient(), evidenceReaderModel(), { spentUsd: 0, capUsd: 0.6, maxCalls: 1 });
+      calls += 1; if (t.by === 'model') { cells.push(...t.value); answered += 1; }
+    }
+    tabled = habitNs.length === 0 || answered === Math.ceil(habitNs.length / perCall);
+  }
+  const units = inferMoves(d.value, cells, pieces, tabled);
+  const profile = profileOf(units, personaHash, d.by === 'model' ? evidenceReaderModel() : null, pieces);
+  store.putMoves(L, personaHash, profile);
+  if (d.by === 'model') {
+    recordStage('moves', { ran: true, detail: `${describeMoves(profile.units)}${tabled ? '' : ' (not every cell tabled)'}` });
+    console.log(`Moves: ${describeMoves(profile.units)}, read from the persona and your pieces${calls ? ` and tabled against every piece in ${calls} call(s)` : ''}${tabled ? '' : ' (not every cell was answered: the counts are the first reading\'s)'}. A standing move holds in most pieces more probably than not; a situational one is explained by the situation it answers; an occasional one is neither, and is placed in no run.`);
+  } else recordStage('moves', { ran: false, why: `${d.why ?? 'no model'}: counted by the words alone` });
+  if (argv.includes('--report') && profile.units.length) console.log(`What my moves are, and when I make them:\n${profile.units.map((u) => `  - ${describeMove(u)}`).join('\n')}`);
+  return profile;
+}
+
+/**
+ * THE METHOD READ OFF THE PIECES (core/method/infer.ts), when the owner wrote none: the steps in the pieces' order, each
+ * shown by a quote, then what each asks the writer to decide (core/method/decision-units.ts), as the owner's steps get.
+ * Kept per corpus: read again only when the pieces changed or no model had read them. An owner's note replaces it.
+ */
+async function inferredMethodFor(L: store.StoreLayout, methodText: { text: string } | null, purpose: string | null): Promise<InferredMethod | null> {
+  if (methodText || argv.includes('--no-infer-method')) { store.setInferredMethod(L, null); return null; }
+  const pieces = sessionCorpus().map(withoutFrontMatter).map((text, i) => ({ name: `piece-${i + 1}`, text }));
+  const kept = store.getInferredMethod(L);
+  const corpusHash = sha(pieces.map((p) => p.text).join('\n\x00'));
+  if (kept?.reading === `${METHOD_INFER.id}-${METHOD_INFER.version}+${corpusHash}`) return kept;
+  if (NO_MODEL() || !pieces.length) return kept;
+  const reading = `${METHOD_INFER.id}-${METHOD_INFER.version}+${corpusHash}`;
+  const d = await readContext(METHOD_INFER, { purpose, pieces }, contextReaderClient(), contextReaderModel(), { spentUsd: 0, capUsd: 0.2, maxCalls: 1 });
+  // READ AND FOUND NONE, OR NOT GROUNDED: remembered as none for this corpus, so a rebuild with the same pieces calls nothing
+  // again; a corpus that changes is read afresh. No model reachable at all was handled above, and keeps what there was.
+  if (d.by !== 'model' || !d.value.length) {
+    const none: InferredMethod = { schema: 1, reader: contextReaderModel() ?? 'model', reading, steps: [], builtAt: new Date().toISOString() };
+    store.setInferredMethod(L, none); return none;
+  }
+  const units = await readContext(METHOD_UNITS, { steps: d.value.map((st, i) => ({ id: String(i + 1), text: st.text, under: null })) }, contextReaderClient(), contextReaderModel(), { spentUsd: 0, capUsd: 0.2, maxCalls: 1 });
+  const m: InferredMethod = { schema: 1, reader: contextReaderModel() ?? 'model', reading,
+    steps: d.value.map((st, i) => ({ ...st, id: `i${i + 1}`, unit: units.value[String(i + 1)] ?? null })), builtAt: new Date().toISOString() };
+  store.setInferredMethod(L, m);
+  console.log(`Method, read from your pieces (you wrote none): ${m.steps.length} step(s), followed as your habit on every run and made a rule of nothing; write them yourself with atelier method <file> to make them yours. ${argv.includes('--report') ? `\n${m.steps.map((st) => `  ${st.id.slice(1)}. ${st.text}  (as in "${st.quote.slice(0, 80)}")`).join('\n')}` : ''}`);
+  return m;
+}
+
 function compositeVoice(c: CompositeRecord, v: StandardVersion, budget: number | null, form: PieceForm): Voice | null {
   const pathsFile = runFile('corpus-paths.json');
   if (!existsSync(pathsFile)) return null;
@@ -364,6 +511,9 @@ function amendedFrom(L: store.StoreLayout, closed: StandardVersion): StandardVer
 export async function build(nameArg?: string, opts: { closing?: boolean } = {}): Promise<void> {
   let s = loadSession();
   const name = skillNameFrom(nameArg ?? flag('--name') ?? die('--name required'));
+  // The stages of this build, for its receipt (core/state/receipt.ts): a command that orchestrates this one has begun
+  // recording; a build on its own starts the record here.
+  if (!orchestrated()) resetStages();
   // THE FIRST THING A NEW USER HITS IF THEY RUN THIS TOO EARLY, so it says what to do rather than
   // what failed. It used to surface a raw ENOENT with an absolute store path — technically accurate,
   // and useless to someone who has simply not minted a standard yet.
@@ -457,7 +607,7 @@ export async function build(nameArg?: string, opts: { closing?: boolean } = {}):
     if (ex.trim().toLowerCase() === 'none') exemplar = null;
     else {
       if (!existsSync(ex)) die(`--exemplar: there is no file at ${ex}.`);
-      const text = readFileSync(ex, 'utf8');
+      const { text, request: exRequest } = splitRequest(readFileSync(ex, 'utf8'));
       // Compared as text, not bytes: a copy with a BOM, Windows line ends or other whitespace is the same piece.
       const norm = (t: string): string => t.replace(/^\uFEFF/, '').normalize('NFC').replace(/\r\n?/g, '\n').replace(/\s+/g, ' ').trim();
       if (s.reservation?.reserved.some((u) => norm(u.artifact) === norm(text))) {
@@ -472,7 +622,7 @@ export async function build(nameArg?: string, opts: { closing?: boolean } = {}):
         console.log(`Note: the exemplar breaks ${broken.map((c) => `${c.requirementId} (${c.result.detail})`).join(', ')}. `
           + 'The model will imitate it as it is.');
       }
-      exemplar = { text };
+      exemplar = { text, ...(exRequest ? { request: exRequest } : {}) };
       console.log('The exemplar is installed with the skill (examples/exemplar.md). If the skill directory is committed, so is the piece.');
     }
   }
@@ -504,9 +654,29 @@ export async function build(nameArg?: string, opts: { closing?: boolean } = {}):
   const contrast = { off: contrastOff, pairs: contrastOff ? [] : contrastFor(chosenPairs, v) };
   const shipped = contrast.pairs;
   if (shipped.length) console.log(`Contrast examples: ${shipped.length} "write this, not that" pair(s) from past repairs (examples/contrast.md). Turn off with --contrast none.`);
-  const voice = await chooseVoice(L, v);
+  // THE OWNER'S METHOD, served whole (`--method-text <file>` from `atelier new --method`; kept through every rebuild).
+  const mt = flag('--method-text');
+  let methodText = store.getMethod(L);
+  if (mt !== undefined) {
+    if (mt.trim().toLowerCase() === 'none') methodText = null;
+    else { if (!existsSync(mt)) die(`--method-text: there is no file at ${mt}.`); methodText = { text: readFileSync(mt, 'utf8') }; }
+  }
+  // WHAT FORM THE WORK TAKES decides how it is compiled (replies or documents): read from the examples, before the voice
+  // is chosen, and carried with it (core/observers/work-form.ts).
+  const form = await workFormFor(L, v, methodText, exemplar);
+  const voice0 = await chooseVoice(L, v, form);
+  const voice = voice0 ? { ...voice0, form } : null;
+  // THE AUTHOR'S MOVES, compiled from the persona (core/compiler/moves.ts): a profile beside the voice, never in the
+  // package or the standard, read once per persona. A review builds nothing and reads nothing.
+  // THE METHOD THE PIECES FOLLOW, when the owner wrote none (core/method/infer.ts): read once per corpus, kept beside the
+  // skill for the brief and the moves to use, never a requirement; --no-infer-method leaves it out; a review reads nothing.
+  const inferred = argv.includes('--review') ? store.getInferredMethod(L) : await inferredMethodFor(L, methodText, desc);
+  const moves = argv.includes('--review') ? null : await movesFor(L, voice, methodText ?? (inferred?.steps.length ? { text: noteOf(inferred.steps) } : null));
   if (!argv.includes('--review')) reportOwnPieces(v, name, s);
-  const pkg0 = renderAgentSkill(v, arch, name, desc, exemplar, shipped, voice);
+  // THE SKILL WORDS EACH POINT BY ITS COUNT: the persona's points carry the rates the profile measured (never the
+  // reading's own word for how often) where a profile was read; the voice on disk is unchanged.
+  const served = voice?.persona && moves ? { ...voice, persona: { ...voice.persona, points: pointsWithRates(voice.persona.points, moves) } } : voice;
+  const pkg0 = renderAgentSkill(v, arch, name, desc, exemplar, shipped, served, methodText);
   const skill = { skillVersionHash: sha(`${arch.architectureHash}|${pkg0.packageHash}`), skillName: name,
     standardVersionHash: v.standardVersionHash, architectureHash: arch.architectureHash, materializedHash: pkg0.packageHash, builtAt: new Date().toISOString(), description: desc };
 
@@ -545,7 +715,7 @@ export async function build(nameArg?: string, opts: { closing?: boolean } = {}):
   if (s.ledger?.records.some((r) => r.resultingStandardVersionHash === v.standardVersionHash)) {
     store.putLedger(L, v.standardVersionHash, s.ledger);
   }
-  store.putStandard(L, v); store.putSkillVersion(L, skill); store.putArchitecture(L, arch); store.putPackage(L, pkg0); store.setActive(L, skill.skillVersionHash);
+  store.putStandard(L, v); store.putSkillVersion(L, skill); store.putArchitecture(L, arch); store.putPackage(L, pkg0);
   // THE AUTHOR'S STANDARD WORDING, read over every piece of theirs that can still be read (those held back
   // included: a clause they use anywhere is theirs). Kept with the stored voice for the copying check and never
   // written into a package. Where the pieces cannot be read, what an earlier build found is kept.
@@ -561,13 +731,41 @@ export async function build(nameArg?: string, opts: { closing?: boolean } = {}):
   const storedVoice = voice ? { ...(voiceWithout as typeof voice), ...(standardWording.length ? { standardWording } : {}), ...(span ? { lengthSpan: span, lengthPieces } : {}), ...(among !== null ? { sharedAmong: among } : {}) } : voice;
   // The composite the owner chose (core/composite), kept with the skill as data; null for a skill of one author.
   if (s.evidence) store.setComposite(L, s.composite ?? null);
-  store.setExemplar(L, exemplar?.text ?? null); store.setVoice(L, storedVoice); store.setDocClass(L, docClass); store.setContrast(L, { off: contrastOff, pairs: chosenPairs });
-  // The author's signals, read off their pieces against the model's drafts at discovery (never a rule).
-  if (existsSync(runFile('signals.json'))) store.setSignals(L, readJson<StoredSignal[]>(runFile('signals.json'), { what: 'the discovered signals', kind: 'array' }));
+  store.setExemplar(L, exemplar?.text ?? null, exemplar?.request ?? null); store.setMethod(L, methodText?.text ?? null); store.setVoice(L, storedVoice); store.setDocClass(L, docClass); store.setContrast(L, { off: contrastOff, pairs: chosenPairs });
   // The fidelity profile and the first implementation release (cli/fidelity.ts): what steers drafts toward
-  // the author's range, below the standard and never able to move it.
-  const release = installFidelity(L, v, skill.skillVersionHash);
-  if (release) console.log(`Implementation release ${release.id}: ${release.settings.drafts} drafts, up to ${release.settings.editBudget} structural edit(s)${release.retrievalHash ? `, ${release.settings.retrievalK} of your passages retrieved per request` : ''}.`);
+  // the author's range, below the standard and never able to move it. Only a profile of this build's sealed corpus:
+  // one another build left in the run folder is set aside (`quarantineRunFiles`), and the signals written with it too.
+  // A profile is installed only for the pieces it names: discovery's under the sealed corpus's hash, a method build's
+  // under the hash of the pieces as read (cli/commands/method.ts, cli/corpus.ts `corpusHashOf`).
+  const unsealed = s.evidence ? [] : sessionCorpus().map(withoutFrontMatter);
+  const expectCorpus = s.evidence?.corpusHash ?? (unsealed.length ? corpusHashOf(unsealed) : null);
+  const hadProfile = existsSync(runFile('fidelity.json')); const hadSignals = existsSync(runFile('signals.json'));
+  const release = installFidelity(L, v, skill.skillVersionHash, expectCorpus);
+  const aside = lastSetAside();
+  if (hadProfile && !release && aside.length) console.log(`(a fidelity profile in this project's run folder is not from these pieces: set aside as fidelity.stale.json, not installed.)`);
+  if (release) console.log(`Implementation release ${release.id}: ${release.settings.drafts} drafts${release.settings.drafts > 1 ? ' (the first alone when it holds every rule)' : ''}, up to ${release.settings.editBudget} structural edit(s)${release.retrievalHash ? `, ${release.settings.retrievalK} of your passages retrieved per request` : ''}.`);
+  const installed = release ? fstore.getProfile(L) : null;
+  recordStage('profile', installed ? { ran: true, detail: `${installed.bands.filter((b) => b.cls === 'all').length} feature(s) banded` }
+    : { ran: false, why: hadProfile ? 'a profile in the run folder was not from these pieces: set aside' : s.evidence ? 'discovery wrote no profile'
+      : unsealed.length && unsealed.length < SELECTION.minRead ? `fewer than ${SELECTION.minRead} pieces: no bands` : unsealed.length ? 'no profile was written for these pieces' : 'no pieces: no bands' });
+  // The author's signals, read off their pieces against the model's drafts at discovery (never a rule): installed with
+  // the profile they were written beside, never without it.
+  if (release && existsSync(runFile('signals.json'))) store.setSignals(L, readJson<StoredSignal[]>(runFile('signals.json'), { what: 'the discovered signals', kind: 'array' }));
+  recordStage('signals', release && hadSignals ? { ran: true, detail: `${store.getSignals(L).length} signal(s)` } : { ran: false, why: hadSignals ? 'set aside with the profile' : installed ? 'fewer than 2 model drafts' : 'no model drafts to compare with' });
+  recordStage('contrast', installed?.detector ? { ran: true, detail: `${installed.detector.trainedOn.model} model draft(s)` } : { ran: false, why: s.evidence ? 'no model drafts' : 'no model-read corpus: a method, stated rules, or fewer than four pieces' });
+  recordStage('method', methodText ? { ran: true, detail: `${stepsOf(methodText.text).length} step(s) served whole` }
+    : inferred?.steps.length ? { ran: true, detail: `${inferred.steps.length} step(s) read from your pieces, not confirmed: the brief follows them as your habit, no rule is made of them` }
+    : { ran: false, why: argv.includes('--no-infer-method') ? 'no method note (--no-infer-method)' : NO_MODEL() ? 'no method note, and no model to read one off the pieces' : 'no method note, and the pieces share no method a reading could show' });
+  const counted = v.requirements.filter((r) => r.wordedFromCheck && r.authority !== 'EXPERT_REJECTED').length;
+  recordStage('counted', counted ? { ran: true, detail: `${counted} rule(s) counted off the pieces` } : { ran: false, why: 'nothing counted off the pieces' });
+  // THE RECEIPT, THEN THE SWITCH. Everything the version needs is in place before the active pointer moves to it, so a
+  // build that stops part-way leaves the skill that was active, whole.
+  const receipt = receiptOf({ skillVersionHash: skill.skillVersionHash, standardVersionHash: v.standardVersionHash, architectureHash: arch.architectureHash, packageHash: pkg0.packageHash,
+    corpusHash: expectCorpus, methodHash: methodText ? sha(methodText.text) : null, models: { contextReader: NO_MODEL() ? 'none' : contextReaderModel() ?? 'none' }, movesHash: moves?.hash ?? null, stages: stagesSoFar(), builtAt: new Date().toISOString() });
+  store.putReceipt(L, receipt);
+  // Said in the whole account and by `status`; under `atelier new` the short screen stays the owner's.
+  if (!orchestrated() || argv.includes('--report')) console.log(describeStages(receipt.stages));
+  store.setActive(L, skill.skillVersionHash);
 
   // ── IMPROVE: WRITE INTO THE USER'S OWN SKILL ───────────────────────────────────────────────
   //
@@ -805,4 +1003,47 @@ function reportObservedBoundaries(arch: SkillArchitecture, v: StandardVersion, n
     console.log(`\nIf one is right: atelier confirm --skill ${name} --rule <id>   (it starts shaping the writing)`);
     console.log(`If one is wrong: atelier confirm --skill ${name} --rule <id> --drop`);
   }
+}
+
+/**
+ * THE FORM OF THE WORK, READ ONCE AND KEPT. The owner's word (`--work-form reply|document`) first; then what was read
+ * before, unless `--persona auto` asks for every reading again; else the reading: code where the examples are decisive,
+ * the context reader otherwise, the name of the work as the floor with no model. Said in one line, with who decided.
+ */
+async function workFormFor(L: store.StoreLayout, v: StandardVersion, method: { text: string } | null, exemplar: { text: string; request?: string } | null): Promise<WorkForm> {
+  const asked = flag('--work-form')?.trim().toUpperCase();
+  if (asked !== undefined) {
+    if (asked !== 'REPLY' && asked !== 'DOCUMENT') die('--work-form takes reply or document.');
+    const chosen: WorkForm = asked === 'REPLY' ? 'REPLY' : 'DOCUMENT';
+    store.setWorkForm(L, chosen);
+    console.log(`Work form: ${chosen === 'REPLY' ? 'replies in a conversation' : 'documents'}, as you said.`);
+    recordStage('work-form', { ran: true, detail: chosen === 'REPLY' ? 'replies' : 'documents' });
+    return chosen;
+  }
+  const stored = store.getWorkForm(L);
+  if (stored && flag('--persona')?.trim().toLowerCase() !== 'auto') { recordStage('work-form', { ran: true, detail: stored === 'REPLY' ? 'replies' : 'documents' }); return stored; }
+  const fromSession = sessionPairs().map((p) => ({ text: withoutFrontMatter(p.text), request: p.request }));
+  const storedPieces = store.getVoice(L)?.pieces ?? [];
+  // The one worked example counts as evidence too: a single sectioned piece is a document.
+  const examples = fromSession.length ? fromSession : storedPieces.length ? storedPieces.map((t) => ({ text: withoutFrontMatter(t), request: null })) : exemplar ? [{ text: exemplar.text, request: exemplar.request ?? null }] : [];
+  const input = { workType: v.workType, examples, method: method?.text ?? null };
+  const model = NO_MODEL() ? null : contextReaderModel();
+  const d = await readContext(WORK_FORM, input, NO_MODEL() ? null : contextReaderClient(), model, { spentUsd: 0, capUsd: 0.2, maxCalls: 1 });
+  // `--review` writes nothing: the reading is made and said, and kept only by a build that commits.
+  if (!argv.includes('--review')) store.setWorkForm(L, d.value);
+  recordStage('work-form', { ran: true, detail: d.value === 'REPLY' ? 'replies' : 'documents' });
+  // A READER THAT CANNOT BE REACHED IS NOT ASKED AGAIN THIS BUILD. A key set for a backend that answers nothing made every
+  // reading after this one wait its own retries out (a minute, for a build that needs none of them): the first failure
+  // turns the rest of the build's readings off, said once, and the build finishes as a build with no model does.
+  if (d.by === 'floor' && d.why?.startsWith('the reader could not be asked')) {
+    process.env.ATELIER_BUILD_NO_MODEL = '1';
+    console.log(`(${d.why}; nothing else in this build asks a model.)`);
+  }
+  const how = d.by === 'code' ? 'every example is written under sections'
+    : d.by === 'model' ? `read from ${examples.length ? `${Math.min(examples.length, 8)} of your examples` : 'how the work is described'} by ${model}`
+      : `from the name of the work alone (${d.why})`;
+  // What a model read is said on the short screen; what code saw or the name decided is in the whole account.
+  console.log(d.by === 'model' ? `Work form: ${d.value === 'REPLY' ? 'replies in a conversation' : 'documents'}; ${how}. Say otherwise with --work-form reply|document.`
+    : `(work form: ${d.value === 'REPLY' ? 'replies in a conversation' : 'documents'}, ${how}; --work-form reply|document says otherwise.)`);
+  return d.value;
 }

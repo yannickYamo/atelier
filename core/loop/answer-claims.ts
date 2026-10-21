@@ -16,7 +16,7 @@
 // "orders_legacy". Each is judged against what the person supplied (the request, bound material): a
 // detail they gave is theirs to have repeated.
 
-import { claimUnitsOf, type Claim } from './claims.js';
+import { claimUnitsOf, LINE_REF, IN_A_NAME, type Claim } from './claims.js';
 import { numbersIn } from './claim-extract.js';
 
 const WORK_DONE = /^\W*(?:fixed|checked|verified|tested|ran|done|updated|deployed|applied|migrated|confirmed|reproduced|patched)\b|\bI(?:['’]ve| have)?\s+(?:ran|run|checked|verified|tested|fixed|updated|deployed|applied|reproduced|confirmed|changed|edited|patched|migrated|backfilled)\b|\b(?:now (?:passes|returns|works|succeeds)|returns? 200 now|(?:all )?tests? (?:now )?pass(?:es|ed)?|all green)\b/i;
@@ -41,18 +41,30 @@ const SPECIFIC = (id: string): boolean => /[\w][_:.-][\w]/.test(id) && !COMMON_N
  */
 export function answerWorkClaims(text: string, known: string, flagged: readonly Claim[]): Claim[] {
   const k = known.toLowerCase();
-  const knownFigures = new Set(numbersIn(known));
+  const knownFigures = new Set([...numbersIn(known), ...hunkLines(known)]);
   const out: Claim[] = [];
   for (const u of claimUnitsOf(text)) {
     // The unit's own text has inline code blanked out; the identifiers are the point here, so the
     // original is read at the unit's offsets.
     const s = text.slice(u.start, u.end);
-    const work = WORK_DONE.test(s) || (RESULT_WORDS.test(s) && numbersIn(s).some((n) => !knownFigures.has(n)));
+    // A RESULT IS A FIGURE OF PROGRESS, NOT A LINE CITED. "**orders.py:42** — the status is written straight onto the
+    // column" has "written" and a number, and read as "1.1M rows written" on nine of twenty reviews in a study: the
+    // number was the line the finding cites. A line reference, a number inside a name, and a line inside a hunk the
+    // material shows are not figures of result (the stated-figure listing already strips the first two).
+    const figures = numbersIn(s.replace(LINE_REF, ' ').replace(IN_A_NAME, ' '));
+    const work = WORK_DONE.test(s) || (RESULT_WORDS.test(s) && figures.some((n) => !knownFigures.has(n)));
     const why = work ? 'a claim of work done or a result seen, which the request did not report' : environmentIdentifier(s, k);
     if (!why) continue;
     const reused = flagged.find((c) => c.start === u.start);
     out.push(reused ? { ...reused, kind: 'EXPERIENCE', why } : { start: u.start, end: u.end, text: u.text, kind: 'EXPERIENCE', why });
   }
+  return out;
+}
+
+/** The line numbers a diff's hunk headers in `known` cover ("@@ -18,0 +18,28 @@" covers 18 to 45): lines a review may cite. */
+export function hunkLines(known: string): string[] {
+  const out: string[] = [];
+  for (const m of known.matchAll(/^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/gm)) { const start = Number(m[1]); const n = m[2] === undefined ? 1 : Number(m[2]); for (let i = 0; i < Math.min(n, 5000); i++) out.push(String(start + i)); }
   return out;
 }
 
@@ -76,6 +88,25 @@ function environmentIdentifier(s: string, known: string): string | null {
 export const answerSentences = (text: string): string[] => claimUnitsOf(text).map((u) => text.slice(u.start, u.end));
 
 /**
+ * THE PATTERN ALONE LISTS; THE PATTERN AND THE JUDGE TOGETHER CUT. On an answer the pattern's work claims were cut on
+ * their own, and on review prose they read "This change adds a method on the settings" as work the assistant did and
+ * "a file claiming 500 rows and supplying 3 is accepted" as a result seen (14 of 34 reviews in a study, every one the
+ * description of the change under review). Where the context judge read the same sentences and did not read them as
+ * work claimed, the pattern's claim is listed for the person and not cut; where both read it so, it is cut as before.
+ * With no judge reading (no model, or not read), the pattern decides alone, as it did. An identifier from the person's
+ * system that nothing given shows stays the pattern's to cut: the judge does not read for that.
+ */
+export function agreedWorkClaims(text: string, workClaims: readonly Claim[], judged: ReadonlySet<number> | null): { readonly cut: Claim[]; readonly listed: Claim[] } {
+  if (judged === null) return { cut: [...workClaims], listed: [] };
+  const units = claimUnitsOf(text);
+  const starts = new Set([...judged].map((i) => units[i]?.start).filter((s): s is number => s !== undefined));
+  const isWork = (c: Claim): boolean => c.why.startsWith('a claim of work done or a result seen');
+  const cut = workClaims.filter((c) => !isWork(c) || starts.has(c.start));
+  const listed = workClaims.filter((c) => !cut.includes(c)).map((c) => ({ ...c, why: `${c.why} (read so by the pattern alone; the context judge did not read it as work claimed: listed for you to check)` }));
+  return { cut, listed };
+}
+
+/**
  * The sentences the context judge read as work done or results that the patterns did not: listed for the
  * person to check, never cut. The judge is not measured (./cut-authority.ts), so it may flag, not delete.
  */
@@ -84,4 +115,16 @@ export function judgedOnly(text: string, judged: ReadonlySet<number> | null, cut
   const units = claimUnitsOf(text);
   return [...judged].map((i) => units[i]).filter((u): u is NonNullable<typeof u> => Boolean(u) && !cutByPattern.some((c) => c.start === u.start))
     .map((u) => ({ start: u.start, end: u.end, text: u.text, kind: 'EXPERIENCE' as const, why: 'may claim work done or a result seen (read by the context judge, not measured): check it' }));
+}
+
+/**
+ * The units the context judge read as stating the person's situation beyond what the request and its material show (a
+ * cause, a setting, a state): listed, never cut. A judge's reading that nobody has qualified can only point, and the
+ * person decides; a sentence already found by the patterns or as work claimed is not listed twice.
+ */
+export function judgedSituations(text: string, judged: ReadonlySet<number> | null, already: readonly { start: number }[]): Claim[] {
+  if (!judged?.size) return [];
+  const units = claimUnitsOf(text);
+  return [...judged].sort((a, b) => a - b).map((i) => units[i]).filter((u): u is NonNullable<typeof u> => Boolean(u) && !already.some((c) => c.start === u.start))
+    .map((u) => ({ start: u.start, end: u.end, text: u.text, kind: 'FIGURE' as const, why: 'states as fact something of your situation that your request and material do not show (read by the context judge, not measured): check it, or say it as an assumption' }));
 }

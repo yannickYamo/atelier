@@ -4,7 +4,7 @@
 // the documented defaults (κ = 2 per dollar, four steps, $0.05 a rewrite, $0.40 a draft) and the EWMA weight 0.2, not
 // read back from the code.
 import { describe, it, expect } from 'vitest';
-import { decide, sizedAction, carriersFor, controllerRecord, joinRecords, askedForRedraft, describeController, CONTROLLER_DEFAULTS, type ControllerInput } from '../core/loop/controller.js';
+import { decide, sizedAction, carriersFor, controllerRecord, askedForRedraft, describeController, CONTROLLER_DEFAULTS, type ControllerInput } from '../core/loop/controller.js';
 import { summariseEffects, type EffectSource } from '../core/fidelity/estimator.js';
 import { refineToStandard } from '../core/loop/run-repair.js';
 import { processSpendByPurpose, spendBetween, type InferenceClient } from '../core/inference/client.js';
@@ -128,7 +128,7 @@ describe('the record', () => {
     const a = controllerRecord([step('rewrite', ['r'], 'kept', 2, 0.001), step('redraft', ['g'], 'handed to a redraft', 0, 0, 0)], 'handed to a redraft: far');
     expect(a).toMatchObject({ policy: 'bounded-v1', callsUsed: 1, usdUsed: 0.001 });
     expect(askedForRedraft(a)).toBe(true);
-    const j = joinRecords(a, step('redraft', ['g'], 'kept', 1, 0.002), controllerRecord([], 'every enforced rule holds and nothing graded is off'));
+    const j = controllerRecord([...a.decisions, step('redraft', ['g'], 'kept', 1, 0.002)], 'every enforced rule holds and nothing graded is off');
     expect(j.decisions.map((d) => d.action)).toEqual(['rewrite', 'redraft', 'redraft']);
     expect(j).toMatchObject({ callsUsed: 2, usdUsed: 0.003, stoppedBecause: 'every enforced rule holds and nothing graded is off' });
     expect(askedForRedraft(j)).toBe(false);

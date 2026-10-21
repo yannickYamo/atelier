@@ -43,6 +43,29 @@ describe('the card, layer by layer', () => {
     expect(out).toContain('Next: read what is marked ~ and ?. You would use it: atelier rate i9 yes');
     expect(out).toContain('Not right: atelier fix "<what was wrong>" writes this piece again');
   });
+  it('a reader the owner\'s labels have qualified establishes the part no count reads: VERIFIED is reachable; without VETO nothing moves; read as missed, it fails', () => {
+    const held = [checked[0], { ...checked[1], verdict: 'MET' as const, detail: '400 words' }];
+    const read = (acts: boolean, verdict: string) => new Map([['x1', { verdict, quote: 'The parties are Kelp Ltd and Fennel GmbH.', why: 'both named as in the sheet', acts }], ['x8', { verdict, why: 'every name is the sheet\'s', acts }]]);
+    // VETO earned on both: the partly checked rule and the judgement rule are established in full, and the run is VERIFIED
+    const v = buildRecord({ requirements: reqs, checked: held, waived: new Map(), request: null, claims: null, copying: null, read: read(true, 'FOLLOWED') });
+    expect(v.state, JSON.stringify(v.entries.map((e) => [e.id, e.result, e.reason, e.observation.coverage, e.observation.qualification]))).toBe('VERIFIED');
+    const x1 = v.entries.find((e) => e.id === 'x1')!;
+    expect(x1.result).toBe('PASS'); expect(x1.observation).toMatchObject({ coverage: 'FULL', qualification: 'QUALIFIED' });
+    expect(x1.observation.evidence).toContain('read as followed by the taste reader on "names both parties exactly as the term sheet does"');
+    expect(x1.observation.evidence).toContain('"The parties are Kelp Ltd and Fennel GmbH."');
+    expect(v.entries.find((e) => e.id === 'x8')!.result).toBe('PASS');
+    // the same readings without VETO: reported elsewhere, and the record stands as the check left it
+    const n = buildRecord({ requirements: reqs, checked: held, waived: new Map(), request: null, claims: null, copying: null, read: read(false, 'FOLLOWED') });
+    expect(n.state).toBe('NEEDS_REVIEW'); expect(n.entries.find((e) => e.id === 'x1')!.reason).toBe('PARTLY_CHECKED');
+    // read as missed by a reader that acts: the rule is seen to fail
+    const m = buildRecord({ requirements: reqs, checked: held, waived: new Map(), request: null, claims: null, copying: null, read: read(true, 'MISSED') });
+    expect(m.state).toBe('BLOCKED'); expect(m.entries.find((e) => e.id === 'x1')!.result).toBe('FAIL');
+    // UNCLEAR, or a rule set aside, or a rule held back for material, is never touched by a reading
+    const u = buildRecord({ requirements: reqs, checked: held, waived: new Map(), request: null, claims: null, copying: null, read: read(true, 'UNCLEAR') });
+    expect(u.state).toBe('NEEDS_REVIEW');
+    const w = buildRecord({ requirements: [reqs[0]], checked: [], waived: new Map([['x1', 'set aside for this request']]), request: null, claims: null, copying: null, read: read(true, 'FOLLOWED') });
+    expect(w.entries[0].result).toBe('NOT_APPLICABLE');
+  });
   it('a rule set aside for the run is shown as not checked, with why, and is the owner\'s to look at', () => {
     const r = buildRecord({ requirements: [reqs[1]], checked: [], waived: new Map([['x7', 'the request states its own length (600 words)']]), request: null, claims: null, copying: null });
     expect(r.state).toBe('NEEDS_REVIEW');

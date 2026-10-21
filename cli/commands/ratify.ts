@@ -11,8 +11,9 @@
 // read a machine proposal and a human ruling as steps in a single automated flow. They are not.
 
 import { suggestAll } from '../../core/ratification/suggest.js';
-import { validateMeasurement, observerFor } from '../../core/observers/registry.js';
-import type { Measurement, ObserverId } from '../../core/state/canonical-state.js';
+import { observerFor } from '../../core/observers/registry.js';
+import { parseMeasureSpec } from '../../core/measurement/spec.js';
+import type { Measurement } from '../../core/state/canonical-state.js';
 import { renderRatifyPage } from '../../renderers/ratify-page/render.js';
 import { coverageOf, describeCoverage } from '../../core/coverage/standard-coverage.js';
 import { blindSpotsOf, BLIND_SPOT_QUESTION } from '../../core/coverage/blind-spot.js';
@@ -401,66 +402,9 @@ export function ratifyOne(): void {
  * Declared, never inferred: the statement's words are not read to decide whether it is measurable.
  */
 export function parseMeasure(spec: string): Measurement {
-  const i = spec.indexOf(':');
-  const observer = (i === -1 ? spec : spec.slice(0, i)).trim().toUpperCase() as ObserverId;
-  const rest = i === -1 ? '' : spec.slice(i + 1);
-  // STRICT. `medianMax=` read as 0, `0x10` as 16 and `15=20` as 15; a target a person did not mean
-  // is worse than a refusal, because it is enforced on every output from then on.
-  if (observer === 'STYLE_DISTANCE') die('--measure: STYLE_DISTANCE is computed from your corpus by discovery, not declared by hand.');
-  const KEYS: Readonly<Record<string, readonly string[]>> = {
-    SENTENCE_LENGTH: ['medianMax', 'p90Max'], PARAGRAPH_LENGTH: ['maxSentences'], HEDGE_RATE: ['maxPer1000'],
-    PATTERN_RATE: ['pattern', 'minPer1000', 'maxPer1000', 'prefer'], FRAGMENT_SHARE: ['maxWords', 'maxShare'],
-    TERM_RATE: ['terms', 'minPer1000', 'maxPer1000'], RATIO: ['numerator', 'denominator', 'minShare', 'maxShare'],
-    DISTRIBUTION: ['edges', 'shares', 'tolerance'],
-    OPENING: ['avoid', 'minWords', 'maxWords'], CLOSING: ['avoid', 'minWords', 'maxWords'],
-    HEADINGS: ['avoid', 'case', 'maxWords', 'minPer1000', 'maxPer1000'], RHYTHM: ['unit', 'minCv', 'maxCv'],
-    FEATURE: ['feature', 'minValue', 'maxValue'], PRESENCE: ['sections', 'in', 'any', 'min', 'figure', 'starts', 'body', 'opens', 'closes', 'labels', 'options'],
-    TABLE: ['columns', 'minRows'], CITED: ['allow'], LINES: ['min', 'perItem', 'sections'], LENGTH: ['unit', 'min', 'max', 'in', 'labels', 'need', 'sections'], NAMES_TEST: [],
-    SHAPE: ['shape', 'kinds', 'min', 'max', 'urlChars'],
-    GRAMMAR: ['dialect', 'vocabulary'] };
-  const TEXT_KEYS = new Set(['pattern', 'prefer', 'case', 'unit', 'in']);
-  // A shape and its kinds are case-sensitive ids (core/observers/shape.ts): `characters`, `claim`.
-  const ID_LIST_KEYS = new Set(['shape', 'kinds']);
-  // Word lists, "|"-separated: TERM_RATE:terms=but|so,minPer1000=4. Kept as written, lower-cased.
-  const LIST_KEYS = new Set(['vocabulary', 'terms', 'numerator', 'denominator', 'avoid', 'sections', 'any', 'starts', 'columns', 'options']);
-  // Number lists, "/"-separated: DISTRIBUTION:edges=8/20/35,shares=0.3/0.4/0.2/0.1,tolerance=0.2.
-  const NUMBER_LIST_KEYS = new Set(['edges', 'shares']);
-  const params: Record<string, number | string[] | number[]> = observer === 'LEXICON'
-    ? { terms: rest.split('|').map((t) => t.trim()).filter(Boolean) }
-    : Object.fromEntries(rest.split(',').filter((kv) => kv.trim()).map((kv): [string, number | string[] | number[]] => {
-      const eq = kv.indexOf('=');
-      const k = kv.slice(0, eq).trim(); const v = kv.slice(eq + 1);
-      if (eq === -1 || !k) die(`--measure: "${kv}" is not name=value`);
-      if (KEYS[observer] && !KEYS[observer].includes(k)) die(`--measure: ${observer} takes ${KEYS[observer].join(', ')}; not "${k}"`);
-      // `prefer` keeps its spaces: " - " is the point of it.
-      if (TEXT_KEYS.has(k)) return [k, [k === 'prefer' ? v : v.trim().toUpperCase()]];
-      // A feature id is case-sensitive (core/observers/features.ts), and its band may sit below zero.
-      if (k === 'feature') return [k, [v.trim()]];
-      // A dialect is a word the grammar observer reads lower-case: GRAMMAR:dialect=british.
-      if (k === 'dialect') return [k, [v.trim().toLowerCase()]];
-      if (ID_LIST_KEYS.has(k)) return [k, v.split('|').map((t) => t.trim()).filter(Boolean)];
-      if (observer === 'FEATURE') {
-        if (!/^-?\d+(\.\d+)?$/.test(v.trim())) die(`--measure: "${kv}" is not name=number`);
-        return [k, Number(v)];
-      }
-      if (LIST_KEYS.has(k)) return [k, v.split('|').map((t) => t.trim().toLowerCase()).filter(Boolean)];
-      if (NUMBER_LIST_KEYS.has(k)) {
-        const xs = v.split('/').map((t) => t.trim());
-        if (!xs.every((t) => /^\d+(\.\d+)?$/.test(t))) die(`--measure: "${kv}" is not name=number/number/...`);
-        return [k, xs.map(Number)];
-      }
-      if (!/^\d+(\.\d+)?$/.test(v.trim())) die(`--measure: "${kv}" is not name=number`);
-      const n = Number(v);
-      // Zero is a real target for a rate cap and for a share bound; for a length it describes no text.
-      // (And a shape's "none": SHAPE:shape=hashtags,max=0 is a count of zero hashtags.)
-      const zeroOk = n === 0 && (['HEDGE_RATE', 'PATTERN_RATE', 'TERM_RATE', 'LINES', 'SHAPE'].includes(observer) || ['minShare', 'maxShare', 'minPer1000', 'maxPer1000', 'minWords'].includes(k));
-      if (n <= 0 && !zeroOk) die(`--measure: ${k} must be greater than zero`);
-      return [k, n];
-    }));
-  const m: Measurement = { observer, params };
-  const problem = validateMeasurement(m);
-  if (problem) die(`--measure ${spec}: ${problem}`);
-  return m;
+  const parsed = parseMeasureSpec(spec);
+  if (parsed.measurement) return parsed.measurement;
+  return die(`--measure ${spec}: ${parsed.problem}`);
 }
 
 export function addOne(): void {
@@ -549,8 +493,10 @@ export function ratifyClose(): void {
       + '\n  atelier ratify-close --reason "<why the standard changed>"'
       + '\nA version history without reasons can be counted, not audited.');
   }
+  // A WRITTEN CHECK'S STANDING RIDES BESIDE THE STANDARD, outside the hash (core/state/canonical-state.ts, `qualifications`).
+  const qualifications = Object.fromEntries(Object.entries(s.qualifications ?? {}).filter(([id]) => kept.some((r) => r.requirementId === id)));
   const v: StandardVersion = { standardVersionHash: hash, ...body, authorityState: authorityStateOf(kept), mintedAt: new Date().toISOString(),
-    supersedes, reason };
+    supersedes, reason, ...(Object.keys(qualifications).length ? { qualifications } : {}) };
   s = step(s, 'RATIFIED', { standardVersionHash: v.standardVersionHash, supersedes });
   // The decisions are stamped with the version they produced, and the ledger is written beside the
   // standard rather than inside it. A standard says what is; the ledger says who decided it and what

@@ -453,17 +453,19 @@ describe('the audit of the invented-claim check', () => {
   });
 
   describe('4. only a qualified instrument may cut', () => {
-    it('production: the list holds the measured pairs, the shipped decision-3 reader among them (studies/CLAIM_READER_V3_QUALIFICATION_RESULT.md)', () => {
+    it('production: the list holds the measured pairs; decision 4 is unmeasured until its study, so no shipped reader gates (studies/CLAIM_READER_V3_QUALIFICATION_RESULT.md)', () => {
       expect(QUALIFIED_READERS.map(({ model, version }) => ({ model, version }))).toEqual([{ model: 'claude-haiku-4-5', version: '0279163b' }, { model: 'claude-haiku-4-5', version: 'a173339d' }]);
       // each carries the rates it was measured at, and where, for anyone shown its verdict
       expect(QUALIFIED_READERS.find((r) => r.version === 'a173339d')?.measured).toMatchObject({ caught: 46, planted: 46, leftAlone: 39, clean: 48 });
-      expect(DECISION_VERSION).toBe(3);
-      expect(READER_VERSION).toBe('a173339d');
-      expect(isQualified('claude-haiku-4-5')).toBe(true);
+      expect(DECISION_VERSION).toBe(4);
+      expect(READER_VERSION).toBe('47d18891');
+      // a changed decision is a changed instrument: the pairs measured at decision 3 do not qualify it
+      expect(isQualified('claude-haiku-4-5')).toBe(false);
+      expect(isQualified('claude-haiku-4-5', 'a173339d')).toBe(true);
       expect(isQualified('claude-haiku-4-5', '0279163b')).toBe(true);
       expect(isQualified('my-small-model')).toBe(false);
-      // the shipped default reader is the one that cuts
-      expect(modelSensor(scripted([]), { spentUsd: 0, capUsd: 1 }, 'claude-haiku-4-5', ctx).gate).toBe('reader');
+      // the shipped default reader cut at decision 3; at decision 4 it reads and the pattern gates, until the study that measures the pair
+      expect(modelSensor(scripted([]), { spentUsd: 0, capUsd: 1 }, 'claude-haiku-4-5', ctx).gate).toBe('pattern');
     });
 
     it('an unqualified reader reports (PREFERRED, never fails, never repaired); the pattern check gates as UNSOURCED', async () => {
@@ -586,14 +588,14 @@ describe('the audit of the invented-claim check', () => {
         },
         when: [{ contains: '[1] The review took 95 minutes.', answer: { nothing: true } }],
       });
-      // A qualified reader (the model and prompt version a qualification result stands behind) cuts.
+      // Only a qualified reader (the model and prompt version a qualification result stands behind) cuts. At decision 4 none
+      // is measured yet: the shipped reader reads, what it finds is listed, nothing is cut and nothing fails.
       const r = run({ ATELIER_CLAIMS: 'model', ATELIER_CLAIMS_MODEL: 'claude-haiku-4-5' },
         'verify', '--skill', 'house', file, '--repair', '--json', ...remote());
-      const j = JSON.parse(r.out) as { output: string; repair: { storiesCut?: string[]; violatedAfter: string[] } };
-      expect(j.output).not.toContain('95 minutes');
-      expect(j.output).not.toContain('94 minutes');
-      expect(j.repair.storiesCut?.join(' ')).toContain('94 minutes');
-      expect(j.repair.violatedAfter).toEqual([]);
+      const j = JSON.parse(r.out.slice(0, r.out.indexOf('\n}') + 2)) as { output: string; repair: { storiesCut?: string[]; violatedAfter: string[] } | null };
+      expect(j.output).toContain('94 minutes');
+      expect(j.repair?.storiesCut ?? []).toEqual([]);
+      expect(j.repair?.violatedAfter ?? []).toEqual([]);
     });
 
     it('4: an owner override makes an unqualified reader fail the check, never delete', async () => {

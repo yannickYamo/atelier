@@ -109,7 +109,9 @@ export type ObserverId = 'LEXICON' | 'SENTENCE_LENGTH' | 'PARAGRAPH_LENGTH' | 'H
   // the shape of one short piece: characters, words, sentences, line breaks, hashtags, what it opens and closes on (core/observers/shape.ts)
   | 'SHAPE'
   // mechanical errors, found by a grammar engine the process wires in (core/observers/grammar.ts)
-  | 'GRAMMAR';
+  | 'GRAMMAR'
+  // a check a model wrote for one step of a method, run in a sandbox, qualified before it may block (core/observers/written.ts)
+  | 'CHECK';
 export interface Measurement {
   readonly observer: ObserverId;
   readonly params: Readonly<Record<string, number | readonly string[] | readonly number[]>>;
@@ -143,6 +145,28 @@ export function assertAuthorityCeiling(r: Pick<Requirement, 'provenance' | 'auth
       + '(USER_ADOPTED) — that is their decision to make. Claiming it as that author\'s ratified '
       + 'standard is not, and no corpus can supply it.');
   }
+}
+
+/** What kind of thing a step of a method is: an instruction, a template example, an explanation, or a criterion (core/method/decision-units.ts). */
+export type UnitKind = 'instruction' | 'template' | 'explanation' | 'criterion';
+/**
+ * A STEP OF A METHOD, COMPILED FOR EXECUTION (core/method/decision-units.ts): the decision it asks for, what it consults,
+ * when it applies (its own words), what it puts in the work, what changes the default, and which steps come first.
+ * Never a requirement of its own and never a weight, and never inside the standard: a reading of the owner's step, kept
+ * beside the standard version it was read from (core/state/store.ts, `putUnits`), so a reading never moves the
+ * standard's hash. `by` says whether a model read it or the words alone decided (the floor: an instruction, applying
+ * always unless its words, or its heading's, say when).
+ */
+export interface DecisionUnit {
+  readonly kind: UnitKind;
+  readonly decision: string | null;
+  readonly inputs: readonly string[];
+  readonly condition: string | null;
+  readonly output: string | null;
+  readonly exception: string | null;
+  readonly dependsOn: readonly string[];
+  readonly quote: string;
+  readonly by: 'model' | 'floor';
 }
 
 export interface Requirement {
@@ -332,8 +356,24 @@ export function assertRealizationGraph(reqs: readonly Requirement[]): void {
  */
 export type AuthorityState = 'DRAFT' | 'RATIFIED';
 
+/**
+ * WHAT A WRITTEN CHECK EARNED ON THE OWNER'S EXAMPLES (core/method/mutants.ts): every example it reads passed, its own
+ * mutants caught, other steps' mutants left alone. Kept BESIDE the standard, never inside its hash: the hash is what
+ * the owner ratified, and a machine's measurement of a check changes nothing they said. A rebuild that qualifies the
+ * same check differently leaves the standard's identity where it was and says so here.
+ */
+export interface CheckQualification {
+  readonly examples: { readonly passed: number; readonly read: number; readonly of: number };
+  readonly own: { readonly caught: number; readonly of: number };
+  readonly cross: { readonly fired: number; readonly of: number };
+  readonly qualified: boolean;
+  readonly why: string | null;
+}
+
 export interface StandardVersion {
   readonly standardVersionHash: string;
+  /** by requirement id, for the written checks of this standard; absent where none was ever qualified. Not hashed. */
+  readonly qualifications?: Readonly<Record<string, CheckQualification>>;
   /**
    * The sealed corpus this standard was recovered from, when there was one.
    *
@@ -523,6 +563,26 @@ export function assertRequestBound(r: RequestBinding, resolvedTask: string): voi
 export interface InvocationSettings {
   /** the Atelier package version that ran */
   readonly atelierVersion: string;
+  /**
+   * THE CERTIFICATE: what this output was held to and by what, so a reader later can see which standard, which
+   * instruments, and at what measured error. The error bound is null until an audit sample of the owner's own
+   * labels, drawn like production, exists; until then the record says so rather than imply one.
+   */
+  readonly certificate?: {
+    readonly standardVersionHash: string;
+    /** the measured rules: counted by a built-in observer, or a written check, qualified or not */
+    readonly checks: { readonly total: number; readonly counted: number; readonly written: number; readonly writtenQualified: number };
+    /** the readers and what they have earned: VETO on these rules, from this many labelled misses at this false-block bound */
+    readonly readers: {
+      readonly taste: { readonly veto: readonly string[]; readonly labelledMisses: number; readonly falseBlockUpper95: number | null };
+      /** the claim instrument that read this output: what gated, and the rates it was measured at on the kinds it was measured on (none elsewhere) */
+      readonly claims?: { readonly instrument: string; readonly version: string | null; readonly gate: 'reader' | 'pattern'; readonly qualified: boolean;
+        readonly measured: { readonly caught: number; readonly planted: number; readonly leftAlone: number; readonly clean: number; readonly on: string } | null; readonly kinds: readonly string[] } | null;
+    };
+    /** the delivered-error bound on the owner's labels; null, with why, until the audit sample exists */
+    readonly errorBound: { readonly alpha: number; readonly n: number } | null;
+    readonly why: string | null;
+  };
   /** the invented-claim instrument, as it names itself; null when the check was off */
   readonly claimInstrument: string | null;
   /**
@@ -547,7 +607,20 @@ export interface InvocationSettings {
     /** a run made as a test (`invoke --test-run`): recorded like any run, and never a source of what the skill learns from its runs */
     readonly testRun?: boolean;
     /** the note from earlier runs that was served beside the skill (`atelier evolve`), by its hash: two runs of one skill version differ by it */
-    readonly carryNoteHash?: string };
+    readonly carryNoteHash?: string;
+    /** the execution brief (core/loop/execution-brief.ts): who decided it, and the stated steps held as applying, set aside, and left open */
+    readonly brief?: { readonly by: 'code' | 'model' | 'floor'; readonly applies: readonly string[]; readonly setAside: readonly string[];
+      /** steps the reading could not place: held as applying, and said so */
+      readonly unresolved?: readonly string[]; readonly unsupported: readonly string[];
+      /** steps the request asked against: they stand, and the writer was told */
+      readonly contradicted?: readonly string[];
+      /** the writer was served the pieces, the method and the rules with no description of the author (`--examples-first`) */
+      readonly served?: 'examples-first';
+      /** the steps were read off the pieces, not written by the owner (core/method/infer.ts): a habit briefed, never a rule */
+      readonly inferred?: true;
+      /** the author's moves for this request (core/loop/execution-brief.ts, `selectMoves`): the profile they came from, and the mode they were served under */
+      readonly moves?: { readonly by: 'code' | 'model' | 'floor'; readonly mode: 'observe' | 'serve'; readonly profile: string; readonly placed: readonly string[]; readonly standing: readonly string[];
+        readonly notPlaced: readonly string[]; readonly unresolved: readonly string[]; readonly budget: number } } };
 }
 
 export interface InvocationRecord {
@@ -608,6 +681,8 @@ export interface InvocationRecord {
    */
   readonly selection?: { readonly drafts: number; readonly chosen: number; readonly why: string;
     readonly written?: number; readonly failed?: readonly string[];
+    /** planned drafts not written because the first held every rule the drafts are chosen by (cli/commands/improve.ts) */
+    readonly spared?: number;
     readonly unchosen?: readonly string[]; readonly unchosenTruncated?: boolean };
   /** what the run was configured with beyond the binding, so a study arm can be re-run from its record */
   readonly settings?: InvocationSettings;
@@ -865,6 +940,12 @@ export function assertSupersessionRecorded(v: StandardVersion): void {
  * has no write access to any of it. What went away was the click, not the control.
  */
 /** DRAFT the moment anything in it is unconfirmed. Computed at mint; never passed in by a caller. */
+/** The qualifications a supersession keeps: those of the written checks still in it, unchanged. */
+export const carriedQualifications = (prev: Pick<StandardVersion, 'qualifications'>, kept: readonly Requirement[]): Pick<StandardVersion, 'qualifications'> => {
+  const q = Object.fromEntries(Object.entries(prev.qualifications ?? {}).filter(([id]) => kept.some((r) => r.requirementId === id && r.measurement?.observer === 'CHECK')));
+  return Object.keys(q).length ? { qualifications: q } : {};
+};
+
 export const authorityStateOf = (rs: readonly Requirement[]): AuthorityState =>
   rs.some((r) => r.authority === 'DERIVED_UNRATIFIED') ? 'DRAFT' : 'RATIFIED';
 

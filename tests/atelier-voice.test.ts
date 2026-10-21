@@ -10,7 +10,7 @@ import { deriveContrastRules } from '../core/observers/contrast.js';
 import { planRepair, applyRepair, seamRepeat } from '../core/loop/repair.js';
 import { checkDraft } from '../core/loop/run-repair.js';
 import { isGeneralScope, type StandardVersion } from '../core/state/canonical-state.js';
-import { selectVoicePassages } from '../core/compiler/voice.js';
+import { usualLength, type Voice } from '../core/compiler/voice.js';
 import { renderAgentSkill } from '../renderers/agent-skill/render.js';
 import { compileArchitecture } from '../core/architecture/compile.js';
 import { aRequirement } from './fixtures.js';
@@ -110,27 +110,19 @@ describe('P1: the skill carries passages the author wrote', () => {
     `I have thought about ${topic} for a long time, and paragraph ${k} of piece ${i} says so plainly. My view is that ${topic} rewards patience, and I would rather be slow and right than quick and sorry about it later. `
     + `It is not glamorous. But ${topic} is where the work is, and I keep coming back to it.`), `[a link](https://example.com/${topic})`].join('\n\n');
   const pieces = topics.map(piece);
-  const v = selectVoicePassages(pieces);
-  it('chooses up to three prose passages, each from a different piece, without headings, lists or links', () => {
-    expect(v.passages).toHaveLength(3);
-    for (const p of v.passages) {
-      expect(p).not.toMatch(/^#|^- |\]\(/m);
-      expect(p.split(/\s+/).length).toBeGreaterThanOrEqual(120);
-    }
-    const from = v.passages.map((p) => topics.find((t) => p.includes(`about ${t}`)));
-    expect(new Set(from).size).toBe(3);
-    expect(v.lengthWords?.[0]).toBeGreaterThanOrEqual(100);
-  });
-  it('fewer than three pieces is too few to tell a typical passage from an odd one', () => {
-    expect(selectVoicePassages(pieces.slice(0, 2)).passages).toEqual([]);
-  });
+  // A voice of passages, as a skill built before whole pieces were served still holds one: one prose passage from each
+  // of three pieces, and the pieces' usual length.
+  const prose = (t: string): string => t.split('\n\n').filter((p) => p.startsWith('I have thought')).slice(0, 3).join('\n\n');
+  const v: Voice = { passages: pieces.slice(0, 3).map(prose), lengthWords: usualLength(pieces) };
   it('the compiled skill serves them inline, says what to take and what never to take, and keeps them for rebuilds', () => {
     const r = aRequirement({ requirementId: 'p1', statement: 'I split the answer by situation.', materiality: 'REQUIRED' });
     const std = { standardVersionHash: 's', evidenceId: 'e', workType: 'writing', requirements: [r], authorityState: 'RATIFIED', mintedAt: '2026-09-27T00:00:00Z' } as unknown as StandardVersion;
     const pkg = renderAgentSkill(std, compileArchitecture(std), 'x', 'd', null, [], v);
     const md = pkg.files['SKILL.md'];
     expect(md).toContain('## How I sound');
-    expect(md).toMatch(/Never take my topics, facts,\s+names, figures, sentences, coined terms or stories/);
+    expect(md).toMatch(/Write the way my pieces are written/);
+    expect(md).toMatch(/a story of mine you were not given is not yours to tell/);
+    expect(md).not.toMatch(/Never take my topics/);
     expect(md).toContain(`> ${v.passages[0].split('\n')[0]}`);
     // a range when the pieces vary, one number when they do not ("about 200 to 200" read as a defect)
     expect(md).toMatch(/run about \d+( to \d+)? words/);
@@ -238,7 +230,9 @@ describe('round 5 design: describe the voice, guard the edges, never displace', 
     const chosen = selectVoicePieces([essay(1), essay(2), essay(3), list(1), list(2)], 5000);
     expect(chosen.some((t) => t.startsWith('# List'))).toBe(true);
     expect(chosen.some((t) => !t.startsWith('# List'))).toBe(true);
-    expect(selectVoicePieces([essay(1), essay(2)], 5000)).toEqual([]);
+    expect(selectVoicePieces([essay(1)], 5000)).toEqual([]);
+    // two pieces are what pasting them would show: both are served
+    expect(selectVoicePieces([essay(1), essay(2)], 5000)).toHaveLength(2);
   });
   it('the persona and whole pieces are served, and the pieces are reference files that never ask to be reused', () => {
     const r = aRequirement({ requirementId: 'p1', statement: 'I split the answer by situation.', materiality: 'REQUIRED' });
@@ -248,7 +242,7 @@ describe('round 5 design: describe the voice, guard the edges, never displace', 
     const pkg = renderAgentSkill(std, compileArchitecture(std), 'x', 'd', null, [], voice);
     expect(pkg.files['SKILL.md']).toContain('- (often) Talks to the reader directly.');
     expect(pkg.files['SKILL.md']).toContain('`examples/voice-1.md` is a whole piece');
-    expect(pkg.files['examples/voice-1.md']).toMatch(/never reuse its topic, facts, names, figures, sentences or coined terms/);
+    expect(pkg.files['examples/voice-1.md']).toMatch(/One whole piece of mine, for how it is written/); // (/never reuse its topic, facts, names, figures, sentences or coined terms/);
   });
 });
 

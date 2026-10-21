@@ -22,6 +22,7 @@ import { FEATURE } from './features.js';
 import { TABLE, CITED, LINES, LENGTH, NAMES_TEST } from './obligations.js';
 import { GRAMMAR } from './grammar.js';
 import { SHAPE } from './shape.js';
+import { CHECK } from './written.js';
 import { findPattern, PATTERN_LABEL, PATTERN_IDS, proseWords, styleDistanceDocs, authorSelfMargins, type PatternId } from './style.js';
 
 export interface Span {
@@ -184,6 +185,10 @@ const OBSERVERS: Readonly<Record<ObserverId, Observer>> = {
         const bannedShort = neverShort.size ? findPattern(text, id).filter((s) => s.family !== undefined && neverShort.has(s.family)) : [];
         if (bannedShort.length) return { verdict: 'VIOLATED', spans: bannedShort, value: null, detail: `${bannedShort.length} move(s) you never make` };
         const pooled = num(p, 'pooledPerWord');
+        // A SHORT TEXT FREE OF EVERY BANNED MOVE MEETS THE BAN. Read as "too short", a short answer whose em dash
+        // was fixed counted as no nearer holding, the fix was thrown away, and the dash shipped. The rate is still
+        // not read under 150 words, and the detail says so.
+        if (pooled === null && words > 0 && neverShort.size) return { verdict: 'MET', spans: [], value: null, detail: 'none of the moves you never make; the rate is not read under 150 words' };
         if (pooled === null || words === 0) return { verdict: 'NOT_APPLICABLE', spans: [], value: null, detail: words === 0 ? 'no prose to count' : 'too short to measure: under 150 words' };
         const hits = findPattern(text, id).filter((s) => !(s.family !== undefined && (neverShort.has(s.family) || BAN_ONLY_FAMILIES.has(s.family))))
           .map((s) => (prefer ? { ...s, why: `${s.why}; write "${prefer}" instead` } : s));
@@ -284,6 +289,8 @@ const OBSERVERS: Readonly<Record<ObserverId, Observer>> = {
   SHAPE,
   // ── Mechanical errors: spelling, agreement, punctuation, by an engine the process wires in (./grammar.ts) ──
   GRAMMAR,
+  // ── A check written for one step of a method, run in a sandbox (./written.ts) ──
+  CHECK,
 };
 
 export const observerFor = (id: ObserverId): Observer => OBSERVERS[id];

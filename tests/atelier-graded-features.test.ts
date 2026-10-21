@@ -9,7 +9,8 @@ import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { mkdtempSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { gradedRules, gradedTargets, withGraded, refineToStandard, GRADED_PER_PASS } from '../core/loop/run-repair.js';
+import { gradedRules, withGraded, refineToStandard } from '../core/loop/run-repair.js';
+import { decide, type ControllerInput } from '../core/loop/controller.js';
 import { signalChecks, signalRules, displacement, SIGNAL_PREFIX } from '../core/loop/graded.js';
 import type { FidelityProfile, FeatureBand } from '../core/fidelity/types.js';
 import type { InferenceClient } from '../core/inference/client.js';
@@ -37,15 +38,6 @@ describe('which rules are graded, and which checks a pass is pointed at', () => 
     expect([...gradedRules(std, 'all').keys()]).toEqual(['a', 'b', 'c']);
     expect(gradedRules(std, ['question']).size).toBe(0);
     expect(gradedRules(std, ['nope']).size).toBe(0);
-  });
-  it('the broken graded checks, the largest |error| first, at most three FEATURES a pass (two rules on one feature count once)', () => {
-    const rules = new Map([['a', 'colon'], ['b', 'parenthesis'], ['c', 'parenthesis'], ['d', 'question'], ['g', 'italic'], ['h', 'passive']]);
-    const report = reportOf([check('a', 0.2), check('b', -0.9), check('c', 0.1), check('d', 0.5), check('g', 1.5), check('h', 0.4), check('f', 2)]);
-    const picked = gradedTargets(report, rules).map((c) => c.requirementId);
-    expect(picked).toEqual(['g', 'b', 'd', 'c']);
-    expect(new Set(picked.map((id) => rules.get(id))).size).toBe(GRADED_PER_PASS);
-    // met checks are no target; a check with no error sorts last
-    expect(gradedTargets(reportOf([check('a', 0.2, 'MET'), check('b', undefined), check('d', 0.1)]), rules).map((c) => c.requirementId)).toEqual(['d', 'b']);
   });
   it('the copy the planner reads has the targets enforced; the report itself is untouched', () => {
     const report = reportOf([check('a', 0.2), check('b', 0.3)]);
@@ -182,12 +174,12 @@ describe('a graded miss reaches the notes', () => {
   const report = { failed: false, unchecked: [], conditional: [], checked: [{ requirementId: 'p1', statement: r.statement, materiality: 'PREFERRED', enforced: false, observer: 'FEATURE', result: missed }] } as never;
   it('unmetReader reads nothing of a PREFERRED feature rule without the option, and its miss with the move when graded', async () => {
     const { unmetReader, redraftNote } = await import('../cli/commands/invoke.js');
-    expect(unmetReader(std, null)).toBeNull();
-    const [miss] = unmetReader(std, null, null, ['parenthesis'])?.({ output: text, report }) ?? [];
+    expect(unmetReader(std)).toBeNull();
+    const [miss] = unmetReader(std, null, ['parenthesis'])?.({ output: text, report }) ?? [];
     expect(miss).toMatchObject({ id: 'p1', statement: 'parenthesis in range.', off: missed.error });
     expect(miss.move).toMatch(/^about [\d.]+ fewer parenthetical asides per 1,000 words$/);
     expect(redraftNote([miss], text)).toContain(miss.move ?? 'x');
-    expect(unmetReader(std, null, null, ['colon'])).toBeNull();
+    expect(unmetReader(std, null, ['colon'])).toBeNull();
   });
   it('roundMisses carries it too, and the shape note is written from it', async () => {
     const { roundMisses, shapeNote } = await import('../cli/commands/invoke.js');
@@ -198,7 +190,7 @@ describe('a graded miss reaches the notes', () => {
   });
   it('a graded miss is marked, and never told as something the method requires: its block says what your pieces usually do', async () => {
     const { unmetReader, redraftNote, shapeNote, gradedLines } = await import('../cli/commands/invoke.js');
-    const [miss] = unmetReader(std, null, null, ['parenthesis'])?.({ output: text, report }) ?? [];
+    const [miss] = unmetReader(std, null, ['parenthesis'])?.({ output: text, report }) ?? [];
     expect(miss.graded).toBe(true);
     for (const note of [redraftNote([miss], text), shapeNote([miss])]) {
       expect(note).toContain('did not do what your pieces usually do (each line says which way and about how far):');
@@ -214,7 +206,7 @@ describe('a graded miss reaches the notes', () => {
     // an enforced FEATURE rule that is also graded is still the method's
     const r0 = report as unknown as { checked: Record<string, unknown>[] };
     const required = { ...r0, checked: [{ ...r0.checked[0], materiality: 'REQUIRED', enforced: true }] } as never;
-    const [hard] = unmetReader(std, null, null, ['parenthesis'])?.({ output: text, report: required }) ?? [];
+    const [hard] = unmetReader(std, null, ['parenthesis'])?.({ output: text, report: required }) ?? [];
     expect(hard.graded).toBeUndefined();
   });
   it('the switch: on by default, and only none turns it off', async () => {
@@ -262,10 +254,13 @@ describe('the profile\'s SIGNAL features act when far out, as checks of their ow
     expect([...gradedRules(std, 'all', profileOf([bandOf('parenthesis', [1, 3])])).entries()]).toEqual([['a', 'colon'], [`${SIGNAL_PREFIX}parenthesis`, 'parenthesis']]);
     expect(gradedRules(std, undefined, profileOf([bandOf('parenthesis', [1, 3])])).size).toBe(0);
   });
-  it('the cap of three features a pass is one cap across both sources, the furthest out first', () => {
-    const rules = new Map([['a', 'colon'], ['b', 'question'], [`${SIGNAL_PREFIX}parenthesis`, 'parenthesis'], [`${SIGNAL_PREFIX}italic`, 'italic'], [`${SIGNAL_PREFIX}ellipsis`, 'ellipsis']]);
-    const report = reportOf([check('a', 0.2), check('b', -0.9), check(`${SIGNAL_PREFIX}parenthesis`, 1.5), check(`${SIGNAL_PREFIX}italic`, 1.1), check(`${SIGNAL_PREFIX}ellipsis`, 2.5)]);
-    expect(gradedTargets(report, rules).map((c) => c.requirementId)).toEqual([`${SIGNAL_PREFIX}ellipsis`, `${SIGNAL_PREFIX}parenthesis`, `${SIGNAL_PREFIX}italic`]);
+  it('the cap of three targets a step is one cap across both sources, the furthest out first', () => {
+    // standard FEATURE rules and profile SIGNAL features reach the controller as one list of graded misses
+    const miss = (id: string, error: number) => ({ id, error, operatorEffect: null });
+    const input: ControllerInput = { enforced: [], claims: 0, length: null, grammar: null, budget: { usdLeft: 1, callsLeft: null }, history: [], observedUsdPerCall: {},
+      can: { redraft: true, rewrite: true }, unreachable: new Set(),
+      graded: [miss('a', 0.6), miss('b', -0.9), miss(`${SIGNAL_PREFIX}parenthesis`, 1.5), miss(`${SIGNAL_PREFIX}italic`, 1.1), miss(`${SIGNAL_PREFIX}ellipsis`, 2.5)] };
+    expect(decide(input)).toMatchObject({ kind: 'act', targets: [`${SIGNAL_PREFIX}ellipsis`, `${SIGNAL_PREFIX}parenthesis`, `${SIGNAL_PREFIX}italic`] });
   });
 });
 

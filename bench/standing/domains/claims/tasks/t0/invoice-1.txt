@@ -1,0 +1,4 @@
+INVOICE 1
+Supplier: Beacon Office Supply
+Item: laptop
+Amount: 2,370 dollars

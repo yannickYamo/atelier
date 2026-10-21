@@ -136,7 +136,7 @@ describe('an owner\'s REQUIRED feature rule is enforced, never graded', () => {
     result: { verdict: 'VIOLATED', value: 16, error: 2.2, detail: 'parenthetical asides 16 per 1,000 words', spans: [{ start: 0, end: 5, text: 'aside', why: '' }] } } as unknown as RuleCheck;
   it('not among the graded rules, so never a redraft item said as "leaves out … the method requires"', () => {
     expect(gradedRules(std, 'all').size).toBe(0);
-    expect(invoke.unmetReader(std, null, null, 'all')?.({ output: 'x', report: reportOf([miss]) }) ?? []).toEqual([]);
+    expect(invoke.unmetReader(std, null, 'all')?.({ output: 'x', report: reportOf([miss]) }) ?? []).toEqual([]);
   });
   it('the controller rewrites its carriers as an enforced span rule', () => {
     const input: ControllerInput = { enforced: [{ id: 'q1', kind: 'span' }], claims: 0, length: null, graded: [], grammar: null, budget: { usdLeft: 1, callsLeft: null }, history: [],
@@ -204,7 +204,8 @@ describe.skipIf(!existsSync(CLI))('end to end: a draft that runs long after two 
     const env: NodeJS.ProcessEnv = { ...process.env, ATELIER_DATA: data, ATELIER_PROJECT_DIR: proj, ATELIER_PRICE_IN: '1', ATELIER_PRICE_OUT: '1' };
     delete env.ANTHROPIC_API_KEY; delete env.ANTHROPIC_AUTH_TOKEN;
     const run = (...args: string[]): string => { try { return execFileSync('node', [CLI, ...args], { encoding: 'utf8', cwd: proj, env, stdio: ['ignore', 'pipe', 'pipe'] }); } catch (e) { return (e as { stdout?: string }).stdout ?? ''; } };
-    run('new', 'goldens', '--method', 'method.md', '--name', 'bake', '--yes');
+    // which check each step asks for is a reading: the scripted backend's stand-in answers it at the build
+    run('new', 'goldens', '--method', 'method.md', '--name', 'bake', '--yes', '--provider', 'openai-compatible', '--base-url', `http://127.0.0.1:${port}`, '--model', 'scripted');
     await fetch(`http://127.0.0.1:${port}/__set`, { method: 'POST', body: readFileSync(join(BAKE, 'runs-long.json'), 'utf8') });
     const log = async (): Promise<string[]> => ((await (await fetch(`http://127.0.0.1:${port}/__log`)).json()) as { bodies: string[] }).bodies;
     const before = (await log()).length;

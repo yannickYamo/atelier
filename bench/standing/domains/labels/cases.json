@@ -1,0 +1,340 @@
+[
+ {
+  "id": "c01",
+  "duration": 48,
+  "transcript": "[00:02] Host: We are on Market Street asking people about rents. [00:14] Passer-by: Rents are up a third since last year. [00:31] A second man shoves the first; both fall against the railing; a bystander pulls them apart. [00:40] Host: We will leave it there.",
+  "labels": [
+   {
+    "category": "Violence – minor",
+    "risk": "Medium",
+    "span": "00:31–00:39",
+    "evidence": "A second man shoves the first; both fall against the railing"
+   }
+  ],
+  "id2": "e01"
+ },
+ {
+  "id": "c02",
+  "duration": 60,
+  "transcript": "[00:05] Narrator: The town centre after the flood. [00:20] Narrator: Water reached the second floor of the library. [00:45] Mayor: We have asked for help and it is coming.",
+  "labels": [
+   {
+    "category": "Disaster – news",
+    "risk": "Medium",
+    "span": "00:05–00:45",
+    "evidence": "The town centre after the flood"
+   }
+  ],
+  "id2": "e02"
+ },
+ {
+  "id": "c03",
+  "duration": 30,
+  "transcript": "[00:03] Chef: Tonight we are making risotto. [00:18] Chef: A splash of white wine goes in now; the alcohol cooks off. [00:27] Chef: Stir and wait.",
+  "labels": [
+   {
+    "category": "Alcohol – reference",
+    "risk": "Low",
+    "span": "00:18–00:22",
+    "evidence": "A splash of white wine goes in now"
+   }
+  ],
+  "id2": "e03"
+ },
+ {
+  "id": "c04",
+  "duration": 90,
+  "transcript": "[00:10] Officer at the range: Safety on, then off. [00:25] Three shots are fired at the paper target. [01:10] Officer: Clear the chamber. [01:25] End of lesson.",
+  "labels": [
+   {
+    "category": "Firearms – use",
+    "risk": "High",
+    "span": "00:25–00:30",
+    "evidence": "Three shots are fired at the paper target"
+   }
+  ],
+  "id2": "e04"
+ },
+ {
+  "id": "c05",
+  "duration": 40,
+  "transcript": "[00:04] Teacher: Today, fractions. [00:20] Student: Is a half bigger than a third? [00:30] Teacher: Yes, and here is why.",
+  "labels": [],
+  "id2": "e05"
+ },
+ {
+  "id": "c06",
+  "duration": 75,
+  "transcript": "[00:08] Comedian: My landlord is a damn genius, he charges for air. [00:30] Crowd laughs. [00:50] Comedian: Anyway, drink up, I know I will. [01:05] He drinks from a bottle on stage.",
+  "labels": [
+   {
+    "category": "Language – mild",
+    "risk": "Low",
+    "span": "00:08–00:12",
+    "evidence": "My landlord is a damn genius"
+   },
+   {
+    "category": "Alcohol – consumption",
+    "risk": "Medium",
+    "span": "01:05–01:10",
+    "evidence": "He drinks from a bottle on stage"
+   }
+  ],
+  "id2": "e06"
+ },
+ {
+  "id": "c07",
+  "duration": 55,
+  "transcript": "[00:06] Reporter: Police say the shop was robbed at knifepoint on Tuesday. [00:30] Shop owner: He showed the knife and asked for the till. [00:48] Reporter: No one was hurt.",
+  "labels": [
+   {
+    "category": "Crime – reference",
+    "risk": "Medium",
+    "span": "00:06–00:48",
+    "evidence": "the shop was robbed at knifepoint on Tuesday"
+   },
+   {
+    "category": "Weapons – reference",
+    "risk": "Medium",
+    "span": "00:30–00:36",
+    "evidence": "He showed the knife and asked for the till"
+   }
+  ],
+  "id2": "e07"
+ },
+ {
+  "id": "c08",
+  "duration": 65,
+  "transcript": "[00:05] Rider: Do not try this at home. [00:20] The rider jumps the bike across the canal; the back wheel clips the edge and he lands hard on the path. [00:50] Rider, bleeding from the elbow: Worth it.",
+  "labels": [
+   {
+    "category": "Dangerous acts – stunt",
+    "risk": "High",
+    "span": "00:20–00:52",
+    "evidence": "The rider jumps the bike across the canal; the back wheel clips the edge and he lands hard"
+   },
+   {
+    "category": "Violence – graphic",
+    "risk": "High",
+    "span": "00:50–00:52",
+    "evidence": "bleeding from the elbow"
+   }
+  ],
+  "id2": "e08"
+ },
+ {
+  "id": "c09",
+  "duration": 50,
+  "transcript": "[00:02] Panellist: The bill fails the people it claims to help. [00:25] Second panellist: Vote it down and write to your member. [00:44] Host: Thank you both.",
+  "labels": [
+   {
+    "category": "Politics – advocacy",
+    "risk": "Medium",
+    "span": "00:25–00:30",
+    "evidence": "Vote it down and write to your member"
+   }
+  ],
+  "id2": "e09"
+ },
+ {
+  "id": "c10",
+  "duration": 35,
+  "transcript": "[00:03] Vet: The dog came in with a broken leg after a fall. [00:15] Vet: We set it this morning. [00:28] The dog limps across the room, tail going.",
+  "labels": [
+   {
+    "category": "Animals – distress",
+    "risk": "Low",
+    "span": "00:03–00:08",
+    "evidence": "The dog came in with a broken leg after a fall"
+   }
+  ],
+  "id2": "e10"
+ },
+ {
+  "id": "c11",
+  "duration": 70,
+  "transcript": "[00:10] Gamer: Next card. [00:30] Gamer: All in on red. [00:40] Dealer: Red wins. [01:00] Gamer: That is rent paid.",
+  "labels": [
+   {
+    "category": "Gambling – play",
+    "risk": "Medium",
+    "span": "00:30–00:40",
+    "evidence": "All in on red"
+   }
+  ],
+  "id2": "e11"
+ },
+ {
+  "id": "c12",
+  "duration": 45,
+  "transcript": "",
+  "labels": [],
+  "id2": "e12"
+ },
+ {
+  "id": "c13",
+  "duration": 58,
+  "transcript": "[00:04] Guide: The old brewery, now a museum. [00:22] Guide: They brewed a dark ale here until 1960. [00:40] Guide: The copper is original.",
+  "labels": [
+   {
+    "category": "Alcohol – reference",
+    "risk": "Low",
+    "span": "00:22–00:26",
+    "evidence": "They brewed a dark ale here until 1960"
+   }
+  ],
+  "id2": "t0"
+ },
+ {
+  "id": "c14",
+  "duration": 80,
+  "transcript": "[00:05] Narrator: The surgeon opens the chest. [00:30] Narrator: Blood is suctioned as the graft is placed. [01:10] Narrator: Four hours later the patient is stable.",
+  "labels": [
+   {
+    "category": "Medical – graphic",
+    "risk": "High",
+    "span": "00:05–00:35",
+    "evidence": "The surgeon opens the chest"
+   }
+  ],
+  "id2": "t1"
+ },
+ {
+  "id": "c15",
+  "duration": 42,
+  "transcript": "[00:03] Coach: Keep your guard up. [00:20] The sparring partner lands a jab; the boy shakes it off and grins. [00:38] Coach: Good round.",
+  "labels": [
+   {
+    "category": "Violence – minor",
+    "risk": "Medium",
+    "span": "00:20–00:26",
+    "evidence": "The sparring partner lands a jab"
+   }
+  ],
+  "id2": "t2"
+ },
+ {
+  "id": "c16",
+  "duration": 66,
+  "transcript": "[00:06] Presenter: The church was built in 1450. [00:30] Presenter: Services are still held on Sundays. [00:55] Bells ring.",
+  "labels": [
+   {
+    "category": "Religion – discussion",
+    "risk": "Low",
+    "span": "00:06–00:35",
+    "evidence": "Services are still held on Sundays"
+   }
+  ],
+  "id2": "t3"
+ },
+ {
+  "id": "c17",
+  "duration": 52,
+  "transcript": "[00:05] Reporter: Two people died when the bridge gave way. [00:25] Reporter: Rescue teams worked through the night. [00:45] Reporter: The cause is not known.",
+  "labels": [
+   {
+    "category": "Death – reference",
+    "risk": "Medium",
+    "span": "00:05–00:10",
+    "evidence": "Two people died when the bridge gave way"
+   },
+   {
+    "category": "Disaster – news",
+    "risk": "Medium",
+    "span": "00:05–00:45",
+    "evidence": "Rescue teams worked through the night"
+   }
+  ],
+  "id2": "t4"
+ },
+ {
+  "id": "c18",
+  "duration": 38,
+  "transcript": "[00:02] Host: Unboxing the new drone. [00:15] Host: Four rotors, a camera, a twenty minute battery. [00:33] Host: Flight test next week.",
+  "labels": [],
+  "id2": "t5"
+ },
+ {
+  "id": "c19",
+  "duration": 61,
+  "transcript": "[00:04] Officer: We recovered a pistol from the car. [00:20] The officer holds up the evidence bag with the pistol inside. [00:50] Officer: No shots were fired.",
+  "labels": [
+   {
+    "category": "Firearms – depiction",
+    "risk": "Medium",
+    "span": "00:20–00:24",
+    "evidence": "The officer holds up the evidence bag with the pistol inside"
+   }
+  ],
+  "id2": "t6"
+ },
+ {
+  "id": "c20",
+  "duration": 47,
+  "transcript": "[00:03] Streamer: I lost the whole paycheque on slots last night. [00:20] Streamer: Never again. [00:40] Streamer: Anyway, back to the game.",
+  "labels": [
+   {
+    "category": "Gambling – reference",
+    "risk": "Low",
+    "span": "00:03–00:08",
+    "evidence": "I lost the whole paycheque on slots last night"
+   }
+  ],
+  "id2": "t7"
+ },
+ {
+  "id": "c21",
+  "duration": 73,
+  "transcript": "[00:05] Narrator: Protesters and police met at the square. [00:30] A bottle is thrown; an officer is struck on the helmet and falls; colleagues drag him back. [01:00] Narrator: Six arrests were made.",
+  "labels": [
+   {
+    "category": "Violence – minor",
+    "risk": "Medium",
+    "span": "00:30–00:36",
+    "evidence": "A bottle is thrown; an officer is struck on the helmet and falls"
+   },
+   {
+    "category": "Crime – depiction",
+    "risk": "Medium",
+    "span": "00:30–00:36",
+    "evidence": "A bottle is thrown"
+   }
+  ],
+  "id2": "t8"
+ },
+ {
+  "id": "c22",
+  "duration": 44,
+  "transcript": "[00:02] Baker: Flour, water, salt, time. [00:20] Baker: Shape it like a damn pillow, gently. [00:38] Baker: Into the oven.",
+  "labels": [
+   {
+    "category": "Language – mild",
+    "risk": "Low",
+    "span": "00:20–00:24",
+    "evidence": "Shape it like a damn pillow"
+   }
+  ],
+  "id2": "t9"
+ },
+ {
+  "id": "c23",
+  "duration": 69,
+  "transcript": "[00:06] Narrator: The wildfire reached the ridge at dawn. [00:30] Narrator: Charred cars line the road; a resident weeps over what was her house. [01:00] Narrator: No deaths are reported.",
+  "labels": [
+   {
+    "category": "Disaster – graphic",
+    "risk": "High",
+    "span": "00:30–00:40",
+    "evidence": "Charred cars line the road; a resident weeps over what was her house"
+   }
+  ],
+  "id2": "t10"
+ },
+ {
+  "id": "c24",
+  "duration": 36,
+  "transcript": "[00:03] Trainer: Three sets of ten. [00:18] Trainer: Breathe out on the push. [00:30] Trainer: Done.",
+  "labels": [],
+  "id2": "t11"
+ }
+]

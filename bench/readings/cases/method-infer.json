@@ -1,0 +1,86 @@
+{
+  "reading": "method-infer",
+  "pass": {
+    "runs": 5,
+    "perCaseAtLeast": 4,
+    "codeDecidedExact": true
+  },
+  "note": "The method the pieces follow, read off them when the owner wrote none (core/method/infer.ts). The label is the headings the steps' quotes fall under, in order; a reading that cannot show two steps is none. Written 2026-10-19, run live on claude-haiku-5-5 on 2026-10-19: analyses and reviews 5 of 5 each, essays none 5 of 5, one piece by code; the five-section contract soft (the reading folds Obligations into its neighbours or reads a step with no heading above it), $0.01.",
+  "cases": [
+    {
+      "id": "analysis-four-sections",
+      "label": "verdict>vendor pricing>cost at this size>risks",
+      "purpose": "competitive analyses of vendors on price",
+      "files": [
+        "bench/standing/domains/analysis/examples/e02.md",
+        "bench/standing/domains/analysis/examples/e03.md",
+        "bench/standing/domains/analysis/examples/e04.md",
+        "bench/standing/domains/analysis/examples/e05.md",
+        "bench/standing/domains/analysis/examples/e06.md",
+        "bench/standing/domains/analysis/examples/e07.md"
+      ],
+      "note": "Six price comparisons, the same four sections in the same order. e01 names the second section \"Vendors\" and is left out so one label fits."
+    },
+    {
+      "id": "code-review-four-sections",
+      "label": "summary>must fix>suggestions>verdict",
+      "purpose": "code reviews of a change",
+      "files": [
+        "bench/standing/domains/code-review/examples/e01.md",
+        "bench/standing/domains/code-review/examples/e02.md",
+        "bench/standing/domains/code-review/examples/e04.md",
+        "bench/standing/domains/code-review/examples/e05.md",
+        "bench/standing/domains/code-review/examples/e06.md",
+        "bench/standing/domains/code-review/examples/e07.md"
+      ],
+      "note": "Six reviews (e03 numbers its items; left out so the quotes fall under the same headings)."
+    },
+    {
+      "id": "contract-five-sections",
+      "label": "parties>confidential information>obligations>term>governing law",
+      "purpose": "non-disclosure agreements",
+      "files": [
+        "bench/standing/domains/contract/examples/e01.md",
+        "bench/standing/domains/contract/examples/e02.md",
+        "bench/standing/domains/contract/examples/e03.md",
+        "bench/standing/domains/contract/examples/e04.md",
+        "bench/standing/domains/contract/examples/e05.md",
+        "bench/standing/domains/contract/examples/e06.md"
+      ],
+      "soft": true,
+      "note": "Six agreements with five sections; a reading may fold two into one step or add a signature step. Soft: the order and the names are what is judged."
+    },
+    {
+      "id": "no-shared-method",
+      "label": "none",
+      "purpose": "essays",
+      "pieces": [
+        {
+          "name": "piece-1",
+          "text": "I moved to the coast in March. The house is small and the sea is loud at night, and I sleep better than I have in years. Nobody warned me about the gulls."
+        },
+        {
+          "name": "piece-2",
+          "text": "There is a kind of software bug that only appears on the second Tuesday of a month, and I have met it twice. The first time it cost a weekend. The second time I knew where to look, and that is the whole value of experience."
+        },
+        {
+          "name": "piece-3",
+          "text": "A recipe is a promise about the future. You read it on Saturday and it tells you what Sunday will taste like. Most promises are not that honest."
+        }
+      ],
+      "note": "Three short essays with no common shape: no method is read (the floor), and the build says the pieces share none."
+    },
+    {
+      "id": "one-piece-no-method",
+      "label": "none",
+      "purpose": "reports",
+      "pieces": [
+        {
+          "name": "piece-1",
+          "text": "## Summary\nThe loop stops one short.\n\n## Verdict\nRequest changes"
+        }
+      ],
+      "note": "One piece is not a method: decided by code."
+    }
+  ]
+}

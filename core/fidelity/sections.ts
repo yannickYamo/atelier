@@ -11,6 +11,7 @@
 
 import type { InferenceClient, Budget } from '../inference/client.js';
 import { spend } from '../inference/client.js';
+import { splitServed } from './request-notes.js';
 
 export interface SectionPlan {
   readonly sections: readonly { readonly title: string; readonly covers: string }[];
@@ -54,8 +55,10 @@ export function parsePlan(raw: unknown): SectionPlan | null {
 
 /** One planning call. Throws when no valid plan comes back: the caller falls back to writing the piece whole. */
 export async function planSections(client: InferenceClient, budget: Budget, served: string, task: string): Promise<SectionPlan> {
+  // the skill cached, this request's notes in the turn (./request-notes.ts)
+  const { skill, forRequest } = splitServed(served);
   const res = await spend(budget, 0.1, async () => {
-    const x = await client.complete({ stableBlock: `${served}\n\n${PLAN_SYSTEM}`, variableBlock: task, userMessage: 'Plan the piece now.',
+    const x = await client.complete({ stableBlock: `${skill}\n\n${PLAN_SYSTEM}`, variableBlock: task, userMessage: `${forRequest ? `For this request only:\n\n${forRequest}\n\n` : ''}Plan the piece now.`,
       toolName: 'emit_plan', toolDescription: 'Return the plan of sections.', schema: PLAN_SCHEMA, maxTokens: 2000, temperature: 0 });
     return { value: x, cost: x.cost, usage: x };
   }, 'writing');

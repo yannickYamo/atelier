@@ -16,7 +16,7 @@ import * as store from '../core/state/store.js';
 import { readJson } from '../core/state/read-json.js';
 import { createHash } from 'node:crypto';
 import { newRun, transition, type Run } from '../core/state/run-state.js';
-import type { ExpertEvidence, Requirement, StandardVersion } from '../core/state/canonical-state.js';
+import type { ExpertEvidence, Requirement, StandardVersion, CheckQualification, Measurement } from '../core/state/canonical-state.js';
 import { contrastFor, type ContrastPair } from '../core/compiler/contrast-examples.js';
 import type { Reservation } from '../core/golden/reservation.js';
 import type { RatificationLedger } from '../core/ratification/decision-record.js';
@@ -71,7 +71,7 @@ export const orchestrated = (): boolean => process.env.ATELIER_ORCHESTRATED === 
 // `node:util.parseArgs` is given this table, so the parser knows an option takes a value because we
 // said so. A census test proves every option the codebase reads is declared, which is what stops the
 // table going stale one flag at a time.
-export const VALUED_OPTIONS: readonly string[] = ['correcting', 
+export const VALUED_OPTIONS: readonly string[] = ['correcting', 'moves', 
   // `atelier method`: the one finished example, and what the skill is for
   'golden', 'for', 'method',
   // `atelier evolve`: the briefs to work on, how many rounds, and (to a run) what earlier drafts left out
@@ -81,31 +81,31 @@ export const VALUED_OPTIONS: readonly string[] = ['correcting',
   'candidate', 'cap', 'complaint', 'context', 'decision',
   'declare-viewed', 'decisions', 'description', 'drafts', 'discovery-backend', 'discovery-base-url', 'discovery-model',
   'discovery-price-in', 'discovery-price-out', 'discovery-provider', 'discovery-strict-schema', 'discovery-structured-output',
-  'exclude', 'exemplar', 'from', 'from-hook', 'held-out', 'host', 'id', 'intent', 'invocation', 'kind', 'mode',
+  'exclude', 'exemplar', 'method-text', 'from', 'from-hook', 'held-out', 'host', 'id', 'intent', 'invocation', 'kind', 'mode',
   'add', 'labels', 'materiality', 'measure', 'form', 'max-calls', 'model', 'name', 'note', 'pick',
   'one-pager', 'pick', 'price-in', 'price-out', 'provenance', 'provider', 'claims', 'claims-model',
   'candidates', 'compiled', 'contexts', 'contrast-cap', 'contexts-exercising', 'control', 'frozen-at', 'max-tokens',
   'cap', 'cases', 'development', 'expert-consistency', 'key', 'observation', 'observer-kappa', 'out', 'page', 'probe-cap', 'prose', 'standard', 'target',
   'results', 'sealed-at', 'seed', 'suite', 'phase', 'class', 'contrast', 'piece-budget', 'pieces',
   'corpus', 'tasks', 'fires', 'margin', 'enforce', 'observe', 'check', 'floor-cap',
-  'finalists', 'screen-model', 'voice', 'persona', 'add', 'strike', 'probe', 'read', 'label', 'reader-model', 'runs',
+  'finalists', 'screen-model', 'voice', 'persona', 'add', 'strike', 'probe', 'read', 'label', 'reader-model', 'runs', 'context-reader', 'evidence-reader', 'work-form',
   'questions', 'reason', 'required-n', 'reserve', 'role',
   // `atelier new` with pieces by several authors (cli/commands/composite.ts): who wrote which, what is liked about each, and a conflict's answer
   'authors', 'admire', 'conflict',
   'rule', 'set', 'skill', 'source-author', 'statement', 'strict-schema',
   'structured-output', 'supersedes', 'target-backend', 'target-base-url', 'target-model',
   'target-price-in', 'target-price-out', 'target-provider', 'target-strict-schema', 'target-structured-output',
-  'task', 'material', 'temperature', 'want', 'to', 'token-limit-param', 'verdict',
+  'task', 'material', 'temperature', 'want', 'to', 'token-limit-param', 'verdict', 'try-release', 'promote-release',
   'why', 'work-type', 'override', 'edits', 'contrast-drafts', 'settings', 'contrast-models', 'topics', 'resamples', 'register', 'until-typical', 'shape-rounds', 'calibrate-from', 'until-author', 'select', 'structure', 'read-structure-from', 'context', 'nearness', 'redraws', 'graded', 'limit',
 ];
 
 export const BOOLEAN_OPTIONS: readonly string[] = [
   'accept', 'accept-new-binding', 'fix-grammar', 'profile', 'auto-reserve', 'cluster-per-file', 'drop', 'dry-run', 'indifferent',
-  'allow-unsourced', 'answer-only', 'bare', 'clear', 'holdout', 'json', 'list', 'loop', 'no-contrast', 'no-repair', 'repair', 'never-this-transition', 'no-negative-probe', 'none', 'public-source',
+  'allow-unsourced', 'answer-only', 'bare', 'clear', 'holdout', 'json', 'list', 'loop', 'no-contrast', 'no-repair', 'no-coverage', 'repair', 'hook', 'never-this-transition', 'no-negative-probe', 'none', 'public-source',
   'ai-assisted', 'blind-expert', 'delivery-proven', 'no-ai-assist', 'per-passage',
   'regenerate',
   'review', 'score', 'skip', 'skip-methods', 'yes', 'baseline', 'qualify', 'promote',
-  'reflect', 'no-reflect', 'report', 'phrase', 'calibrate', 'placeholders', 'no-unsourced-note', 'no-redraft', 'no-model', 'always', 'evaluation', 'learn', 'include-reserved', 'taste', 'no-taste', 'setup', 'auto', 'no-fidelity', 'fidelity', 'rollback', 'distill', 'next', 'sections', 'panel', 'quiet', 'label', 'typicality', 'read-subjects', 'strict', 'allow-nonconformant', 'full', 'no-index', 'test-run',
+  'reflect', 'no-reflect', 'report', 'phrase', 'calibrate', 'placeholders', 'no-placeholders', 'no-unsourced-note', 'no-redraft', 'no-model', 'always', 'evaluation', 'learn', 'include-reserved', 'taste', 'no-taste', 'no-brief', 'examples-first', 'no-infer-method', 'voices', 'setup', 'auto', 'no-fidelity', 'fidelity', 'rollback', 'distill', 'next', 'sections', 'panel', 'quiet', 'label', 'typicality', 'read-subjects', 'strict', 'allow-nonconformant', 'full', 'no-index', 'test-run',
 ];
 
 export const argv = process.argv.slice(2);
@@ -474,6 +474,35 @@ export const describeBinding = (b: RuntimeBinding): string =>
 /** Is there a model to ask for this step at all? False only where the default provider has no key: nothing is sent to find out. */
 export const canReach = (role: Role): boolean => providerFor(role) !== 'anthropic' || Boolean(process.env.ANTHROPIC_API_KEY ?? process.env.ANTHROPIC_AUTH_TOKEN);
 
+/**
+ * WHO READS FOR CONTEXT (core/inference/reading.ts): the small model that reads what words mean, where a word pattern
+ * used to decide (what form the work takes, what a request asks for). Haiku 5.5 on Anthropic; on another backend the
+ * model named for the run, or none, in which case code and the floor decide and the record says so.
+ */
+export const CONTEXT_READER_DEFAULT = 'claude-haiku-5-5';
+export const contextReaderModel = (): string | null =>
+  flag('--context-reader') ?? process.env.ATELIER_CONTEXT_READER
+  ?? (providerFor('discovery') === 'anthropic' ? CONTEXT_READER_DEFAULT : flag('--model') ?? process.env.ATELIER_MODEL ?? null);
+export const contextReaderClient = (): InferenceClient | null => {
+  const m = contextReaderModel();
+  return m && canReach('discovery') ? clientFor(m) : null;
+};
+/**
+ * WHO READS THE EVIDENCE OF A HABIT (core/compiler/moves.ts: the first reading of each persona point and the table of
+ * every habit against every piece). A reading that decides whether a sentence in a long piece makes an abstract move;
+ * on the hand-labelled corpus the small reader answered it differently from call to call and the mid-size one did
+ * not (bench/readings/cases/persona-table.json, 2026-10-19), so it is Sonnet 5.5 on Anthropic by default, a few calls
+ * per build. --evidence-reader or ATELIER_EVIDENCE_READER names another; on another backend it is the context reader.
+ */
+export const EVIDENCE_READER_DEFAULT = 'claude-sonnet-5-5';
+export const evidenceReaderModel = (): string | null =>
+  flag('--evidence-reader') ?? process.env.ATELIER_EVIDENCE_READER
+  ?? (providerFor('discovery') === 'anthropic' ? EVIDENCE_READER_DEFAULT : contextReaderModel());
+export const evidenceReaderClient = (): InferenceClient | null => {
+  const m = evidenceReaderModel();
+  return m && canReach('discovery') ? clientFor(m) : null;
+};
+
 export const assertReachable = (role: Role): void => {
   const provider = providerFor(role);
   if (provider === 'anthropic') {
@@ -626,6 +655,10 @@ export interface ProposalSet {
   readonly promptHash: string;
   readonly workType: string;
   readonly rules: readonly ProposedRule[];
+  /** the form of the work as the proposer read it from what was said (core/observers/work-form.ts); absent when it said none */
+  readonly form?: 'REPLY' | 'DOCUMENT';
+  /** which check each stated rule carries, by its statement (core/method/step-check.ts), read with the proposal so `--yes` asks nothing more */
+  readonly checks?: Readonly<Record<string, { readonly how: 'measure' | 'written'; readonly measurement: Measurement; readonly means: string }>>;
 }
 
 // ── session (one active run per PROJECT; a run is a study, not a session) ─────────────────────
@@ -661,6 +694,8 @@ export interface Session {
    * that shipped with the first version and was called by nothing; this field is where it lands.
    */
   ledger?: RatificationLedger | null;
+  /** what each written check earned on the examples, by requirement id; written beside the standard at the close */
+  qualifications?: Readonly<Record<string, CheckQualification>>;
   /**
    * What discovery knew about each proposal that the requirement does not carry: which vantages
    * reached it, how else it was phrased, how often it held in work the proposer never read, and what
@@ -1001,11 +1036,11 @@ export const authoredIdAllocator = (s: Session): (() => string) => {
  * where they still teach the standard being rendered.
  */
 export function carriedFrom(L: store.StoreLayout, fromVersion: string | null, v: StandardVersion): {
-  exemplar: { text: string } | null; contrast: ContrastPair[]; voice: Voice | null;
+  exemplar: { text: string; request?: string } | null; contrast: ContrastPair[]; voice: Voice | null; method: { text: string } | null;
 } {
   const sv = fromVersion ? store.getSkillVersion(L, fromVersion) : null;
   const pkg = sv ? store.getPackage(L, sv.materializedHash) : null;
-  if (!pkg) return { exemplar: store.getExemplar(L), contrast: [], voice: store.getVoice(L) };
+  if (!pkg) return { exemplar: store.getExemplar(L), contrast: [], voice: store.getVoice(L), method: store.getMethod(L) };
   // The author's passages travel with the package that served them, like the contrast pairs.
   const voiceRaw = pkg.assurance?.['voice.json'];
   const voice = ((): Voice | null => { try { return voiceRaw ? JSON.parse(voiceRaw) as Voice : null; } catch { return null; } })();
@@ -1015,5 +1050,10 @@ export function carriedFrom(L: store.StoreLayout, fromVersion: string | null, v:
   const raw = pkg.assurance?.['contrast-pairs.json']
     ?? ('examples/contrast.md' in pkg.files ? JSON.stringify(store.getContrast(L).pairs) : undefined);
   const pairs = ((): ContrastPair[] => { try { return raw ? JSON.parse(raw) as ContrastPair[] : []; } catch { return []; } })();
-  return { exemplar: ex === undefined ? null : { text: ex }, contrast: store.getContrast(L).off ? [] : contrastFor(pairs, v), voice };
+  // The method travels with the package that served it, like the voice.
+  const methodRaw = pkg.assurance?.['method.md'];
+  // An exemplar served beside its request is read back as the pair: the renderer wraps it again the same way.
+  // (with or without the lines later builds put around it: "From another conversation…" before, "What I had…" between)
+  const pair = ex === undefined ? null : /^(?:From another conversation, with someone else\.\n\n)?The request it answered: ([^\n]*)\n\n(?:What I had: [^\n]*\n\n)?What I wrote:\n\n([\s\S]*)$/.exec(ex);
+  return { exemplar: ex === undefined ? null : pair ? { text: pair[2], request: pair[1] } : { text: ex }, contrast: store.getContrast(L).off ? [] : contrastFor(pairs, v), voice, method: methodRaw === undefined ? null : { text: methodRaw } };
 }

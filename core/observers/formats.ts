@@ -93,6 +93,9 @@ export function checkFormat(text: string, f: FormatProfile): FormatFindings {
   return { hard, soft };
 }
 
-/** Work that is a reply to someone: an assistant's answers, support replies, review comments. */
+/**
+ * Work that is a reply to someone, READ OFF ITS NAME: the floor of the work-form reading (core/observers/work-form.ts),
+ * used only where no model could read the examples. It matched "code review" for a skill of sectioned review documents.
+ */
 export const isReplyWork = (workType: string): boolean =>
   /\b(repl(?:y|ies)|answers?|assistant|chat|support|review comments?|code reviews?)\b/i.test(workType);

@@ -21,7 +21,7 @@ import { acts, isOmission, type RuleCheck, type VerifyReport } from '../observer
 import { errorAtLength, featureWordCount } from '../observers/features.js';
 import type { StandardVersion } from '../state/canonical-state.js';
 import { displacedFamilies } from '../observers/style.js';
-import { spanIntegrity, namesIn, numbersIn, addedFigures } from './integrity.js';
+import { spanIntegrity, namesIn, numbersIn, addedFigures, workLost } from './integrity.js';
 import { isGrammarNote } from '../observers/grammar.js';
 import { processSpendByPurpose, spendBetween, type SpendPurpose } from '../inference/client.js';
 import type { PlannedStep, StepLedger } from './controller.js';
@@ -704,9 +704,13 @@ async function takeStep<T extends Proposed>(ledger: StepLedger, plan: StepPlan, 
   // overshoot, so it is the last one to exempt. A claim redraft is held to the floor too: dropping an invented claim may
   // shorten the piece, but not below what was asked; when it would, the redraft is not kept and the claim stays listed
   // for the person, which is the truthful outcome (no repair delivers less than was asked).
+  // A SHAPE target is a length only when it counts characters or words; removing a link, a tag or an emoji is not a
+  // length cut and is held to the share like any edit.
+  const lengthShape = (c: RuleCheck): boolean => { const sh = rule.paramsOf?.(c)?.shape ?? (c as { params?: Record<string, unknown> }).params?.shape; const first: unknown = Array.isArray(sh) ? (sh as unknown[])[0] : sh; return first === 'characters' || first === 'words'; };
   const lengthCut = plan.action === 'claim-redraft' || plan.targets.some((id) => id === 'request-length' || id === 'length'
-    || [...b.report.checked, ...after.report.checked].some((c) => c.requirementId === id && (c.observer === 'LENGTH' || c.observer === 'SHAPE')));
-  const lost = survivalLoss(b.text, after.text, lengthCut) ?? belowAsked(b.text, after.text, rule.floorWords ?? null);
+    || [...b.report.checked, ...after.report.checked].some((c) => c.requirementId === id && (c.observer === 'LENGTH' || (c.observer === 'SHAPE' && lengthShape(c)))));
+  const lost = survivalLoss(b.text, after.text, lengthCut) ?? belowAsked(b.text, after.text, rule.floorWords ?? null)
+    ?? workLost(b.text, after.text, plan.action);
   const unreadable = enforced.size ? [...enforced].filter((id) => lostToLength(b.report.checked.find((c) => c.requirementId === id), after.report.checked.find((c) => c.requirementId === id))) : [];
   const why = lost ?? (unreadable.length ? `it would leave the text too short to check ${unreadable.join(', ')}`
     : worse.length ? `it made ${worse.join(', ')} worse`

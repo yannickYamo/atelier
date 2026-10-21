@@ -112,7 +112,7 @@ describe('C. the hand-off contract: exactly the targets handed, named, and never
   const floor = (v: number): RuleCheck => ({ ...rate('c4', 'PATTERN_RATE', v, 0, `${v} per 1,000 words (at least 22.5)`, v < 22.5 ? 'VIOLATED' : 'MET'), statement: c4.statement });
   const habit: RuleCheck = { requirementId: 'c10', statement: c10.statement, materiality: 'PREFERRED', enforced: false, observer: 'FEATURE', result: { verdict: 'VIOLATED', value: 41.8, error: 41.8, detail: 'parenthetical asides 41.8 per 1,000 words', spans: spans(3) } };
   it('a floor rate with no span, handed over, is told with which way it is out; the record and the outcome name it alone', async () => {
-    const unmet = unmetReader(std, null, null, 'all');
+    const unmet = unmetReader(std, null, 'all');
     if (!unmet) throw new Error('expected a reader');
     const handed = (t: string) => ({ output: t, report: reportOf([floor(17.4), habit], true), repair: { passes: 0, violatedBefore: [], violatedAfter: [], originalOutputHash: 'h', why: 'w',
       controller: controllerRecord([step('redraft', 'handed to a redraft', ['c4'], 0)], 'handed to a redraft', true) } });

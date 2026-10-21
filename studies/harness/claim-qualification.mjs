@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // THE CLAIM READER'S QUALIFICATION BATTERY (studies/CLAIM_READER_QUALIFICATION_PREREGISTRATION.md for v1,
 // studies/CLAIM_READER_V2_QUALIFICATION_PREREGISTRATION.md for v2,
-// studies/CLAIM_READER_V3_QUALIFICATION_PREREGISTRATION.md for v3: the sealed version and seed below are v3's).
+// studies/CLAIM_READER_V3_QUALIFICATION_PREREGISTRATION.md for v3, studies/CLAIM_READER_V4_QUALIFICATION_PREREGISTRATION.md
+// for v4: the sealed version and seed below are v4's).
 // v3 reads headings and table rows, so from v3 excerpts keep their headings, and two plant kinds put the
 // invention in a heading or a table.
 //
@@ -33,8 +34,8 @@ import { modelSensor, patternSensor, READER_VERSION } from '../../dist/core/loop
 import { wordsOf } from '../../dist/core/observers/text.js';
 import { clopperPearson } from '../../dist/core/stats/sign-test.js';
 
-const SEALED_READER_VERSION = 'a173339d';
-const SEED = 'claim-reader-v3-2026-09-29';
+const SEALED_READER_VERSION = '47d18891';
+const SEED = 'claim-reader-v4-2026-10-18';
 const DEV_PIECES = 5;
 const EXCERPTS_PER_PIECE = 2;
 const EXCERPT_WORDS = 350;

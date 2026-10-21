@@ -1,0 +1,401 @@
+{
+  "reading": "persona-moves",
+  "pass": {
+    "runs": 5,
+    "perCaseAtLeast": 4,
+    "codeDecidedExact": true
+  },
+  "note": "One persona point per case against the pieces it quotes. The label is `trigger status|pieces evidenced`: the status decided by code from what the reading grounds (a trigger is supported only by a second quote from the same piece as the move; none when the point is not a move), the count the distinct pieces the reading quotes the move from, verbatim. No applicability is labelled: the kind is inferred from counts after the table (core/stats/habit.ts), not read. The scope the reading gives is recorded beside each run as `aside` against the case's `aside`, and not judged. v5 (2026-10-19) shows the reading no frequency word and keeps every verbatim quote: run live on claude-haiku-5-5, 2026-10-19: 52/65, two soft cases, one label corrected (see its note). `label2`, where set, judges what a counted feature means: quotes (none, or near the habit only) or absent/present (the feature is the habit); set only where one answer is right.",
+  "cases": [
+    {
+      "id": "supported-trigger-two-pieces",
+      "label": "supported|2",
+      "point": {
+        "aspect": "Adversarial framing on risky surfaces",
+        "description": "Where input is untrusted, writes one sentence from the abusive caller's view, saying what they can do.",
+        "frequency": "SOMETIMES",
+        "quote": "A caller can refund more than the order total"
+      },
+      "pieces": [
+        {
+          "name": "piece-1",
+          "text": "## Summary\nThe handler takes the amount from the request body without checking it. A caller can refund more than the order total, and the gateway is charged each time.\n\n## Verdict\nRequest changes"
+        },
+        {
+          "name": "piece-2",
+          "text": "## Summary\nThe count comes straight from the form. A caller can pass a negative count and the loop never ends.\n\n## Verdict\nRequest changes"
+        },
+        {
+          "name": "piece-3",
+          "text": "## Summary\nThis change renames a module and keeps its tests. Nothing reads from outside.\n\n## Verdict\nApprove"
+        }
+      ],
+      "aside": "sentence"
+    },
+    {
+      "id": "hedge-only-under-uncertainty",
+      "label": "supported|1",
+      "point": {
+        "aspect": "Hedged words reserved for genuine uncertainty",
+        "description": "Uses 'probably' or 'confirm' in a sentence only where the diff cannot show the fact.",
+        "frequency": "SOMETIMES",
+        "quote": "probably safe, but confirm that no caller passes null"
+      },
+      "pieces": [
+        {
+          "name": "piece-1",
+          "text": "## Summary\nThe callers of parse are not in this diff. The new branch is probably safe, but confirm that no caller passes null.\n\n## Verdict\nComment"
+        },
+        {
+          "name": "piece-2",
+          "text": "## Summary\nThe loop stops one short. Use a range to the length.\n\n## Verdict\nRequest changes"
+        },
+        {
+          "name": "piece-3",
+          "text": "## Summary\nThe migration is reversible and the tests cover it.\n\n## Verdict\nApprove"
+        }
+      ],
+      "aside": "sentence",
+      "note": "label2 removed 2026-10-19: the reading says the hedge habit is tentativeModal present 3 of 5; harmless, since a quote of 'probably' where the modal count is zero hands the decision back to the quotes (measureAgrees), so the only harmful direction is a feature absent everywhere, judged on the severity case."
+    },
+    {
+      "id": "move-shown-situation-not",
+      "label": "proposed|1",
+      "point": {
+        "aspect": "Quiet naming judgements",
+        "description": "Calls a name awkward in one flat adjective, then proposes a clearer one.",
+        "frequency": "SOMETIMES",
+        "quote": "The name tmp2 is awkward: rename it"
+      },
+      "pieces": [
+        {
+          "name": "piece-1",
+          "text": "## Suggestions\nThe name tmp2 is awkward: rename it.\n\n## Verdict\nComment"
+        },
+        {
+          "name": "piece-2",
+          "text": "## Summary\nThe loop stops one short. Use a range to the length.\n\n## Verdict\nRequest changes"
+        },
+        {
+          "name": "piece-3",
+          "text": "## Summary\nThe migration is reversible and the tests cover it.\n\n## Verdict\nApprove"
+        }
+      ],
+      "soft": true,
+      "note": "The piece shows the move and nothing else: there is no second sentence that shows a situation. A reading that quotes the move itself as its situation is grounded to proposed; one that finds no trigger at all gives none, which is also honest. Soft on the status.",
+      "aside": "sentence"
+    },
+    {
+      "id": "always-in-three",
+      "label": "none|3",
+      "point": {
+        "aspect": "Impersonal point of view",
+        "description": "Never says I or you; a finding is a bare statement about the artifact.",
+        "frequency": "ALWAYS",
+        "quote": "The loop stops one short"
+      },
+      "pieces": [
+        {
+          "name": "piece-1",
+          "text": "## Summary\nThe loop stops one short. Use a range to the length.\n\n## Verdict\nRequest changes"
+        },
+        {
+          "name": "piece-2",
+          "text": "## Summary\nThe handler trusts the body. Validate the amount before the charge.\n\n## Verdict\nRequest changes"
+        },
+        {
+          "name": "piece-3",
+          "text": "## Summary\nThe migration is reversible and the tests cover it.\n\n## Verdict\nApprove"
+        }
+      ],
+      "aside": "sentence"
+    },
+    {
+      "id": "always-in-two-of-five",
+      "label": "supported|2",
+      "point": {
+        "aspect": "Verdict line with a reason",
+        "description": "The verdict line carries its reason after a dash.",
+        "frequency": "ALWAYS",
+        "quote": "Request changes — the retry loop never backs off"
+      },
+      "pieces": [
+        {
+          "name": "piece-1",
+          "text": "## Summary\nThe retry is unbounded.\n\n## Verdict\nRequest changes — the retry loop never backs off"
+        },
+        {
+          "name": "piece-2",
+          "text": "## Summary\nThe cache key omits the tenant.\n\n## Verdict\nRequest changes — two tenants share a cache line"
+        },
+        {
+          "name": "piece-3",
+          "text": "## Summary\nThe migration is reversible.\n\n## Verdict\nApprove"
+        },
+        {
+          "name": "piece-4",
+          "text": "## Summary\nThe rename keeps its tests.\n\n## Verdict\nApprove"
+        },
+        {
+          "name": "piece-5",
+          "text": "## Summary\nThe log line is at the wrong level.\n\n## Verdict\nComment"
+        }
+      ],
+      "note": "Labelled none|2 as a standing trait before the live run of v5 (2026-10-19): the reading gave it a situation, 'when the verdict requests changes', shown by a second quote in both pieces, 5 of 5 runs; the pieces bear it out (the reason follows the two Request changes verdicts and none of the others), so the kind the counts give is situational (2 of 2 in, 0 of 3 out). The label follows the reading and the data, not the assumption.",
+      "aside": "sentence",
+      "label2": "quotes"
+    },
+    {
+      "id": "register-is-not-a-move",
+      "label": "none|3",
+      "point": {
+        "aspect": "Formal register",
+        "description": "Clipped and professional: no jokes, no exclamation marks, almost no contractions.",
+        "frequency": "OFTEN",
+        "quote": "Use a range to the length"
+      },
+      "pieces": [
+        {
+          "name": "piece-1",
+          "text": "## Summary\nThe loop stops one short. Use a range to the length.\n\n## Verdict\nRequest changes"
+        },
+        {
+          "name": "piece-2",
+          "text": "## Summary\nThe handler trusts the body. Validate the amount before the charge.\n\n## Verdict\nRequest changes"
+        },
+        {
+          "name": "piece-3",
+          "text": "## Summary\nThe migration is reversible and the tests cover it.\n\n## Verdict\nApprove"
+        }
+      ],
+      "note": "A register has no trigger (null), and OFTEN is not general: unknown by code.",
+      "aside": "sentence"
+    },
+    {
+      "id": "section-scope-competing-explanation",
+      "label": "supported|1",
+      "point": {
+        "aspect": "Competing explanation first",
+        "description": "When the accepted explanation hides the real constraint, opens the argument with the competing explanation and only then the mechanism, across the opening paragraphs.",
+        "frequency": "SOMETIMES",
+        "quote": "The usual story is that the queue is slow. It is not the queue."
+      },
+      "pieces": [
+        {
+          "name": "piece-1",
+          "text": "Everyone on the team blamed the queue for the latency. The usual story is that the queue is slow. It is not the queue.\n\nThe lock on the writer is held across the network call, so every consumer waits on one socket.\n\nRelease the lock before the call."
+        },
+        {
+          "name": "piece-2",
+          "text": "The report shows the cache hit rate at ninety percent. That number counts hits on keys that are never read again.\n\nCount hits on keys read within the hour, and the rate is forty."
+        },
+        {
+          "name": "piece-3",
+          "text": "The deploy failed because the image tag moved. Pin the tag and the deploy is reproducible."
+        }
+      ],
+      "aside": "section",
+      "soft": true
+    },
+    {
+      "id": "decision-scope-tradeoff",
+      "label": "supported|1",
+      "point": {
+        "aspect": "Recommendation changed by a tradeoff",
+        "description": "When a fix has a cost that outweighs it, recommends against the fix the diff makes and names what to do instead.",
+        "frequency": "SOMETIMES",
+        "quote": "Do not add the index: the write path pays for it on every insert"
+      },
+      "pieces": [
+        {
+          "name": "piece-1",
+          "text": "## Summary\nThe change adds an index to speed the nightly report. The table takes ten thousand inserts a second during the day. Do not add the index: the write path pays for it on every insert. Run the report from the replica.\n\n## Verdict\nRequest changes"
+        },
+        {
+          "name": "piece-2",
+          "text": "## Summary\nThe loop stops one short. Use a range to the length.\n\n## Verdict\nRequest changes"
+        },
+        {
+          "name": "piece-3",
+          "text": "## Summary\nThe migration is reversible and the tests cover it.\n\n## Verdict\nApprove"
+        }
+      ],
+      "aside": "decision",
+      "label2": "quotes"
+    },
+    {
+      "id": "terse-verdict",
+      "label": "none|3",
+      "point": {
+        "aspect": "Abrupt closing",
+        "description": "Ends on a terse verdict line with no sign-off.",
+        "frequency": "ALWAYS",
+        "quote": "Request changes"
+      },
+      "pieces": [
+        {
+          "name": "piece-1",
+          "text": "## Summary\nThe loop stops one short.\n\n## Verdict\nRequest changes"
+        },
+        {
+          "name": "piece-2",
+          "text": "## Summary\nThe handler trusts the body.\n\n## Verdict\nRequest changes"
+        },
+        {
+          "name": "piece-3",
+          "text": "## Summary\nThe migration is reversible.\n\n## Verdict\nApprove"
+        }
+      ],
+      "aside": "sentence",
+      "label2": "quotes"
+    },
+    {
+      "id": "one-golden",
+      "label": "none|1",
+      "point": {
+        "aspect": "Impersonal point of view",
+        "description": "Never says I or you; a finding is a bare statement about the artifact.",
+        "frequency": "ALWAYS",
+        "quote": "The loop stops one short"
+      },
+      "pieces": [
+        {
+          "name": "piece-1",
+          "text": "## Summary\nThe loop stops one short. Use a range to the length.\n\n## Verdict\nRequest changes"
+        }
+      ],
+      "note": "One piece: general by code, marked provisional (not in the label).",
+      "aside": "sentence"
+    },
+    {
+      "id": "rarely-supported",
+      "label": "supported|1",
+      "point": {
+        "aspect": "Side benefit in passing",
+        "description": "When a fix has a second payoff, tacks it on with 'which also'.",
+        "frequency": "RARELY",
+        "quote": "which also removes the retry"
+      },
+      "pieces": [
+        {
+          "name": "piece-1",
+          "text": "## Suggestions\nMove the call inside the transaction, which also removes the retry.\n\n## Verdict\nComment"
+        },
+        {
+          "name": "piece-2",
+          "text": "## Summary\nThe loop stops one short. Use a range to the length.\n\n## Verdict\nRequest changes"
+        },
+        {
+          "name": "piece-3",
+          "text": "## Summary\nThe migration is reversible and the tests cover it.\n\n## Verdict\nApprove"
+        }
+      ],
+      "soft": true,
+      "note": "Soft: the move and its situation are one sentence here ('Move the call inside the transaction, which also removes the retry'), and a situation quote must be distinct from the move's, so the reading answers proposed 4 of 5 (v5 live, 2026-10-19). A sentence-scope move whose situation is in the same sentence has no second quote to give; the table and the counts decide its kind.",
+      "aside": "sentence"
+    },
+    {
+      "id": "concession-clause",
+      "label": "supported|2",
+      "point": {
+        "aspect": "Concession before critique",
+        "description": "When part of a change is defensible, grants it in the finding's first clause before pressing the defect.",
+        "frequency": "OFTEN",
+        "quote": "which is safe on its own, but"
+      },
+      "pieces": [
+        {
+          "name": "piece-1",
+          "text": "## Must fix\nThe handler now checks the amount against the order, which is safe on its own, but the check runs after the charge, so a bad amount is charged and then refused.\n\n## Verdict\nRequest changes"
+        },
+        {
+          "name": "piece-2",
+          "text": "## Must fix\nThe retry now backs off, which is right, but the cap is a minute, so a dead upstream is retried sixty times.\n\n## Verdict\nRequest changes"
+        },
+        {
+          "name": "piece-3",
+          "text": "## Summary\nThe migration is reversible and the tests cover it.\n\n## Verdict\nApprove"
+        }
+      ],
+      "aside": "sentence"
+    },
+    {
+      "id": "judgement-trigger-reworded",
+      "label": "supported|1",
+      "aside": "decision",
+      "point": {
+        "aspect": "Recommendation changed by a tradeoff",
+        "description": "When a fix adds work to a hot write path to speed a cold read, recommends against the fix the diff makes and names what to do instead.",
+        "frequency": "SOMETIMES",
+        "quote": "Do not add the index: the write path pays for it on every insert"
+      },
+      "pieces": [
+        {
+          "name": "piece-1",
+          "text": "## Summary\nThe change adds an index to speed the nightly report. The table takes ten thousand inserts a second during the day. Do not add the index: the write path pays for it on every insert. Run the report from the replica.\n\n## Verdict\nRequest changes"
+        },
+        {
+          "name": "piece-2",
+          "text": "## Summary\nThe loop stops one short. Use a range to the length.\n\n## Verdict\nRequest changes"
+        },
+        {
+          "name": "piece-3",
+          "text": "## Summary\nThe migration is reversible and the tests cover it.\n\n## Verdict\nApprove"
+        }
+      ],
+      "note": "the trigger a reader can see (work added to a hot write path), shown by the inserts-per-second sentence"
+    },
+    {
+      "id": "severity-named-not-exclamation",
+      "label": null,
+      "label2": "quotes",
+      "point": {
+        "aspect": "Severity escalation in plain words",
+        "description": "Names the class of harm in one plain phrase after the mechanism, never raising the temperature.",
+        "frequency": "SOMETIMES",
+        "quote": "This is a privilege escalation affecting every route behind the guard."
+      },
+      "files": [
+        "bench/standing/domains/code-review/examples/e01.md",
+        "bench/standing/domains/code-review/examples/e02.md",
+        "bench/standing/domains/code-review/examples/e03.md",
+        "bench/standing/domains/code-review/examples/e04.md",
+        "bench/standing/domains/code-review/examples/e05.md",
+        "bench/standing/domains/code-review/examples/e06.md",
+        "bench/standing/domains/code-review/examples/e07.md",
+        "bench/standing/domains/code-review/examples/e08.md",
+        "bench/standing/domains/code-review/examples/e09.md",
+        "bench/standing/domains/code-review/examples/e10.md",
+        "bench/standing/domains/code-review/examples/e11.md",
+        "bench/standing/domains/code-review/examples/e12.md"
+      ],
+      "note": "The absence of exclamation marks is consistent with \"never raising the temperature\" and does not measure \"names the class of harm\": the feature, if named, is only near the habit (label2 quotes). On the real build the reading said exclamation:absent and the count gave 12 of 12. The trigger is not judged here (the reading proposes 'when a defect lets one user act with another's privileges', shown by a second quote in piece-9, and that is a fair reading): only what the feature means is."
+    },
+    {
+      "id": "no-exclamation-is-the-feature",
+      "label": "none|3",
+      "label2": "absent",
+      "point": {
+        "aspect": "No exclamation marks",
+        "description": "Never uses an exclamation mark.",
+        "frequency": "ALWAYS",
+        "quote": "Request changes"
+      },
+      "pieces": [
+        {
+          "name": "piece-1",
+          "text": "## Summary\nThe loop stops one short.\n\n## Verdict\nRequest changes"
+        },
+        {
+          "name": "piece-2",
+          "text": "## Summary\nThe handler trusts the body.\n\n## Verdict\nRequest changes"
+        },
+        {
+          "name": "piece-3",
+          "text": "## Summary\nThe migration is reversible.\n\n## Verdict\nRequest changes"
+        }
+      ],
+      "note": "The point names the very thing the feature counts: absent is the habit."
+    }
+  ]
+}

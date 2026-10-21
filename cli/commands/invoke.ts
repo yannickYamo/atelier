@@ -4,13 +4,26 @@
 // the provider factory, host selection — lives in ../runtime.js and is imported, so a
 // command file reads as one job rather than as a slice of everything.
 
+import { wordsOf as overlapWords } from '../../core/observers/overlap.js';
 import { inRepairChain, stepGuarded, outOfStepCalls } from '../../core/inference/step-guard.js';
 import { existsSync, readFileSync } from 'node:fs';
 import { methodReading, methodLine } from '../../core/eval/obligations.js';
 import type { CheckContext } from '../../core/observers/registry.js';
-import { checksFor, claimInstrumentOf, contextJudgeFor, smallReaderFor, CLAIMS_MODEL_DEFAULT, shortFormRequest } from '../checks.js';
+import { checksFor, claimInstrumentOf, contextJudgeFor, contextJudgeModel, smallReaderFor, CLAIMS_MODEL_DEFAULT, shortFormRequest } from '../checks.js';
 import { regressions, readAtLength, featureParamsOf, ruleParamsOf, enforcedNeverWorse, applyStep, unmeasuredIn, type ParamsOf, type Proposed } from '../../core/loop/repair.js';
-import { refineToStandard, checkDraft, checkDraftAsync, withWaivers, enforceClaims, heavyCut, listedClaims, brokenByCut, gradedRules, PUBLIC_FACTS, INCONCLUSIVE, UNREAD, type CheckOptions } from '../../core/loop/run-repair.js';
+import { answerSentences, judgedSituations } from '../../core/loop/answer-claims.js';
+import { groundCarried } from '../../core/loop/grounding.js';
+import { withoutServedNotes } from '../../core/loop/echo.js';
+import { certificateFor, claimStandingOf, recordHead } from '../../core/eval/certificate.js';
+import { SLOT_NOTE } from '../../renderers/agent-skill/render.js';
+import { EXECUTION_BRIEF, briefNote, applyingSteps, setAsideSteps, unresolvedSteps, type BriefStep, selectMoves, type MoveSelection } from '../../core/loop/execution-brief.js';
+import { MOVE_CASES, eligibleMoves } from '../../core/loop/move-cases.js';
+import { MOVE_READER, countOutcomes } from '../../core/taste/move-reader.js';
+/** Reading calls a run makes by default on a long request: two batches of twelve rules, each read twice. */
+const READ_CALLS_DEFAULT = 4;
+import { readContext } from '../../core/inference/reading.js';
+import { needsNote, needsNothing } from '../../core/loop/task-needs.js';
+import { refineToStandard, checkDraft, checkDraftAsync, withWaivers, enforceClaims, heavyCut, listedClaims, brokenByCut, gradedRules, PUBLIC_FACTS, INCONCLUSIVE, UNREAD, REPAIR_PASSES, type CheckOptions } from '../../core/loop/run-repair.js';
 import { signalChecks, displacement, isSignal, ownerWords } from '../../core/loop/graded.js';
 import { steeredShape, steersMiss, shapeLengthAim } from '../../core/loop/shape-steer.js';
 import { signalDistance } from '../../core/observers/selection.js';
@@ -50,7 +63,7 @@ import { chainOf, sampleSkeleton, skeletonBlock, followed, NEAR_WEIGHT, type Mov
 import { readStructure, STRUCTURE_READER_VERSION, type StructureMove } from '../../core/structure/moves.js';
 import { structureModel } from './fidelity.js';
 import { checkClass } from '../../core/observers/doc-class.js';
-import { readTaste, tasteRules, describeTaste, applicabilityFor, vetoMisses, type TasteReading } from '../../core/taste/reader.js';
+import { readTaste, tasteRules, describeTaste, applicabilityFor, vetoMisses, readCoverage, type TasteReading, type ReadBounds } from '../../core/taste/reader.js';
 import { tastePermissions } from '../../core/taste/calibration.js';
 import { refineTaste } from '../../core/taste/repair.js';
 import { overlapIndex, sentencesKept, sentencesAdded } from '../../core/observers/overlap.js';
@@ -62,13 +75,14 @@ import { statedLength, statedLengths, againstStated, statedBounds, notHeldBecaus
 import { proseWords } from '../../core/observers/style.js';
 import { isReplyWork } from '../../core/observers/formats.js';
 import { citesLines, numbered, citedLines } from '../../core/loop/locators.js';
-import { composeServed } from '../served.js';
+import { composeServed, forThisRequest, withoutPersonaBlocks } from '../served.js';
 import { findOwnershipBreaches, describeBreaches } from '../../core/state/output-ownership.js';
 import { assertHistoryNotServed, foldRepairs } from '../../core/architecture/repair-memory.js';
 import type { SkillVersion, InvocationSettings } from '../../core/state/canonical-state.js';
 import * as store from '../../core/state/store.js';
 import { copyGuardPieces } from '../../core/compiler/voice.js';
 import { listsBecause, unmeasuredKind } from '../../core/loop/claim-extract.js';
+import { formatOf } from '../../core/observers/formats.js';
 import { planFor } from '../../core/plan/execution-plan.js';
 import { checkSatisfiable, describeSatisfiability, type SatisfiabilityVerdict } from '../../core/state/prerequisite.js';
 import { resolveProvenance } from '../../core/fidelity/provenance.js';
@@ -78,7 +92,7 @@ import { version } from '../help.js';
 import { writeAtomic } from '../../core/state/fs-atomic.js';
 import { compareBindings, describeMismatch, describeNewSurface, detectResolvedModelDrift, bindingHash } from '../../core/runtime/binding.js';
 import { resolve as resolvePath } from 'node:path';
-import { sha, DATA, VALUED_OPTIONS, die, argv, flag, clientAndBinding, describeBinding, numericFlag, positional, boundResources, boundMaterial, assertSkillName, runFile, clientFor, callsSeen, thinkingOfCalls, thinkingBlocksOfCalls } from '../runtime.js';
+import { sha, DATA, VALUED_OPTIONS, die, argv, flag, clientAndBinding, describeBinding, numericFlag, positional, boundResources, boundMaterial, assertSkillName, runFile, clientFor, callsSeen, thinkingOfCalls, thinkingBlocksOfCalls, contextReaderClient, canReach } from '../runtime.js';
 
 /**
  * What a skill serves, resolved once and shared.
@@ -288,8 +302,9 @@ export const draftOrder = (a: DraftScore, b: DraftScore): number =>
   // pieces span, then by how much: never a pull toward their average (core/fidelity/types.ts).
   // THE LENGTH THEIR PIECES RUN, when the request names none: how many words a draft is outside it. After every
   // rule, before the finer features: a draft at the author's length that breaks a rule does not win on length.
-  || (a.lengthOff ?? 0) - (b.lengthOff ?? 0)
-  || (a.outside ?? 0) - (b.outside ?? 0) || (a.outsideBy ?? 0) - (b.outsideBy ?? 0)
+  // (Words outside the span of the author's pieces, and features outside their range, no longer rank drafts: they
+  // measure closeness to the examples, not the work asked for, and ranking on them chose a sixty-word fix over "Glad
+  // it works" for a thank-you. They are still recorded, and still steered after the draft by graded notes.)
   // THE PERSON'S FACTS USED. Real writing carries more specifics than an imitation written from the same
   // facts; the way to that density is using what was supplied, so only ledger facts count. Specific-looking
   // text that was not supplied earns nothing here and is the claim floor's to cut.
@@ -350,7 +365,10 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   // `--drafts 1` turns this off.
   // THE IMPLEMENTATION RELEASE (cli/fidelity.ts): how many drafts, how many structural edits, which of the
   // author's passages and which experience notes are served. Below the standard, recorded with the output.
-  const fid = std && !argv.includes('--no-fidelity') ? releaseFor(L, sv) : null;
+  const tryRelease = flag('--try-release') ?? null;
+  if (tryRelease && (!std || argv.includes('--no-fidelity'))) die(`--try-release runs a stored release, and this run has none to run${argv.includes('--no-fidelity') ? ' (--no-fidelity)' : ': the skill has no standard'}.`);
+  const fid = std && !argv.includes('--no-fidelity') ? releaseFor(L, sv, tryRelease) : null;
+  if (tryRelease && fid?.release.id !== tryRelease) die(`release ${tryRelease} could not be served (its profile is not stored); nothing was run.`);
   // `--fidelity` runs the full loop for this run (LOOP_SETTINGS), over whatever the release says.
   const runSettings = fid ? (argv.includes('--fidelity') ? { ...fid.release.settings, ...LOOP_SETTINGS } : fid.release.settings) : null;
   // THE VOICE LAYER (core/voice), only for a skill whose owner declared the corpus's register under this
@@ -394,7 +412,6 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   // bound, has no claim check to wait for: strict holds the rest of the standard, and the verdict says the
   // specifics were listed and why. --allow-unsourced turns the claim check off, and with it this stop.
   const materialBound = store.getMaterial(L).length > 0 || boundMaterial().length > 0;
-  const unmeasuredWork = listsBecause({ cls: flag('--class') ?? store.getDocClass(L), bound: materialBound, slots: argv.includes('--placeholders') });
   const unmeasuredNamed = unmeasuredKind(flag('--class') ?? store.getDocClass(L));
   if (strict && unmeasuredNamed && !argv.includes('--allow-unsourced')) {
     die(`Strict delivery needs a claim check that decides, and here the claim check is not measured on ${unmeasuredNamed}. Nothing was written. Run without --strict to get a draft with unsourced sentences listed.`);
@@ -440,11 +457,16 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const adoptedCarry = store.getCarry(L); const methodCarry = adoptedCarry?.standardVersion === sv.standardVersionHash ? adoptedCarry : null;
   const carryNoteFile = flag('--carry-note');
   const carryNote = (carryNoteFile !== undefined ? (existsSync(carryNoteFile) ? readFileSync(carryNoteFile, 'utf8') : die(`--carry-note ${carryNoteFile}: there is no such file.`)) : methodCarry?.note ?? '').trim();
-  const nDrafts = Math.max(1, Math.floor(numericFlag('--drafts', runSettings ? runSettings.drafts : methodCarry?.drafts ?? (store.getVoice(L)?.pieces?.length ? 2 : 1))));
+  const nDrafts = Math.max(1, Math.floor(numericFlag('--drafts', runSettings ? runSettings.drafts : methodCarry?.drafts ?? 1)));
   const editBudget = runSettings && !argv.includes('--no-repair') ? Math.max(0, Math.floor(numericFlag('--edits', runSettings.editBudget))) : 0;
-  // THE TASTE READER IS A MODEL'S OPINION OF THE OWNER'S RULES, and has not earned a say (docs/TASTE.md): it runs
-  // only when asked for (--taste). A run is held to what code can read and what the owner judges.
-  const taste = std && argv.includes('--taste') && !argv.includes('--no-taste') ? TasteSession.open(L, std, asked, waiting) : null;
+  // THE TASTE READER IS A MODEL'S OPINION OF THE OWNER'S RULES, and has not earned a say (docs/TASTE.md). It reads the
+  // delivered text against every rule no count checks, in reporting mode, wherever a model can be reached: what it
+  // finds is shown, counted toward the labels that earn it a say, and never a reason to cut or redraft until then.
+  // Bounded (`setBounds`, after the request is read): a short request gets no reading unless asked (--taste), a long
+  // one at most a few calls, --strict every rule. --no-taste turns it off. A run is held to what code can read and
+  // what the owner judges.
+  const readerAsked = argv.includes('--taste');
+  let taste = std && !argv.includes('--no-taste') && (readerAsked || canReach('discovery')) ? TasteSession.open(L, std, asked, waiting) : null;
   // The bounds grow with the drafts and the taste reader's calls, and a request the cap cannot cover is
   // refused before anything is spent rather than failing halfway with nothing delivered.
   // GRADED FEATURES, ON BY DEFAULT: the standard's FEATURE rules and the profile's far-out SIGNAL features are repair
@@ -482,6 +504,9 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   // judge when there is one (core/loop/context-judge.ts); the word patterns are the floor. On the run's own budget,
   // so its calls count against the cap the person set.
   const judge = !argv.includes('--allow-unsourced') ? contextJudgeFor(budget) : undefined;
+  // WHAT THE REQUEST ASKS FOR IS READ ON EVERY RUN THAT ASKS FOR MORE THAN A LINE (the task first): a reply that leaves a
+  // part out is written again once. A request of a few words is one ask, and its reply is read as a whole by the checks.
+  const coverageOn = judge?.covers !== undefined && !argv.includes('--no-coverage') && (strict || asksParts(asked));
   const intent = judge ? await judge.requestIntent(asked) : null;
   // THE REGISTER OF THE REQUEST (core/voice/register.ts): the person's flag, else the request's own words for its
   // document type as the judge quoted them, else the word table.
@@ -512,7 +537,15 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
 
   // ASKED FOR, NOT INVENTED. A story, a named source or a figure the person did not supply is cut from
   // the output (core/loop/claims.ts). Said before anything is spent, with how to supply the real ones.
-  const needsLine = materialLine(satisfiable, material.length > 0, !argv.includes('--allow-unsourced'), name);
+  // SLOTS BY DEFAULT FOR WRITING WITH NO MATERIAL. An invented story, source or figure in a document written from a
+  // title alone becomes a marked slot for the person's own ("[your story: …]"), never a cut that leaves the piece
+  // abstract. Where material is bound (a diff, a term sheet) the facts are the material's: a specific not in it is
+  // listed for the reader, never slotted (a Must fix finding became "[your own story, figure or source goes here]").
+  // Replies list too. `--placeholders` asks for slots anywhere; `--no-placeholders` asks for cuts on a document.
+  // A skill built before the form was read falls to the name of the work, as the compiler did.
+  const placeholdersOn = argv.includes('--placeholders') || (!argv.includes('--no-placeholders') && material.length === 0
+    && (store.getWorkForm(L) ?? (std && isReplyWork(std.workType) ? 'REPLY' : 'DOCUMENT')) === 'DOCUMENT');
+  const needsLine = materialLine(satisfiable, material.length > 0, !argv.includes('--allow-unsourced'), name, placeholdersOn);
   if (needsLine) report.say(needsLine);
   if (nDrafts > 1 && (!std || contractFile !== null)) {
     console.log(`(--drafts ${nDrafts} does not apply here: ${!std ? 'the standard is missing' : 'this skill has an output contract, so there is one shape to produce'}; writing one draft.)`);
@@ -523,6 +556,11 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   // in the record; the compiled skill is untouched. A REQUIRED one applies only under a condition (a
   // general one refused the run above), so it is also not counted against this output.
   const withheld = std ? std.requirements.filter((q) => waiting.has(q.requirementId)).map((q) => q.statement) : [];
+  // These stay CUT out of the skill, as measured: told to set them aside, a writer still shown "name the design
+  // alternative we rejected" was the one that invented. They turn on whether material is bound, not on the request, so
+  // the skill stays the same bytes across a run's requests. Every rule set aside below because of what one request
+  // says is named after the skill instead (cli/served.ts, `forThisRequest`), and the skill stays whole for the cache.
+  const needMaterial = [...withheld];
   const waived = new Map<string, string>();
   for (const [id, why] of heldBackReasons(satisfiable)) waived.set(id, why);
   // OUT OF REGISTER, ONLY WHAT THE OWNER'S POLICY CARRIES (core/voice/transfer.ts). A rule learned from blog
@@ -545,7 +583,8 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   // A NUMBER IN THE REQUEST IS A LENGTH TOO (core/intake/length.ts). "About 2,000 words" was not seen: only words
   // like "detailed" were, so the usual length stayed in the prompt and the chapter came back short.
   const stated = statedLength(asked);
-  const lengthAsked = intent?.length ?? requestedLength(asked);
+  // The judge's reading is decisive when it ran, a null included: `??` let the word pattern overrule a judge that had read the request and found no length asked.
+  const lengthAsked = intent ? intent.length : requestedLength(asked);
   for (const q of lengthRulesTheRequestSets(std, stated, stated !== null && contractFile === null && !notHeldBecause(asked, stated))) {
     waived.set(q.requirementId, `the request states its own length (${stated?.raw})`);
     withheld.push(q.statement);
@@ -560,8 +599,9 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   // A BARE request is not a shape. "Return only the post" asks for no preamble, not for a post without the
   // author's paragraphs: read as a shape, it switched off every pace and rhythm rule on exactly the long
   // pieces those rules exist for. Then the standard stays whole and only the wrapping is dropped.
-  const formatAsked = intent?.format ?? requestedFormat(asked);
-  const shape = formatAsked ? formatShape(formatAsked) : null;
+  const formatAsked = intent ? intent.format : requestedFormat(asked);
+  // The judge's shape where it said one (it read the words); the word list only where no judge did.
+  const shape = formatAsked ? (intent?.shape ?? formatShape(formatAsked)) : null;
   let presentationWithheld = 0;
   if (formatAsked && shape === 'SHAPE' && std) {
     const p = presentationRules(std.requirements);
@@ -576,14 +616,82 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
     report.say(transfer.said);
     for (const q of std?.requirements ?? []) if (transfer.doesNotApply.has(q.requirementId)) withheld.push(q.statement);
   }
-  const checks = { ...checksFor(L, { material: materialText, task: asked, context: { request: asked, material }, guardClaims: !argv.includes('--allow-unsourced'), placeholders: argv.includes('--placeholders'), ...(judge ? { judge } : {}) }),
+  // THE EXECUTION BRIEF (core/loop/execution-brief.ts): which of the method's stated steps this request asks for, read
+  // once against the request where a step's own words make it conditional; the decisions they ask for; what was given;
+  // what to leave open. A step set aside is withheld from the writer by name and marked set aside in the evaluation
+  // (a required one keeps the run at NEEDS REVIEW). A short request gets no brief: the method as served says it all.
+  // Whether a step is enforced is the plan's to say (core/plan/execution-plan.ts), never read off the rule's own field.
+  const enforcedSteps = new Set(std ? planFor(std).rules.filter((p) => p.enforced).map((p) => p.id) : []);
+  const unitsOf = store.getUnits(L, sv.standardVersionHash);
+  const statedSteps: BriefStep[] = (std?.requirements ?? []).filter((q) => q.provenance === 'EXPERT_STATED' && q.authority !== 'EXPERT_REJECTED' && !waived.has(q.requirementId))
+    .map((q, i) => ({ id: q.requirementId, n: i + 1, statement: q.statement, required: enforcedSteps.has(q.requirementId), unit: unitsOf[q.requirementId] ?? null }));
+  // WITH NO NOTE OF THE OWNER'S, the steps read off the pieces at build (core/method/infer.ts) brief the run instead: a habit
+  // of the pieces, none of them required, said to the writer as not confirmed; the standard holds none of them.
+  const inferredRecord = statedSteps.length ? null : store.getInferredMethod(L);
+  const inferredMethod = inferredRecord?.steps.length ? inferredRecord : null;
+  const briefSteps: BriefStep[] = statedSteps.length ? statedSteps : (inferredMethod?.steps ?? []).map((st, i) => ({ id: st.id, n: i + 1, statement: st.text, required: false, unit: st.unit }));
+  // WHETHER THE REQUEST NEEDS THE METHOD decides the brief, not its word count: "Review this change" with a diff bound is
+  // the method's work, and so is "The import stalls. Why?"; "Thanks, that solved it." is not. Material bound is need;
+  // otherwise what the request asks for, as the intent reading quoted it from the request (core/loop/task-needs.ts);
+  // with no reading, a request long enough to ask for parts.
+  const needsMethod = material.length > 0 || (intent?.needs ? !needsNothing(intent.needs) : lengthAsked !== 'SHORT' && asksParts(asked));
+  const briefOn = briefSteps.length > 0 && contractFile === null && needsMethod && !argv.includes('--no-brief');
+  // THE AUTHOR'S MOVES (core/compiler/moves.ts), read with the brief: the profile of the persona this skill serves, the
+  // eligible moves (never unknown, never provisional) placed by the same reading, selected by code. Under 'observe' (the
+  // default, or the release's setting) the selection is recorded and nothing is served; under 'serve' (--moves serve,
+  // or the release) the placed moves are said to the writer in the brief. The standard is untouched either way.
+  // THE PROFILE THE BUILD NAMED, by the receipt of the version this run serves: never one looked up by the persona
+  // on disk now, which a later build may have moved. A version built before profiles were kept has none.
+  const receiptNow = store.getReceipt(L, sv.skillVersionHash);
+  const profile = receiptNow?.movesHash ? store.getMovesByHash(L, receiptNow.movesHash) : null;
+  const movesFlag = flag('--moves');
+  if (movesFlag !== undefined && movesFlag !== 'observe' && movesFlag !== 'serve') die(`--moves is observe or serve, got "${movesFlag}".`);
+  // EXAMPLES FIRST: the writer is served the author's pieces, the method and the rules, and no description of the author
+  // (no "How I sound" points, no repertoire, no move in the brief); the profile reads the work afterwards as it would,
+  // and nothing of it authorises a repair. One run's choice, recorded on the run; nothing in the build changes.
+  const examplesFirst = argv.includes('--examples-first');
+  const movesMode: 'observe' | 'serve' = examplesFirst ? 'observe' : (movesFlag as 'observe' | 'serve' | undefined) ?? runSettings?.moves ?? 'observe';
+  const eligible = profile ? eligibleMoves(profile.units) : [];
+  const given = { request: asked, material: material.map((m) => ({ name: m.name, head: m.text.slice(0, 600) })) };
+  const brief = briefOn ? await readContext(EXECUTION_BRIEF, { ...given, steps: briefSteps },
+    contextJudgeModel() ? contextReaderClient() : null, contextJudgeModel(), { spentUsd: 0, capUsd: 0.05, maxCalls: 1 }) : null;
+  // The moves' cases are their own reading (core/loop/move-cases.ts): a second small call only when a move has a case.
+  // The moves' placement is read only where it is served, or where --moves observe asks for the record.
+  const placement = brief && profile && (movesMode === 'serve' || movesFlag !== undefined) ? await readContext(MOVE_CASES, { ...given, moves: eligible },
+    contextJudgeModel() ? contextReaderClient() : null, contextJudgeModel(), { spentUsd: 0, capUsd: 0.03, maxCalls: 1 }) : null;
+  const selection: MoveSelection | null = brief && placement ? selectMoves(placement.value, brief.value, eligible, briefSteps) : null;
+  const briefNoteText = brief ? briefNote(brief.value, briefSteps, material, movesMode === 'serve' ? selection : null) : '';
+  const briefText = briefNoteText && inferredMethod ? `(My usual steps, named below, were read from my own pieces and are not rules I wrote: follow them as my habit, not as requirements.)\n${briefNoteText}` : briefNoteText;
+  if (selection && profile && placement) report.say(`Moves of mine for this request: ${selection.placed.length} placed (${movesMode === 'serve' ? 'served to the writer' : 'observed, not served'}; about ${selection.budget} a piece), ${selection.standing.length} standing (how I always am, in the skill), ${selection.notPlaced.length} not this case, ${selection.unresolved.length} unresolved and never served; read by ${placement.by === 'model' ? 'the context reader' : placement.by}; profile ${profile.hash}.`);
+  // HOW MUCH THE READER MAY READ THIS RUN: nothing on a short request unless asked, four calls on a long one (two
+  // batches of twelve rules, the brief's applying steps and the required rules first), every rule under --strict.
+  // A READER THAT CAN CHANGE NOTHING IS NOT RUN UNASKED: where the reader holds no VETO on this skill its reading is a
+  // report, and a report on every run doubled the cost of short work without touching the text (the v6 study). --taste
+  // runs it and records readings to label; once the labels qualify it, it reads by default where the method is needed.
+  if (taste) {
+    const maxCalls = readerAsked || strict ? Infinity : needsMethod && taste.acts ? READ_CALLS_DEFAULT : 0;
+    if (maxCalls === 0) {
+      if (needsMethod && !taste.acts) report.say(`Judgement reader: not run (reporting only until your labels qualify it; --taste reads this run and records readings to label: atelier taste --skill ${name} --calibrate).`);
+      taste = null;
+    } else taste.setBounds({ maxCalls, first: new Set(brief ? applyingSteps(brief.value, briefSteps).filter((s) => s.required).map((s) => s.id) : []) });
+  }
+  if (brief) {
+    for (const s of setAsideSteps(brief.value, briefSteps)) { waived.set(s.id, `set aside for this request: ${brief.value.placed[s.id].why ?? 'not this case'}`); withheld.push(s.statement); }
+    const off = setAsideSteps(brief.value, briefSteps); const open = unresolvedSteps(brief.value, briefSteps);
+    if (off.length || open.length || brief.value.unsupported.length || brief.value.contradicted.length) report.say(`For this request: ${off.length ? `${off.length} step(s) of the method set aside (${off.map((s) => s.n).join(', ')})` : 'every step applies'}${open.length ? `; ${open.length} not decided by the request, held as applying (${open.map((s) => s.n).join(', ')})` : ''}${brief.value.unsupported.length ? `; ${brief.value.unsupported.length} decision(s) need a specific not given (said, and decided on what is given)` : ''}${brief.value.contradicted.length ? `; the request asks against ${brief.value.contradicted.length} step(s), which stand` : ''} (${brief.by === 'model' ? 'read' : brief.by === 'code' ? 'nothing to read' : `by default: ${brief.why ?? ''}`}).`);
+  }
+  const checks = { ...checksFor(L, { material: materialText, task: asked, context: { request: asked, material }, guardClaims: !argv.includes('--allow-unsourced'), placeholders: placeholdersOn, ...(judge ? { judge } : {}) }),
     ...(short.format ? { format: short.format } : {}),
     ...(transfer ? { doesNotApply: transfer.doesNotApply } : {}),
     ...(waived.size ? { waived } : {}), ...(graded !== undefined ? { graded, gradedProfile: carried } : {}) };
   // DRAFTS THAT DIFFER (core/fidelity/types.ts, `diversity`): each draft its own temperature and its own slice of
   // the author's closest passages, so the shared block carries only the notes.
   const diverse = Boolean(runSettings?.diversity) && nDrafts > 1 && fid !== null;
-  const impl = fid && runSettings ? implementationBlock({ ...fid.release, settings: diverse ? { ...runSettings, retrievalK: 0 } : runSettings }, fid.index, asked, readNear) : { text: '', retrieved: [] };
+  // DRAFTS ON DEMAND (cli/commands/improve.ts, `enough`): the drafts a release setting plans are written only as far as
+  // the first wants a rival. Drafts the person asked for by `--drafts`, and drafts sampled or varied to keep the author's
+  // spread, are all written, as asked.
+  const draftsOnDemand = nDrafts > 1 && !argv.includes('--drafts') && !sampling && !diverse;
+  const impl = fid && runSettings ? implementationBlock({ ...fid.release, settings: diverse ? { ...runSettings, retrievalK: 0 } : runSettings }, fid.index, asked, readNear) : { retrieved: [], notes: '', passages: '' };
   const pool = diverse && fid?.index && runSettings && runSettings.retrievalK > 0 ? retrieveNear(fid.index, asked, runSettings.retrievalK * nDrafts, readNear) : [];
   // A run whose flags changed what the release would have done is recorded with the settings that ran and
   // no release: credited to the release, it would make the settings search compare arms that never ran.
@@ -617,7 +725,20 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const lengthNote = stated && contractFile === null ? lengthToWriteTo(asked, stated) : '';
   // Served under its own heading, as what it is: what earlier runs showed, not a rule of the standard.
   const carryBlock = carryNote && contractFile === null ? `\n\n## From earlier runs of this skill (not a rule of the standard)\n\n${carryNote}` : '';
-  const servedForRun = `${withheld.length ? withoutRules(servedText, withheld) : servedText}${impl.text}${carryBlock}${lengthNote}`;
+  // THE SKILL WHOLE AND THE SAME ON EVERY REQUEST, THEN THIS REQUEST'S NOTES (cli/served.ts, `forThisRequest`): rules set
+  // aside for it are named there, never cut out of the skill, so the skill is cached once and read from the cache after.
+  // WHAT THIS REQUEST NEEDS (core/loop/task-needs.ts), read in the call that read its form: said after the skill, uncached.
+  // NEVER FOR A REQUEST THAT ASKS FOR A DOCUMENT. Said to the writer of an article, "assume it and say the assumption" came
+  // back as an out-of-voice note on the article's assumptions in three papers of five. A request that names the kind of
+  // document it wants ("a technical paper", "a post": the same reading's `document`, in the request's own words) is a
+  // piece to write, not someone to answer, and its form is the author's.
+  const needs = intent?.document ? undefined : intent?.needs;
+  if (needs && !needsNothing(needs)) report.say(`Read before writing: ${[needs.deliver.length ? `${needs.deliver.length} thing(s) asked for` : '', needs.unknowns.length ? `turns on ${needs.unknowns.map((u) => u.what).join('; ')}` : '', needs.actOn ? `could act on "${needs.actOn}"` : '', needs.irreversible ? `cannot be undone: "${needs.irreversible}"` : ''].filter(Boolean).join(' · ')}.`);
+  // The slot shape is said for the run that wants slots (a document, no material bound), never in the skill (SLOT_NOTE).
+  const requestNotes = forThisRequest(withheld.filter((w) => !needMaterial.includes(w)), briefText, impl.passages, lengthNote, needsNote(needs), placeholdersOn ? SLOT_NOTE : '');
+  const servedBase = examplesFirst ? withoutPersonaBlocks(servedText) : servedText;
+  if (examplesFirst) report.say(`Examples first: served without the description of how I sound or my repertoire${servedBase === servedText ? ' (the skill carried none)' : ''}; my moves are read on the work and never served.`);
+  const servedForRun = `${needMaterial.length ? withoutRules(servedBase, needMaterial) : servedBase}${impl.notes ? `\n\n${impl.notes}` : ''}${carryBlock}${requestNotes}`;
   const deliveryForRun = withheld.length ? { ...delivery, withheldRules: withheld } : delivery;
   // What the person said was wrong with an earlier version (`atelier fix`) goes to the writer whatever shape was asked for.
   const corrected = `${task}${correctionFor(flag('--correcting'))}${transfer?.note ?? ''}`;
@@ -640,22 +761,17 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const completions: string[] = [];
   // THE AUTHOR'S OWN LENGTH, WHERE IT APPLIES (`ownLengthApplies`): one more thing the drafts are chosen by.
   const ownBand = ownLengthApplies({ shortForm: Boolean(transfer), stated: Boolean(stated), asked: Boolean(lengthAsked), shape: shape === 'SHAPE', contract: contractFile !== null,
-    answers: checks.format?.claims === 'list' || (std ? isReplyWork(std.workType) : false), outOfRegister: register?.status === 'out', sections: argv.includes('--sections'), ruled: lengthIsRuled(std) })
+    answers: checks.format?.claims === 'list' || (std ? (store.getWorkForm(L) ?? (isReplyWork(std.workType) ? 'REPLY' : 'DOCUMENT')) === 'REPLY' : false), outOfRegister: register?.status === 'out', sections: argv.includes('--sections'), ruled: lengthIsRuled(std) })
     ? ownLengthBand(store.getVoice(L)?.lengthSpan) : null;
-  // What one more draft would be told, when a draft leaves it unmet (`withRedraft`).
-  const ownSpan = store.getVoice(L)?.lengthSpan;
-  // A draft is written again for its length only on evidence that a piece of the author's runs inside the span: with
-  // n pieces the next one falls between the shortest and the longest (n - 1) times in (n + 1), which is four in
-  // five from nine pieces. On fewer the drafts are still chosen by length, which costs nothing. --no-redraft turns
-  // the step off whole.
-  const enough = (store.getVoice(L)?.lengthPieces ?? 0) >= LENGTH_REDRAFT_PIECES;
-  // A short piece from a long-form standard (`transfer`) is never written again toward the length of the longer pieces.
+  // THE AUTHOR'S LENGTH IS NEVER A REASON TO WRITE A DRAFT AGAIN (owner's ruling): the task decides how much is
+  // needed, and the method how it is done. Their usual length is said to the writer as guidance and reported against
+  // the output; a draft is written again only for what the request, the method or the evidence requires.
   // A length the request states in words is held as the request's own: a draft that misses it is written again.
   // Only where it can be read one way (core/intake/length.ts, `notHeldBecause`); otherwise it is shown as not counted.
   const notHeld = stated && contractFile === null ? notHeldBecause(asked, stated) : null;
   // A length in pages is held in words, at the number of words a page that it says (core/intake/length.ts, `inWords`).
   const askedWords = stated && contractFile === null && !notHeld ? inWords(stated) : null;
-  const unmet = std && !argv.includes('--no-redraft') ? unmetReader(std, ownBand && ownSpan && enough && !transfer ? { band: ownBand, span: ownSpan } : null, askedWords, graded, graded !== undefined ? carried : null) : null;
+  const unmet = std && !argv.includes('--no-redraft') ? unmetReader(std, askedWords, graded, graded !== undefined ? carried : null, formatAsked ?? null) : null;
   let delivered: Delivered | null = null;
   const keepDelivered = (refine: (draft: string) => Promise<Delivered>) => async (draft: string): Promise<Delivered> => (delivered = await refine(draft));
   // THE BOUNDED CONTROLLER (core/loop/controller.ts): the release's settings, whether a draft can be written again when it
@@ -672,23 +788,31 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const rec = await runOnce(L, sv, servedForRun, servedHash, deliveryForRun, taskForRun, client, budget, binding,
     resolveProvenance(flag('--provenance'), process.env), contractFile,
     flag('--task') ? 'FLAG' : 'POSITIONAL',
-    std && !argv.includes('--no-repair') ? keepDelivered(withGradedRecord(withStructureRead(repairChain(refineFor(),
-      unmet ? { unmet, notes: completions, resume: refineFor(), paramsOf: ruleParamsOf(std), round: shapeRoundNow, check: (text: string) => checkDraft(name, std, text, { ...checks, claimSensor: undefined }), redraft: async (note, purpose) => (await spendOneWithResult(client, budget, servedForRun, taskForRun, null, note, {}, purpose)).piece, graded: gradedTrace,
+    std && !argv.includes('--no-repair') ? keepDelivered(withSituations(withGrounding(withGradedRecord(withStructureRead(withoutEcho(repairChain(refineFor(),
+      unmet ? { unmet, notes: completions, resume: refineFor(), paramsOf: ruleParamsOf(std), round: shapeRoundNow, protect: store.getVoice(L)?.standardWording ?? [], check: (text: string) => checkDraft(name, std, text, { ...checks, claimSensor: undefined }), redraft: async (note, purpose) => (await spendOneWithResult(client, budget, servedForRun, taskForRun, null, note, {}, purpose)).piece, graded: gradedTrace,
         steps: { usdPerCall: () => { const ls = spendBetween(ledgerBefore, processSpendByPurpose()).filter((l) => l.purpose === 'writing' || l.purpose === 'graded'); const n = ls.reduce((k, l) => k + l.calls, 0); return n ? ls.reduce((k, l) => k + l.usd, 0) / n : undefined; } },
         displaced: (from: string, to: string) => displacement(from, to, graded !== undefined ? carried : null, new Set())?.refusedFor ?? [] } : null,
       fid && (editBudget > 0 || argv.includes('--fidelity')) ? { client, budget, name, std, checks, profile: editProfile ?? fid.profile, editBudget, trace, taste } : null,
       voiceRuns && bank && fid ? { client, budget, name, std, checks, bank, copied: fid.index ? overlapIndex(fid.index.passages.map((p) => p.text)) : null, trace, taste, reader: smallReaderFor()?.client ?? null, gate: runSettings?.voiceGate === 'reader' ? 'reader' as const : 'lists' as const } : null,
-      strict && judge?.covers ? { client, budget, judge, asked, servedText: servedForRun, task: taskForRun, notes: completions, paramsOf: ruleParamsOf(std) } : null,
+      coverageOn && judge?.covers ? { client, budget, judge, asked, servedText: servedForRun, task: taskForRun, notes: completions, paramsOf: ruleParamsOf(std), redraft: strict,
+        ...(checks.guardClaims !== false ? { readsWith: { material: checks.evidence ?? '' } } : {}) } : null,
       shapeRounds > 0 ? { client, budget, std, round: shapeRoundNow, graded, gradedProfile: graded !== undefined ? carried : null, gradedTrace, calibration: fid?.typicality ?? null, detector: fid?.profile.detector ?? null, target: shapeTarget, authorTarget, rounds: shapeRounds, servedText: servedForRun, task: taskForRun, trace, taste, notes: completions,
         fresh: planState ? (round: number) => freshPlannedDraft(client, budget, servedForRun, taskForRun, planState, round) : null } : null,
-      runSteps),
-      planState ? { budget, trace, state: planState } : null), gradedTrace, ledgerBefore)) : null,
-    std && nDrafts > 1 ? withSections(selectDraft({ n: nDrafts, name, std, checks, taste, ownBand, signals: store.getSignals(L), profile: steerProfile, trace, ledger, sampling, ...(diverse ? { variant: variantOf, retrievedFor } : {}) }), sectionWriter)
+      runSteps), requestNotes, completions),
+      planState ? { budget, trace, state: planState } : null), gradedTrace, ledgerBefore),
+      checks.guardClaims !== false && checks.examples ? { client, budget, request: asked, evidence: `${checks.evidence ?? ''}\n${checks.approved ?? ''}`, examples: checks.examples, notes: completions,
+        recheck: (text: string) => checkDraftAsync(name, std, text, checks) } : null),
+      judge && checks.guardClaims !== false ? { judge, request: asked, material: checks.evidence ?? '' } : null)) : null,
+    std && nDrafts > 1 ? withSections(selectDraft({ n: nDrafts, onDemand: draftsOnDemand, name, std, checks, taste, ownBand, signals: store.getSignals(L), profile: steerProfile, trace, ledger, sampling, ...(diverse ? { variant: variantOf, retrievedFor } : {}) }), sectionWriter)
       : sectionWriter ? { n: 1, write: sectionWriter, choose: () => ({ index: 0, why: '' }) } : null,
     std && checks.guardClaims !== false ? async (text: string) => {
       const r = await checkDraftAsync(name, std, text, checks);
       return (r.checked.find((c) => c.requirementId === 'UNSOURCED' && acts(c))?.result.spans ?? []).map((sp) => sp.text);
-    } : null, settingsFor(checks, taste, nDrafts, carryBlock ? carryNote : ''),
+    } : null, settingsFor(checks, taste, nDrafts, carryBlock ? carryNote : '', brief ? { by: brief.by, applies: applyingSteps(brief.value, briefSteps).map((s) => s.id), setAside: setAsideSteps(brief.value, briefSteps).map((s) => s.id),
+      unresolved: unresolvedSteps(brief.value, briefSteps).map((s) => s.id), unsupported: brief.value.unsupported.map((u) => u.id), contradicted: brief.value.contradicted.map((c) => c.id),
+      ...(examplesFirst ? { served: 'examples-first' as const } : {}),
+      ...(inferredMethod ? { inferred: true as const } : {}),
+      ...(selection && profile && placement ? { moves: { by: placement.by, mode: movesMode, profile: profile.hash, placed: selection.placed.map((u) => u.id), standing: selection.standing.map((u) => u.id), notPlaced: selection.notPlaced.map((x) => x.id), unresolved: selection.unresolved, budget: selection.budget } } : {}) } : null, std),
     // A structured output is JSON, not prose: no reading of it means anything against a prose range.
     fid && std && contractFile === null ? (output: string) => fidelityRecord(fid, output, trace, impl.retrieved, applicability(name, std, output, waived, withheld, checks.context, transfer?.doesNotApply), ledger,
       { ...(runSettings ?? fid.release.settings), drafts: nDrafts, editBudget, ...(voiceMode === 'incontext' ? { voice: 'incontext' as const } : { voice: undefined }),
@@ -706,14 +830,25 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   // cuts, the sentences it could not find in the material close the delivered text, after everything the checks
   // read; the record keeps the text without them. With nothing bound the list is every specific the writer chose,
   // which tells a reader nothing: it stays in the report. --no-unsourced-note leaves it there in every case.
-  const listed = unmeasuredWork && materialBound && !argv.includes('--no-unsourced-note') ? rec.repair?.claimsToCheck ?? [] : [];
-  const shipped = listed.length ? `${rec.output.trimEnd()}\n\n---\nNot found in what you supplied (check before you use this):\n${listed.map((c) => `- "${c}"`).join('\n')}` : rec.output;
+  // MARKED WHERE IT STANDS. A finding the material does not support is labelled in place as one to verify, so the
+  // person reading the review or the answer sees which claims rest on what they gave and which do not; a list after
+  // the text left the unsupported finding reading as fact where it stood. Any kind of work, once material is bound.
+  // A sentence that cannot be found as written is listed after the text, as before.
+  // Only where the claim check lists and does not cut (a kind nobody measured, or one that lists by design): where it
+  // cuts, what it leaves is what a qualified reading kept, and marks in finished prose are noise.
+  const lists = Boolean(listsBecause({ cls: flag('--class') ?? store.getDocClass(L), bound: materialBound, slots: placeholdersOn }))
+    || formatOf(flag('--class') ?? store.getDocClass(L))?.claims === 'list';
+  const listed = lists && materialBound && !argv.includes('--no-unsourced-note') ? rec.repair?.claimsToCheck ?? [] : [];
+  const shipped = markUnsupported(rec.output, listed);
   if (!machine && !strict) console.log(`\n${shipped}\n`);
   if (adoptedCarry && !methodCarry) report.say(store.CARRY_RETIRED);
   for (const c of completions) report.say(c);
   reportChecks(report, rec, std, checks);
   if (lineCiting && material.length) report.say(lineCitationsLine(rec.output, material));
   const tasteMonitor = taste ? await taste.report(report, rec, name) : null;
+  // THE MOVES, READ ON THE WORK (core/taste/move-reader.ts): its own small call, under the taste reader's own gate, so
+  // the reader's coverage of the method's steps is never spent on a move. A reading, never a gate: recorded, shown, summed.
+  const movesMonitor = selection && profile && placement && !argv.includes('--no-taste') && (readerAsked || movesFlag !== undefined || movesMode === 'serve') && canReach('discovery') ? await readMovesOnWork(L, rec, asked, selection, profile.hash, movesMode, report) : null;
   reportIntegrity(report, rec, cls.ok ? cls.note : null, std, L);
   reportFidelity(report, rec);
   if (ownBand) report.say(ownLengthLine(rec.output, ownBand, store.getVoice(L)?.lengthSpan ?? ownBand));
@@ -739,18 +874,18 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
     const kept = delivered as Delivered | null;
     const finalReport = !std || contractFile !== null ? null : kept?.output === rec.output ? kept.report
       : await checkDraftAsync(name, std, rec.output, checks).catch(() => null);
-    evaluation = buildRunEval({ L, rec, std, sensor: checks.claimSensor, claimsOff: argv.includes('--allow-unsourced'),
+    evaluation = buildRunEval({ L, rec, std, sensor: checks.claimSensor, claimsOff: argv.includes('--allow-unsourced'), readings: taste?.readingsOf(rec.output),
       answers: checks.format?.claims === 'list', unmeasured: checks.listsBecause ?? null, profile: fid?.profile ?? null,
-      format: { words: formatAsked ?? null, shape, withheld: presentationWithheld }, taste: tasteMonitor, costUsd: spent,
+      format: { words: formatAsked ?? null, shape, withheld: presentationWithheld }, taste: tasteMonitor, moves: movesMonitor, costUsd: spent,
       // Where the cost went (core/inference/client.ts, `SpendPurpose`) and what the writer was sent, in words.
       spend: spentBy,
-      sent: { skill: countWords(servedForRun) - countWords(impl.text) - countWords(carryBlock), added: countWords(impl.text) + countWords(carryBlock) + perDraftWords, request: countWords(taskForRun) },
+      sent: { skill: countWords(needMaterial.length ? withoutRules(servedText, needMaterial) : servedText), added: countWords(impl.notes) + countWords(carryBlock) + countWords(requestNotes) + perDraftWords, request: countWords(taskForRun) },
       durationMs: Date.now() - started, drafts: nDrafts, report: finalReport, contract: contractFile !== null,
       request: askedWords ? requestLength(rec.output, askedWords) : stated && notHeld ? { asked: stated.raw, met: null, detail: notHeld } : null,
       applicability: rec.fidelity?.applicability ?? (std ? applicability(name, std, rec.output, waived, withheld, checks.context, transfer?.doesNotApply) : []),
       // WHAT THE REQUEST ASKED FOR, AGAINST THE DELIVERED TEXT: read under strict delivery, from the run's cache when
       // the loop already read this text. A monitor on the panel: it never decides the verdict.
-      coverage: strict && judge?.covers ? await judge.covers(asked, rec.output).catch(() => null) : null,
+      coverage: coverageOn && judge?.covers ? await judge.covers(asked, rec.output).catch(() => null) : null,
       strict: strict ? { redraws, allowed: argv.includes('--allow-nonconformant') } : null });
   } catch (e) {
     report.say(`(the evaluation of this run could not be built: ${(e as Error).message.split('\n')[0]})`);
@@ -778,6 +913,8 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   if (machine === 'answer' && !refused) process.stdout.write(`${shipped}\n`);
   if (machine === 'json') {
     process.stdout.write(`${JSON.stringify({
+      // THE ONE RECORD HEAD every door prints (core/eval/certificate.ts): the same keys `atelier verify --json` gives.
+      ...recordHead({ state: evaluation?.record?.state ?? null, standardVersionHash: sv.standardVersionHash, skillVersion: sv.skillVersionHash, certificate: rec.settings?.certificate ?? null, record: evaluation?.record ?? null }),
       // `answer` is what --answer-only prints: the output with its list of specifics not found in the material.
       output: refused ? null : rec.output, answer: refused ? null : shipped, ...(strict ? { delivered: !refused } : {}), invocationId: rec.invocationId, skillVersion: sv.skillVersionHash, costUsd: Number(spent.toFixed(4)),
       rulesBroken: rec.repair?.violatedAfter ?? [], cut: rec.repair?.storiesCut ?? [], toCheck: rec.repair?.claimsToCheck ?? [],
@@ -810,15 +947,18 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
  * figure in the output may come from. The request itself is material too: a story typed into the task
  * is theirs to tell.
  */
-function taskWithMaterial(L: store.StoreLayout, asked: string, lineCiting = false): { material: readonly { name: string; text: string }[]; materialText: string; task: string } {
+export function taskWithMaterial(L: store.StoreLayout, asked: string, lineCiting = false, slots = argv.includes('--placeholders')): { material: readonly { name: string; text: string }[]; materialText: string; task: string } {
   const material = [...store.getMaterial(L), ...boundMaterial()];
   const materialText = [asked, ...material.map((m) => m.text)].join('\n\n');
   // What the checks read is the material as given; what the writer sees, for a skill that cites lines, carries
-  // each line's number, so a citation is read off the page and never counted.
+  // each line's number, so a citation is read off the page and never counted. The skill's own text shows the
+  // writer how to leave a slot ([link: …]) for a specific no one gave; with material bound, nothing is missing,
+  // and a code review once named "[person: who owns the shipping policy]" as a Must fix. So the writer is told.
+  const noSlots = slots ? '' : '\n\n(The material holds every specific this piece names. Leave no bracketed slot for me to fill: what the material does not give, the piece does without.)';
   const task = !material.length ? asked
     : lineCiting ? `${asked}\n\n${material.map((m) => `<material name="${m.name}" lines="numbered">\n${numbered(m.name, m.text)}\n</material>`).join('\n\n')}\n\n`
-      + '(Each line of the material is shown with its line number in front of it. When you cite a line, use that number; do not count.)'
-      : `${asked}\n\n${material.map((m) => `<material name="${m.name}">\n${m.text}\n</material>`).join('\n\n')}`;
+      + '(Each line of the material is shown with its line number in front of it. When you cite a line, use that number; do not count.)' + noSlots
+      : `${asked}\n\n${material.map((m) => `<material name="${m.name}">\n${m.text}\n</material>`).join('\n\n')}${noSlots}`;
   return { material, materialText, task };
 }
 
@@ -873,10 +1013,13 @@ class TasteSession {
   private budget: Budget | null = null;
   private decided: Promise<boolean[]> | null = null;
   private reader: InferenceClient | null = null;
+  private bounds: ReadBounds = {};
 
   private constructor(
     private readonly L: store.StoreLayout, private readonly std: Standard, readonly asked: string,
     private readonly waiting: ReadonlySet<string>, readonly veto: ReadonlySet<string>,
+    /** what the reader has earned across its rules: labelled misses so far and the bound on its false blocks */
+    readonly pooled: { readonly trials: number; readonly upper95: number },
   ) {}
 
   /** A session when the standard has reading-based rules; null when there is nothing to read. */
@@ -884,11 +1027,14 @@ class TasteSession {
     const rules = tasteRules(std);
     if (!rules.length) return null;
     const earned = tastePermissions(rules, store.readEvents(L), readerModel());
-    return new TasteSession(L, std, asked, waiting, withoutWaiting(earned.veto, rules, waiting));
+    return new TasteSession(L, std, asked, waiting, withoutWaiting(earned.veto, rules, waiting), { trials: earned.pooled.trials, upper95: earned.pooled.upper95 });
   }
 
   /** Whether the reader has earned the right to act on any rule this run. */
   get acts(): boolean { return this.veto.size > 0; }
+
+  /** What this run may spend on readings (core/taste/reader.ts, `ReadBounds`); set once the request has been read. */
+  setBounds(b: ReadBounds): void { this.bounds = b; }
 
   /**
    * Calls reserved in the ceiling from the start, so a repair is never dropped for want of one: every
@@ -909,7 +1055,7 @@ class TasteSession {
   async read(text: string): Promise<TasteReading[]> {
     const had = this.readings.get(text);
     if (had) return had;
-    const r = await readTaste(this.client(), this.meter, this.std, text, this.asked, await this.applies());
+    const r = await readTaste(this.client(), this.meter, this.std, text, this.asked, await this.applies(), this.bounds);
     this.readings.set(text, r);
     return r;
   }
@@ -925,6 +1071,10 @@ class TasteSession {
     }
   }
 
+  /** The reading of one text, rule by rule, with whether the reader may act on each: what the record takes (cli/eval-run.ts). */
+  readingsOf(text: string): { requirementId: string; verdict: string; quote?: string; why: string; acts: boolean }[] {
+    return (this.readings.get(text) ?? this.taken ?? []).map((r) => ({ requirementId: r.requirementId, verdict: r.verdict, ...(r.quote ? { quote: r.quote } : {}), why: r.why, acts: this.veto.has(r.key) }));
+  }
   /** Recorded on every output, said in one line. */
   async report(report: RunReport, rec: Invocation, name: string): Promise<TasteMonitor | null> {
     return reportTaste(report, { L: this.L, std: this.std, rec, asked: this.asked, budget: this.meter, tasteOn: true,
@@ -945,7 +1095,7 @@ export function refineDraft(c: DraftContext & { readonly client: InferenceClient
   return async (draft: string, ledger: StepLedger) => {
     // The counted checks' steps and the taste rewrite are steps on the run's one ledger (core/loop/controller.ts, rule B).
     const checks: Checks = { ...c.checks, controller: { ...c.checks.controller, ledger } };
-    const r = await refineToStandard(c.client, c.budget, c.name, c.std, draft, 2, checks);
+    const r = await refineToStandard(c.client, c.budget, c.name, c.std, draft, REPAIR_PASSES, checks);
     const taste = c.taste;
     if (!taste?.acts) return { output: r.output, repair: r.repair, report: r.report };
     let t: Awaited<ReturnType<typeof refineTaste>>;
@@ -989,11 +1139,21 @@ const brokenIn = (r: Awaited<ReturnType<typeof checkDraftAsync>>): string[] =>
  * distance from the author's signals, and style. A count picks it, never a judge's taste: the reader
  * breaks ties between drafts that break the same REQUIRED rules, and never outranks one.
  */
-function selectDraft(c: DraftContext & { readonly n: number; readonly ownBand?: readonly [number, number] | null; readonly signals: ReturnType<typeof store.getSignals>; readonly profile: FidelityProfile | null; readonly trace: FidelityTrace; readonly ledger: readonly Fact[]; readonly variant?: (i: number) => DraftVariant; readonly retrievedFor?: readonly number[][]; readonly sampling?: boolean }) {
-  return { n: c.n, ...(c.variant ? { variant: c.variant } : {}), choose: async (drafts: readonly string[], written?: readonly { readonly index: number; readonly temperatureSent: number | null }[]) => {
+function selectDraft(c: DraftContext & { readonly n: number; readonly onDemand?: boolean; readonly ownBand?: readonly [number, number] | null; readonly signals: ReturnType<typeof store.getSignals>; readonly profile: FidelityProfile | null; readonly trace: FidelityTrace; readonly ledger: readonly Fact[]; readonly variant?: (i: number) => DraftVariant; readonly retrievedFor?: readonly number[][]; readonly sampling?: boolean }) {
+  // CANDIDATES ARE READ BY WHAT DECIDES BETWEEN THEM (core/loop/claim-extract.ts, `candidates`): a claim reader that only
+  // reports is spent on the delivered text, not on every draft that competed.
+  const checks = c.checks.claimSensor?.candidates ? { ...c.checks, claimSensor: c.checks.claimSensor.candidates } : c.checks;
+  // THE FIRST DRAFT NEEDS NO RIVAL when nothing at the top of the drafts' order could be bettered: no REQUIRED rule broken,
+  // no rule the reader acts on read as missed (cli/commands/improve.ts, `enough`).
+  const enough = async (draft: string): Promise<boolean> => {
+    if (brokenIn(await checkDraftAsync(c.name, c.std, draft, checks)).length) return false;
+    if (c.taste?.acts && (await c.taste.misses([draft]))[0] > 0) return false;
+    return true;
+  };
+  return { n: c.n, ...(c.variant ? { variant: c.variant } : {}), ...(c.onDemand ? { enough } : {}), choose: async (drafts: readonly string[], written?: readonly { readonly index: number; readonly temperatureSent: number | null }[]) => {
     if (c.variant && written) c.trace.variants = written.map((w) => ({ index: w.index, temperature: w.temperatureSent, retrieved: c.retrievedFor?.[w.index] ?? [] }));
     const tasteMissed = c.taste?.acts ? await c.taste.misses(drafts) : drafts.map(() => 0);
-    const reports = await Promise.all(drafts.map((d) => checkDraftAsync(c.name, c.std, d, c.checks)));
+    const reports = await Promise.all(drafts.map((d) => checkDraftAsync(c.name, c.std, d, checks)));
     const profile = c.profile;
     const readings = profile ? drafts.map((d) => readFidelity(d, profile)) : [];
     c.trace.drafts.push(...readings);
@@ -1279,8 +1439,6 @@ export interface Unmet { readonly id: string; readonly statement: string; readon
   /** which way and how far, in plain words ("about 120 words shorter", "about 4 fewer parenthetical asides per 1,000 words"), where the miss is a number */ readonly move?: string;
   /** a graded feature's miss (`--graded`) of a rule the standard does not enforce: what the author's pieces usually do, never what the work requires */ readonly graded?: true }
 export const LENGTH_ID = 'length';
-/** The fewest pieces from which a draft is written again for its length: (n - 1) / (n + 1) is 0.8 at nine. */
-export const LENGTH_REDRAFT_PIECES = 9;
 /** How many times a draft is written again: once, and once more for a length alone. */
 const REDRAFTS = 2;
 /** A draft that only runs long is cut up to this many times: each pass removes words from the last. */
@@ -1301,9 +1459,10 @@ export function lengthAim(n: number, lo: number | null, hi: number | null): stri
 const lengthMove = (off: number, long: boolean): string | undefined => (off > 0 ? `about ${off} words ${long ? 'shorter' : 'longer'}` : undefined);
 
 /** The reader of what a draft left unmet for this skill and this run, or null when there is nothing of the kind to read. */
-export function unmetReader(std: Standard, own: { band: readonly [number, number]; span: readonly [number, number] } | null, asked: StatedLength | null = null,
+export function unmetReader(std: Standard, asked: StatedLength | null = null,
   /** the graded features: a miss of a FEATURE rule on one of them is written again for, PREFERRED or not */ graded?: CheckOptions['graded'],
-  /** the profile whose far-out SIGNAL features are graded misses too (core/loop/graded.ts) */ profile?: FidelityProfile | null):
+  /** the profile whose far-out SIGNAL features are graded misses too (core/loop/graded.ts) */ profile?: FidelityProfile | null,
+  /** the shape the request itself asks for, in its own words ("one line, please"), when it states one */ format: string | null = null):
   ((d: { output: string; report: VerifyReport }, handed?: readonly string[]) => Unmet[]) | null {
   // A missing section or table is not a sentence to rewrite (core/loop/repair.ts leaves such a rule alone); nor is a
   // citation that is no line of the material, since the right number is on the page the writer was given.
@@ -1313,9 +1472,11 @@ export function unmetReader(std: Standard, own: { band: readonly [number, number
   const gradedOf = gradedRules(std, graded, profile);
   const stated = new Map(planFor(std).rules.map((p) => [p.id, p.statement]));
   const params = new Map(std.requirements.flatMap((r) => (r.measurement ? [[r.requirementId, r.measurement] as const] : [])));
-  // A request that names a length sets it: no learned length band is told against it (core/loop/run-repair.ts, `gradedRules`).
-  if (asked) for (const id of [...gradedOf.keys()]) if (steeredShape(params.get(id))?.how === 'length') gradedOf.delete(id);
-  if (!must.size && !own && !asked && !gradedOf.size) return null;
+  // A LEARNED LENGTH BAND IS NO MISS. Outside the length the author's pieces run, a draft is not written again for it, in
+  // either direction, whatever the kind of work: the request sets how much is needed (owner's ruling).
+  for (const id of [...gradedOf.keys()]) if (steeredShape(params.get(id))?.how === 'length') gradedOf.delete(id);
+  const shape = format ? statedShape(format) : null;
+  if (!must.size && !asked && !gradedOf.size && !shape) return null;
   // A length the method states in words is a miss of length too: how far, and what to aim for.
   const limits = new Map(std.requirements.flatMap((r) => (r.measurement?.observer === 'LENGTH' && ((r.measurement.params.unit as readonly string[] | undefined)?.[0] ?? 'words').toLowerCase() === 'words'
     ? [[r.requirementId, { lo: typeof r.measurement.params.min === 'number' ? r.measurement.params.min : null, hi: typeof r.measurement.params.max === 'number' ? r.measurement.params.max : null, whole: !r.measurement.params.in }] as const] : [])));
@@ -1367,6 +1528,10 @@ export function unmetReader(std: Standard, own: { band: readonly [number, number
         && (steeredShape(params.get(x.requirementId)) === null || steersMiss(params.get(x.requirementId), x.result.error, x.result.value))).map((x) => gradedMiss(x)),
       // the profile's far-out SIGNAL features, read on the text itself: they are no line of the recorded report
       ...(gradedOf.size ? signalChecks(d.output, profile).filter((x) => x.result.verdict === 'VIOLATED' && gradedOf.has(x.requirementId)).map((x) => gradedMiss(x, x.params)) : [])]);
+    // THE SHAPE THE REQUEST ASKS FOR, where code can read it: "one line" is one line, "one sentence" one sentence. It
+    // reached the prompt and nothing after it: "one line, please" came back as a paragraph.
+    const shapeMiss = shape ? shapeOff(d.output, shape) : null;
+    if (shapeMiss) rules.push({ id: LENGTH_ID, whole: true as const, of: 'request' as const, statement: `Answer in the shape the request asks for: ${format ?? ''}`, detail: shapeMiss.detail, off: shapeMiss.off });
     if (asked) {
       const written = wordsWritten(d.output); const [lo, hi] = statedBounds(asked);
       if (againstStated(written, asked) === 'met') return rules;
@@ -1374,11 +1539,7 @@ export function unmetReader(std: Standard, own: { band: readonly [number, number
       const move = lengthMove(off, long);
       return [...rules, { id: LENGTH_ID, whole: true as const, of: 'request' as const, statement: `Write it at the length the request asks for: ${asked.raw}`, detail: `${written} words, ${off} ${long ? 'too many' : 'too few'}`, off, ...(aim ? { aim } : {}), ...(move ? { move } : {}) }];
     }
-    const n = own ? proseWords(d.output) : 0;
-    if (!own || againstBand(n, own.band) === 'met') return rules;
-    const aim = lengthAim(n, own.band[0], own.band[1]); const move = lengthMove(wordsOutside(n, own.band), n > own.band[1]);
-    return [...rules, { id: LENGTH_ID, whole: true as const, statement: `Write it at the length my pieces run: ${own.span[0]} to ${own.span[1]} words`,
-      detail: `${n} words, ${wordsOutside(n, own.band)} ${n > own.band[1] ? 'too many' : 'too few'}`, off: wordsOutside(n, own.band), ...(aim ? { aim } : {}), ...(move ? { move } : {}) }];
+    return rules;
   };
 }
 
@@ -1423,7 +1584,7 @@ export function redraftNote(unmet: readonly Unmet[], draft: string): string {
  * at most TARGETS_PER_STEP of them; every rule the work requires is told.
  */
 export function roundMisses(std: Standard, d: { output: string; report: VerifyReport }, graded?: CheckOptions['graded'], profile?: FidelityProfile | null): Unmet[] {
-  const named = unmetReader(std, null, null, graded, profile)?.(d) ?? [];
+  const named = unmetReader(std, null, graded, profile)?.(d) ?? [];
   const have = new Set(named.map((u) => u.id));
   const stated = new Map(planFor(std).rules.map((p) => [p.id, p.statement]));
   const params = new Map(std.requirements.flatMap((r) => (r.measurement ? [[r.requirementId, r.measurement] as const] : [])));
@@ -1488,7 +1649,7 @@ export function cutNote(unmet: readonly Unmet[], draft: string): string {
   const n = wordsWritten(draft); const cut = to ? Math.max(over, n - Number(to.replace(/,/g, ''))) : over;
   return `The draft below holds what this work requires and runs too long: ${unmet.map((u) => u.detail).join('; ')}.\n`
     + `Choose what to delete so that at least ${cut} words go. Pick whole sentences, or clauses that can go without the sentence around them breaking: a restated point, a qualifier, an aside, a sentence that repeats its paragraph. `
-    + 'Never pick a heading, a table row, anything in a list, a name, a figure or a citation; never the first sentence of a paragraph; never a sentence that another sentence points to, counts or continues ("the test above", "the second reason", a list it introduces). '
+    + 'Never pick a heading, a table row, anything in a list, a name, a figure or a citation; never the first sentence of a paragraph; never a sentence that another sentence points to, counts or continues ("the test above", "the second reason", a list it introduces); never a clause the author\'s own pieces carry word for word (a standard clause, a list the pieces always give). '
     + 'Answer with one deletion per line, each copied exactly from the draft, character for character, and nothing else.\n\n'
     + `The draft:\n<earlier-draft>\n${draft.trim()}\n</earlier-draft>`;
 }
@@ -1525,11 +1686,23 @@ const balanced = (t: string): boolean => {
  * digits or in words), sits in no heading or table row, is not a whole list item, and leaves every emphasis, code
  * span, link, bracket and quotation around it as balanced as it found them. Everything else is left as it was.
  */
-export function applyCuts(draft: string, picks: readonly string[], target: number, count: (text: string) => number = wordsWritten): { text: string; applied: string[] } {
+export function applyCuts(draft: string, picks: readonly string[], target: number, count: (text: string) => number = wordsWritten,
+  /** the author's standard wording (core/observers/overlap.ts): a sentence carrying any of these six-word runs is the house's, and never cut */
+  protect: readonly string[] = []): { text: string; applied: string[] } {
   let text = draft; const applied: string[] = [];
+  const protectedGrams = new Set(protect);
+  const carriesHouseWording = (sentence: string): boolean => {
+    if (!protectedGrams.size) return false;
+    const w = overlapWords(sentence);
+    for (let i = 0; i + 6 <= w.length; i++) if (protectedGrams.has(w.slice(i, i + 6).join(' '))) return true;
+    return false;
+  };
   for (const raw of picks) {
     if (count(text) <= target) break;
     const p = raw.trim().replace(LIST_MARK, '').replace(/^["“'‘](.*)["”'’]$/s, '$1').trim();
+    // THE HOUSE'S OWN CLAUSE IS NOT WHAT ADDS LEAST. The cutter, shown the draft alone, named the "includes, without
+    // limitation" list that every one of the author's contracts carries; the pieces say what the author keeps.
+    if (carriesHouseWording(p)) continue;
     if (p.length < 12 || /[\r\n]/.test(p) || /\d/.test(p) || NUMBER_WORD.test(p) || wordsWritten(p) > CUT_MAX_WORDS || !SENTENCE_ENDS.test(p) || !balanced(p) || !/^[\p{Lu}"“'‘(*_]/u.test(p)) continue;
     const at = text.indexOf(p); if (at < 0 || text.lastIndexOf(p) !== at) continue;
     const start = text.lastIndexOf('\n', at) + 1; const nl = text.indexOf('\n', at); const end = nl === -1 ? text.length : nl;
@@ -1581,7 +1754,8 @@ function redraftOutcome(before: readonly Unmet[], after: readonly Unmet[], kept:
   }
   if (before.every((u) => u.id === LENGTH_ID)) {
     const now = after.find((u) => u.id === LENGTH_ID); const what = before[0].of === 'request' ? 'what the request asks for' : 'what your pieces span';
-    return kept ? `Written again for length: the first draft ran ${before[0].detail}, outside ${what}; ${now ? `it now runs ${now.detail}, nearer and still outside` : 'it is now inside it'}.`
+    const why = before[0].statement.startsWith('Answer in the shape') ? 'in the shape the request asks for' : 'for length';
+    return kept ? `Written again ${why}: the first draft ran ${before[0].detail}, outside ${what}; ${now ? `it now runs ${now.detail}, nearer and still outside` : 'it is now inside it'}.`
       : `The draft runs ${before[0].detail}, outside ${what}; one more draft did not do better, so the first is kept.`;
   }
   // A graded miss is a feature off the author's range (too many asides as often as too few): missed, never "left out".
@@ -1601,6 +1775,8 @@ function redraftOutcome(before: readonly Unmet[], after: readonly Unmet[], kept:
  */
 export function withRedraft(refine: Refine,
   c: { unmet: (d: Delivered, handed?: readonly string[]) => Unmet[]; redraft: (note: string, purpose?: SpendPurpose) => Promise<string>; notes: string[];
+    /** the author's standard wording (core/observers/overlap.ts): a sentence carrying it is never cut for length */
+    protect?: readonly string[];
     /** where the graded note lines sent and the drafts written for graded misses alone are counted */
     graded?: GradedTrace | null;
     /** the displacement guard (core/loop/graded.ts) on a draft written again: why it may not be kept, or nothing */
@@ -1729,7 +1905,7 @@ export function withRedraft(refine: Refine,
       const s = await applyStep<Rewritten>(ledger, planned, { text: d.output, report: d.report }, async (taken) => {
         if (cutting) {
           const said = await c.redraft(cutNote(aimed, d.output)); const count = countFor(aimed);
-          const cut = applyCuts(d.output, said.split('\n'), cutTarget(aimed, count(d.output)), count);
+          const cut = applyCuts(d.output, said.split('\n'), cutTarget(aimed, count(d.output)), count, c.protect ?? []);
           if (!cut.applied.length) { cutApplied = false; return { unchanged: 'nothing named could be removed' }; }
           piece = cut.text;
         } else {
@@ -1890,28 +2066,127 @@ function noted(d: Delivered, note: string, violatedBefore: readonly string[]): D
 }
 
 /**
- * WHAT THE REQUEST ASKS FOR, GIVEN IN FULL (under --strict). The reply is read against the parts of the request; one that
+ * WHAT THE DELIVERED TEXT STATES OF THE PERSON'S SITUATION, READ ONCE (the source roles). The context judge reads the
+ * delivered text beside the request and its material, and each sentence it reads as stating a cause, a setting or a
+ * state they do not show joins the sentences listed for the person to check. Listed, never cut, never a failure: the
+ * reading is not qualified. One small-model call per run, on the text that ships; a reading that fails changes nothing.
+ */
+export function withSituations(refine: (draft: string) => Promise<Delivered>, c: { judge: ContextJudge; request: string; material: string } | null): (draft: string) => Promise<Delivered> {
+  const judge = c?.judge;
+  if (!c || !judge?.situations) return refine;
+  return async (draft: string) => {
+    const d = await refine(draft);
+    const ss = answerSentences(d.output);
+    try { await judge.readAnswer(ss, { request: c.request, material: c.material }); } catch { return d; }
+    // kept as every listed claim is kept (`listedClaims`): its first 160 characters, so one sentence is listed once
+    const found = judgedSituations(d.output, judge.situations?.(ss) ?? null, []).map((x) => x.text.slice(0, 160));
+    const had = d.repair?.claimsToCheck ?? [];
+    const add = found.filter((t) => !had.some((h) => h.slice(0, 60) === t.slice(0, 60)));
+    if (!add.length || !d.repair) return d;
+    return { ...d, repair: { ...d.repair, claimsToCheck: [...had, ...add] } };
+  };
+}
+
+/**
+ * THE NOTES ARE NEVER PART OF THE WORK (core/loop/echo.ts). A line of this request's notes (the brief, the rules set
+ * aside, the slot shape) that the writer printed into the draft is removed by code before any check reads it, and said.
+ */
+export function withoutEcho(refine: (draft: string) => Promise<Delivered>, notes: string, say: string[]): (draft: string) => Promise<Delivered> {
+  if (!notes.trim()) return refine;
+  return async (draft: string) => {
+    const r = withoutServedNotes(draft, notes);
+    if (r.removed.length) say.push(`Removed from the work: ${r.removed.length} line(s) of the brief the writer printed into it (an instruction to the writer, never part of the piece).`);
+    return refine(r.text);
+  };
+}
+
+/**
+ * A FACT OF AN EXAMPLE'S CASE, CORRECTED WHERE IT STANDS (core/loop/grounding.ts). On the text the repair chain delivers:
+ * each sentence the carry-over signal finds is rewritten to state only what the request gives, and kept only when code
+ * accepts the rewrite and the whole text, checked again, breaks no rule that held. What is not kept stays as written,
+ * listed for the person, and the record says it is unresolved. Never a deletion.
+ */
+export function withGrounding(refine: (draft: string) => Promise<Delivered>,
+  c: { client: InferenceClient; budget: Budget; request: string; evidence: string; examples: string; notes?: string[]; recheck: (text: string) => Promise<VerifyReport> } | null): (draft: string) => Promise<Delivered> {
+  if (!c) return refine;
+  return async (draft: string) => {
+    const d = await refine(draft);
+    let after: VerifyReport | null = null;
+    const held = new Set(brokenIn(d.report));
+    const g = await groundCarried(d.output, { ...c, breaksNothing: async (next) => {
+      after = await c.recheck(next);
+      return brokenIn(after).every((id) => held.has(id));
+    } });
+    if (!g.note) return d;
+    // said where the person reads the run, and in its record
+    c.notes?.push(g.note);
+    if (g.text === d.output || !after) return noted(d, g.note, brokenIn(d.report));
+    // a sentence rewritten is no longer one to check; what the new text lists is listed (an unresolved one among them)
+    const rewritten = g.found.filter((f) => f.kept).map((f) => f.sentence.slice(0, 60));
+    // THE MODEL'S OWN TEXT STAYS ON RECORD. A draft nothing else changed has no repair record yet: it is made from the text
+    // before the rewrite, so the record never says the delivered text is what the model wrote.
+    const base: Delivered = d.repair ? d : { ...d, repair: { passes: 0, violatedBefore: brokenIn(d.report), violatedAfter: brokenIn(d.report), originalOutputHash: sha(d.output), draft: d.output, why: 'grounded: a fact only an example\'s case held, rewritten where it stood' } };
+    const done = noted({ ...base, output: g.text, report: after }, g.note, brokenIn(d.report));
+    const toCheck = (done.repair?.claimsToCheck ?? []).filter((t) => !rewritten.some((r) => t.slice(0, 60) === r));
+    return done.repair ? { ...done, repair: { ...done.repair, claimsToCheck: [...new Set([...toCheck, ...listedClaims(after)])] } } : done;
+  };
+}
+
+/** A request that can ask for more than one thing: more than a line of words. "Thanks, that solved it." is one ask. */
+export const asksParts = (task: string): boolean => (task.match(/[\p{L}\p{N}][\p{L}\p{N}'’-]*/gu) ?? []).length >= 8;
+
+/**
+ * WHAT THE REQUEST ASKS FOR, GIVEN IN FULL (on every run whose request can ask more than one thing, and under --strict). The reply is read against the parts of the request; one that
  * leaves a part out is written again once, told which, and the draft written again is refined on the run's same ledger.
  * The draft is one step (`coverage`) on that ledger, counted against the limit, and kept only on the one acceptance rule
  * (core/loop/controller.ts, rule A) and when it leaves out fewer parts.
  */
 export function withCoverage(refine: Refine,
-  c: { client: InferenceClient; budget: Budget; judge: ContextJudge; asked: string; servedText: string; task: string; notes: string[]; paramsOf?: ParamsOf } | null): Refine {
+  c: { client: InferenceClient; budget: Budget; judge: ContextJudge; asked: string; servedText: string; task: string; notes: string[]; paramsOf?: ParamsOf;
+    /** the request's material, when the run also reads the situations the reply states: then one call reads both (context-judge.ts, `readAnswer`) */
+    readsWith?: { readonly material: string };
+    /**
+     * Whether a reply that leaves a part out is written again (`--strict`). Otherwise the reading is made and said, and the
+     * reply stands: on twenty-four fresh requests one such draft in six was kept (the rest were refused or did no better),
+     * and what a reply needs is now said to the writer before it writes (core/loop/task-needs.ts).
+     */
+    redraft: boolean } | null): Refine {
   if (!c?.judge.covers) return refine;
   const covers = c.judge.covers.bind(c.judge);
+  // ONE READING OF A REPLY: its sentences (the situations it states) and, against the whole reply, what the request asks.
+  // `covers` then answers from it, and `withSituations` too when the reply is the one delivered. A reading that fails
+  // leaves `covers` to read alone, as before.
+  const readAll = async (output: string): Promise<void> => {
+    if (!c.readsWith || !c.judge.situations) return;
+    await c.judge.readAnswer(answerSentences(output), { request: c.asked, material: c.readsWith.material, reply: { task: c.asked, output } }).catch(() => undefined);
+  };
   return async (draft: string, ledger: StepLedger) => {
     const d = await refine(draft, ledger);
+    await readAll(d.output);
     let missing: string[];
-    try { missing = ((await covers(c.asked, d.output))?.parts ?? []).filter((p) => p.covered === false).map((p) => p.words); } catch (e) {
+    // A PART HELD BACK ON PURPOSE (to ask, or to have it confirmed first) is the method's call, never a reason to write again:
+    // "delete every untracked file" answered with "confirm first" was written again and the second draft rightly not kept.
+    let held: string[];
+    try {
+      const parts = (await covers(c.asked, d.output))?.parts ?? [];
+      missing = parts.filter((p) => p.covered === false && !p.deferred).map((p) => p.words);
+      held = parts.filter((p) => p.covered === false && p.deferred).map((p) => p.words);
+    } catch (e) {
       // A reading that could not be made is said, in one line: the reply was not read against the request.
       const why = (e as Error).message.split('\n')[0];
       c.notes.push(`The reply was not read against what the request asks${/budget exhausted|call budget/.test(why) ? ': the budget ran out before the reading' : ` (${why})`}; nothing was written again for it.`);
       return d;
     }
+    if (held.length) c.notes.push(`Held back on purpose, to ask or to confirm first: ${held.map((m) => `"${m}"`).join('; ')}; not written again for it (the method decides when to ask or confirm).`);
     if (!missing.length) return d;
     const named = missing.map((m) => `"${m}"`).join('; ');
-    const note = `An earlier reply left out parts of what the request asks for: ${named}. Write the reply so that it gives each of them in full, at the length that takes. `
-      + 'If you cannot give one because you were not shown what it needs, say so plainly and ask for it. Never invent a file, a project, a figure or a result.';
+    if (!c.redraft) {
+      c.notes.push(`Read after writing: the reply may leave out ${missing.length} part(s) of the request (${named}); listed for you, not written again (--strict writes it again).`);
+      return d;
+    }
+    // The method decides how each part is given (act, confirm first, state an assumption): the note only names what is missing.
+    const note = `An earlier reply left out parts of what the request asks for: ${named}. Write the reply so that it gives each of them in full, at the length that takes, `
+      + 'following the skill\'s method on when to act, when to confirm first and when to state an assumption. Never invent a file, a project, a figure or a result.';
     type Covered = Proposed & { readonly d2: Delivered; readonly piece: string; readonly missing2: number };
     const s = await applyStep<Covered>(ledger, { action: 'coverage', targets: ['coverage'], why: `the reply leaves out ${missing.length} part(s) of the request (${named}): written again to give each`,
       expectedGain: missing.length, expectedCostUsd: DEFAULT_COST.coverage }, { text: d.output, report: d.report }, async (taken) => {
@@ -1919,7 +2194,10 @@ export function withCoverage(refine: Refine,
       // counted as taken before the draft is refined on the same ledger, so the steps on it are within the one cap
       taken();
       const d2 = await refine(piece, ledger);
-      const missing2 = ((await covers(c.asked, d2.output))?.parts ?? []).filter((p) => p.covered === false).length;
+      await readAll(d2.output);
+      // only a part the first reply already held back is excused: one the new draft newly holds back ("want me to add the
+      // rollback points?") is still not given, so a draft that only trades a missing part for a question is not kept
+      const missing2 = ((await covers(c.asked, d2.output))?.parts ?? []).filter((p) => p.covered === false && (!p.deferred || !held.includes(p.words))).length;
       return { text: d2.output, report: d2.report, d2, piece, missing2 };
     }, { paramsOf: c.paramsOf, purposes: ['writing'],
       also: (x) => (x.missing2 < missing.length ? null : `it leaves out ${x.missing2} part(s), no fewer`),
@@ -2271,7 +2549,7 @@ export function applicability(name: string, std: Standard, output: string, waive
     // Not a rule set aside: one that does not apply to an output of this kind (a long-form band on a short piece).
     const off = doesNotApply?.get(q.requirementId);
     if (off) return { requirementId: q.requirementId, status: 'NOT_APPLICABLE' as const, why: off };
-    const why = waived.get(q.requirementId) ?? (withheld.includes(q.statement) ? 'withheld from this run\'s prompt' : null);
+    const why = waived.get(q.requirementId) ?? (withheld.includes(q.statement) ? 'withheld for this run (left out of the prompt, or named there as set aside)' : null);
     if (why) return { requirementId: q.requirementId, status: 'WAIVED' as const, why };
     if (verdict.get(q.requirementId) === 'NOT_APPLICABLE') return { requirementId: q.requirementId, status: 'NOT_APPLICABLE' as const, why: 'outside what its measurement can judge in this text' };
     const cond = conditional.get(q.requirementId);
@@ -2306,20 +2584,23 @@ function draftScore(r: Awaited<ReturnType<typeof checkDraftAsync>>, std: Standar
 }
 
 /** What this run was configured with, beyond the binding and the package: enough to re-run a study arm from its record. */
-function settingsFor(checks: Checks, taste: TasteSession | null, nDrafts: number, carryNote = ''): InvocationSettings {
+type BriefFlag = NonNullable<InvocationSettings['flags']['brief']>;
+function settingsFor(checks: Checks, taste: TasteSession | null, nDrafts: number, carryNote = '', brief: BriefFlag | null = null, std: Standard | null = null): InvocationSettings {
   const temperature = flag('--temperature') === undefined ? undefined : Number(flag('--temperature'));
   return {
     atelierVersion: version(),
+    ...(std ? { certificate: certificateFor(std, taste, claimStandingOf(checks.claimSensor)) } : {}),
     claimInstrument: checks.claimSensor?.instrument ?? null,
     // Read when the record is written, after the run: a reader that degraded mid-run says so here.
     get claim() { return claimInstrumentOf(checks); },
     tasteVeto: [...(taste?.veto ?? [])].sort(),
     learnedTellsHash: sha(JSON.stringify(checks.learnedTells ?? [])),
     formatProfile: checks.format?.id ?? null,
-    contextJudge: checks.judge ? `${process.env.ATELIER_CLAIMS_MODEL ?? CLAIMS_MODEL_DEFAULT} (context judge, report-only)` : null,
+    contextJudge: checks.judge ? `${contextJudgeModel() ?? CLAIMS_MODEL_DEFAULT} (context judge, report-only)` : null,
     maxTokens: draftMaxTokens(),
     ...(temperature === undefined ? {} : { temperature }),
-    flags: { drafts: nDrafts, noTaste: !argv.includes('--taste') || argv.includes('--no-taste'), allowUnsourced: argv.includes('--allow-unsourced'), placeholders: argv.includes('--placeholders'), ...(argv.includes('--test-run') ? { testRun: true } : {}), ...(carryNote ? { carryNoteHash: sha(carryNote) } : {}) },
+    flags: { drafts: nDrafts, noTaste: taste === null, allowUnsourced: argv.includes('--allow-unsourced'), placeholders: checks.placeholders ?? false, ...(argv.includes('--test-run') ? { testRun: true } : {}), ...(carryNote ? { carryNoteHash: sha(carryNote) } : {}),
+      ...(brief ? { brief } : {}) },
   };
 }
 
@@ -2405,8 +2686,8 @@ export function withoutWaiting(veto: ReadonlySet<string>, rules: readonly { rule
  * THE ONE LINE ABOUT MATERIAL, near the top. Names the exact `--with` that lets waiting rules fire:
  * a prerequisite is matched by name, so a generic "bind your notes" would not have cleared it.
  */
-export function materialLine(v: SatisfiabilityVerdict, materialBound: boolean, guardClaims: boolean, name: string): string | null {
-  const cut = !guardClaims ? null : argv.includes('--placeholders') ? 'a story, source or figure the draft invents is replaced by a slot for yours'
+export function materialLine(v: SatisfiabilityVerdict, materialBound: boolean, guardClaims: boolean, name: string, placeholders = false): string | null {
+  const cut = !guardClaims ? null : placeholders ? 'a story, source or figure the draft invents is replaced by a slot for yours'
     : materialBound ? 'any story, source or figure not found in what you bound is cut, or listed where the check is not measured'
     : 'a story, source or figure in the draft cannot be checked against anything of yours, and is listed for you, not cut';
   if (v.kind === 'DEGRADED') {
@@ -2526,6 +2807,30 @@ function reportChecks(report: RunReport, rec: Invocation, std: Standard | null, 
   }
 }
 
+type MovesMonitor = NonNullable<EvalSummary['monitors']['moves']>;
+/**
+ * What the delivered text did with the moves placed and standing for this request, read by the taste reader's model in
+ * one call of its own (core/taste/move-reader.ts). Said in one line, kept with the run as an event (never for a run
+ * marked as a test), and never a reason to write again. A failure to read is said, and costs the person nothing.
+ */
+async function readMovesOnWork(L: store.StoreLayout, rec: Invocation, asked: string, selection: MoveSelection, profile: string, mode: 'observe' | 'serve', report: RunReport): Promise<MovesMonitor | null> {
+  const units = [...selection.placed, ...selection.standing];
+  if (!units.length) return null;
+  try {
+    const placed = new Set(selection.placed.map((u) => u.id));
+    const d = await readContext(MOVE_READER, { text: rec.output, request: asked, moves: units }, readerClientFor(), readerModel(), { spentUsd: 0, capUsd: 0.05, maxCalls: 1 });
+    const n = countOutcomes(d.value);
+    const each = units.map((u) => ({ id: u.id, aspect: u.aspect || u.observed, placed: placed.has(u.id), outcome: d.value[u.id]?.outcome ?? 'NOT_READ' as const, why: d.value[u.id]?.why ?? '' }));
+    if (!argv.includes('--test-run')) store.appendEvent(L, { kind: 'MOVE_READING', invocationId: rec.invocationId, profile, mode, by: d.by, readerModel: d.by === 'model' ? readerModel() : null, at: new Date().toISOString(), readings: d.value });
+    const said = each.filter((x) => x.outcome === 'MISSING' || x.outcome === 'MISAPPLIED').slice(0, 2).map((x) => `${x.aspect} ${x.outcome.toLowerCase()}: ${x.why}`).join('; ');
+    report.say(`My moves, read on the work: ${n.REALISED} realised, ${n.MISAPPLIED} misapplied, ${n.MISSING} missing, ${n.NOT_APPLICABLE} not applicable${n.NOT_READ ? `, ${n.NOT_READ} not read` : ''} of ${units.length} (${mode === 'serve' ? 'served' : 'observed, not served'}; a reading, never a gate)${said ? `. ${said}` : ''}.`);
+    return { mode, profile, by: d.by, realised: n.REALISED, misapplied: n.MISAPPLIED, missing: n.MISSING, notApplicable: n.NOT_APPLICABLE, notRead: n.NOT_READ, each };
+  } catch (e) {
+    report.say(`(the moves could not be read on the work: ${(e as Error).message.split('\n')[0]})`);
+    return null;
+  }
+}
+
 interface TasteContext {
   readonly L: store.StoreLayout; readonly std: Standard | null; readonly rec: Invocation; readonly asked: string; readonly budget: Budget;
   readonly tasteOn: boolean; readonly tasteTaken: readonly TasteReading[] | null; readonly readings: ReadonlyMap<string, TasteReading[]>;
@@ -2553,11 +2858,12 @@ async function reportTaste(report: RunReport, t: TasteContext): Promise<TasteMon
     if (held) return null;
     const missed = read.filter((x) => x.verdict === 'MISSED' && !t.waiting.has(x.requirementId)).length;
     const waiting = read.filter((x) => t.waiting.has(x.requirementId)).length;
+    const cov = readCoverage(read);
     const status = t.permissions?.veto.size ? 'it acts on the rules your labels gave it' : `reporting only until you label it: atelier taste --skill ${t.name} --calibrate`;
-    report.say(`Taste reader: ${missed} of ${read.length} reading-based rule(s) read as missed${waiting ? `, ${waiting} waiting for your material` : ''} (${status}).`);
+    report.say(`Taste reader: read ${cov.read} of ${cov.of} reading-based rule(s), ${missed} read as missed${cov.notRead ? `, ${cov.notRead} not read under this run's reading cap (--strict reads every rule)` : ''}${waiting ? `, ${waiting} waiting for your material` : ''} (${status}).`);
     const trials = earned.pooled.trials;
     return { followed: read.filter((x) => x.verdict === 'FOLLOWED' && !t.waiting.has(x.requirementId)).length, missed,
-      unclear: read.filter((x) => x.verdict === 'UNCLEAR' && !t.waiting.has(x.requirementId)).length, waiting,
+      unclear: read.filter((x) => x.verdict === 'UNCLEAR' && !t.waiting.has(x.requirementId)).length, waiting, ...(cov.notRead ? { notRead: cov.notRead } : {}),
       labelled: trials ? { right: earned.pooled.confirmed, of: trials } : null, acts: Boolean(t.permissions?.veto.size) };
   } catch (e) {
     if (t.rec.repair?.taste) report.say(`taste repair: ${t.rec.repair.taste.why}.`);
@@ -2676,4 +2982,56 @@ export function presentationRules(requirements: readonly { requirementId: string
     measured: requirements.filter((q) => q.measurement && PRESENTATION.has(q.measurement.observer)),
     prose: requirements.filter((q) => !q.measurement && PRESENTATION_WORDS.test(q.statement)),
   };
+}
+
+/**
+ * Each listed sentence labelled where it stands; one that cannot be found as written is listed after the text.
+ * Found in the text as delivered, before any label is added: as written, or (where its code spans were blanked for the
+ * reader) by its words in order inside one line, each word whole. Linear in the text: no pattern is built from it.
+ */
+export function markUnsupported(text: string, listed: readonly string[]): string {
+  const MARK = ' [needs verification: not shown in what you supplied]';
+  const ends: number[] = []; const rest: string[] = [];
+  // Line bounds of the delivered text: a match never runs past one. (Not sentences: a full stop inside code, as in
+  // `meta.json`, is no sentence end, and a claim read with its code blanked spans it.)
+  const bounds: [number, number][] = [];
+  for (const m of text.matchAll(/[^\n]+/g)) bounds.push([m.index, m.index + m[0].length]);
+  const isWord = (c: string | undefined): boolean => c !== undefined && /[\p{L}\p{N}_]/u.test(c);
+  const wholeAt = (hay: string, needle: string, from: number, until: number): number => {
+    for (let i = hay.indexOf(needle, from); i !== -1 && i + needle.length <= until; i = hay.indexOf(needle, i + 1)) {
+      if (!isWord(hay[i - 1]) || !isWord(needle[0])) if (!isWord(hay[i + needle.length]) || !isWord(needle[needle.length - 1])) return i;
+    }
+    return -1;
+  };
+  for (const c of listed) {
+    const claim = c.trim();
+    if (!claim) continue;
+    const exact = text.indexOf(claim);
+    if (exact !== -1) { ends.push(exact + claim.length); continue; }
+    const parts = claim.split(/\s{2,}/).map((w) => w.trim()).filter(Boolean);
+    let found = -1;
+    if (parts.length > 1) {
+      for (const [a, b] of bounds) {
+        let at = a; let ok = true;
+        for (const part of parts) { const i = wholeAt(text, part, at, b); if (i === -1) { ok = false; break; } at = i + part.length; }
+        if (ok) { found = at; break; }
+      }
+    }
+    if (found === -1) rest.push(c); else ends.push(found);
+  }
+  let out = text;
+  for (const e of [...new Set(ends)].sort((x, y) => y - x)) out = `${out.slice(0, e)}${MARK}${out.slice(e)}`;
+  return rest.length ? `${out.trimEnd()}\n\n---\nNot found in what you supplied (check before you use this):\n${rest.map((c) => `- "${c}"`).join('\n')}` : out;
+}
+
+/** The shapes a request can state that code reads exactly: one line, one sentence. Null for any other. */
+export function statedShape(format: string): 'line' | 'sentence' | null {
+  return /\b(?:one|a single|single)\s+line\b/i.test(format) ? 'line' : /\b(?:one|a single|single)\s+sentence\b/i.test(format) ? 'sentence' : null;
+}
+/** How a text misses the stated shape (what it found, and how many lines or sentences over), or null when it holds it. */
+export function shapeOff(text: string, shape: 'line' | 'sentence'): { detail: string; off: number } | null {
+  const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
+  if (shape === 'line') return lines.length > 1 ? { detail: `${lines.length} lines, asked for one`, off: lines.length - 1 } : null;
+  const sentences = text.replace(/`[^`]*`/g, 'x').split(/(?<=[.!?])\s+(?=\S)/).filter((x) => x.trim());
+  return sentences.length > 1 || lines.length > 1 ? { detail: `${sentences.length} sentences, asked for one`, off: Math.max(sentences.length, lines.length) - 1 } : null;
 }

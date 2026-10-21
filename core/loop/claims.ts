@@ -224,8 +224,8 @@ export function wordCountClaims(text: string, material: string): Claim[] {
  *   a calculation                a sentence `derived` finds worked from the material's own figures (./derived.ts)
  */
 export const STATED_FIGURE_WHY = 'a figure stated as fact that is not in your material or your request: listed for you to check, never cut; if it is yours, add it to your material (atelier material)';
-const LINE_REF = /\blines?\s+\d+(?:\s*(?:-|–|to|and|through)\s*\d+)?|(?<=\S):\d+(?::\d+)?\b/gi;
-const IN_A_NAME = /`[^`]*`|\b[A-Za-z_][\w-]*?\d[\w.-]*/g;
+export const LINE_REF = /\blines?\s+\d+(?:\s*(?:-|–|to|and|through)\s*\d+)?|(?<=\S):\d+(?::\d+)?\b/gi;
+export const IN_A_NAME = /`[^`]*`|\b[A-Za-z_][\w-]*?\d[\w.-]*/g;
 const SUPPOSED = /\b(?:if|suppose|supposing|assum(?:e|ing)|imagine|hypothetically|for (?:example|instance)|let['’]?s say|say,?\s+(?:about\s+|roughly\s+)?[$€£]?\d)\b|\be\.g\./i;
 export function statedFigureClaims(text: string, material: string, derived: (sentence: string) => boolean = () => false): Claim[] {
   const known = new Set(numbersIn(material));

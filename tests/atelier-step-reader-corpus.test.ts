@@ -7,8 +7,9 @@
 // fares on each today. A change may move a step to `agree`; it may never move one away from it, and it may never give
 // a step a check its words do not ask for (a false check is the harmful error). Grow the corpus; never trim it.
 import { describe, it, expect } from 'vitest';
+import { mp } from './helpers/step-plan.js';
 import { readFileSync } from 'node:fs';
-import { methodProposals } from '../core/method/standard.js';
+import { } from '../core/method/standard.js';
 
 type Label = 'LINES' | 'LINES_EACH' | 'NAMES_TEST' | `PARAGRAPH_LENGTH:${number}` | null;
 interface Item { id: string; step: string; sections: string[]; check: Label }
@@ -21,7 +22,7 @@ const DIFF = '--- a/src/client.ts\n+++ b/src/client.ts\n@@ -80,0 +81,2 @@\n+expo
 /** The reading the method reader gives the step, in the corpus's terms. */
 export function readingOf(x: Item): Label {
   const reference = x.sections.map((s) => `## ${s}\nSomething here.\n`).join('\n');
-  const m = methodProposals(`- ${x.step}\n`, { task: 'Review this change.', material: [{ name: 'diff', text: DIFF }], reference })[0]?.measurement;
+  const m = mp(`- ${x.step}\n`, { task: 'Review this change.', material: [{ name: 'diff', text: DIFF }], reference })[0]?.measurement;
   if (m?.observer === 'LINES') return m.params.perItem ? 'LINES_EACH' : 'LINES';
   if (m?.observer === 'PARAGRAPH_LENGTH') return `PARAGRAPH_LENGTH:${Number(m.params.maxSentences)}`;
   return m?.observer === 'NAMES_TEST' ? 'NAMES_TEST' : null;

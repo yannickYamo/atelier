@@ -111,7 +111,7 @@ describe('when the budget runs out before the request is read, it is said in one
     const judge = { covers: async () => { throw new BudgetExceeded(1, 1); } } as unknown as ContextJudge;
     const text = 'A reply.';
     const refine = async (t: string) => ({ output: t, report: verifyText('d', NONE, t), repair: null });
-    const d = await withCoverage(refine, { client: raw(), budget: { spentUsd: 1, capUsd: 1 }, judge, asked: 'reply', servedText: 's', task: 't', notes })(text, stepLedger());
+    const d = await withCoverage(refine, { client: raw(), budget: { spentUsd: 1, capUsd: 1 }, judge, asked: 'reply', servedText: 's', task: 't', notes, redraft: true })(text, stepLedger());
     expect(d.output).toBe(text);
     expect(notes).toHaveLength(1);
     expect(notes[0]).toMatch(/not read against what the request asks: the budget ran out/);

@@ -4,6 +4,22 @@
 // composing the text its own way is how a size, an export and a run come to describe three different skills, so
 // the composition lives here, takes nothing but the package's files, and reads no store.
 
+export { FOR_THIS_REQUEST, splitServed } from '../core/fidelity/request-notes.js';
+import { FOR_THIS_REQUEST } from '../core/fidelity/request-notes.js';
+
+/**
+ * THIS REQUEST'S NOTES, AFTER THE SKILL: the rules set aside for it, said by name (never cut out of the skill, which stays
+ * whole and cacheable), then anything else particular to it. Empty when there is nothing to say.
+ */
+export function forThisRequest(setAside: readonly string[], ...rest: readonly string[]): string {
+  const rules = [...new Set(setAside.map((s) => s.trim().replace(/\s+/g, ' ')).filter(Boolean))];
+  const aside = rules.length
+    ? `These rules of the skill above are set aside for this request (it states its own length or format, or the rule does not carry to it). Do not apply them here; everything else in the skill applies, and the method still comes first.\n\n${rules.map((r) => `- ${r}`).join('\n')}`
+    : '';
+  const parts = [aside, ...rest.map((x) => x.trim())].filter(Boolean);
+  return parts.length ? `${FOR_THIS_REQUEST}${parts.join('\n\n')}` : '';
+}
+
 /** What a package serves a model: SKILL.md, the example files inlined after it, and the ones a named context left out. */
 export interface Composed { readonly servedText: string; readonly servedExamples: string[]; readonly withheld: string[] }
 
@@ -42,15 +58,36 @@ export function composeServed(files: Readonly<Record<string, string>>, context: 
   //
   // So the block is fenced rather than headed, and says what it is FOR rather than only what it is
   // NOT. No heading to continue, and an explicit statement that the deliverable starts after it.
+  // TWO FRAMES, BY THE FORM THE PACKAGE CARRIES (`<!-- form: … -->`, renderers/agent-skill/render.ts). Replies: each
+  // example is another person's earlier conversation, and nothing in it is true of this one. Documents: each piece is
+  // a whole piece the author wrote on a subject of its own, read for how it is written; its subject and facts are its
+  // own. The reply frame around a blog's pieces told the writer its own author's essays were someone else's chats.
+  const documents = skillMd.includes('<!-- form: documents -->');
   const exampleBlock = servedExamples.length
     ? `\n\n=== REFERENCE MATERIAL — PRIVATE CONTEXT, NOT PART OF YOUR OUTPUT ===\n\n`
-      + `Everything up to the end marker shows how the author works, or how this skill's rules apply\n`
+      + `Everything up to the end marker shows how the author ${documents ? 'writes' : 'works'}, or how this skill's rules apply\n`
       + `(a "write this, not that" file is model-written, never the author's). It is context for you, never\n`
       + `content for the reader: do not reproduce, continue, quote, enumerate, summarise or mention\n`
       + `any of it unless the user explicitly asks about the skill itself. These are instances rather\n`
       + `than instructions — where one is marked NOT required, an output that does otherwise is not\n`
-      + `wrong.\n\n${servedExamples.map((f) => files[f]).join('\n\n- - -\n\n')}`
-      + `\n\n=== END REFERENCE MATERIAL — the work you produce begins fresh from here ===`
+      + `wrong.\n\n`
+      // NOT THIS CONVERSATION. "Thanks, that solved it." came back as "CORS is fixed": the writer read an example's
+      // exchange as what had gone before in this one. And an example that rightly asked first (its request named no
+      // target) taught asking where the request did name one. Said once, for every kind of work, in no example's words.
+      + (documents
+        ? `Each piece of the author's below is a whole piece they wrote on a subject of its own, shown for how it is\n`
+          + `written. Its subject, its facts, its names and its stories belong to that piece and not to this one: the\n`
+          + `piece you write begins from the request and its material alone, and takes from these only the way they\n`
+          + `are written.\n\n`
+        : `None of it happened in this conversation. Each example is a separate, earlier conversation with someone\n`
+          + `else: its request, what was known then, and what was written. The person you are answering now has told\n`
+          + `you only what their request says; nothing in these examples was said by them, done for them, or is true of\n`
+          + `their case. Whether an example asked first, acted, confirmed before acting or declined was decided by its\n`
+          + `own request; for the request in front of you, the method and that request decide.\n\n`)
+      + servedExamples.map((f) => files[f]).join('\n\n- - -\n\n')
+      + (documents
+        ? `\n\n=== END REFERENCE MATERIAL — the request comes next. The piece you write begins fresh from it and its material ===`
+        : `\n\n=== END REFERENCE MATERIAL — the request you are answering now comes next. Its words are all you know of this person's situation; the work you produce begins fresh from here ===`)
     : '';
   return { servedText: `${skillMd}${exampleBlock}`, servedExamples, withheld };
 }
@@ -70,4 +107,20 @@ export function withoutReferenceIndex(skillMd: string): string {
     if (!dropping) out.push(line);
   }
   return out.join('\n');
+}
+
+/**
+ * THE SKILL WITHOUT THE DESCRIPTION OF THE AUTHOR, for an examples-first run: the "How I sound" points and the
+ * repertoire of moves are left out of what the writer is served, and the author's pieces, the method and every rule
+ * stay as they are. Each block is a header line ending in a colon and the list that follows it, joined by one
+ * blank line, so both go. A skill with neither is returned as it is. The profile still reads the work afterwards.
+ */
+export function withoutPersonaBlocks(skillMd: string): string {
+  const blocks = skillMd.split('\n\n'); const out: string[] = [];
+  for (let i = 0; i < blocks.length; i++) {
+    const b = blocks[i];
+    if (/^(?:How I sound \(|Moves I make in some pieces, not most \()/.test(b)) { if (b.trimEnd().endsWith(':') && i + 1 < blocks.length && blocks[i + 1].startsWith('- ')) i += 1; continue; }
+    out.push(b);
+  }
+  return out.join('\n\n');
 }

@@ -353,19 +353,28 @@ export interface CallUsage { readonly inputTokens: number; readonly cacheReadTok
 /** One purpose's share of what a process (or a run, as a difference of two snapshots) spent. */
 export interface SpendLine { readonly purpose: SpendPurpose; readonly usd: number; readonly calls: number;
   /** every input token the provider counted, cached or not; 0 where no call of this purpose reported its usage */
-  readonly inputTokens: number; readonly outputTokens: number }
+  readonly inputTokens: number; readonly outputTokens: number;
+  /** of `inputTokens`, those read from the provider's prompt cache, and those written to it; absent when none */
+  readonly cacheReadTokens?: number; readonly cacheWriteTokens?: number }
 
-const processLedger = new Map<SpendPurpose, { usd: number; calls: number; inputTokens: number; outputTokens: number }>();
+const processLedger = new Map<SpendPurpose, { usd: number; calls: number; inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheWriteTokens: number }>();
+
+/** A line with its cache counts said only when there are any. */
+const withCache = (l: { purpose: SpendPurpose; usd: number; calls: number; inputTokens: number; outputTokens: number; cacheReadTokens?: number; cacheWriteTokens?: number }): SpendLine => {
+  const { cacheReadTokens: r = 0, cacheWriteTokens: w = 0, ...rest } = l;
+  return { ...rest, ...(r ? { cacheReadTokens: r } : {}), ...(w ? { cacheWriteTokens: w } : {}) };
+};
 
 /** A copy of the ledger as it stands, to be compared with a later one (`spendBetween`). */
-export const processSpendByPurpose = (): readonly SpendLine[] => [...processLedger].map(([purpose, x]) => ({ purpose, ...x }));
+export const processSpendByPurpose = (): readonly SpendLine[] => [...processLedger].map(([purpose, x]) => withCache({ purpose, ...x }));
 
 /** What was spent between two snapshots, largest first; purposes with no call in between are left out. */
 export function spendBetween(before: readonly SpendLine[], after: readonly SpendLine[]): SpendLine[] {
   const was = new Map(before.map((l) => [l.purpose, l]));
   return after.map((l) => { const b = was.get(l.purpose);
     // Rounded to a millionth of a dollar: a difference of two running sums is otherwise recorded with float noise.
-    return { purpose: l.purpose, usd: Math.round((l.usd - (b?.usd ?? 0)) * 1e6) / 1e6, calls: l.calls - (b?.calls ?? 0), inputTokens: l.inputTokens - (b?.inputTokens ?? 0), outputTokens: l.outputTokens - (b?.outputTokens ?? 0) }; })
+    return withCache({ purpose: l.purpose, usd: Math.round((l.usd - (b?.usd ?? 0)) * 1e6) / 1e6, calls: l.calls - (b?.calls ?? 0), inputTokens: l.inputTokens - (b?.inputTokens ?? 0), outputTokens: l.outputTokens - (b?.outputTokens ?? 0),
+      cacheReadTokens: (l.cacheReadTokens ?? 0) - (b?.cacheReadTokens ?? 0), cacheWriteTokens: (l.cacheWriteTokens ?? 0) - (b?.cacheWriteTokens ?? 0) }); })
     .filter((l) => l.calls > 0).sort((a, b) => b.usd - a.usd || b.calls - a.calls || a.purpose.localeCompare(b.purpose));
 }
 
@@ -414,9 +423,10 @@ export async function spend<T>(budget: Budget, estimateUsd: number, fn: () => Pr
   const { value, cost, usage } = result;
   budget.spentUsd += budgetUsd(cost);
   processSpent += budgetUsd(cost);
-  const line = processLedger.get(purpose) ?? { usd: 0, calls: 0, inputTokens: 0, outputTokens: 0 };
+  const line = processLedger.get(purpose) ?? { usd: 0, calls: 0, inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 };
   processLedger.set(purpose, { usd: line.usd + budgetUsd(cost), calls: line.calls + 1,
-    inputTokens: line.inputTokens + (usage ? usage.inputTokens + usage.cacheReadTokens + usage.cacheWriteTokens : 0), outputTokens: line.outputTokens + (usage?.outputTokens ?? 0) });
+    inputTokens: line.inputTokens + (usage ? usage.inputTokens + usage.cacheReadTokens + usage.cacheWriteTokens : 0), outputTokens: line.outputTokens + (usage?.outputTokens ?? 0),
+    cacheReadTokens: line.cacheReadTokens + (usage?.cacheReadTokens ?? 0), cacheWriteTokens: line.cacheWriteTokens + (usage?.cacheWriteTokens ?? 0) });
   // AFTER ONE CALL, AND NOT BEFORE. What a call costs is reported by the provider, so the first one
   // is what establishes whether a dollar cap is capable of binding this runtime at all. If it is not,
   // and no call bound was set, then continuing means running with no bound while displaying one.

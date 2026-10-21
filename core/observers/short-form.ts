@@ -72,8 +72,11 @@ const BANDED: readonly NumericShape[] = ['characters', 'words', 'sentences', 'lo
 /** Shapes held by a cap only: a floor on hashtags or line breaks would ask for furniture. */
 const CAPPED: readonly NumericShape[] = ['lineBreaks', 'blankLines', 'hashtags', 'mentions', 'links', 'emoji'];
 
-/** A count band widened as a length is: by its own width on each side, never under zero. */
-const countBand = (lo: number, hi: number): readonly [number, number] => { const w = Math.max(1, hi - lo); return [Math.max(0, lo - w), hi + w]; };
+/**
+ * A count band widened as a length is: by its own width on each side, and never less than a quarter of the largest
+ * count (three pieces whose longest sentence ran 23 words gave 22 to 24), never under zero.
+ */
+const countBand = (lo: number, hi: number): readonly [number, number] => { const w = Math.max(1, hi - lo, Math.ceil(hi * 0.25)); return [Math.max(0, lo - w), hi + w]; };
 
 /**
  * THE SHAPE BANDS THE PIECES SHOW. `limit`: the platform's character limit, where the format or the owner gives one;

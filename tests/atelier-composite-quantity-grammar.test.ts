@@ -6,7 +6,7 @@
 // beside each side of a length conflict, and merges nothing on its own: whether two lengths can both be followed is
 // never decided by it (tests/atelier-composite-length-asked.test.ts).
 import { describe, it, expect } from 'vitest';
-import { quantitiesOf, quantityOf, type Quantity } from '../core/composite/quantity.js';
+import { quantitiesOf, type Quantity } from '../core/composite/quantity.js';
 
 const q = (measure: Quantity['measure'], unit: Quantity['unit'], min: number | null, max: number | null, flag?: 'about' | 'allows'): Quantity => ({ measure, unit, min, max, ...(flag ? { [flag]: true } : {}) });
 const CASES: readonly (readonly [string, Quantity | null])[] = [
@@ -70,7 +70,7 @@ const CASES: readonly (readonly [string, Quantity | null])[] = [
   ['End with a 20-word takeaway.', null],
 ];
 describe('a quantity, however it is said', () => {
-  for (const [said, want] of CASES) it(said, () => { expect(quantityOf(said)).toEqual(want); });
+  for (const [said, want] of CASES) it(said, () => { expect(quantitiesOf(said)[0] ?? null).toEqual(want); });
   it('two quantities on one measure are what both allow', () => {
     expect(quantitiesOf('Keep the piece between 250 and 400 words, and never more than 350 words.')).toEqual([q('piece', 'words', 250, 350)]);
   });

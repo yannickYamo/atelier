@@ -1,5 +1,6 @@
 // tests/atelier-execution-plan.test.ts — WHAT A SKILL DOES WITH EACH RULE IS DECIDED ONCE, AND READ EVERYWHERE.
 import { describe, it, expect } from 'vitest';
+import { mp } from './helpers/step-plan.js';
 import { planFor, describePlan } from '../core/plan/execution-plan.js';
 import { buildRecord } from '../core/eval/record-build.js';
 import type { Requirement, StandardVersion } from '../core/state/canonical-state.js';
@@ -77,7 +78,7 @@ describe('the runtime and the evaluation read the plan, and so agree', () => {
     const { unmetReader } = await import('../cli/commands/invoke.js');
     const violated = (id: string) => ({ requirementId: id, materiality: 'REQUIRED', result: { verdict: 'VIOLATED', detail: 'd', spans: [], value: null } });
     const report = { failed: true, unchecked: [], checked: ['x1', 'x2', 'x3', 'x4', 'x6', 'h1'].map(violated) } as never;
-    expect(unmetReader(std, null)?.({ output: 'x', report }).map((u) => u.id)).toEqual(plan.rules.filter((p) => p.onMiss === 'REDRAFT').map((p) => p.id));
+    expect(unmetReader(std)?.({ output: 'x', report }).map((u) => u.id)).toEqual(plan.rules.filter((p) => p.onMiss === 'REDRAFT').map((p) => p.id));
   });
   it('what blocks in the record is exactly what the plan enforces', () => {
     const checked = plan.rules.filter((p) => p.check).map((p) => ({ id: p.id, required: p.enforced, verdict: 'VIOLATED' as const, detail: 'found' }));
@@ -141,8 +142,8 @@ describe('a check tied to a step by its subject, and not by what the step asks, 
   const NOTE = '1. Every claim in Bottom Line should trace to a numbered Evidence item, cited in square brackets like [3].\n2. Name the source the first time I cite someone else\'s idea or figure.\n3. Keep the whole piece between 5 and 400 words.\n4. Every figure must be sourced from the material you were given.\n5. Keep numbers as they appeared at source.\n';
   const EXAMPLE = '## Bottom Line\n\nThey lead on price [1].\n\n## Evidence\n\n1. Their pricing page, 4 May.\n';
   it('built as the owner\'s rule, with its check, and not enforced', async () => {
-    const { methodProposals } = await import('../core/method/standard.js'); const { decideSteps } = await import('../cli/commands/method.js');
-    const proposals = methodProposals(NOTE, { task: 't', material: [], reference: EXAMPLE }).filter((p) => p.origin === 'STATED');
+    const { decideSteps } = await import('../cli/commands/method.js');
+    const proposals = mp(NOTE, { task: 't', material: [], reference: EXAMPLE }).filter((p) => p.origin === 'STATED');
     expect(proposals.map((p) => [p.measurement?.observer ?? null, p.related ?? false])).toEqual([['CITED', true], ['CITED', true], ['LENGTH', false], ['CITED', false], ['CITED', false]]);
     let n = 0; const { decided } = decideSteps(proposals, () => `x${++n}`);
     const p = planFor({ requirements: decided });

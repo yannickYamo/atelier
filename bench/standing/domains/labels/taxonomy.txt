@@ -1,0 +1,40 @@
+TAXONOMY (39 categories)
+Violence – minor
+Violence – graphic
+Firearms – depiction
+Firearms – use
+Language – mild
+Language – strong
+Alcohol – reference
+Alcohol – consumption
+Drugs – reference
+Drugs – use
+Nudity – partial
+Nudity – full
+Hate – slur
+Hate – incitement
+Gambling – reference
+Gambling – play
+Dangerous acts – stunt
+Dangerous acts – self-harm
+Disaster – news
+Disaster – graphic
+Politics – discussion
+Politics – advocacy
+Religion – discussion
+Religion – mockery
+Death – reference
+Death – depiction
+Crime – reference
+Crime – depiction
+Terrorism – reference
+Terrorism – depiction
+Weapons – reference
+Weapons – depiction
+Sexual – innuendo
+Sexual – explicit
+Medical – procedure
+Medical – graphic
+Animals – distress
+Animals – cruelty
+Floor – all brands

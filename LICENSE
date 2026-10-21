@@ -1,21 +1,26 @@
-MIT License
+Atelier License
 
-Copyright (c) 2026 Yannick Maurice
+Copyright (c) 2026 Yannick Maurice. All rights reserved.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+Atelier is source-available. It is not open source.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+1. Permission. You may use, run and copy this software, and redistribute it to others, in unmodified form only,
+   provided every copy carries this license and the copyright notice above.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+2. No modification. You may not modify, adapt, translate, or create derivative works of this software or any part of
+   it, and you may not distribute a modified copy. Changes to the software are made only by the copyright holder and
+   the people the copyright holder names in writing.
+
+3. No removal of notices. You may not remove or alter any copyright, license or attribution notice.
+
+4. Other rights reserved. No right to sublicense, sell, or offer the software as a service to third parties is granted
+   beyond what section 1 states. Contact the copyright holder for any other use.
+
+5. Termination. These permissions end automatically if you breach any term. On termination you stop every use and
+   destroy every copy you hold.
+
+6. Warranty and liability. THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+   INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+   NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+   LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+   SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.

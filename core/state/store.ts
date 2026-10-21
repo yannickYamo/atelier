@@ -18,6 +18,10 @@ import type { Recurrence, VersionBreakRates } from '../mining/recurrence.js';
 import type { QualityFloorContract, FloorQualification, FrozenBaselineEntry } from '../distinctiveness/floor.js';
 import { mkdirSync, readFileSync, existsSync, readdirSync, appendFileSync, rmSync } from 'node:fs';
 import { writeAtomic } from './fs-atomic.js';
+import type { BuildReceipt } from './receipt.js';
+import type { MoveProfile } from '../compiler/moves.js';
+import type { InferredMethod } from '../method/infer.js';
+import type { DecisionUnit } from './canonical-state.js';
 import { readJson, MalformedStoreFile } from './read-json.js';
 import { join, dirname } from 'node:path';
 import type { Observation } from '../measurement/observation.js';
@@ -122,15 +126,47 @@ export function getLedger(l: StoreLayout, standardVersionHash: string): Ratifica
  * Kept beside the skill rather than in a SkillVersion, so every re-render (amend, confirm, fix) carries
  * the same one until the owner changes it.
  */
-export function getExemplar(l: StoreLayout): { text: string } | null {
+export function getExemplar(l: StoreLayout): { text: string; request?: string } | null {
   const p = join(dirs(l).base, 'exemplar.md');
-  return existsSync(p) ? { text: readFileSync(p, 'utf8') } : null;
+  if (!existsSync(p)) return null;
+  const q = join(dirs(l).base, 'exemplar-request.txt');
+  return { text: readFileSync(p, 'utf8'), ...(existsSync(q) ? { request: readFileSync(q, 'utf8') } : {}) };
 }
-export function setExemplar(l: StoreLayout, text: string | null): void {
-  const p = join(dirs(l).base, 'exemplar.md');
+/** The exemplar, and the request it answered when it carried one: kept apart, so a rebuild serves the same pair. */
+export function setExemplar(l: StoreLayout, text: string | null, request: string | null = null): void {
+  const p = join(dirs(l).base, 'exemplar.md'); const q = join(dirs(l).base, 'exemplar-request.txt');
+  if (text === null || request === null) { if (existsSync(q)) rmSync(q); }
   if (text === null) { if (existsSync(p)) rmSync(p); return; }
   mkdirSync(dirs(l).base, { recursive: true });
   writeAtomic(p, text);
+  if (request !== null) writeAtomic(q, request);
+}
+
+/**
+ * THE OWNER'S METHOD, AS THEY WROTE IT: served whole with every build (renderers/agent-skill/render.ts), so that what
+ * a writer is told is the method itself and not the part of it a check could read. Kept beside the skill like the
+ * exemplar, so every re-render carries the same text until the owner builds from a new one.
+ */
+export function getMethod(l: StoreLayout): { text: string } | null {
+  const p = join(dirs(l).base, 'method.md');
+  return existsSync(p) ? { text: readFileSync(p, 'utf8') } : null;
+}
+export function setMethod(l: StoreLayout, text: string | null): void {
+  const p = join(dirs(l).base, 'method.md');
+  if (text === null) { if (existsSync(p)) rmSync(p); return; }
+  mkdirSync(dirs(l).base, { recursive: true });
+  writeAtomic(p, text);
+}
+/** THE METHOD READ OFF THE PIECES when the owner wrote none (core/method/infer.ts): a habit of the pieces, never a rule; the brief uses it, the standard never does. */
+export function getInferredMethod(l: StoreLayout): InferredMethod | null {
+  const p = join(dirs(l).base, 'method-inferred.json');
+  return existsSync(p) ? readJson<InferredMethod>(p, { what: 'the inferred method', requireKeys: ['steps'] }) : null;
+}
+export function setInferredMethod(l: StoreLayout, m: InferredMethod | null): void {
+  const p = join(dirs(l).base, 'method-inferred.json');
+  if (m === null) { if (existsSync(p)) rmSync(p); return; }
+  mkdirSync(dirs(l).base, { recursive: true });
+  writeAtomic(p, JSON.stringify(m, null, 1));
 }
 
 /**
@@ -314,6 +350,18 @@ export function setComposite(l: StoreLayout, c: CompositeRecord | null): void {
  * threshold was read off pieces of one kind, and a fragment cap calibrated on essays says nothing true
  * about a tweet. Declared by the owner; null when they never said.
  */
+/** The form the work takes, as read at build (core/observers/work-form.ts): a reply in a conversation, or a document. */
+export function getWorkForm(l: StoreLayout): 'REPLY' | 'DOCUMENT' | null {
+  const p = join(dirs(l).base, 'form.txt');
+  const x = existsSync(p) ? readFileSync(p, 'utf8').trim() : '';
+  return x === 'REPLY' || x === 'DOCUMENT' ? x : null;
+}
+export function setWorkForm(l: StoreLayout, form: 'REPLY' | 'DOCUMENT' | null): void {
+  const p = join(dirs(l).base, 'form.txt');
+  if (form === null) { if (existsSync(p)) rmSync(p); return; }
+  mkdirSync(dirs(l).base, { recursive: true });
+  writeAtomic(p, form);
+}
 export function getDocClass(l: StoreLayout): string | null {
   const p = join(dirs(l).base, 'class.txt');
   return existsSync(p) ? readFileSync(p, 'utf8').trim() || null : null;
@@ -461,8 +509,24 @@ export const getArchitecture = (l: StoreLayout, hash: string, standardVersionHas
     + 'and picking one would silently attribute an arrangement to the wrong standard.');
 };
 
+/**
+ * A PACKAGE IS ITS SERVED FILES. The hash is over them (renderers/agent-skill/render.ts, `packageHash`); the record
+ * beside them (the voice, the pairs, the method) is unhashed bookkeeping. A rebuild that serves the same files wrote
+ * that record with its keys in another order (the voice's `pieceRequests` is taken off and put back last on every
+ * build) and was refused as a second body under one hash: no file differed. So the files are what is compared, in
+ * any key order; the stored record stays canonical when they agree, and only files that differ are refused.
+ */
 export function putPackage(l: StoreLayout, pkg: StoredPackage): void {
-  putByHash(join(dirs(l).packages, `${pkg.packageHash}.json`), pkg.packageHash, pkg, 'package');
+  const p = join(dirs(l).packages, `${pkg.packageHash}.json`);
+  if (existsSync(p)) {
+    const existing = readJson<StoredPackage>(p, { what: `package ${pkg.packageHash}`, requireKeys: ['packageHash', 'files'] });
+    const canon = (files: Readonly<Record<string, string>>): string => JSON.stringify(Object.keys(files).sort().map((k) => [k, files[k]]));
+    if (canon(existing.files) !== canon(pkg.files)) {
+      throw new Error(`STORE: package ${pkg.packageHash} already exists with different served files. A hash is an identity; two bodies cannot share one.`);
+    }
+    return;
+  }
+  putByHash(p, pkg.packageHash, pkg, 'package');
 }
 export const getPackage = (l: StoreLayout, hash: string): StoredPackage | null => {
   const p = join(dirs(l).packages, `${hash}.json`);
@@ -556,6 +620,30 @@ export function listFeedback(l: StoreLayout): readonly FeedbackRecord[] {
 }
 
 /** The ONLY mutable file. Rollback moves this and nothing else. */
+/** THE BUILD RECEIPT (./receipt.ts), beside the version it describes and keyed by the version's hash. */
+export function putReceipt(l: StoreLayout, r: BuildReceipt): void {
+  const d = join(dirs(l).base, 'receipts'); mkdirSync(d, { recursive: true });
+  writeAtomic(join(d, `${r.skillVersionHash}.json`), JSON.stringify(r, null, 1));
+}
+export function getReceipt(l: StoreLayout, skillVersionHash: string): BuildReceipt | null {
+  const p = join(dirs(l).base, 'receipts', `${skillVersionHash}.json`);
+  return existsSync(p) ? readJson<BuildReceipt>(p, { what: 'the build receipt', requireKeys: ['receiptHash', 'stages'] }) : null;
+}
+
+/**
+ * THE DECISION UNITS OF A STANDARD (core/method/decision-units.ts), by requirement id, keyed by the standard version they
+ * were read from: an implementation artifact beside the standard, never inside it, so a model's reading of the steps
+ * moves no standard hash. Absent for a standard built before units were read.
+ */
+export function putUnits(l: StoreLayout, standardVersionHash: string, units: Readonly<Record<string, DecisionUnit>>): void {
+  const d = join(dirs(l).base, 'units'); mkdirSync(d, { recursive: true });
+  writeAtomic(join(d, `${standardVersionHash}.json`), JSON.stringify(units, null, 1));
+}
+export function getUnits(l: StoreLayout, standardVersionHash: string): Readonly<Record<string, DecisionUnit>> {
+  const p = join(dirs(l).base, 'units', `${standardVersionHash}.json`);
+  return existsSync(p) ? readJson<Record<string, DecisionUnit>>(p, { what: 'the decision units' }) : {};
+}
+
 export function setActive(l: StoreLayout, skillVersionHash: string): void {
   if (!getSkillVersion(l, skillVersionHash)) {
     throw new Error(`STORE: cannot activate ${skillVersionHash} — no such version. Activation points at history; it does not create it.`);
@@ -690,4 +778,32 @@ export function recordBinding(l: StoreLayout, skillVersionHash: string, binding:
   mkdirSync(dirs(l).bindings, { recursive: true });
   const next: BindingLog = { bindings: [...existing, { binding, hash: h, firstSeenAt: new Date().toISOString() }] };
   writeAtomic(bindingPath(l, skillVersionHash), JSON.stringify(next, null, 1));
+}
+
+/**
+ * THE AUTHOR'S MOVE PROFILE (core/compiler/moves.ts): an immutable implementation artifact beside the voice, never in the
+ * standard or the package, so a model's reading of the moves moves no standard hash. Each profile is written under its
+ * own content hash and never overwritten, so a build receipt that names it resolves for as long as the store does; a
+ * pointer by the persona's hash names the profile a persona currently has, and is what a rebuild with the same
+ * persona reuses (a floor profile is replaced by a model's when one is there, and the floor stays on disk).
+ */
+export function putMoves(l: StoreLayout, personaHash: string, profile: MoveProfile): void {
+  const d = join(dirs(l).base, 'moves'); mkdirSync(d, { recursive: true });
+  // The hash covers everything but the time, so a profile already on disk under this hash is this profile: kept as
+  // first written, never overwritten.
+  const file = join(d, `${profile.hash}.json`);
+  if (!existsSync(file)) writeAtomic(file, JSON.stringify(profile, null, 1));
+  writeAtomic(join(d, `persona-${personaHash}.json`), JSON.stringify({ hash: profile.hash }, null, 1));
+}
+/** The profile a persona currently has, by the persona's hash; null when none was read. */
+export function getMoves(l: StoreLayout, personaHash: string): MoveProfile | null {
+  const p = join(dirs(l).base, 'moves', `persona-${personaHash}.json`);
+  if (!existsSync(p)) return null;
+  const { hash } = readJson<{ hash: string }>(p, { what: 'the move profile pointer', requireKeys: ['hash'] });
+  return getMovesByHash(l, hash);
+}
+/** A profile by its own hash, as a build receipt names it. */
+export function getMovesByHash(l: StoreLayout, hash: string): MoveProfile | null {
+  const p = join(dirs(l).base, 'moves', `${hash}.json`);
+  return existsSync(p) ? readJson<MoveProfile>(p, { what: 'the move profile', requireKeys: ['hash', 'units'] }) : null;
 }

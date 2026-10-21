@@ -1,0 +1,4 @@
+INVOICE 2
+Supplier: Crane & Sons Electronics
+Item: an external drive
+Amount: 2,129 dollars

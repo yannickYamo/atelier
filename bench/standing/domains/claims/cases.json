@@ -1,0 +1,402 @@
+[
+ {
+  "i": 0,
+  "ins": "Larkspur Robotics Ltd",
+  "place": "a co-working space on Fenwick Street",
+  "items": [
+   "laptop",
+   "docking station"
+  ],
+  "how": "theft from a locked locker",
+  "am": [
+   1200,
+   650
+  ],
+  "locked": true,
+  "clause": "4.2",
+  "covered": true,
+  "total": 1850,
+  "date": "3 March 2026",
+  "reportDate": "5 March 2026"
+ },
+ {
+  "i": 1,
+  "ins": "Mossbank Analytics Inc",
+  "place": "the insured's office on Harbour Lane",
+  "items": [
+   "camera body",
+   "lens"
+  ],
+  "how": "theft from an unlocked desk",
+  "am": [
+   2137,
+   1191
+  ],
+  "locked": false,
+  "clause": "4.2",
+  "covered": false,
+  "total": 3328,
+  "date": "8 April 2026",
+  "reportDate": "10 April 2026"
+ },
+ {
+  "i": 2,
+  "ins": "Tindall & Vane LLP",
+  "place": "a client site in Kilburn",
+  "items": [
+   "two monitors",
+   "a desktop workstation"
+  ],
+  "how": "water damage from a burst pipe",
+  "am": [
+   3074,
+   1732
+  ],
+  "locked": true,
+  "clause": "4.7",
+  "covered": true,
+  "total": 4806,
+  "date": "13 June 2026",
+  "reportDate": "15 June 2026"
+ },
+ {
+  "i": 3,
+  "ins": "Orchard Row Studio Ltd",
+  "place": "a shared workshop on Tanner Row",
+  "items": [
+   "a 3D printer",
+   "filament stock"
+  ],
+  "how": "theft from a locked van",
+  "am": [
+   4011,
+   2273
+  ],
+  "locked": true,
+  "clause": "4.2",
+  "covered": true,
+  "total": 6284,
+  "date": "18 September 2026",
+  "reportDate": "20 September 2026"
+ },
+ {
+  "i": 4,
+  "ins": "Pellucid Health Inc",
+  "place": "a hotel meeting room in Leeds",
+  "items": [
+   "a tablet",
+   "a drawing display"
+  ],
+  "how": "accidental drop during transport",
+  "am": [
+   4948,
+   2814
+  ],
+  "locked": true,
+  "clause": "4.5",
+  "covered": true,
+  "total": 7762,
+  "date": "23 March 2026",
+  "reportDate": "25 March 2026"
+ },
+ {
+  "i": 5,
+  "ins": "Quarry Lane Foods Ltd",
+  "place": "the insured's van, parked overnight",
+  "items": [
+   "a projector",
+   "a sound bar"
+  ],
+  "how": "theft from an unattended bag",
+  "am": [
+   1785,
+   1155
+  ],
+  "locked": false,
+  "clause": "4.2",
+  "covered": false,
+  "total": 2940,
+  "date": "4 April 2026",
+  "reportDate": "6 April 2026"
+ },
+ {
+  "i": 6,
+  "ins": "Rushmere Logistics Inc",
+  "place": "a conference venue in Bristol",
+  "items": [
+   "a laptop",
+   "a phone"
+  ],
+  "how": "power surge after a storm",
+  "am": [
+   2722,
+   1696
+  ],
+  "locked": true,
+  "clause": "4.9",
+  "covered": true,
+  "total": 4418,
+  "date": "9 June 2026",
+  "reportDate": "11 June 2026"
+ },
+ {
+  "i": 7,
+  "ins": "Saltmarsh Games Oy",
+  "place": "a rented studio on Pike Street",
+  "items": [
+   "a soldering station",
+   "an oscilloscope"
+  ],
+  "how": "theft from a locked office overnight",
+  "am": [
+   3659,
+   2237
+  ],
+  "locked": true,
+  "clause": "4.2",
+  "covered": true,
+  "total": 5896,
+  "date": "14 September 2026",
+  "reportDate": "16 September 2026"
+ },
+ {
+  "i": 8,
+  "ins": "Thornfield Legal Ltd",
+  "place": "a storage unit on Mill Road",
+  "items": [
+   "a label printer",
+   "a barcode scanner"
+  ],
+  "how": "fire damage in a neighbouring unit",
+  "am": [
+   4596,
+   2778
+  ],
+  "locked": true,
+  "clause": "4.2",
+  "covered": true,
+  "total": 7374,
+  "date": "19 March 2026",
+  "reportDate": "21 March 2026"
+ },
+ {
+  "i": 9,
+  "ins": "Umber Street Coffee Co",
+  "place": "a university library",
+  "items": [
+   "a laptop",
+   "an external drive"
+  ],
+  "how": "theft from a locked storage unit",
+  "am": [
+   1433,
+   1119
+  ],
+  "locked": true,
+  "clause": "4.2",
+  "covered": true,
+  "total": 2552,
+  "date": "24 April 2026",
+  "reportDate": "26 April 2026"
+ },
+ {
+  "i": 10,
+  "ins": "Vellum Press Inc",
+  "place": "a co-working space on Fenwick Street",
+  "items": [
+   "laptop",
+   "docking station"
+  ],
+  "how": "theft from a locked locker",
+  "am": [
+   2370,
+   1660
+  ],
+  "locked": true,
+  "clause": "4.2",
+  "covered": true,
+  "total": 4030,
+  "date": "5 June 2026",
+  "reportDate": "7 June 2026"
+ },
+ {
+  "i": 11,
+  "ins": "Wayfarer Fintech Ltd",
+  "place": "the insured's office on Harbour Lane",
+  "items": [
+   "camera body",
+   "lens"
+  ],
+  "how": "theft from an unlocked desk",
+  "am": [
+   3307,
+   2201
+  ],
+  "locked": false,
+  "clause": "4.2",
+  "covered": false,
+  "total": 5508,
+  "date": "10 September 2026",
+  "reportDate": "12 September 2026"
+ },
+ {
+  "i": 12,
+  "ins": "Yewtree Biotech AS",
+  "place": "a client site in Kilburn",
+  "items": [
+   "two monitors",
+   "a desktop workstation"
+  ],
+  "how": "water damage from a burst pipe",
+  "am": [
+   4244,
+   2742
+  ],
+  "locked": true,
+  "clause": "4.7",
+  "covered": true,
+  "total": 6986,
+  "date": "15 March 2026",
+  "reportDate": "17 March 2026"
+ },
+ {
+  "i": 13,
+  "ins": "Zephyr Point Media Ltd",
+  "place": "a shared workshop on Tanner Row",
+  "items": [
+   "a 3D printer",
+   "filament stock"
+  ],
+  "how": "theft from a locked van",
+  "am": [
+   5181,
+   1083
+  ],
+  "locked": true,
+  "clause": "4.2",
+  "covered": true,
+  "total": 6264,
+  "date": "20 April 2026",
+  "reportDate": "22 April 2026"
+ },
+ {
+  "i": 14,
+  "ins": "Alder Mews Architects",
+  "place": "a hotel meeting room in Leeds",
+  "items": [
+   "a tablet",
+   "a drawing display"
+  ],
+  "how": "accidental drop during transport",
+  "am": [
+   2018,
+   1624
+  ],
+  "locked": true,
+  "clause": "4.5",
+  "covered": true,
+  "total": 3642,
+  "date": "25 June 2026",
+  "reportDate": "27 June 2026"
+ },
+ {
+  "i": 15,
+  "ins": "Bramble Hill Dental",
+  "place": "the insured's van, parked overnight",
+  "items": [
+   "a projector",
+   "a sound bar"
+  ],
+  "how": "theft from an unattended bag",
+  "am": [
+   2955,
+   2165
+  ],
+  "locked": false,
+  "clause": "4.2",
+  "covered": false,
+  "total": 5120,
+  "date": "6 September 2026",
+  "reportDate": "8 September 2026"
+ },
+ {
+  "i": 16,
+  "ins": "Cinder Lane Hardware Inc",
+  "place": "a conference venue in Bristol",
+  "items": [
+   "a laptop",
+   "a phone"
+  ],
+  "how": "power surge after a storm",
+  "am": [
+   3892,
+   2706
+  ],
+  "locked": true,
+  "clause": "4.9",
+  "covered": true,
+  "total": 6598,
+  "date": "11 March 2026",
+  "reportDate": "13 March 2026"
+ },
+ {
+  "i": 17,
+  "ins": "Dovecote Learning Ltd",
+  "place": "a rented studio on Pike Street",
+  "items": [
+   "a soldering station",
+   "an oscilloscope"
+  ],
+  "how": "theft from a locked office overnight",
+  "am": [
+   4829,
+   1047
+  ],
+  "locked": true,
+  "clause": "4.2",
+  "covered": true,
+  "total": 5876,
+  "date": "16 April 2026",
+  "reportDate": "18 April 2026"
+ },
+ {
+  "i": 18,
+  "ins": "Elmhurst Clinics LLP",
+  "place": "a storage unit on Mill Road",
+  "items": [
+   "a label printer",
+   "a barcode scanner"
+  ],
+  "how": "fire damage in a neighbouring unit",
+  "am": [
+   1666,
+   1588
+  ],
+  "locked": true,
+  "clause": "4.2",
+  "covered": true,
+  "total": 3254,
+  "date": "21 June 2026",
+  "reportDate": "23 June 2026"
+ },
+ {
+  "i": 19,
+  "ins": "Ferrous Gate Engineering Ltd",
+  "place": "a university library",
+  "items": [
+   "a laptop",
+   "an external drive"
+  ],
+  "how": "theft from a locked storage unit",
+  "am": [
+   2603,
+   2129
+  ],
+  "locked": true,
+  "clause": "4.2",
+  "covered": true,
+  "total": 4732,
+  "date": "26 September 2026",
+  "reportDate": "28 September 2026"
+ }
+]

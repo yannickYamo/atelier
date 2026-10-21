@@ -106,9 +106,18 @@ export interface EvalSummary {
   readonly monitors: {
     readonly detector: { readonly p: number; readonly families: readonly string[]; readonly qualified: boolean | null } | null;
     readonly taste: { readonly followed: number; readonly missed: number; readonly unclear: number; readonly waiting: number;
+      /** rules the run's reading cap left unread (core/taste/reader.ts, `ReadBounds`) */
+      readonly notRead?: number;
       readonly labelled: { readonly right: number; readonly of: number } | null; readonly acts: boolean } | null;
+    /**
+     * THE AUTHOR'S MOVES, READ ON THE DELIVERED TEXT (core/taste/move-reader.ts), observe only: for each move placed or
+     * standing for this request, what the piece did with it. Counts, and each move by id and aspect for `atelier eval`.
+     */
+    readonly moves?: { readonly mode: 'observe' | 'serve'; readonly profile: string; readonly by: 'code' | 'model' | 'floor';
+      readonly realised: number; readonly misapplied: number; readonly missing: number; readonly notApplicable: number; readonly notRead: number;
+      readonly each: readonly { readonly id: string; readonly aspect: string; readonly placed: boolean; readonly outcome: 'REALISED' | 'MISAPPLIED' | 'MISSING' | 'NOT_APPLICABLE' | 'NOT_READ'; readonly why: string }[] } | null;
     /** what the request explicitly asks for, and how much of it the delivered text gives (read under strict delivery) */
-    readonly coverage?: { readonly asked: number; readonly given: number; readonly missing: readonly string[]; readonly unclear: number };
+    readonly coverage?: { readonly asked: number; readonly given: number; readonly missing: readonly string[]; readonly unclear: number; readonly heldBack?: readonly string[] };
   };
   /** strict delivery: an output is delivered only when it conforms, or when the person let it through by flag */
   readonly delivery?: { readonly mode: 'strict'; readonly delivered: boolean; readonly redraws: number };
@@ -242,7 +251,7 @@ export function renderPanel(e: EvalSummary, opts: { width?: number; color?: bool
     out.push(`    ${pad('voice pass', 18)}${v.mode === 'off' ? 'off' : `in-context pairs${v.bank ? ` (bank ${v.bank.slice(0, 8)})` : ''}: ${v.passed} paragraph(s) rewritten, ${v.refused} refused and kept as written`}${v.note ? ` · ${v.note}` : ''}`);
   }
   const m = e.monitors;
-  if (m.detector || m.taste || m.coverage) {
+  if (m.detector || m.taste || m.coverage || m.moves) {
     out.push('');
     out.push('  MONITORS  shown only, never gate');
     if (m.detector) out.push(`    ${pad('style detector', 18)}P(model-written) ${m.detector.p}${m.detector.families.length ? ` · valid for ${m.detector.families.join(', ')}` : ''} · ${m.detector.qualified === true ? 'qualified on the hold-outs atelier qualify could run' : m.detector.qualified === false ? 'did not qualify on held-out data' : 'not qualified yet (atelier qualify)'}`);
@@ -252,9 +261,14 @@ export function renderPanel(e: EvalSummary, opts: { width?: number; color?: bool
       out.push(`    ${pad('taste reader', 18)}${t.followed} followed · ${t.missed} missed · ${t.unclear} unclear${t.waiting ? ` · ${t.waiting} waiting for material` : ''} · ${lab}${t.acts ? ' · holds VETO' : ''}`);
     }
   }
+  if (m.moves) {
+    const mv = m.moves;
+    const said = mv.each.filter((x) => x.outcome === 'MISSING' || x.outcome === 'MISAPPLIED').slice(0, 2).map((x) => `${x.aspect} ${x.outcome.toLowerCase()}: ${x.why}`).join('; ');
+    out.push(`    ${pad('my moves', 18)}${mv.realised} realised · ${mv.misapplied} misapplied · ${mv.missing} missing · ${mv.notApplicable} not applicable${mv.notRead ? ` · ${mv.notRead} not read` : ''} (${mv.mode === 'serve' ? 'served' : 'observed, not served'}; a reading, never a gate)${said ? ` · ${said}` : ''}`);
+  }
   if (m.coverage) {
     const cv = m.coverage;
-    out.push(`    ${pad('request coverage', 18)}${cv.given} of ${cv.asked} thing(s) the request asks for are given${cv.missing.length ? ` · not found: ${cv.missing.map((w) => `"${w}"`).join(', ')}` : ''}${cv.unclear ? ` · ${cv.unclear} unclear` : ''} · not qualified yet`);
+    out.push(`    ${pad('request coverage', 18)}${cv.given} of ${cv.asked} thing(s) the request asks for are given${cv.missing.length ? ` · not found: ${cv.missing.map((w) => `"${w}"`).join(', ')}` : ''}${cv.heldBack?.length ? ` · held back to ask or confirm first: ${cv.heldBack.map((w) => `"${w}"`).join(', ')}` : ''}${cv.unclear ? ` · ${cv.unclear} unclear` : ''} · not qualified yet`);
   }
   out.push('');
   out.push(`  not measured: ${e.notMeasured.join('; ')}`);

@@ -1,12 +1,12 @@
-// tests/atelier-review-method-e2e.test.ts — A REVIEW METHOD, BUILT AND HELD THROUGH THE BINARY, WITH NO MODEL.
+// tests/atelier-review-method-e2e.test.ts — A REVIEW METHOD, BUILT AND HELD THROUGH THE BINARY, WITH NO KEY OF ITS OWN.
 //
 // The owner's method for reviewing a change has three steps: a verdict, a citation for every finding, and a test that
 // would have caught it. Built from one finished review with its diff beside it, the second and third are read by code
 // (in part), the first is left to the owner in their own words. A review that does all three is not VERIFIED: what the
 // checks do not read (whether a cited line supports its finding, whether the test is the right one, whether the
 // verdict is right) is the owner's to read. A finding with no citation, or no test named, blocks, with what failed.
-import { describe, it, expect } from 'vitest';
-import { execFileSync } from 'node:child_process';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -29,8 +29,19 @@ describe('atelier new --method on a code-review method, with a diff as material'
   writeFileSync(join(proj, 'change.diff'), DIFF);
   const env: NodeJS.ProcessEnv = { ...process.env, ATELIER_DATA: data, ATELIER_PROJECT_DIR: proj };
   delete env.ANTHROPIC_API_KEY; delete env.ANTHROPIC_AUTH_TOKEN;
+  // which check each step asks for is a reading (core/method/step-check.ts), answered by the scripted backend's stand-in
+  let backend: ChildProcess; let port = 0;
+  beforeAll(async () => {
+    backend = spawn(process.execPath, [resolve('tests/fixtures/scripted-backend.mjs')], { stdio: ['ignore', 'pipe', 'inherit'] });
+    port = await new Promise<number>((ok, bad) => {
+      backend.stdout!.on('data', (d: Buffer) => { const m = /PORT (\d+)/.exec(d.toString()); if (m) ok(Number(m[1])); });
+      backend.on('exit', () => { bad(new Error('scripted backend exited before listening')); });
+    });
+  }, 60_000);
+  afterAll(() => { backend?.kill(); });
+  const reader = (a: readonly string[]): string[] => (a[0] === 'new' || a[0] === 'method' ? ['--provider', 'openai-compatible', '--base-url', `http://127.0.0.1:${port}`, '--model', 'scripted'] : []);
   const run = (...a: string[]): { code: number; out: string } => {
-    try { return { code: 0, out: execFileSync('node', [CLI, ...a], { encoding: 'utf8', cwd: proj, env, stdio: ['ignore', 'pipe', 'pipe'] }) }; }
+    try { return { code: 0, out: execFileSync('node', [CLI, ...a, ...reader(a)], { encoding: 'utf8', cwd: proj, env, stdio: ['ignore', 'pipe', 'pipe'] }) }; }
     catch (e) { const x = e as { status: number; stdout: string; stderr: string }; return { code: x.status, out: x.stdout + x.stderr }; }
   };
   const verify = (text: string): { code: number; record: { state: string; entries: Entry[] }; checked: Checked[]; text: string } => {
@@ -41,7 +52,7 @@ describe('atelier new --method on a code-review method, with a diff as material'
   };
   const entry = (r: { record: { entries: Entry[] } }, words: string): Entry | undefined => r.record.entries.find((e) => e.statement === words);
 
-  it('builds with no key, each step read as the owner wrote it', () => {
+  it('builds with no key of its own, each step read as the owner wrote it', () => {
     const r = run('new', 'review.md', '--method', 'method.md', '--name', 'review', '--report');
     expect(r.code, r.out).toBe(0);
     expect(r.out).toContain('Your skill "review" is ready.');

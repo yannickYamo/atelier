@@ -43,6 +43,8 @@ export interface RunEvalInput {
   readonly profile: FidelityProfile | null;
   readonly format: { readonly words: string | null; readonly shape: 'SHAPE' | 'BARE' | null; readonly withheld: number };
   readonly taste: EvalSummary['monitors']['taste'];
+  /** the author's moves read on the delivered text (core/taste/move-reader.ts), when they were */
+  readonly moves?: EvalSummary['monitors']['moves'];
   readonly costUsd: number;
   /** where the cost went, by purpose, and what the run sent the writer (core/eval/size.ts); both recorded as given */
   readonly spend?: EvalSummary['spend'];
@@ -61,7 +63,15 @@ export interface RunEvalInput {
   readonly request?: { readonly asked: string; readonly met: boolean | null; readonly detail: string } | null;
   /** strict delivery: how many redraws were allowed, and whether a nonconformant output was let through by flag */
   readonly strict?: { readonly redraws: number; readonly allowed: boolean } | null;
+  /** the taste reader's reading of the delivered text, rule by rule, with whether the reader may act on each (VETO earned) */
+  readonly readings?: readonly RuleReadingOf[];
 }
+
+/** One rule's reading of the delivered text, as the record takes it (core/eval/record-build.ts, `RuleReading`). */
+export interface RuleReadingOf { readonly requirementId: string; readonly verdict: string; readonly quote?: string; readonly why: string; readonly acts: boolean }
+/** The readings by requirement id, for the record; a rule read more than once keeps its first reading. */
+export const readMap = (readings: readonly RuleReadingOf[] | undefined): ReadonlyMap<string, RuleReadingOf> | undefined =>
+  readings ? new Map(readings.filter((r, i, all) => all.findIndex((x) => x.requirementId === r.requirementId) === i).map((r) => [r.requirementId, r])) : undefined;
 
 export function buildRunEval(x: RunEvalInput): EvalSummary {
   const { rec, std } = x;
@@ -108,7 +118,7 @@ export function buildRunEval(x: RunEvalInput): EvalSummary {
   if (longest !== null && longest >= copyLimit(voice)) reasons.push(`a ${longest}-word run copied from your pieces`);
   if (x.request?.met === false) reasons.push(`the length the request asks for was not met (${x.request.detail})`);
   // THE RECORD (core/eval/record.ts): the same facts, each with what was observed of it, judged in one place.
-  const record = x.contract || !std ? undefined : recordForText({ L: x.L, std, text: rec.output, report: final, sensor: x.sensor, claimsOff: x.claimsOff, answers: x.answers, unmeasured: x.unmeasured ?? null,
+  const record = x.contract || !std ? undefined : recordForText({ L: x.L, readings: x.readings, std, text: rec.output, report: final, sensor: x.sensor, claimsOff: x.claimsOff, answers: x.answers, unmeasured: x.unmeasured ?? null,
     waived: new Map(x.applicability.filter((a) => a.status === 'WAIVED').map((a) => [a.requirementId, a.why ?? 'set aside for this run'])), request: x.request ?? null, cut: counts.cut,
     lostToLength: rec.repair?.unmeasured ?? [] });
   // THE YES/NO KEPT WITH THE RUN IS THE RECORD'S (core/eval/record.ts, `standingOf`): nothing required was seen to
@@ -180,8 +190,10 @@ export function buildRunEval(x: RunEvalInput): EvalSummary {
     monitors: {
       detector: reading?.detector ? { p: reading.detector.p, families: reading.detector.families ?? [], qualified: detectorQ ? detectorQ.result.passes : null } : null,
       taste: x.taste,
+      ...(x.moves ? { moves: x.moves } : {}),
       ...(x.coverage ? { coverage: { asked: x.coverage.parts.length, given: x.coverage.parts.filter((p) => p.covered === true).length,
-        missing: x.coverage.parts.filter((p) => p.covered === false).map((p) => p.words), unclear: x.coverage.parts.filter((p) => p.covered === null).length } } : {}),
+        missing: x.coverage.parts.filter((p) => p.covered === false && !p.deferred).map((p) => p.words), unclear: x.coverage.parts.filter((p) => p.covered === null).length,
+        ...(x.coverage.parts.some((p) => p.deferred) ? { heldBack: x.coverage.parts.filter((p) => p.deferred).map((p) => p.words) } : {}) } } : {}),
     },
     ...(x.strict ? { delivery: { mode: 'strict' as const, delivered: standing.deliverable || x.strict.allowed, redraws: x.strict.redraws } } : {}),
     ...(vr ? { voice: { mode: vr.mode, register: { status: vr.register.status, request: vr.register.request, corpus: vr.register.corpus, distance: vr.register.distance },
@@ -204,7 +216,9 @@ const isClaimLine = (id: string): boolean => id.startsWith('UNSOURCED') || CLAIM
 export function recordForText(x: { L: store.StoreLayout; std: StandardVersion; text: string; report: VerifyReport | null; sensor: ClaimSensor | undefined; claimsOff: boolean; answers: boolean;
   unmeasured: string | null; waived?: ReadonlyMap<string, string>; request?: { asked: string; met: boolean | null; detail: string } | null; cut?: number;
   /** rules the draft was read on that the text is too short to read (core/state/canonical-state.ts, `RepairRecord.unmeasured`) */
-  lostToLength?: readonly string[] }): EvaluationRecord {
+  lostToLength?: readonly string[];
+  /** the taste reader's reading of this text, rule by rule, with whether it may act (core/eval/record-build.ts, `RuleReading`) */
+  readings?: readonly RuleReadingOf[] }): EvaluationRecord {
   const line = (id: string): RuleCheck | undefined => x.report?.checked.find((c) => c.requirementId === id);
   const spans = (id: string): number => (line(id)?.result.verdict === 'VIOLATED' ? line(id)?.result.spans.length ?? 0 : 0);
   const state = x.claimsOff ? 'off' as const : !x.report || line(UNREAD) ? 'not-checked' as const : 'checked' as const;
@@ -221,7 +235,7 @@ export function recordForText(x: { L: store.StoreLayout; std: StandardVersion; t
       delivered: spans('UNSOURCED'), open: spans(INCONCLUSIVE) + spans(CLAIMS_TO_CHECK) + spans(PUBLIC_FACTS), cut: x.cut ?? 0, unconfirmed: spans(INCONCLUSIVE) },
     // Wording found in three or more pieces of the corpus is the author's standard wording, and is not counted.
     copying: shared ? { longest: shared.longestShared, limit: copyLimit(voice), tellable: (voice?.lengthPieces ?? voice?.pieces?.length ?? 0) >= STANDARD_WORDING_PIECES, ...(shared.longestWords ? { words: shared.longestWords } : {}) } : null,
-    unmeasured: new Set(x.lostToLength ?? []),
+    unmeasured: new Set(x.lostToLength ?? []), read: readMap(x.readings),
     replaced: new Set(x.request ? x.std.requirements.filter((r) => x.waived?.has(r.requirementId) && r.measurement?.observer === 'LENGTH' && !r.measurement.params.in).map((r) => r.requirementId) : []),
   });
 }

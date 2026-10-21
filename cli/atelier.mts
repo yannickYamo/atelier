@@ -203,7 +203,8 @@ const main = async (): Promise<void> => {
     // (./commands/method.ts); without one, the rules are read off the folder and offered for approval.
     // One compiler, three sources: the owner's method, what can be counted in their examples, and (where a model
     // is asked) what it reads in them. With no model, by choice or because none is set up, the first two build.
-    case 'new': return flag('--method') || argv.includes('--no-model') ? method() : newSkill();
+    // --voices asks for the combination of the voices read in the writing, which the examples-only build has no screen for.
+    case 'new': return flag('--method') || (argv.includes('--no-model') && !argv.includes('--voices')) ? method() : newSkill();
     case 'run': return run();
     case 'lab': { lab(); return; }
     case 'review': { await review(); return; }

@@ -56,11 +56,15 @@ export function evaluate(): void {
     const yes = rated.filter((e) => byRun.get(e.invocationId)?.ship).length;
     const conformant = es.filter((e) => e.result.conformant).length;
     const costs = es.map((e) => e.costUsd); const times = es.map((e) => e.durationMs);
+    // WHAT A USABLE OUTPUT COSTS: every dollar the cohort's rated runs spent, over the runs the person would ship. The
+    // economics a release is judged by (a cheaper run that ships less often is not cheaper), null until a run is rated.
+    const ratedCost = rated.reduce((n, e) => n + e.costUsd, 0);
+    const perUsable = yes ? Math.round((ratedCost / yes) * 10000) / 10000 : null;
     // Where each run stood (core/eval/record.ts); a run recorded before the record existed is counted apart.
     const stood = (st: string): number => es.filter((e) => e.record?.state === st).length;
     const states = { verified: stood('VERIFIED'), needsReview: stood('NEEDS_REVIEW'), blocked: stood('BLOCKED'), unrecorded: es.filter((e) => !e.record).length };
     return { release, runs: es.length, states, conformant, rated: rated.length, wouldShip: yes, parted: disagreement(es, (id) => byRun.get(id)?.ship),
-      cost: { p50: quantile(costs, 0.5), p90: quantile(costs, 0.9) }, durationMs: { p50: quantile(times, 0.5), p90: quantile(times, 0.9) } };
+      cost: { p50: quantile(costs, 0.5), p90: quantile(costs, 0.9), perUsable }, durationMs: { p50: quantile(times, 0.5), p90: quantile(times, 0.9) } };
   });
   const brokenCount = new Map<string, number>();
   for (const e of evals) for (const b of e.gates.required.broken) brokenCount.set(b.id, (brokenCount.get(b.id) ?? 0) + 1);
@@ -82,10 +86,22 @@ export function evaluate(): void {
   const thinRequests = thinIds.size ? store.listInvocations(L).filter((r) => thinIds.has(r.invocationId)).map((r) => r.input.split('\n')[0].slice(0, 80)) : [];
   const coverage = { runs: withSubject.length, thin: thinIds.size, requests: thinRequests };
 
+  // THE AUTHOR'S MOVES, OVER RUNS (core/taste/move-reader.ts): for each move, in how many runs it was placed or standing
+  // and what the piece did with it. A reading, never a gate; the rate is the reader's, until a study rates the reader.
+  const moveRuns = evals.flatMap((e) => (e.monitors.moves ? [{ e, m: e.monitors.moves }] : []));
+  const byMove = new Map<string, { aspect: string; runs: number; realised: number; misapplied: number; missing: number; notApplicable: number; notRead: number }>();
+  for (const { m: mon } of moveRuns) for (const x of mon.each) {
+    const m = byMove.get(x.id) ?? { aspect: x.aspect, runs: 0, realised: 0, misapplied: 0, missing: 0, notApplicable: 0, notRead: 0 };
+    m.runs += 1;
+    if (x.outcome === 'REALISED') m.realised += 1; else if (x.outcome === 'MISAPPLIED') m.misapplied += 1; else if (x.outcome === 'MISSING') m.missing += 1; else if (x.outcome === 'NOT_APPLICABLE') m.notApplicable += 1; else m.notRead += 1;
+    byMove.set(x.id, m);
+  }
+  const moves = { runs: moveRuns.length, served: moveRuns.filter(({ m: mon }) => mon.mode === 'serve').length, each: [...byMove.entries()].map(([id, m]) => ({ id, ...m })).sort((a, b) => b.runs - a.runs) };
+
   if (argv.includes('--json')) {
     console.log(JSON.stringify({ skill: name, cohorts: summary.map((c) => ({ ...c, conformantCi: wilson(c.conformant, c.runs), wouldShipCi: wilson(c.wouldShip, c.rated) })),
       brokenRules: Object.fromEntries(brokenCount), reasons: Object.fromEntries(reasonCount), complaints: Object.fromEntries(complaints),
-      notShippedBecause: noRating, toRead: queue.map((e) => e.invocationId), coverage }, null, 1));
+      notShippedBecause: noRating, toRead: queue.map((e) => e.invocationId), coverage, moves }, null, 1));
     return;
   }
   if (testRuns.size && !argv.includes('--json')) console.log(`(${testRuns.size} run(s) marked as tests are left out: a benchmark answer or a held-back case is a measurement, not use.)`);
@@ -103,7 +119,7 @@ export function evaluate(): void {
     console.log(`    would ship     ${c.rated ? rate(c.wouldShip, c.rated) : `not rated yet: atelier rate <run> yes|no`}`);
     if (c.parted.verified.rated) console.log(`    said verified, and you would not use it   ${c.parted.verified.wouldNotUse} of ${c.parted.verified.rated} rated`);
     if (c.parted.blocked.rated) console.log(`    blocked, and you would use it             ${c.parted.blocked.wouldUse} of ${c.parted.blocked.rated} rated`);
-    console.log(`    cost           median $${c.cost.p50.toFixed(2)} · 90th $${c.cost.p90.toFixed(2)}`);
+    console.log(`    cost           median $${c.cost.p50.toFixed(2)} · 90th $${c.cost.p90.toFixed(2)}${c.cost.perUsable !== null ? ` · $${c.cost.perUsable.toFixed(2)} per output you would ship` : ''}`);
     console.log(`    time           median ${(c.durationMs.p50 / 1000).toFixed(1)} s · 90th ${(c.durationMs.p90 / 1000).toFixed(1)} s`);
   }
   if (brokenCount.size || reasonCount.size || complaints.size || noRating.length) {
@@ -123,6 +139,10 @@ export function evaluate(): void {
     console.log(coverage.thin ? `    ${coverage.thin} of ${coverage.runs} run(s): their readings rest on your whole range, not on how you write on that subject`
       : `    none of ${coverage.runs} run(s): every request was near at least two of your pieces`);
     for (const q of [...new Set(coverage.requests)].slice(0, 5)) console.log(`    "${q}"`);
+  }
+  if (moves.runs) {
+    console.log(`\n  MY MOVES, READ ON THE WORK (${moves.runs} run(s), ${moves.served} with the moves served; a reading, never a gate)`);
+    for (const m of moves.each.slice(0, 8)) console.log(`    ${m.aspect.slice(0, 44).padEnd(46)}realised ${m.realised}/${m.runs} · misapplied ${m.misapplied} · missing ${m.missing} · not applicable ${m.notApplicable}${m.notRead ? ` · not read ${m.notRead}` : ''}`);
   }
   console.log(`\n  drift on your range: atelier fidelity --skill ${name}`);
 }

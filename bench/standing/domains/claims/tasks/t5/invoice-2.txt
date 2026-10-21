@@ -1,0 +1,4 @@
+INVOICE 2
+Supplier: Crane & Sons Electronics
+Item: a sound bar
+Amount: 2,165 dollars

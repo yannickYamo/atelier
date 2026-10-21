@@ -12,9 +12,9 @@ import { spend, processSpendByPurpose, spendBetween, type SpendPurpose, type Spe
 import type { StandardVersion, RepairRecord, RepairEdits, GradedRecord, ControllerDecisionRecord } from '../state/canonical-state.js';
 import { acts, isOmission, verifyText, type VerifyReport, type RuleCheck } from '../observers/verify.js';
 import { planFor } from '../plan/execution-plan.js';
-import { unsourcedClaims, wordCountClaims, claimUnitsOf, statedFigureClaims } from './claims.js';
+import { unsourcedClaims, wordCountClaims, claimUnitsOf, statedFigureClaims, type Claim } from './claims.js';
 import { derivedFromKnown } from './derived.js';
-import { answerWorkClaims, answerSentences, judgedOnly } from './answer-claims.js';
+import { answerWorkClaims, answerSentences, judgedOnly, judgedSituations, agreedWorkClaims } from './answer-claims.js';
 import { assertMayCut, type CutAuthority } from './cut-authority.js';
 import type { ContextJudge } from './context-judge.js';
 import type { ClaimSensor } from './claim-extract.js';
@@ -30,7 +30,8 @@ import { planRepair, repairPrompt, applyRepair, acceptRepair, addsNoWords, readA
   survivalLoss, type Reverted, type Applied, type RepairTarget, type Proposed, type NoChange, type StepPlan, type StepRule, type StepResult } from './repair.js';
 import { keysOf, measurementId } from '../state/rule-key.js';
 import { learnedShape, steeredShape, steersMiss, removeShapeExtras } from './shape-steer.js';
-import { mechanicalFixes, grammarFixes } from './mechanical-repair.js';
+import { carryOverClaims } from './carry-over.js';
+import { mechanicalFixes, grammarFixes, correctingCheck } from './mechanical-repair.js';
 import { ensureGrammar, readGrammar, isGrammarNote, grammarFixing, GRAMMAR_NOTE_SUFFIX } from '../observers/grammar.js';
 import type { RepairPair } from '../state/canonical-state.js';
 import { createHash } from 'node:crypto';
@@ -91,6 +92,12 @@ export interface CheckOptions {
   readonly gradedProfile?: FidelityProfile | null;
   /** what the person supplied: their notes, anecdotes, figures. Claims found here are theirs to make. */
   readonly material?: string;
+  /** the request's own material alone, without the skill's rules beside it: what a claim about the current work may rest on */
+  readonly evidence?: string;
+  /** the examples the skill is served (the author's pieces, the requests they answered, the exemplar): their facts belong to their case (./carry-over.ts) */
+  readonly examples?: string;
+  /** what the owner approved and the writer may name on any request: the method note and the standard's statements. A term of theirs is never borrowed */
+  readonly approved?: string;
   /** false turns off the invented-story and invented-figure check (`--allow-unsourced`) */
   readonly guardClaims?: boolean;
   /**
@@ -218,17 +225,22 @@ export function checkDraft(skill: string, v: StandardVersion, text: string, opts
   // answer's claim that the assistant did or saw something, a result figure, or an identifier from the
   // person's environment that the request did not give is cut (./answer-claims.ts); the rest is listed.
   const listOnly = opts.format?.claims === 'list';
-  const workClaims = listOnly ? answerWorkClaims(text, opts.material ?? '', claims) : [];
-  const judgeFlags = listOnly ? judgedOnly(text, opts.judge?.workClaims(answerSentences(text)) ?? null, workClaims) : [];
+  const workClaims = listOnly ? answerWorkClaims(text, opts.evidence ?? opts.material ?? '', claims) : [];
+  const judgedWork = listOnly ? opts.judge?.workClaims(answerSentences(text)) ?? null : null;
+  // Cut where the pattern and the judge agree; the pattern's own reading alone is listed (./answer-claims.ts, `agreedWorkClaims`).
+  const agreed = listOnly ? agreedWorkClaims(text, workClaims, judgedWork) : { cut: [] as Claim[], listed: [] as Claim[] };
+  const judgeFlags = listOnly ? judgedOnly(text, judgedWork, workClaims) : [];
+  const situationFlags = opts.judge?.situations ? judgedSituations(text, opts.judge.situations(answerSentences(text)), [...claims, ...workClaims, ...judgeFlags]) : [];
   // ON A KIND OF WORK NOBODY MEASURED, NOTHING IS CUT. The reader's findings and the patterns' are one list
   // for the person to check: on 27 real competitive analyses the cut deleted 32 legitimate sentences of 41.
   const unmeasured = !listOnly && opts.listsBecause ? opts.listsBecause : null;
   // Each finding's own words say what a cut does; here nothing is cut, and the words say so.
   const everyFinding = unmeasured ? [...claims, ...(reading?.gate ? reading.claims.filter((c) => !claims.some((x) => x.start === c.start)) : [])]
     .sort((x, y) => x.start - y.start).map((c) => ({ ...c, why: c.why.replace(/: the sentence is cut; /, ': listed for you to check; ') })) : [];
-  const toCut = unmeasured ? [] : listOnly ? workClaims : claims;
+  const toCut = unmeasured ? [] : listOnly ? agreed.cut : claims;
   const toList = unmeasured ? everyFinding
-    : listOnly ? [...claims.filter((c) => !workClaims.some((w) => w.start === c.start)), ...judgeFlags.filter((j) => !claims.some((c) => c.start === j.start))] : [];
+    : listOnly ? [...claims.filter((c) => !agreed.cut.some((w) => w.start === c.start)), ...agreed.listed.filter((l) => !claims.some((c) => c.start === l.start)),
+      ...judgeFlags.filter((j) => !claims.some((c) => c.start === j.start)), ...situationFlags] : [];
   // A COUNT WRITTEN IN WORDS IS LISTED, NEVER CUT. "Nine people", "three of your prospects": the pattern check
   // reads a spelled-out count with less confidence than a figure in digits (./claims.ts, wordCountClaims), and a
   // review found it in true sentences. Whatever the kind of work, these join the list for the person to check
@@ -239,11 +251,19 @@ export function checkDraft(skill: string, v: StandardVersion, text: string, opts
   // measured the check on the kind of work and material is bound, "95% of callers hit the retry path" is what the
   // person most needs to check. Never cut, and never a sentence already listed.
   const overlaps = (a: { start: number; end: number }, b: { start: number; end: number }): boolean => a.start < b.end && b.start < a.end;
-  const stated = unmeasured && (opts.material ?? '').trim()
+  // On any kind of work once material is bound: listing, never cutting, so no kind needs to have been measured for it.
+  const stated = (unmeasured || listOnly) && (opts.material ?? '').trim()
     ? statedFigureClaims(text, opts.material ?? '', (s) => derivedFromKnown(s, opts.material ?? ''))
       .filter((c) => ![...toList, ...words].some((x) => overlaps(x, c)))
     : [];
-  const listed = [...toList, ...words, ...stated].sort((x, y) => x.start - y.start);
+  // A FACT OF AN EXAMPLE'S CASE, SAID OF THIS ONE (./carry-over.ts): a term of the served examples that the request and its
+  // material never name, in a sentence that states it. A signal, listed for the person on every kind of work, never cut.
+  // Read against a request only: with none (a `verify` with no --task), every term the examples share would be "borrowed".
+  const carried = !(opts.examples ?? '').trim() || !(opts.context?.request ?? '').trim() ? []
+    : carryOverClaims(text, opts.examples ?? '', `${opts.evidence ?? opts.material ?? ''}\n${opts.approved ?? ''}\n${opts.context?.request ?? ''}`)
+      .filter((c) => ![...toCut, ...toList, ...words, ...stated].some((x) => overlaps(x, c)));
+  const situated = listOnly ? [] : situationFlags.filter((c) => ![...toCut, ...toList, ...words, ...stated, ...carried].some((x) => overlaps(x, c)));
+  const listed = [...toList, ...words, ...stated, ...carried, ...situated].sort((x, y) => x.start - y.start);
   const statement = 'Never invent a story, a quotation, an attribution or a specific the person did not supply.';
   // Which instrument found what may be cut: the patterns decide an answer's work claims; otherwise the
   // gating reading's instrument, qualified or not (./cut-authority.ts refuses the ones that may not cut).
@@ -257,7 +277,8 @@ export function checkDraft(skill: string, v: StandardVersion, text: string, opts
         : toCut.length ? `${toCut.length} claim(s) not in the material supplied` : 'no unsourced stories, quotations or specifics'} [${by}]` } };
   const checkLine = listed.length ? [{ requirementId: CLAIMS_TO_CHECK, statement: unmeasured ? `Not found in what you supplied: listed for you to check, never cut, because ${unmeasured}.`
     : listOnly ? 'Specifics not in the material supplied: listed for you to check, never cut in this format.'
-      : 'Counts written in words that are not in the material supplied: listed for you to check, never cut; the pattern check reads them with less confidence than a figure in digits.',
+      : listed.length === words.length ? 'Counts written in words that are not in the material supplied: listed for you to check, never cut; the pattern check reads them with less confidence than a figure in digits.'
+        : 'Not shown by your request or the material supplied: listed for you to check, never cut.',
     materiality: 'PREFERRED', phase: 'ACCURACY' as const,
     result: { verdict: 'VIOLATED' as const, spans: [...listed], value: listed.length, detail: `${listed.length} specific(s) to check [${by}]` } }] : [];
   const readerOnly = reading?.gate && !unmeasured ? reading : null;
@@ -310,6 +331,8 @@ export async function checkDraftAsync(skill: string, v: StandardVersion, text: s
   // The grammar engine, loaded once, before the first check of a standard that carries the rule (../observers/grammar.ts).
   await ensureGrammar(v);
   if (opts.guardClaims !== false && opts.claimSensor) await opts.claimSensor.read(text);
+  // The situations a text states are read once, on the text delivered (cli/commands/invoke.ts, `withSituations`): they are
+  // only listed, so no step of the loop needs them. A text read so is listed here too, from the judge's cache.
   if (opts.guardClaims !== false && opts.format?.claims === 'list' && opts.judge) await opts.judge.readAnswer(answerSentences(text));
   return checkDraft(skill, v, text, opts);
 }
@@ -626,20 +649,15 @@ export function heavyCut(draft: string, cut: readonly string[]): string | null {
     + '--allow-unsourced; if they are yours, bind them with --with or atelier material';
 }
 
-/** At most this many graded features are targeted in one pass: the ones furthest outside their band first. */
-export const GRADED_PER_PASS = 3;
-
 /**
  * The rules a run grades (`CheckOptions.graded`): requirement id to the feature it counts. The standard's FEATURE
  * rules, and, with a profile, its SIGNAL features under their own ids (./graded.ts). Empty without the option.
  * A FEATURE rule the plan enforces (one the owner REQUIRED) is never graded: it is the owner's, enforced like any rule they require (its carriers
  * rewritten through the controller), and never steered as a habit or written again as one.
  */
-export function gradedRules(v: Pick<StandardVersion, 'requirements'>, graded: CheckOptions['graded'], profile?: FidelityProfile | null,
-  /** the request: one that names a length sets it, and no learned length band is steered against it */ request?: string | null): Map<string, string> {
+export function gradedRules(v: Pick<StandardVersion, 'requirements'>, graded: CheckOptions['graded'], profile?: FidelityProfile | null): Map<string, string> {
   const out = new Map<string, string>();
   if (graded === undefined) return out;
-  const lengthAsked = request ? statedLength(request) !== null : false;
   // which rules a run enforces is the plan's to say (../plan/execution-plan.ts), never the rule's own field
   const enforced = new Set(planFor(v).rules.filter((p) => p.enforced).map((p) => p.id));
   for (const r of v.requirements) {
@@ -648,7 +666,8 @@ export function gradedRules(v: Pick<StandardVersion, 'requirements'>, graded: Ch
     // pieces never carry. Steered under the shape's own name; a band the owner stated is theirs, never a habit pulled at.
     if (learnedShape(r)) {
       const sh = steeredShape(r.measurement);
-      if (sh && !(lengthAsked && sh.how === 'length') && (graded === 'all' || graded.includes(sh.shape))) out.set(r.requirementId, sh.shape);
+      // A learned length is never a target (owner's ruling): the task sets how much is needed. It is reported, not steered.
+      if (sh && sh.how !== 'length' && (graded === 'all' || graded.includes(sh.shape))) out.set(r.requirementId, sh.shape);
       continue;
     }
     if (r.measurement?.observer !== 'FEATURE') continue;
@@ -656,22 +675,6 @@ export function gradedRules(v: Pick<StandardVersion, 'requirements'>, graded: Ch
     if (f && (graded === 'all' || graded.includes(f))) out.set(r.requirementId, f);
   }
   for (const [id, f] of signalRules(profile)) if (graded === 'all' || graded.includes(f)) out.set(id, f);
-  return out;
-}
-
-/**
- * The graded checks one pass is pointed at: the broken ones, the largest |error| first (../observers/registry.ts,
- * `ObserverResult.error`), at most GRADED_PER_PASS features. Two rules on one feature count as one feature.
- */
-export function gradedTargets(report: VerifyReport, rules: ReadonlyMap<string, string>): RuleCheck[] {
-  const broken = report.checked.filter((c) => rules.has(c.requirementId) && c.result.verdict === 'VIOLATED')
-    .sort((a, b) => Math.abs(b.result.error ?? 0) - Math.abs(a.result.error ?? 0) || a.requirementId.localeCompare(b.requirementId));
-  const features = new Set<string>(); const out: RuleCheck[] = [];
-  for (const c of broken) {
-    const f = rules.get(c.requirementId) ?? c.requirementId;
-    if (!features.has(f) && features.size >= GRADED_PER_PASS) continue;
-    features.add(f); out.push(c);
-  }
   return out;
 }
 
@@ -683,8 +686,11 @@ export function withGraded(report: VerifyReport, ids: ReadonlySet<string>): Veri
 /** The report with the invented-claim line left out: what a model rewrite may be pointed at. */
 const withoutClaims = (r: VerifyReport): VerifyReport => ({ ...r, checked: r.checked.filter((c) => c.requirementId !== 'UNSOURCED' && c.requirementId !== INCONCLUSIVE && c.requirementId !== UNREAD) });
 
+/** How many rewrite passes a repair may run on one draft: the one place the count is set, for every door (invoke, verify --repair, fix). */
+export const REPAIR_PASSES = 2;
+
 export async function refineToStandard(
-  client: InferenceClient, budget: Budget, skill: string, v: StandardVersion, draft: string, maxPasses = 2,
+  client: InferenceClient, budget: Budget, skill: string, v: StandardVersion, draft: string, maxPasses: number = REPAIR_PASSES,
   opts: CheckOptions = {},
 ): Promise<Refined> {
   // A caller that hands no ledger (verify --repair, fix) runs this refinement as the run: a repair chain of its own, in
@@ -700,7 +706,7 @@ async function refineOnLedger(client: InferenceClient, budget: Budget, skill: st
   // pointed at, and what the run did about them; `pending` is what keeps the loop going where `failed` would not.
   // The profile's SIGNAL features ride on the reports this loop holds as checks of their own (./graded.ts), and are
   // taken off every report this function returns: the record and the evaluation never see them.
-  const graded = gradedRules(v, opts.graded, opts.gradedProfile, opts.context?.request);
+  const graded = gradedRules(v, opts.graded, opts.gradedProfile);
   const gradedOn = opts.graded !== undefined && graded.size > 0;
   const profile = gradedOn ? opts.gradedProfile ?? null : null;
   // THE LEARNED SHAPE BANDS THIS RUN STEERS (./shape-steer.ts): a length, written again toward its band; a count of
@@ -813,8 +819,9 @@ async function refineOnLedger(client: InferenceClient, budget: Budget, skill: st
     // A GRAMMAR rule with a confirmed error the checker can correct is the controller's grammar step, after everything
     // else; one whose errors have no sure correction is an enforced rule like any, its sentence rewritten. Only under
     // --fix-grammar: by default a grammar rule is never violated (its findings are listed), and there is no such step.
-    const grammar = !grammarFixing() ? [] : r.checked.filter((c) => acts(c) && c.result.verdict === 'VIOLATED' && c.observer === 'GRAMMAR' && !isGrammarNote(c)
-      && c.result.spans.some((sp) => sp.replacement !== undefined)).map((c) => c.requirementId);
+    // A QUALIFIED WRITTEN CHECK THAT SUPPLIED THE CORRECTION is the same step: the value it computed, put in place by code.
+    const grammar = r.checked.filter((c) => acts(c) && c.result.verdict === 'VIOLATED' && (correctingCheck(v, c) || (grammarFixing() && c.observer === 'GRAMMAR' && !isGrammarNote(c)
+      && c.result.spans.some((sp) => sp.replacement !== undefined)))).map((c) => c.requirementId);
     const enforced: EnforcedMiss[] = r.checked.filter((c) => acts(c) && c.result.verdict === 'VIOLATED' && !CLAIM_LINES.has(c.requirementId) && !grammar.includes(c.requirementId))
       .map((c) => ({ id: c.requirementId, kind: isOmission(c) || !c.result.spans.length ? 'omission' as const : 'span' as const }));
     // one miss per feature: a rule and a signal on the same feature are one target, the further out of the two

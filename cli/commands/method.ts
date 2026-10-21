@@ -13,25 +13,36 @@
 //
 // Nothing here calls a model (core/method/standard.ts). The build is one call and never stops for a disagreement
 // between the method and the examples; `--yes` confirms the steps the examples dispute, so that they block.
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, statSync, rmSync } from 'node:fs';
 import { basename, resolve } from 'node:path';
-import { DATA, argv, die, flag, positional, loadSession, saveSession, archiveSession, authoredIdAllocator, runFile, sha } from '../runtime.js';
+import { DATA, argv, die, flag, positional, loadSession, saveSession, archiveSession, authoredIdAllocator, runFile, sha, canReach, contextReaderClient, contextReaderModel } from '../runtime.js';
 import * as store from '../../core/state/store.js';
+import { resetStages } from '../stages.js';
+import { METHOD_UNITS, unitFloor, describeUnit, type DecisionUnit } from '../../core/method/decision-units.js';
+import { STEP_CHECK, STEP_CHECK_REPAIR, planOf, stepCheckInput, heldByPolarity, judgement, type StepPlan, type StepToCheck, type StepCheck, type ExampleCase } from '../../core/method/step-check.js';
+import { measure } from '../../core/observers/registry.js';
+import { STEP_MUTANTS, mutate, qualifyCheck, describeQualification } from '../../core/method/mutants.js';
+import { countWords } from '../../core/eval/size.js';
 import { normalizeClass, CLASS_ALIASES } from '../../core/observers/doc-class.js';
 import { unmeasuredKind } from '../../core/loop/claim-extract.js';
 import { skillNameFrom } from '../../renderers/agent-skill/render.js';
+import { RULE_POLARITY, UNREAD_KIND } from '../../core/observers/rule-polarity.js';
+import { readContext } from '../../core/inference/reading.js';
 import { writeAtomic } from '../../core/state/fs-atomic.js';
 import { draftHash, appendDecision, type RatificationLedger } from '../../core/ratification/decision-record.js';
 import { decide } from '../../core/ratification/authority.js';
-import type { Requirement } from '../../core/state/canonical-state.js';
+import type { Requirement, CheckQualification } from '../../core/state/canonical-state.js';
 import type { GoldenCase } from '../../core/golden/case.js';
-import { proposalsAcross, countedOffers, tellOffers, grammarOffer, stepsOf, shortFormOffers, type MethodProposal } from '../../core/method/standard.js';
+import { proposalsAcross, countedOffers, tellOffers, grammarOffer, stepsOf, outlineOf, shortFormOffers, type MethodProposal } from '../../core/method/standard.js';
 import { shortFormOptions, type ShortFormOptions } from '../../core/observers/short-form.js';
 import { ensureGrammar } from '../../core/observers/grammar.js';
-import { readCase, corpusFiles } from '../corpus.js';
+import { readCase, corpusFiles, sessionCorpus, corpusHashOf } from '../corpus.js';
+import { buildProfile } from '../../core/fidelity/profile.js';
+import { SELECTION } from '../../core/observers/selection.js';
+import { withoutFrontMatter } from '../../core/composite/authors.js';
+import { authorship } from '../../core/composite/voices.js';
 import { shortFormFolder } from './intake.js';
 import { MIN_GOLDEN_CHARS } from '../../core/discovery/chain/corpus-import.js';
-import { withoutFrontMatter } from '../../core/composite/authors.js';
 import { observesOf, propositionOf, type Observes } from '../../core/eval/observes.js';
 import { planFor, describePlan } from '../../core/plan/execution-plan.js';
 import { ratifyClose } from './ratify.js';
@@ -205,12 +216,15 @@ export function nameFor(notePath: string, goldenPath: string, viaNew: boolean): 
  * sentence: authored by them, and required where code can hold an output to it. One read off the example is the
  * machine's reading that they approved: a preference until they say otherwise.
  */
-export function decideSteps(proposals: readonly MethodProposal[], nextId: () => string, confirmed = false): { decided: Requirement[]; ledger: RatificationLedger } {
+export function decideSteps(proposals: readonly MethodProposal[], nextId: () => string, confirmed = false,
+  /** each statement's kind as read (core/observers/rule-polarity.ts); a statement not in it is a thing to do */
+  kinds: ReadonlyMap<string, 'BOUNDARY' | 'GENERATIVE'> = new Map(),
+): { decided: Requirement[]; ledger: RatificationLedger; qualifications: Record<string, CheckQualification> } {
   const bases: Requirement[] = proposals.map((p) => ({
     requirementId: nextId(), statement: p.statement, appliesWhen: 'GENERAL',
-    // A prohibition opens with one. "Then a Suggestions section: improvements that do not block the merge" asks for
-    // a section, and was listed under what not to do.
-    kind: /^\s*(?:never|do not|don't|must not|avoid|no)\b/i.test(p.statement) ? 'BOUNDARY' : 'GENERATIVE',
+    // Whether the step forbids or asks for something is read (core/observers/rule-polarity.ts); unread, it is a thing
+    // to do in its own words ("Then a Suggestions section: improvements that do not block the merge" asks for a section).
+    kind: kinds.get(p.statement) ?? UNREAD_KIND,
     authority: 'DERIVED_UNRATIFIED', provenance: 'MACHINE_DISCOVERED',
     // No evidence is carried: how the example fared on a check is said on the screen, and is not the author's words.
     evidence: null, evidenceItemId: null, wouldBeAbsentIf: null,
@@ -231,15 +245,19 @@ export function decideSteps(proposals: readonly MethodProposal[], nextId: () => 
     // A stated step with a check is required: it is the owner's, and code can hold an output to it. One read off the
     // example is a preference until the owner says otherwise.
     const p = proposals[i];
-    const enforce = p.measurement && !base.contested && !base.related;
+    // A written check is not enforced until it is qualified on the owner's examples and their mutants (core/method/mutants.ts).
+    const enforce = p.measurement && !base.contested && !base.related && !(p.measurement.observer === 'CHECK' && !p.qualification?.qualified);
     const outcome = decide(base, p.origin === 'STATED' ? { verb: 'STATED', ...(enforce ? { materiality: 'REQUIRED' } : {}) } : { verb: 'APPROVE', materiality: p.required ? 'REQUIRED' : 'PREFERRED' });
     ledger = appendDecision(ledger, base, outcome.ledgerDecision, { decidedAt: new Date().toISOString() });
     return outcome.requirement;
   });
-  return { decided, ledger };
+  // WHAT EACH WRITTEN CHECK EARNED, by the id its rule now carries: kept beside the standard, outside its hash.
+  const qualifications = Object.fromEntries(decided.flatMap((r, i) => { const q = proposals[i].qualification; return q && r.measurement?.observer === 'CHECK' ? [[r.requirementId, q]] : []; }));
+  return { decided, ledger, qualifications };
 }
 
 export async function method(): Promise<void> {
+  resetStages();
   // `atelier new <your-work> --method <note>` and `atelier method <note> --golden <your-work>` are one command; and
   // `atelier new <your-work>` with no note (--no-model, or no model set up) is the same one with no stated step:
   // the skill is what the examples show, counted, and the pieces themselves.
@@ -277,7 +295,16 @@ export async function method(): Promise<void> {
   const { folder, cases } = readExamples(goldenPath, notePath ?? '');
   // The grammar engine, before the examples are read: their vocabulary and dialect are read off them by it.
   await ensureGrammar();
-  const read = proposalsAcross(note, cases);
+  // WHAT EACH STATED STEP IS, READ ONCE (core/observers/rule-polarity.ts): a prohibition or a thing to do. Read first, so
+  // the check reading can be held against it: a prohibition is never given a check that requires what it forbids.
+  const stepKindsRead = await stepKinds(stepsOf(note).map((st) => st.text));
+  // WHICH CHECK EACH STATED STEP CARRIES, READ ONCE (core/method/step-check.ts): a measurement from the menu, a check the
+  // model writes, or judgement; grounded on the owner's examples by code. With no model every step is a judgement.
+  const checksPlan = await stepPlan(stepsOf(note).map((st, i) => ({ id: String(i + 1), text: st.text, under: st.under })), cases, stepKindsRead);
+  const across = proposalsAcross(note, cases, checksPlan);
+  // A WRITTEN CHECK EARNS ITS SAY (core/method/mutants.ts): it must pass every example and catch the edits that break
+  // only its step; until then it is kept, shown with what it caught, and enforced nowhere. Its standing is said beside it.
+  const read = { ...across, proposals: across.proposals.map((p) => (p.qualification ? { ...p, onExample: describeQualification(p.qualification) } : p)) };
   const lead = read.lead;
   // What the pieces show about how they are written, counted: offered beside the method, with no model.
   // WITH NO METHOD, THE ONE THING ASKED IS "LIKE THESE". It is said as the skill's one rule, which no count reads and
@@ -294,6 +321,9 @@ export async function method(): Promise<void> {
   const example = cases[lead];
   const whole = argv.includes('--report');
   console.log(`${notePath === null ? 'No method note: built from your examples' : `Method: ${basename(notePath)}`}  ·  ${cases.length === 1 ? `example: ${example.id}` : `${cases.length} examples from ${basename(goldenPath)}`}${whole && cases.length > 1 ? `; checks read from ${example.id}, then held against the rest` : ''}${whole && example.material.length ? ` with ${example.material.length} file(s) of material` : ''}\n`);
+  // VOICES READ IN THE WRITING ARE SAID, AND BUILT AS ONE unless asked (cli/commands/new.ts says the same on its path).
+  const voices = notePath === null && folder && cases.length > 1 ? authorship(cases.map((c) => ({ id: c.id, text: c.reference }))).voices : null;
+  if (voices && voices.groups.length > 1) console.log(`${voices.groups.length} voices read in how the pieces are written (${voices.groups.map((g) => `${g.pieces.length} piece(s)`).join(', ')}): built as one voice, which is what pointing at one folder asks for.\n  To build the combination of them, each read on its own:  atelier new ${goldenPath} --voices\n`);
   for (const line of whole ? describeMethod(proposals, example.caseClass) : shortScreen(proposals)) console.log(line);
   // The limits of a corpus of short pieces: one line on the screen, the whole account with --report.
   if (short.brief) { console.log(''); for (const line of whole ? short.limits : [short.brief]) console.log(`Short form: ${line}`); }
@@ -315,34 +345,88 @@ export async function method(): Promise<void> {
   if (again) { archiveSession(); s = loadSession(); }
 
   // ── THE OWNER'S STEPS AS THEIR OWN, WHAT THE EXAMPLE SHOWS AS APPROVED AND SHOWN ──────
-  const { decided, ledger } = decideSteps(proposals, authoredIdAllocator(s), confirmed);
+  // WHAT EACH STEP IS, READ ONCE: a prohibition or a thing to do. The reader sees every step in one call; without a
+  // model (none set up, or --no-model) the word pattern decides, and the whole account says so.
+  const kinds = await stepKinds([...likeThese, ...read.proposals].map((p) => p.statement), stepKindsRead);
+  // WHAT EACH STATED STEP ASKS THE WRITER TO DECIDE, read once (core/method/decision-units.ts): kind, decision, inputs,
+  // condition in the step's own words, output, exception, dependencies. Said in the whole account; the brief for one
+  // request selects by it. With no model the words decide: an instruction, applying always unless they say when.
+  const units = await decisionUnits(read.proposals.filter((p) => p.origin === 'STATED'), stepsOf(note));
+  if (whole && units.size) { console.log('\nWhat each step asks the writer to decide:'); let i = 0; for (const [statement, u] of units) console.log(`  ${++i}. ${statement.slice(0, 90)}\n      ${describeUnit(u)}`); }
+  const { decided, ledger, qualifications } = decideSteps(proposals, authoredIdAllocator(s), confirmed, kinds);
   // WHOSE BUILD THIS IS, WRITTEN BEFORE ANYTHING ELSE IS. A build that stops after the standard is stored and before
   // the skill is installed leaves a skill of this name behind: with the name kept here, the same command run again
   // knows the skill as this folder's and finishes it. Without it, the person was told somebody else had built it.
-  s = { ...s, skillName: name, claim: { owned: Boolean(activeNow) }, decided: [...s.decided, ...decided], ledger, ...(folder ? { source: folder } : {}) };
+  s = { ...s, skillName: name, claim: { owned: Boolean(activeNow) }, decided: [...s.decided, ...decided], ledger, qualifications: { ...s.qualifications, ...qualifications }, ...(folder ? { source: folder } : {}) };
   saveSession(s);
 
   // The finished example is installed with the skill as the one worked example: what good looks like, for a writer
   // that has the method beside it. Its own task and material are not part of it.
   const exampleFile = runFile(`method-example-${sha(example.reference)}.md`);
-  writeAtomic(exampleFile, withoutFrontMatter(example.reference));
+  // With the request it answered, when the example carried one: served beside it (renderers/agent-skill/render.ts).
+  writeAtomic(exampleFile, `${example.task ? `---\nrequest: |\n${example.task.split('\n').map((l) => `  ${l}`).join('\n')}\n---\n` : ''}${withoutFrontMatter(example.reference)}`);
   process.env.ATELIER_ORCHESTRATED = '1';
-  // Every step is the owner's and every check is code: the build asks no model for a reading of the examples.
-  process.env.ATELIER_BUILD_NO_MODEL = '1';
+  // EVERY STEP IS THE OWNER'S AND EVERY CHECK IS CODE; HOW THE AUTHOR SOUNDS IS STILL READ. Nothing about the method
+  // needs a model, and this build asked for none, so a skill built this way carried no persona and no scope reading, and
+  // its log never said so. Three skills built this way scored last on "sounds like the author" in the three-context
+  // study, while every skill that tied or won had a persona (core/compiler/persona.ts: rules do not make a model sound
+  // like the author, a description does). The rules still need held-out pieces to be checked on; a description steers
+  // and never blocks, so it needs none. With a model set up, the build reads the persona, and the scope for work that
+  // answers; without one it is as it was. The pieces are served whole either way: the model reads them, it never
+  // chooses which are shown (cli/commands/build.ts, `WHOLE_PIECES`).
+  if (!canReach('discovery') || argv.includes('--no-model')) process.env.ATELIER_BUILD_NO_MODEL = '1';
+  process.env.ATELIER_BUILD_WHOLE_PIECES = '1';
   if (!argv.includes('--work-type')) argv.push('--work-type', flag('--for') ?? name.replace(/-/g, ' '));
   if (!argv.includes('--exemplar')) argv.push('--exemplar', exampleFile);
+  // HOW A HOST KNOWS WHEN TO LOAD IT: the owner's own description when their method carries one, else what the skill is
+  // for and the method's first line. "Applies a compiled standard" told a host nothing, and the skill was rarely loaded.
+  // The owner's own always; one made from the purpose only on a first build, never over a description set since.
+  if (!argv.includes('--description') && (/^description:/m.test(/^\uFEFF?---\r?\n([\s\S]*?)\r?\n---/.exec(note)?.[1] ?? '') || !activeNow)) {
+    const d = describeFrom(note, flag('--for') ?? null, name); if (d) argv.push('--description', d);
+  }
+  // The method itself is served whole with the skill: what the steps above decide is what is checked, never what the
+  // writer is told.
+  if (notePath !== null && !argv.includes('--method-text')) {
+    const methodFile = runFile(`method-note-${sha(note)}.md`);
+    writeAtomic(methodFile, note);
+    argv.push('--method-text', methodFile);
+  }
   // Three pieces or more are served with the skill, as its own way of writing, and their lengths recorded; with
   // fewer there is no telling a usual piece from an odd one, and the one worked example stands alone.
-  if (!argv.includes('--voice') && !(folder && cases.length >= 3)) argv.push('--voice', 'none');
-  if (!argv.includes('--persona')) argv.push('--persona', 'none');
+  if (!argv.includes('--voice') && !(folder && cases.length >= 2)) argv.push('--voice', 'none');
   // (With no method note nothing names the kind of work: a folder called "posts" or "contract" is not thereby held
   // as a post or a contract. --class says it.)
   if (!argv.includes('--class') && notePath !== null) store.setDocClass({ root: DATA, skillName: name }, kind);
   // THE BUILD SAYS A GREAT DEAL (the standard's hash, the size of the export, what no instrument measures): all of it
   // true, none of it what a person needs to start. It is kept for --report, and shown whole if the build fails.
+  // THE AUTHOR'S RANGE ON THIS PATH TOO (core/fidelity/profile.ts). A skill built from a method and pieces had no
+  // profile: no band of the author's own features, nothing to choose a draft by or to read an output against, no
+  // release to steer, while a skill from discovery had all of it. The bands need the pieces alone; the detector and the
+  // signals need the model's drafts, which this path never writes, so every band is monitored and none steers until a
+  // discovery or `atelier fidelity` adds them. Written here and installed by build under the pieces' own hash, as a
+  // discovery's is under the sealed corpus's; fewer pieces than a band can be read from leaves none, and the build says.
+  // Discovery's other artefacts (signals, retrieval, typicality) belong to the profile discovery wrote them beside, never to
+  // this one: anything another build left in the run folder is cleared, as discovery clears it before writing its own.
+  for (const f of ['fidelity.json', 'signals.json', 'retrieval.json', 'typicality.json']) rmSync(runFile(f), { force: true });
+  const pieces = folder ? sessionCorpus().map(withoutFrontMatter) : [];
+  if (pieces.length >= SELECTION.minRead) {
+    writeAtomic(runFile('fidelity.json'), JSON.stringify(buildProfile({ read: pieces.map((text, i) => ({ id: `piece-${i + 1}`, text })), held: [], model: [], corpusHash: corpusHashOf(pieces) })));
+  }
   const said: string[] = []; const log = console.log;
   if (!whole) console.log = (...a: unknown[]) => { said.push(a.map(String).join(' ')); };
   try { ratifyClose(); await build(name); } catch (e) { console.log = log; for (const l of said) console.log(l); throw e; } finally { console.log = log; }
+  // THE UNITS, BESIDE THE STANDARD THEY WERE READ FROM, never inside it: keyed by requirement id under the standard's
+  // hash, so a reading moves no standard and a rebuild under the same standard finds them (core/state/store.ts).
+  if (units.size) {
+    const built = store.getActive(LN); const sv = built ? store.getSkillVersion(LN, built) : null;
+    if (sv) store.putUnits(LN, sv.standardVersionHash, Object.fromEntries(decided.flatMap((q) => { const u = units.get(q.statement); return u ? [[q.requirementId, u]] : []; })));
+  }
+  // HOW THE AUTHOR WAS READ IS SAID ON THE SHORT SCREEN TOO. The persona and the scope carry the author's voice, and a
+  // build without them was indistinguishable, on this screen, from one with them. One line each, in the build's own
+  // words, when a model was there to read: what it read, or why it read nothing. With no model set up the screen stays
+  // as it was (`atelier new` has said so once already), and what the owner asked for (--persona none) is not said back.
+  // Everything the build said is in --report.
+  if (!whole) for (const l of said.filter((x) => /^(Work form: |Persona: |Scope: |\(no persona: \d|\(the persona could not be derived|\(the examples could not be read for scope|\(a fidelity profile in this project)/.test(x))) console.log(l);
   // Required is what a run is held to. What the example showed is checked and reported, and fails nothing: said apart,
   // so that the count of what is enforced is never larger than it is.
   // The screen above already said what is checked and what is theirs: all that is left to say is that it is ready.
@@ -352,4 +436,144 @@ export async function method(): Promise<void> {
   console.log(`\nYour skill "${name}" is ready.`);
   if (disputed.length && !confirmed) console.log(`  ${disputed.length} of your steps ${disputed.length === 1 ? 'is' : 'are'} not what your own examples do (marked ! above). ${disputed.length === 1 ? 'It is' : 'They are'} checked and shown on every run, and block${disputed.length === 1 ? 's' : ''} nothing until you say so:\n    keep ${disputed.length === 1 ? 'it' : 'them'} as written: atelier ${typedWithout(['--yes'])} --name ${name} --yes   ·   or change the method and build again`);
   console.log(`  Use it: atelier run "<the task>"${against ? ' --with <file>' : ''}   (or /${name} in Claude Code)`);
+}
+
+/**
+ * THE DESCRIPTION A HOST READS TO DECIDE WHEN TO LOAD THE SKILL. The owner's own (`description:` in the method's front
+ * matter) when there is one; else "Use when asked to <purpose>." with the method's first sentence of prose, which is
+ * the method saying what it is for. Null when there is neither.
+ */
+export function describeFrom(note: string, purpose: string | null, name: string): string | null {
+  const fm = /^\uFEFF?---\r?\n([\s\S]*?)\r?\n---/.exec(note);
+  // A block scalar (`description: >` or `|`) runs over the indented lines under it.
+  const block = fm ? /^description:\s*[|>][+-]?\s*\n((?:[ \t]+\S[^\n]*\n?)+)/m.exec(fm[1])?.[1] : undefined;
+  const line = fm ? /^description:\s*(.+)$/m.exec(fm[1])?.[1]?.trim() : undefined;
+  const own = block ? block.split('\n').map((l) => l.trim()).join(' ').trim()
+    : line && !/^[|>][+-]?$/.test(line) ? (/^"[\s\S]*"$/.test(line) ? line.slice(1, -1).replace(/\\(["\\])/g, '$1') : line.replace(/^'([\s\S]*)'$/, '$1')) : undefined;
+  if (own) return own.replace(/\s+/g, ' ').slice(0, 1000);
+  const body = note.replace(/^\uFEFF?---\r?\n[\s\S]*?\r?\n---\r?\n?/, '');
+  const first = body.split(/\r?\n\s*\r?\n/).map((p) => p.trim()).find((p) => p && !/^(?:#|[-*+]\s|\d+[.)]\s|\||```|>)/.test(p));
+  const sentence = first ? (/^[\s\S]*?[.!?](?=\s|$)/.exec(first.replace(/\s+/g, ' '))?.[0] ?? first.replace(/\s+/g, ' ')).slice(0, 300) : '';
+  const what = purpose?.trim() ? purpose.trim() : name.replace(/-/g, ' ');
+  return `Use when asked to ${what.replace(/[.\s]+$/, '')}.${sentence ? ` ${sentence}` : ''}`;
+}
+
+/** The decision unit of every stated step, read in one call where a model is set up (core/method/decision-units.ts); the words alone where none is. */
+async function decisionUnits(stated: readonly MethodProposal[], steps: readonly { text: string; under: string | null }[]): Promise<Map<string, DecisionUnit>> {
+  const unique = [...new Set(stated.map((p) => p.statement.trim()).filter(Boolean))];
+  if (!unique.length) return new Map();
+  const under = new Map(steps.map((st) => [st.text.trim(), st.under]));
+  const input = { steps: unique.map((text, i) => ({ id: String(i + 1), text, under: under.get(text) ?? null })) };
+  const noModel = !canReach('discovery') || argv.includes('--no-model');
+  const d = await readContext(METHOD_UNITS, input, noModel ? null : contextReaderClient(), noModel ? null : contextReaderModel(), { spentUsd: 0, capUsd: 0.2, maxCalls: 1 });
+  if (argv.includes('--report')) console.log(`(what each step asks the writer to decide: ${d.by === 'model' ? `read by ${contextReaderModel()}` : d.by === 'code' ? 'nothing to read' : `by the words alone (${d.why})`}.)`);
+  return new Map(input.steps.map((st) => [st.text, d.value[st.id] ?? unitFloor(st)]));
+}
+
+/**
+ * How many times the step-check reading is drawn on a build with a model. One draw varies: the same four examples read
+ * 7, 5 and 7 of 8 steps as checked in three builds, and a check that passed 9 of 10 examples in one build passed none
+ * in the next. So the reading is drawn CHECK_DRAWS times and code keeps what the draws agree on: a listed measurement
+ * given by a majority of draws, or the written check that qualifies best on the owner's mutants (core/method/mutants.ts).
+ * A draw count, as drafts are: not a reading of its own. With no model there is one draw, and it is the floor.
+ */
+export const CHECK_DRAWS = 3;
+
+/**
+ * THE CHECK EACH STATED STEP CARRIES (core/method/step-check.ts), read CHECK_DRAWS times where a model is set up and
+ * decided by code: a qualified written check first, then a measurement a majority of draws named, then a written check
+ * that reports only, then judgement. Every written candidate is grounded on the owner's examples, sent back once when
+ * it did not compile, held to the mutants of its step (one mutant reading per step, shared by its candidates), and the
+ * best unqualified one sent back up to twice with the examples it fails. Judgement for every step where no model is.
+ * Shared by `atelier new --method` (steps from the note, with examples) and `atelier skill` (rules stated, no example).
+ */
+export async function stepPlan(steps: readonly StepToCheck[], cases: readonly ExampleCase[], kinds: ReadonlyMap<string, 'BOUNDARY' | 'GENERATIVE'>): Promise<StepPlan | null> {
+  if (!steps.length) return null;
+  const input = stepCheckInput(steps, cases, outlineOf, countWords);
+  const noModel = !canReach('discovery') || argv.includes('--no-model');
+  const k = noModel ? 1 : CHECK_DRAWS;
+  const client = noModel ? null : contextReaderClient(); const model = noModel ? null : contextReaderModel();
+  const draws = await Promise.all(Array.from({ length: k }, () => readContext(STEP_CHECK, input, client, model, { spentUsd: 0, capUsd: 0.3, maxCalls: 1 })));
+  const lead = input.example;
+  const context = (c: ExampleCase): { request?: string; material: readonly { name: string; text: string }[] } => ({ ...(c.task ? { request: c.task } : {}), material: c.material });
+  const examples = cases.map((c) => ({ text: c.reference, context: context(c) }));
+  const leadCase = cases.find((c) => c.reference.slice(0, 6000) === lead.head) ?? cases[0];
+  // EVERY DRAW'S ANSWER FOR EACH STEP, grounded: a written check that did not compile is sent back once with the problem;
+  // then the two readings are held against each other (a prohibition keeps no check that requires what it forbids).
+  const candidates = new Map<string, StepCheck[]>();
+  for (const st of steps) {
+    const list: StepCheck[] = [];
+    for (const d of draws) {
+      let c: StepCheck = d.value[st.id] ?? judgement(st, 'floor');
+      if (c.attempt && !noModel) {
+        const r = await readContext(STEP_CHECK_REPAIR, { step: st, means: c.means, source: c.attempt.source, problem: c.attempt.problem, example: lead.head, material: input.material }, client, model, { spentUsd: 0, capUsd: 0.1, maxCalls: 1 });
+        if (r.value.source) c = { how: 'written', measurement: { observer: 'CHECK', params: { source: r.value.source.split('\n'), means: [c.means.replace(/^the written check could not be compiled.*$/, st.text.slice(0, 120))] } }, quote: c.quote, means: st.text.slice(0, 120), by: 'model' };
+      }
+      list.push(heldByPolarity(c, st, kinds.get(st.text)));
+    }
+    candidates.set(st.id, list);
+  }
+  // THE MUTANTS OF EVERY STEP WITH A WRITTEN CANDIDATE, one reading per step (asked for several at once, the reader
+  // wrote edits for the first and stopped): what a written check must catch, and what the other steps' checks must not.
+  const writtenSteps = steps.filter((st) => cases.length && (candidates.get(st.id) ?? []).some((c) => c.how === 'written'));
+  const mutantSteps = writtenSteps.map((st) => ({ id: st.id, text: st.text, means: (candidates.get(st.id) ?? []).find((c) => c.how === 'written')?.means ?? st.text }));
+  const mutants = await Promise.all(mutantSteps.map((ms) => readContext(STEP_MUTANTS, { steps: [ms], example: leadCase?.reference ?? '' }, client, model, { spentUsd: 0, capUsd: 0.2, maxCalls: 1 })));
+  const mutantsOf = (id: string): { text: string; context: ReturnType<typeof context> }[] => {
+    const at = mutantSteps.findIndex((ms) => ms.id === id);
+    return at === -1 || !leadCase ? [] : (mutants[at].value[id] ?? []).map((m) => ({ text: mutate(leadCase.reference, m), context: context(leadCase) }));
+  };
+  if (argv.includes('--report') && mutantSteps.length) console.log(`(edits that break each written check's step: ${mutants.some((r) => r.by === 'model') ? `written by ${contextReaderModel()}: ${mutantSteps.map((ms, i) => `${ms.id}: ${(mutants[i].value[ms.id] ?? []).length}`).join(', ')}` : `none (${mutants[0]?.why ?? 'nothing to read'})`}.)`);
+  // WHAT EACH STEP KEEPS, decided by code over the draws.
+  const chosen: Record<string, StepCheck> = {};
+  for (const st of steps) {
+    const list = candidates.get(st.id) ?? [];
+    const key = (c: StepCheck): string => JSON.stringify(c.measurement);
+    const own = mutantsOf(st.id); const others = writtenSteps.filter((o) => o.id !== st.id).flatMap((o) => mutantsOf(o.id));
+    // every distinct written candidate, qualified; the best unqualified one sent back with the examples it fails
+    const written = [...new Map(list.flatMap((c) => (c.how === 'written' && c.measurement ? [[key(c), { c, m: c.measurement }] as const] : []))).values()];
+    const score = (q: CheckQualification): number => (q.qualified ? 1000 : 0) + q.examples.passed * 10 + q.own.caught - q.cross.fired * 5;
+    let qualified = written.map(({ c, m }) => ({ c, m, q: cases.length ? qualifyCheck(m, examples, own, others) : null }));
+    const repairable = qualified.flatMap((x) => (x.q && !x.q.qualified && x.q.examples.passed < x.q.examples.read ? [{ c: x.c, m: x.m, q: x.q }] : []));
+    const best = repairable.sort((a, b) => score(b.q) - score(a.q))[0];
+    if (best && !noModel) {
+      let m = best.m; let q = best.q;
+      for (let round = 0; round < 2 && !q.qualified && q.examples.passed < q.examples.read; round++) {
+        const failing = examples.map((x, i) => ({ x, i, r: measure(x.text, m, x.context) })).filter((y) => y.r.verdict === 'VIOLATED');
+        if (!failing.length) break;
+        const problem = `fails ${failing.length} of the ${examples.length} finished examples, which all hold the step. ${failing.slice(0, 2).map((y) => `On ${cases[y.i]?.id ?? y.i + 1} the check said "${y.r.detail}"`).join('; ')}. The check reads something other than the step, or reads the example wrongly: fix the check, not the example.`;
+        const r = await readContext(STEP_CHECK_REPAIR, { step: st, means: best.c.means, source: Array.isArray(m.params.source) ? m.params.source.join('\n') : '', problem, example: failing[0].x.text, material: failing[0].x.context.material }, client, model, { spentUsd: 0, capUsd: 0.1, maxCalls: 1 });
+        if (!r.value.source) break;
+        m = { ...m, params: { ...m.params, source: r.value.source.split('\n') } }; q = qualifyCheck(m, examples, own, others);
+      }
+      const repaired = { c: { ...best.c, measurement: m }, m, q };
+      qualified = qualified.map((x) => (x.c === best.c ? repaired : x));
+    }
+    const agreed = (c: StepCheck): { of: number; same: number } => ({ of: k, same: list.filter((x) => x.how === c.how && (c.how === 'judgement' || key(x) === key(c))).length });
+    const bestWritten = [...qualified].sort((a, b) => score(b.q ?? { qualified: false, examples: { passed: 0, read: 0, of: 0 }, own: { caught: 0, of: 0 }, cross: { fired: 0, of: 0 }, why: null }) - score(a.q ?? { qualified: false, examples: { passed: 0, read: 0, of: 0 }, own: { caught: 0, of: 0 }, cross: { fired: 0, of: 0 }, why: null }))[0];
+    // a listed measurement a majority of draws named (with one draw, any)
+    const groups = new Map<string, StepCheck[]>();
+    for (const c of list.filter((x) => x.how === 'measure')) { const g = groups.get(key(c)) ?? []; g.push(c); groups.set(key(c), g); }
+    const majority = [...groups.values()].filter((g) => g.length >= Math.ceil(k / 2)).sort((a, b) => b.length - a.length)[0]?.[0];
+    const pick: StepCheck = bestWritten?.q?.qualified ? { ...bestWritten.c, qualification: bestWritten.q }
+      : majority ?? (bestWritten ? { ...bestWritten.c, ...(bestWritten.q ? { qualification: bestWritten.q } : {}) }
+        : list.find((c) => c.how === 'judgement' && c.by === 'model') ?? list[0] ?? judgement(st, 'floor'));
+    chosen[st.id] = { ...pick, agreed: agreed(pick) };
+  }
+  if (argv.includes('--report')) {
+    const d = draws[0];
+    console.log(`(which check each step asks for: ${d.by === 'model' ? `read ${k} time${k === 1 ? '' : 's'} by ${contextReaderModel()}, the draws' agreement kept` : d.by === 'code' ? 'nothing to read' : `none read, every step is yours to judge (${d.why})`}.)`);
+    // each step's reading, with the reason where it fell to judgement: what the reader said is the owner's to see
+    for (const st of steps) { const c = chosen[st.id]; console.log(`   ${st.id}. ${c.how}${c.by === 'floor' && c.how === 'judgement' ? ` (${c.means})` : c.how === 'judgement' ? ` (the reader: ${c.means.slice(0, 120)})` : `: ${c.means.slice(0, 120)}`}${c.agreed && k > 1 ? ` [${c.agreed.same} of ${c.agreed.of} draws]` : ''}${c.qualification ? `; ${describeQualification(c.qualification)}` : ''}`); }
+  }
+  return planOf(steps, chosen);
+}
+
+/** The kind of every step the owner wrote or their example showed, read in one call where a model is set up; a thing to do where none is, said in --report. */
+async function stepKinds(statements: readonly string[], known: ReadonlyMap<string, 'BOUNDARY' | 'GENERATIVE'> = new Map()): Promise<Map<string, 'BOUNDARY' | 'GENERATIVE'>> {
+  const unique = [...new Set(statements.map((t) => t.trim()).filter(Boolean))].filter((t) => !known.has(t));
+  const input = { statements: unique.map((text, i) => ({ id: `r${i + 1}`, text })) };
+  const noModel = !canReach('discovery') || argv.includes('--no-model');
+  const d = await readContext(RULE_POLARITY, input, noModel ? null : contextReaderClient(), noModel ? null : contextReaderModel(), { spentUsd: 0, capUsd: 0.1, maxCalls: 1 });
+  if (argv.includes('--report') && unique.length) console.log(`(what each step is, a prohibition or a thing to do: ${d.by === 'model' ? `read by ${contextReaderModel()}` : d.by === 'code' ? 'nothing to read' : `not read, each taken as a thing to do (${d.why})`}.)`);
+  return new Map([...known, ...input.statements.map((s): [string, 'BOUNDARY' | 'GENERATIVE'] => [s.text, d.value[s.id] ?? UNREAD_KIND])]);
 }

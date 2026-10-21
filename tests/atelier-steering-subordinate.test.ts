@@ -14,7 +14,7 @@ import { join, resolve } from 'node:path';
 import { FEATURE } from '../core/observers/features.js';
 import { acceptRepair, readAtLength } from '../core/loop/repair.js';
 import { refineToStandard } from '../core/loop/run-repair.js';
-import { decide, controllerRecord, joinRecords, askedForRedraft, redraftHandOff, describeController, type ControllerInput } from '../core/loop/controller.js';
+import { decide, controllerRecord, askedForRedraft, redraftHandOff, describeController, type ControllerInput } from '../core/loop/controller.js';
 import { ownerWords } from '../core/loop/graded.js';
 import { distanceFromBand, bandWords } from '../core/observers/selection.js';
 import { shortFormTransfer } from '../core/observers/short-form.js';
@@ -119,7 +119,7 @@ describe('B1: a hand-off to a redraft is a flag on the record, honoured whatever
     expect(askedForRedraft(handed)).toBe(true);
     expect(redraftHandOff(handed)?.outcome).toBe('handed to a redraft');
     expect(askedForRedraft(controllerRecord(handed.decisions, 'handed'))).toBe(false);
-    expect(askedForRedraft(joinRecords(handed, step('redraft', 'kept'), undefined))).toBe(false);
+    expect(askedForRedraft(controllerRecord([...handed.decisions, step('redraft', 'kept')], 'kept'))).toBe(false);
     expect(askedForRedraft(controllerRecord([step('redraft', 'handed to a redraft')], 'handed'))).toBe(true);
   });
 });
@@ -216,7 +216,7 @@ describe('what the run prints says one thing at a time', () => {
     const params = { feature: ['parenthesis'], minValue: 1, maxValue: 3 };
     const std = { requirements: [{ requirementId: 'p1', statement: 'Few asides.', materiality: 'PREFERRED', authority: 'USER_ADOPTED', appliesWhen: 'GENERAL', measurement: { observer: 'FEATURE', params } }] } as never;
     const report = reportOf([{ requirementId: 'p1', statement: 'Few asides.', materiality: 'PREFERRED', enforced: false, observer: 'FEATURE', result: FEATURE.observe(text, params) }]);
-    const [miss] = unmetReader(std, null, null, ['parenthesis'])?.({ output: text, report }) ?? [];
+    const [miss] = unmetReader(std, null, ['parenthesis'])?.({ output: text, report }) ?? [];
     expect(miss.move).toMatch(/^about [\d.]+ fewer parenthetical asides per 1,000 words$/);
     expect(miss.detail).not.toMatch(/to remove/);
   });

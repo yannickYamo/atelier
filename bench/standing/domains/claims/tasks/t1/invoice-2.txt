@@ -1,0 +1,4 @@
+INVOICE 2
+Supplier: Crane & Sons Electronics
+Item: lens
+Amount: 2,201 dollars

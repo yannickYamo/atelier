@@ -1,12 +1,25 @@
-// One method note and a folder of finished examples, built in one call with no model: the owner's steps are the
-// rules, each held against every example; the examples are served with the skill and their lengths recorded.
-import { describe, it, expect } from 'vitest';
-import { execFileSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs';
+// One method note and a folder of finished examples, built in one call: the owner's steps are the rules, each held
+// against every example; the examples are served with the skill and their lengths recorded. Which check a step asks for
+// is a reading (core/method/step-check.ts), answered here by the scripted backend's stand-in; no key is set.
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
 const CLI = resolve('dist/cli/atelier.mjs');
+let backend: ChildProcess; let port = 0;
+const BACKEND = (): string[] => ['--provider', 'openai-compatible', '--base-url', `http://127.0.0.1:${port}`, '--model', 'scripted'];
+/** A build command gets the scripted reader; everything else runs as typed. */
+const withReader = (a: readonly string[]): string[] => (a[0] === 'method' || (a[0] === 'new' && a.includes('--method')) ? [...a, ...BACKEND()] : [...a]);
+beforeAll(async () => {
+  backend = spawn(process.execPath, [resolve('tests/fixtures/scripted-backend.mjs')], { stdio: ['ignore', 'pipe', 'inherit'] });
+  port = await new Promise<number>((ok, bad) => {
+    backend.stdout!.on('data', (d: Buffer) => { const m = /PORT (\d+)/.exec(d.toString()); if (m) ok(Number(m[1])); });
+    backend.on('exit', () => { bad(new Error('scripted backend exited before listening')); });
+  });
+}, 60_000);
+afterAll(() => { backend?.kill(); });
 const NOTE = 'How we review a change\n\n1. Open with a Summary section.\n2. Then a Must fix section.\n3. End with a Verdict section that holds one of: Approve, Request changes, Comment.\n4. Weigh the risk of the change before the style of it.\n';
 const body = (n: number): string => Array.from({ length: n }, (_, i) => `The change touches part ${i + 1} of the runner and keeps its tests.`).join(' ');
 const piece = (verdict: string, n: number): string => `---\nrequest: Review this change.\n---\n## Summary\n${body(n)}\n\n## Must fix\nNone.\n\n## Verdict\n${verdict}\n`;
@@ -19,14 +32,14 @@ const seed = (verdicts: readonly string[]) => {
   const env: NodeJS.ProcessEnv = { ...process.env, ATELIER_DATA: data, ATELIER_PROJECT_DIR: proj };
   delete env.ANTHROPIC_API_KEY; delete env.ANTHROPIC_AUTH_TOKEN;
   const run = (...a: string[]): { code: number; out: string } => {
-    try { return { code: 0, out: execFileSync('node', [CLI, ...a], { encoding: 'utf8', cwd: proj, env, stdio: ['ignore', 'pipe', 'pipe'] }) }; }
+    try { return { code: 0, out: execFileSync('node', [CLI, ...withReader(a)], { encoding: 'utf8', cwd: proj, env, stdio: ['ignore', 'pipe', 'pipe'] }) }; }
     catch (e) { const x = e as { status: number; stdout: string; stderr: string }; return { code: x.status, out: x.stdout + x.stderr }; }
   };
   return { data, proj, run };
 };
 
 describe('atelier method <note> --golden <folder>', () => {
-  it('builds with no key: every step held against every example, the pieces served, their span recorded', () => {
+  it('builds with no key of its own: every step held against every example, the pieces served, their span recorded', () => {
     const { data, proj, run } = seed(['Approve', 'Request changes', 'Comment', 'Approve']);
     const r = run('method', 'method.md', '--golden', 'examples', '--name', 'review', '--yes', '--report');
     expect(r.code, r.out).toBe(0);
@@ -101,7 +114,7 @@ describe('atelier method <note> --golden <folder>', () => {
 });
 
 describe('three tweets and five lines of rules', () => {
-  it('build with no key, three rules held by code, every tweet passing them', () => {
+  it('three rules held by code, every tweet passing them', () => {
     const data = mkdtempSync(join(tmpdir(), 'atelier-tw-data-')); const proj = mkdtempSync(join(tmpdir(), 'atelier-tw-proj-'));
     mkdirSync(join(proj, 'tweets'));
     ['Shipped the fix at 2am. Nobody noticed. That is the job.', 'Your roadmap is a list of guesses. Date the guesses, not the features.', 'Hiring tip: ask what they deleted last quarter. Builders remember.']
@@ -109,7 +122,7 @@ describe('three tweets and five lines of rules', () => {
     writeFileSync(join(proj, 'rules.md'), 'How I write a tweet\n\n- Under 120 characters.\n- Between 2 and 3 sentences.\n- Never use the word "excited" or "thrilled".\n- No hashtags and no emoji.\n- End on the point, not on a question.\n');
     const env: NodeJS.ProcessEnv = { ...process.env, ATELIER_DATA: data, ATELIER_PROJECT_DIR: proj };
     delete env.ANTHROPIC_API_KEY; delete env.ANTHROPIC_AUTH_TOKEN;
-    const out = execFileSync('node', [CLI, 'method', 'rules.md', '--golden', 'tweets', '--name', 'short-posts', '--yes', '--report'], { encoding: 'utf8', cwd: proj, env, stdio: ['ignore', 'pipe', 'pipe'] });
+    const out = execFileSync('node', [CLI, 'method', 'rules.md', '--golden', 'tweets', '--name', 'short-posts', '--yes', '--report', ...BACKEND()], { encoding: 'utf8', cwd: proj, env, stdio: ['ignore', 'pipe', 'pipe'] });
     expect(out).toContain('checks for: at most 119 characters; your example: held in all 3 of your examples');
     expect(out).toContain('checks for: 2 to 3 sentences; your example: held in all 3 of your examples');
     expect(out).toContain('checks for: none of: excited, thrilled; your example: held in all 3 of your examples');
@@ -133,7 +146,7 @@ describe('what a pass over the new commands found', () => {
     const env: NodeJS.ProcessEnv = { ...process.env, ATELIER_DATA: data, ATELIER_PROJECT_DIR: proj };
     delete env.ANTHROPIC_API_KEY; delete env.ANTHROPIC_AUTH_TOKEN;
     const run = (...a: string[]): { code: number; out: string } => {
-      try { return { code: 0, out: execFileSync('node', [CLI, ...a], { encoding: 'utf8', cwd: proj, env, stdio: ['ignore', 'pipe', 'pipe'] }) }; }
+      try { return { code: 0, out: execFileSync('node', [CLI, ...withReader(a)], { encoding: 'utf8', cwd: proj, env, stdio: ['ignore', 'pipe', 'pipe'] }) }; }
       catch (e) { const x = e as { status: number; stdout: string; stderr: string }; return { code: x.status, out: x.stdout + x.stderr }; }
     };
     expect(run('method', 'method.md', '--golden', 'e1.md', '--name', 'reviews', '--yes').code).toBe(0);
@@ -202,7 +215,10 @@ describe('atelier new <your-work>, with no method note and no model', () => {
     // the pieces themselves are what the writer is given, and the one rule is the owner's to judge
     const dir = join(proj, '.claude', 'skills', 'posts');
     expect(readFileSync(join(dir, 'SKILL.md'), 'utf8')).toContain('New work reads like the 3 examples given');
-    expect(['voice-1.md', 'voice-2.md', 'voice-3.md'].map((f) => readFileSync(join(dir, 'examples', f), 'utf8')).join('\n')).toContain('Boring deploys are a feature.');
+    // each piece once: the worked example is not also a voice piece
+    const served = readdirSync(join(dir, 'examples')).filter((f) => /^(?:exemplar|voice-\d+)\.md$/.test(f)).map((f) => readFileSync(join(dir, 'examples', f), 'utf8')).join('\n');
+    expect(served).toContain('Boring deploys are a feature.');
+    expect(served.split('Boring deploys are a feature.').length - 1).toBe(1);
   }, 120_000);
   it('--no-model chooses the same build on purpose, and one example is enough', () => {
     const { proj, run } = seedPosts();
@@ -255,7 +271,7 @@ describe('a build that stopped half-way is finished by building again', () => {
     const other = mkdtempSync(join(tmpdir(), 'atelier-mf-other-')); mkdirSync(join(other, 'examples'));
     writeFileSync(join(other, 'method.md'), NOTE.replace('Summary', 'Overview')); writeFileSync(join(other, 'examples', 'e1.md'), piece('Approve', 4).replace('Summary', 'Overview'));
     const env: NodeJS.ProcessEnv = { ...process.env, ATELIER_DATA: b.data, ATELIER_PROJECT_DIR: other }; delete env.ANTHROPIC_API_KEY; delete env.ANTHROPIC_AUTH_TOKEN;
-    execFileSync('node', [CLI, 'new', 'examples', '--method', 'method.md', '--name', 'review', '--yes'], { encoding: 'utf8', cwd: other, env, stdio: ['ignore', 'pipe', 'pipe'] });
+    execFileSync('node', [CLI, 'new', 'examples', '--method', 'method.md', '--name', 'review', '--yes', ...BACKEND()], { encoding: 'utf8', cwd: other, env, stdio: ['ignore', 'pipe', 'pipe'] });
     const again = b.run('new', 'examples', '--method', 'method.md', '--name', 'review', '--yes');
     expect(again.code).not.toBe(0);
     expect(again.out).toMatch(/a skill called "review" already exists, and this folder did not build it/);
@@ -268,7 +284,7 @@ describe('a build that stopped half-way is finished by building again', () => {
     writeFileSync(join(other, 'method.md'), NOTE); writeFileSync(join(other, 'examples', 'e1.md'), piece('Approve', 4));
     const env: NodeJS.ProcessEnv = { ...process.env, ATELIER_DATA: a.data, ATELIER_PROJECT_DIR: other }; delete env.ANTHROPIC_API_KEY; delete env.ANTHROPIC_AUTH_TOKEN;
     let out: string; let code = 0;
-    try { out = execFileSync('node', [CLI, 'new', 'examples', '--method', 'method.md', '--name', 'review', '--yes'], { encoding: 'utf8', cwd: other, env, stdio: ['ignore', 'pipe', 'pipe'] }); }
+    try { out = execFileSync('node', [CLI, 'new', 'examples', '--method', 'method.md', '--name', 'review', '--yes', ...BACKEND()], { encoding: 'utf8', cwd: other, env, stdio: ['ignore', 'pipe', 'pipe'] }); }
     catch (e) { const x = e as { status: number; stdout: string; stderr: string }; code = x.status; out = x.stdout + x.stderr; }
     expect(code).not.toBe(0);
     expect(out).toMatch(/a skill called "review" already exists, and this folder did not build it/);

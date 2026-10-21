@@ -186,9 +186,15 @@ describe('atelier new on ten pieces by five unnamed voices, with a model', () =>
 });
 
 describe('the same ten pieces with no model set up', () => {
-  it('finds the voices, counts each one alone, and builds in one call asking nothing', () => {
+  it('one folder is one voice unless asked: the voices read are said; --voices counts each one alone and builds in one call asking nothing', () => {
     const data = mkdtempSync(join(tmpdir(), 'atelier-infer-k-data-')); const proj = mkdtempSync(join(tmpdir(), 'atelier-infer-k-proj-'));
-    const out = keyless(data, proj, 'new', folder(proj, FIVE_VOICES), PURPOSE, '--name', 'mix');
+    // UNASKED: said, and built as one voice (the examples-only build)
+    const one = keyless(mkdtempSync(join(tmpdir(), 'atelier-infer-k1-data-')), mkdtempSync(join(tmpdir(), 'atelier-infer-k1-proj-')), 'new', folder(proj, FIVE_VOICES), PURPOSE, '--name', 'one');
+    expect(one).not.toMatch(/^EXIT/);
+    expect(one).toMatch(/5 voices read in how the pieces are written \(2 piece\(s\), 2 piece\(s\), 2 piece\(s\), 2 piece\(s\), 2 piece\(s\)\): built as one voice/);
+    expect(one).toMatch(/--voices/);
+    expect(one).not.toMatch(/Combined 5 voices/);
+    const out = keyless(data, proj, 'new', folder(proj, FIVE_VOICES), PURPOSE, '--name', 'mix', '--voices');
     expect(out).not.toMatch(/^EXIT/);
     expect(out).toMatch(/5 voices found in 10 pieces/);
     for (const v of ['voice 1', 'voice 2', 'voice 3', 'voice 4', 'voice 5']) expect(out).toMatch(new RegExp(`rule\\(s\\) counted from ${v}'s pieces alone`));

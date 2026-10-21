@@ -149,6 +149,15 @@ describe('through the binary: material, and several drafts chosen by count', () 
     run('ratify-close', '--work-type', 'writing');
     run('build', '--name', 'inc');
     const be = ['--provider', 'openai-compatible', '--base-url', `http://127.0.0.1:${port}`, '--model', 'scripted'];
+    // A document written with no material bound gets the slot by default: no flag needed. `--no-placeholders` asks for
+    // what was there before: with nothing of the person's to check against, the story is listed for them, not cut.
+    const byDefault = run('invoke', '--skill', 'inc', 'write it', ...be);
+    expect(byDefault).toContain(CLAIM_SLOT);
+    expect(byDefault).not.toContain('broke production');
+    const listedInstead = run('invoke', '--skill', 'inc', 'write it', '--no-placeholders', ...be);
+    expect(listedInstead).not.toContain(CLAIM_SLOT);
+    expect(listedInstead).toContain('broke production');
+    expect(listedInstead).toContain('is listed for you, not cut');
     const out = run('invoke', '--skill', 'inc', 'write it', '--drafts', '2', '--placeholders', ...be);
     expect(out).toContain(CLAIM_SLOT);
     expect(out).not.toContain('broke production');

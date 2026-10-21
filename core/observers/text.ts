@@ -194,3 +194,22 @@ export const DEFAULT_HEDGES: readonly string[] = [
   'sort of', 'kind of', 'generally', 'tends to', 'could be',
 ];
 
+
+/**
+ * THE TEXT WITH ITS CODE BLANKED, offsets kept: every character of a fenced block (``` or ~~~, fences included) and
+ * of an inline code span (`...`) becomes a space, newlines stay. What counts or removes a piece's prose features
+ * (links, hashtags, emoji) reads this, so a URL inside a code sample is never a "link" the piece carries too many of.
+ */
+export function maskCode(text: string): string {
+  const blank = (s: string): string => s.replace(/[^\n]/g, ' ');
+  const lines = text.split('\n');
+  let fence: string | null = null;
+  const out = lines.map((line) => {
+    const open = /^\s*(`{3,}|~{3,})/.exec(line);
+    // a fence closes only on a bare fence line of its own kind and at least its length (```js inside it is text)
+    if (fence) { if (open?.[1].startsWith(fence[0]) && open[1].length >= fence.length && line.trim() === open[1]) fence = null; return blank(line); }
+    if (open) { fence = open[1]; return blank(line); }
+    return line.replace(/(`+)(?!`)([\s\S]*?[^`])\1(?!`)/g, (m) => blank(m));
+  });
+  return out.join('\n');
+}

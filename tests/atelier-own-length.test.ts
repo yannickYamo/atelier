@@ -16,9 +16,11 @@ describe('the band comes from the pieces, and every piece is inside it', () => {
     expect(lengthSpan([words(202), words(217)])).toBeNull();
   });
   it('the band is the span widened by its own width on each side', () => {
-    expect(ownLengthBand([202, 217])).toEqual([187, 232]);
+    // the width is the spread, and never less than a quarter of the longest piece: pieces of one length are not a preference one word wide
+    expect(ownLengthBand([202, 217])).toEqual([147, 272]);
     expect(ownLengthBand([300, 3000])).toEqual([1, 5700]);
-    expect(ownLengthBand([150, 150])).toEqual([149, 151]);
+    expect(ownLengthBand([150, 150])).toEqual([112, 188]);
+    expect(ownLengthBand([231, 231])).toEqual([173, 289]);
     expect(ownLengthBand(null)).toBeNull();
     expect(ownLengthBand(undefined)).toBeNull();
   });
@@ -40,21 +42,22 @@ describe('it applies in one context, and is said to', () => {
   });
 });
 
-describe('drafts are chosen by it after every rule, and before the finer features', () => {
+describe('the length of the author\'s pieces is recorded and chooses no draft', () => {
   const base: DraftScore = { req: 0, taste: 0, tells: 0, all: 0, signal: null, style: 0 };
   it('how far outside the band a count is', () => {
     expect([150, 187, 232, 248].map((n) => wordsOutside(n, [187, 232]))).toEqual([37, 0, 0, 16]);
   });
-  it('of two drafts that break the same rules, the one at the author\'s length is chosen', () => {
-    expect(draftOrder({ ...base, lengthOff: 0, outside: 3 }, { ...base, lengthOff: 16, outside: 0 })).toBeLessThan(0);
-    expect(draftOrder({ ...base, lengthOff: 6 }, { ...base, lengthOff: 16 })).toBeLessThan(0);
+  // A request sets the length of what answers it; the author's usual length chose a sixty-word fix for a thank-you.
+  it('of two drafts that break the same rules, neither wins on the author\'s length', () => {
+    expect(draftOrder({ ...base, lengthOff: 0 }, { ...base, lengthOff: 16 })).toBe(0);
+    expect(draftOrder({ ...base, lengthOff: 6 }, { ...base, lengthOff: 16 })).toBe(0);
   });
   it('a draft at the right length that breaks a rule does not win on length', () => {
     expect(draftOrder({ ...base, req: 1, lengthOff: 0 }, { ...base, req: 0, lengthOff: 40 })).toBeGreaterThan(0);
     expect(draftOrder({ ...base, all: 1, lengthOff: 0 }, { ...base, all: 0, lengthOff: 40 })).toBeGreaterThan(0);
   });
-  it('where it does not apply, nothing changes: no length is counted', () => {
-    expect(draftOrder({ ...base, outside: 1 }, { ...base, outside: 2 })).toBeLessThan(0);
+  it('nor on the author\'s range', () => {
+    expect(draftOrder({ ...base, outside: 1 }, { ...base, outside: 2 })).toBe(0);
   });
 });
 
@@ -88,22 +91,22 @@ describe('what a draft left unmet, and what the one more draft is told', () => {
   const report = (broken: readonly string[]) => ({ failed: broken.length > 0, checked: ['x1', 'x2', 'c1'].map((id) => ({ requirementId: id, materiality: 'REQUIRED', result: { verdict: broken.includes(id) ? 'VIOLATED' : 'MET', spans: [], value: 0, detail: `${id} detail` } })) }) as never;
   it('a missing part of the method and a bad citation are unmet; a banned word is a sentence to rewrite, and is not', async () => {
     const { unmetReader } = await import('../cli/commands/invoke.js');
-    const read = unmetReader(std, null);
+    const read = unmetReader(std);
     expect(read?.({ output: words(210), report: report(['x1', 'x2', 'c1']) }).map((u) => u.id)).toEqual(['x1', 'x2']);
     expect(read?.({ output: words(210), report: report([]) })).toEqual([]);
   });
-  it('the length is unmet when the request named none and the draft is outside what the pieces span', async () => {
-    const { unmetReader, LENGTH_ID } = await import('../cli/commands/invoke.js');
-    const read = unmetReader(std, { band: [187, 232], span: [202, 217] });
-    expect(read?.({ output: words(210), report: report([]) })).toEqual([]);
-    expect(read?.({ output: words(248), report: report(['x1']) })).toEqual([
-      { id: 'x1', statement: 'x1 must hold.', detail: 'x1 detail' },
-      { id: LENGTH_ID, statement: 'Write it at the length my pieces run: 202 to 217 words', detail: '248 words, 16 too many', off: 16, aim: 'aim for 216 words or fewer', whole: true, move: 'about 16 words shorter' }]);
+  // The owner's ruling: the task sets how much is needed. The length the author's pieces run is guidance and is
+  // reported; a draft is never written again only for running outside it, short or long.
+  it('the author\'s length is never what a draft is written again for', async () => {
+    const { unmetReader } = await import('../cli/commands/invoke.js');
+    const read = unmetReader(std);
+    expect(read?.({ output: words(20), report: report([]) })).toEqual([]);
+    expect(read?.({ output: words(900), report: report([]) })).toEqual([]);
   });
   it('a skill with nothing of the kind to read has no such step', async () => {
     const { unmetReader } = await import('../cli/commands/invoke.js');
-    expect(unmetReader({ requirements: [rule('c1', 'LEXICON')] } as never, null)).toBeNull();
-    expect(unmetReader({ requirements: [] } as never, { band: [1, 2], span: [1, 2] })).not.toBeNull();
+    expect(unmetReader({ requirements: [rule('c1', 'LEXICON')] } as never)).toBeNull();
+    expect(unmetReader({ requirements: [] } as never)).toBeNull();
   });
   it('the note names each with what the check found, and carries the draft it is to keep what it can of', async () => {
     const { redraftNote } = await import('../cli/commands/invoke.js');
@@ -190,7 +193,7 @@ describe('after a miss of length the writer is given something to aim for, and o
     const { unmetReader, redraftNote } = await import('../cli/commands/invoke.js');
     const std = { requirements: [{ requirementId: 'x7', statement: 'Between 220 and 420 words.', materiality: 'REQUIRED', obligation: 'DELIVERABLE', measurement: { observer: 'LENGTH', params: { unit: ['words'], min: 220, max: 420 } } }] } as never;
     const report = { failed: true, checked: [{ requirementId: 'x7', materiality: 'REQUIRED', result: { verdict: 'VIOLATED', spans: [], value: 471, detail: '471 words (220 to 420): long by 51' } }] } as never;
-    const [miss] = unmetReader(std, null)?.({ output: 'x', report }) ?? [];
+    const [miss] = unmetReader(std)?.({ output: 'x', report }) ?? [];
     expect(miss).toMatchObject({ id: 'x7', off: 51, aim: 'aim for 378 words or fewer' });
     // and the note says which way and how far, after what to aim for
     expect(redraftNote([miss], 'd')).toContain('- Between 220 and 420 words. (471 words (220 to 420): long by 51; aim for 378 words or fewer; about 51 words shorter)');
@@ -244,7 +247,7 @@ describe('a trim is for the length of the whole piece', () => {
     const section = { requirementId: 's1', statement: 'Keep the Summary section under 30 words.', materiality: 'REQUIRED', obligation: 'DELIVERABLE', authority: 'EXPERT_AUTHORED', provenance: 'EXPERT_STATED',
       measurement: { observer: 'LENGTH', params: { unit: ['words'], in: ['Summary'], need: 1, max: 29 } } };
     const report = { failed: true, unchecked: [], checked: [{ requirementId: 's1', materiality: 'REQUIRED', result: { verdict: 'VIOLATED', detail: '41 words (at most 29): long by 12', spans: [], value: 41 } }] } as never;
-    const [miss] = unmetReader({ requirements: [section] } as never, null)?.({ output: 'x', report }) ?? [];
+    const [miss] = unmetReader({ requirements: [section] } as never)?.({ output: 'x', report }) ?? [];
     expect(miss).toMatchObject({ id: 's1', off: 12 });
     expect(miss.whole).toBeUndefined();
     // so the writer is told to write the piece again with the section named, not to cut the piece to 26 words

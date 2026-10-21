@@ -200,8 +200,8 @@ export const grammarStatus = (): { readonly ready: true } | { readonly ready: fa
 
 interface Range { readonly start: number; readonly end: number }
 
-/** The stretches of a text no lint may touch: code, quotation, address, citation, figure, front matter. */
-export function protectedRanges(text: string): Range[] {
+/** The stretches of a text no lint may touch: code, quotation, address, citation, figure, front matter. A correction a qualified check supplies for a figure it computed is the one caller that spares the figures (`figures: false`). */
+export function protectedRanges(text: string, opts: { readonly figures?: boolean } = {}): Range[] {
   const out: Range[] = [];
   const add = (re: RegExp): void => { for (const m of text.matchAll(re)) out.push({ start: m.index, end: m.index + m[0].length }); };
   add(/^---\r?\n[\s\S]*?\r?\n(?:---|\.\.\.)[ \t]*(?:\r?\n|$)/g);            // front matter
@@ -221,7 +221,7 @@ export function protectedRanges(text: string): Range[] {
   add(/(?<![\w/])[\w.-]+(?:\/[\w.-]+)+(?::\d+(?:-\d+)?)?/g);               // paths, and path:line citations
   add(/\b[\w-]+\.[a-z]{1,6}:\d+(?:-\d+)?\b/gi);                           // file:line
   add(/\[\^?\d+\]|\([A-Z][\w'.-]+(?: (?:et al\.|and) [A-Z][\w'.-]+)?,? \d{4}[a-z]?\)/g); // [12], (Smith 2020)
-  add(/[$£€¥]\s?\d[\d,.]*(?:\s?(?:k|m|bn|million|billion))?|\d[\d,.]*\s?(?:%|percent|per cent)|\b\d[\d,.:]*\b/gi); // figures, currency
+  if (opts.figures !== false) add(/[$£€¥]\s?\d[\d,.]*(?:\s?(?:k|m|bn|million|billion))?|\d[\d,.]*\s?(?:%|percent|per cent)|\b\d[\d,.:]*\b/gi); // figures, currency
   return out.sort((a, b) => a.start - b.start);
 }
 const inside = (ranges: readonly Range[], l: Range): boolean => ranges.some((r) => l.start < r.end && l.end > r.start);

@@ -42,7 +42,14 @@ export function listEvals(l: StoreLayout): EvalSummary[] {
 }
 
 /** A person's answer to "would you ship this as is?", with their reason. */
-export interface Rating { readonly invocationId: string; readonly ship: boolean; readonly why: string | null; readonly at: string; readonly release: string | null }
+/**
+ * Why an answer would or would not be sent, from a closed list (optional; the yes or no stays the verdict). They tell a
+ * necessary part left out from an extra the answer could do without, so what a rating says is not read into a longer
+ * answer or a shorter one by guesswork.
+ */
+export const REASON_CODES = ['missing-necessary', 'unnecessary-extra', 'wrong', 'unsafe', 'unsupported-claim', 'voice-off', 'too-long', 'too-short', 'asks-instead-of-acting'] as const;
+export type ReasonCode = typeof REASON_CODES[number];
+export interface Rating { readonly invocationId: string; readonly ship: boolean; readonly why: string | null; readonly at: string; readonly release: string | null; readonly reasons?: readonly ReasonCode[] }
 
 export function putRating(l: StoreLayout, r: Rating): void {
   writeAtomic(join(base(l), 'ratings', `${safeId(r.invocationId)}-${r.at.replace(/[^0-9]/g, '')}.json`), JSON.stringify(r, null, 1));

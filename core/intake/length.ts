@@ -261,7 +261,10 @@ export const oneLength = (lo: number, hi: number): boolean => lo > 0 && (hi <= l
 
 export function ownLengthBand(span: readonly [number, number] | null | undefined): readonly [number, number] | null {
   if (!span) return null;
-  const [lo, hi] = span; const width = Math.max(1, hi - lo);
+  // PIECES OF ONE LENGTH SAY LITTLE ABOUT A RANGE. Three replies of 231 characters gave a band of 230 to 232, and a
+  // band read from a few pieces is descriptive, never a preference as narrow as its spread: the width is at least a
+  // quarter of the longest piece, so a corpus with no spread still allows what a corpus usually shows.
+  const [lo, hi] = span; const width = Math.max(1, hi - lo, Math.ceil(hi * 0.25));
   return [Math.max(1, lo - width), hi + width];
 }
 

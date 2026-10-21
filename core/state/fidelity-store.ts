@@ -87,6 +87,13 @@ export function getRelease(l: StoreLayout, id: string): ImplementationRelease | 
   return r;
 }
 
+/** Every stored release, oldest first: the active one, its history, and the candidates beside it. */
+export function listReleases(l: StoreLayout): ImplementationRelease[] {
+  if (!existsSync(releasesDir(l))) return [];
+  return readdirSync(releasesDir(l)).filter((f) => /^[0-9a-f]+\.json$/.test(f)).flatMap((f) => { const r = getRelease(l, f.slice(0, -5)); return r ? [r] : []; })
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+}
+
 /**
  * Write a release under its id. The id must be the hash of its content and the parent must already be
  * stored. Writing the same release twice keeps the first (its `createdAt` and `why` sit outside the
@@ -105,16 +112,6 @@ export function putRelease(l: StoreLayout, r: ImplementationRelease): Implementa
   }
   writeAtomic(join(releasesDir(l), `${r.id}.json`), JSON.stringify(r, null, 1));
   return r;
-}
-
-/** Every stored release, oldest first (by createdAt, then id). */
-export function listReleases(l: StoreLayout): ImplementationRelease[] {
-  const d = releasesDir(l);
-  if (!existsSync(d)) return [];
-  return readdirSync(d).filter((f) => /^[0-9a-f]+\.json$/.test(f))
-    .map((f) => getRelease(l, f.slice(0, -5)))
-    .filter((r): r is ImplementationRelease => r !== null)
-    .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
 }
 
 /** The release chain from `id` back to the root, newest first. Throws on a missing link or a cycle. */

@@ -13,8 +13,17 @@
 //   atelier_verify        any text against a skill's measured rules, with the spans that broke one
 //   atelier_skill_report  a skill's evaluation: what every output is checked by and how far each check can be
 //                         trusted (the card printed when it was built), and, given a run, that run's evaluation
+//   atelier_new           build a skill from a folder of work and a method note: the review screen first; the skill
+//                         is built only when the PERSON has approved what the screen shows (approve: true)
+//   atelier_run           new work with a skill, written, checked, repaired, recorded: the whole run record
+//   atelier_report        a run's record, or a skill's weights and clashes
+//   atelier_rate          the person's own ruling on a run (ship as is, or not), recorded on the skill
+//   atelier_fix           a piece written again for what was wrong, in the person's words
 //
-// Nothing here can change a standard. The calling agent does the rewriting; this says what to rewrite.
+// The reading tools change nothing. The building tools run the same commands a person runs at the terminal, in a
+// child process with this server's environment (the model key, ATELIER_DATA, ATELIER_PROJECT_DIR), so an app that
+// reaches Atelier through MCP has the same front door and the same records. The person approves the standard, never
+// the agent: atelier_new builds nothing until approve is true, and the agent must have shown them the screen.
 
 import { checksFor } from '../checks.js';
 import { skillCardFor } from '../skill-card.js';
@@ -25,8 +34,11 @@ import { stateLine } from '../../core/eval/run-card.js';
 import { needsReview, partlyChecked } from '../../core/eval/record.js';
 import { getEval } from '../../core/state/eval-store.js';
 import { createInterface } from 'node:readline';
-import { existsSync, readdirSync } from 'node:fs';
+import { existsSync, readdirSync, mkdtempSync } from 'node:fs';
+import { writeAtomic } from '../../core/state/fs-atomic.js';
 import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { spawnSync } from 'node:child_process';
 import * as store from '../../core/state/store.js';
 import { describeVerify } from '../../core/observers/verify.js';
 import { checkDraftAsync } from '../../core/loop/run-repair.js';
@@ -57,7 +69,34 @@ const TOOLS = [
     inputSchema: { type: 'object', properties: { skill: { type: 'string' },
       run: { type: 'string', description: 'an invocation id: return that run\'s evaluation rather than the skill\'s card' } },
     required: ['skill'], additionalProperties: false } },
+  { name: 'atelier_new', description: 'Build a skill from a folder of a person\'s finished work, with their method note when they have one. Without approve it shows the screen a person approves from and builds nothing; show that screen to the person. With approve: true it builds exactly that. Calls a model where one is set up.',
+    inputSchema: { type: 'object', properties: { work: { type: 'string', description: 'a file, or a folder of their finished pieces' },
+      method: { type: 'string', description: 'their method note, when they wrote one' }, purpose: { type: 'string', description: 'what the skill is for, in their words' },
+      name: { type: 'string', description: 'the skill\'s name; read from the folder when left out' },
+      approve: { type: 'boolean', description: 'true only when the person has seen the screen and said to build it' } },
+    required: ['work'], additionalProperties: false } },
+  { name: 'atelier_run', description: 'New work with a skill: written, checked against every rule, repaired where a required rule broke, recorded. Returns the work and its whole record (state VERIFIED, NEEDS REVIEW or BLOCKED, the rules as they fared, the run id). Calls a model.',
+    inputSchema: { type: 'object', properties: { skill: { type: 'string' }, task: { type: 'string', description: 'the request, in the person\'s words' },
+      material: { type: 'string', description: 'notes, figures or sources the work must draw on' },
+      files: { type: 'array', items: { type: 'string' }, description: 'paths of material files to bind for this run' } },
+    required: ['skill', 'task'], additionalProperties: false } },
+  { name: 'atelier_report', description: 'A run\'s record (its evaluation and trace) given its run id, or a skill\'s weights and settled clashes given the skill.',
+    inputSchema: { type: 'object', properties: { run: { type: 'string' }, skill: { type: 'string' } }, additionalProperties: false } },
+  { name: 'atelier_rate', description: 'Record the person\'s own ruling on a run: whether they would ship it as it stands, and why. Only the person rules; never rate on their behalf.',
+    inputSchema: { type: 'object', properties: { run: { type: 'string' }, ship: { type: 'boolean' }, why: { type: 'string' } }, required: ['run', 'ship', 'why'], additionalProperties: false } },
+  { name: 'atelier_fix', description: 'Write the last piece again for what was wrong, in the person\'s words; the skill is left alone. Calls a model.',
+    inputSchema: { type: 'object', properties: { what: { type: 'string' }, skill: { type: 'string' } }, required: ['what'], additionalProperties: false } },
 ] as const;
+
+/** The atelier binary this server was started from, run as a person would run it, in the project the server serves. */
+function runCli(args: readonly string[]): { text: string; isError: boolean } {
+  const cwd = process.env.ATELIER_PROJECT_DIR ?? process.cwd();
+  const r = spawnSync(process.execPath, [...process.execArgv, process.argv[1], ...args], { encoding: 'utf8', cwd, env: process.env, maxBuffer: 64 * 1024 * 1024 });
+  const text = `${r.stdout ?? ''}${r.stderr ? `\n${r.stderr}` : ''}`.trim();
+  return { text: text || `(atelier ${args[0]} said nothing)`, isError: (r.status ?? 1) !== 0 };
+}
+const str = (x: unknown): string | null => (typeof x === 'string' && x.trim() ? x : null);
+const NAME = /^[a-z0-9][a-z0-9-]{0,63}$/;
 
 const standardOf = (skill: string): StandardVersion => {
   if (!/^[a-z0-9][a-z0-9-]{0,63}$/.test(skill)) throw new Error(`"${skill}" is not a skill name.`);
@@ -138,6 +177,41 @@ const call = async (name: string, args: Record<string, unknown>): Promise<{ text
       violations: report.checked.filter((c) => c.result.verdict === 'VIOLATED').map((c) => ({ rule: c.requirementId, materiality: c.materiality,
         detail: c.result.detail, spans: c.result.spans.map((s) => ({ text: s.text, start: s.start, end: s.end, why: s.why })) })),
       ...(taste ? { taste: taste.verdicts, ...(taste.couldNotRun ? { tasteCouldNotRun: true } : {}) } : {}) })}` };
+  }
+  if (name === 'atelier_new') {
+    const work = str(args.work); if (!work) return { isError: true, text: 'work: a file or a folder of the person\'s finished pieces is required.' };
+    const method = str(args.method); const purpose = str(args.purpose); const skillName = str(args.name);
+    if (skillName && !NAME.test(skillName)) return { isError: true, text: `"${skillName}" is not a skill name (lower case, digits, hyphens).` };
+    // THE PERSON APPROVES. Without approve the method path shows its screen and builds nothing (--review); the discovery
+    // path proposes and waits for --accept. With approve both paths build exactly what was shown.
+    const a = ['new', work, ...(method ? ['--method', method] : []), ...(purpose ? [purpose] : []), ...(skillName ? ['--name', skillName] : []),
+      ...(args.approve === true ? ['--yes', '--accept'] : method ? ['--review'] : [])];
+    const r = runCli(a);
+    return { ...r, text: args.approve === true ? r.text : `${r.text}\n\nNothing was built. Show this to the person; build it with approve: true once they say so.` };
+  }
+  if (name === 'atelier_run') {
+    const task = str(args.task); if (!task) return { isError: true, text: 'task: the request is required.' };
+    if (!NAME.test(skill)) return { isError: true, text: `"${skill}" is not a skill name.` };
+    const files = Array.isArray(args.files) ? args.files.filter((f): f is string => typeof f === 'string' && f.trim().length > 0) : [];
+    const withs = files.flatMap((f) => ['--with', f]);
+    const material = str(args.material);
+    if (material) { const dir = mkdtempSync(join(tmpdir(), 'atelier-mcp-')); const f = join(dir, 'material.md'); writeAtomic(f, material); withs.push('--with', `material=${f}`); }
+    return runCli(['invoke', '--skill', skill, task, '--json', ...withs]);
+  }
+  if (name === 'atelier_report') {
+    const run = str(args.run);
+    if (run) return runCli(['report', run]);
+    if (NAME.test(skill)) return runCli(['report', '--skill', skill]);
+    return { isError: true, text: 'give a run id, or a skill.' };
+  }
+  if (name === 'atelier_rate') {
+    const run = str(args.run); const why = str(args.why);
+    if (!run || !why || typeof args.ship !== 'boolean') return { isError: true, text: 'run, ship (true or false) and why are required.' };
+    return runCli(['rate', run, args.ship ? 'yes' : 'no', why]);
+  }
+  if (name === 'atelier_fix') {
+    const what = str(args.what); if (!what) return { isError: true, text: 'what: what was wrong, in the person\'s words, is required.' };
+    return runCli(['fix', what, ...(NAME.test(skill) ? ['--skill', skill] : [])]);
   }
   throw new Error(`unknown tool "${name}"`);
 };

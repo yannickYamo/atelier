@@ -1,0 +1,4 @@
+INVOICE 1
+Supplier: Beacon Office Supply
+Item: a tablet
+Amount: 4,948 dollars

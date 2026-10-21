@@ -68,8 +68,9 @@ describe('B3: what a piece must contain', () => {
     expect(r.spans[0].why).toMatch(/does not start with "next"/);
   });
   it('declared on the command line like any measure, and refused when it asks for nothing', () => {
-    expect(parseMeasure('PRESENCE:in=last,starts=next|then')).toEqual({ observer: 'PRESENCE', params: { in: ['LAST'], starts: ['next', 'then'] } });
-    expect(parseMeasure('PRESENCE:sections=Recommendation|Bets').params.sections).toEqual(['recommendation', 'bets']);
+    // names and places are kept as written: the observer compares them without regard to case, and the screen says them as the owner wrote them
+    expect(parseMeasure('PRESENCE:in=last,starts=next|then')).toEqual({ observer: 'PRESENCE', params: { in: ['last'], starts: ['next', 'then'] } });
+    expect(parseMeasure('PRESENCE:sections=Recommendation|Bets').params.sections).toEqual(['Recommendation', 'Bets']);
     expect(observerFor('PRESENCE').validate({ in: ['LAST'] })).toMatch(/needs sections, any, figure or starts/);
   });
 });

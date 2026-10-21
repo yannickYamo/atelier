@@ -169,10 +169,41 @@ export function derivedFromKnown(sentence: string, material: string): boolean {
   const text = sentence.replace(YEAR, ' ');
   const figures = numbersIn(text);
   if (!figures.length) return false;
-  const known = [...new Set(numbersIn(material).map(Number).filter(Number.isFinite))];
-  const open = figures.filter((f) => !derivable(f, known)).map(Number);
+  // A FIGURE IN CODE IS THERE AS WRITTEN, NEVER AS AN OPERAND. A diff is full of incidental numbers (hunk ranges,
+  // line numbers, constants); arithmetic over them reached "2.3M rows" and "3 of 12 tests fail", and an invented
+  // finding went out as derived from the change under review. A figure the code holds counts when it is the figure;
+  // only the prose of the material is worked from.
+  const prose = proseOf(material);
+  const anywhere = new Set(numbersIn(material).map(Number).filter(Number.isFinite));
+  const known = [...new Set(numbersIn(prose).map(Number).filter(Number.isFinite))];
+  const open = figures.filter((f) => !anywhere.has(Number(f)) && !derivable(f, known)).map(Number);
   if (!open.length) return true;
-  return known.length <= MAX_WORKED && worked(text, material, open);
+  return known.length <= MAX_WORKED && worked(text, prose, open);
+}
+
+/**
+ * The material less its code: fenced blocks, and diffs (headers, and each hunk's lines as its header counts them).
+ * Counted, so prose written after a diff is prose again, a "- " list item included.
+ */
+export function proseOf(material: string): string {
+  const out: string[] = []; let fenced = false; let header = false; let oldLeft = 0; let newLeft = 0;
+  for (const line of material.split('\n')) {
+    if (/^\s*(```|~~~)/.test(line)) { fenced = !fenced; continue; }
+    if (fenced) continue;
+    const hunk = /^@@ -\d+(?:,(\d+))? \+\d+(?:,(\d+))? @@/.exec(line);
+    if (hunk) { oldLeft = hunk[1] === undefined ? 1 : Number(hunk[1]); newLeft = hunk[2] === undefined ? 1 : Number(hunk[2]); header = false; continue; }
+    if (/^(diff --git |index [0-9a-f]|--- |\+\+\+ |new file mode|deleted file mode|similarity index|rename (from|to) )/.test(line)) { header = true; continue; }
+    if (oldLeft > 0 || newLeft > 0) {
+      if (line.startsWith('+')) { newLeft -= 1; continue; }
+      if (line.startsWith('-')) { oldLeft -= 1; continue; }
+      if (line.startsWith(' ') || line === '') { oldLeft -= 1; newLeft -= 1; continue; }
+      if (line.startsWith('\\')) continue;
+      oldLeft = 0; newLeft = 0;
+    }
+    if (header && /^(old|new) mode /.test(line)) continue;
+    header = false; out.push(line);
+  }
+  return out.join('\n');
 }
 
 /**

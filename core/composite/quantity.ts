@@ -277,9 +277,6 @@ export function quantitiesOf(statement: string): Quantity[] {
   return out;
 }
 
-/** The rule's quantity, or null when it states none (the first, when it states several). */
-export const quantityOf = (statement: string): Quantity | null => quantitiesOf(statement)[0] ?? null;
-
 /** How far two limits may sit apart and still be one trait: within 30% of the larger, and never less than 2 apart counts. */
 export const withinTolerance = (a: number, b: number): boolean => Math.abs(a - b) <= Math.max(2, 0.3 * Math.max(Math.abs(a), Math.abs(b)));
 

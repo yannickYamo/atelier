@@ -12,8 +12,8 @@
 import { describe, it, expect } from 'vitest';
 import type { Measurement, Requirement } from '../core/state/canonical-state.js';
 import { buildTraitTable, relationOf, singular, labelOf, type TraitClass } from '../core/composite/traits.js';
-import { composeSelection, describeComposite, openQuestions, standOf, type CompositeAuthor, type CompositeDecision, type CompositeRecord, type ConflictAnswer } from '../core/composite/selection.js';
-import { readContradictions } from '../core/composite/contradictions.js';
+import { composeSelection, describeComposite, openStanding, standOf, type CompositeAuthor, type CompositeDecision, type CompositeRecord, type ConflictAnswer } from '../core/composite/selection.js';
+import { readInstructionLines } from '../core/composite/contradictions.js';
 import { processSpendByPurpose, type InferenceClient } from '../core/inference/client.js';
 import { decisionsFor, instructionLines, openLine } from '../cli/commands/composite.js';
 
@@ -193,7 +193,7 @@ describe('a pair the model reads as impossible to follow together is asked, neve
     expect(rec.decisions.map((d) => d.outcome)).toEqual(['OPEN', 'OPEN']);
     expect(rec.conflicts).toHaveLength(1);
     expect(rec.conflicts[0]).toMatchObject({ n: 1, provenance: 'read by the model at build', reason: pair.reason, answer: null });
-    expect(openQuestions(rec)).toHaveLength(1);
+    expect(openStanding(rec).neither).toHaveLength(1);
     const screen = describeComposite(rec, (id) => x.rules.find((r) => r.requirementId === id)?.statement ?? id).join('\n');
     expect(screen).toContain(`1. one statement against another (read by the model at build: ${pair.reason})`);
   });
@@ -215,11 +215,11 @@ describe('a pair the model reads as impossible to follow together is asked, neve
       return Promise.resolve({ json: { pairs: [{ a: 2, b: 1, reason: 'they clash' }, { a: 1, b: 2, reason: 'again' }, { a: 1, b: 9, reason: 'no such line' }] }, cost: { basis: 'API_METERED', billingUsd: 0.001 }, termination: 'COMPLETE', modelId: 'm' });
     } } as unknown as InferenceClient;
     const before = processSpendByPurpose().find((l) => l.purpose === 'composite contradictions')?.calls ?? 0;
-    const pairs = await readContradictions(client, { spentUsd: 0, capUsd: 1, maxCalls: 1 }, lines);
+    const { pairs } = await readInstructionLines(client, { spentUsd: 0, capUsd: 1, maxCalls: 1 }, lines);
     expect(pairs).toEqual([{ a: 'b1', b: 'a1', reason: 'they clash' }]);
     expect(sent).toEqual(['emit_contradictions\n1. (ada) Write as a column of crisp fragments.\n2. (bram) Let every sentence earn its subordinate clause.']);
     expect(processSpendByPurpose().find((l) => l.purpose === 'composite contradictions')?.calls).toBe(before + 1);
-    await expect(readContradictions({ complete: () => Promise.resolve({ json: {}, cost: { basis: 'API_METERED', billingUsd: 0 }, termination: 'COMPLETE', modelId: 'm' }) } as unknown as InferenceClient,
+    await expect(readInstructionLines({ complete: () => Promise.resolve({ json: {}, cost: { basis: 'API_METERED', billingUsd: 0 }, termination: 'COMPLETE', modelId: 'm' }) } as unknown as InferenceClient,
       { spentUsd: 0, capUsd: 1 }, lines)).rejects.toThrow(/nothing usable/);
   });
   it('the list it is given is the rules that will instruct, a range at its merged limits', () => {
@@ -250,7 +250,7 @@ describe('a conflict the person answered, opened again by the guard', () => {
     expect(chose?.reopened?.why).toMatch(/^your answer B would ship two instructions that cannot both be followed/);
   });
   it('counts it among the open questions, so the record, the count and the screen agree', () => {
-    const open = openQuestions(rec).map((c) => c.n);
+    const open = openStanding(rec).neither.map((c) => c.n);
     expect(open).toContain(both?.n);
     expect(open).toContain(chose?.n);
     expect(open).toContain(opener);
@@ -263,7 +263,7 @@ describe('a conflict the person answered, opened again by the guard', () => {
       expect(open.includes(c.n), stand).toBe(held);
       if (open.includes(c.n)) expect(stand).not.toMatch(/^→ (?:both|kai|lena|nora|otto) /);
     }
-    expect(openLine(rec)).toContain(`${openQuestions(rec).length} conflict(s) kept as open question(s)`);
+    expect(openLine(rec)).toContain(`${openStanding(rec).neither.length} conflict(s) kept as open question(s)`);
   });
   it('the screen shows a "both" range at its merged limits, as the build states it', () => {
     const y = setup({ kai: [rhythm('k1', 0.1, 0.2)], nora: [rhythm('n1', 0.3, 0.4)] });

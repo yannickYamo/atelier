@@ -19,11 +19,12 @@
 // WHAT THE EXAMPLE SHOWS AND THE METHOD DID NOT SAY (its sections in order, its tables, that its figures are all in
 // the material) is proposed, never assumed: one example cannot tell a habit from an accident.
 //
-// No model is called. A step is linked to a check by its own words (it names a section the example has, a table,
-// sources), and a step that names none of these is a judgement. Narrow on purpose: a link that is not plainly there
-// is not made.
+// WHICH CHECK A STATED STEP CARRIES IS READ, NOT MATCHED (./step-check.ts): a model names a measurement from the menu or
+// writes a check, code grounds it on the owner's example, and a step the reading cannot ground is a judgement. The plan
+// of those readings is handed in; with none, every stated step is a judgement. No pattern on a step's wording decides
+// anything here.
 
-import type { Requirement, Measurement } from '../state/canonical-state.js';
+import type { Requirement, Measurement, CheckQualification } from '../state/canonical-state.js';
 import type { GoldenCase } from '../golden/case.js';
 import { measure, type CheckContext } from '../observers/registry.js';
 import { headingsOf, sectionHeadsOf, sectionBodyOf } from '../observers/structure.js';
@@ -31,14 +32,16 @@ import { proseWords } from '../observers/style.js';
 import { ownLengthBand } from '../intake/length.js';
 import { PER_ROLE_LIMIT } from '../observers/selection.js';
 import { tablesOf, figuresOf, targetOf } from '../observers/obligations.js';
-import { citesLines } from '../loop/locators.js';
 import { deriveMeasuredRules, piecesBreaking } from '../observers/derive.js';
 import { isShortForm, shapeBandRules, pooledRateRules, shortFormLimits, shortFormBrief, type ShapeBandRule, type PooledRateRule, type ShortFormOptions } from '../observers/short-form.js';
 import { allowed, CORPUS_RULE_SHARE } from '../ratification/suggest.js';
 import { machineTellRule } from '../observers/contrast.js';
 import { PATTERN_LABEL } from '../observers/style.js';
 import { grammarMeasurement, grammarStatus, piecesWithErrors, termsOf, GRAMMAR_STATEMENT } from '../observers/grammar.js';
-import { norm, lowered, tableColumns, isConditional, sectionsPlaced, sectionsNamed, sectionsOutright, optionsOf, statedCount, sectionLength, sectionsOpening, citesPlaces, namesTest } from './step-readers.js';
+import type { StepPlan } from './step-check.js';
+
+/** A name as it is compared: lower case, letters, digits and % only. */
+export const norm = (s: string): string => s.toLowerCase().replace(/[^a-z0-9% ]+/g, ' ').replace(/\s+/g, ' ').trim();
 
 export type Obligation = NonNullable<Requirement['obligation']>;
 
@@ -51,8 +54,9 @@ export interface MethodStep {
 
 /**
  * THE STEPS OF A METHOD NOTE, in order. A list item is a step. Where the note has no list, each sentence of its
- * paragraphs is. Headings are not steps: they say what the steps under them are about. Front matter, code and
- * tables are left out.
+ * paragraphs is. A heading says what the steps under it are about, with one exception of form: a NUMBERED heading
+ * followed by prose ("### 3. Keep it short", then a paragraph) is a rule written as a heading, and it is one step with
+ * its paragraph; a numbered heading over a list is the list's name. Front matter, code and tables are left out.
  */
 export function stepsOf(note: string): MethodStep[] {
   const body = (note.charCodeAt(0) === 0xFEFF ? note.slice(1) : note).replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, '').replace(/```[\s\S]*?```/g, '').replace(/<!--[\s\S]*?-->/g, '');
@@ -75,16 +79,26 @@ export function stepsOf(note: string): MethodStep[] {
     && !(lines[firstAt + 1] ?? '').trim() && lines.slice(firstAt + 1).some((l) => l.trim())
     && !/\b(?:must|never|always|do not|don't|required?|shall|only)\b/i.test(first)
     && !/^(?:open|start|begin|lead|end|close|finish|conclude|include|add|write|keep|give|put|use|state|list|name|say|check|make|call|flag|ask|point|prefer|separate|weigh|size|then)\b/i.test(first);
+  // A numbered heading waits for what follows it: prose makes it a step (the heading, then its paragraph), a list
+  // makes it that list's name, and the next heading or a table drops it.
+  let pending: string | null = null;
   for (const [at, line] of lines.entries()) {
     if (titled && at === firstAt) continue;
     const heading = /^#{1,6}\s+(.+?)\s*#*\s*$/.exec(line);
     const item = /^\s*(?:[-*+]|\d+[.)])\s+(.*)$/.exec(line);
-    if (heading) { closeItem(); closePara(); under = heading[1].replace(/[*_`]/g, '').trim(); continue; }
+    if (heading) {
+      closeItem(); closePara(); under = heading[1].replace(/[*_`]/g, '').trim();
+      const numbered = /^\d+[.)]\s+(.+)$/.exec(under);
+      pending = numbered ? numbered[1].trim() : null;
+      continue;
+    }
     // What the work needs before it starts is not a step of it: a list of inputs says what to bind, not what to do.
     if (under !== null && /^(?:required\s+)?(?:inputs?|prerequisites?)$/i.test(under.trim())) continue;
-    if (/^\s*\|/.test(line)) { closeItem(); closePara(); continue; }
-    if (item) { closeItem(); closePara(); open = [item[1]]; continue; }
+    if (/^\s*\|/.test(line)) { closeItem(); closePara(); pending = null; continue; }
+    if (item) { closeItem(); closePara(); pending = null; open = [item[1]]; continue; }
     if (!line.trim()) { closeItem(); closePara(); continue; }
+    // VERBATIM: the heading's words then the paragraph's, nothing added between them, so the step is still a passage of the note.
+    if (pending !== null) { open = [pending]; pending = null; }
     if (open) open.push(line.trim()); else para.push(line.trim());
   }
   closeItem(); closePara();
@@ -152,6 +166,8 @@ export interface MethodProposal {
   readonly byName?: true;
   /** The check was tied to the step by its subject (sources, figures), not by what it asks: near the rule, and not the rule. */
   readonly related?: true;
+  /** A written check's standing on the owner's examples and their mutants (core/method/mutants.ts); recorded beside the standard. */
+  readonly qualification?: CheckQualification;
   /**
    * Counted off the examples and said by no step: how the pieces are written (a sentence length, a paragraph cap, a
    * word never used). A rule of style, not a part of the work: shown, used to choose between drafts, and repaired
@@ -167,94 +183,11 @@ export interface MethodProposal {
   readonly platform?: true;
 }
 
-const SOURCING = /\b(?:cit(?:e|es|ed|ation)|sourc(?:e|es|ed|ing)|attribut\w+|referenc\w+)\b/i;
-/** A word for a figure itself: what the lookup in the material reads. A claim is not one. */
-const FIGURES = /\b(?:figure|number|statistic|stat|data|metric|price|pricing|revenue|percent\w*|quantit\w+)s?\b/i;
-const ABOUT_FIGURES = /\b(?:figure|number|statistic|stat|data|claim|metric|price|pricing|revenue|percent\w*|quantit\w+)s?\b/i;
-
-/**
- * The check a stated step names by its own words, or null. A step that names sections the example has is about
- * those sections; one that speaks of a table is about the example's table whose columns it names (or its only
- * table); one that speaks of sources for figures is about the material.
- */
-function checkNamedBy(step: string, outline: ReturnType<typeof outlineOf>, how: { byName?: boolean; related?: boolean } = {}): Measurement | null {
-  const said = ` ${norm(step)} `;
-  // WHAT THE STEP NAMES OUTRIGHT COMES FIRST, whether or not the example has it: "a Risks section", "a table with the
-  // columns A, B and C". Read only from the example, a step that names a column the example lacks was given the
-  // example's own table and marked as held.
-  const columns = tableColumns(step);
-  if (columns.length >= 2) return { observer: 'TABLE', params: { columns, minRows: 1 } };
-  const conditional = isConditional(step);
-  const low = lowered(step);
-  const found = conditional ? [] : sectionsPlaced(step, outline.sections);
-  const named = conditional ? [] : sectionsNamed(step);
-  // The example's own names decide only when they cover everything the step names outright: "open with a Glossary
-  // section and include a Summary section", over an example with no Glossary, is the owner's to settle below.
-  // A section the step names with a capital and the example does not have ("and a Glossary section") is not dropped:
-  // the check asks for it too, the example fails it, and the owner is asked.
-  const outright = sectionsOutright(step, outline.sections);
-  if (found.length && outright.length && !conditional) return sectionsCheck([...found.map((x) => x.sec), ...outright], outline);
-  if (found.length && named.every((x) => found.some((f) => f.name === norm(x.name)))) {
-    // Tied by the example's own name where the step's wording alone would not have said it: a reading, said as one.
-    how.byName = found.some((f) => !named.some((x) => norm(x.name) === f.name));
-    // Where is said by the verb that introduces the name, and by nothing else.
-    const before = (x: { at: number }): string => low.slice(0, x.at + 1);
-    const opens = /\b(?:opens?|starts?|begins?|leads?)(?: with)? $/.test(before(found[0]));
-    const closes = /\b(?:ends?|closes?|finish(?:es)?|concludes?)(?: with)? $/.test(before(found[found.length - 1]));
-    return sectionsCheck(found.map((x) => x.sec), outline, { opens, closes: closes && !(opens && found.length === 1), options: optionsOf(step) });
-  }
-  const sections = named.map((x) => x.name).filter((n, i, all) => all.findIndex((o) => norm(o) === norm(n)) === i);
-  if (sections.length) {
-    // Where is said by the verb, and by nothing else: "listing the first three risks" says nothing of where.
-    const opens = /^(?:open|start|begin|lead)/.test(named[0].verb);
-    const closes = /^(?:end|close|finish|conclude)/.test(named[named.length - 1].verb);
-    return sectionsCheck(sections, outline, { opens, closes: closes && !(opens && sections.length === 1), options: optionsOf(step) });
-  }
-  // A STEP THAT ASKS FOR A TABLE ("include a table of…", "holds one table") is held to the example's. One that speaks
-  // of a table already there ("three to five rows in that table", "right below the table") asks for something else,
-  // which nothing here reads: tied to the table's columns, its check read what the step does not ask.
-  if (/\b(?:an?|one|two|three|\d+)\s+(?:[\w-]+\s+){0,3}tables?\b|\btables?\s+(?:with|of|showing|comparing|listing)\b/i.test(step) && outline.tables.length) {
-    const columnsSaid = (t: (typeof outline.tables)[number]): number => t.header.filter((h) => h.length >= 3 && said.includes(` ${norm(h)} `)).length;
-    const best = [...outline.tables].sort((a, b) => columnsSaid(b) - columnsSaid(a))[0];
-    if (columnsSaid(best) > 0 || outline.tables.length === 1) return { observer: 'TABLE', params: { columns: best.header.filter(Boolean), minRows: 1 } };
-  }
-  // A count in a step that opens on one of the example's sections is that section's. Where it could not be read as
-  // the section's length, it is not thereby the whole work's: it is the owner's to judge.
-  const whole = (m: Measurement | null): Measurement | null => (m?.observer === 'LENGTH' && !m.params.in && sectionsOpening(step, outline.sections).length ? null : m);
-  const counted = sectionLength(step, outline.sections) ?? whole(statedCount(step));
-  // Where the example's sections are labels, a section's length is read between them: the check carries their names.
-  if (counted) return outline.labels && counted.observer === 'LENGTH' && counted.params.in ? { ...counted, params: { ...counted.params, labels: 1, sections: [...outline.sections] } } : counted;
-  // A step that asks for citations of places ("cite each item as path:line", "point to the line", "give the file and
-  // line", "every finding points at the code") is held by looking each one up (./step-readers.ts, `citesPlaces`).
-  // Not where the step forbids the form or asks for it only sometimes ("do not cite as path:line", "where there is
-  // one"). And "each item" is not "at least one": a review with nothing to fix cites nothing, and holds the step.
-  // Where the step asks for one on EVERY finding ("each finding cites its line"), each finding is read for one too:
-  // under the section the step names where it names one of the example's, else under the headings that call their
-  // contents findings. Whether the cited line supports the finding is never read.
-  const cites = citesPlaces(step, citesLines, outline.sections);
-  if (cites) return { observer: 'LINES', params: { min: 0, ...(cites.perItem ? { perItem: 1, ...(cites.sections.length ? { sections: cites.sections } : {}) } : {}) } };
-  // A step that asks the work to name a test ("name the test that would have caught it", "suggest a test") is held
-  // by looking for one: a test file, or a test function or case in backticks. Which test is the right one is not read.
-  if (namesTest(step)) return { observer: 'NAMES_TEST', params: {} };
-  // A STEP THAT SPEAKS OF SOURCES AND OF FIGURES is given the lookup of figures in the material. That is the step's
-  // subject, not what it asks: "name the source the first time I cite a figure" is not broken by a figure the
-  // material lacks. The check is kept, shown, and marked as near the rule: it blocks nothing.
-  // It IS what the step asks where the figures are what the step is about and the source is where they must come
-  // from: "every figure must be sourced from the material", "keep numbers as they appeared at source". Said of
-  // figures first, then of the source. Anything else (a claim, or the source named before the figure) is near it.
-  if (SOURCING.test(step) && ABOUT_FIGURES.test(step)) {
-    const figures = step.search(FIGURES); const source = step.search(SOURCING);
-    how.related = !(figures !== -1 && figures < source);
-    return { observer: 'CITED', params: { allow: 0 } };
-  }
-  return null;
-}
-
 /**
  * THE REQUIREMENTS ONE METHOD AND ONE EXAMPLE SUPPORT, in the order a person reads them: the owner's steps first,
  * then what the example shows that no step said.
  */
-export function methodProposals(note: string, example: Pick<GoldenCase, 'task' | 'material' | 'reference'>): MethodProposal[] {
+export function methodProposals(note: string, example: Pick<GoldenCase, 'task' | 'material' | 'reference'>, plan: StepPlan | null = null): MethodProposal[] {
   const outline = outlineOf(example.reference);
   const context: CheckContext = { ...(example.task ? { request: example.task } : {}), material: example.material };
   const read = (m: Measurement): { verdict: string; detail: string } => { const r = measure(example.reference, m, context); return { verdict: r.verdict, detail: r.detail }; };
@@ -264,13 +197,14 @@ export function methodProposals(note: string, example: Pick<GoldenCase, 'task' |
   const unreadable = (m: Measurement): boolean => targetOf(m.observer) === 'BOUND_MATERIAL' && !example.material.length;
   const against = (r: { verdict: string; detail: string }, m: Measurement): string | null => (r.verdict === 'VIOLATED' && !unreadable(m) ? `your example does not do this (${r.detail})` : null);
   for (const step of stepsOf(note)) {
-    const how: { byName?: boolean; related?: boolean } = {};
-    const m = checkNamedBy(step.text, outline, how);
+    // THE CHECK THE READING GAVE THE STEP, grounded on this example already (./step-check.ts); none, and the step is
+    // the owner's to judge. A written check is a deliverable of the text until it is qualified, and blocks nothing.
+    const given = plan?.get(step.text) ?? null; const m = given?.measurement ?? null;
     if (!m) { out.push({ statement: step.text, origin: 'STATED', obligation: 'JUDGEMENT', measurement: null, onExample: null, conflict: null }); continue; }
     const r = read(m);
     claimed.add(m.observer === 'TABLE' ? `TABLE:${(m.params.columns as readonly string[]).join('|')}` : m.observer);
     if (m.observer === 'PRESENCE') for (const sec of ((m.params.sections as readonly string[] | undefined) ?? [])) claimedSections.add(norm(sec));
-    out.push({ statement: step.text, origin: 'STATED', obligation: targetOf(m.observer) === 'BOUND_MATERIAL' ? 'EXECUTION' : 'DELIVERABLE', measurement: m, onExample: unreadable(m) ? 'could not be read on it: it carries no material' : r.detail, conflict: against(r, m), ...(how.byName ? { byName: true as const } : {}), ...(how.related ? { related: true as const } : {}) });
+    out.push({ statement: step.text, origin: 'STATED', obligation: targetOf(m.observer) === 'BOUND_MATERIAL' ? 'EXECUTION' : 'DELIVERABLE', measurement: m, onExample: unreadable(m) ? 'could not be read on it: it carries no material' : r.detail, conflict: against(r, m), ...(given?.near ? { related: true as const } : {}), ...(given?.qualification ? { qualification: given.qualification } : {}) });
   }
   // WHAT THE NOTE LAYS OUT AS A TEMPLATE: its own section headings and its own tables are the owner saying what the
   // work contains, as plainly as a sentence would. Each is held against the example like any stated step: sections
@@ -372,12 +306,15 @@ export function acrossExamples(proposals: readonly MethodProposal[], others: rea
  * all, or broken by some and so put to the owner) is taken; the first by name where several do equally. The owner's steps do not change, only which
  * piece they are read against.
  */
-export function proposalsAcross(note: string, cases: readonly (Pick<GoldenCase, 'task' | 'material' | 'reference'> & { readonly id: string })[]): { lead: number; proposals: MethodProposal[] } {
+export function proposalsAcross(note: string, cases: readonly (Pick<GoldenCase, 'task' | 'material' | 'reference'> & { readonly id: string })[], plan: StepPlan | null = null): { lead: number; proposals: MethodProposal[] } {
   let best = { lead: 0, proposals: [] as MethodProposal[], held: -Infinity };
   cases.forEach((c, i) => {
-    const proposals = acrossExamples(methodProposals(note, c), cases.filter((_, k) => k !== i), c.id);
-    // The most steps read as checks; among equals, the piece the fewest of them disagree with.
-    const held = proposals.filter((p) => p.origin === 'STATED' && p.measurement).length * 1000 - proposals.filter((p) => p.conflict).length;
+    const own = methodProposals(note, c, plan);
+    const proposals = acrossExamples(own, cases.filter((_, k) => k !== i), c.id);
+    // The most steps read as checks; among equals, the piece that itself does what the most steps say, then the one the
+    // fewest pieces disagree with. (The checks are read once for every example, so a piece that lacks a section the others
+    // have is told apart by its own failures, not by reading fewer checks.)
+    const held = proposals.filter((p) => p.origin === 'STATED' && p.measurement).length * 1000 - own.filter((p) => p.conflict).length * 10 - proposals.filter((p) => p.conflict).length;
     if (held > best.held) best = { lead: i, proposals, held };
   });
   return { lead: best.lead, proposals: best.proposals };

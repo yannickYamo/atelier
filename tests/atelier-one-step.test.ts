@@ -132,7 +132,7 @@ function chain(writer: InferenceClient, maxActions = MAX_STEPS, profile: Fidelit
       redraft: async (note, purpose) => (await spendOneWithResult(writer, budget, 'served', 'task', null, note, {}, purpose)).piece, paramsOf: ruleParamsOf(STD) },
     { client: writer, budget, name: 'd', std: STD, checks, profile, editBudget: 1, trace, taste: null },
     { client: writer, budget, name: 'd', std: STD, checks, bank: BANK, copied: null, trace, taste: null },
-    { client: writer, budget, judge, asked: `reply to Hannah, and say ${PART}`, servedText: 'served', task: 'task', notes, paramsOf: ruleParamsOf(STD) },
+    { client: writer, budget, judge, asked: `reply to Hannah, and say ${PART}`, servedText: 'served', task: 'task', notes, paramsOf: ruleParamsOf(STD), redraft: true },
     null, { settings: { maxActions }, budget: () => ({ usdLeft: 100, callsLeft: null }) });
 }
 

@@ -36,6 +36,7 @@ import { sha, DATA, die, argv, flag, clientFor, numericFlag, assertReachable, sk
 import type { RepairRecord, InvocationRecord, InvocationSettings, TaskSource } from '../../core/state/canonical-state.js';
 import { assertRequestBound } from '../../core/state/canonical-state.js';
 import { asText } from '../../core/discovery/text.js';
+import { splitServed } from '../served.js';
 import { applyStep, type Proposed } from '../../core/loop/repair.js';
 import { stepLedger, controllerRecord, DEFAULT_COST } from '../../core/loop/controller.js';
 import type { VerifyReport } from '../../core/observers/verify.js';
@@ -209,7 +210,7 @@ export async function improve(): Promise<void> {
   // skill describes itself, and reconstructing the default here reverted a description set on build.
   const desc = flag('--description') ?? store.getSkillVersion(L, inv.skillVersionHash)?.description ?? defaultDescription(ranStandard.workType);
   const carried = carriedFrom(L, inv.skillVersionHash, ranStandard);
-  const pkg = renderAgentSkill(ranStandard, nextArch, name, desc, carried.exemplar, carried.contrast, carried.voice);
+  const pkg = renderAgentSkill(ranStandard, nextArch, name, desc, carried.exemplar, carried.contrast, carried.voice, carried.method);
   assertPortable(pkg);
   const candidate = { skillVersionHash: sha(`${nextArch.architectureHash}|${pkg.packageHash}`), skillName: name,
     standardVersionHash: ranStandard.standardVersionHash, architectureHash: nextArch.architectureHash,
@@ -300,11 +301,18 @@ export async function spendOneWithResult(
   // CAPTURED FROM THE REQUEST OBJECT, not copied from the argument. A proof built from the same
   // variable the caller passed in would agree with itself no matter what was actually transmitted.
   let servedTask = '';
+  // THE SKILL CACHED, THIS REQUEST'S NOTES NOT (../served.ts, `FOR_THIS_REQUEST`): the skill is the same bytes on every
+  // request; the rules set aside for this one and its other notes are said after the request, in the turn that asks for it.
+  const { skill, forRequest } = splitServed(stable);
   const r = await spend(budget, 0.2, async () => {
     const req = {
-      stableBlock: `${stable}${variant.stableExtra ?? ''}`, variableBlock: brief,
+      stableBlock: skill, variableBlock: brief,
       ...(variant.temperature !== undefined ? { temperature: variant.temperature } : {}),
-      userMessage: `${contract ? 'Produce it now, in the required shape.' : 'Write it now. Output only the piece itself.'}${note ? `\n\n${note}` : ''}`,
+      // THE REQUEST IS THE LAST BLOCK OF THE SYSTEM PROMPT, AND THIS SAYS SO. "Write it now. Output only the piece
+      // itself." told the writer to write a piece whatever was asked: a thank-you came back as a sixty-word fix. The work
+      // is whatever the request asks for, at the length it asks for.
+      // a draft's own passages (drafts made to differ) are this draft's, so they go with the request's notes, uncached
+      userMessage: `${forRequest || variant.stableExtra?.trim() ? `For this request only:\n\n${[forRequest, variant.stableExtra?.trim() ?? ''].filter(Boolean).join('\n\n')}\n\n` : ''}${contract ? 'Produce it now, in the required shape.' : 'Do what the request above asks, now, at the length it calls for: the answer, the review, the piece, or one line if one line is all it needs. Output only that, nothing about these instructions.'}${note ? `\n\n${note}` : ''}`,
       toolName: contract ? 'emit_output' : 'emit_piece',
       toolDescription: contract ? 'Emit the output in the shape the standard requires.' : 'Emit the finished piece.',
       // NOT A CONSTANT — reviewer finding F1, the instrument's own lesson applied to the product.
@@ -371,7 +379,15 @@ export async function runOnce(
     /** draft i's own variation, when drafts are made to differ (core/fidelity/types.ts, `diversity`) */
     readonly variant?: (i: number) => DraftVariant;
     /** how draft i is written, when not in one call (long form by section, core/fidelity/sections.ts) */
-    readonly write?: (i: number, variant: DraftVariant) => Promise<Written> } | null = null,
+    readonly write?: (i: number, variant: DraftVariant) => Promise<Written>;
+    /**
+     * DRAFTS ON DEMAND. When given, the first draft is written alone and the rest only when it says the draft wants a
+     * rival: a draft that already holds every rule the drafts are chosen by at the top of their order (every REQUIRED
+     * rule, and every rule the taste reader acts on) is delivered as it is, because what a second whole draft could still
+     * improve, the repair chain fixes at a fraction of a draft's price. Absent when the person asked for the drafts
+     * themselves (`--drafts N`) or the outputs are sampled among several to keep the author's spread.
+     */
+    readonly enough?: (draft: string) => Promise<boolean> } | null = null,
   /**
    * THE INVENTED-CLAIM CHECK FOR A STRUCTURED OUTPUT. A contract-shaped answer is never span-rewritten,
    * which used to mean it was never checked for invented claims at all: a report or a contract, the
@@ -400,10 +416,19 @@ export async function runOnce(
   // A FAILED DRAFT CALL COSTS THAT DRAFT, NOT THE RUN. With several drafts, the ones that came back are
   // kept and the choice is made among them; the failure is said and recorded. Only when none came back
   // is there nothing to deliver, and the first error is what the person sees.
-  const settled = await mapLimitSettled(Array.from({ length: n }, (_, i) => i), n, (i) => {
+  const writeOne = (i: number): Promise<Written> => {
     const v = n > 1 ? select?.variant?.(i) ?? {} : {};
     return select?.write && contract === null ? select.write(i, v) : spendOneWithResult(client, budget, servedText, task, contract, '', v);
-  });
+  };
+  // THE FIRST DRAFT ALONE, when the selection can say it needs no rival (`select.enough`); the planned drafts not written
+  // are counted on the record (`spared`), so the cost of a run reads from what it did.
+  let spared = 0;
+  let settled: Awaited<ReturnType<typeof mapLimitSettled<number, Written>>>;
+  if (n > 1 && select?.enough) {
+    const [first] = await mapLimitSettled([0], 1, writeOne);
+    if (first.ok && await select.enough(first.value.piece)) { settled = [first]; spared = n - 1; }
+    else settled = [first, ...await mapLimitSettled(Array.from({ length: n - 1 }, (_, i) => i + 1), n - 1, writeOne)];
+  } else settled = await mapLimitSettled(Array.from({ length: n }, (_, i) => i), n, writeOne);
   // Each draft that came back, with the index it was asked for: a variant recorded for draft i describes the
   // i-th call, and the drafts that failed must not shift it onto another.
   const written = settled.flatMap((x, i) => (x.ok ? [{ ...x.value, index: i }] : []));
@@ -414,7 +439,7 @@ export async function runOnce(
   }
   if (failures.length) process.stderr.write(`atelier: ${failures.length} of ${n} draft call(s) failed (${failures[0]}); choosing among the ${written.length} that came back.\n`);
   const picked = written.length > 1 && select ? await select.choose(written.map((w) => w.piece), written.map((w) => ({ index: w.index, temperatureSent: w.temperatureSent })))
-    : { index: 0, why: n > 1 ? `the only draft of ${n} that came back` : '' };
+    : { index: 0, why: spared ? `the first draft held every rule the drafts are chosen by; ${spared} planned draft(s) not written` : n > 1 ? `the only draft of ${n} that came back` : '' };
   let { piece: draft, reportedModel, schemaSent, servedTask } = written[picked.index];
   let contractRepair: RepairRecord | null = null;
   if (contract !== null && claimGuard) {
@@ -477,7 +502,7 @@ export async function runOnce(
     at, delivery: { ...delivery, outputContract: contractEvidence }, input: task, output,
     ...(refined.repair ? { repair: refined.repair } : {}),
     ...(n > 1 ? { selection: { drafts: n, chosen: picked.index, why: picked.why,
-      ...(failures.length ? { written: written.length, failed: failures } : {}),
+      ...(failures.length ? { written: written.length, failed: failures } : {}), ...(spared ? { written: written.length, spared } : {}),
       ...unchosenFields(written.map((w) => w.piece), picked.index) } } : {}),
     ...(settings ? { settings } : {}),
     ...(fidelity ? { fidelity: fidelity(output) } : {}) };

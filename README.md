@@ -1,162 +1,128 @@
 # Atelier
 
 [![CI](https://github.com/yannickYamo/atelier/actions/workflows/ci.yml/badge.svg)](https://github.com/yannickYamo/atelier/actions/workflows/ci.yml)
-[![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+[![license](https://img.shields.io/badge/license-source--available-blue)](LICENSE)
 [![node](https://img.shields.io/badge/node-%3E%3D22-brightgreen)](package.json)
 
 ## What is Atelier?
 
-Atelier is an agentic system that builds AI skills from your method and examples of the work you want, runs every output through a check, and keeps improving the skill without ever changing the standard you approved. I built it because I kept hitting the same wall: perfect context, still variance. In production, a standard model suffers from "needle in a haystack" drop-offs, hallucinatory drift, and little formatting discipline. You point it at pieces written the way you want - yours, your team's, or a style you admire - and it reads them, proposes the rules behind them, and shows the evidence for each one. You approve those rules once. From then on, Atelier compiles them into a skill and does the work of holding them.
+**Atelier takes the standard your experts already hold work to - a method note, a policy, a folder of finished examples - and turns it into checks that run on every output. It fixes what breaks a measurable rule, hands what needs judgment to a person, and records what was checked and what wasn't. The aim is narrow: output quality held to one standard, repeatable from run to run.**
 
-Teams ask for it in plainer words:
+I'll say up front what this isn't, because the category is crowded and most of what's in it works on a different part of the problem.
 
-- "Review code the way our principal engineer does."
-- "Draft every contract the way our legal team works."
-- "Write the way our best product people write and reason."
-- "Change the model underneath without changing how we work."
+## It isn't an eval, and it isn't an optimizer
 
-You don't need to learn how Atelier works to get there. Write down how you do the work, hand it a few finished examples, read one short screen that says what will be checked and what stays your judgement, and connect your agent. Everything else stays underneath.
+Evals and optimizers improve the average over many runs. You measure a set, you tune, the distribution moves. That's useful work and I'm not arguing against it.
 
-I built it for three things: output that stays stable over time, less entropy from one run to the next, and writing in the voice I chose, at scale, without anyone supervising each draft.
+Atelier looks at this output, now, before it ships. Which rules held, which broke, the passage as evidence, and what happens next. Upstream tools make the model more likely to be right. Atelier catches the one that isn't, and names which output, which rule, and why.
 
-Think of it as three things you do, and one it does for you:
+**Those are different jobs and you want both.** An optimizer that lifts your pass rate has done something real, and the outputs it still misses go to a customer.
 
-1. **Give it your method and your finished work.** Each step you wrote is your rule, in your words. Where code can hold a step it is checked on every run; the rest is yours to judge, and is said to be. With no written method, it reads the rules off your examples and you approve them.
-2. **Build it once.** The standard is hashed and versioned the moment you accept it. No model update, optimizer or judge can move it.
-3. **Run it, and react.** Every output is written, checked and repaired, and comes back with its evaluation: each of your rules marked as verified, failed, checked in part or yours to judge, under one word that says where it stands (blocked, needs review, or verified). When something is wrong, you say so in your own words.
-4. **It improves itself, and keeps a change only when it measures better.** Atelier mines its own records for what keeps going wrong, searches for a better way to carry your rules, and installs a winner only when the gate allows it.
+## It isn't a guardrail or a schema check
 
-Instead of a model that re-guesses your rules on every run, you get rules you approved, kept in a file outside the model, and a verdict on every output.
+A guardrail checks a rule a developer wrote. Someone sat down, decided banned terms matter, and typed them in.
+
+Atelier compiles the rules your experts actually hold, out of documents you already have. Before anything runs, you get a compile report in three columns:
+
+- **measurable** - checked by code on every output
+- **needs judgment** - read by a model, reported
+- **not captured** - quoted back to you verbatim, with the question attached
+
+The third column is the honest one. If your policy says "the tone should match the account's seniority," Atelier doesn't pretend to have operationalized that. It hands the sentence back and asks what you meant.
+
+**A rule a model reads never blocks until it has proved its error rate on your own labels.** A counted rule - a banned term, a required section, a length - blocks from day one. Code decides it, no label needed. I want to say that plainly because the two get conflated and the trust you extend should be different.
+
+## What it checks
+
+The counted layer: required sections and fields, allowed values, lengths and counts, banned terms, a cited line that exists in the material, every specific traced back to material you supplied.
+
+Then the step-specific layer. Figures that reconcile, cross-field rules - a check a model writes for that step, grounded on your examples. It reports until it's qualified on edits of your own examples that break only that step. Only then may it block.
+
+Then judgment rules: "the span supports the label," "severity matches the evidence." A model reads these and quotes the passage back. Reported until qualified on your labels.
+
+And then what it couldn't read at all, shown verbatim, for you.
+
+## How outputs change
+
+A rewrite happens only where a measurable rule broke. The rewrite is kept only if it re-verifies clean on every rule it touched. **A rewrite that changes a claim or a figure is refused** - I'd rather hand you a blocked output than a quietly edited number.
+
+An omission is a different animal. A missing section isn't something you repair in place; the work is written again, in a run. In verify it stays blocked and says so.
+
+Judgment goes to a person, with the passage. Their rulings qualify the reader. The standard itself never changes unless you change it.
+
+## Who decides what good means
+
+You do. Every rule is approved before it binds. Rules are versioned by content, apart from the model, so a model's reading cannot alter what you ratified.
+
+A new reader model starts unqualified: it reports only, until your labels qualify it. A new writer model is held to the same standard on every output. What doesn't exist yet is a gate that re-verifies a new model against your labels before it goes live. I'd like that. It isn't built.
+
+## Where it plugs in today
+
+**CLI.** `verify` and `run`, with one JSON record head on both: schema, state, standard, skill version, certificate, record. Exit 1 when a required rule broke, exit 2 when it couldn't check.
+
+**Claude Code hook.** `verify --hook` reads the hook event and exits 2 with the broken rules, only when something required failed. Otherwise 0 - including when it couldn't check.
+
+**MCP.** `atelier_verify`, `atelier_rules`, `atelier_new`, `atelier_run`, `atelier_report`, `atelier_rate`, `atelier_fix`, for Claude Code and Codex.
+
+**CI.** `verify` as a step. A broken required rule fails the check.
+
+One caveat worth stating rather than burying: verify takes one file at a time. A folder is a shell loop. I'm not going to call that "a folder of outputs in one call," because it isn't.
+
+Not built, and not available: a Python or TypeScript SDK, a hosted endpoint, a labeling queue, asynchronous reading. Those are next.
+
+On latency: counted checks run offline in milliseconds. The invented-claim reader and the judgment reader are model calls in the request path when a key is set. There's no asynchronous path yet.
+
+## Two modes for skill authors
+
+**Portable.** The exported skill carries your method into Claude Code or Codex. It cannot guarantee the agent obeyed it.
+
+**Guarded.** Verify runs on every output - in `run`, in CI, through the hook, or through the MCP tool - and the record says what held.
 
 ```bash
-atelier new ./my-work --method how-we-do-it.md    # build: your method and your finished examples
-atelier run "the next piece of work"               # run: the work, and its evaluation rule by rule
-atelier fix "what was wrong"                       # react: in your own words
+atelier new ./examples --method how-we-do-it.md --name my-skill   # from your method and your work
+atelier skill "lead with the action, number the steps"            # from rules you state
+atelier run "write the release notes for v2.1"                    # drafted, checked, repaired, recorded
+atelier verify --skill my-skill draft.md --repair                 # check or fix any text
+atelier verify --skill my-skill --hook                            # as a Claude Code hook: exit 2 blocks
+atelier fix "the opening was too abstract"                        # correct a piece, or the skill
 ```
 
-No written method yet? `atelier new ./my-work "what it is for"` reads the rules off your examples for you to
-approve. Everything else the tool can do is under `atelier lab`.
+## Voice
 
-```bash
-atelier lab                                       # the rest: verify, material, reproduce, evolve, and the experiments
-```
+Voice is where I want to be most careful, because it's where the temptation to oversell is strongest.
 
-## Why Atelier?
+Atelier holds your method. It keeps every specific traced to your material. It holds your counted habits - the contraction rate, the dash rate, the things you do without noticing. It keeps machine tells out.
 
-- **Rules you own.** The standard is hashed and versioned, and only you can change it. Swap the model next month and the rules don't move with it.
-- **Nothing invented.** In an essay or a post (`--class`) with your material bound, a made-up story, quote or figure is cut, never reworded; anywhere else it is listed for you to check. On product essays no test had used, the claim check caught all 46 planted inventions and left 39 of 48 clean drafts alone (false flags at most 31 in 100, one-sided 95% bound).
-- **A verdict on every output.** Conformant or not, with a plain pass or fail per check, plus what wasn't measured. There's no overall score, because adding the checks up would hide the one that failed.
-- **It improves without drifting.** Atelier searches for better ways to carry your rules and keeps a change only when it measures better. It can never edit a rule, and every release rolls back in one command.
-- **It works where you already work.** A skill for Claude Code or Codex, `npx skills add`, a Cursor or VS Code entry, an MCP server, a CLI guard that exits 1 on a broken rule, or a single-file export for any agent. It covers writing and answers alike: code reviews, financial reports, blog posts, contracts, support replies.
+What it does not yet do is make a model sound like you from a few pieces. We tested that. I'd rather say it than claim otherwise.
 
-The same model on the same task, with and without Atelier:
+## What is measured
 
-| On the same task | Without Atelier | With Atelier |
+Every figure below comes from a study in `studies/`, with the design and the failures kept alongside it. Most of this is development evidence, not sealed.
+
+| claim | result | status |
 |---|---|---|
-| Required rules held in full, outside blog test (the author's essays pasted in) | 2 of 9 posts | 7 of 9 posts |
-| Em dashes, invisible characters, copied six-word runs (same test) | not counted | none in any post |
-| Six-word runs copied from the author's pieces, per piece (the pieces given to it) | 97 | 3.6 |
-| An invented story, quote or figure, in published writing | ships as written | cut, never reworded, in an essay or post with your material bound; listed anywhere else |
-| Coding answers, the outside benchmark's own judge (no skill) | 3.99 | 4.39 |
-| What you know about an output before you read it | nothing | a pass or fail per check |
+| Nothing invented | 0 invented claims in 60 outputs across two corpora; the other arms carried 37 to 67 flagged specifics per corpus | sealed |
+| The method holds | code review: checklist 7 of 10, defect cited 9 of 10, every other arm 0 of 10; contracts: 10 of 10, matched by one skill creator's skill | development |
+| Counted rules hold | 31% of answers broke a counted rule, against 76% for a hand-written skill never shown the rules | development |
+| Invented specifics caught | 46 of 46 planted inventions; clean drafts left alone 39 of 48 and 35 of 38 | sealed |
+| Sounds like the author | ranked first blind on single pieces; the pre-registered gate failed | closed, not claimed |
 
-Change the model next month and the standard doesn't move.
+A few readings worth pulling out. On the code review arm, the planted defect was cited within two lines 9 times in 10, and every other arm scored 0 of 10 on the checklist. On the contracts arm, ten term sheets came back 10 of 10 - and so did a skill creator's skill, which is the comparison I'd want to see if I were you.
 
-## How it works
+The invented-specifics run used product essays no test had touched. All 46 planted inventions were caught. A pattern check on the same material caught 11. Clean drafts were left alone 39 times in 48.
 
-Atelier runs three loops, and you make one decision in them.
+What isn't established: a sealed win against a hand-written skill, error bounds on a real customer stream, and the compile front door on arbitrary SKILL.md files. That last one is in progress.
 
-The model writes; code checks and decides. You own what good means, and the machine may only look for a better way to carry it: meaning and optimization have different owners.
+## The offer
 
-**Build.** A discovery agent reads your examples, proposes rules with evidence, and writes drafts of its own on your topics to find where the model drifts from you. You approve the standard once, and it's hashed. A compiler then gives each rule the least machinery that carries it: an instruction, an example, a self-check, an output contract, or nothing.
+Send one policy and the last thousand outputs of one workflow, in whatever form they're in. Back comes how many broke your own rules, rule by rule, with the passage. The first report costs nothing.
 
-**Run.** Two drafts are written and the closer one to your range is kept. Counted rules get measured. A small model lists every specific claim and code checks each one against what you supplied. Only what broke is rewritten, and the run is recorded with its verdict. The loop is bounded: each repair step is chosen by what matters most, sized to how far off the draft is, and taken only while it is expected to pay for itself (at most four steps), and with `--strict` a fixed number of fresh drafts, then a refusal with its reasons. A draft that holds everything and is a little outside your range is left as written. Only what you required goes into the prompt as an instruction; what you merely tolerate, or what was only observed, never does.
-
-**Your taste acts on every draft.** Atelier counts 53 features of how you write. The ones your pieces hold, and the ones that tell you from the model, are steered on every run when a draft falls outside your range: the miss points at the sentences that carry it and says which way and how far. Steering never fails a draft, and a fix that pushes another feature out of your range is refused. Only you make a feature required. Feature steering is on by default, and its benefit is being measured.
-
-**Grammar, without flattening your voice.** Every new skill holds one editorial rule: no mechanical errors. Atelier finds mechanical slips (spelling, agreement, punctuation) with an offline checker and lists them for you, each with what the checker noted. It never changes your text unless you pass `--fix-grammar`, and a finding never blocks a run or lowers its verdict: a checker cannot tell "plan a" or "git add ." from a slip, so the findings are listed on their own line, a run that holds every rule you set reads VERIFIED with the list beside it, and the rule reads as met only when the checker finds nothing. When the checker cannot load, the run says "grammar not checked" and never claims it was. Grammar you write into your own method is yours, and binds like any rule of yours. Quotes, code, figures, @mentions, hashtags, emoji, addresses, file names and words in capitals are never flagged, nor is a name the checker knows. A capitalised word it does not know is listed as "a name, an acronym or a coined word", and your own terms are listed as yours: listed, never changed. A construction your own pieces use ("it don't") is left as yours and not listed. With `--fix-grammar` on `run`, `invoke` or `verify`, a narrow set is corrected in place and each change is shown: a known misspelling in lower case (one of a curated list, like "recieve" and "definately"), "he are" and "I are", "a" or "an" the wrong way round before a common lower-case word ("a essay"), two commas, and a space before a comma or a full stop. It may change words that are right in context, like letter names, code and quoted examples, so read the changes. With `--fix-grammar`, a slip whose fix another of your rules refuses stays in the text and the rule reads broken, so the run can be blocked. No spelling is ever converted between British and American English.
-
-**Short pieces, and several authors.** A skill built from tweets or short posts learns their length, shape and habits from the set as a whole and steers toward them, without ever blocking on them; it holds a platform limit only when you give one (`--limit`), since posts on X can run to thousands of characters. Pieces that vary too much in length set no length band. A long-form skill asked for a tweet keeps your method and drops the rules that only fit long pieces. Give pieces by several writers, named or not: Atelier tells the voices apart by how they are written, reads each one on its own, takes what is most characteristic of each, settles any clash by which side is more characteristic, and builds the blend in one step, saying in one line what came from whom. Format and length alone never turn one writer into several. Every inferred trait steers as preferred and cannot block a draft; only you can make one required. Nothing is asked; `atelier fix` changes anything you disagree with.
-
-**Improve.** `atelier fix` writes the piece again with what you said put right. With `--always` it turns your complaint into a candidate for the skill that you compare blind. `atelier tend --auto` runs a round of search, tests each candidate against a regression floor, and undoes its own install when a rule starts breaking more often.
-
-The claim check treats writing and answers differently on purpose. Deleting an invented anecdote from an essay costs you nothing. Deleting a correct detail from a technical answer costs you the answer.
-
-## What you see after every run
-
-**Every run ends with its own evaluation, and a tick never says more than was checked.**
-
-The first line says where the work stands. Under it are three layers that are different promises: your rules in your own words, what this request asked for, and whether the specifics trace to what you supplied. A rule a check read only part of is marked `~`, with the part it read and the part left to you. A rule no check can read is marked `?`. Nothing is added up into a score.
-
-This is the layout, from the renderer, on an example run.
-
-```text
-── Evaluation · BLOCKED ──────────────────────────────────────────────────────────── $0.09 · 24 s ──
-  Not usable as it stands: 1 requirement seen to fail. 2 of 7 verified, 4 left for you.
-
-  Your rules
-    ✓  Open with a Verdict section that holds one of: Approve, Request changes, Comment.
-    ~  Then a Must fix section: every defect that blocks the merge, cited as path:line.
-         checked, and held: a "Must fix" section, with something in it
-         not checked, yours to read: every defect that blocks the merge, cited as path:line
-    ~  Cite only lines the change adds.
-         checked, and held: every path:line cited is a line of the material with something on it
-         not checked, yours to read: whether each item carries a citation, and whether the cited
-         line is the right one
-    ✗  Keep the whole review under 300 words.
-         found: 341 words (at most 299): long by 42
-    ?  Weigh the risk of the change before the style of it.
-       (no check reads the rule marked ? with nothing under it: it is yours to judge)
-
-  Evidence
-    ?  Every specific in the work is found in what you supplied
-         read, and not to be relied on: 2 could not be found in it: listed for you (the claim check
-         is not measured on code review)
-    ✓  No passage is lifted from one of your examples
-         the longest shared run is 5 words
-
-  From your examples (not required): 0 of 1 habits kept
-         not kept: No hedging words. (2 hedging words in 341)
-
-  What was done: 2 drafts written, the better one kept · written again once for what was missing; 1
-  thing is still missing
-
-  Next: run it again. If the evaluation is wrong about your work: atelier fix "<what was wrong>"
-  --evaluation
-  Every check in full: add --report · Over all your runs: atelier lab eval
-```
-
-Work with judgement in it is never called verified by a machine: the card says what is left for you to read. `atelier rate <run> yes|no` records the one answer only you can give: would you use it as it is? `atelier report <run>` adds the engine's own account and the trace, and `atelier lab eval` reports every run. Agents read the same record through `--json` and the MCP check.
-
-## What's proven, and what isn't
-
-**What Atelier counts holds up in the tests. Matching an author's voice hasn't been shown yet.**
-
-A skill built in 90 seconds held its own against a hand-tuned one. In an outside test, Atelier built a skill from 12 example coding-assistant answers for $0.41. On the benchmark of a popular hand-written skill tuned for it, the Atelier skill scored 4.51 against 4.32 as a plug-in. Run through `atelier invoke` it scored 4.39, against 4.13 for the earlier build and 3.99 with no skill.
-
-The invented-claim check is the piece I trust most. On product essays no test had used, it caught all 46 planted inventions and left 39 of 48 clean drafts alone (false flags at most 31 in 100, one-sided 95% bound). A pattern check on the same material caught 11 of 46. In a sealed study across two corpora, Atelier delivered no invented claim in 60 outputs, where plain prompting and pasted examples carried 37 to 67 flagged specifics per corpus ([INDISTINGUISHABILITY_RESULT](studies/INDISTINGUISHABILITY_RESULT.md)).
-
-Voice is not settled, and a model judge can't settle it: in an outside study, three frontier models preferred an imitation over the real author. An independent reviewer ran the fuller loop that steers pace and rhythm, and it didn't move the author's range at about three times the cost. That loop stays off by default behind `--fidelity`. The same study tested it directly: a classifier on features no part of Atelier reads still told every arm's outputs from the authors' unseen pieces, Atelier's included, and writing against a skeleton of the author's own paragraph moves did not close the gap.
-
-An outside test also found a real failure: an early runtime cut correct sentences from answers and scored below no skill at all. Since 0.7.0 only a measured instrument may delete text. Two studies came back null and one came back negative. They're listed next to the wins in [RESULTS](docs/RESULTS.md), at the same size, with every score in [bench/runs](https://github.com/yannickYamo/atelier/tree/main/bench/runs/0.7.0).
-
-## How it compares
-
-**Each of these tools finds a standard or enforces one. They differ in who can change it.**
-
-| | Where the standard comes from | Who can move it | Checked on every output | Invented claims | A change you can undo |
-|---|---|---|---|---|---|
-| A strong model with examples | re-guessed every run | every run | no | not checked | nothing to undo |
-| Voice tools (Spiral, Writer, Jasper) | inferred by the vendor | the vendor, or its judge | by the vendor's own checks | not the focus | the vendor's call |
-| Style checkers (Vale, Markup AI) | rules written by hand | whoever edits them | yes, the rules they hold | not checked | yes, in the rule files |
-| Prompt optimizers (GEPA, SkillOpt, EvoSkill; SSO with a judge in place of a metric) | a metric someone else wrote, or a judge's preference | whoever owns the metric or the judge | by that metric or judge | only if it does | each candidate is kept, by that tool |
-| **Atelier** | **your examples, approved rule by rule** | **only you** | **yes, with a pass or fail you can read** | **cut, by a measured checker** | **every release is versioned and rolls back** |
-
-Atelier keeps the part each one is good at. It finds the rules from your examples, the way a voice tool does. It checks them on every output, the way a style checker does. It can search for a better way to carry them, the way an optimizer does. The rules stay the ones you approved.
-
-A first head-to-head against GEPA and SkillOpt has been run, in development and at small budgets, with both searching on Atelier's own rule score: Atelier broke fewer of the author's rules in 5 of 6 comparisons, and its skills were 6 to 16 times the size of theirs. A run at a fair budget, on a sealed test, hasn't been made. The kit to do it is in [bench/compare](https://github.com/yannickYamo/atelier/tree/main/bench/compare), and the result goes here whichever way it comes out. More in [COMPARISON](docs/COMPARISON.md) and [RESULTS](docs/RESULTS.md).
+You'll still be the one who decides what the broken ones mean. The reading moved; the answering didn't.
 
 ## Install
+
+The repository is public under a source-available license (see [LICENSE](LICENSE)): you may use and redistribute
+unmodified copies; changes are made only by the authors.
 
 ```bash
 git clone https://github.com/yannickYamo/atelier && cd atelier
@@ -198,6 +164,7 @@ What comes next is a closing test by an independent tester. The bar: from a fold
 
 ## Contributing
 
-The most useful contribution is evidence. Point Atelier at work whose standard you know, hold some back,
-and report what it got right, what sounded right and was wrong, and whether pasting the examples did as
-well; negative results stay in. See [CONTRIBUTING](CONTRIBUTING.md) and [AGENTS.md](AGENTS.md).
+Code changes are made by the authors only; the license allows no modification by anyone else. The
+contribution that is open to everyone is evidence. Point Atelier at work whose standard you know,
+hold some back, and report what it got right, what sounded right and was wrong, and whether pasting the
+examples did as well; negative results stay in. See [CONTRIBUTING](CONTRIBUTING.md) and [AGENTS.md](AGENTS.md).
