@@ -1,0 +1,19 @@
+{
+  "clip": "c21",
+  "duration": "01:13",
+  "overall": "Medium",
+  "categories": [
+    {
+      "category": "Violence – minor",
+      "risk": "Medium",
+      "span": "00:30–00:45",
+      "evidence": "A bottle is thrown; an officer is struck on the helmet and falls; colleagues drag him back."
+    },
+    {
+      "category": "Politics – discussion",
+      "risk": "Low",
+      "span": "00:05–00:30",
+      "evidence": "Protesters and police met at the square."
+    }
+  ]
+}

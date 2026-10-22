@@ -1,0 +1,12 @@
+{
+ "fixture": "labels",
+ "arm": "plainx",
+ "task": "t0",
+ "run": 2,
+ "text": "{\n  \"clip\": \"c13\",\n  \"duration\": \"00:58\",\n  \"overall\": \"Low\",\n  \"categories\": [\n    {\n      \"category\": \"Alcohol – reference\",\n      \"risk\": \"Low\",\n      \"span\": \"00:22–00:40\",\n      \"evidence\": \"They brewed a dark ale here until 1960.\"\n    }\n  ]\n}",
+ "costUsd": 0.013772,
+ "stop": "end_turn",
+ "error": null,
+ "meterUsd": 0.013771999999999895,
+ "seconds": 4.137
+}

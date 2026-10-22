@@ -1,0 +1,12 @@
+{
+ "fixture": "labels",
+ "arm": "plain",
+ "task": "t7",
+ "run": 1,
+ "text": "```json\n{\n  \"clip\": \"c20\",\n  \"duration\": \"00:47\",\n  \"overall\": \"Low\",\n  \"categories\": [\n    {\n      \"category\": \"Gambling – reference\",\n      \"span\": \"00:03–00:20\",\n      \"risk\": \"Low\",\n      \"evidence\": \"I lost the whole paycheque on slots last night.\"\n    }\n  ]\n}\n```",
+ "costUsd": 0.009208,
+ "stop": "end_turn",
+ "error": null,
+ "meterUsd": 0.009208000000000105,
+ "seconds": 4.372
+}

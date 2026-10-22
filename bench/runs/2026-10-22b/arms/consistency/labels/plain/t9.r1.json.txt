@@ -1,0 +1,17 @@
+```json
+{
+  "clip": "c22",
+  "duration": "00:44",
+  "overall": "Low",
+  "categories": [
+    {
+      "category": "Language – mild",
+      "span": "00:20–00:38",
+      "risk": "Low",
+      "evidence": "Shape it like a damn pillow, gently."
+    }
+  ]
+}
+```
+
+The policy extract doesn't include the strong-word list. I treated "damn" as mild, so it is not "Language – strong". If your list includes it, the category and risk would need to change.

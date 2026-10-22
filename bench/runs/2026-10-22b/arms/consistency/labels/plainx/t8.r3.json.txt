@@ -1,0 +1,13 @@
+{
+  "clip": "c21",
+  "duration": "01:13",
+  "overall": "Medium",
+  "categories": [
+    {
+      "category": "Violence – minor",
+      "risk": "Medium",
+      "span": "00:30–01:00",
+      "evidence": "A bottle is thrown; an officer is struck on the helmet and falls; colleagues drag him back."
+    }
+  ]
+}

@@ -1,0 +1,81 @@
+{
+ "fixture": "adhd",
+ "arm": "atelier",
+ "task": "long-form-request",
+ "run": 2,
+ "text": "Generate a random `code_verifier` in your client before you do anything else; everything in the flow hangs off it.\n\n**The core idea.** The authorization code flow lets a client get tokens without ever handling the user's password. PKCE (Proof Key for Code Exchange, pronounced \"pixy\") adds a one-time secret that proves the app redeeming the code is the same app that asked for it. Imagine a public client, such as a mobile app or single-page app, that cannot keep a client secret. Say a malicious app on the same phone intercepts the redirect carrying the authorization code. Without PKCE, it could trade that code for tokens. With PKCE, the stolen code is useless because the attacker does not hold the verifier.\n\n**The actors.**\n- **Resource owner:** the user.\n- **Client:** your app.\n- **Authorization server:** issues codes and tokens (the login and consent page plus the token endpoint).\n- **Resource server:** the API that accepts access tokens.\n\n**The flow, step by step.**\n\n1. **Create the verifier.** The client generates `code_verifier`, a high-entropy random string of 43 to 128 characters using letters, digits, `-`, `.`, `_`, and `~`. It stays in client memory or session storage. It is never sent in the first leg.\n\n2. **Derive the challenge.** The client computes `code_challenge = BASE64URL(SHA256(code_verifier))` and sets `code_challenge_method=S256`. A hash is one-way, so seeing the challenge does not reveal the verifier. Use `plain` (challenge equals verifier) only if SHA-256 is truly unavailable; it gives much weaker protection.\n\n3. **Send the user to the authorization endpoint.** The client redirects the browser (or opens the system browser) to something like:\n\n```\nGET /authorize?\n  response_type=code\n  &client_id=abc123\n  &redirect_uri=https://app.example.com/callback\n  &scope=openid profile\n  &state=xyz789\n  &code_challenge=E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM\n  &code_challenge_method=S256\n```\n\n   - `state` is a random value you check on return. It defends against CSRF.\n   - `redirect_uri` must exactly match one registered with the authorization server.\n\n4. **User authenticates and consents.** The authorization server shows its login page, then a consent screen listing the scopes. Your app never sees the credentials. The server stores the `code_challenge` alongside the code it is about to issue.\n\n5. **Receive the authorization code.** The server redirects the browser back:\n\n```\nhttps://app.example.com/callback?code=SplxlOBeZQQYbYS6WxSbIA&state=xyz789\n```\n\n   The client confirms `state` matches what it sent, and aborts if it does not. The code is short-lived (typically about a minute or less) and single-use.\n\n6. **Redeem the code with the verifier.** The client makes a direct back-channel POST to the token endpoint:\n\n```\nPOST /token\nContent-Type: application/x-www-form-urlencoded\n\ngrant_type=authorization_code\n&code=SplxlOBeZQQYbYS6WxSbIA\n&redirect_uri=https://app.example.com/callback\n&client_id=abc123\n&code_verifier=dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk\n```\n\n7. **Server verifies PKCE.** The server hashes the submitted `code_verifier` with SHA-256, base64url-encodes it, and compares the result to the `code_challenge` it stored in step 4. It also checks that the code is unexpired and unused, and that `redirect_uri` and `client_id` match. If anything fails, it returns an error such as `invalid_grant`.\n\n8. **Receive tokens.** On success the server returns JSON:\n\n```\n{\n  \"access_token\": \"...\",\n  \"token_type\": \"Bearer\",\n  \"expires_in\": 3600,\n  \"refresh_token\": \"...\",\n  \"id_token\": \"...\"   // only if openid scope was requested\n}\n```\n\n9. **Call the API.** The client sends `Authorization: Bearer <access_token>` to the resource server, which validates the token and serves the request.\n\n10. **Refresh when needed.** When the access token expires, the client POSTs `grant_type=refresh_token` to the token endpoint. For public clients, prefer refresh token rotation, where each refresh issues a new refresh token and invalidates the old one.\n\n**Why the attack fails.** An attacker who intercepts the code in step 5 sees only the `code_challenge` (from the front channel) and the code. To redeem it, they must send a `code_verifier` that hashes to the stored challenge. They cannot reverse SHA-256, and the real verifier never traveled over the redirect. The back-channel call in step 6 is the only place the verifier appears, and it goes straight from client to server over TLS.\n\n**Why this replaces the implicit flow.** The implicit flow returned tokens directly in the redirect URL, exposing them to browser history, referrer headers, and injected scripts. The code flow with PKCE keeps tokens off the front channel entirely. Current OAuth security guidance (the OAuth 2.0 Security Best Current Practice and the OAuth 2.1 draft) recommends PKCE for all clients, including confidential ones.\n\n**Implementation pitfalls.**\n- Generate the verifier with a cryptographically secure random source, not `Math.random()`.\n- Use a fresh verifier and `state` per authorization request.\n- Register exact redirect URIs; avoid wildcards.\n- On mobile, use the system browser (ASWebAuthenticationSession, Custom Tabs) rather than an embedded web view.\n- Store tokens in the platform's secure storage. In browsers, prefer keeping them in memory over `localStorage`.\n\n**Facts to verify before relying on them:** the 43 to 128 character verifier range and the S256 method come from RFC 7636; the \"about a minute\" code lifetime is a common recommendation, not a fixed rule, so check your provider's setting.\n\n**Next action (under 2 minutes):** open your OAuth client library's docs and confirm it sends `code_challenge_method=S256` by default.",
+ "state": "NEEDS_REVIEW",
+ "costUsd": 0.0239,
+ "exit": 0,
+ "standard": "d497e8fdd36f3852",
+ "headKeys": [
+  "schema",
+  "state",
+  "standardVersionHash",
+  "skillVersion",
+  "certificate",
+  "record"
+ ],
+ "certificate": {
+  "standardVersionHash": "d497e8fdd36f3852",
+  "checks": {
+   "total": 6,
+   "counted": 0,
+   "written": 6,
+   "writtenQualified": 0
+  },
+  "readers": {
+   "taste": {
+    "veto": [],
+    "labelledMisses": 0,
+    "falseBlockUpper95": null
+   },
+   "claims": {
+    "instrument": "pattern check (no material bound: a model reading of specifics could only list them)",
+    "version": null,
+    "gate": "pattern",
+    "qualified": false,
+    "measured": null,
+    "kinds": []
+   }
+  },
+  "latitude": {
+   "skill": "CREATIVE",
+   "run": "CREATIVE",
+   "tightenedBy": null,
+   "setBy": "model"
+  },
+  "acceptedUnmeasured": [
+   {
+    "id": "x1",
+    "statement": "Lead with the next action: the first line is something the reader can do, and a command, path, or snippet goes first with prose after, if at all."
+   },
+   {
+    "id": "x3",
+    "statement": "End with one concrete next action the reader can do in under two minutes."
+   },
+   {
+    "id": "x4",
+    "statement": "Finish the first issue, then offer the second as a separate question rather than mixing it in; answer mid-work questions yourself if you can, and if one still needs the reader, surface it once at the end."
+   },
+   {
+    "id": "x5",
+    "statement": "Restate the current state every turn, e.g. which step is done and what is next, and use the harness's task or plan tool for multi-step work instead of also narrating the plan as prose."
+   },
+   {
+    "id": "x7",
+    "statement": "Show what now works in concrete terms, with how to try it, instead of burying wins in a recap."
+   },
+   {
+    "id": "x12",
+    "statement": "Keep these rules on for every response for the rest of the session, even when the topic changes, and turn them off only when the reader says \"stop adhd mode\" or \"normal mode\" (confirm in one line, then return to default style)."
+   }
+  ],
+  "errorBound": null,
+  "why": "no delivered-error bound: it needs an audit sample of your own labels, drawn like the work this skill does; the checks and readers above are what this output was held to"
+ },
+ "error": null,
+ "stderr": "No notes of yours are bound, so a story, source or figure in the draft cannot be checked against anything of yours, and is listed for you, not cut. Add yours: --with notes=<file>, or atelier material --skill i-have-adhd <file>.\nJudgement reader: not run (reporting only until your labels qualify it; --taste reads this run and records readings to label: atelier taste --skill i-have-adhd --calibrate).\nRead before writing: 1 thing(s) asked for.\nChecked: every REQUIRED measured rule holds.\n6 specific(s) are not in your material: left in for you to check before you use this (listed in the details).\n$0.02 · everything this run checked: <scratch>/data/build-adhd-1-9ZmSOB/runs/project-194d0492abd9d831/last-invocation.txt · not right? atelier fix \"<what was wrong>\"\n",
+ "meterUsd": 0.023894340000000014,
+ "seconds": 23.26
+}

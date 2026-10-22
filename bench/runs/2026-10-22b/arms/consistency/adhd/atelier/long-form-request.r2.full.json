@@ -1,0 +1,518 @@
+{
+ "schema": "atelier-record/1",
+ "state": "NEEDS_REVIEW",
+ "standardVersionHash": "d497e8fdd36f3852",
+ "skillVersion": "a7196cc301e58c6d",
+ "certificate": {
+  "standardVersionHash": "d497e8fdd36f3852",
+  "checks": {
+   "total": 6,
+   "counted": 0,
+   "written": 6,
+   "writtenQualified": 0
+  },
+  "readers": {
+   "taste": {
+    "veto": [],
+    "labelledMisses": 0,
+    "falseBlockUpper95": null
+   },
+   "claims": {
+    "instrument": "pattern check (no material bound: a model reading of specifics could only list them)",
+    "version": null,
+    "gate": "pattern",
+    "qualified": false,
+    "measured": null,
+    "kinds": []
+   }
+  },
+  "latitude": {
+   "skill": "CREATIVE",
+   "run": "CREATIVE",
+   "tightenedBy": null,
+   "setBy": "model"
+  },
+  "acceptedUnmeasured": [
+   {
+    "id": "x1",
+    "statement": "Lead with the next action: the first line is something the reader can do, and a command, path, or snippet goes first with prose after, if at all."
+   },
+   {
+    "id": "x3",
+    "statement": "End with one concrete next action the reader can do in under two minutes."
+   },
+   {
+    "id": "x4",
+    "statement": "Finish the first issue, then offer the second as a separate question rather than mixing it in; answer mid-work questions yourself if you can, and if one still needs the reader, surface it once at the end."
+   },
+   {
+    "id": "x5",
+    "statement": "Restate the current state every turn, e.g. which step is done and what is next, and use the harness's task or plan tool for multi-step work instead of also narrating the plan as prose."
+   },
+   {
+    "id": "x7",
+    "statement": "Show what now works in concrete terms, with how to try it, instead of burying wins in a recap."
+   },
+   {
+    "id": "x12",
+    "statement": "Keep these rules on for every response for the rest of the session, even when the topic changes, and turn them off only when the reader says \"stop adhd mode\" or \"normal mode\" (confirm in one line, then return to default style)."
+   }
+  ],
+  "errorBound": null,
+  "why": "no delivered-error bound: it needs an audit sample of your own labels, drawn like the work this skill does; the checks and readers above are what this output was held to"
+ },
+ "record": {
+  "schema": 1,
+  "state": "NEEDS_REVIEW",
+  "entries": [
+   {
+    "id": "x2",
+    "statement": "Write a numbered list with each step as one bounded action, using the fewest steps that still work, cutting unneeded steps, and folding trivial steps into the one before.",
+    "dimension": "HABIT",
+    "source": "EXAMPLE",
+    "required": false,
+    "observation": {
+     "proposition": "Flags any numbered list longer than seven steps as a proxy for fewest-steps; the bounded-action judgement is left to the person. (a check written for this step)",
+     "coverage": "NONE",
+     "qualification": "DETERMINISTIC",
+     "evidence": "the check did not run",
+     "unchecked": "how much of this rule the check reads is not known"
+    },
+    "result": "UNVERIFIED",
+    "reason": "NOT_MACHINE_CHECKABLE"
+   },
+   {
+    "id": "x6",
+    "statement": "Give specific time estimates in concrete units, not vague ones.",
+    "dimension": "HABIT",
+    "source": "EXAMPLE",
+    "required": false,
+    "observation": {
+     "proposition": "Flags vague time words such as 'a few minutes', 'a while', 'shortly' that stand in for a concrete unit. (a check written for this step)",
+     "coverage": "NONE",
+     "qualification": "DETERMINISTIC",
+     "evidence": "the check did not run",
+     "unchecked": "how much of this rule the check reads is not known"
+    },
+    "result": "UNVERIFIED",
+    "reason": "NOT_MACHINE_CHECKABLE"
+   },
+   {
+    "id": "x8",
+    "statement": "State errors matter-of-factly with cause and fix; never use \"Uh oh,\" \"Oh no,\" or \"There seems to be a problem.\"",
+    "dimension": "HABIT",
+    "source": "EXAMPLE",
+    "required": false,
+    "observation": {
+     "proposition": "Flags the three banned error phrases anywhere in the reply. (a check written for this step)",
+     "coverage": "NONE",
+     "qualification": "DETERMINISTIC",
+     "evidence": "the check did not run",
+     "unchecked": "how much of this rule the check reads is not known"
+    },
+    "result": "UNVERIFIED",
+    "reason": "NOT_MACHINE_CHECKABLE"
+   },
+   {
+    "id": "x9",
+    "statement": "Group related items, rank the most relevant first, and show no more than five items per group, keeping the rest available for when the user asks or they become next; never omit relevant items when completeness matters.",
+    "dimension": "HABIT",
+    "source": "EXAMPLE",
+    "required": false,
+    "observation": {
+     "proposition": "Flags any bulleted or numbered group of more than five items in a row. (a check written for this step)",
+     "coverage": "NONE",
+     "qualification": "DETERMINISTIC",
+     "evidence": "the check did not run",
+     "unchecked": "how much of this rule the check reads is not known"
+    },
+    "result": "UNVERIFIED",
+    "reason": "NOT_MACHINE_CHECKABLE"
+   },
+   {
+    "id": "x10",
+    "statement": "No preamble, no recap, no closing pleasantries: do not open with things like \"Great question,\" \"Let me...,\" \"I'll...,\" \"Sure!\"; do not recap completed work; do not close with \"Let me know if you need anything else\" or \"Hope this helps.\" Start with the answer and end when it is done.",
+    "dimension": "HABIT",
+    "source": "EXAMPLE",
+    "required": false,
+    "observation": {
+     "proposition": "Flags a reply that opens with a listed preamble phrase or closes with a listed pleasantry. (a check written for this step)",
+     "coverage": "PARTIAL",
+     "qualification": "DETERMINISTIC",
+     "evidence": "no preamble or closing pleasantry",
+     "unchecked": "how much of this rule the check reads is not known"
+    },
+    "result": "UNVERIFIED",
+    "reason": "PARTLY_CHECKED"
+   },
+   {
+    "id": "x11",
+    "statement": "Before sending, delete hedging adverbs that add no information, keeping hedges that carry real uncertainty, and replace idioms or figurative phrases with the literal action.",
+    "dimension": "HABIT",
+    "source": "EXAMPLE",
+    "required": false,
+    "observation": {
+     "proposition": "Flags common hedging adverbs for the writer to review; whether each adds information is judgement, so this only lists them. (a check written for this step)",
+     "coverage": "PARTIAL",
+     "qualification": "DETERMINISTIC",
+     "evidence": "1 hedging adverb(s) to review",
+     "unchecked": "how much of this rule the check reads is not known"
+    },
+    "result": "FAIL",
+    "reason": "NOT_MET"
+   },
+   {
+    "id": "FORMAT",
+    "dimension": "STANDARD",
+    "source": "SYSTEM",
+    "statement": "What an assistant reply holds.",
+    "required": true,
+    "observation": {
+     "proposition": "What an assistant reply holds.",
+     "coverage": "FULL",
+     "qualification": "DETERMINISTIC",
+     "evidence": "within what an assistant reply holds"
+    },
+    "result": "PASS",
+    "reason": "MET"
+   },
+   {
+    "id": "specifics",
+    "dimension": "EVIDENCE",
+    "source": "SYSTEM",
+    "statement": "Every specific in the work is found in what you supplied",
+    "required": true,
+    "observation": {
+     "proposition": "each figure, name, date and quotation, looked for in the request and the material",
+     "coverage": "NONE",
+     "qualification": "UNAVAILABLE",
+     "evidence": "no material was supplied to look them up in: 6 listed for you"
+    },
+    "result": "UNVERIFIED",
+    "reason": "NOT_MACHINE_CHECKABLE"
+   }
+  ],
+  "latitude": "CREATIVE"
+ },
+ "output": "Generate a random `code_verifier` in your client before you do anything else; everything in the flow hangs off it.\n\n**The core idea.** The authorization code flow lets a client get tokens without ever handling the user's password. PKCE (Proof Key for Code Exchange, pronounced \"pixy\") adds a one-time secret that proves the app redeeming the code is the same app that asked for it. Imagine a public client, such as a mobile app or single-page app, that cannot keep a client secret. Say a malicious app on the same phone intercepts the redirect carrying the authorization code. Without PKCE, it could trade that code for tokens. With PKCE, the stolen code is useless because the attacker does not hold the verifier.\n\n**The actors.**\n- **Resource owner:** the user.\n- **Client:** your app.\n- **Authorization server:** issues codes and tokens (the login and consent page plus the token endpoint).\n- **Resource server:** the API that accepts access tokens.\n\n**The flow, step by step.**\n\n1. **Create the verifier.** The client generates `code_verifier`, a high-entropy random string of 43 to 128 characters using letters, digits, `-`, `.`, `_`, and `~`. It stays in client memory or session storage. It is never sent in the first leg.\n\n2. **Derive the challenge.** The client computes `code_challenge = BASE64URL(SHA256(code_verifier))` and sets `code_challenge_method=S256`. A hash is one-way, so seeing the challenge does not reveal the verifier. Use `plain` (challenge equals verifier) only if SHA-256 is truly unavailable; it gives much weaker protection.\n\n3. **Send the user to the authorization endpoint.** The client redirects the browser (or opens the system browser) to something like:\n\n```\nGET /authorize?\n  response_type=code\n  &client_id=abc123\n  &redirect_uri=https://app.example.com/callback\n  &scope=openid profile\n  &state=xyz789\n  &code_challenge=E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM\n  &code_challenge_method=S256\n```\n\n   - `state` is a random value you check on return. It defends against CSRF.\n   - `redirect_uri` must exactly match one registered with the authorization server.\n\n4. **User authenticates and consents.** The authorization server shows its login page, then a consent screen listing the scopes. Your app never sees the credentials. The server stores the `code_challenge` alongside the code it is about to issue.\n\n5. **Receive the authorization code.** The server redirects the browser back:\n\n```\nhttps://app.example.com/callback?code=SplxlOBeZQQYbYS6WxSbIA&state=xyz789\n```\n\n   The client confirms `state` matches what it sent, and aborts if it does not. The code is short-lived (typically about a minute or less) and single-use.\n\n6. **Redeem the code with the verifier.** The client makes a direct back-channel POST to the token endpoint:\n\n```\nPOST /token\nContent-Type: application/x-www-form-urlencoded\n\ngrant_type=authorization_code\n&code=SplxlOBeZQQYbYS6WxSbIA\n&redirect_uri=https://app.example.com/callback\n&client_id=abc123\n&code_verifier=dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk\n```\n\n7. **Server verifies PKCE.** The server hashes the submitted `code_verifier` with SHA-256, base64url-encodes it, and compares the result to the `code_challenge` it stored in step 4. It also checks that the code is unexpired and unused, and that `redirect_uri` and `client_id` match. If anything fails, it returns an error such as `invalid_grant`.\n\n8. **Receive tokens.** On success the server returns JSON:\n\n```\n{\n  \"access_token\": \"...\",\n  \"token_type\": \"Bearer\",\n  \"expires_in\": 3600,\n  \"refresh_token\": \"...\",\n  \"id_token\": \"...\"   // only if openid scope was requested\n}\n```\n\n9. **Call the API.** The client sends `Authorization: Bearer <access_token>` to the resource server, which validates the token and serves the request.\n\n10. **Refresh when needed.** When the access token expires, the client POSTs `grant_type=refresh_token` to the token endpoint. For public clients, prefer refresh token rotation, where each refresh issues a new refresh token and invalidates the old one.\n\n**Why the attack fails.** An attacker who intercepts the code in step 5 sees only the `code_challenge` (from the front channel) and the code. To redeem it, they must send a `code_verifier` that hashes to the stored challenge. They cannot reverse SHA-256, and the real verifier never traveled over the redirect. The back-channel call in step 6 is the only place the verifier appears, and it goes straight from client to server over TLS.\n\n**Why this replaces the implicit flow.** The implicit flow returned tokens directly in the redirect URL, exposing them to browser history, referrer headers, and injected scripts. The code flow with PKCE keeps tokens off the front channel entirely. Current OAuth security guidance (the OAuth 2.0 Security Best Current Practice and the OAuth 2.1 draft) recommends PKCE for all clients, including confidential ones.\n\n**Implementation pitfalls.**\n- Generate the verifier with a cryptographically secure random source, not `Math.random()`.\n- Use a fresh verifier and `state` per authorization request.\n- Register exact redirect URIs; avoid wildcards.\n- On mobile, use the system browser (ASWebAuthenticationSession, Custom Tabs) rather than an embedded web view.\n- Store tokens in the platform's secure storage. In browsers, prefer keeping them in memory over `localStorage`.\n\n**Facts to verify before relying on them:** the 43 to 128 character verifier range and the S256 method come from RFC 7636; the \"about a minute\" code lifetime is a common recommendation, not a fixed rule, so check your provider's setting.\n\n**Next action (under 2 minutes):** open your OAuth client library's docs and confirm it sends `code_challenge_method=S256` by default.",
+ "answer": "Generate a random `code_verifier` in your client before you do anything else; everything in the flow hangs off it.\n\n**The core idea.** The authorization code flow lets a client get tokens without ever handling the user's password. PKCE (Proof Key for Code Exchange, pronounced \"pixy\") adds a one-time secret that proves the app redeeming the code is the same app that asked for it. Imagine a public client, such as a mobile app or single-page app, that cannot keep a client secret. Say a malicious app on the same phone intercepts the redirect carrying the authorization code. Without PKCE, it could trade that code for tokens. With PKCE, the stolen code is useless because the attacker does not hold the verifier.\n\n**The actors.**\n- **Resource owner:** the user.\n- **Client:** your app.\n- **Authorization server:** issues codes and tokens (the login and consent page plus the token endpoint).\n- **Resource server:** the API that accepts access tokens.\n\n**The flow, step by step.**\n\n1. **Create the verifier.** The client generates `code_verifier`, a high-entropy random string of 43 to 128 characters using letters, digits, `-`, `.`, `_`, and `~`. It stays in client memory or session storage. It is never sent in the first leg.\n\n2. **Derive the challenge.** The client computes `code_challenge = BASE64URL(SHA256(code_verifier))` and sets `code_challenge_method=S256`. A hash is one-way, so seeing the challenge does not reveal the verifier. Use `plain` (challenge equals verifier) only if SHA-256 is truly unavailable; it gives much weaker protection.\n\n3. **Send the user to the authorization endpoint.** The client redirects the browser (or opens the system browser) to something like:\n\n```\nGET /authorize?\n  response_type=code\n  &client_id=abc123\n  &redirect_uri=https://app.example.com/callback\n  &scope=openid profile\n  &state=xyz789\n  &code_challenge=E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM\n  &code_challenge_method=S256\n```\n\n   - `state` is a random value you check on return. It defends against CSRF.\n   - `redirect_uri` must exactly match one registered with the authorization server.\n\n4. **User authenticates and consents.** The authorization server shows its login page, then a consent screen listing the scopes. Your app never sees the credentials. The server stores the `code_challenge` alongside the code it is about to issue.\n\n5. **Receive the authorization code.** The server redirects the browser back:\n\n```\nhttps://app.example.com/callback?code=SplxlOBeZQQYbYS6WxSbIA&state=xyz789\n```\n\n   The client confirms `state` matches what it sent, and aborts if it does not. The code is short-lived (typically about a minute or less) and single-use.\n\n6. **Redeem the code with the verifier.** The client makes a direct back-channel POST to the token endpoint:\n\n```\nPOST /token\nContent-Type: application/x-www-form-urlencoded\n\ngrant_type=authorization_code\n&code=SplxlOBeZQQYbYS6WxSbIA\n&redirect_uri=https://app.example.com/callback\n&client_id=abc123\n&code_verifier=dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk\n```\n\n7. **Server verifies PKCE.** The server hashes the submitted `code_verifier` with SHA-256, base64url-encodes it, and compares the result to the `code_challenge` it stored in step 4. It also checks that the code is unexpired and unused, and that `redirect_uri` and `client_id` match. If anything fails, it returns an error such as `invalid_grant`.\n\n8. **Receive tokens.** On success the server returns JSON:\n\n```\n{\n  \"access_token\": \"...\",\n  \"token_type\": \"Bearer\",\n  \"expires_in\": 3600,\n  \"refresh_token\": \"...\",\n  \"id_token\": \"...\"   // only if openid scope was requested\n}\n```\n\n9. **Call the API.** The client sends `Authorization: Bearer <access_token>` to the resource server, which validates the token and serves the request.\n\n10. **Refresh when needed.** When the access token expires, the client POSTs `grant_type=refresh_token` to the token endpoint. For public clients, prefer refresh token rotation, where each refresh issues a new refresh token and invalidates the old one.\n\n**Why the attack fails.** An attacker who intercepts the code in step 5 sees only the `code_challenge` (from the front channel) and the code. To redeem it, they must send a `code_verifier` that hashes to the stored challenge. They cannot reverse SHA-256, and the real verifier never traveled over the redirect. The back-channel call in step 6 is the only place the verifier appears, and it goes straight from client to server over TLS.\n\n**Why this replaces the implicit flow.** The implicit flow returned tokens directly in the redirect URL, exposing them to browser history, referrer headers, and injected scripts. The code flow with PKCE keeps tokens off the front channel entirely. Current OAuth security guidance (the OAuth 2.0 Security Best Current Practice and the OAuth 2.1 draft) recommends PKCE for all clients, including confidential ones.\n\n**Implementation pitfalls.**\n- Generate the verifier with a cryptographically secure random source, not `Math.random()`.\n- Use a fresh verifier and `state` per authorization request.\n- Register exact redirect URIs; avoid wildcards.\n- On mobile, use the system browser (ASWebAuthenticationSession, Custom Tabs) rather than an embedded web view.\n- Store tokens in the platform's secure storage. In browsers, prefer keeping them in memory over `localStorage`.\n\n**Facts to verify before relying on them:** the 43 to 128 character verifier range and the S256 method come from RFC 7636; the \"about a minute\" code lifetime is a common recommendation, not a fixed rule, so check your provider's setting.\n\n**Next action (under 2 minutes):** open your OAuth client library's docs and confirm it sends `code_challenge_method=S256` by default.",
+ "invocationId": "ia078fa60ad",
+ "costUsd": 0.0239,
+ "rulesBroken": [],
+ "cut": [],
+ "toCheck": [
+  "The client generates                , a high-entropy random string of 43 to 128 characters using letters, digits,    ,    ,    , and    .",
+  "The server hashes the submitted                 with SHA-256, base64url-encodes it, and compares the result to the                  it stored in step 4.",
+  "The back-channel call in step 6 is the only place the verifier appears, and it goes straight from client to server over TLS.",
+  "Current OAuth security guidance (the OAuth 2.0 Security Best Current Practice and the OAuth 2.1 draft) recommends PKCE for all clients, including confidential o",
+  "**Facts to verify before relying on them:** the 43 to 128 character verifier range and the S256 method come from RFC 7636; the \"about a minute\" code lifetime is",
+  "**Next action (under 2 minutes):** open your OAuth client library's docs and confirm it sends                              by default."
+ ],
+ "rules": {
+  "checked": [
+   {
+    "id": "x10",
+    "statement": "No preamble, no recap, no closing pleasantries: do not open with things like \"Great question,\" \"Let me...,\" \"I'll...,\" \"Sure!\"; do not recap completed work; do not close with \"Let me know if you need anything else\" or \"Hope this helps.\" Start with the answer and end when it is done.",
+    "materiality": null,
+    "verdict": "MET",
+    "detail": "no preamble or closing pleasantry"
+   },
+   {
+    "id": "x11",
+    "statement": "Before sending, delete hedging adverbs that add no information, keeping hedges that carry real uncertainty, and replace idioms or figurative phrases with the literal action.",
+    "materiality": null,
+    "verdict": "VIOLATED",
+    "detail": "1 hedging adverb(s) to review"
+   },
+   {
+    "id": "UNSOURCED",
+    "statement": "Never claim work done, a result seen, or a detail of the person's own system that the request did not give.",
+    "materiality": "REQUIRED",
+    "verdict": "MET",
+    "detail": "no unsourced stories, quotations or specifics [pattern check (no material bound: a model reading of specifics could only list them)]"
+   },
+   {
+    "id": "UNSOURCED·check",
+    "statement": "Specifics not in the material supplied: listed for you to check, never cut in this format.",
+    "materiality": "PREFERRED",
+    "verdict": "VIOLATED",
+    "detail": "6 specific(s) to check [pattern check (no material bound: a model reading of specifics could only list them)]"
+   },
+   {
+    "id": "FORMAT",
+    "statement": "What an assistant reply holds.",
+    "materiality": "REQUIRED",
+    "verdict": "MET",
+    "detail": "within what an assistant reply holds"
+   }
+  ],
+  "unchecked": [
+   {
+    "id": "x1",
+    "statement": "Lead with the next action: the first line is something the reader can do, and a command, path, or snippet goes first with prose after, if at all."
+   },
+   {
+    "id": "x3",
+    "statement": "End with one concrete next action the reader can do in under two minutes."
+   },
+   {
+    "id": "x4",
+    "statement": "Finish the first issue, then offer the second as a separate question rather than mixing it in; answer mid-work questions yourself if you can, and if one still needs the reader, surface it once at the end."
+   },
+   {
+    "id": "x5",
+    "statement": "Restate the current state every turn, e.g. which step is done and what is next, and use the harness's task or plan tool for multi-step work instead of also narrating the plan as prose."
+   },
+   {
+    "id": "x7",
+    "statement": "Show what now works in concrete terms, with how to try it, instead of burying wins in a recap."
+   },
+   {
+    "id": "x12",
+    "statement": "Keep these rules on for every response for the rest of the session, even when the topic changes, and turn them off only when the reader says \"stop adhd mode\" or \"normal mode\" (confirm in one line, then return to default style)."
+   }
+  ]
+ },
+ "withheld": [],
+ "report": [
+  "No notes of yours are bound, so a story, source or figure in the draft cannot be checked against anything of yours, and is listed for you, not cut. Add yours: --with notes=<file>, or atelier material --skill i-have-adhd <file>.",
+  "Judgement reader: not run (reporting only until your labels qualify it; --taste reads this run and records readings to label: atelier taste --skill i-have-adhd --calibrate).",
+  "Read before writing: 1 thing(s) asked for.",
+  "checked against the standard: 0 REQUIRED rule(s) broken in the draft (); 0 rewrite pass(es) of only the spans that broke them; nothing to repair.",
+  "Checked: every REQUIRED measured rule holds.",
+  "invented-claim check: pattern check (no material bound: a model reading of specifics could only list them).",
+  "6 specific(s) are not in your material: left in for you to check before you use this (listed in the details).",
+  "    check: \"The client generates                , a high-entropy random string of 43 to 128 characters using letters, digits,    ,    ,    , and    .\"",
+  "    check: \"The server hashes the submitted                 with SHA-256, base64url-encodes it, and compares the result to the                  it stored in step 4.\"",
+  "    check: \"The back-channel call in step 6 is the only place the verifier appears, and it goes straight from client to server over TLS.\"",
+  "    check: \"Current OAuth security guidance (the OAuth 2.0 Security Best Current Practice and the OAuth 2.1 draft) recommends PKCE for all clients, including confidential o\"",
+  "    check: \"**Facts to verify before relying on them:** the 43 to 128 character verifier range and the S256 method come from RFC 7636; the \"about a minute\" code lifetime is\"",
+  "    check: \"**Next action (under 2 minutes):** open your OAuth client library's docs and confirm it sends                              by default.\"",
+  "(checked as assistant-reply, the class this standard measures; declare --class if the text is something else)",
+  "invocation ia078fa60ad  ·  SkillVersion a7196cc301e58c6d  ·  $0.0239 (claim reader $0.0001)"
+ ],
+ "eval": {
+  "schema": 1,
+  "invocationId": "ia078fa60ad",
+  "skill": "i-have-adhd",
+  "skillVersion": "a7196cc301e58c6d",
+  "at": "2026-10-21T23:27:56.716Z",
+  "release": null,
+  "model": "claude-sonnet-5-5",
+  "drafts": 1,
+  "costUsd": 0.0239,
+  "spend": [
+   {
+    "purpose": "writing",
+    "usd": 0.022871,
+    "calls": 1,
+    "inputTokens": 2649,
+    "outputTokens": 2158,
+    "cacheReadTokens": 2226
+   },
+   {
+    "purpose": "context judge",
+    "usd": 0.001023,
+    "calls": 4,
+    "inputTokens": 9765,
+    "outputTokens": 459,
+    "cacheReadTokens": 2728
+   }
+  ],
+  "sent": {
+   "skill": 974,
+   "added": 137,
+   "request": 17
+  },
+  "durationMs": 23109,
+  "result": {
+   "conformant": true,
+   "reasons": []
+  },
+  "record": {
+   "schema": 1,
+   "state": "NEEDS_REVIEW",
+   "entries": [
+    {
+     "id": "x2",
+     "statement": "Write a numbered list with each step as one bounded action, using the fewest steps that still work, cutting unneeded steps, and folding trivial steps into the one before.",
+     "dimension": "HABIT",
+     "source": "EXAMPLE",
+     "required": false,
+     "observation": {
+      "proposition": "Flags any numbered list longer than seven steps as a proxy for fewest-steps; the bounded-action judgement is left to the person. (a check written for this step)",
+      "coverage": "NONE",
+      "qualification": "DETERMINISTIC",
+      "evidence": "the check did not run",
+      "unchecked": "how much of this rule the check reads is not known"
+     },
+     "result": "UNVERIFIED",
+     "reason": "NOT_MACHINE_CHECKABLE"
+    },
+    {
+     "id": "x6",
+     "statement": "Give specific time estimates in concrete units, not vague ones.",
+     "dimension": "HABIT",
+     "source": "EXAMPLE",
+     "required": false,
+     "observation": {
+      "proposition": "Flags vague time words such as 'a few minutes', 'a while', 'shortly' that stand in for a concrete unit. (a check written for this step)",
+      "coverage": "NONE",
+      "qualification": "DETERMINISTIC",
+      "evidence": "the check did not run",
+      "unchecked": "how much of this rule the check reads is not known"
+     },
+     "result": "UNVERIFIED",
+     "reason": "NOT_MACHINE_CHECKABLE"
+    },
+    {
+     "id": "x8",
+     "statement": "State errors matter-of-factly with cause and fix; never use \"Uh oh,\" \"Oh no,\" or \"There seems to be a problem.\"",
+     "dimension": "HABIT",
+     "source": "EXAMPLE",
+     "required": false,
+     "observation": {
+      "proposition": "Flags the three banned error phrases anywhere in the reply. (a check written for this step)",
+      "coverage": "NONE",
+      "qualification": "DETERMINISTIC",
+      "evidence": "the check did not run",
+      "unchecked": "how much of this rule the check reads is not known"
+     },
+     "result": "UNVERIFIED",
+     "reason": "NOT_MACHINE_CHECKABLE"
+    },
+    {
+     "id": "x9",
+     "statement": "Group related items, rank the most relevant first, and show no more than five items per group, keeping the rest available for when the user asks or they become next; never omit relevant items when completeness matters.",
+     "dimension": "HABIT",
+     "source": "EXAMPLE",
+     "required": false,
+     "observation": {
+      "proposition": "Flags any bulleted or numbered group of more than five items in a row. (a check written for this step)",
+      "coverage": "NONE",
+      "qualification": "DETERMINISTIC",
+      "evidence": "the check did not run",
+      "unchecked": "how much of this rule the check reads is not known"
+     },
+     "result": "UNVERIFIED",
+     "reason": "NOT_MACHINE_CHECKABLE"
+    },
+    {
+     "id": "x10",
+     "statement": "No preamble, no recap, no closing pleasantries: do not open with things like \"Great question,\" \"Let me...,\" \"I'll...,\" \"Sure!\"; do not recap completed work; do not close with \"Let me know if you need anything else\" or \"Hope this helps.\" Start with the answer and end when it is done.",
+     "dimension": "HABIT",
+     "source": "EXAMPLE",
+     "required": false,
+     "observation": {
+      "proposition": "Flags a reply that opens with a listed preamble phrase or closes with a listed pleasantry. (a check written for this step)",
+      "coverage": "PARTIAL",
+      "qualification": "DETERMINISTIC",
+      "evidence": "no preamble or closing pleasantry",
+      "unchecked": "how much of this rule the check reads is not known"
+     },
+     "result": "UNVERIFIED",
+     "reason": "PARTLY_CHECKED"
+    },
+    {
+     "id": "x11",
+     "statement": "Before sending, delete hedging adverbs that add no information, keeping hedges that carry real uncertainty, and replace idioms or figurative phrases with the literal action.",
+     "dimension": "HABIT",
+     "source": "EXAMPLE",
+     "required": false,
+     "observation": {
+      "proposition": "Flags common hedging adverbs for the writer to review; whether each adds information is judgement, so this only lists them. (a check written for this step)",
+      "coverage": "PARTIAL",
+      "qualification": "DETERMINISTIC",
+      "evidence": "1 hedging adverb(s) to review",
+      "unchecked": "how much of this rule the check reads is not known"
+     },
+     "result": "FAIL",
+     "reason": "NOT_MET"
+    },
+    {
+     "id": "FORMAT",
+     "dimension": "STANDARD",
+     "source": "SYSTEM",
+     "statement": "What an assistant reply holds.",
+     "required": true,
+     "observation": {
+      "proposition": "What an assistant reply holds.",
+      "coverage": "FULL",
+      "qualification": "DETERMINISTIC",
+      "evidence": "within what an assistant reply holds"
+     },
+     "result": "PASS",
+     "reason": "MET"
+    },
+    {
+     "id": "specifics",
+     "dimension": "EVIDENCE",
+     "source": "SYSTEM",
+     "statement": "Every specific in the work is found in what you supplied",
+     "required": true,
+     "observation": {
+      "proposition": "each figure, name, date and quotation, looked for in the request and the material",
+      "coverage": "NONE",
+      "qualification": "UNAVAILABLE",
+      "evidence": "no material was supplied to look them up in: 6 listed for you"
+     },
+     "result": "UNVERIFIED",
+     "reason": "NOT_MACHINE_CHECKABLE"
+    }
+   ],
+   "latitude": "CREATIVE"
+  },
+  "gates": {
+   "required": {
+    "held": 1,
+    "applicable": 1,
+    "broken": []
+   },
+   "claims": {
+    "state": "checked",
+    "delivered": 0,
+    "unconfirmed": 0,
+    "cut": 0,
+    "listed": 6,
+    "disputed": 0,
+    "agreement": null,
+    "instrument": "pattern check (no material bound: a model reading of specifics could only list them)",
+    "answers": true,
+    "unmeasured": "no material was bound to check against",
+    "measured": null
+   },
+   "copying": null,
+   "format": {
+    "kind": "none",
+    "words": null,
+    "withheld": 0,
+    "held": true
+   },
+   "applicability": {
+    "applied": 12,
+    "notApplicable": 0,
+    "waived": []
+   }
+  },
+  "fidelity": null,
+  "monitors": {
+   "detector": null,
+   "taste": null,
+   "coverage": {
+    "asked": 2,
+    "given": 0,
+    "missing": [],
+    "unclear": 2
+   }
+  },
+  "notMeasured": [
+   "argument, stance and content (read by the taste reader, a monitor)",
+   "your range (this skill has no fidelity profile: build it from a corpus)"
+  ]
+ },
+ "model": "claude-sonnet-5-5",
+ "thinking": "disabled",
+ "thinkingBlocks": 0,
+ "maxTokens": 12000,
+ "steering": "all"
+}

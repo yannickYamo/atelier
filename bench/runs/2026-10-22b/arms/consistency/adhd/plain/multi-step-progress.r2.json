@@ -1,0 +1,12 @@
+{
+ "fixture": "adhd",
+ "arm": "plain",
+ "task": "multi-step-progress",
+ "run": 2,
+ "text": "Run this to count the rows that need backfilling:\n\n```sql\nSELECT COUNT(*) FROM <table> WHERE <new_col> IS NULL;\n```\n\n**Status:** Step 3 of 5, backfill. The schema change is done.\n\n**Steps for the backfill:**\n1. Run the count above.\n2. Test on a small batch (Postgres syntax, adjust for your DB):\n   ```sql\n   UPDATE <table>\n   SET <new_col> = <value_expr>\n   WHERE id IN (\n     SELECT id FROM <table> WHERE <new_col> IS NULL LIMIT 1000\n   );\n   ```\n3. Spot-check 5 updated rows.\n4. Repeat step 2 in a loop until the count hits 0.\n\n**Time estimate:** Under 1M rows takes about 5 minutes. Over 100M rows takes hours, so run it in the background with a pause between batches.\n\n**Next:** Paste the count and I'll give you an exact batch size and time estimate.",
+ "costUsd": 0.01465,
+ "stop": "end_turn",
+ "error": null,
+ "meterUsd": 0.014649999999999608,
+ "seconds": 8.263
+}

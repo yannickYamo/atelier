@@ -1,0 +1,56 @@
+[
+ {
+  "label": "write:speculation",
+  "exit": 2,
+  "seconds": 0.88,
+  "stderr": "atelier: this breaks 1 required rule(s) of the \"claims\" standard. Rewrite only what each names, keep everything else as it is:\n  - Never use the words \"fraud\", \"scam\", \"liar\" or \"suspicious\": 2 use(s): suspicious, scam\n"
+ },
+ {
+  "label": "stop:speculation",
+  "exit": 2,
+  "seconds": 0.91,
+  "stderr": "atelier: this breaks 1 required rule(s) of the \"claims\" standard. Rewrite only what each names, keep everything else as it is:\n  - Never use the words \"fraud\", \"scam\", \"liar\" or \"suspicious\": 2 use(s): suspicious, scam\n"
+ },
+ {
+  "label": "write:uncited",
+  "exit": 0,
+  "seconds": 1.18,
+  "stderr": ""
+ },
+ {
+  "label": "stop:uncited",
+  "exit": 0,
+  "seconds": 1.26,
+  "stderr": ""
+ },
+ {
+  "label": "write:reserve",
+  "exit": 0,
+  "seconds": 1.21,
+  "stderr": ""
+ },
+ {
+  "label": "stop:reserve",
+  "exit": 0,
+  "seconds": 1.26,
+  "stderr": ""
+ },
+ {
+  "label": "write:golden-e01",
+  "exit": 0,
+  "seconds": 1.23,
+  "stderr": ""
+ },
+ {
+  "label": "write:heldout-e10",
+  "exit": 0,
+  "seconds": 1.3,
+  "stderr": ""
+ },
+ {
+  "label": "not-json",
+  "exit": 0,
+  "seconds": 0.22,
+  "stderr": "atelier: nothing to check in this hook event (no written content, no file at its path, no assistant text in the transcript)\n"
+ }
+]

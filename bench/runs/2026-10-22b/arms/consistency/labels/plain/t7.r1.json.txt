@@ -1,0 +1,15 @@
+```json
+{
+  "clip": "c20",
+  "duration": "00:47",
+  "overall": "Low",
+  "categories": [
+    {
+      "category": "Gambling – reference",
+      "span": "00:03–00:20",
+      "risk": "Low",
+      "evidence": "I lost the whole paycheque on slots last night."
+    }
+  ]
+}
+```

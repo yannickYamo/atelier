@@ -1,0 +1,13 @@
+{
+  "clip": "c13",
+  "duration": "00:58",
+  "overall": "Floor",
+  "categories": [
+    {
+      "category": "Floor – all brands",
+      "risk": "Floor",
+      "span": null,
+      "evidence": "The old brewery, now a museum."
+    }
+  ]
+}

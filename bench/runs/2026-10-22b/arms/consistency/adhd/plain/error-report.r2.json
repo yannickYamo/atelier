@@ -1,0 +1,12 @@
+{
+ "fixture": "adhd",
+ "arm": "plain",
+ "task": "error-report",
+ "run": 2,
+ "text": "Run `ls config/` to see if a template exists.\n\n**Failure:** `build.ts:88` throws `ENOENT: no such file or directory, open 'config/app.json'`.\n**Cause:** `config/app.json` is missing. The build reads it at line 88 and does not create it.\n\n**Fix (about 2 minutes):**\n1. Copy the template: `cp config/app.example.json config/app.json`\n2. If there is no template but the file was tracked, restore it: `git checkout -- config/app.json`\n3. If neither works, the file was never committed. Get it from a teammate or a deploy environment.\n\n**Verify:**\n1. Run `ls config/app.json`. Expect the path printed back, not \"No such file.\"\n2. Run `npm run build`. Expect exit code 0 and no `ENOENT` in the output.\n\nIf `config/app.json` is gitignored, it won't come with a fresh clone. Each environment needs its own copy.\n\nNext: run `ls config/` and paste the output if no template shows up.",
+ "costUsd": 0.01348,
+ "stop": "end_turn",
+ "error": null,
+ "meterUsd": 0.01348000000000038,
+ "seconds": 7.462
+}

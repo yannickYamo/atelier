@@ -1,0 +1,12 @@
+{
+ "fixture": "adhd",
+ "arm": "plain",
+ "task": "destructive-action",
+ "run": 3,
+ "text": "Preview first: `git clean -fdxn`\n\n1. Run `git clean -fdxn` to list what will be deleted. Nothing is removed.\n2. Check the list for `.env` files, local configs, and other secrets or keys. Ignored files are included, and none of it is recoverable from git.\n3. Run `git clean -fdx` to delete everything listed.\n\nFlags: `-f` force, `-d` include directories, `-x` include ignored files, `-n` dry run.\n\nNested git repos are skipped by default. Use `-ff` instead of `-f` to remove those too.\n\nNext: run step 1 and paste anything in the list you're unsure about.",
+ "costUsd": 0.010328,
+ "stop": "end_turn",
+ "error": null,
+ "meterUsd": 0.010328000000000337,
+ "seconds": 5.936
+}

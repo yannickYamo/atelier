@@ -1,0 +1,81 @@
+{
+ "fixture": "adhd",
+ "arm": "atelier",
+ "task": "concept-explanation",
+ "run": 1,
+ "text": "Default to merge on any branch other people have seen; use rebase only to tidy commits that exist on your machine alone.\n\n**Merge**\n`git switch main && git merge feature`\n\nMerge joins two lines of history with a new \"merge commit\" that has two parents. Nothing existing is rewritten. The history shows what happened: you branched, work went on in parallel, and the branches came back together.\n\n- Safe on shared branches, because no commit changes.\n- The log gets branchy, and merge commits can add noise.\n- If something goes wrong, `git merge --abort` returns you to where you started.\n\n**Rebase**\n`git switch feature && git rebase main`\n\nRebase takes your branch's commits and replays them, one at a time, on top of the latest `main`. Each replayed commit is a new commit with a new hash, and the old ones are abandoned. The result is a straight line, as if you had started your work today.\n\nAnalogy: merge is stapling your pages into the book with a note saying when you did it. Rebase is retyping your pages after the last chapter so they look like they were always there.\n\n- The history is linear and easy to read.\n- It rewrites commits. If anyone else has pulled your branch, their copy now disagrees with yours, and untangling that is painful.\n- You may resolve conflicts once per replayed commit, not once overall.\n- `git rebase --abort` undoes an in-progress rebase.\n\n**How to choose**\n\n1. Is the branch pushed and used by anyone else? Merge. Never rebase it.\n2. Is it local, or yours alone? You may rebase it onto `main` before opening a pull request, to keep history clean.\n3. Are you unsure? Merge. The worst case is a slightly messier log, not lost or duplicated work.\n\n**Rule to memorize:** never rebase commits that exist outside your own machine. Rebasing your own unpushed work is the safe use. If you rebase a branch you already pushed, the push is rejected, and `git push --force-with-lease` is then needed. Treat that need as a warning sign on shared branches.\n\n**Safety net:** `git reflog` lists where your branch pointed recently. If a rebase goes badly, find the commit from before it and run `git reset --hard <that-hash>`.\n\n**Do this now (under 2 minutes):** in a scratch repo, create a branch, make one commit on it and one on `main`, run `git rebase main` on the branch, then `git log --oneline --graph`. Repeat with `git merge` in a second scratch branch and compare the two graphs.",
+ "state": "NEEDS_REVIEW",
+ "costUsd": 0.0108,
+ "exit": 0,
+ "standard": "d497e8fdd36f3852",
+ "headKeys": [
+  "schema",
+  "state",
+  "standardVersionHash",
+  "skillVersion",
+  "certificate",
+  "record"
+ ],
+ "certificate": {
+  "standardVersionHash": "d497e8fdd36f3852",
+  "checks": {
+   "total": 6,
+   "counted": 0,
+   "written": 6,
+   "writtenQualified": 0
+  },
+  "readers": {
+   "taste": {
+    "veto": [],
+    "labelledMisses": 0,
+    "falseBlockUpper95": null
+   },
+   "claims": {
+    "instrument": "pattern check (no material bound: a model reading of specifics could only list them)",
+    "version": null,
+    "gate": "pattern",
+    "qualified": false,
+    "measured": null,
+    "kinds": []
+   }
+  },
+  "latitude": {
+   "skill": "CREATIVE",
+   "run": "CREATIVE",
+   "tightenedBy": null,
+   "setBy": "model"
+  },
+  "acceptedUnmeasured": [
+   {
+    "id": "x1",
+    "statement": "Lead with the next action: the first line is something the reader can do, and a command, path, or snippet goes first with prose after, if at all."
+   },
+   {
+    "id": "x3",
+    "statement": "End with one concrete next action the reader can do in under two minutes."
+   },
+   {
+    "id": "x4",
+    "statement": "Finish the first issue, then offer the second as a separate question rather than mixing it in; answer mid-work questions yourself if you can, and if one still needs the reader, surface it once at the end."
+   },
+   {
+    "id": "x5",
+    "statement": "Restate the current state every turn, e.g. which step is done and what is next, and use the harness's task or plan tool for multi-step work instead of also narrating the plan as prose."
+   },
+   {
+    "id": "x7",
+    "statement": "Show what now works in concrete terms, with how to try it, instead of burying wins in a recap."
+   },
+   {
+    "id": "x12",
+    "statement": "Keep these rules on for every response for the rest of the session, even when the topic changes, and turn them off only when the reader says \"stop adhd mode\" or \"normal mode\" (confirm in one line, then return to default style)."
+   }
+  ],
+  "errorBound": null,
+  "why": "no delivered-error bound: it needs an audit sample of your own labels, drawn like the work this skill does; the checks and readers above are what this output was held to"
+ },
+ "error": null,
+ "stderr": "No notes of yours are bound, so a story, source or figure in the draft cannot be checked against anything of yours, and is listed for you, not cut. Add yours: --with notes=<file>, or atelier material --skill i-have-adhd <file>.\nJudgement reader: not run (reporting only until your labels qualify it; --taste reads this run and records readings to label: atelier taste --skill i-have-adhd --calibrate).\nRead before writing: 1 thing(s) asked for.\nChecked: every REQUIRED measured rule holds.\n1 specific(s) are not in your material: left in for you to check before you use this (listed in the details).\n$0.01 · everything this run checked: <scratch>/data/build-adhd-1-9ZmSOB/runs/project-194d0492abd9d831/last-invocation.txt · not right? atelier fix \"<what was wrong>\"\n",
+ "meterUsd": 0.010809139999999662,
+ "seconds": 14.946
+}

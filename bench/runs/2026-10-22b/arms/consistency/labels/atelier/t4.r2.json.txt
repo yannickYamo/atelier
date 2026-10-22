@@ -1,0 +1,19 @@
+{
+  "clip": "c17",
+  "duration": "00:52",
+  "overall": "Medium",
+  "categories": [
+    {
+      "category": "Disaster – news",
+      "risk": "Medium",
+      "span": "00:05–00:50",
+      "evidence": "Two people died when the bridge gave way."
+    },
+    {
+      "category": "Death – reference",
+      "risk": "Medium",
+      "span": "00:05–00:10",
+      "evidence": "Two people died when the bridge gave way."
+    }
+  ]
+}

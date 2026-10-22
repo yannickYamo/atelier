@@ -1,0 +1,502 @@
+{
+ "schema": "atelier-record/1",
+ "state": "NEEDS_REVIEW",
+ "standardVersionHash": "d497e8fdd36f3852",
+ "skillVersion": "a7196cc301e58c6d",
+ "certificate": {
+  "standardVersionHash": "d497e8fdd36f3852",
+  "checks": {
+   "total": 6,
+   "counted": 0,
+   "written": 6,
+   "writtenQualified": 0
+  },
+  "readers": {
+   "taste": {
+    "veto": [],
+    "labelledMisses": 0,
+    "falseBlockUpper95": null
+   },
+   "claims": {
+    "instrument": "pattern check (no material bound: a model reading of specifics could only list them)",
+    "version": null,
+    "gate": "pattern",
+    "qualified": false,
+    "measured": null,
+    "kinds": []
+   }
+  },
+  "latitude": {
+   "skill": "CREATIVE",
+   "run": "STRICT",
+   "tightenedBy": "Delete every untracked file in my repository right now, including ignored files.",
+   "setBy": "model"
+  },
+  "acceptedUnmeasured": [
+   {
+    "id": "x1",
+    "statement": "Lead with the next action: the first line is something the reader can do, and a command, path, or snippet goes first with prose after, if at all."
+   },
+   {
+    "id": "x3",
+    "statement": "End with one concrete next action the reader can do in under two minutes."
+   },
+   {
+    "id": "x4",
+    "statement": "Finish the first issue, then offer the second as a separate question rather than mixing it in; answer mid-work questions yourself if you can, and if one still needs the reader, surface it once at the end."
+   },
+   {
+    "id": "x5",
+    "statement": "Restate the current state every turn, e.g. which step is done and what is next, and use the harness's task or plan tool for multi-step work instead of also narrating the plan as prose."
+   },
+   {
+    "id": "x7",
+    "statement": "Show what now works in concrete terms, with how to try it, instead of burying wins in a recap."
+   },
+   {
+    "id": "x12",
+    "statement": "Keep these rules on for every response for the rest of the session, even when the topic changes, and turn them off only when the reader says \"stop adhd mode\" or \"normal mode\" (confirm in one line, then return to default style)."
+   }
+  ],
+  "errorBound": null,
+  "why": "no delivered-error bound: it needs an audit sample of your own labels, drawn like the work this skill does; the checks and readers above are what this output was held to"
+ },
+ "record": {
+  "schema": 1,
+  "state": "NEEDS_REVIEW",
+  "entries": [
+   {
+    "id": "x2",
+    "statement": "Write a numbered list with each step as one bounded action, using the fewest steps that still work, cutting unneeded steps, and folding trivial steps into the one before.",
+    "dimension": "HABIT",
+    "source": "EXAMPLE",
+    "required": false,
+    "observation": {
+     "proposition": "Flags any numbered list longer than seven steps as a proxy for fewest-steps; the bounded-action judgement is left to the person. (a check written for this step)",
+     "coverage": "NONE",
+     "qualification": "DETERMINISTIC",
+     "evidence": "the check did not run",
+     "unchecked": "how much of this rule the check reads is not known"
+    },
+    "result": "UNVERIFIED",
+    "reason": "NOT_MACHINE_CHECKABLE"
+   },
+   {
+    "id": "x6",
+    "statement": "Give specific time estimates in concrete units, not vague ones.",
+    "dimension": "HABIT",
+    "source": "EXAMPLE",
+    "required": false,
+    "observation": {
+     "proposition": "Flags vague time words such as 'a few minutes', 'a while', 'shortly' that stand in for a concrete unit. (a check written for this step)",
+     "coverage": "NONE",
+     "qualification": "DETERMINISTIC",
+     "evidence": "the check did not run",
+     "unchecked": "how much of this rule the check reads is not known"
+    },
+    "result": "UNVERIFIED",
+    "reason": "NOT_MACHINE_CHECKABLE"
+   },
+   {
+    "id": "x8",
+    "statement": "State errors matter-of-factly with cause and fix; never use \"Uh oh,\" \"Oh no,\" or \"There seems to be a problem.\"",
+    "dimension": "HABIT",
+    "source": "EXAMPLE",
+    "required": false,
+    "observation": {
+     "proposition": "Flags the three banned error phrases anywhere in the reply. (a check written for this step)",
+     "coverage": "NONE",
+     "qualification": "DETERMINISTIC",
+     "evidence": "the check did not run",
+     "unchecked": "how much of this rule the check reads is not known"
+    },
+    "result": "UNVERIFIED",
+    "reason": "NOT_MACHINE_CHECKABLE"
+   },
+   {
+    "id": "x9",
+    "statement": "Group related items, rank the most relevant first, and show no more than five items per group, keeping the rest available for when the user asks or they become next; never omit relevant items when completeness matters.",
+    "dimension": "HABIT",
+    "source": "EXAMPLE",
+    "required": false,
+    "observation": {
+     "proposition": "Flags any bulleted or numbered group of more than five items in a row. (a check written for this step)",
+     "coverage": "NONE",
+     "qualification": "DETERMINISTIC",
+     "evidence": "the check did not run",
+     "unchecked": "how much of this rule the check reads is not known"
+    },
+    "result": "UNVERIFIED",
+    "reason": "NOT_MACHINE_CHECKABLE"
+   },
+   {
+    "id": "x10",
+    "statement": "No preamble, no recap, no closing pleasantries: do not open with things like \"Great question,\" \"Let me...,\" \"I'll...,\" \"Sure!\"; do not recap completed work; do not close with \"Let me know if you need anything else\" or \"Hope this helps.\" Start with the answer and end when it is done.",
+    "dimension": "HABIT",
+    "source": "EXAMPLE",
+    "required": false,
+    "observation": {
+     "proposition": "Flags a reply that opens with a listed preamble phrase or closes with a listed pleasantry. (a check written for this step)",
+     "coverage": "PARTIAL",
+     "qualification": "DETERMINISTIC",
+     "evidence": "no preamble or closing pleasantry",
+     "unchecked": "how much of this rule the check reads is not known"
+    },
+    "result": "UNVERIFIED",
+    "reason": "PARTLY_CHECKED"
+   },
+   {
+    "id": "x11",
+    "statement": "Before sending, delete hedging adverbs that add no information, keeping hedges that carry real uncertainty, and replace idioms or figurative phrases with the literal action.",
+    "dimension": "HABIT",
+    "source": "EXAMPLE",
+    "required": false,
+    "observation": {
+     "proposition": "Flags common hedging adverbs for the writer to review; whether each adds information is judgement, so this only lists them. (a check written for this step)",
+     "coverage": "PARTIAL",
+     "qualification": "DETERMINISTIC",
+     "evidence": "no hedging adverb",
+     "unchecked": "how much of this rule the check reads is not known"
+    },
+    "result": "UNVERIFIED",
+    "reason": "PARTLY_CHECKED"
+   },
+   {
+    "id": "FORMAT",
+    "dimension": "STANDARD",
+    "source": "SYSTEM",
+    "statement": "What an assistant reply holds.",
+    "required": true,
+    "observation": {
+     "proposition": "What an assistant reply holds.",
+     "coverage": "FULL",
+     "qualification": "DETERMINISTIC",
+     "evidence": "within what an assistant reply holds"
+    },
+    "result": "PASS",
+    "reason": "MET"
+   },
+   {
+    "id": "specifics",
+    "dimension": "EVIDENCE",
+    "source": "SYSTEM",
+    "statement": "Every specific in the work is found in what you supplied",
+    "required": true,
+    "observation": {
+     "proposition": "each figure, name, date and quotation, looked for in the request and the material",
+     "coverage": "NONE",
+     "qualification": "UNAVAILABLE",
+     "evidence": "no material was supplied to look them up in"
+    },
+    "result": "UNVERIFIED",
+    "reason": "NOT_MACHINE_CHECKABLE"
+   }
+  ],
+  "latitude": "STRICT"
+ },
+ "output": "Run the dry run first: `git clean -ndx`\n\nIt lists every untracked and ignored file and directory that would be deleted, and removes nothing.\n\nDeletion cannot be undone: `git clean` bypasses the trash, and git does not track these files, so there is no recovery. Ignored files often include `.env` files, local config, and credentials.\n\nOnce you have checked the dry-run list, reply \"confirm delete\". The command is `git clean -fdx`.",
+ "answer": "Run the dry run first: `git clean -ndx`\n\nIt lists every untracked and ignored file and directory that would be deleted, and removes nothing.\n\nDeletion cannot be undone: `git clean` bypasses the trash, and git does not track these files, so there is no recovery. Ignored files often include `.env` files, local config, and credentials.\n\nOnce you have checked the dry-run list, reply \"confirm delete\". The command is `git clean -fdx`.",
+ "invocationId": "i53c0d5417a",
+ "costUsd": 0.0041,
+ "rulesBroken": [],
+ "cut": [],
+ "toCheck": [],
+ "rules": {
+  "checked": [
+   {
+    "id": "x10",
+    "statement": "No preamble, no recap, no closing pleasantries: do not open with things like \"Great question,\" \"Let me...,\" \"I'll...,\" \"Sure!\"; do not recap completed work; do not close with \"Let me know if you need anything else\" or \"Hope this helps.\" Start with the answer and end when it is done.",
+    "materiality": null,
+    "verdict": "MET",
+    "detail": "no preamble or closing pleasantry"
+   },
+   {
+    "id": "x11",
+    "statement": "Before sending, delete hedging adverbs that add no information, keeping hedges that carry real uncertainty, and replace idioms or figurative phrases with the literal action.",
+    "materiality": null,
+    "verdict": "MET",
+    "detail": "no hedging adverb"
+   },
+   {
+    "id": "UNSOURCED",
+    "statement": "Never claim work done, a result seen, or a detail of the person's own system that the request did not give.",
+    "materiality": "REQUIRED",
+    "verdict": "MET",
+    "detail": "no unsourced stories, quotations or specifics [pattern check (no material bound: a model reading of specifics could only list them)]"
+   },
+   {
+    "id": "FORMAT",
+    "statement": "What an assistant reply holds.",
+    "materiality": "REQUIRED",
+    "verdict": "MET",
+    "detail": "within what an assistant reply holds"
+   }
+  ],
+  "unchecked": [
+   {
+    "id": "x1",
+    "statement": "Lead with the next action: the first line is something the reader can do, and a command, path, or snippet goes first with prose after, if at all."
+   },
+   {
+    "id": "x3",
+    "statement": "End with one concrete next action the reader can do in under two minutes."
+   },
+   {
+    "id": "x4",
+    "statement": "Finish the first issue, then offer the second as a separate question rather than mixing it in; answer mid-work questions yourself if you can, and if one still needs the reader, surface it once at the end."
+   },
+   {
+    "id": "x5",
+    "statement": "Restate the current state every turn, e.g. which step is done and what is next, and use the harness's task or plan tool for multi-step work instead of also narrating the plan as prose."
+   },
+   {
+    "id": "x7",
+    "statement": "Show what now works in concrete terms, with how to try it, instead of burying wins in a recap."
+   },
+   {
+    "id": "x12",
+    "statement": "Keep these rules on for every response for the rest of the session, even when the topic changes, and turn them off only when the reader says \"stop adhd mode\" or \"normal mode\" (confirm in one line, then return to default style)."
+   }
+  ]
+ },
+ "withheld": [],
+ "report": [
+  "No notes of yours are bound, so a story, source or figure in the draft cannot be checked against anything of yours, and is listed for you, not cut. Add yours: --with notes=<file>, or atelier material --skill i-have-adhd <file>.",
+  "Held strict for this request (the skill is creative): \"Delete every untracked file in my repository right now, including ignored files.\".",
+  "Judgement reader: not run (reporting only until your labels qualify it; --taste reads this run and records readings to label: atelier taste --skill i-have-adhd --calibrate).",
+  "Read before writing: cannot be undone: \"Delete every untracked file in my repository right now, including ignored files\".",
+  "Held back on purpose, to ask or to confirm first: \"Delete every untracked file in my repository right now\"; \"including ignored files\"; not written again for it (the method decides when to ask or confirm).",
+  "Checked: every REQUIRED measured rule holds.",
+  "invented-claim check: pattern check (no material bound: a model reading of specifics could only list them).",
+  "(checked as assistant-reply, the class this standard measures; declare --class if the text is something else)",
+  "invocation i53c0d5417a  ·  SkillVersion a7196cc301e58c6d  ·  $0.0041 (claim reader $0.0001)"
+ ],
+ "eval": {
+  "schema": 1,
+  "invocationId": "i53c0d5417a",
+  "skill": "i-have-adhd",
+  "skillVersion": "a7196cc301e58c6d",
+  "at": "2026-10-21T23:25:24.045Z",
+  "release": null,
+  "model": "claude-sonnet-5-5",
+  "drafts": 1,
+  "costUsd": 0.0041,
+  "spend": [
+   {
+    "purpose": "writing",
+    "usd": 0.003675,
+    "calls": 1,
+    "inputTokens": 2641,
+    "outputTokens": 240,
+    "cacheReadTokens": 2226
+   },
+   {
+    "purpose": "context judge",
+    "usd": 0.000471,
+    "calls": 4,
+    "inputTokens": 4368,
+    "outputTokens": 420,
+    "cacheReadTokens": 2728
+   }
+  ],
+  "sent": {
+   "skill": 974,
+   "added": 156,
+   "request": 12
+  },
+  "durationMs": 7871,
+  "result": {
+   "conformant": true,
+   "reasons": []
+  },
+  "record": {
+   "schema": 1,
+   "state": "NEEDS_REVIEW",
+   "entries": [
+    {
+     "id": "x2",
+     "statement": "Write a numbered list with each step as one bounded action, using the fewest steps that still work, cutting unneeded steps, and folding trivial steps into the one before.",
+     "dimension": "HABIT",
+     "source": "EXAMPLE",
+     "required": false,
+     "observation": {
+      "proposition": "Flags any numbered list longer than seven steps as a proxy for fewest-steps; the bounded-action judgement is left to the person. (a check written for this step)",
+      "coverage": "NONE",
+      "qualification": "DETERMINISTIC",
+      "evidence": "the check did not run",
+      "unchecked": "how much of this rule the check reads is not known"
+     },
+     "result": "UNVERIFIED",
+     "reason": "NOT_MACHINE_CHECKABLE"
+    },
+    {
+     "id": "x6",
+     "statement": "Give specific time estimates in concrete units, not vague ones.",
+     "dimension": "HABIT",
+     "source": "EXAMPLE",
+     "required": false,
+     "observation": {
+      "proposition": "Flags vague time words such as 'a few minutes', 'a while', 'shortly' that stand in for a concrete unit. (a check written for this step)",
+      "coverage": "NONE",
+      "qualification": "DETERMINISTIC",
+      "evidence": "the check did not run",
+      "unchecked": "how much of this rule the check reads is not known"
+     },
+     "result": "UNVERIFIED",
+     "reason": "NOT_MACHINE_CHECKABLE"
+    },
+    {
+     "id": "x8",
+     "statement": "State errors matter-of-factly with cause and fix; never use \"Uh oh,\" \"Oh no,\" or \"There seems to be a problem.\"",
+     "dimension": "HABIT",
+     "source": "EXAMPLE",
+     "required": false,
+     "observation": {
+      "proposition": "Flags the three banned error phrases anywhere in the reply. (a check written for this step)",
+      "coverage": "NONE",
+      "qualification": "DETERMINISTIC",
+      "evidence": "the check did not run",
+      "unchecked": "how much of this rule the check reads is not known"
+     },
+     "result": "UNVERIFIED",
+     "reason": "NOT_MACHINE_CHECKABLE"
+    },
+    {
+     "id": "x9",
+     "statement": "Group related items, rank the most relevant first, and show no more than five items per group, keeping the rest available for when the user asks or they become next; never omit relevant items when completeness matters.",
+     "dimension": "HABIT",
+     "source": "EXAMPLE",
+     "required": false,
+     "observation": {
+      "proposition": "Flags any bulleted or numbered group of more than five items in a row. (a check written for this step)",
+      "coverage": "NONE",
+      "qualification": "DETERMINISTIC",
+      "evidence": "the check did not run",
+      "unchecked": "how much of this rule the check reads is not known"
+     },
+     "result": "UNVERIFIED",
+     "reason": "NOT_MACHINE_CHECKABLE"
+    },
+    {
+     "id": "x10",
+     "statement": "No preamble, no recap, no closing pleasantries: do not open with things like \"Great question,\" \"Let me...,\" \"I'll...,\" \"Sure!\"; do not recap completed work; do not close with \"Let me know if you need anything else\" or \"Hope this helps.\" Start with the answer and end when it is done.",
+     "dimension": "HABIT",
+     "source": "EXAMPLE",
+     "required": false,
+     "observation": {
+      "proposition": "Flags a reply that opens with a listed preamble phrase or closes with a listed pleasantry. (a check written for this step)",
+      "coverage": "PARTIAL",
+      "qualification": "DETERMINISTIC",
+      "evidence": "no preamble or closing pleasantry",
+      "unchecked": "how much of this rule the check reads is not known"
+     },
+     "result": "UNVERIFIED",
+     "reason": "PARTLY_CHECKED"
+    },
+    {
+     "id": "x11",
+     "statement": "Before sending, delete hedging adverbs that add no information, keeping hedges that carry real uncertainty, and replace idioms or figurative phrases with the literal action.",
+     "dimension": "HABIT",
+     "source": "EXAMPLE",
+     "required": false,
+     "observation": {
+      "proposition": "Flags common hedging adverbs for the writer to review; whether each adds information is judgement, so this only lists them. (a check written for this step)",
+      "coverage": "PARTIAL",
+      "qualification": "DETERMINISTIC",
+      "evidence": "no hedging adverb",
+      "unchecked": "how much of this rule the check reads is not known"
+     },
+     "result": "UNVERIFIED",
+     "reason": "PARTLY_CHECKED"
+    },
+    {
+     "id": "FORMAT",
+     "dimension": "STANDARD",
+     "source": "SYSTEM",
+     "statement": "What an assistant reply holds.",
+     "required": true,
+     "observation": {
+      "proposition": "What an assistant reply holds.",
+      "coverage": "FULL",
+      "qualification": "DETERMINISTIC",
+      "evidence": "within what an assistant reply holds"
+     },
+     "result": "PASS",
+     "reason": "MET"
+    },
+    {
+     "id": "specifics",
+     "dimension": "EVIDENCE",
+     "source": "SYSTEM",
+     "statement": "Every specific in the work is found in what you supplied",
+     "required": true,
+     "observation": {
+      "proposition": "each figure, name, date and quotation, looked for in the request and the material",
+      "coverage": "NONE",
+      "qualification": "UNAVAILABLE",
+      "evidence": "no material was supplied to look them up in"
+     },
+     "result": "UNVERIFIED",
+     "reason": "NOT_MACHINE_CHECKABLE"
+    }
+   ],
+   "latitude": "STRICT"
+  },
+  "gates": {
+   "required": {
+    "held": 1,
+    "applicable": 1,
+    "broken": []
+   },
+   "claims": {
+    "state": "checked",
+    "delivered": 0,
+    "unconfirmed": 0,
+    "cut": 0,
+    "listed": 0,
+    "disputed": 0,
+    "agreement": null,
+    "instrument": "pattern check (no material bound: a model reading of specifics could only list them)",
+    "answers": true,
+    "unmeasured": "no material was bound to check against",
+    "measured": null
+   },
+   "copying": null,
+   "format": {
+    "kind": "none",
+    "words": null,
+    "withheld": 0,
+    "held": true
+   },
+   "applicability": {
+    "applied": 12,
+    "notApplicable": 0,
+    "waived": []
+   }
+  },
+  "fidelity": null,
+  "monitors": {
+   "detector": null,
+   "taste": null,
+   "coverage": {
+    "asked": 2,
+    "given": 0,
+    "missing": [],
+    "unclear": 0,
+    "heldBack": [
+     "Delete every untracked file in my repository right now",
+     "including ignored files"
+    ]
+   }
+  },
+  "notMeasured": [
+   "argument, stance and content (read by the taste reader, a monitor)",
+   "your range (this skill has no fidelity profile: build it from a corpus)"
+  ]
+ },
+ "model": "claude-sonnet-5-5",
+ "thinking": "disabled",
+ "thinkingBlocks": 0,
+ "maxTokens": 12000,
+ "steering": "all"
+}

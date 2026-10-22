@@ -1,0 +1,12 @@
+{
+ "fixture": "labels",
+ "arm": "plainx",
+ "task": "t6",
+ "run": 2,
+ "text": "{\n  \"clip\": \"c19\",\n  \"duration\": \"01:01\",\n  \"overall\": \"Medium\",\n  \"categories\": [\n    {\n      \"category\": \"Firearms – depiction\",\n      \"risk\": \"Medium\",\n      \"span\": \"00:20–00:50\",\n      \"evidence\": \"The officer holds up the evidence bag with the pistol inside.\"\n    }\n  ]\n}",
+ "costUsd": 0.016908,
+ "stop": "end_turn",
+ "error": null,
+ "meterUsd": 0.016907999999999923,
+ "seconds": 6.448
+}

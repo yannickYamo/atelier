@@ -1,0 +1,518 @@
+{
+ "schema": "atelier-record/1",
+ "state": "NEEDS_REVIEW",
+ "standardVersionHash": "d497e8fdd36f3852",
+ "skillVersion": "a7196cc301e58c6d",
+ "certificate": {
+  "standardVersionHash": "d497e8fdd36f3852",
+  "checks": {
+   "total": 6,
+   "counted": 0,
+   "written": 6,
+   "writtenQualified": 0
+  },
+  "readers": {
+   "taste": {
+    "veto": [],
+    "labelledMisses": 0,
+    "falseBlockUpper95": null
+   },
+   "claims": {
+    "instrument": "pattern check (no material bound: a model reading of specifics could only list them)",
+    "version": null,
+    "gate": "pattern",
+    "qualified": false,
+    "measured": null,
+    "kinds": []
+   }
+  },
+  "latitude": {
+   "skill": "CREATIVE",
+   "run": "CREATIVE",
+   "tightenedBy": null,
+   "setBy": "model"
+  },
+  "acceptedUnmeasured": [
+   {
+    "id": "x1",
+    "statement": "Lead with the next action: the first line is something the reader can do, and a command, path, or snippet goes first with prose after, if at all."
+   },
+   {
+    "id": "x3",
+    "statement": "End with one concrete next action the reader can do in under two minutes."
+   },
+   {
+    "id": "x4",
+    "statement": "Finish the first issue, then offer the second as a separate question rather than mixing it in; answer mid-work questions yourself if you can, and if one still needs the reader, surface it once at the end."
+   },
+   {
+    "id": "x5",
+    "statement": "Restate the current state every turn, e.g. which step is done and what is next, and use the harness's task or plan tool for multi-step work instead of also narrating the plan as prose."
+   },
+   {
+    "id": "x7",
+    "statement": "Show what now works in concrete terms, with how to try it, instead of burying wins in a recap."
+   },
+   {
+    "id": "x12",
+    "statement": "Keep these rules on for every response for the rest of the session, even when the topic changes, and turn them off only when the reader says \"stop adhd mode\" or \"normal mode\" (confirm in one line, then return to default style)."
+   }
+  ],
+  "errorBound": null,
+  "why": "no delivered-error bound: it needs an audit sample of your own labels, drawn like the work this skill does; the checks and readers above are what this output was held to"
+ },
+ "record": {
+  "schema": 1,
+  "state": "NEEDS_REVIEW",
+  "entries": [
+   {
+    "id": "x2",
+    "statement": "Write a numbered list with each step as one bounded action, using the fewest steps that still work, cutting unneeded steps, and folding trivial steps into the one before.",
+    "dimension": "HABIT",
+    "source": "EXAMPLE",
+    "required": false,
+    "observation": {
+     "proposition": "Flags any numbered list longer than seven steps as a proxy for fewest-steps; the bounded-action judgement is left to the person. (a check written for this step)",
+     "coverage": "NONE",
+     "qualification": "DETERMINISTIC",
+     "evidence": "the check did not run",
+     "unchecked": "how much of this rule the check reads is not known"
+    },
+    "result": "UNVERIFIED",
+    "reason": "NOT_MACHINE_CHECKABLE"
+   },
+   {
+    "id": "x6",
+    "statement": "Give specific time estimates in concrete units, not vague ones.",
+    "dimension": "HABIT",
+    "source": "EXAMPLE",
+    "required": false,
+    "observation": {
+     "proposition": "Flags vague time words such as 'a few minutes', 'a while', 'shortly' that stand in for a concrete unit. (a check written for this step)",
+     "coverage": "NONE",
+     "qualification": "DETERMINISTIC",
+     "evidence": "the check did not run",
+     "unchecked": "how much of this rule the check reads is not known"
+    },
+    "result": "UNVERIFIED",
+    "reason": "NOT_MACHINE_CHECKABLE"
+   },
+   {
+    "id": "x8",
+    "statement": "State errors matter-of-factly with cause and fix; never use \"Uh oh,\" \"Oh no,\" or \"There seems to be a problem.\"",
+    "dimension": "HABIT",
+    "source": "EXAMPLE",
+    "required": false,
+    "observation": {
+     "proposition": "Flags the three banned error phrases anywhere in the reply. (a check written for this step)",
+     "coverage": "NONE",
+     "qualification": "DETERMINISTIC",
+     "evidence": "the check did not run",
+     "unchecked": "how much of this rule the check reads is not known"
+    },
+    "result": "UNVERIFIED",
+    "reason": "NOT_MACHINE_CHECKABLE"
+   },
+   {
+    "id": "x9",
+    "statement": "Group related items, rank the most relevant first, and show no more than five items per group, keeping the rest available for when the user asks or they become next; never omit relevant items when completeness matters.",
+    "dimension": "HABIT",
+    "source": "EXAMPLE",
+    "required": false,
+    "observation": {
+     "proposition": "Flags any bulleted or numbered group of more than five items in a row. (a check written for this step)",
+     "coverage": "NONE",
+     "qualification": "DETERMINISTIC",
+     "evidence": "the check did not run",
+     "unchecked": "how much of this rule the check reads is not known"
+    },
+    "result": "UNVERIFIED",
+    "reason": "NOT_MACHINE_CHECKABLE"
+   },
+   {
+    "id": "x10",
+    "statement": "No preamble, no recap, no closing pleasantries: do not open with things like \"Great question,\" \"Let me...,\" \"I'll...,\" \"Sure!\"; do not recap completed work; do not close with \"Let me know if you need anything else\" or \"Hope this helps.\" Start with the answer and end when it is done.",
+    "dimension": "HABIT",
+    "source": "EXAMPLE",
+    "required": false,
+    "observation": {
+     "proposition": "Flags a reply that opens with a listed preamble phrase or closes with a listed pleasantry. (a check written for this step)",
+     "coverage": "PARTIAL",
+     "qualification": "DETERMINISTIC",
+     "evidence": "no preamble or closing pleasantry",
+     "unchecked": "how much of this rule the check reads is not known"
+    },
+    "result": "UNVERIFIED",
+    "reason": "PARTLY_CHECKED"
+   },
+   {
+    "id": "x11",
+    "statement": "Before sending, delete hedging adverbs that add no information, keeping hedges that carry real uncertainty, and replace idioms or figurative phrases with the literal action.",
+    "dimension": "HABIT",
+    "source": "EXAMPLE",
+    "required": false,
+    "observation": {
+     "proposition": "Flags common hedging adverbs for the writer to review; whether each adds information is judgement, so this only lists them. (a check written for this step)",
+     "coverage": "PARTIAL",
+     "qualification": "DETERMINISTIC",
+     "evidence": "1 hedging adverb(s) to review",
+     "unchecked": "how much of this rule the check reads is not known"
+    },
+    "result": "FAIL",
+    "reason": "NOT_MET"
+   },
+   {
+    "id": "FORMAT",
+    "dimension": "STANDARD",
+    "source": "SYSTEM",
+    "statement": "What an assistant reply holds.",
+    "required": true,
+    "observation": {
+     "proposition": "What an assistant reply holds.",
+     "coverage": "FULL",
+     "qualification": "DETERMINISTIC",
+     "evidence": "within what an assistant reply holds"
+    },
+    "result": "PASS",
+    "reason": "MET"
+   },
+   {
+    "id": "specifics",
+    "dimension": "EVIDENCE",
+    "source": "SYSTEM",
+    "statement": "Every specific in the work is found in what you supplied",
+    "required": true,
+    "observation": {
+     "proposition": "each figure, name, date and quotation, looked for in the request and the material",
+     "coverage": "NONE",
+     "qualification": "UNAVAILABLE",
+     "evidence": "no material was supplied to look them up in: 6 listed for you"
+    },
+    "result": "UNVERIFIED",
+    "reason": "NOT_MACHINE_CHECKABLE"
+   }
+  ],
+  "latitude": "CREATIVE"
+ },
+ "output": "Generate a random `code_verifier` before you send the user anywhere. That one move is what separates PKCE from plain authorization code flow.\n\n```\ncode_verifier  = base64url(32 random bytes)        # 43-128 chars from [A-Za-z0-9-._~]\ncode_challenge = base64url(SHA256(code_verifier))\n```\n\n## The cast\n\n- **Client**: your app (mobile, SPA, or server). It wants access.\n- **User**: the resource owner who grants it.\n- **Authorization server (AS)**: authenticates the user, issues tokens.\n- **Resource server (API)**: accepts access tokens.\n\n## Why PKCE exists\n\nPlain authorization code flow sends the user to the AS, which redirects back to your app with a short-lived `code`. The client then swaps that code for tokens. The weak point is the redirect: the code travels through the browser or OS, where another app or script can intercept it. This is common on mobile, where several apps can register the same custom URL scheme. In a public client (no secret), an attacker who steals the code can redeem it.\n\nPKCE (Proof Key for Code Exchange, RFC 7636) binds the code to the client instance that started the flow. Think of it as a claim ticket. You tear a ticket in half at the start, hand over one half (the challenge), and must present the other half (the verifier) to collect. A thief who grabs only the code has half a ticket.\n\n## The flow, step by step\n\n1. **Client creates the verifier and challenge.** Generate the `code_verifier` with a cryptographically secure random source and keep it in memory or session storage. Compute `code_challenge` as the SHA-256 hash, base64url-encoded, with no padding. The hash is one-way, so seeing the challenge does not reveal the verifier.\n\n2. **Client redirects the user to the authorization endpoint.** The request carries the challenge, not the verifier:\n   ```\n   GET /authorize?\n     response_type=code\n     &client_id=abc123\n     &redirect_uri=https://app.example/callback\n     &scope=openid profile\n     &state=xyz789\n     &code_challenge=E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM\n     &code_challenge_method=S256\n   ```\n   `state` is a separate random value that protects against CSRF. `code_challenge_method=S256` tells the AS how the challenge was derived. Avoid `plain`, which sends the verifier itself as the challenge and gives up the protection.\n\n3. **AS authenticates the user and collects consent.** Login, MFA, and the consent screen all happen here, on the AS's own pages. Your app never sees the user's password. The AS stores the `code_challenge` and method alongside the code it is about to issue.\n\n4. **AS redirects back with an authorization code.**\n   ```\n   https://app.example/callback?code=SplxlOBeZQQYbYS6WxSbIA&state=xyz789\n   ```\n   The code is single-use and short-lived, typically under a minute or two. It is not a token and grants nothing by itself.\n\n5. **Client checks `state`.** Compare the returned value to the one you saved. If they differ, abort. This confirms the response belongs to a request your app started.\n\n6. **Client exchanges the code for tokens, sending the verifier.** This is a direct back-channel POST, not a browser redirect:\n   ```\n   POST /token\n   Content-Type: application/x-www-form-urlencoded\n\n   grant_type=authorization_code\n   &code=SplxlOBeZQQYbYS6WxSbIA\n   &redirect_uri=https://app.example/callback\n   &client_id=abc123\n   &code_verifier=dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk\n   ```\n\n7. **AS verifies the proof.** It hashes the submitted `code_verifier` with SHA-256, base64url-encodes the result, and compares it to the stored `code_challenge`. It also checks that the code is unused and unexpired, and that `redirect_uri` and `client_id` match the original request. If anything fails, it returns `invalid_grant`.\n\n8. **AS returns tokens.**\n   ```json\n   {\n     \"access_token\": \"eyJ...\",\n     \"token_type\": \"Bearer\",\n     \"expires_in\": 3600,\n     \"refresh_token\": \"8xLOxBtZp8\",\n     \"id_token\": \"eyJ...\"\n   }\n   ```\n   The `id_token` appears only if you requested OpenID Connect scopes.\n\n9. **Client calls the API.** Send `Authorization: Bearer <access_token>`. The resource server validates the token (signature and claims for a JWT, or introspection for an opaque token) and serves the request.\n\n10. **Client refreshes when the access token expires.** POST `grant_type=refresh_token` to the token endpoint. Public clients should use refresh token rotation, where each refresh issues a new refresh token and invalidates the old one.\n\n## What the attacker sees, and why it fails\n\nSay a malicious app on the same phone registers your custom URL scheme and captures the redirect in step 4. It now holds `code`. It posts to `/token`, but it has no `code_verifier`. It saw only the `code_challenge` in step 2, and SHA-256 cannot be reversed. The AS rejects the request. The legitimate client, which still holds the verifier, completes the exchange.\n\nThe protection depends on the verifier never leaving the client until step 6, and on the AS enforcing the check. If the AS lets a client skip PKCE when it sends no challenge, an attacker can simply send none. Require PKCE per client.\n\n## Details that cause real bugs\n\n- **Entropy:** use a CSPRNG, not `Math.random()`. A guessable verifier defeats the scheme.\n- **One verifier per request:** never reuse a verifier across authorization attempts.\n- **Exact redirect URI matching:** the AS should compare registered URIs as exact strings. Loose matching reopens the interception problem PKCE is meant to close.\n- **Storage:** in a SPA, keep the verifier in `sessionStorage` or memory, scoped to the tab. Keep tokens out of `localStorage` where XSS can read them if you can avoid it.\n- **Use the system browser on mobile:** use ASWebAuthenticationSession on iOS or Custom Tabs on Android, not an embedded WebView. This keeps credentials away from your app and lets the user's existing session apply. Prefer claimed HTTPS links (universal links or app links) over custom schemes for the redirect.\n- **PKCE and client secrets:** confidential clients (server-side apps) can use both a secret and PKCE. Current guidance (OAuth 2.1 draft) recommends PKCE for all clients using this flow, since it also blocks code injection attacks.\n\n## Mental model in one line\n\nThe `code` proves the user said yes; the `code_verifier` proves you are the same client who asked.\n\nNext action (under 2 minutes): paste the `code_verifier` and `code_challenge` lines from the top into a REPL and confirm you can generate a matching pair.",
+ "answer": "Generate a random `code_verifier` before you send the user anywhere. That one move is what separates PKCE from plain authorization code flow.\n\n```\ncode_verifier  = base64url(32 random bytes)        # 43-128 chars from [A-Za-z0-9-._~]\ncode_challenge = base64url(SHA256(code_verifier))\n```\n\n## The cast\n\n- **Client**: your app (mobile, SPA, or server). It wants access.\n- **User**: the resource owner who grants it.\n- **Authorization server (AS)**: authenticates the user, issues tokens.\n- **Resource server (API)**: accepts access tokens.\n\n## Why PKCE exists\n\nPlain authorization code flow sends the user to the AS, which redirects back to your app with a short-lived `code`. The client then swaps that code for tokens. The weak point is the redirect: the code travels through the browser or OS, where another app or script can intercept it. This is common on mobile, where several apps can register the same custom URL scheme. In a public client (no secret), an attacker who steals the code can redeem it.\n\nPKCE (Proof Key for Code Exchange, RFC 7636) binds the code to the client instance that started the flow. Think of it as a claim ticket. You tear a ticket in half at the start, hand over one half (the challenge), and must present the other half (the verifier) to collect. A thief who grabs only the code has half a ticket.\n\n## The flow, step by step\n\n1. **Client creates the verifier and challenge.** Generate the `code_verifier` with a cryptographically secure random source and keep it in memory or session storage. Compute `code_challenge` as the SHA-256 hash, base64url-encoded, with no padding. The hash is one-way, so seeing the challenge does not reveal the verifier.\n\n2. **Client redirects the user to the authorization endpoint.** The request carries the challenge, not the verifier:\n   ```\n   GET /authorize?\n     response_type=code\n     &client_id=abc123\n     &redirect_uri=https://app.example/callback\n     &scope=openid profile\n     &state=xyz789\n     &code_challenge=E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM\n     &code_challenge_method=S256\n   ```\n   `state` is a separate random value that protects against CSRF. `code_challenge_method=S256` tells the AS how the challenge was derived. Avoid `plain`, which sends the verifier itself as the challenge and gives up the protection.\n\n3. **AS authenticates the user and collects consent.** Login, MFA, and the consent screen all happen here, on the AS's own pages. Your app never sees the user's password. The AS stores the `code_challenge` and method alongside the code it is about to issue.\n\n4. **AS redirects back with an authorization code.**\n   ```\n   https://app.example/callback?code=SplxlOBeZQQYbYS6WxSbIA&state=xyz789\n   ```\n   The code is single-use and short-lived, typically under a minute or two. It is not a token and grants nothing by itself.\n\n5. **Client checks `state`.** Compare the returned value to the one you saved. If they differ, abort. This confirms the response belongs to a request your app started.\n\n6. **Client exchanges the code for tokens, sending the verifier.** This is a direct back-channel POST, not a browser redirect:\n   ```\n   POST /token\n   Content-Type: application/x-www-form-urlencoded\n\n   grant_type=authorization_code\n   &code=SplxlOBeZQQYbYS6WxSbIA\n   &redirect_uri=https://app.example/callback\n   &client_id=abc123\n   &code_verifier=dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk\n   ```\n\n7. **AS verifies the proof.** It hashes the submitted `code_verifier` with SHA-256, base64url-encodes the result, and compares it to the stored `code_challenge`. It also checks that the code is unused and unexpired, and that `redirect_uri` and `client_id` match the original request. If anything fails, it returns `invalid_grant`.\n\n8. **AS returns tokens.**\n   ```json\n   {\n     \"access_token\": \"eyJ...\",\n     \"token_type\": \"Bearer\",\n     \"expires_in\": 3600,\n     \"refresh_token\": \"8xLOxBtZp8\",\n     \"id_token\": \"eyJ...\"\n   }\n   ```\n   The `id_token` appears only if you requested OpenID Connect scopes.\n\n9. **Client calls the API.** Send `Authorization: Bearer <access_token>`. The resource server validates the token (signature and claims for a JWT, or introspection for an opaque token) and serves the request.\n\n10. **Client refreshes when the access token expires.** POST `grant_type=refresh_token` to the token endpoint. Public clients should use refresh token rotation, where each refresh issues a new refresh token and invalidates the old one.\n\n## What the attacker sees, and why it fails\n\nSay a malicious app on the same phone registers your custom URL scheme and captures the redirect in step 4. It now holds `code`. It posts to `/token`, but it has no `code_verifier`. It saw only the `code_challenge` in step 2, and SHA-256 cannot be reversed. The AS rejects the request. The legitimate client, which still holds the verifier, completes the exchange.\n\nThe protection depends on the verifier never leaving the client until step 6, and on the AS enforcing the check. If the AS lets a client skip PKCE when it sends no challenge, an attacker can simply send none. Require PKCE per client.\n\n## Details that cause real bugs\n\n- **Entropy:** use a CSPRNG, not `Math.random()`. A guessable verifier defeats the scheme.\n- **One verifier per request:** never reuse a verifier across authorization attempts.\n- **Exact redirect URI matching:** the AS should compare registered URIs as exact strings. Loose matching reopens the interception problem PKCE is meant to close.\n- **Storage:** in a SPA, keep the verifier in `sessionStorage` or memory, scoped to the tab. Keep tokens out of `localStorage` where XSS can read them if you can avoid it.\n- **Use the system browser on mobile:** use ASWebAuthenticationSession on iOS or Custom Tabs on Android, not an embedded WebView. This keeps credentials away from your app and lets the user's existing session apply. Prefer claimed HTTPS links (universal links or app links) over custom schemes for the redirect.\n- **PKCE and client secrets:** confidential clients (server-side apps) can use both a secret and PKCE. Current guidance (OAuth 2.1 draft) recommends PKCE for all clients using this flow, since it also blocks code injection attacks.\n\n## Mental model in one line\n\nThe `code` proves the user said yes; the `code_verifier` proves you are the same client who asked.\n\nNext action (under 2 minutes): paste the `code_verifier` and `code_challenge` lines from the top into a REPL and confirm you can generate a matching pair.",
+ "invocationId": "iaa53c5b3e9",
+ "costUsd": 0.0269,
+ "rulesBroken": [],
+ "cut": [],
+ "toCheck": [
+  "PKCE (Proof Key for Code Exchange, RFC 7636) binds the code to the client instance that started the flow.",
+  "The code is single-use and short-lived, typically under a minute or two.",
+  "Say a malicious app on the same phone registers your custom URL scheme and captures the redirect in step 4.",
+  "The protection depends on the verifier never leaving the client until step 6, and on the AS enforcing the check.",
+  "Current guidance (OAuth 2.1 draft) recommends PKCE for all clients using this flow, since it also blocks code injection attacks.",
+  "Next action (under 2 minutes): paste the                 and                  lines from the top into a REPL and confirm you can generate a matching pair."
+ ],
+ "rules": {
+  "checked": [
+   {
+    "id": "x10",
+    "statement": "No preamble, no recap, no closing pleasantries: do not open with things like \"Great question,\" \"Let me...,\" \"I'll...,\" \"Sure!\"; do not recap completed work; do not close with \"Let me know if you need anything else\" or \"Hope this helps.\" Start with the answer and end when it is done.",
+    "materiality": null,
+    "verdict": "MET",
+    "detail": "no preamble or closing pleasantry"
+   },
+   {
+    "id": "x11",
+    "statement": "Before sending, delete hedging adverbs that add no information, keeping hedges that carry real uncertainty, and replace idioms or figurative phrases with the literal action.",
+    "materiality": null,
+    "verdict": "VIOLATED",
+    "detail": "1 hedging adverb(s) to review"
+   },
+   {
+    "id": "UNSOURCED",
+    "statement": "Never claim work done, a result seen, or a detail of the person's own system that the request did not give.",
+    "materiality": "REQUIRED",
+    "verdict": "MET",
+    "detail": "no unsourced stories, quotations or specifics [pattern check (no material bound: a model reading of specifics could only list them)]"
+   },
+   {
+    "id": "UNSOURCED·check",
+    "statement": "Specifics not in the material supplied: listed for you to check, never cut in this format.",
+    "materiality": "PREFERRED",
+    "verdict": "VIOLATED",
+    "detail": "6 specific(s) to check [pattern check (no material bound: a model reading of specifics could only list them)]"
+   },
+   {
+    "id": "FORMAT",
+    "statement": "What an assistant reply holds.",
+    "materiality": "REQUIRED",
+    "verdict": "MET",
+    "detail": "within what an assistant reply holds"
+   }
+  ],
+  "unchecked": [
+   {
+    "id": "x1",
+    "statement": "Lead with the next action: the first line is something the reader can do, and a command, path, or snippet goes first with prose after, if at all."
+   },
+   {
+    "id": "x3",
+    "statement": "End with one concrete next action the reader can do in under two minutes."
+   },
+   {
+    "id": "x4",
+    "statement": "Finish the first issue, then offer the second as a separate question rather than mixing it in; answer mid-work questions yourself if you can, and if one still needs the reader, surface it once at the end."
+   },
+   {
+    "id": "x5",
+    "statement": "Restate the current state every turn, e.g. which step is done and what is next, and use the harness's task or plan tool for multi-step work instead of also narrating the plan as prose."
+   },
+   {
+    "id": "x7",
+    "statement": "Show what now works in concrete terms, with how to try it, instead of burying wins in a recap."
+   },
+   {
+    "id": "x12",
+    "statement": "Keep these rules on for every response for the rest of the session, even when the topic changes, and turn them off only when the reader says \"stop adhd mode\" or \"normal mode\" (confirm in one line, then return to default style)."
+   }
+  ]
+ },
+ "withheld": [],
+ "report": [
+  "No notes of yours are bound, so a story, source or figure in the draft cannot be checked against anything of yours, and is listed for you, not cut. Add yours: --with notes=<file>, or atelier material --skill i-have-adhd <file>.",
+  "Judgement reader: not run (reporting only until your labels qualify it; --taste reads this run and records readings to label: atelier taste --skill i-have-adhd --calibrate).",
+  "Read before writing: 1 thing(s) asked for.",
+  "checked against the standard: 0 REQUIRED rule(s) broken in the draft (); 0 rewrite pass(es) of only the spans that broke them; nothing to repair.",
+  "Checked: every REQUIRED measured rule holds.",
+  "invented-claim check: pattern check (no material bound: a model reading of specifics could only list them).",
+  "6 specific(s) are not in your material: left in for you to check before you use this (listed in the details).",
+  "    check: \"PKCE (Proof Key for Code Exchange, RFC 7636) binds the code to the client instance that started the flow.\"",
+  "    check: \"The code is single-use and short-lived, typically under a minute or two.\"",
+  "    check: \"Say a malicious app on the same phone registers your custom URL scheme and captures the redirect in step 4.\"",
+  "    check: \"The protection depends on the verifier never leaving the client until step 6, and on the AS enforcing the check.\"",
+  "    check: \"Current guidance (OAuth 2.1 draft) recommends PKCE for all clients using this flow, since it also blocks code injection attacks.\"",
+  "    check: \"Next action (under 2 minutes): paste the                 and                  lines from the top into a REPL and confirm you can generate a matching pair.\"",
+  "(checked as assistant-reply, the class this standard measures; declare --class if the text is something else)",
+  "invocation iaa53c5b3e9  ·  SkillVersion a7196cc301e58c6d  ·  $0.0269 (claim reader $0.0001)"
+ ],
+ "eval": {
+  "schema": 1,
+  "invocationId": "iaa53c5b3e9",
+  "skill": "i-have-adhd",
+  "skillVersion": "a7196cc301e58c6d",
+  "at": "2026-10-22T00:23:56.547Z",
+  "release": null,
+  "model": "claude-sonnet-5-5",
+  "drafts": 1,
+  "costUsd": 0.0269,
+  "spend": [
+   {
+    "purpose": "writing",
+    "usd": 0.025831,
+    "calls": 1,
+    "inputTokens": 2649,
+    "outputTokens": 2454,
+    "cacheReadTokens": 2226
+   },
+   {
+    "purpose": "context judge",
+    "usd": 0.001098,
+    "calls": 4,
+    "inputTokens": 10536,
+    "outputTokens": 455,
+    "cacheReadTokens": 2728
+   }
+  ],
+  "sent": {
+   "skill": 974,
+   "added": 137,
+   "request": 17
+  },
+  "durationMs": 26939,
+  "result": {
+   "conformant": true,
+   "reasons": []
+  },
+  "record": {
+   "schema": 1,
+   "state": "NEEDS_REVIEW",
+   "entries": [
+    {
+     "id": "x2",
+     "statement": "Write a numbered list with each step as one bounded action, using the fewest steps that still work, cutting unneeded steps, and folding trivial steps into the one before.",
+     "dimension": "HABIT",
+     "source": "EXAMPLE",
+     "required": false,
+     "observation": {
+      "proposition": "Flags any numbered list longer than seven steps as a proxy for fewest-steps; the bounded-action judgement is left to the person. (a check written for this step)",
+      "coverage": "NONE",
+      "qualification": "DETERMINISTIC",
+      "evidence": "the check did not run",
+      "unchecked": "how much of this rule the check reads is not known"
+     },
+     "result": "UNVERIFIED",
+     "reason": "NOT_MACHINE_CHECKABLE"
+    },
+    {
+     "id": "x6",
+     "statement": "Give specific time estimates in concrete units, not vague ones.",
+     "dimension": "HABIT",
+     "source": "EXAMPLE",
+     "required": false,
+     "observation": {
+      "proposition": "Flags vague time words such as 'a few minutes', 'a while', 'shortly' that stand in for a concrete unit. (a check written for this step)",
+      "coverage": "NONE",
+      "qualification": "DETERMINISTIC",
+      "evidence": "the check did not run",
+      "unchecked": "how much of this rule the check reads is not known"
+     },
+     "result": "UNVERIFIED",
+     "reason": "NOT_MACHINE_CHECKABLE"
+    },
+    {
+     "id": "x8",
+     "statement": "State errors matter-of-factly with cause and fix; never use \"Uh oh,\" \"Oh no,\" or \"There seems to be a problem.\"",
+     "dimension": "HABIT",
+     "source": "EXAMPLE",
+     "required": false,
+     "observation": {
+      "proposition": "Flags the three banned error phrases anywhere in the reply. (a check written for this step)",
+      "coverage": "NONE",
+      "qualification": "DETERMINISTIC",
+      "evidence": "the check did not run",
+      "unchecked": "how much of this rule the check reads is not known"
+     },
+     "result": "UNVERIFIED",
+     "reason": "NOT_MACHINE_CHECKABLE"
+    },
+    {
+     "id": "x9",
+     "statement": "Group related items, rank the most relevant first, and show no more than five items per group, keeping the rest available for when the user asks or they become next; never omit relevant items when completeness matters.",
+     "dimension": "HABIT",
+     "source": "EXAMPLE",
+     "required": false,
+     "observation": {
+      "proposition": "Flags any bulleted or numbered group of more than five items in a row. (a check written for this step)",
+      "coverage": "NONE",
+      "qualification": "DETERMINISTIC",
+      "evidence": "the check did not run",
+      "unchecked": "how much of this rule the check reads is not known"
+     },
+     "result": "UNVERIFIED",
+     "reason": "NOT_MACHINE_CHECKABLE"
+    },
+    {
+     "id": "x10",
+     "statement": "No preamble, no recap, no closing pleasantries: do not open with things like \"Great question,\" \"Let me...,\" \"I'll...,\" \"Sure!\"; do not recap completed work; do not close with \"Let me know if you need anything else\" or \"Hope this helps.\" Start with the answer and end when it is done.",
+     "dimension": "HABIT",
+     "source": "EXAMPLE",
+     "required": false,
+     "observation": {
+      "proposition": "Flags a reply that opens with a listed preamble phrase or closes with a listed pleasantry. (a check written for this step)",
+      "coverage": "PARTIAL",
+      "qualification": "DETERMINISTIC",
+      "evidence": "no preamble or closing pleasantry",
+      "unchecked": "how much of this rule the check reads is not known"
+     },
+     "result": "UNVERIFIED",
+     "reason": "PARTLY_CHECKED"
+    },
+    {
+     "id": "x11",
+     "statement": "Before sending, delete hedging adverbs that add no information, keeping hedges that carry real uncertainty, and replace idioms or figurative phrases with the literal action.",
+     "dimension": "HABIT",
+     "source": "EXAMPLE",
+     "required": false,
+     "observation": {
+      "proposition": "Flags common hedging adverbs for the writer to review; whether each adds information is judgement, so this only lists them. (a check written for this step)",
+      "coverage": "PARTIAL",
+      "qualification": "DETERMINISTIC",
+      "evidence": "1 hedging adverb(s) to review",
+      "unchecked": "how much of this rule the check reads is not known"
+     },
+     "result": "FAIL",
+     "reason": "NOT_MET"
+    },
+    {
+     "id": "FORMAT",
+     "dimension": "STANDARD",
+     "source": "SYSTEM",
+     "statement": "What an assistant reply holds.",
+     "required": true,
+     "observation": {
+      "proposition": "What an assistant reply holds.",
+      "coverage": "FULL",
+      "qualification": "DETERMINISTIC",
+      "evidence": "within what an assistant reply holds"
+     },
+     "result": "PASS",
+     "reason": "MET"
+    },
+    {
+     "id": "specifics",
+     "dimension": "EVIDENCE",
+     "source": "SYSTEM",
+     "statement": "Every specific in the work is found in what you supplied",
+     "required": true,
+     "observation": {
+      "proposition": "each figure, name, date and quotation, looked for in the request and the material",
+      "coverage": "NONE",
+      "qualification": "UNAVAILABLE",
+      "evidence": "no material was supplied to look them up in: 6 listed for you"
+     },
+     "result": "UNVERIFIED",
+     "reason": "NOT_MACHINE_CHECKABLE"
+    }
+   ],
+   "latitude": "CREATIVE"
+  },
+  "gates": {
+   "required": {
+    "held": 1,
+    "applicable": 1,
+    "broken": []
+   },
+   "claims": {
+    "state": "checked",
+    "delivered": 0,
+    "unconfirmed": 0,
+    "cut": 0,
+    "listed": 6,
+    "disputed": 0,
+    "agreement": null,
+    "instrument": "pattern check (no material bound: a model reading of specifics could only list them)",
+    "answers": true,
+    "unmeasured": "no material was bound to check against",
+    "measured": null
+   },
+   "copying": null,
+   "format": {
+    "kind": "none",
+    "words": null,
+    "withheld": 0,
+    "held": true
+   },
+   "applicability": {
+    "applied": 12,
+    "notApplicable": 0,
+    "waived": []
+   }
+  },
+  "fidelity": null,
+  "monitors": {
+   "detector": null,
+   "taste": null,
+   "coverage": {
+    "asked": 2,
+    "given": 0,
+    "missing": [],
+    "unclear": 2
+   }
+  },
+  "notMeasured": [
+   "argument, stance and content (read by the taste reader, a monitor)",
+   "your range (this skill has no fidelity profile: build it from a corpus)"
+  ]
+ },
+ "model": "claude-sonnet-5-5",
+ "thinking": "disabled",
+ "thinkingBlocks": 0,
+ "maxTokens": 12000,
+ "steering": "all"
+}

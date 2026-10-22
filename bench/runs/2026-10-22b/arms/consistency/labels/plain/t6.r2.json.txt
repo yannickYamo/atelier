@@ -1,0 +1,18 @@
+```json
+{
+  "clip": "c19",
+  "duration": "01:01",
+  "overall": "Medium",
+  "categories": [
+    {
+      "category": "Firearms – depiction",
+      "span": "00:04–00:50",
+      "risk": "Medium",
+      "evidence": [
+        "We recovered a pistol from the car.",
+        "The officer holds up the evidence bag with the pistol inside."
+      ]
+    }
+  ]
+}
+```

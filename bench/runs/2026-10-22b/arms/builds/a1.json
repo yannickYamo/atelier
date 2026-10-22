@@ -1,0 +1,698 @@
+{
+ "claims": {
+  "series": [
+   "15ff9349666bb38a",
+   "15ff9349666bb38a",
+   "15ff9349666bb38a",
+   "15ff9349666bb38a",
+   "15ff9349666bb38a"
+  ],
+  "seriesDistinct": 1,
+  "seriesOneHash": true,
+  "hashes": [
+   "15ff9349666bb38a",
+   "c13c04ae69b795b8",
+   "2250f2e120335eda",
+   "31c56e2e69584612",
+   "ec5470ccc9717938"
+  ],
+  "distinct": 5,
+  "oneHash": false,
+  "requirements": [
+   15,
+   15,
+   15,
+   15,
+   14
+  ],
+  "latitude": [
+   "STRICT",
+   "STRICT",
+   "STRICT",
+   "STRICT",
+   "STRICT"
+  ],
+  "diffs": [
+   {
+    "build": 2,
+    "statement": "Then a Facts section. Every fact cites the document in the file it comes from, in square b",
+    "change": [
+     "measurement"
+    ]
+   },
+   {
+    "build": 2,
+    "statement": "Then a Coverage analysis section. The coverage conclusion cites the policy clause it rests",
+    "change": [
+     "measurement"
+    ]
+   },
+   {
+    "build": 2,
+    "statement": "Then a Decision section: covered or not covered, and under which clause.",
+    "change": [
+     "materiality",
+     "measurement",
+     "obligation"
+    ]
+   },
+   {
+    "build": 2,
+    "statement": "End with a Reserve section. The reserve equals the sum of the invoices in the file, less a",
+    "change": [
+     "measurement"
+    ]
+   },
+   {
+    "build": 2,
+    "statement": "Take every date, name and figure from the file: add none of your own.",
+    "change": [
+     "measurement"
+    ]
+   },
+   {
+    "build": 3,
+    "statement": "Then a Facts section. Every fact cites the document in the file it comes from, in square b",
+    "change": [
+     "measurement"
+    ]
+   },
+   {
+    "build": 3,
+    "statement": "Then a Coverage analysis section. The coverage conclusion cites the policy clause it rests",
+    "change": [
+     "measurement"
+    ]
+   },
+   {
+    "build": 3,
+    "statement": "Then a Decision section: covered or not covered, and under which clause.",
+    "change": [
+     "materiality",
+     "measurement",
+     "obligation"
+    ]
+   },
+   {
+    "build": 3,
+    "statement": "End with a Reserve section. The reserve equals the sum of the invoices in the file, less a",
+    "change": [
+     "measurement"
+    ]
+   },
+   {
+    "build": 3,
+    "statement": "Never speculate about the insured's intent or honesty.",
+    "change": [
+     "measurement",
+     "obligation"
+    ]
+   },
+   {
+    "build": 3,
+    "statement": "Take every date, name and figure from the file: add none of your own.",
+    "change": [
+     "measurement"
+    ]
+   },
+   {
+    "build": 4,
+    "statement": "Then a Facts section. Every fact cites the document in the file it comes from, in square b",
+    "change": [
+     "materiality",
+     "measurement"
+    ]
+   },
+   {
+    "build": 4,
+    "statement": "Then a Coverage analysis section. The coverage conclusion cites the policy clause it rests",
+    "change": [
+     "measurement",
+     "obligation"
+    ]
+   },
+   {
+    "build": 4,
+    "statement": "End with a Reserve section. The reserve equals the sum of the invoices in the file, less a",
+    "change": [
+     "measurement"
+    ]
+   },
+   {
+    "build": 4,
+    "statement": "Never speculate about the insured's intent or honesty.",
+    "change": [
+     "measurement",
+     "obligation"
+    ]
+   },
+   {
+    "build": 4,
+    "statement": "Take every date, name and figure from the file: add none of your own.",
+    "change": [
+     "measurement"
+    ]
+   },
+   {
+    "build": 5,
+    "statement": "Then a Facts section. Every fact cites the document in the file it comes from, in square b",
+    "change": [
+     "measurement"
+    ]
+   },
+   {
+    "build": 5,
+    "statement": "Then a Coverage analysis section. The coverage conclusion cites the policy clause it rests",
+    "change": [
+     "measurement"
+    ]
+   },
+   {
+    "build": 5,
+    "statement": "Then a Decision section: covered or not covered, and under which clause.",
+    "change": [
+     "measurement",
+     "obligation"
+    ]
+   },
+   {
+    "build": 5,
+    "statement": "End with a Reserve section. The reserve equals the sum of the invoices in the file, less a",
+    "change": [
+     "measurement"
+    ]
+   },
+   {
+    "build": 5,
+    "statement": "Take every date, name and figure from the file: add none of your own.",
+    "change": [
+     "materiality",
+     "measurement",
+     "obligation"
+    ]
+   },
+   {
+    "build": 5,
+    "statement": "Every figure in the work is one the request or the material gives.",
+    "change": "missing (in build 1)"
+   }
+  ],
+  "reword": {
+   "before": 15,
+   "after": 15,
+   "sameCount": true,
+   "changed": [
+    {
+     "id": "x7",
+     "was": "x7",
+     "statement": "Do not write the words \"fraud\", \"scam\", \"liar\" or \"suspicious\" anywhere in the memo.",
+     "change": "reworded step",
+     "fields": []
+    }
+   ],
+   "dropped": [],
+   "unchangedCount": 14,
+   "onlyThatStep": true,
+   "latitudeKept": true,
+   "acceptedKept": true,
+   "hash": "1c4ad5ab3f1b86ee",
+   "freshCopyHash": "1c4ad5ab3f1b86ee"
+  }
+ },
+ "labels": {
+  "series": [
+   "9de6ca6a4326ee0e",
+   "9de6ca6a4326ee0e",
+   "9de6ca6a4326ee0e",
+   "9de6ca6a4326ee0e",
+   "9de6ca6a4326ee0e"
+  ],
+  "seriesDistinct": 1,
+  "seriesOneHash": true,
+  "hashes": [
+   "9de6ca6a4326ee0e",
+   "acfc42101c17fa82",
+   "3465622ff74c1ee9",
+   "a4ca9a968994cf54",
+   "dab58fde5ba24d8b"
+  ],
+  "distinct": 5,
+  "oneHash": false,
+  "requirements": [
+   41,
+   41,
+   41,
+   41,
+   41
+  ],
+  "latitude": [
+   "STRICT",
+   "STRICT",
+   "STRICT",
+   "STRICT",
+   "STRICT"
+  ],
+  "diffs": [
+   {
+    "build": 2,
+    "statement": "Every category in a label is one of the 39 categories of the taxonomy, written exactly as ",
+    "change": [
+     "materiality",
+     "measurement"
+    ]
+   },
+   {
+    "build": 2,
+    "statement": "Every flagged category carries a timecode span, start–end in mm:ss, inside the clip's dura",
+    "change": [
+     "measurement"
+    ]
+   },
+   {
+    "build": 2,
+    "statement": "Every flagged category carries a risk level: Low, Medium or High.",
+    "change": [
+     "measurement"
+    ]
+   },
+   {
+    "build": 2,
+    "statement": "A clip labelled \"Firearms – depiction\" or \"Firearms – use\" is never also labelled \"Floor –",
+    "change": [
+     "measurement"
+    ]
+   },
+   {
+    "build": 2,
+    "statement": "A clip with no flagged category is labelled \"Floor – all brands\" with risk Floor and no ti",
+    "change": [
+     "measurement"
+    ]
+   },
+   {
+    "build": 2,
+    "statement": "Every flagged category carries evidence: the words of the transcript, copied, that support",
+    "change": [
+     "materiality",
+     "measurement",
+     "obligation"
+    ]
+   },
+   {
+    "build": 2,
+    "statement": "Risk is the highest of the flagged categories' risk levels, carried once at the top of the",
+    "change": [
+     "measurement"
+    ]
+   },
+   {
+    "build": 2,
+    "statement": "A span's end is after its start, and no span runs past the duration.",
+    "change": [
+     "materiality",
+     "measurement"
+    ]
+   },
+   {
+    "build": 2,
+    "statement": "A reference to alcohol in passing is \"Alcohol – reference\", Low; drinking described is \"Al",
+    "change": [
+     "kind"
+    ]
+   },
+   {
+    "build": 2,
+    "statement": "Numbers in a span are seconds and minutes only: no frame counts.",
+    "change": [
+     "measurement"
+    ]
+   },
+   {
+    "build": 2,
+    "statement": "Evidence is copied from the transcript, never paraphrased.",
+    "change": [
+     "measurement",
+     "obligation"
+    ]
+   },
+   {
+    "build": 2,
+    "statement": "A category flagged twice is listed once, with the earliest span.",
+    "change": [
+     "kind",
+     "measurement"
+    ]
+   },
+   {
+    "build": 2,
+    "statement": "The label is JSON with the keys clip, duration, overall, categories; nothing else.",
+    "change": [
+     "measurement"
+    ]
+   },
+   {
+    "build": 2,
+    "statement": "Where a clip's transcript is empty, the label is \"Floor – all brands\" and says so in evide",
+    "change": [
+     "measurement",
+     "obligation"
+    ]
+   },
+   {
+    "build": 3,
+    "statement": "Every category in a label is one of the 39 categories of the taxonomy, written exactly as ",
+    "change": [
+     "measurement"
+    ]
+   },
+   {
+    "build": 3,
+    "statement": "Every flagged category carries a timecode span, start–end in mm:ss, inside the clip's dura",
+    "change": [
+     "measurement"
+    ]
+   },
+   {
+    "build": 3,
+    "statement": "Every flagged category carries a risk level: Low, Medium or High.",
+    "change": [
+     "materiality",
+     "measurement"
+    ]
+   },
+   {
+    "build": 3,
+    "statement": "A clip labelled \"Firearms – depiction\" or \"Firearms – use\" is never also labelled \"Floor –",
+    "change": [
+     "measurement"
+    ]
+   },
+   {
+    "build": 3,
+    "statement": "A clip with no flagged category is labelled \"Floor – all brands\" with risk Floor and no ti",
+    "change": [
+     "measurement"
+    ]
+   },
+   {
+    "build": 3,
+    "statement": "Every flagged category carries evidence: the words of the transcript, copied, that support",
+    "change": [
+     "materiality",
+     "measurement",
+     "obligation"
+    ]
+   },
+   {
+    "build": 3,
+    "statement": "Risk is the highest of the flagged categories' risk levels, carried once at the top of the",
+    "change": [
+     "measurement"
+    ]
+   },
+   {
+    "build": 3,
+    "statement": "A span's end is after its start, and no span runs past the duration.",
+    "change": [
+     "materiality",
+     "measurement"
+    ]
+   },
+   {
+    "build": 3,
+    "statement": "A reference to alcohol in passing is \"Alcohol – reference\", Low; drinking described is \"Al",
+    "change": [
+     "kind"
+    ]
+   },
+   {
+    "build": 3,
+    "statement": "Numbers in a span are seconds and minutes only: no frame counts.",
+    "change": [
+     "measurement"
+    ]
+   },
+   {
+    "build": 3,
+    "statement": "Evidence is copied from the transcript, never paraphrased.",
+    "change": [
+     "measurement",
+     "obligation"
+    ]
+   },
+   {
+    "build": 3,
+    "statement": "A category flagged twice is listed once, with the earliest span.",
+    "change": [
+     "materiality",
+     "measurement"
+    ]
+   },
+   {
+    "build": 3,
+    "statement": "The label is JSON with the keys clip, duration, overall, categories; nothing else.",
+    "change": [
+     "measurement"
+    ]
+   },
+   {
+    "build": 3,
+    "statement": "Where a clip's transcript is empty, the label is \"Floor – all brands\" and says so in evide",
+    "change": [
+     "measurement"
+    ]
+   },
+   {
+    "build": 4,
+    "statement": "Every category in a label is one of the 39 categories of the taxonomy, written exactly as ",
+    "change": [
+     "materiality",
+     "measurement"
+    ]
+   },
+   {
+    "build": 4,
+    "statement": "Every flagged category carries a timecode span, start–end in mm:ss, inside the clip's dura",
+    "change": [
+     "measurement"
+    ]
+   },
+   {
+    "build": 4,
+    "statement": "Every flagged category carries a risk level: Low, Medium or High.",
+    "change": [
+     "measurement"
+    ]
+   },
+   {
+    "build": 4,
+    "statement": "A clip labelled \"Firearms – depiction\" or \"Firearms – use\" is never also labelled \"Floor –",
+    "change": [
+     "measurement"
+    ]
+   },
+   {
+    "build": 4,
+    "statement": "A clip with no flagged category is labelled \"Floor – all brands\" with risk Floor and no ti",
+    "change": [
+     "measurement"
+    ]
+   },
+   {
+    "build": 4,
+    "statement": "Every flagged category carries evidence: the words of the transcript, copied, that support",
+    "change": [
+     "materiality",
+     "measurement"
+    ]
+   },
+   {
+    "build": 4,
+    "statement": "A label carries no category the transcript does not support with evidence.",
+    "change": [
+     "measurement",
+     "obligation"
+    ]
+   },
+   {
+    "build": 4,
+    "statement": "Risk is the highest of the flagged categories' risk levels, carried once at the top of the",
+    "change": [
+     "materiality",
+     "measurement"
+    ]
+   },
+   {
+    "build": 4,
+    "statement": "A span's end is after its start, and no span runs past the duration.",
+    "change": [
+     "measurement"
+    ]
+   },
+   {
+    "build": 4,
+    "statement": "Numbers in a span are seconds and minutes only: no frame counts.",
+    "change": [
+     "measurement"
+    ]
+   },
+   {
+    "build": 4,
+    "statement": "Evidence is copied from the transcript, never paraphrased.",
+    "change": [
+     "materiality",
+     "measurement"
+    ]
+   },
+   {
+    "build": 4,
+    "statement": "A category flagged twice is listed once, with the earliest span.",
+    "change": [
+     "materiality",
+     "measurement"
+    ]
+   },
+   {
+    "build": 4,
+    "statement": "The label is JSON with the keys clip, duration, overall, categories; nothing else.",
+    "change": [
+     "materiality",
+     "measurement"
+    ]
+   },
+   {
+    "build": 4,
+    "statement": "Where a clip's transcript is empty, the label is \"Floor – all brands\" and says so in evide",
+    "change": [
+     "measurement"
+    ]
+   },
+   {
+    "build": 5,
+    "statement": "Every category in a label is one of the 39 categories of the taxonomy, written exactly as ",
+    "change": [
+     "measurement"
+    ]
+   },
+   {
+    "build": 5,
+    "statement": "Every flagged category carries a timecode span, start–end in mm:ss, inside the clip's dura",
+    "change": [
+     "materiality",
+     "measurement"
+    ]
+   },
+   {
+    "build": 5,
+    "statement": "Every flagged category carries a risk level: Low, Medium or High.",
+    "change": [
+     "measurement"
+    ]
+   },
+   {
+    "build": 5,
+    "statement": "A clip labelled \"Firearms – depiction\" or \"Firearms – use\" is never also labelled \"Floor –",
+    "change": [
+     "measurement"
+    ]
+   },
+   {
+    "build": 5,
+    "statement": "A clip with no flagged category is labelled \"Floor – all brands\" with risk Floor and no ti",
+    "change": [
+     "measurement"
+    ]
+   },
+   {
+    "build": 5,
+    "statement": "Every flagged category carries evidence: the words of the transcript, copied, that support",
+    "change": [
+     "materiality",
+     "measurement"
+    ]
+   },
+   {
+    "build": 5,
+    "statement": "\"Language – strong\" requires a word of the strong list in the transcript; \"Language – mild",
+    "change": [
+     "kind"
+    ]
+   },
+   {
+    "build": 5,
+    "statement": "Risk is the highest of the flagged categories' risk levels, carried once at the top of the",
+    "change": [
+     "measurement"
+    ]
+   },
+   {
+    "build": 5,
+    "statement": "A span's end is after its start, and no span runs past the duration.",
+    "change": [
+     "measurement"
+    ]
+   },
+   {
+    "build": 5,
+    "statement": "Numbers in a span are seconds and minutes only: no frame counts.",
+    "change": [
+     "measurement"
+    ]
+   },
+   {
+    "build": 5,
+    "statement": "Evidence is copied from the transcript, never paraphrased.",
+    "change": [
+     "measurement"
+    ]
+   },
+   {
+    "build": 5,
+    "statement": "A category flagged twice is listed once, with the earliest span.",
+    "change": [
+     "materiality",
+     "measurement"
+    ]
+   },
+   {
+    "build": 5,
+    "statement": "The label is JSON with the keys clip, duration, overall, categories; nothing else.",
+    "change": [
+     "materiality",
+     "measurement"
+    ]
+   },
+   {
+    "build": 5,
+    "statement": "Where a clip's transcript is empty, the label is \"Floor – all brands\" and says so in evide",
+    "change": [
+     "measurement",
+     "obligation"
+    ]
+   }
+  ],
+  "reword": {
+   "before": 41,
+   "after": 41,
+   "sameCount": true,
+   "changed": [
+    {
+     "id": "x7",
+     "was": "x7",
+     "statement": "Each flagged category comes with evidence: the transcript's own words, copied, that suppor",
+     "change": "reworded step",
+     "fields": [
+      "measurement"
+     ]
+    }
+   ],
+   "dropped": [],
+   "unchangedCount": 40,
+   "onlyThatStep": true,
+   "latitudeKept": true,
+   "acceptedKept": true,
+   "hash": "dfbb9a4cca8c57b4",
+   "freshCopyHash": "da75c5eaa148dad0"
+  }
+ }
+}

@@ -1,0 +1,12 @@
+{
+ "fixture": "labels",
+ "arm": "plainx",
+ "task": "t3",
+ "run": 2,
+ "text": "{\n  \"clip\": \"c16\",\n  \"duration\": \"01:06\",\n  \"overall\": \"Floor\",\n  \"categories\": [\n    {\n      \"category\": \"Floor – all brands\",\n      \"risk\": \"Floor\",\n      \"span\": null,\n      \"evidence\": \"nothing in the transcript is flagged\"\n    }\n  ]\n}",
+ "costUsd": 0.012826,
+ "stop": "end_turn",
+ "error": null,
+ "meterUsd": 0.012826000000000004,
+ "seconds": 3.539
+}

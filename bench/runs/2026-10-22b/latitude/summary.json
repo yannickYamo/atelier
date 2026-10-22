@@ -1,0 +1,16 @@
+{
+ "model": "claude-haiku-5-5",
+ "draws": 5,
+ "cases": 30,
+ "rightIn4of5": 30,
+ "strictReadCreative": 0,
+ "floors": 0,
+ "byLabel": {
+  "STRICT": 10,
+  "GROUNDED": 10,
+  "CREATIVE": 10
+ },
+ "wrong": [],
+ "meterUsd": 0.016727499999999118,
+ "pass": true
+}

@@ -1,0 +1,12 @@
+{
+ "fixture": "labels",
+ "arm": "plain",
+ "task": "t5",
+ "run": 1,
+ "text": "```json\n{\n  \"clip\": \"c18\",\n  \"duration\": \"00:38\",\n  \"overall\": \"Floor\",\n  \"categories\": [\n    {\n      \"category\": \"Floor – all brands\",\n      \"risk\": \"Floor\"\n    }\n  ]\n}\n```",
+ "costUsd": 0.006948,
+ "stop": "end_turn",
+ "error": null,
+ "meterUsd": 0.006948000000000398,
+ "seconds": 2.498
+}

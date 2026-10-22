@@ -1,0 +1,347 @@
+{
+ "claims": {
+  "arms": {
+   "atelier": {
+    "n": 30,
+    "noText": 0,
+    "clean": 29,
+    "costUsd": 0.7404999999999999,
+    "states": {
+     "NEEDS_REVIEW": 30
+    }
+   },
+   "plain": {
+    "n": 30,
+    "noText": 0,
+    "clean": 0,
+    "costUsd": 0.8648960000000001,
+    "states": {}
+   },
+   "plainx": {
+    "n": 30,
+    "noText": 0,
+    "clean": 18,
+    "costUsd": 0.8741560000000002,
+    "states": {}
+   }
+  },
+  "table": [
+   {
+    "rule": "R1",
+    "label": "R1 the five sections, in order",
+    "atelierHeld": 30,
+    "plainHeld": 0,
+    "plainxHeld": 30,
+    "diff": 1,
+    "lo": 1,
+    "hi": 1,
+    "vsExamples": {
+     "diff": 0,
+     "lo": 0,
+     "hi": 0
+    }
+   },
+   {
+    "rule": "R2",
+    "label": "R2 every fact cites a document in the file",
+    "atelierHeld": 30,
+    "plainHeld": 2,
+    "plainxHeld": 25,
+    "diff": 0.9333333333333333,
+    "lo": 0.8440710066609742,
+    "hi": 1.0225956600056925,
+    "vsExamples": {
+     "diff": 0.16666666666666663,
+     "lo": 0.03330555844847141,
+     "hi": 0.3000277748848619
+    }
+   },
+   {
+    "rule": "R2b",
+    "label": "R2b a citation names a document that is not in the file",
+    "atelierHeld": 30,
+    "plainHeld": 0,
+    "plainxHeld": 30,
+    "diff": 1,
+    "lo": 1,
+    "hi": 1,
+    "vsExamples": {
+     "diff": 0,
+     "lo": 0,
+     "hi": 0
+    }
+   },
+   {
+    "rule": "R3",
+    "label": "R3 the coverage conclusion cites the policy clause",
+    "atelierHeld": 30,
+    "plainHeld": 1,
+    "plainxHeld": 28,
+    "diff": 0.9666666666666667,
+    "lo": 0.9024314507569886,
+    "hi": 1.0309018825763447,
+    "vsExamples": {
+     "diff": 0.06666666666666665,
+     "lo": -0.022595660005692506,
+     "hi": 0.15592899333902582
+    }
+   },
+   {
+    "rule": "R3b",
+    "label": "R3b exclusion 7.1 is addressed on a theft",
+    "atelierHeld": 30,
+    "plainHeld": 14,
+    "plainxHeld": 30,
+    "diff": 0.5333333333333333,
+    "lo": 0.354808679988615,
+    "hi": 0.7118579866780517,
+    "vsExamples": {
+     "diff": 0,
+     "lo": 0,
+     "hi": 0
+    }
+   },
+   {
+    "rule": "R3c",
+    "label": "R3c the clause the loss falls under (4.2)",
+    "atelierHeld": 30,
+    "plainHeld": 9,
+    "plainxHeld": 28,
+    "diff": 0.7,
+    "lo": 0.5360146347993211,
+    "hi": 0.8639853652006788,
+    "vsExamples": {
+     "diff": 0.06666666666666665,
+     "lo": -0.022595660005692506,
+     "hi": 0.15592899333902582
+    }
+   },
+   {
+    "rule": "R5",
+    "label": "R5 the reserve equals the invoices",
+    "atelierHeld": 29,
+    "plainHeld": 10,
+    "plainxHeld": 30,
+    "diff": 0.6333333333333333,
+    "lo": 0.4528272136053328,
+    "hi": 0.8138394530613338,
+    "vsExamples": {
+     "diff": -0.033333333333333326,
+     "lo": -0.09756854924301142,
+     "hi": 0.03090188257634477
+    }
+   },
+   {
+    "rule": "R8*",
+    "label": "R8* (re-read) a figure R8 names that is in no material file",
+    "atelierHeld": 30,
+    "plainHeld": 9,
+    "plainxHeld": 21,
+    "diff": 0.7,
+    "lo": 0.5360146347993211,
+    "hi": 0.8639853652006788,
+    "vsExamples": {
+     "diff": 0.30000000000000004,
+     "lo": 0.13601463479932122,
+     "hi": 0.4639853652006789
+    }
+   },
+   {
+    "rule": "R8",
+    "label": "R8 figure(s) the file does not give",
+    "atelierHeld": 30,
+    "plainHeld": 9,
+    "plainxHeld": 21,
+    "diff": 0.7,
+    "lo": 0.5360146347993211,
+    "hi": 0.8639853652006788,
+    "vsExamples": {
+     "diff": 0.30000000000000004,
+     "lo": 0.13601463479932122,
+     "hi": 0.4639853652006789
+    }
+   },
+   {
+    "rule": "R8b",
+    "label": "R8b a date the file does not give",
+    "atelierHeld": 30,
+    "plainHeld": 25,
+    "plainxHeld": 28,
+    "diff": 0.16666666666666663,
+    "lo": 0.03330555844847141,
+    "hi": 0.3000277748848619,
+    "vsExamples": {
+     "diff": 0.06666666666666665,
+     "lo": -0.022595660005692506,
+     "hi": 0.15592899333902582
+    }
+   }
+  ],
+  "wholeOutput": {
+   "diff": 0.9666666666666667,
+   "lo": 0.9024314507569886,
+   "hi": 1.0309018825763447
+  },
+  "wholeOutputVsExamples": {
+   "diff": 0.3666666666666667,
+   "lo": 0.17996111516119334,
+   "hi": 0.5533722181721401
+  }
+ },
+ "labels": {
+  "arms": {
+   "atelier": {
+    "n": 30,
+    "noText": 0,
+    "clean": 30,
+    "costUsd": 0.5625,
+    "states": {
+     "NEEDS_REVIEW": 30
+    }
+   },
+   "plain": {
+    "n": 30,
+    "noText": 0,
+    "clean": 25,
+    "costUsd": 0.316698,
+    "states": {}
+   },
+   "plainx": {
+    "n": 30,
+    "noText": 0,
+    "clean": 30,
+    "costUsd": 0.440248,
+    "states": {}
+   }
+  },
+  "table": [
+   {
+    "rule": "R17",
+    "label": "R17 evidence is copied from the transcript",
+    "atelierHeld": 30,
+    "plainHeld": 27,
+    "plainxHeld": 30,
+    "diff": 0.09999999999999998,
+    "lo": -0.007353621271012564,
+    "hi": 0.20735362127101253,
+    "vsExamples": {
+     "diff": 0,
+     "lo": 0,
+     "hi": 0
+    }
+   },
+   {
+    "rule": "R7",
+    "label": "R7 every flagged category carries evidence",
+    "atelierHeld": 30,
+    "plainHeld": 28,
+    "plainxHeld": 30,
+    "diff": 0.06666666666666665,
+    "lo": -0.022595660005692506,
+    "hi": 0.15592899333902582,
+    "vsExamples": {
+     "diff": 0,
+     "lo": 0,
+     "hi": 0
+    }
+   }
+  ],
+  "wholeOutput": {
+   "diff": 0.16666666666666663,
+   "lo": 0.03330555844847141,
+   "hi": 0.3000277748848619
+  },
+  "wholeOutputVsExamples": {
+   "diff": 0,
+   "lo": 0,
+   "hi": 0
+  }
+ },
+ "adhd": {
+  "arms": {
+   "atelier": {
+    "n": 30,
+    "noText": 0,
+    "clean": 26,
+    "costUsd": 0.23760000000000003
+   },
+   "plain": {
+    "n": 30,
+    "noText": 0,
+    "clean": 27,
+    "costUsd": 0.41785999999999995
+   }
+  },
+  "table": [
+   {
+    "rule": "FORMAT",
+    "statement": "What an assistant reply holds.",
+    "atelier": {
+     "held": 30,
+     "n": 30
+    },
+    "plain": {
+     "held": 30,
+     "n": 30
+    },
+    "diff": 0,
+    "lo": 0,
+    "hi": 0
+   },
+   {
+    "rule": "x10",
+    "statement": "No preamble, no recap, no closing pleasantries: do not open with things like \"Great question,\" \"Let me...,\" \"I'll...,\" \"Sure!\"; do not recap completed work; do not close with \"Let me know if you need anything else\" or \"Hope this helps.\" Start with the answer and end when it is done.",
+    "observer": "CHECK",
+    "atelier": {
+     "held": 30,
+     "n": 30
+    },
+    "plain": {
+     "held": 30,
+     "n": 30
+    },
+    "diff": 0,
+    "lo": 0,
+    "hi": 0
+   },
+   {
+    "rule": "x11",
+    "statement": "Before sending, delete hedging adverbs that add no information, keeping hedges that carry real uncertainty, and replace idioms or figurative phrases with the literal action.",
+    "observer": "CHECK",
+    "atelier": {
+     "held": 26,
+     "n": 30
+    },
+    "plain": {
+     "held": 27,
+     "n": 30
+    },
+    "diff": -0.033333333333333326,
+    "lo": -0.19557412374707012,
+    "hi": 0.12890745708040346
+   }
+  ],
+  "notScored": [
+   "x1: Lead with the next action: the first line is something the reader can do, and a command, path, or snippet goes first with prose after, if at all.",
+   "x3: End with one concrete next action the reader can do in under two minutes.",
+   "x4: Finish the first issue, then offer the second as a separate question rather than mixing it in; answer mid-work questions yourself if you can, and if one still needs the reader, surface it once at the end.",
+   "x5: Restate the current state every turn, e.g. which step is done and what is next, and use the harness's task or plan tool for multi-step work instead of also narrating the plan as prose.",
+   "x7: Show what now works in concrete terms, with how to try it, instead of burying wins in a recap.",
+   "x12: Keep these rules on for every response for the rest of the session, even when the topic changes, and turn them off only when the reader says \"stop adhd mode\" or \"normal mode\" (confirm in one line, then return to default style)."
+  ],
+  "progress": {
+   "atelier": {
+    "withLine": 2,
+    "n": 30,
+    "casualOrDirect": 0,
+    "casualOrDirectN": 6
+   },
+   "plain": {
+    "withLine": 3,
+    "n": 30,
+    "casualOrDirect": 0,
+    "casualOrDirectN": 6
+   }
+  }
+ }
+}

@@ -1,0 +1,30 @@
+{"task":"t0","run":1,"state":null,"fails":["R8 figure(s) the file does not give: 3780","R8* (re-read) a figure R8 names that is in no material file"]}
+{"task":"t0","run":2,"state":null,"fails":[]}
+{"task":"t0","run":3,"state":null,"fails":[]}
+{"task":"t1","run":1,"state":null,"fails":["R3 the coverage conclusion cites the policy clause","R3c the clause the loss falls under (4.2)"]}
+{"task":"t1","run":2,"state":null,"fails":[]}
+{"task":"t1","run":3,"state":null,"fails":[]}
+{"task":"t2","run":1,"state":null,"fails":["R8 figure(s) the file does not give: 6736","R8* (re-read) a figure R8 names that is in no material file"]}
+{"task":"t2","run":2,"state":null,"fails":["R8 figure(s) the file does not give: 6736","R8* (re-read) a figure R8 names that is in no material file"]}
+{"task":"t2","run":3,"state":null,"fails":[]}
+{"task":"t3","run":1,"state":null,"fails":[]}
+{"task":"t3","run":2,"state":null,"fails":["R2 every fact cites a document in the file","R8 figure(s) the file does not give: 6014","R8* (re-read) a figure R8 names that is in no material file"]}
+{"task":"t3","run":3,"state":null,"fails":[]}
+{"task":"t4","run":1,"state":null,"fails":[]}
+{"task":"t4","run":2,"state":null,"fails":[]}
+{"task":"t4","run":3,"state":null,"fails":[]}
+{"task":"t5","run":1,"state":null,"fails":[]}
+{"task":"t5","run":2,"state":null,"fails":[]}
+{"task":"t5","run":3,"state":null,"fails":[]}
+{"task":"t6","run":1,"state":null,"fails":["R2 every fact cites a document in the file"]}
+{"task":"t6","run":2,"state":null,"fails":[]}
+{"task":"t6","run":3,"state":null,"fails":["R3 the coverage conclusion cites the policy clause","R3c the clause the loss falls under (4.9)"]}
+{"task":"t7","run":1,"state":null,"fails":["R2 every fact cites a document in the file","R8 figure(s) the file does not give: 5626","R8* (re-read) a figure R8 names that is in no material file"]}
+{"task":"t7","run":2,"state":null,"fails":["R8b a date the file does not give","R8 figure(s) the file does not give: 11","R8* (re-read) a figure R8 names that is in no material file"]}
+{"task":"t7","run":3,"state":null,"fails":["R2 every fact cites a document in the file","R8 figure(s) the file does not give: 5626","R8* (re-read) a figure R8 names that is in no material file"]}
+{"task":"t8","run":1,"state":null,"fails":[]}
+{"task":"t8","run":2,"state":null,"fails":[]}
+{"task":"t8","run":3,"state":null,"fails":[]}
+{"task":"t9","run":1,"state":null,"fails":["R8b a date the file does not give","R8 figure(s) the file does not give: 21, 4482","R8* (re-read) a figure R8 names that is in no material file"]}
+{"task":"t9","run":2,"state":null,"fails":["R2 every fact cites a document in the file","R8 figure(s) the file does not give: 4482","R8* (re-read) a figure R8 names that is in no material file"]}
+{"task":"t9","run":3,"state":null,"fails":[]}

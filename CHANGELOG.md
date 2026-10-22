@@ -7,6 +7,40 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+### Studies: tests A and C after the gap fixes (about $5.90 in all)
+
+Claims, labels and the public `i-have-adhd` skill, writer `claude-sonnet-5-5`, every call metered; every table and output
+is in `bench/runs/2026-10-22b/` (RESULTS.md, report.md). Test C read 30 labelled skills five times each.
+
+- **A skill rebuilt from unchanged inputs keeps one standard.** Builds 2 to 5 in the folder of build 1 gave build 1's hash
+  on claims and labels, for about a tenth of a cent each. A reworded step changed only that step's requirement (claims
+  15 to 15 rules, labels 41 to 41), and the latitude was kept. Built from scratch in five fresh folders, the same inputs
+  still gave five hashes on each fixture: every written check is drawn anew, and some steps moved between required,
+  judgement and habit.
+- **No held-out golden was blocked** (claims e10 and labels e12 both NEEDS REVIEW; labels had 10 of 12 blocked by the
+  copying check on 10-21).
+- **Planted defects.** The defect's own step named it with its passage in 3 of 5 on claims and 3 of 5 on labels, and
+  blocked it in 1 of 5 on each. Not named: the added date and the unaddressed exclusion (claims), "High" without a
+  depiction and a category outside the taxonomy (labels).
+- **No claims or labels run was delivered.** All 60 ended NEEDS REVIEW: on a strict skill nothing is accepted unmeasured
+  by default, and a required step a check reads only in part (the Summary's "one paragraph") can never be. i-have-adhd
+  was read as creative work and delivered 30 of 30. The test fails on its delivery line.
+- **The margin over the model given the same examples holds on claims, not on labels.** Every oracle rule held in 29 of
+  30 Atelier memos against 18 of 30 with the method and the examples the skill serves (36.7 points, interval 18.0 to
+  55.3), and 0 of 30 with the method alone. Labels: 30 of 30 against 30 of 30 with the examples, 25 of 30 with the
+  method alone.
+- **Progress lines.** 2 of 30 i-have-adhd replies carry one, none on a casual or direct question (23 of 30 on 10-21).
+- **Repair still fixes nothing** (0 of 5) and changes nothing else: the speculation rewrite was refused for adding a
+  negation, and the other four defects had no enforced rule broken in a sentence.
+- **Hook.** Exit 2 on the speculation defect in under a second, 0 on the held-out golden with no note: no rule that reads
+  material is required in this build.
+- **Record head on every output** (110 of 110), and an ERROR head on an unknown skill and on an unknown model.
+- **Test C passes:** 30 of 30 cases right in at least 4 of 5 draws (150 of 150 draws), no strict case read creative, for
+  under two cents.
+- Found and not fixed: material is named by its folder path at build and by its `--with` name at run, so a written
+  citation check failed all nine of the owner's examples and never qualified; a method step whose written check did not
+  qualify is stored as a habit, so it neither blocks nor sends a run to review; a hook event that is not JSON exits 0.
+
 ### A clean run can be verified, a skill built again keeps what the owner decided, and every door says what it did
 
 - **VERIFIED with material bound.** The claim check decides from what it does at the level and the instrument that

@@ -1,0 +1,41 @@
+{
+ "build": 1,
+ "before": {
+  "files": {
+   "15ff9349666bb38a.json": "63e343213df99468"
+  },
+  "active": "15ff9349666bb38a"
+ },
+ "after": {
+  "files": {
+   "15ff9349666bb38a.json": "63e343213df99468"
+  },
+  "active": "15ff9349666bb38a"
+ },
+ "sameFiles": true,
+ "sameActive": true,
+ "standardFileKeys": [
+  "standardVersionHash",
+  "evidenceId",
+  "workType",
+  "requirements",
+  "latitude",
+  "authorityState",
+  "mintedAt",
+  "supersedes",
+  "reason",
+  "qualifications"
+ ],
+ "qualificationsInFile": true,
+ "qualificationIds": [
+  "x2",
+  "x3",
+  "x5",
+  "x8"
+ ],
+ "qualifiedIds": [],
+ "recomputed": "15ff9349666bb38a",
+ "withQualifications": "d317d9f1696e359c",
+ "requirementsMentionQualified": false,
+ "hashMatchesName": true
+}

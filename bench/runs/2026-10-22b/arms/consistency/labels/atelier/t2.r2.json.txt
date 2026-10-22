@@ -1,0 +1,13 @@
+{
+  "clip": "c15",
+  "duration": "00:42",
+  "overall": "Medium",
+  "categories": [
+    {
+      "category": "Violence – minor",
+      "risk": "Medium",
+      "span": "00:20–00:24",
+      "evidence": "The sparring partner lands a jab; the boy shakes it off and grins."
+    }
+  ]
+}

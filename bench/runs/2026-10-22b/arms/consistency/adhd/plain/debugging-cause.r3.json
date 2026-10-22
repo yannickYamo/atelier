@@ -1,0 +1,12 @@
+{
+ "fixture": "adhd",
+ "arm": "plain",
+ "task": "debugging-cause",
+ "run": 3,
+ "text": "Add the header to the failing request in the test:\n\n```ts\nawait request(app)\n  .get('/your-route')\n  .set('Authorization', `Bearer ${token}`) // add this line\n  .expect(200);\n```\n\n**Cause:** The route requires auth. The request sends no `Authorization` header, so the server correctly returns 401. The test is wrong, not the server.\n\n**Steps:**\n1. Get a valid token in the test setup (`beforeAll`). Use your existing login helper, or sign one with the same secret the app uses.\n2. Add the `.set('Authorization', ...)` line above to the failing request.\n3. Run `npm test -- <your-spec-file>`\n\n**Time:** About 5 minutes if a token helper exists, 15 if you have to write one.\n\n**Exception:** If this route is meant to be public, the bug is in the app. Remove the auth middleware from that route instead.\n\nNext: run the test and paste the first failing line if it still fails.",
+ "costUsd": 0.012024,
+ "stop": "end_turn",
+ "error": null,
+ "meterUsd": 0.012024000000000257,
+ "seconds": 5.702
+}

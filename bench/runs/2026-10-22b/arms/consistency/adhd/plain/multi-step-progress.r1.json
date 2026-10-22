@@ -1,0 +1,12 @@
+{
+ "fixture": "adhd",
+ "arm": "plain",
+ "task": "multi-step-progress",
+ "run": 1,
+ "text": "Run this to size the backfill (replace the placeholders):\n\n```sql\nSELECT COUNT(*) FROM <table> WHERE <new_column> IS NULL;\n```\n\n**Status:** Step 3 of 5 in progress (backfill). Schema change is done.\n\n**Backfill steps:**\n1. Confirm a recent backup or snapshot exists. The backfill rewrites data.\n2. Run the batched update below. Repeat until it reports 0 rows updated.\n   ```sql\n   UPDATE <table>\n   SET <new_column> = <value_expr>\n   WHERE id IN (\n     SELECT id FROM <table>\n     WHERE <new_column> IS NULL\n     LIMIT 10000\n   );\n   ```\n3. Re-run the count query. Expect 0.\n\n**Time:** Roughly 1 to 5 minutes per million rows. The count tells you your real number.\n\nNext: run the count and paste the result. I'll tailor the script to your table, column, and database (the SQL above is Postgres-style).",
+ "costUsd": 0.01635,
+ "stop": "end_turn",
+ "error": null,
+ "meterUsd": 0.016350000000000087,
+ "seconds": 9.144
+}

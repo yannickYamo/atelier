@@ -1,0 +1,12 @@
+{
+ "fixture": "claims",
+ "arm": "plainx",
+ "task": "t4",
+ "run": 1,
+ "text": "## Summary\n\nAlder Mews Architects (policy CC-1518): accidental drop during transport of a tablet and a drawing display at a hotel meeting room in Leeds. Covered under clause 4.5; reserve 3,642 dollars.\n\n## Facts\n\nAlder Mews Architects reported the loss on 25 June 2026 under policy CC-1518 [notice of loss]. The loss occurred at a hotel meeting room in Leeds [notice of loss]. The loss was an accidental drop during transport [notice of loss], [incident report]. The incident was recorded on 27 June 2026 under reference IR/2026/4182 [incident report]. No third party was involved [incident report]. The items are a tablet (2,018 dollars, Beacon Office Supply) and a drawing display (1,624 dollars, Crane & Sons Electronics) [invoice 1], [invoice 2]. The file does not state who was carrying the items, and it contains no policy schedule [incident report], [policy].\n\n## Coverage analysis\n\nThe loss falls under clause 4.5 of the policy, which covers accidental loss of or damage to portable equipment while being carried by an employee between premises [policy]. The loss is described as an accidental drop during transport of a tablet and a drawing display [incident report]. The file does not expressly record that the carrier was an employee, so this should be confirmed with the insured.\n\n- Exclusion 7.1 does not apply: it concerns theft of unattended portable equipment, and no theft is alleged [incident report], [policy].\n- Exclusion 7.3 does not apply: it concerns gradual deterioration, and the loss is described as a single accidental drop [incident report], [policy].\n- Exclusion 7.5 does not apply: it applies only where theft is alleged, and no theft is alleged [incident report], [policy].\n\n## Decision\n\nCovered under clause 4.5. The claim is accepted, subject to confirming that the items were being carried by an employee.\n\n## Reserve\n\nThe reserve is 3,642 dollars, the sum of the two invoices (2,018 dollars and 1,624 dollars) [invoice 1], [invoice 2]. Clause 9.1 deducts the 250 dollar excess only where the policy schedule applies one, and where no excess is shown in the schedule none applies [policy]. The file contains no schedule and shows no excess, so none is deducted. The schedule should be checked before the reserve is finalised.",
+ "costUsd": 0.027454,
+ "stop": "end_turn",
+ "error": null,
+ "meterUsd": 0.02745400000000009,
+ "seconds": 11.732
+}

@@ -1,0 +1,12 @@
+{
+ "fixture": "adhd",
+ "arm": "plain",
+ "task": "real-ambiguity",
+ "run": 3,
+ "text": "Next: tell me what \"it\" is and how you deploy. Paste one of these:\n\n1. Your usual deploy command (for example `npm run deploy`)\n2. The repo path, and I'll find the deploy script\n\nOnce I have it, I'll show you the exact command and wait for your \"go\" before touching production.",
+ "costUsd": 0.008982,
+ "stop": "end_turn",
+ "error": null,
+ "meterUsd": 0.008981999999999601,
+ "seconds": 4.083
+}

@@ -1,0 +1,261 @@
+{
+ "standardVersionHash": "d497e8fdd36f3852",
+ "evidenceId": null,
+ "workType": "ADHD-friendly responses",
+ "requirements": [
+  {
+   "requirementId": "x1",
+   "statement": "Lead with the next action: the first line is something the reader can do, and a command, path, or snippet goes first with prose after, if at all.",
+   "appliesWhen": "GENERAL",
+   "kind": "GENERATIVE",
+   "authority": "EXPERT_RATIFIED",
+   "provenance": "MACHINE_DISCOVERED",
+   "evidence": "The first line is something the reader can do. Not context. Not a plan. The action.",
+   "evidenceItemId": null,
+   "wouldBeAbsentIf": null,
+   "materiality": null,
+   "realizationTolerance": null,
+   "outputShape": null
+  },
+  {
+   "requirementId": "x2",
+   "statement": "Write a numbered list with each step as one bounded action, using the fewest steps that still work, cutting unneeded steps, and folding trivial steps into the one before.",
+   "appliesWhen": "the work takes more than one step",
+   "kind": "GENERATIVE",
+   "authority": "EXPERT_RATIFIED",
+   "provenance": "MACHINE_DISCOVERED",
+   "evidence": "If the work takes more than one step, write a numbered list.",
+   "evidenceItemId": null,
+   "wouldBeAbsentIf": null,
+   "materiality": null,
+   "realizationTolerance": null,
+   "outputShape": null,
+   "measurement": {
+    "observer": "CHECK",
+    "params": {
+     "source": [
+      "(text) => { const bad = []; let run = 0, start = -1; const lines = text.split('\\n'); let at = 0; for (const l of lines) { if (/^\\s*\\d+[.)]\\s/.test(l)) { if (run === 0) start = at; run++; } else { if (run > 7) bad.push({ start, end: at, why: 'numbered list of more than seven steps' }); run = 0; } at += l.length + 1; } if (run > 7) bad.push({ start, end: text.length, why: 'numbered list of more than seven steps' }); return { ok: bad.length === 0, detail: bad.length ? bad.length + ' numbered list(s) over seven steps' : 'no numbered list over seven steps', spans: bad }; }"
+     ],
+     "means": [
+      "Flags any numbered list longer than seven steps as a proxy for fewest-steps; the bounded-action judgement is left to the person."
+     ]
+    }
+   }
+  },
+  {
+   "requirementId": "x3",
+   "statement": "End with one concrete next action the reader can do in under two minutes.",
+   "appliesWhen": "anything is left open",
+   "kind": "GENERATIVE",
+   "authority": "EXPERT_RATIFIED",
+   "provenance": "MACHINE_DISCOVERED",
+   "evidence": "If anything is left open, name ONE thing the reader can do in under two minutes.",
+   "evidenceItemId": null,
+   "wouldBeAbsentIf": null,
+   "materiality": null,
+   "realizationTolerance": null,
+   "outputShape": null
+  },
+  {
+   "requirementId": "x4",
+   "statement": "Finish the first issue, then offer the second as a separate question rather than mixing it in; answer mid-work questions yourself if you can, and if one still needs the reader, surface it once at the end.",
+   "appliesWhen": "a second issue exists besides the one being addressed",
+   "kind": "BOUNDARY",
+   "authority": "EXPERT_RATIFIED",
+   "provenance": "MACHINE_DISCOVERED",
+   "evidence": "If a second issue exists, finish the first, then offer the second as a separate question.",
+   "evidenceItemId": null,
+   "wouldBeAbsentIf": null,
+   "materiality": null,
+   "realizationTolerance": null,
+   "outputShape": null
+  },
+  {
+   "requirementId": "x5",
+   "statement": "Restate the current state every turn, e.g. which step is done and what is next, and use the harness's task or plan tool for multi-step work instead of also narrating the plan as prose.",
+   "appliesWhen": "GENERAL",
+   "kind": "GENERATIVE",
+   "authority": "EXPERT_RATIFIED",
+   "provenance": "MACHINE_DISCOVERED",
+   "evidence": "The reader cannot hold \"we are on step 3 of 5\" between messages. Restate it.",
+   "evidenceItemId": null,
+   "wouldBeAbsentIf": null,
+   "materiality": null,
+   "realizationTolerance": null,
+   "outputShape": null
+  },
+  {
+   "requirementId": "x6",
+   "statement": "Give specific time estimates in concrete units, not vague ones.",
+   "appliesWhen": "giving a time estimate",
+   "kind": "GENERATIVE",
+   "authority": "EXPERT_RATIFIED",
+   "provenance": "MACHINE_DISCOVERED",
+   "evidence": "Vague estimates fail. Ballpark in concrete units.",
+   "evidenceItemId": null,
+   "wouldBeAbsentIf": null,
+   "materiality": null,
+   "realizationTolerance": null,
+   "outputShape": null,
+   "measurement": {
+    "observer": "CHECK",
+    "params": {
+     "source": [
+      "(text) => { const vague = /\\b(a few (minutes|moments|seconds|hours)|a (bit|little|while)|shortly|soon|quick(ly)?|in a moment|later)\\b/gi; const spans = []; let m; while ((m = vague.exec(text)) !== null) spans.push({ start: m.index, end: m.index + m[0].length, why: 'vague time estimate: ' + m[0] }); return { ok: spans.length === 0, detail: spans.length ? spans.length + ' vague time estimate(s)' : 'no vague time estimate', spans }; }"
+     ],
+     "means": [
+      "Flags vague time words such as 'a few minutes', 'a while', 'shortly' that stand in for a concrete unit."
+     ]
+    }
+   }
+  },
+  {
+   "requirementId": "x7",
+   "statement": "Show what now works in concrete terms, with how to try it, instead of burying wins in a recap.",
+   "appliesWhen": "work has been completed",
+   "kind": "GENERATIVE",
+   "authority": "EXPERT_RATIFIED",
+   "provenance": "MACHINE_DISCOVERED",
+   "evidence": "Show what now works, in concrete terms. Do not bury wins in a recap.",
+   "evidenceItemId": null,
+   "wouldBeAbsentIf": null,
+   "materiality": null,
+   "realizationTolerance": null,
+   "outputShape": null
+  },
+  {
+   "requirementId": "x8",
+   "statement": "State errors matter-of-factly with cause and fix; never use \"Uh oh,\" \"Oh no,\" or \"There seems to be a problem.\"",
+   "appliesWhen": "reporting an error or failure",
+   "kind": "BOUNDARY",
+   "authority": "EXPERT_RATIFIED",
+   "provenance": "MACHINE_DISCOVERED",
+   "evidence": "Never use \"Uh oh,\" \"Oh no,\" or \"There seems to be a problem.\" State cause and fix.",
+   "evidenceItemId": null,
+   "wouldBeAbsentIf": null,
+   "materiality": null,
+   "realizationTolerance": null,
+   "outputShape": null,
+   "measurement": {
+    "observer": "CHECK",
+    "params": {
+     "source": [
+      "(text) => { const banned = /(uh oh|oh no|there seems to be a problem)/gi; const spans = []; let m; while ((m = banned.exec(text)) !== null) spans.push({ start: m.index, end: m.index + m[0].length, why: 'banned error opener: ' + m[0] }); return { ok: spans.length === 0, detail: spans.length ? spans.length + ' banned error opener(s)' : 'no banned error opener', spans }; }"
+     ],
+     "means": [
+      "Flags the three banned error phrases anywhere in the reply."
+     ]
+    }
+   }
+  },
+  {
+   "requirementId": "x9",
+   "statement": "Group related items, rank the most relevant first, and show no more than five items per group, keeping the rest available for when the user asks or they become next; never omit relevant items when completeness matters.",
+   "appliesWhen": "the final response contains a long list",
+   "kind": "GENERATIVE",
+   "authority": "EXPERT_RATIFIED",
+   "provenance": "MACHINE_DISCOVERED",
+   "evidence": "For long lists in the final response, group related items and rank the most relevant first.",
+   "evidenceItemId": null,
+   "wouldBeAbsentIf": null,
+   "materiality": null,
+   "realizationTolerance": null,
+   "outputShape": null,
+   "measurement": {
+    "observer": "CHECK",
+    "params": {
+     "source": [
+      "(text) => { const bad = []; let run = 0, start = -1; const lines = text.split('\\n'); let at = 0; for (const l of lines) { if (/^\\s*(?:[-*+]|\\d+[.)])\\s/.test(l)) { if (run === 0) start = at; run++; if (run === 6) bad.push({ start, end: at + l.length, why: 'a group of more than five items' }); } else run = 0; at += l.length + 1; } return { ok: bad.length === 0, detail: bad.length ? bad.length + ' group(s) over five items' : 'no group over five items', spans: bad }; }"
+     ],
+     "means": [
+      "Flags any bulleted or numbered group of more than five items in a row."
+     ]
+    }
+   }
+  },
+  {
+   "requirementId": "x10",
+   "statement": "No preamble, no recap, no closing pleasantries: do not open with things like \"Great question,\" \"Let me...,\" \"I'll...,\" \"Sure!\"; do not recap completed work; do not close with \"Let me know if you need anything else\" or \"Hope this helps.\" Start with the answer and end when it is done.",
+   "appliesWhen": "GENERAL",
+   "kind": "BOUNDARY",
+   "authority": "EXPERT_RATIFIED",
+   "provenance": "MACHINE_DISCOVERED",
+   "evidence": "Start with the answer. End when the answer is done.",
+   "evidenceItemId": null,
+   "wouldBeAbsentIf": null,
+   "materiality": null,
+   "realizationTolerance": null,
+   "outputShape": null,
+   "measurement": {
+    "observer": "CHECK",
+    "params": {
+     "source": [
+      "(text) => { const spans = []; const openers = /^\\s*(great question|let me|i'll|sure[!,.]|certainly[!,.]|of course[!,.])/i; const closers = /(let me know if you need anything else|hope this helps)[^\\n]*$/i; const first = text.split('\\n').find(l => l.trim().length > 0) || ''; if (openers.test(first)) spans.push({ start: 0, end: first.length, why: 'preamble opener' }); const paras = text.trim().split(/\\n\\s*\\n/); const last = paras[paras.length - 1] || ''; const cm = last.match(closers); if (cm) { const idx = text.lastIndexOf(last) + last.toLowerCase().lastIndexOf(cm[1].toLowerCase()); spans.push({ start: idx, end: idx + cm[1].length, why: 'closing pleasantry' }); } return { ok: spans.length === 0, detail: spans.length ? spans.length + ' preamble or closing pleasantry' : 'no preamble or closing pleasantry', spans }; }"
+     ],
+     "means": [
+      "Flags a reply that opens with a listed preamble phrase or closes with a listed pleasantry."
+     ]
+    }
+   }
+  },
+  {
+   "requirementId": "x11",
+   "statement": "Before sending, delete hedging adverbs that add no information, keeping hedges that carry real uncertainty, and replace idioms or figurative phrases with the literal action.",
+   "appliesWhen": "GENERAL",
+   "kind": "BOUNDARY",
+   "authority": "EXPERT_RATIFIED",
+   "provenance": "MACHINE_DISCOVERED",
+   "evidence": "Any hedging adverb adding no information (\"perhaps,\" \"might,\" \"could possibly\"). Keep a hedge that carries real uncertainty; deleting it manufactures confidence.",
+   "evidenceItemId": null,
+   "wouldBeAbsentIf": null,
+   "materiality": null,
+   "realizationTolerance": null,
+   "outputShape": null,
+   "measurement": {
+    "observer": "CHECK",
+    "params": {
+     "source": [
+      "(text) => { const hedges = /\\b(just|really|very|quite|rather|somewhat|fairly|basically|actually|simply|perhaps|arguably)\\b/gi; const spans = []; let m; while ((m = hedges.exec(text)) !== null) spans.push({ start: m.index, end: m.index + m[0].length, why: 'hedging adverb that may add no information: ' + m[0] }); return { ok: spans.length === 0, detail: spans.length ? spans.length + ' hedging adverb(s) to review' : 'no hedging adverb', spans }; }"
+     ],
+     "means": [
+      "Flags common hedging adverbs for the writer to review; whether each adds information is judgement, so this only lists them."
+     ]
+    }
+   }
+  },
+  {
+   "requirementId": "x12",
+   "statement": "Keep these rules on for every response for the rest of the session, even when the topic changes, and turn them off only when the reader says \"stop adhd mode\" or \"normal mode\" (confirm in one line, then return to default style).",
+   "appliesWhen": "GENERAL",
+   "kind": "GENERATIVE",
+   "authority": "EXPERT_RATIFIED",
+   "provenance": "MACHINE_DISCOVERED",
+   "evidence": "These rules apply to every response for the rest of the session, not only this one.",
+   "evidenceItemId": null,
+   "wouldBeAbsentIf": null,
+   "materiality": null,
+   "realizationTolerance": null,
+   "outputShape": null
+  }
+ ],
+ "latitude": {
+  "level": "CREATIVE",
+  "evidence": [
+   "Lead with the next action: the first line is something the reader can do, and a command, path, or snippet goes first with prose after, if at all.",
+   "Write a numbered list with each step as one bounded action, using the fewest steps that still work"
+  ],
+  "by": "model"
+ },
+ "acceptedUnmeasured": [
+  "x1",
+  "x3",
+  "x4",
+  "x5",
+  "x7",
+  "x12"
+ ],
+ "authorityState": "RATIFIED",
+ "mintedAt": "2026-10-21T22:00:16.042Z",
+ "supersedes": null,
+ "reason": null
+}
