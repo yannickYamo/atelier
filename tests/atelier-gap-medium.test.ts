@@ -130,6 +130,22 @@ describe('M6: the repair can fix what the rules named', () => {
     expect(reverted).toEqual([]);
     expect(out).toContain('consistent with the documents');
   });
+  it('the reviewer\'s two cases: a "may" outside the banned clause is kept; a removed clause sharing "the" with the rest still goes', () => {
+    const scamAt = (text: string) => ({ start: text.indexOf('scam'), end: text.indexOf('scam') + 4, text: 'scam', why: 'banned' });
+    const plan = (text: string) => planRepair(text, report({ requirementId: 'x7', statement: 'Do not write the word "scam".', materiality: 'REQUIRED', enforced: true, observer: 'LEXICON',
+      result: { verdict: 'VIOLATED', value: 1, detail: '', spans: [scamAt(text)] } }));
+    // a second "may", outside the banned clause, lost by the rewrite: refused
+    const a = 'Repairs may take a week, and it may be a scam.\n';
+    const ra: Reverted[] = [];
+    applyRepair(a, plan(a), [{ id: 1, text: 'Repairs take a week.' }], ra);
+    expect(ra.map((r) => r.kind)).toEqual(['MEANING']);
+    // the banned clause removed whole, though "the" survives in what is left: accepted
+    const b = 'The account is plausible, and the claim may be a scam.\n';
+    const rb: Reverted[] = [];
+    const out = applyRepair(b, plan(b), [{ id: 1, text: 'The account is plausible.' }], rb);
+    expect(rb).toEqual([]);
+    expect(out).toContain('The account is plausible.');
+  });
   it('a hedge outside the banned word\'s clause still may not go', () => {
     const text = 'Repairs may take a week, and the account is suspicious.\n';
     const at = (w: string) => ({ start: text.indexOf(w), end: text.indexOf(w) + w.length, text: w, why: 'banned' });

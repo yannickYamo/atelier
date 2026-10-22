@@ -170,7 +170,8 @@ describe('what a review of the first version found', () => {
   });
   it('a first line that is a rule or an instruction is a step, whatever its punctuation; a note called Inputs still has steps', () => {
     expect(stepsOf('Always open with the verdict')).toHaveLength(1);
-    expect(stepsOf('Never write more than one page\n\n- Open with the verdict.\n- End with the risks.\n').map((x) => x.text)).toContain('Never write more than one page');
+    // beside a list, a first line is a step where the units reading reads it as an instruction (no word decides it)
+    expect(stepsOf('Never write more than one page\n\n- Open with the verdict.\n- End with the risks.\n', new Set(['Never write more than one page'])).map((x) => x.text)).toContain('Never write more than one page');
     expect(stepsOf('Open with a Summary section\n\nThen give the evidence in order\n')).toHaveLength(2);
     expect(stepsOf('Inputs\n\n- Open with the verdict.\n- End with the risks.\n')).toHaveLength(2);
   });
@@ -594,7 +595,10 @@ describe('a rule written as a numbered heading', () => {
   it('is one step with its paragraph; a numbered heading over a list names the list; a bare one is nothing', () => {
     const note = '# How I review\n\n### 1. Keep it short\n\nOne idea per sentence. Cut the preamble.\n\n### 2. Order\n\n- Verdict first.\n- Then the risks.\n\n### 3. Tone:\nPlain words.\n\n### 4. Empty\n\n## Words to cut\n\nNever write "leverage".\n';
     // verbatim: the heading's words, then its paragraph's, nothing added between them
-    expect(stepsOf(note).map((s) => s.text)).toEqual(['Keep it short One idea per sentence. Cut the preamble.', 'Verdict first.', 'Then the risks.', 'Tone: Plain words.', 'Never write "leverage".']);
-    expect(stepsOf(note).map((s) => s.under)).toEqual(['1. Keep it short', '2. Order', '2. Order', '3. Tone:', 'Words to cut']);
+    // the prose under "Words to cut" sits beside a list: a step only where the units reading reads it as an instruction
+    expect(stepsOf(note).map((s) => s.text)).toEqual(['Keep it short One idea per sentence. Cut the preamble.', 'Verdict first.', 'Then the risks.', 'Tone: Plain words.']);
+    const kept = stepsOf(note, new Set(['Never write "leverage".']));
+    expect(kept.map((s) => s.text)).toEqual(['Keep it short One idea per sentence. Cut the preamble.', 'Verdict first.', 'Then the risks.', 'Tone: Plain words.', 'Never write "leverage".']);
+    expect(kept.map((s) => s.under)).toEqual(['1. Keep it short', '2. Order', '2. Order', '3. Tone:', 'Words to cut']);
   });
 });

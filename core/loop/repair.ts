@@ -189,15 +189,31 @@ function clauseAround(text: string, sent: { start: number; end: number }, sp: { 
   return s.slice(from, till).trim();
 }
 
-/** The hedges a rewrite may drop: those of a banned word's clause that the rewrite took out whole (no other word of it left). */
-function hedgesGone(clauses: readonly Clause[], replacement: string): string[] {
+/**
+ * THE BANNED CLAUSES A REWRITE TOOK OUT WHOLE: no word of four letters or more of the clause, other than the banned word
+ * and its hedges, is left in the replacement ("the" and "and" survive any rewrite and say nothing of the clause). A
+ * clause that carries a figure is never treated as gone: a figure is a fact, and the meaning check keeps it.
+ */
+function clausesGone(clauses: readonly Clause[], replacement: string): Clause[] {
   const kept = new Set(replacement.toLowerCase().match(/[\p{L}\p{N}'’]+/gu) ?? []);
-  return clauses.flatMap((c) => {
+  return clauses.filter((c) => {
+    if (/\d/.test(c.text)) return false;
     const hedges = hedgesIn(c.text);
     const banned = new Set(c.banned.toLowerCase().match(/[\p{L}\p{N}'’]+/gu) ?? []);
-    const rest = (c.text.toLowerCase().match(/[\p{L}\p{N}'’]+/gu) ?? []).filter((w) => w.length >= 3 && !banned.has(w) && !hedges.includes(w));
-    return rest.every((w) => !kept.has(w)) ? hedges : [];
+    const rest = (c.text.toLowerCase().match(/[\p{L}\p{N}'’]+/gu) ?? []).filter((w) => w.length >= 4 && !banned.has(w) && !hedges.includes(w));
+    return rest.every((w) => !kept.has(w));
   });
+}
+
+/**
+ * The span as the meaning check reads it: without the banned clauses the rewrite took out whole. Their hedge goes with
+ * them, and only theirs: a "may" elsewhere in the span is still the span's, and still required ("Repairs may take a week,
+ * and it may be a scam" rewritten as "Repairs take a week" loses the first "may" and is refused).
+ */
+function withoutGoneClauses(span: string, clauses: readonly Clause[], replacement: string): string {
+  let out = span;
+  for (const c of clausesGone(clauses, replacement)) { const at = out.indexOf(c.text); if (at !== -1) out = `${out.slice(0, at)}${out.slice(at + c.text.length)}`; }
+  return out;
 }
 
 /** A document's name as a citation reads it: lower case, no extension, "-", "_" and spaces alike. */
@@ -286,7 +302,7 @@ export function applyRepair(text: string, targets: readonly RepairTarget[], repl
     }
     // Only a span that is purely an unsourced claim skips the meaning check; a merged one is checked on
     // everything outside its claims.
-    const integrity = spanIntegrity(t.text, rep, new Set([...(t.drops ?? []), ...hedgesGone(t.clauses ?? [], rep)]), (t.specifics ?? false) && !t.mixed, new Set(t.swaps ?? []), t.recase ?? false,
+    const integrity = spanIntegrity(withoutGoneClauses(t.text, t.clauses ?? [], rep), rep, new Set(t.drops ?? []), (t.specifics ?? false) && !t.mixed, new Set(t.swaps ?? []), t.recase ?? false,
       t.mixed ? t.claims ?? [] : []);
     if (!integrity.ok) { reverted.push({ id: t.id, kind: 'MEANING', lost: integrity.lost }); continue; }
     // A banned move may not move: a replacement that lowers one spelling of a move and raises another

@@ -33,7 +33,7 @@ import { draftHash, appendDecision, type RatificationLedger } from '../../core/r
 import { decide } from '../../core/ratification/authority.js';
 import type { Requirement, CheckQualification } from '../../core/state/canonical-state.js';
 import type { GoldenCase } from '../../core/golden/case.js';
-import { proposalsAcross, countedOffers, tellOffers, grammarOffer, stepsOf, outlineOf, shortFormOffers, type MethodProposal } from '../../core/method/standard.js';
+import { proposalsAcross, countedOffers, tellOffers, grammarOffer, stepsOf, asideOf, outlineOf, shortFormOffers, type MethodProposal } from '../../core/method/standard.js';
 import { shortFormOptions, type ShortFormOptions } from '../../core/observers/short-form.js';
 import { ensureGrammar } from '../../core/observers/grammar.js';
 import { readCase, corpusFiles, sessionCorpus, corpusHashOf } from '../corpus.js';
@@ -280,14 +280,17 @@ export async function method(): Promise<void> {
   // WHAT EACH STATED STEP IS, READ ONCE (core/observers/rule-polarity.ts): a prohibition or a thing to do. Read first, so
   // the check reading can be held against it: a prohibition is never given a check that requires what it forbids.
   // Frozen with each step's check (core/method/freeze.ts): a step whose words and examples are unchanged is not read again.
+  // THE PROSE BESIDE A LIST, READ ONCE: which of its sentences instruct (core/method/decision-units.ts). Only those join
+  // the steps; with no model none do, and the list is the method (core/method/standard.ts, `stepsOf`).
+  const keep = await asideKept(note);
   const frozenNow = store.getFrozenChecks(LN); const rejected = rejectedOutputs(LN);
-  const kindsKept = frozenKinds(stepsOf(note), examplesKey(cases), frozenNow, rejected);
-  const stepKindsRead = await stepKinds(stepsOf(note).map((st) => st.text), kindsKept);
+  const kindsKept = frozenKinds(stepsOf(note, keep), examplesKey(cases), frozenNow, rejected);
+  const stepKindsRead = await stepKinds(stepsOf(note, keep).map((st) => st.text), kindsKept);
   // WHICH CHECK EACH STATED STEP CARRIES, READ ONCE (core/method/step-check.ts): a measurement from the menu, a check the
   // model writes, or judgement; grounded on the owner's examples by code. With no model every step is a judgement.
-  const planSteps = stepsOf(note).map((st, i) => ({ id: String(i + 1), text: st.text, under: st.under }));
+  const planSteps = stepsOf(note, keep).map((st, i) => ({ id: String(i + 1), text: st.text, under: st.under }));
   const checksPlan = await stepPlan(planSteps, cases, stepKindsRead, { frozen: frozenNow, rejected });
-  const across = proposalsAcross(note, cases, checksPlan);
+  const across = proposalsAcross(note, cases, checksPlan, keep);
   // A WRITTEN CHECK EARNS ITS SAY (core/method/mutants.ts): it must pass every example and catch the edits that break
   // only its step; until then it is kept, shown with what it caught, and enforced nowhere. Its standing is said beside it.
   const read = { ...across, proposals: across.proposals.map((p) => (p.qualification ? { ...p, onExample: describeQualification(p.qualification) } : p)) };
@@ -333,7 +336,7 @@ export async function method(): Promise<void> {
   // WHAT EACH STATED STEP ASKS THE WRITER TO DECIDE, read once (core/method/decision-units.ts): kind, decision, inputs,
   // condition in the step's own words, output, exception, dependencies. Said in the whole account; the brief for one
   // request selects by it. With no model the words decide: an instruction, applying always unless they say when.
-  const units = await decisionUnits(read.proposals.filter((p) => p.origin === 'STATED'), stepsOf(note));
+  const units = await decisionUnits(read.proposals.filter((p) => p.origin === 'STATED'), stepsOf(note, keep));
   if (whole && units.size) { console.log('\nWhat each step asks the writer to decide:'); let i = 0; for (const [statement, u] of units) console.log(`  ${++i}. ${statement.slice(0, 90)}\n      ${describeUnit(u)}`); }
   const { decided, ledger, qualifications } = decideSteps(proposals, authoredIdAllocator(s), confirmed, kinds);
   // WHOSE BUILD THIS IS, WRITTEN BEFORE ANYTHING ELSE IS. A build that stops after the standard is stored and before
@@ -445,6 +448,23 @@ export function describeFrom(note: string, purpose: string | null, name: string)
 }
 
 /** The decision unit of every stated step, read in one call where a model is set up (core/method/decision-units.ts); the words alone where none is. */
+/**
+ * WHICH SENTENCES OF THE PROSE BESIDE A LIST INSTRUCT, read by the units reading and kept only where a model read them as
+ * an instruction (an explanation, a template or a criterion is not a step). The floor reads no meaning, so with no model
+ * nothing is kept and the list is the method.
+ */
+async function asideKept(note: string): Promise<Set<string>> {
+  const aside = asideOf(note);
+  const noModel = !canReach('discovery') || argv.includes('--no-model');
+  if (!aside.length || noModel) return new Set();
+  const input = { steps: aside.map((st, i) => ({ id: String(i + 1), text: st.text, under: st.under })) };
+  const d = await readContext(METHOD_UNITS, input, contextReaderClient(), contextReaderModel(), { spentUsd: 0, capUsd: 0.1, maxCalls: 1 });
+  if (d.by !== 'model') return new Set();
+  const kept = new Set(input.steps.filter((st) => d.value[st.id]?.kind === 'instruction').map((st) => st.text));
+  if (argv.includes('--report')) console.log(`(sentences beside the list read as instructions, and kept as steps: ${kept.size} of ${aside.length}.)`);
+  return kept;
+}
+
 async function decisionUnits(stated: readonly MethodProposal[], steps: readonly { text: string; under: string | null }[]): Promise<Map<string, DecisionUnit>> {
   const unique = [...new Set(stated.map((p) => p.statement.trim()).filter(Boolean))];
   if (!unique.length) return new Map();

@@ -122,9 +122,12 @@ describe('the steps of a method note', () => {
       'Open with a Verdict section that says who wins, and for whom.', 'Include a table with the columns Vendor, Price per seat and Minimum.',
       'Every figure must be sourced from the material you were given.', 'Weigh switching cost before recommending anything.', 'End with a Risks section.']);
   });
-  it('a comment is no step; "Sources of error" is not a list of inputs; a sentence beside a list is a step too, whatever its words (what it is, the units reading says)', () => {
+  it('a comment is no step; "Sources of error" is not a list of inputs; a sentence beside a list is a step only where the units reading read it as an instruction', () => {
     const note = '<!-- QUICK_MODE\nfocus: tables\n-->\n\n## Purpose\n\nThis describes the landscape for the reader. Never rank a vendor before stating the market.\n\n## Sources of error\n\n- Check each price against the list.\n';
-    expect(stepsOf(note).map((s) => s.text)).toEqual(['Check each price against the list.', 'This describes the landscape for the reader.', 'Never rank a vendor before stating the market.']);
+    // no reading (no model): the list is the method
+    expect(stepsOf(note).map((s) => s.text)).toEqual(['Check each price against the list.']);
+    // the reading kept the one instruction, and not the description
+    expect(stepsOf(note, new Set(['Never rank a vendor before stating the market.'])).map((s) => s.text)).toEqual(['Check each price against the list.', 'Never rank a vendor before stating the market.']);
   });
   it('a note with no list is read by its sentences', () => {
     expect(stepsOf('Lead with the verdict. Then show the comparison in a table. Never recommend without the price.').map((s) => s.text)).toHaveLength(3);
