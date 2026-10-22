@@ -100,6 +100,10 @@ export function observesOf(statement: string, m: Measurement | null | undefined,
   const never = neverRead(m);
   if (never) return { proposition, coverage: 'PARTIAL', unchecked: never };
   if (fromCheck) return { proposition, coverage: 'FULL' };
+  // A CHECK WRITTEN FOR THIS STEP reads the step it was written for: that is what it is. Whether it may be trusted is a
+  // separate question, answered by its qualification on the owner's examples (core/method/mutants.ts); an unqualified
+  // one is held back by the plan and its rule read by the owner, whatever its coverage says.
+  if (m.observer === 'CHECK') return { proposition, coverage: 'FULL' };
   const kind = new Set(kindWords(m));
   if (!kind.size) return { proposition, coverage: 'PARTIAL', unchecked: 'how much of this rule the check reads is not known' };
   const named = namedIn(m); const numbers = numbersOf(m);

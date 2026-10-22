@@ -117,11 +117,11 @@ describe('the study\'s pass lines, offline (2026-10-22)', () => {
     const before = run(['invoke', '--skill', 'claims', REQUEST, ...WITH(), '--claims', 'pattern', '--json', ...BACKEND()]);
     const r1 = json(before.out) as unknown as Rec;
     expect(r1.state, JSON.stringify(r1.record.entries.filter((e) => e.result === 'FAIL'))).toBe('NEEDS_REVIEW');
-    // the citation check read every fact as cited, against the names of the material as bound; a written check reads its
-    // step in part, so the step waits for the owner like the Summary's "one paragraph"
+    // the citation check read every fact as cited, against the names of the material as bound; a qualified check written
+    // for the step reads the step it was written for, so the step is held in full and waits on nobody
     const x2id = idOf('Then a Facts section');
     const x2 = r1.record.entries.find((e) => e.id === x2id)!;
-    expect([x2.result, x2.reason]).toEqual(['UNVERIFIED', 'PARTLY_CHECKED']);
+    expect([x2.result, x2.reason]).toEqual(['PASS', 'MET']);
     expect(x2.observation.evidence).toContain('every fact cites the file');
     // the owner accepts every judgement step, and the part of the Summary and Facts steps their checks do not read
     const x1 = idOf('Open with a Summary');
@@ -129,10 +129,12 @@ describe('the study\'s pass lines, offline (2026-10-22)', () => {
     expect(a.code, a.out + a.err).toBe(0);
     expect(a.out).toContain('Accepted unmeasured: not "nosuch"');
     expect(a.out).toContain(`Accepted unmeasured: not ${idOf('Never use the words')}, a check reads it in full`);
-    expect(a.out).toContain('7 unmeasured rules accepted');
+    expect(a.out).toContain(`Accepted unmeasured: not ${x2id}, a check reads it in full`);
+    expect(a.out).toContain('6 unmeasured rules accepted');
     const accepted = active().acceptedUnmeasured ?? [];
-    expect(accepted).toEqual(expect.arrayContaining([x1, x2id]));
-    expect(accepted).toHaveLength(7);
+    expect(accepted).toEqual(expect.arrayContaining([x1]));
+    expect(accepted).not.toContain(x2id);
+    expect(accepted).toHaveLength(6);
     const after = run(['invoke', '--skill', 'claims', REQUEST, ...WITH(), '--claims', 'pattern', '--json', ...BACKEND()]);
     const r2 = json(after.out) as unknown as Rec;
     const open = r2.record.entries.filter((e) => e.required && e.result !== 'PASS' && e.reason !== 'LISTED_FOR_YOU' && e.result !== 'NOT_APPLICABLE');
@@ -141,7 +143,7 @@ describe('the study\'s pass lines, offline (2026-10-22)', () => {
     expect(r2.certificate.acceptedUnmeasured.map((x) => x.id).sort()).toEqual([...accepted].sort());
     expect(r2.certificate.acceptedUnmeasured.find((x) => x.id === x1)?.part).toBeTruthy();
     expect(r2.record.entries.find((e) => e.id === x1)?.reason).toBe('LISTED_FOR_YOU');
-    expect(r2.record.entries.find((e) => e.id === x2id)?.observation.evidence).toContain('accepted by you as unmeasured for');
+    expect(r2.record.entries.find((e) => e.id === x2id)?.result).toBe('PASS');
   }, 240_000);
 
   it('A3, A7: the citation check names the uncited sentence, and the repair fixes it', async () => {
@@ -156,7 +158,7 @@ describe('the study\'s pass lines, offline (2026-10-22)', () => {
     const r = run(['verify', '--skill', 'claims', join(root, 'uncited.md'), ...WITH(), '--claims', 'pattern', '--repair', '--json', ...BACKEND()]);
     const fixed = json(r.out) as unknown as Rec & { output: string };
     expect(fixed.output, r.err).toContain('at the time [police report].');
-    expect(fixed.state).toBe('VERIFIED');
+    expect(fixed.state, JSON.stringify(fixed.record.entries.filter((e) => e.required && e.result !== 'PASS' && e.reason !== 'LISTED_FOR_YOU' && e.result !== 'NOT_APPLICABLE'))).toBe('VERIFIED');
     expect(fixed.record.entries.find((e) => e.id === x2)?.result).not.toBe('FAIL');
   }, 240_000);
 
