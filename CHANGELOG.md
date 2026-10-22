@@ -7,6 +7,23 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+### A rewrite names what no check read, a label's form is not copying, and a written check reads what it says
+
+- **A repair says which required rules no check read on its rewrite.** A rewrite was already refused when it newly
+  broke any rule a check reads, the one it was made for or another, qualified or not. A rule no check reads, or reads
+  only in part, cannot refuse one, and no pattern is made up to stand in for it: a kept rewrite now names each such rule
+  on its step ("not read on the rewrite by a check, yours to read: x6 (its check does not read "Never speculate")"). A
+  rule accepted as unmeasured is not named.
+- **The copying check leaves out the form of a JSON output with prose around it.** A label followed by a paragraph was
+  read as prose, and its keys and the values every label of its kind carries counted as a lifted passage. The JSON is
+  now found where it opens and closes a line (or in a code fence); its keys, and the values the material holds or that
+  recur across the examples (in as many as the standard wording asks), are out of the count. The prose around it, and
+  free text inside a value, are counted as before.
+- **A written check reads what its own words say.** It was recorded as reading its whole step. Its `means` line is now
+  read word by word against the step, as any check against its words: in full only where that line accounts for every
+  word of the step, otherwise in part, with the part named ("written exactly as the taxonomy writes it"). Words in the
+  check's code count for nothing.
+
 ### A strict skill can deliver, a method step keeps its authority, and the material has one name
 
 - **One name for a document of the material.** At the build an example's material was named by its path

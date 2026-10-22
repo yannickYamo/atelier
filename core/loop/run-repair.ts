@@ -686,6 +686,23 @@ export function heavyCut(draft: string, cut: readonly string[]): string | null {
 }
 
 /**
+ * WHAT NO CHECK READ ON A REWRITE. A rewrite is held to every rule a check reads (`acceptRepair`: every check of the
+ * standard, the one it was made for or not, qualified or not); a required rule no check reads, or reads only in part, is
+ * not, and no pattern is made up to stand in for the judgement. Such rules are named on the step instead, with the part
+ * unread, so a kept rewrite never reads as held to them: "raises a concern that may warrant further verification" was
+ * kept for a banned word, under a step against speculation no check reads. A rule the owner accepted as unmeasured is
+ * theirs already, and is not named. Null when every required rule is read in full.
+ */
+export function unreadOnRewrite(v: Pick<StandardVersion, 'requirements' | 'acceptedUnmeasured'>): string | null {
+  const accepted = new Set(v.acceptedUnmeasured ?? []);
+  const unread = planFor(v).rules.filter((p) => p.role !== 'HABIT' && !accepted.has(p.id) && p.check?.coverage !== 'FULL').map((p) => {
+    const part = p.check?.unchecked;
+    return `${p.id} (${!p.check ? 'no check reads it' : !part || part.startsWith('how much') ? 'its check reads an unknown part of it' : `its check does not read "${part}"`})`;
+  });
+  return unread.length ? `not read on the rewrite by a check, yours to read: ${unread.join(', ')}` : null;
+}
+
+/**
  * The rules a run grades (`CheckOptions.graded`): requirement id to the feature it counts. The standard's FEATURE
  * rules, and, with a profile, its SIGNAL features under their own ids (./graded.ts). Empty without the option.
  * A FEATURE rule the plan enforces (one the owner REQUIRED) is never graded: it is the owner's, enforced like any rule they require (its carriers
@@ -1060,6 +1077,7 @@ async function refineOnLedger(client: InferenceClient, budget: Budget, skill: st
    * fixes something, and displaces nothing.
    */
   const tallyOf = (gradedPass: boolean): (typeof edits)[] => (gradedPass ? [edits, gradedEdits] : [edits]);
+  const unread = unreadOnRewrite(v);
   const rewriteStep = async (d: Decision): Promise<{ stop?: string }> => {
     const ids = new Set(d.targets);
     const enforcedStep = d.action === 'rewrite';
@@ -1140,7 +1158,7 @@ async function refineOnLedger(client: InferenceClient, budget: Budget, skill: st
         if (disp?.refusedFor.length) observedNote = `displacement observed: ${disp.refusedFor.join('; ')}`;
         return null;
       },
-      note: (_x, kept, why, v) => (kept ? observedNote : v.own ?? why ?? undefined),
+      note: (_x, kept, why, v) => (kept ? [observedNote, unread].filter(Boolean).join('; ') || undefined : v.own ?? why ?? undefined),
       movement: (x, kept) => (kept ? movedBy(d.targets, atLength(withGraded(report, gradedIds), from, x.text), x.report, enforcedStep) : 0) });
     if (s.kind === 'refused') return { stop: s.why };
     if (s.kind === 'failed') {

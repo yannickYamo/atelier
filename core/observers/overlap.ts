@@ -116,25 +116,44 @@ const gramsOf = (w: readonly string[]): string[] => w.slice(0, Math.max(0, w.len
 /**
  * A STRUCTURED OUTPUT'S FORM IS NOT A PASSAGE. A JSON label carries the same keys as every example and a category name
  * from a fixed list; counted as words, "ticket category billing priority level high" was a lifted passage. Where the text
- * parses as JSON (form parse: JSON.parse, a code fence around it allowed), its keys, and the string values the material
- * or every example also carries, are put out of the count: each is replaced by a word no piece holds, so no run crosses
- * it. Free text inside a value is counted as ever. Any other text is returned as it is.
+ * is JSON (form parse: JSON.parse, `jsonIn`), its keys, and the string values the material holds or the owner's examples
+ * carry as wording that recurs (in as many pieces as the standard wording asks, `standardWordingOf`), are put out of the
+ * count: each is replaced by a word no piece holds, so no run crosses it. Free text inside a value is counted as ever, and
+ * so is any prose around the JSON. Text with no JSON in it is returned as it is.
  */
 export function formTokensOut(text: string, pieces: readonly string[], material: string): string {
-  const body = text.trim().replace(/^```(?:json)?\s*\n([\s\S]*?)\n```$/, '$1');
-  let parsed: unknown;
-  try { parsed = JSON.parse(body); } catch { return text; }
-  if (typeof parsed !== 'object' || parsed === null) return text;
+  const found = jsonIn(text);
+  if (!found) return text;
   const keys = new Set<string>(); const values = new Set<string>();
   const walk = (x: unknown): void => {
     if (Array.isArray(x)) { x.forEach(walk); return; }
     if (typeof x === 'object' && x !== null) { for (const [k, v] of Object.entries(x)) { keys.add(k); walk(v); } return; }
     if (typeof x === 'string' && x.trim()) values.add(x);
   };
-  walk(parsed);
+  walk(found.value);
   const has = (hay: string, v: string): boolean => hay.toLowerCase().includes(v.toLowerCase());
-  const fixed = [...values].filter((v) => has(material, v) || (pieces.length > 0 && pieces.every((p) => has(p, v))));
-  return [...keys, ...fixed].sort((a, b) => b.length - a.length).reduce((t, tok) => t.split(JSON.stringify(tok)).join(' xformx '), text);
+  const separate = [...new Set(pieces.map((p) => p.normalize('NFKC').trim()))];
+  const need = Math.min(separate.length, separate.length >= STANDARD_WORDING_FROM_TWO_AT ? 2 : STANDARD_WORDING_PIECES);
+  const fixed = [...values].filter((v) => has(material, v) || (need > 0 && separate.filter((p) => has(p, v)).length >= need));
+  const json = [...keys, ...fixed].sort((a, b) => b.length - a.length).reduce((t, tok) => t.split(JSON.stringify(tok)).join(' xformx '), text.slice(found.start, found.end));
+  return `${text.slice(0, found.start)}${json}${text.slice(found.end)}`;
+}
+
+/**
+ * THE JSON IN A TEXT, BY FORM: the whole text, the inside of a code fence, or a block that opens a line with "{" or "["
+ * and closes one with "}" or "]", the first such stretch that parses as an object or an array. A writer that puts a
+ * paragraph after its label still delivered a label. Null where none parses.
+ */
+function jsonIn(text: string): { readonly value: object; readonly start: number; readonly end: number } | null {
+  const parse = (start: number, end: number): { value: object; start: number; end: number } | null => {
+    try { const v: unknown = JSON.parse(text.slice(start, end)); return typeof v === 'object' && v !== null ? { value: v, start, end } : null; } catch { return null; }
+  };
+  const fence = /```(?:json)?[ \t]*\n([\s\S]*?)\n[ \t]*```/.exec(text);
+  if (fence) { const at = fence.index + fence[0].indexOf(fence[1]); const r = parse(at, at + fence[1].length); if (r) return r; }
+  const opens = [...text.matchAll(/^[ \t]*[{[]/gm)].map((m) => m.index + m[0].length - 1).slice(0, 8);
+  const closes = [...text.matchAll(/[}\]][ \t]*$/gm)].map((m) => m.index + 1).reverse().slice(0, 40);
+  for (const s of opens) for (const e of closes) if (e > s) { const r = parse(s, e); if (r) return r; }
+  return null;
 }
 
 export const suppliedWording = (text: string): string[] => [...new Set(gramsOf(wordsOf(visible(text))))];
