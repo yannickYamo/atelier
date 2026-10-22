@@ -27,6 +27,7 @@ import { processSpendByPurpose, spendBetween, type SpendPurpose } from '../infer
 import type { PlannedStep, StepLedger } from './controller.js';
 import { inStep } from '../inference/step-guard.js';
 import { proseWordsOf } from '../observers/text.js';
+import { materialName } from '../golden/case.js';
 
 /** What a rewrite is told for a mechanical error no correction in place could fix: the error, and nothing else. */
 const GRAMMAR_HINT = 'Fix only the mechanical error named, in the fewest words; change no other word, and keep every figure, name and spelling the author chose';
@@ -217,7 +218,7 @@ function withoutGoneClauses(span: string, clauses: readonly Clause[], replacemen
 }
 
 /** A document's name as a citation reads it: lower case, no extension, "-", "_" and spaces alike. */
-const citeKey = (s: string): string => s.toLowerCase().replace(/\.[a-z0-9]{1,5}$/, '').replace(/[-_\s]+/g, ' ').trim();
+const citeKey = (s: string): string => materialName(s).toLowerCase();
 
 export const REPAIR_SYSTEM = `You revise marked spans of a draft so that each one meets the rules it broke.
 

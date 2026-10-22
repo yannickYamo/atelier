@@ -6,7 +6,7 @@
 
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, extname, basename, resolve, dirname } from 'node:path';
-import { inMaterialDir, materialDirOf, staysInside, goldenCase, MATERIAL_TEXT, type GoldenCase } from '../core/golden/case.js';
+import { inMaterialDir, materialDirOf, materialName, staysInside, goldenCase, MATERIAL_TEXT, type GoldenCase } from '../core/golden/case.js';
 import { extract, looksLikeUnsplitPair, READABLE, META_NAME } from '../core/intake/extract.js';
 import { walk } from './commands/intake.js';
 import { die, loadSession } from './runtime.js';
@@ -76,7 +76,7 @@ export function readCase(file: string, say: (line: string) => void = () => undef
     const text = !existsSync(f) ? null : (READABLE as readonly string[]).includes(ext) ? (() => { const x = extract(f); return x.ok ? x.text : null; })()
       : (MATERIAL_TEXT as readonly string[]).includes(ext) ? readFileSync(f, 'utf8') : null;
     if (!text?.trim()) { unread.push(name); return []; }
-    return [{ name, text }];
+    return [{ name: materialName(f), text }];
   });
   if (unread.length) say(`Material that could not be read, and is not counted: ${unread.join(', ')}.`);
   return goldenCase(basename(file), r.text, r.request ?? null, material);

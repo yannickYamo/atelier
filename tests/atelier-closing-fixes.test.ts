@@ -83,7 +83,7 @@ describe('with material bound, the writer is told to leave no slot', () => {
     expect(taskWithMaterial(L, 'Review this change.', false, false).task).toBe('Review this change.');
     store.addMaterial(L, 'change.diff', 'diff --git a/x b/x\n+1\n');
     const t = taskWithMaterial(L, 'Review this change.', false, false).task;
-    expect(t).toContain('<material name="change.diff">');
+    expect(t).toContain('<material name="change">');
     expect(t).toContain('Leave no bracketed slot for me to fill');
     expect(taskWithMaterial(L, 'Review this change.', true, false).task).toMatch(/do not count\.\)\n\n\(The material holds every specific/);
     expect(taskWithMaterial(L, 'Review this change.', false, true).task).not.toContain('bracketed slot');

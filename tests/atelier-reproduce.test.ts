@@ -66,7 +66,7 @@ describe('through the binary: one full case held back, run on its task and mater
     const before = (await served()).length;
     const r = atelier('reproduce', '--skill', 'analysis', '--dry-run');
     expect(r.code, r.err).toBe(0);
-    expect(r.out).toMatch(/^would run {2}(acme|borealis)\.md\n {2}task: Compare (acme|borealis) with its nearest rival on price for a team of ten\.\n {2}material: (acme|borealis)\.material\/filing\.md \(\d+ words\)$/m);
+    expect(r.out).toMatch(/^would run {2}(acme|borealis)\.md\n {2}task: Compare (acme|borealis) with its nearest rival on price for a team of ten\.\n {2}material: filing \(\d+ words\)$/m);
     expect(r.out).toMatch(/--dry-run: 1 of 1 case\(s\) would be run; nothing was called and nothing was written\./);
     const plan = JSON.parse(atelier('reproduce', '--skill', 'analysis', '--dry-run', '--json').out) as { cases: { id: string; runs: boolean; task?: string }[] };
     expect(plan.cases).toHaveLength(1);

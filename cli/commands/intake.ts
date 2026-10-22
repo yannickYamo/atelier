@@ -10,7 +10,7 @@ import { join, resolve, basename, dirname, extname, posix } from 'node:path';
 import { planImport, MIN_GOLDEN_CHARS, MIN_ANSWER_CHARS } from '../../core/discovery/chain/corpus-import.js';
 import { reserve, type Reservation } from '../../core/golden/reservation.js';
 import { describeGoldenEvidence, clusterAssignment, type GoldenUnit } from '../../core/golden/golden-unit.js';
-import { classOf, describeCases, inMaterialDir, materialDirOf, preferredForReserve, staysInside, MATERIAL_DIR, MATERIAL_TEXT, type CaseMaterial } from '../../core/golden/case.js';
+import { classOf, describeCases, inMaterialDir, materialDirOf, materialName, preferredForReserve, staysInside, MATERIAL_DIR, MATERIAL_TEXT, type CaseMaterial } from '../../core/golden/case.js';
 import { adaptSkillFolder, classifyPackagePath, type AdaptedPackage } from '../../core/intake/package.js';
 import type { ExpertEvidence } from '../../core/state/canonical-state.js';
 import { extract, READABLE, META_NAME } from '../../core/intake/extract.js';
@@ -138,7 +138,7 @@ export function intake(path: string, workType: string, mode?: 'GENERATE' | 'GUAR
     for (const f of [...new Set([...inFolder, ...refs])]) {
       if (f === r.file) continue;
       const text = existsSync(join(base, f)) ? materialText(f) : null;
-      if (text?.trim()) { texts.push({ name: f, text }); if (refs.includes(f)) named.add(f); } else unreadMaterial.push(`${f} (for ${r.file})`);
+      if (text?.trim()) { texts.push({ name: materialName(f), text }); if (refs.includes(f)) named.add(f); } else unreadMaterial.push(`${f} (for ${r.file})`);
     }
     if (texts.length) materialOf.set(r.file, texts);
   }

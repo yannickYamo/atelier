@@ -167,7 +167,7 @@ describe('through the binary: material, and several drafts chosen by count', () 
     mkdirSync(join(proj, 'm'), { recursive: true });
     writeFileSync(join(proj, 'm', 'incidents.md'), 'Last year we shipped a loop that broke production. It recovered by noon.');
     run('material', '--skill', 'inc', join(proj, 'm', 'incidents.md'));
-    expect(store.getMaterial({ root: data, skillName: 'inc' }).map((m) => m.name)).toEqual(['incidents.md']);
+    expect(store.getMaterial({ root: data, skillName: 'inc' }).map((m) => m.name)).toEqual(['incidents']);
     const out2 = run('invoke', '--skill', 'inc', 'write it', ...be);
     expect(out2).toContain('Last year we shipped a loop that broke production.');
     expect(readFileSync(join(proj, '.claude', 'skills', 'inc', 'SKILL.md'), 'utf8')).toBeTruthy();

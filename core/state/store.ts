@@ -422,7 +422,7 @@ export function setDocClass(l: StoreLayout, cls: string | null): void {
 export function getMaterial(l: StoreLayout): { name: string; text: string }[] {
   const d = join(dirs(l).base, 'material');
   if (!existsSync(d)) return [];
-  return readdirSync(d).filter((f) => !f.startsWith('.')).sort().map((f) => ({ name: f, text: readFileSync(join(d, f), 'utf8') }));
+  return readdirSync(d).filter((f) => !f.startsWith('.')).sort().map((f) => ({ name: materialName(f), text: readFileSync(join(d, f), 'utf8') }));
 }
 export function addMaterial(l: StoreLayout, name: string, text: string): void {
   const d = join(dirs(l).base, 'material');
@@ -759,6 +759,7 @@ export function history(l: StoreLayout): readonly HistoryEntry[] {
 
 import type { RuntimeBinding } from '../runtime/binding.js';
 import { bindingHash } from '../runtime/binding.js';
+import { materialName } from '../golden/case.js';
 
 interface BindingLog { readonly bindings: { binding: RuntimeBinding; hash: string; firstSeenAt: string }[] }
 

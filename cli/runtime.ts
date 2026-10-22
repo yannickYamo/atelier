@@ -19,6 +19,7 @@ import { newRun, transition, type Run } from '../core/state/run-state.js';
 import type { ExpertEvidence, Requirement, StandardVersion, CheckQualification, Measurement, Latitude } from '../core/state/canonical-state.js';
 import { contrastFor, type ContrastPair } from '../core/compiler/contrast-examples.js';
 import type { Reservation } from '../core/golden/reservation.js';
+import { materialName } from '../core/golden/case.js';
 import type { RatificationLedger } from '../core/ratification/decision-record.js';
 import type { AuthorMap } from '../core/composite/authors.js';
 import type { CompositeRecord } from '../core/composite/selection.js';
@@ -93,7 +94,7 @@ export const VALUED_OPTIONS: readonly string[] = ['correcting', 'moves',
   // `atelier new` with pieces by several authors (cli/commands/composite.ts): who wrote which, what is liked about each, and a conflict's answer
   'authors', 'admire', 'conflict',
   // how strictly output is held (cli/latitude.ts), and whether the rules no check reads are accepted unmeasured
-  'latitude', 'unmeasured',
+  'latitude', 'unmeasured', 'accept-unmeasured',
   'rule', 'set', 'skill', 'source-author', 'statement', 'strict-schema',
   'structured-output', 'supersedes', 'target-backend', 'target-base-url', 'target-model',
   'target-price-in', 'target-price-out', 'target-provider', 'target-strict-schema', 'target-structured-output',
@@ -583,7 +584,7 @@ export const boundMaterial = (): { name: string; path: string; text: string }[] 
     // file declares a resource held elsewhere and reads nothing; one that looks like a path and is not there is said.
     if (!spec.includes('=')) {
       const stem = fileStem(spec);
-      if (stem) { out.push({ name: stem, path: spec, text: readFileSync(spec, 'utf8') }); continue; }
+      if (stem) { out.push({ name: materialName(spec), path: spec, text: readFileSync(spec, 'utf8') }); continue; }
       if (/[\\/]|\.[A-Za-z0-9]{1,8}$/.test(spec)) die(`--with ${spec}: there is no file at ${spec}.`);
       continue;
     }
