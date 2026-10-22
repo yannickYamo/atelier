@@ -26,7 +26,7 @@
     "@anthropic-ai/sdk": "^0.125.0"
   },
   "optionalDependencies": {
-    "harper.js": "2.10.0"
+    "harper.js": "2.13.0"
   },
   "license": "SEE LICENSE IN LICENSE",
   "publishConfig": {
