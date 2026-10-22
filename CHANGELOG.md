@@ -32,6 +32,33 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
   partly read one with its part. A rule a qualified or counted check reads in full needs no acceptance, and a name that
   is no rule is said; neither stops the command.
 
+### Studies: the failed pass lines of 10-22b run again ($2.20)
+
+Claims and labels at efa0050, writer `claude-sonnet-5-5`, every call metered, two runs per task; every table and output
+is in `bench/runs/2026-10-22c/` (RESULTS.md, report.md). The owner's choice, stated before the runs: on a strict skill
+accept as unmeasured the judgement steps and the unread part of a partly read required rule, never a rule a check reads
+in full. Accepted: claims x1 (the Summary's "one paragraph"); labels x4, x8, x9, x13, x14, x15, x17 (judgement).
+
+- **Still nothing delivered** (claims 0 of 20, labels 0 of 20). A step whose written check did not qualify is recorded
+  as read in full, so the owner's choice does not accept it, and it holds every run: claims x3, x4, x5, x6, x8; labels
+  x2, x5, x6, x7, x10, x11, x19. Had those been accepted too, 5 and 6 of 20 would have been delivered; the claims reader
+  held the rest. One labels run was blocked by the copying check on the keys and values every Floor label shares.
+- **The margin over the model given the same examples holds on claims:** every oracle rule held in 19 of 20 Atelier
+  memos against 7 of 20 (+60 points, interval 37 to 83). The examples arm was run again: the served examples of the
+  earlier build were not kept, so its prompt could not be shown identical.
+- **Repair fixes 2 of 5** (0 of 5 before): the banned words and the uncited fact. The banned-word rewrite says "raises a
+  concern that may warrant further verification", the doubt step 6 forbids; that step has no qualified check. Nothing
+  else was added, dropped or negated.
+- **Hook passes:** an event that is not JSON exits 2 with the reason; the held-out golden exits 0 and names the 4
+  required rules it could not read.
+- **Planted defects named by their own step with the passage: claims 3 of 5 (2 with the defect's own passage), labels
+  2 of 5**, against 3 and 3. Labels step 17 is judgement in this build, and the taxonomy step's qualified check reads
+  only the form of a category, so "Violence – scuffle" passes.
+- The material-naming fix worked: claims step 2's citation check qualified (9 of 9 examples, 4 of 4 breaking edits).
+- Found and not fixed: a qualified check that reads only part of its step is recorded as reading it in full; an
+  unqualified written check is "read in full" on the record and "partly read" to `--accept-unmeasured`; the copying
+  check blocks a Floor label; repair can swap a banned word for an insinuation.
+
 ### Studies: tests A and C after the gap fixes (about $5.90 in all)
 
 Claims, labels and the public `i-have-adhd` skill, writer `claude-sonnet-5-5`, every call metered; every table and output

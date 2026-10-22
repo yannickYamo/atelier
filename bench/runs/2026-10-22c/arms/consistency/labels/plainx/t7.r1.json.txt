@@ -1,0 +1,13 @@
+{
+  "clip": "c20",
+  "duration": "00:47",
+  "overall": "Low",
+  "categories": [
+    {
+      "category": "Gambling – reference",
+      "risk": "Low",
+      "span": "00:03–00:08",
+      "evidence": "I lost the whole paycheque on slots last night."
+    }
+  ]
+}

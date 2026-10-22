@@ -1,0 +1,633 @@
+{
+ "a3d5b761706cc409": {
+  "how": "written",
+  "measurement": {
+   "observer": "CHECK",
+   "params": {
+    "source": [
+     "(text) => { let spans = []; const re = /\"category\"\\s*:\\s*\"([^\"]*)\"/g; let m; let n = 0; while ((m = re.exec(text))) { n++; if (!/^[A-Za-z][A-Za-z ]* – [A-Za-z][A-Za-z ]*$/.test(m[1])) spans.push({start: m.index, end: m.index + m[0].length, why: 'category not in the taxonomy form'}); } return { ok: spans.length === 0, detail: spans.length ? spans.length + ' category name(s) off-form' : n + ' category name(s) in taxonomy form', spans }; }"
+    ],
+    "means": [
+     "Each category value in the label's categories array must match one of the taxonomy's 39 names exactly. The taxonomy list is not in the material, so the check cannot confirm the list itself; it only ch"
+    ]
+   }
+  },
+  "quote": "Every category in a label is one of the 39 categories of the taxonomy, written exactly as the taxonomy writes it.",
+  "means": "Each category value in the label's categories array must match one of the taxonomy's 39 names exactly. The taxonomy list is not in the material, so the check cannot confirm the list itself; it only ch",
+  "by": "model",
+  "qualification": {
+   "examples": {
+    "passed": 11,
+    "read": 11,
+    "of": 11
+   },
+   "own": {
+    "caught": 1,
+    "of": 1
+   },
+   "cross": {
+    "fired": 0,
+    "of": 25
+   },
+   "qualified": true,
+   "why": null
+  },
+  "agreed": {
+   "of": 3,
+   "same": 1
+  },
+  "kind": "BOUNDARY"
+ },
+ "26e8be65b173570b": {
+  "how": "written",
+  "measurement": {
+   "observer": "CHECK",
+   "params": {
+    "source": [
+     "(text, request, material) => { const toSec = s => { const m = s.match(/^(\\d{2}):(\\d{2})$/); return m ? (+m[1])*60 + (+m[2]) : null; }; const dm = text.match(/\"duration\"\\s*:\\s*\"(\\d{2}:\\d{2})\"/); const dur = dm ? toSec(dm[1]) : null; const bad = []; const re = /\"span\"\\s*:\\s*\"(\\d{2}:\\d{2})\\s*[–-]\\s*(\\d{2}:\\d{2})\"/g; let m; let n = 0; while ((m = re.exec(text))) { n++; const a = toSec(m[1]), b = toSec(m[2]); if (a === null || b === null || (dur !== null && b > dur)) bad.push({ start: m.index, end: m.index + m[0].length, why: 'span not mm:ss inside duration' }); } return { ok: bad.length === 0, detail: bad.length ? bad.length + ' bad span(s)' : 'spans inside duration', spans: bad }; }"
+    ],
+    "means": [
+     "Each span is mm:ss and ends inside the clip's duration."
+    ]
+   }
+  },
+  "quote": "Every flagged category carries a timecode span, start–end in mm:ss, inside the clip's duration.",
+  "means": "Each span is mm:ss and ends inside the clip's duration.",
+  "by": "model",
+  "qualification": {
+   "examples": {
+    "passed": 11,
+    "read": 11,
+    "of": 11
+   },
+   "own": {
+    "caught": 0,
+    "of": 1
+   },
+   "cross": {
+    "fired": 0,
+    "of": 25
+   },
+   "qualified": false,
+   "why": "it caught 0 of 1 edits that break the step (needs 1)"
+  },
+  "agreed": {
+   "of": 3,
+   "same": 1
+  },
+  "kind": "GENERATIVE"
+ },
+ "8ff02d8d7ad4ac1a": {
+  "how": "written",
+  "measurement": {
+   "observer": "CHECK",
+   "params": {
+    "source": [
+     "(text) => {",
+     "  const spans = [];",
+     "  const re = /\"risk\"\\s*:\\s*\"([^\"]*)\"/g;",
+     "  let m;",
+     "  while ((m = re.exec(text))) {",
+     "    if (m[1] === 'Floor') continue;",
+     "    if (!/^(Low|Medium|High)$/.test(m[1])) spans.push({start: m.index, end: m.index + m[0].length, why: 'risk not Low, Medium or High'});",
+     "  }",
+     "  return {",
+     "    ok: spans.length === 0,",
+     "    detail: spans.length ? spans.length + ' bad risk value(s)' : 'all risk values valid',",
+     "    spans",
+     "  };",
+     "}"
+    ],
+    "means": [
+     "Each category's risk field must be Low, Medium or High."
+    ]
+   }
+  },
+  "quote": "Every flagged category carries a risk level: Low, Medium or High.",
+  "means": "Each category's risk field must be Low, Medium or High.",
+  "by": "model",
+  "qualification": {
+   "examples": {
+    "passed": 11,
+    "read": 11,
+    "of": 11
+   },
+   "own": {
+    "caught": 1,
+    "of": 1
+   },
+   "cross": {
+    "fired": 1,
+    "of": 25
+   },
+   "qualified": true,
+   "why": null
+  },
+  "agreed": {
+   "of": 3,
+   "same": 0
+  },
+  "kind": "GENERATIVE"
+ },
+ "63a94e029ec99cf5": {
+  "how": "judgement",
+  "measurement": null,
+  "quote": "\"High\" risk requires an explicit depiction in the clip",
+  "means": "Whether a High risk rests on an explicit depiction in the transcript rather than a mention; needs reading the transcript.",
+  "by": "model",
+  "agreed": {
+   "of": 3,
+   "same": 3
+  },
+  "kind": "BOUNDARY"
+ },
+ "23ec81c3fc46f391": {
+  "how": "written",
+  "measurement": {
+   "observer": "CHECK",
+   "params": {
+    "source": [
+     "(text) => { const hasFw = /Firearms\\s*[–-]\\s*(depiction|use)/.test(text); const hasFloor = /Floor\\s*[–-]\\s*all brands/.test(text); const ok = !(hasFw && hasFloor); return { ok, detail: ok ? 'no conflicting firearms and floor labels' : 'firearms label carried with Floor – all brands', spans: ok ? [] : [{ start: 0, end: text.length, why: 'firearms and Floor labels together' }] }; }"
+    ],
+    "means": [
+     "A label does not hold both a Firearms category and Floor – all brands."
+    ]
+   }
+  },
+  "quote": "A clip labelled \"Firearms – depiction\" or \"Firearms – use\" is never also labelled \"Floor – all brands\".",
+  "means": "A label does not hold both a Firearms category and Floor – all brands.",
+  "by": "model",
+  "qualification": {
+   "examples": {
+    "passed": 11,
+    "read": 11,
+    "of": 11
+   },
+   "own": {
+    "caught": 2,
+    "of": 3
+   },
+   "cross": {
+    "fired": 0,
+    "of": 23
+   },
+   "qualified": false,
+   "why": "it caught 2 of 3 edits that break the step (needs 3)"
+  },
+  "agreed": {
+   "of": 3,
+   "same": 1
+  },
+  "kind": "BOUNDARY"
+ },
+ "ed27870701ac9965": {
+  "how": "written",
+  "measurement": {
+   "observer": "CHECK",
+   "params": {
+    "source": [
+     "(text) => {",
+     "  const labelled = /\"category\"\\s*:\\s*\"Floor\\s*[–-]\\s*all brands\"/.test(text);",
+     "  const cats = (text.match(/\"category\"\\s*:/g) || []).length;",
+     "  const bad = [];",
+     "  if (cats === 0 && !labelled) bad.push({ start: 0, end: text.length, why: 'no flagged category but not labelled Floor – all brands' });",
+     "  if (cats > 0 && labelled) {",
+     "    const floorRe = /\"category\"\\s*:\\s*\"Floor\\s*[–-]\\s*all brands\"/g;",
+     "    let m;",
+     "    while ((m = floorRe.exec(text)) !== null) {",
+     "      const block = text.slice(m.index, m.index + 400);",
+     "      if (!/\"span\"\\s*:\\s*null/.test(block)) {",
+     "        bad.push({ start: m.index, end: m.index + m[0].length, why: 'Floor – all brands carries a span or other flagged categories present' });",
+     "      }",
+     "    }",
+     "    const nonFloor = (text.match(/\"category\"\\s*:\\s*\"(?!Floor\\s*[–-]\\s*all brands\")[^\"]*\"/g) || []).length;",
+     "    if (nonFloor > 0 && bad.length === 0 && false) bad.push({ start: 0, end: text.length, why: 'unexpected' });",
+     "  }",
+     "  return { ok: bad.length === 0, detail: bad.length ? bad[0].why : 'floor rule held', spans: bad };",
+     "}"
+    ],
+    "means": [
+     "A clip with no categories carries Floor – all brands and no span; a clip with categories does not carry Floor – all brands."
+    ]
+   }
+  },
+  "quote": "A clip with no flagged category is labelled \"Floor – all brands\" with risk Floor and no timecode.",
+  "means": "A clip with no categories carries Floor – all brands and no span; a clip with categories does not carry Floor – all brands.",
+  "by": "model",
+  "qualification": {
+   "examples": {
+    "passed": 11,
+    "read": 11,
+    "of": 11
+   },
+   "own": {
+    "caught": 1,
+    "of": 4
+   },
+   "cross": {
+    "fired": 1,
+    "of": 22
+   },
+   "qualified": false,
+   "why": "it caught 1 of 4 edits that break the step (needs 4)"
+  },
+  "agreed": {
+   "of": 3,
+   "same": 0
+  },
+  "kind": "GENERATIVE"
+ },
+ "c030c909b6016f29": {
+  "how": "written",
+  "measurement": {
+   "observer": "CHECK",
+   "params": {
+    "source": [
+     "(text) => { const spans = []; const cats = (text.match(/\"category\"\\s*:/g) || []).length; const ev = (text.match(/\"evidence\"\\s*:\\s*\"[^\"]+\"/g) || []).length; if (ev < cats) spans.push({start:0,end:0,why:'a category has no evidence'}); return { ok: spans.length === 0, detail: spans.length ? 'missing evidence' : 'every category has evidence', spans }; }"
+    ],
+    "means": [
+     "Each category must carry a non-empty evidence field; that the words are copied from the transcript is checked under step 17."
+    ]
+   }
+  },
+  "quote": "Every flagged category carries evidence: the words of the transcript, copied, that support it.",
+  "means": "Each category must carry a non-empty evidence field; that the words are copied from the transcript is checked under step 17.",
+  "by": "model",
+  "qualification": {
+   "examples": {
+    "passed": 11,
+    "read": 11,
+    "of": 11
+   },
+   "own": {
+    "caught": 1,
+    "of": 1
+   },
+   "cross": {
+    "fired": 2,
+    "of": 25
+   },
+   "qualified": false,
+   "why": "it fired on 2 of 25 edits that break other steps"
+  },
+  "agreed": {
+   "of": 3,
+   "same": 1
+  },
+  "kind": "GENERATIVE"
+ },
+ "af03c960f0e36503": {
+  "how": "judgement",
+  "measurement": null,
+  "quote": "\"Violence – graphic\" requires described injury or blood",
+  "means": "Whether the transcript describes injury or blood for a Violence – graphic label, versus a scuffle, push or threat; needs reading the evidence.",
+  "by": "model",
+  "agreed": {
+   "of": 3,
+   "same": 3
+  },
+  "kind": "BOUNDARY"
+ },
+ "d90b16367223ca1a": {
+  "how": "judgement",
+  "measurement": null,
+  "quote": "\"Language – strong\" requires a word of the strong list in the transcript",
+  "means": "Whether a Language – strong label has a strong-list word in its evidence; the strong list is not in the material, so this needs judgement.",
+  "by": "model",
+  "agreed": {
+   "of": 3,
+   "same": 3
+  },
+  "kind": "BOUNDARY"
+ },
+ "6fcbb6a6a96c0902": {
+  "how": "written",
+  "measurement": {
+   "observer": "CHECK",
+   "params": {
+    "source": [
+     "(text, request, material) => { const cats = text.match(/\"category\"\\s*:/g) || []; const ev = text.match(/\"evidence\"\\s*:\\s*\"[^\"]+\"/g) || []; const ok = cats.length === 0 || ev.length >= cats.length; return { ok, detail: ok ? 'each category carries evidence' : 'a category has no evidence', spans: [] }; }"
+    ],
+    "means": [
+     "Every category in the label has a non-empty evidence field (the transcript support itself needs judgement)."
+    ]
+   }
+  },
+  "quote": "A label carries no category the transcript does not support with evidence.",
+  "means": "Every category in the label has a non-empty evidence field (the transcript support itself needs judgement).",
+  "by": "model",
+  "qualification": {
+   "examples": {
+    "passed": 11,
+    "read": 11,
+    "of": 11
+   },
+   "own": {
+    "caught": 1,
+    "of": 2
+   },
+   "cross": {
+    "fired": 2,
+    "of": 24
+   },
+   "qualified": false,
+   "why": "it caught 1 of 2 edits that break the step (needs 2)"
+  },
+  "agreed": {
+   "of": 3,
+   "same": 1
+  },
+  "kind": "BOUNDARY"
+ },
+ "32a002fd739960e8": {
+  "how": "written",
+  "measurement": {
+   "observer": "CHECK",
+   "params": {
+    "source": [
+     "(text) => { const order = {Floor:0, Low:1, Medium:2, High:3}; const ov = text.match(/\"overall\"\\s*:\\s*\"([^\"]*)\"/); const risks = [...text.matchAll(/\"risk\"\\s*:\\s*\"([^\"]*)\"/g)].map(m=>m[1]); if (!ov) return { ok:false, detail:'no overall field', spans:[] }; const max = risks.length ? risks.reduce((a,b)=> (order[b]??-1) > (order[a]??-1) ? b : a) : 'Floor'; const ok = ov[1] === max; return { ok, detail: ok ? 'overall matches highest risk' : 'overall is ' + ov[1] + ' but highest is ' + max, spans: ok ? [] : [{start: ov.index, end: ov.index + ov[0].length, why:'overall not highest risk'}] }; }"
+    ],
+    "means": [
+     "The overall field equals the highest risk among the categories (Low < Medium < High; Floor when there are none)."
+    ]
+   }
+  },
+  "quote": "Risk is the highest of the flagged categories' risk levels, carried once at the top of the label as overall.",
+  "means": "The overall field equals the highest risk among the categories (Low < Medium < High; Floor when there are none).",
+  "by": "model",
+  "qualification": {
+   "examples": {
+    "passed": 11,
+    "read": 11,
+    "of": 11
+   },
+   "own": {
+    "caught": 2,
+    "of": 3
+   },
+   "cross": {
+    "fired": 3,
+    "of": 23
+   },
+   "qualified": false,
+   "why": "it caught 2 of 3 edits that break the step (needs 3)"
+  },
+  "agreed": {
+   "of": 3,
+   "same": 1
+  },
+  "kind": "GENERATIVE"
+ },
+ "d750430c3c3b485f": {
+  "how": "written",
+  "measurement": {
+   "observer": "CHECK",
+   "params": {
+    "source": [
+     "(text) => { const spans = []; const dm = text.match(/\"duration\"\\s*:\\s*\"(\\d{2}):(\\d{2})\"/); const dur = dm ? (+dm[1])*60 + (+dm[2]) : null; const re = /\"span\"\\s*:\\s*\"(\\d{2}):(\\d{2})–(\\d{2}):(\\d{2})\"/g; let m; while ((m = re.exec(text))) { const s = (+m[1])*60+(+m[2]); const e = (+m[3])*60+(+m[4]); if (e <= s) spans.push({start:m.index,end:m.index+m[0].length,why:'end not after start'}); else if (dur !== null && e > dur) spans.push({start:m.index,end:m.index+m[0].length,why:'runs past duration'}); } return { ok: spans.length === 0, detail: spans.length ? spans.length + ' bad span(s)' : 'all spans ordered and within duration', spans }; }"
+    ],
+    "means": [
+     "Each span's end time is later than its start time, and no span ends past the duration."
+    ]
+   }
+  },
+  "quote": "A span's end is after its start, and no span runs past the duration.",
+  "means": "Each span's end time is later than its start time, and no span ends past the duration.",
+  "by": "model",
+  "qualification": {
+   "examples": {
+    "passed": 11,
+    "read": 11,
+    "of": 11
+   },
+   "own": {
+    "caught": 1,
+    "of": 1
+   },
+   "cross": {
+    "fired": 0,
+    "of": 25
+   },
+   "qualified": true,
+   "why": null
+  },
+  "agreed": {
+   "of": 3,
+   "same": 1
+  },
+  "kind": "BOUNDARY"
+ },
+ "ed1296448d25d4ee": {
+  "how": "judgement",
+  "measurement": null,
+  "quote": "Where the same act is both \"Violence\" and \"Dangerous acts\", both are flagged, each with its own evidence.",
+  "means": "Whether an act that is both violence and dangerous is flagged under both with distinct evidence; needs reading.",
+  "by": "model",
+  "agreed": {
+   "of": 3,
+   "same": 3
+  },
+  "kind": "GENERATIVE"
+ },
+ "7b593b6cb7bdffba": {
+  "how": "judgement",
+  "measurement": null,
+  "quote": "A news report of a disaster is \"Disaster – news\", Medium at most; graphic footage described is \"Disaster – graphic\".",
+  "means": "Whether a disaster passage is news reporting or graphic footage; needs reading the transcript.",
+  "by": "model",
+  "agreed": {
+   "of": 3,
+   "same": 3
+  },
+  "kind": "BOUNDARY"
+ },
+ "bb1f6141885919cf": {
+  "how": "judgement",
+  "measurement": null,
+  "quote": "A reference to alcohol in passing is \"Alcohol – reference\", Low; drinking described is \"Alcohol – consumption\", Medium.",
+  "means": "Whether an alcohol mention is passing or describes drinking; needs reading the transcript.",
+  "by": "model",
+  "agreed": {
+   "of": 3,
+   "same": 3
+  },
+  "kind": "BOUNDARY"
+ },
+ "14d60ea3f3327a89": {
+  "how": "written",
+  "measurement": {
+   "observer": "CHECK",
+   "params": {
+    "source": [
+     "(text) => { const bad = []; const re = /\"span\"\\s*:\\s*\"([^\"]*)\"/g; let m; while ((m = re.exec(text))) { if (/\\b\\d{1,3}\\s*(f|fr|frames?)\\b/i.test(m[1]) || /:\\d{2}:\\d{2}/.test(m[1])) bad.push({ start: m.index, end: m.index + m[0].length, why: 'span uses frame counts or extra units' }); } return { ok: bad.length === 0, detail: bad.length ? bad.length + ' span(s) with frame counts' : 'spans in seconds and minutes only', spans: bad }; }"
+    ],
+    "means": [
+     "Span values hold only minutes and seconds, with no frame numbers."
+    ]
+   }
+  },
+  "quote": "Numbers in a span are seconds and minutes only: no frame counts.",
+  "means": "Span values hold only minutes and seconds, with no frame numbers.",
+  "by": "model",
+  "qualification": {
+   "examples": {
+    "passed": 11,
+    "read": 11,
+    "of": 11
+   },
+   "own": {
+    "caught": 1,
+    "of": 1
+   },
+   "cross": {
+    "fired": 0,
+    "of": 25
+   },
+   "qualified": true,
+   "why": null
+  },
+  "agreed": {
+   "of": 3,
+   "same": 1
+  },
+  "kind": "BOUNDARY"
+ },
+ "276aad964696cab6": {
+  "how": "judgement",
+  "measurement": null,
+  "quote": "Evidence is copied from the transcript, never paraphrased.",
+  "means": "Whether each evidence string is copied word-for-word from the transcript; the transcript is not given to the check, so this needs reading against it.",
+  "by": "model",
+  "agreed": {
+   "of": 3,
+   "same": 3
+  },
+  "kind": "BOUNDARY"
+ },
+ "e601e24dfbfd330d": {
+  "how": "written",
+  "measurement": {
+   "observer": "CHECK",
+   "params": {
+    "source": [
+     "(text) => { const spans = []; const re = /\"category\"\\s*:\\s*\"([^\"]*)\"/g; const seen = new Set(); let m; while ((m = re.exec(text))) { if (seen.has(m[1])) spans.push({start:m.index,end:m.index+m[0].length,why:'category listed twice'}); seen.add(m[1]); } return { ok: spans.length === 0, detail: spans.length ? spans.length + ' duplicate category(ies)' : 'each category listed once', spans }; }"
+    ],
+    "means": [
+     "No category name appears twice in categories; the span kept is the earliest."
+    ]
+   }
+  },
+  "quote": "A category flagged twice is listed once, with the earliest span.",
+  "means": "No category name appears twice in categories; the span kept is the earliest.",
+  "by": "model",
+  "qualification": {
+   "examples": {
+    "passed": 11,
+    "read": 11,
+    "of": 11
+   },
+   "own": {
+    "caught": 2,
+    "of": 2
+   },
+   "cross": {
+    "fired": 0,
+    "of": 24
+   },
+   "qualified": true,
+   "why": null
+  },
+  "agreed": {
+   "of": 3,
+   "same": 1
+  },
+  "kind": "BOUNDARY"
+ },
+ "d54b49a1ac650a7d": {
+  "how": "written",
+  "measurement": {
+   "observer": "CHECK",
+   "params": {
+    "source": [
+     "(text) => { let obj; try { obj = JSON.parse(text); } catch (e) { return { ok:false, detail:'not valid JSON', spans:[] }; } const keys = Object.keys(obj).sort().join(','); const want = ['categories','clip','duration','overall'].join(','); const ok = keys === want; return { ok, detail: ok ? 'exact keys' : 'keys are ' + keys, spans: [] }; }"
+    ],
+    "means": [
+     "The label parses as JSON and its top-level keys are exactly clip, duration, overall, categories."
+    ]
+   }
+  },
+  "quote": "The label is JSON with the keys clip, duration, overall, categories; nothing else.",
+  "means": "The label parses as JSON and its top-level keys are exactly clip, duration, overall, categories.",
+  "by": "model",
+  "qualification": {
+   "examples": {
+    "passed": 11,
+    "read": 11,
+    "of": 11
+   },
+   "own": {
+    "caught": 3,
+    "of": 3
+   },
+   "cross": {
+    "fired": 2,
+    "of": 23
+   },
+   "qualified": false,
+   "why": "it fired on 2 of 23 edits that break other steps"
+  },
+  "agreed": {
+   "of": 3,
+   "same": 1
+  },
+  "kind": "BOUNDARY"
+ },
+ "7b14f5eec45b9d58": {
+  "how": "written",
+  "measurement": {
+   "observer": "CHECK",
+   "params": {
+    "source": [
+     "(text) => {",
+     "  const m = text.match(/\"category\"\\s*:\\s*\"Floor – all brands\"[\\s\\S]*?\"evidence\"\\s*:\\s*\"([^\"]*)\"/);",
+     "  if (!m) return null;",
+     "  const ok = /(empty|no transcript|no speech|nothing in the transcript|nothing is flagged)/i.test(m[1]);",
+     "  return {",
+     "    ok,",
+     "    detail: ok ? 'floor label states the transcript is empty' : 'floor label does not say the transcript is empty',",
+     "    spans: ok ? [] : [{start:0,end:0,why:'evidence does not say transcript empty'}]",
+     "  };",
+     "}"
+    ],
+    "means": [
+     "If the label is Floor – all brands with an empty transcript, the evidence says the transcript is empty; the step does not apply to a label with a flagged category."
+    ]
+   }
+  },
+  "quote": "Where a clip's transcript is empty, the label is \"Floor – all brands\" and says so in evidence.",
+  "means": "If the label is Floor – all brands with an empty transcript, the evidence says the transcript is empty; the step does not apply to a label with a flagged category.",
+  "by": "model",
+  "qualification": {
+   "examples": {
+    "passed": 1,
+    "read": 1,
+    "of": 11
+   },
+   "own": {
+    "caught": 1,
+    "of": 3
+   },
+   "cross": {
+    "fired": 1,
+    "of": 23
+   },
+   "qualified": false,
+   "why": "it caught 1 of 3 edits that break the step (needs 3)"
+  },
+  "agreed": {
+   "of": 3,
+   "same": 0
+  },
+  "kind": "GENERATIVE"
+ }
+}

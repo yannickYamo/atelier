@@ -1,0 +1,888 @@
+{
+ "entries": [
+  {
+   "at": "2026-10-22T06:15:13.703Z",
+   "step": "testA1",
+   "fixture": "claims",
+   "build": 1,
+   "how": "atelier new examples --method method.md (fresh data)",
+   "exit": 0,
+   "seconds": 99.1,
+   "meterUsd": 0.16826803,
+   "standardHash": "f201213421c222c1",
+   "skillVersion": "6e70ebb6f58e2b31",
+   "data": "<scratch>/data/build-claims-1-GC9yHX"
+  },
+  {
+   "at": "2026-10-22T06:16:54.457Z",
+   "step": "testA1",
+   "fixture": "labels",
+   "build": 1,
+   "how": "atelier new examples --method method.md (fresh data)",
+   "exit": 0,
+   "seconds": 100.715,
+   "meterUsd": 0.12221565499999998,
+   "standardHash": "41190182644e50ff",
+   "skillVersion": "b96b64a9a4bfebe3",
+   "data": "<scratch>/data/build-labels-1-JMlLs8"
+  },
+  {
+   "at": "2026-10-22T06:17:56.796Z",
+   "step": "amend",
+   "fixture": "claims",
+   "exit": 0,
+   "accepted": [
+    "x1"
+   ],
+   "standardHash": "4823666957968b33",
+   "meterUsd": 0
+  },
+  {
+   "at": "2026-10-22T06:17:56.976Z",
+   "step": "amend",
+   "fixture": "labels",
+   "exit": 0,
+   "accepted": [
+    "x4",
+    "x8",
+    "x9",
+    "x13",
+    "x14",
+    "x15",
+    "x17"
+   ],
+   "standardHash": "4833d2ab138de82b",
+   "meterUsd": 0
+  },
+  {
+   "at": "2026-10-22T06:19:45.259Z",
+   "step": "test2+3",
+   "fixture": "claims",
+   "build": 1,
+   "verifies": 6,
+   "meterUsd": 0.07588399999999995
+  },
+  {
+   "at": "2026-10-22T06:20:38.269Z",
+   "step": "test2+3",
+   "fixture": "labels",
+   "build": 1,
+   "verifies": 6,
+   "meterUsd": 0.056514000000000064
+  },
+  {
+   "at": "2026-10-22T06:21:06.115Z",
+   "step": "test4",
+   "build": 1,
+   "repairs": 5,
+   "meterUsd": 0.028273500000000062
+  },
+  {
+   "at": "2026-10-22T06:21:39.605Z",
+   "step": "test6+7+9",
+   "build": 1,
+   "meterUsd": 0.025964999999999905
+  },
+  {
+   "at": "2026-10-22T06:21:57.821Z",
+   "step": "test5",
+   "fixture": "claims",
+   "arm": "atelier",
+   "task": "t0",
+   "run": 1,
+   "costUsd": 0.0416,
+   "meterUsd": 0.041606299999999874
+  },
+  {
+   "at": "2026-10-22T06:22:16.738Z",
+   "step": "test5",
+   "fixture": "claims",
+   "arm": "atelier",
+   "task": "t1",
+   "run": 1,
+   "costUsd": 0.0217,
+   "meterUsd": 0.021690980000000026
+  },
+  {
+   "at": "2026-10-22T06:22:38.243Z",
+   "step": "test5",
+   "fixture": "claims",
+   "arm": "atelier",
+   "task": "t2",
+   "run": 1,
+   "costUsd": 0.024,
+   "meterUsd": 0.024023579999999933
+  },
+  {
+   "at": "2026-10-22T06:22:54.993Z",
+   "step": "test5",
+   "fixture": "claims",
+   "arm": "atelier",
+   "task": "t3",
+   "run": 1,
+   "costUsd": 0.0203,
+   "meterUsd": 0.020334380000000207
+  },
+  {
+   "at": "2026-10-22T06:23:17.264Z",
+   "step": "test5",
+   "fixture": "claims",
+   "arm": "atelier",
+   "task": "t4",
+   "run": 1,
+   "costUsd": 0.0255,
+   "meterUsd": 0.025454679999999952
+  },
+  {
+   "at": "2026-10-22T06:23:34.046Z",
+   "step": "test5",
+   "fixture": "claims",
+   "arm": "atelier",
+   "task": "t5",
+   "run": 1,
+   "costUsd": 0.0192,
+   "meterUsd": 0.019233379999999967
+  },
+  {
+   "at": "2026-10-22T06:24:00.668Z",
+   "step": "test5",
+   "fixture": "claims",
+   "arm": "atelier",
+   "task": "t6",
+   "run": 1,
+   "costUsd": 0.0286,
+   "meterUsd": 0.028579280000000096
+  },
+  {
+   "at": "2026-10-22T06:24:25.002Z",
+   "step": "test5",
+   "fixture": "claims",
+   "arm": "atelier",
+   "task": "t7",
+   "run": 1,
+   "costUsd": 0.0247,
+   "meterUsd": 0.024688380000000065
+  },
+  {
+   "at": "2026-10-22T06:24:52.225Z",
+   "step": "test5",
+   "fixture": "claims",
+   "arm": "atelier",
+   "task": "t8",
+   "run": 1,
+   "costUsd": 0.0282,
+   "meterUsd": 0.028212380000000037
+  },
+  {
+   "at": "2026-10-22T06:25:13.576Z",
+   "step": "test5",
+   "fixture": "claims",
+   "arm": "atelier",
+   "task": "t9",
+   "run": 1,
+   "costUsd": 0.0215,
+   "meterUsd": 0.021549779999999963
+  },
+  {
+   "at": "2026-10-22T06:25:33.086Z",
+   "step": "test5",
+   "fixture": "claims",
+   "arm": "atelier",
+   "task": "t0",
+   "run": 2,
+   "costUsd": 0.0209,
+   "meterUsd": 0.020943880000000026
+  },
+  {
+   "at": "2026-10-22T06:25:54.092Z",
+   "step": "test5",
+   "fixture": "claims",
+   "arm": "atelier",
+   "task": "t1",
+   "run": 2,
+   "costUsd": 0.0224,
+   "meterUsd": 0.022357780000000105
+  },
+  {
+   "at": "2026-10-22T06:26:16.588Z",
+   "step": "test5",
+   "fixture": "claims",
+   "arm": "atelier",
+   "task": "t2",
+   "run": 2,
+   "costUsd": 0.025,
+   "meterUsd": 0.02503498000000004
+  },
+  {
+   "at": "2026-10-22T06:26:37.413Z",
+   "step": "test5",
+   "fixture": "claims",
+   "arm": "atelier",
+   "task": "t3",
+   "run": 2,
+   "costUsd": 0.0235,
+   "meterUsd": 0.023471280000000094
+  },
+  {
+   "at": "2026-10-22T06:26:59.937Z",
+   "step": "test5",
+   "fixture": "claims",
+   "arm": "atelier",
+   "task": "t4",
+   "run": 2,
+   "costUsd": 0.0251,
+   "meterUsd": 0.025076580000000015
+  },
+  {
+   "at": "2026-10-22T06:27:21.002Z",
+   "step": "test5",
+   "fixture": "claims",
+   "arm": "atelier",
+   "task": "t5",
+   "run": 2,
+   "costUsd": 0.0221,
+   "meterUsd": 0.02206777999999987
+  },
+  {
+   "at": "2026-10-22T06:27:48.721Z",
+   "step": "test5",
+   "fixture": "claims",
+   "arm": "atelier",
+   "task": "t6",
+   "run": 2,
+   "costUsd": 0.028,
+   "meterUsd": 0.028009180000000078
+  },
+  {
+   "at": "2026-10-22T06:28:11.093Z",
+   "step": "test5",
+   "fixture": "claims",
+   "arm": "atelier",
+   "task": "t7",
+   "run": 2,
+   "costUsd": 0.0231,
+   "meterUsd": 0.023142580000000135
+  },
+  {
+   "at": "2026-10-22T06:28:32.729Z",
+   "step": "test5",
+   "fixture": "claims",
+   "arm": "atelier",
+   "task": "t8",
+   "run": 2,
+   "costUsd": 0.0228,
+   "meterUsd": 0.022769279999999892
+  },
+  {
+   "at": "2026-10-22T06:28:55.112Z",
+   "step": "test5",
+   "fixture": "claims",
+   "arm": "atelier",
+   "task": "t9",
+   "run": 2,
+   "costUsd": 0.0225,
+   "meterUsd": 0.02251787999999999
+  },
+  {
+   "at": "2026-10-22T06:29:17.845Z",
+   "step": "test5",
+   "fixture": "labels",
+   "arm": "atelier",
+   "task": "t0",
+   "run": 1,
+   "costUsd": 0.0395,
+   "meterUsd": 0.0394737799999999
+  },
+  {
+   "at": "2026-10-22T06:29:35.700Z",
+   "step": "test5",
+   "fixture": "labels",
+   "arm": "atelier",
+   "task": "t1",
+   "run": 1,
+   "costUsd": 0.0188,
+   "meterUsd": 0.018789379999999856
+  },
+  {
+   "at": "2026-10-22T06:29:53.551Z",
+   "step": "test5",
+   "fixture": "labels",
+   "arm": "atelier",
+   "task": "t2",
+   "run": 1,
+   "costUsd": 0.0181,
+   "meterUsd": 0.018075280000000138
+  },
+  {
+   "at": "2026-10-22T06:30:09.378Z",
+   "step": "test5",
+   "fixture": "labels",
+   "arm": "atelier",
+   "task": "t3",
+   "run": 1,
+   "costUsd": 0.0164,
+   "meterUsd": 0.016372580000000303
+  },
+  {
+   "at": "2026-10-22T06:30:27.041Z",
+   "step": "test5",
+   "fixture": "labels",
+   "arm": "atelier",
+   "task": "t4",
+   "run": 1,
+   "costUsd": 0.0175,
+   "meterUsd": 0.017518380000000278
+  },
+  {
+   "at": "2026-10-22T06:30:43.266Z",
+   "step": "test5",
+   "fixture": "labels",
+   "arm": "atelier",
+   "task": "t5",
+   "run": 1,
+   "costUsd": 0.0153,
+   "meterUsd": 0.015320979999999818
+  },
+  {
+   "at": "2026-10-22T06:31:05.283Z",
+   "step": "test5",
+   "fixture": "labels",
+   "arm": "atelier",
+   "task": "t6",
+   "run": 1,
+   "costUsd": 0.0216,
+   "meterUsd": 0.02157648000000001
+  },
+  {
+   "at": "2026-10-22T06:31:22.355Z",
+   "step": "test5",
+   "fixture": "labels",
+   "arm": "atelier",
+   "task": "t7",
+   "run": 1,
+   "costUsd": 0.0179,
+   "meterUsd": 0.017936980000000435
+  },
+  {
+   "at": "2026-10-22T06:31:42.540Z",
+   "step": "test5",
+   "fixture": "labels",
+   "arm": "atelier",
+   "task": "t8",
+   "run": 1,
+   "costUsd": 0.0202,
+   "meterUsd": 0.02016387999999969
+  },
+  {
+   "at": "2026-10-22T06:31:58.848Z",
+   "step": "test5",
+   "fixture": "labels",
+   "arm": "atelier",
+   "task": "t9",
+   "run": 1,
+   "costUsd": 0.0172,
+   "meterUsd": 0.017186380000000057
+  },
+  {
+   "at": "2026-10-22T06:32:15.085Z",
+   "step": "test5",
+   "fixture": "labels",
+   "arm": "atelier",
+   "task": "t0",
+   "run": 2,
+   "costUsd": 0.0187,
+   "meterUsd": 0.018727979999999977
+  },
+  {
+   "at": "2026-10-22T06:32:24.510Z",
+   "step": "test5",
+   "fixture": "labels",
+   "arm": "atelier",
+   "task": "t1",
+   "run": 2,
+   "costUsd": 0.0094,
+   "meterUsd": 0.009359380000000028
+  },
+  {
+   "at": "2026-10-22T06:32:41.290Z",
+   "step": "test5",
+   "fixture": "labels",
+   "arm": "atelier",
+   "task": "t2",
+   "run": 2,
+   "costUsd": 0.0186,
+   "meterUsd": 0.01861387999999997
+  },
+  {
+   "at": "2026-10-22T06:32:49.418Z",
+   "step": "test5",
+   "fixture": "labels",
+   "arm": "atelier",
+   "task": "t3",
+   "run": 2,
+   "costUsd": 0.008,
+   "meterUsd": 0.007984079999999949
+  },
+  {
+   "at": "2026-10-22T06:33:06.742Z",
+   "step": "test5",
+   "fixture": "labels",
+   "arm": "atelier",
+   "task": "t4",
+   "run": 2,
+   "costUsd": 0.0197,
+   "meterUsd": 0.019716180000000083
+  },
+  {
+   "at": "2026-10-22T06:33:14.591Z",
+   "step": "test5",
+   "fixture": "labels",
+   "arm": "atelier",
+   "task": "t5",
+   "run": 2,
+   "costUsd": 0.0082,
+   "meterUsd": 0.008157480000000161
+  },
+  {
+   "at": "2026-10-22T06:33:31.439Z",
+   "step": "test5",
+   "fixture": "labels",
+   "arm": "atelier",
+   "task": "t6",
+   "run": 2,
+   "costUsd": 0.0183,
+   "meterUsd": 0.01825967999999989
+  },
+  {
+   "at": "2026-10-22T06:33:39.733Z",
+   "step": "test5",
+   "fixture": "labels",
+   "arm": "atelier",
+   "task": "t7",
+   "run": 2,
+   "costUsd": 0.0086,
+   "meterUsd": 0.00859498000000003
+  },
+  {
+   "at": "2026-10-22T06:33:57.317Z",
+   "step": "test5",
+   "fixture": "labels",
+   "arm": "atelier",
+   "task": "t8",
+   "run": 2,
+   "costUsd": 0.0187,
+   "meterUsd": 0.018659379999999892
+  },
+  {
+   "at": "2026-10-22T06:34:13.211Z",
+   "step": "test5",
+   "fixture": "labels",
+   "arm": "atelier",
+   "task": "t9",
+   "run": 2,
+   "costUsd": 0.0174,
+   "meterUsd": 0.01742988000000012
+  },
+  {
+   "at": "2026-10-22T06:34:23.130Z",
+   "step": "test5",
+   "fixture": "claims",
+   "arm": "plainx",
+   "task": "t0",
+   "run": 1,
+   "costUsd": 0.025402,
+   "meterUsd": 0.025401999999999925
+  },
+  {
+   "at": "2026-10-22T06:34:36.139Z",
+   "step": "test5",
+   "fixture": "claims",
+   "arm": "plainx",
+   "task": "t1",
+   "run": 1,
+   "costUsd": 0.027816,
+   "meterUsd": 0.027816000000000063
+  },
+  {
+   "at": "2026-10-22T06:34:47.745Z",
+   "step": "test5",
+   "fixture": "claims",
+   "arm": "plainx",
+   "task": "t2",
+   "run": 1,
+   "costUsd": 0.026596,
+   "meterUsd": 0.026596000000000064
+  },
+  {
+   "at": "2026-10-22T06:35:03.009Z",
+   "step": "test5",
+   "fixture": "claims",
+   "arm": "plainx",
+   "task": "t3",
+   "run": 1,
+   "costUsd": 0.029298,
+   "meterUsd": 0.029298000000000046
+  },
+  {
+   "at": "2026-10-22T06:35:15.723Z",
+   "step": "test5",
+   "fixture": "claims",
+   "arm": "plainx",
+   "task": "t4",
+   "run": 1,
+   "costUsd": 0.029034,
+   "meterUsd": 0.029034000000000004
+  },
+  {
+   "at": "2026-10-22T06:35:27.565Z",
+   "step": "test5",
+   "fixture": "claims",
+   "arm": "plainx",
+   "task": "t5",
+   "run": 1,
+   "costUsd": 0.026546,
+   "meterUsd": 0.02654599999999996
+  },
+  {
+   "at": "2026-10-22T06:35:42.524Z",
+   "step": "test5",
+   "fixture": "claims",
+   "arm": "plainx",
+   "task": "t6",
+   "run": 1,
+   "costUsd": 0.030606,
+   "meterUsd": 0.03060599999999991
+  },
+  {
+   "at": "2026-10-22T06:35:56.601Z",
+   "step": "test5",
+   "fixture": "claims",
+   "arm": "plainx",
+   "task": "t7",
+   "run": 1,
+   "costUsd": 0.03134,
+   "meterUsd": 0.031339999999999923
+  },
+  {
+   "at": "2026-10-22T06:36:08.961Z",
+   "step": "test5",
+   "fixture": "claims",
+   "arm": "plainx",
+   "task": "t8",
+   "run": 1,
+   "costUsd": 0.027904,
+   "meterUsd": 0.02790399999999993
+  },
+  {
+   "at": "2026-10-22T06:36:22.325Z",
+   "step": "test5",
+   "fixture": "claims",
+   "arm": "plainx",
+   "task": "t9",
+   "run": 1,
+   "costUsd": 0.02936,
+   "meterUsd": 0.029360000000000053
+  },
+  {
+   "at": "2026-10-22T06:36:37.949Z",
+   "step": "test5",
+   "fixture": "claims",
+   "arm": "plainx",
+   "task": "t0",
+   "run": 2,
+   "costUsd": 0.030692,
+   "meterUsd": 0.03069199999999994
+  },
+  {
+   "at": "2026-10-22T06:36:49.864Z",
+   "step": "test5",
+   "fixture": "claims",
+   "arm": "plainx",
+   "task": "t1",
+   "run": 2,
+   "costUsd": 0.026726,
+   "meterUsd": 0.026726000000000028
+  },
+  {
+   "at": "2026-10-22T06:37:02.892Z",
+   "step": "test5",
+   "fixture": "claims",
+   "arm": "plainx",
+   "task": "t2",
+   "run": 2,
+   "costUsd": 0.029426,
+   "meterUsd": 0.029425999999999952
+  },
+  {
+   "at": "2026-10-22T06:37:19.789Z",
+   "step": "test5",
+   "fixture": "claims",
+   "arm": "plainx",
+   "task": "t3",
+   "run": 2,
+   "costUsd": 0.033078,
+   "meterUsd": 0.03307799999999994
+  },
+  {
+   "at": "2026-10-22T06:37:33.618Z",
+   "step": "test5",
+   "fixture": "claims",
+   "arm": "plainx",
+   "task": "t4",
+   "run": 2,
+   "costUsd": 0.030464,
+   "meterUsd": 0.030464000000000047
+  },
+  {
+   "at": "2026-10-22T06:37:43.793Z",
+   "step": "test5",
+   "fixture": "claims",
+   "arm": "plainx",
+   "task": "t5",
+   "run": 2,
+   "costUsd": 0.024526,
+   "meterUsd": 0.024526000000000048
+  },
+  {
+   "at": "2026-10-22T06:38:00.504Z",
+   "step": "test5",
+   "fixture": "claims",
+   "arm": "plainx",
+   "task": "t6",
+   "run": 2,
+   "costUsd": 0.032636,
+   "meterUsd": 0.03263600000000011
+  },
+  {
+   "at": "2026-10-22T06:38:15.486Z",
+   "step": "test5",
+   "fixture": "claims",
+   "arm": "plainx",
+   "task": "t7",
+   "run": 2,
+   "costUsd": 0.03268,
+   "meterUsd": 0.03268000000000004
+  },
+  {
+   "at": "2026-10-22T06:38:28.206Z",
+   "step": "test5",
+   "fixture": "claims",
+   "arm": "plainx",
+   "task": "t8",
+   "run": 2,
+   "costUsd": 0.028254,
+   "meterUsd": 0.028254
+  },
+  {
+   "at": "2026-10-22T06:38:42.661Z",
+   "step": "test5",
+   "fixture": "claims",
+   "arm": "plainx",
+   "task": "t9",
+   "run": 2,
+   "costUsd": 0.0302,
+   "meterUsd": 0.030200000000000005
+  },
+  {
+   "at": "2026-10-22T06:38:47.557Z",
+   "step": "test5",
+   "fixture": "labels",
+   "arm": "plainx",
+   "task": "t0",
+   "run": 1,
+   "costUsd": 0.014592,
+   "meterUsd": 0.014591999999999938
+  },
+  {
+   "at": "2026-10-22T06:38:56.256Z",
+   "step": "test5",
+   "fixture": "labels",
+   "arm": "plainx",
+   "task": "t1",
+   "run": 1,
+   "costUsd": 0.019142,
+   "meterUsd": 0.019141999999999992
+  },
+  {
+   "at": "2026-10-22T06:39:01.474Z",
+   "step": "test5",
+   "fixture": "labels",
+   "arm": "plainx",
+   "task": "t2",
+   "run": 1,
+   "costUsd": 0.014742,
+   "meterUsd": 0.014742000000000033
+  },
+  {
+   "at": "2026-10-22T06:39:05.173Z",
+   "step": "test5",
+   "fixture": "labels",
+   "arm": "plainx",
+   "task": "t3",
+   "run": 1,
+   "costUsd": 0.012906,
+   "meterUsd": 0.012906000000000084
+  },
+  {
+   "at": "2026-10-22T06:39:12.594Z",
+   "step": "test5",
+   "fixture": "labels",
+   "arm": "plainx",
+   "task": "t4",
+   "run": 1,
+   "costUsd": 0.017918,
+   "meterUsd": 0.0179180000000001
+  },
+  {
+   "at": "2026-10-22T06:39:15.154Z",
+   "step": "test5",
+   "fixture": "labels",
+   "arm": "plainx",
+   "task": "t5",
+   "run": 1,
+   "costUsd": 0.011384,
+   "meterUsd": 0.01138400000000006
+  },
+  {
+   "at": "2026-10-22T06:39:22.835Z",
+   "step": "test5",
+   "fixture": "labels",
+   "arm": "plainx",
+   "task": "t6",
+   "run": 1,
+   "costUsd": 0.017598,
+   "meterUsd": 0.017598000000000003
+  },
+  {
+   "at": "2026-10-22T06:39:28.346Z",
+   "step": "test5",
+   "fixture": "labels",
+   "arm": "plainx",
+   "task": "t7",
+   "run": 1,
+   "costUsd": 0.015144,
+   "meterUsd": 0.015143999999999824
+  },
+  {
+   "at": "2026-10-22T06:39:35.356Z",
+   "step": "test5",
+   "fixture": "labels",
+   "arm": "plainx",
+   "task": "t8",
+   "run": 1,
+   "costUsd": 0.018188,
+   "meterUsd": 0.01818799999999987
+  },
+  {
+   "at": "2026-10-22T06:39:40.309Z",
+   "step": "test5",
+   "fixture": "labels",
+   "arm": "plainx",
+   "task": "t9",
+   "run": 1,
+   "costUsd": 0.012542,
+   "meterUsd": 0.012541999999999831
+  },
+  {
+   "at": "2026-10-22T06:39:46.556Z",
+   "step": "test5",
+   "fixture": "labels",
+   "arm": "plainx",
+   "task": "t0",
+   "run": 2,
+   "costUsd": 0.015182,
+   "meterUsd": 0.015181999999999807
+  },
+  {
+   "at": "2026-10-22T06:39:53.153Z",
+   "step": "test5",
+   "fixture": "labels",
+   "arm": "plainx",
+   "task": "t1",
+   "run": 2,
+   "costUsd": 0.016752,
+   "meterUsd": 0.016751999999999878
+  },
+  {
+   "at": "2026-10-22T06:39:58.336Z",
+   "step": "test5",
+   "fixture": "labels",
+   "arm": "plainx",
+   "task": "t2",
+   "run": 2,
+   "costUsd": 0.014572,
+   "meterUsd": 0.014571999999999807
+  },
+  {
+   "at": "2026-10-22T06:40:01.865Z",
+   "step": "test5",
+   "fixture": "labels",
+   "arm": "plainx",
+   "task": "t3",
+   "run": 2,
+   "costUsd": 0.012536,
+   "meterUsd": 0.01253599999999988
+  },
+  {
+   "at": "2026-10-22T06:40:09.373Z",
+   "step": "test5",
+   "fixture": "labels",
+   "arm": "plainx",
+   "task": "t4",
+   "run": 2,
+   "costUsd": 0.018578,
+   "meterUsd": 0.018578000000000205
+  },
+  {
+   "at": "2026-10-22T06:40:11.934Z",
+   "step": "test5",
+   "fixture": "labels",
+   "arm": "plainx",
+   "task": "t5",
+   "run": 2,
+   "costUsd": 0.011584,
+   "meterUsd": 0.011584000000000039
+  },
+  {
+   "at": "2026-10-22T06:40:18.438Z",
+   "step": "test5",
+   "fixture": "labels",
+   "arm": "plainx",
+   "task": "t6",
+   "run": 2,
+   "costUsd": 0.016468,
+   "meterUsd": 0.01646800000000015
+  },
+  {
+   "at": "2026-10-22T06:40:24.063Z",
+   "step": "test5",
+   "fixture": "labels",
+   "arm": "plainx",
+   "task": "t7",
+   "run": 2,
+   "costUsd": 0.013854,
+   "meterUsd": 0.013853999999999811
+  },
+  {
+   "at": "2026-10-22T06:40:29.907Z",
+   "step": "test5",
+   "fixture": "labels",
+   "arm": "plainx",
+   "task": "t8",
+   "run": 2,
+   "costUsd": 0.016508,
+   "meterUsd": 0.016507999999999967
+  },
+  {
+   "at": "2026-10-22T06:40:33.183Z",
+   "step": "test5",
+   "fixture": "labels",
+   "arm": "plainx",
+   "task": "t9",
+   "run": 2,
+   "costUsd": 0.012612,
+   "meterUsd": 0.012611999999999846
+  }
+ ],
+ "meterTotalUsd": 2.201187505
+}

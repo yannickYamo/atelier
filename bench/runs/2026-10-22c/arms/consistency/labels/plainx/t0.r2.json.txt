@@ -1,0 +1,13 @@
+{
+  "clip": "c13",
+  "duration": "00:58",
+  "overall": "Low",
+  "categories": [
+    {
+      "category": "Alcohol – reference",
+      "risk": "Low",
+      "span": "00:22–00:40",
+      "evidence": "They brewed a dark ale here until 1960."
+    }
+  ]
+}

@@ -1,0 +1,1269 @@
+{
+ "standardVersionHash": "41190182644e50ff",
+ "evidenceId": null,
+ "workType": "labels",
+ "requirements": [
+  {
+   "requirementId": "x1",
+   "statement": "Every category in a label is one of the 39 categories of the taxonomy, written exactly as the taxonomy writes it.",
+   "appliesWhen": "GENERAL",
+   "kind": "BOUNDARY",
+   "authority": "EXPERT_AUTHORED",
+   "provenance": "EXPERT_STATED",
+   "evidence": null,
+   "evidenceItemId": null,
+   "wouldBeAbsentIf": null,
+   "materiality": "REQUIRED",
+   "realizationTolerance": null,
+   "outputShape": null,
+   "obligation": "DELIVERABLE",
+   "measurement": {
+    "observer": "CHECK",
+    "params": {
+     "source": [
+      "(text) => { let spans = []; const re = /\"category\"\\s*:\\s*\"([^\"]*)\"/g; let m; let n = 0; while ((m = re.exec(text))) { n++; if (!/^[A-Za-z][A-Za-z ]* – [A-Za-z][A-Za-z ]*$/.test(m[1])) spans.push({start: m.index, end: m.index + m[0].length, why: 'category not in the taxonomy form'}); } return { ok: spans.length === 0, detail: spans.length ? spans.length + ' category name(s) off-form' : n + ' category name(s) in taxonomy form', spans }; }"
+     ],
+     "means": [
+      "Each category value in the label's categories array must match one of the taxonomy's 39 names exactly. The taxonomy list is not in the material, so the check cannot confirm the list itself; it only ch"
+     ]
+    }
+   }
+  },
+  {
+   "requirementId": "x2",
+   "statement": "Every flagged category carries a timecode span, start–end in mm:ss, inside the clip's duration.",
+   "appliesWhen": "GENERAL",
+   "kind": "GENERATIVE",
+   "authority": "EXPERT_AUTHORED",
+   "provenance": "EXPERT_STATED",
+   "evidence": null,
+   "evidenceItemId": null,
+   "wouldBeAbsentIf": null,
+   "materiality": null,
+   "realizationTolerance": null,
+   "outputShape": null,
+   "obligation": "DELIVERABLE",
+   "measurement": {
+    "observer": "CHECK",
+    "params": {
+     "source": [
+      "(text, request, material) => { const toSec = s => { const m = s.match(/^(\\d{2}):(\\d{2})$/); return m ? (+m[1])*60 + (+m[2]) : null; }; const dm = text.match(/\"duration\"\\s*:\\s*\"(\\d{2}:\\d{2})\"/); const dur = dm ? toSec(dm[1]) : null; const bad = []; const re = /\"span\"\\s*:\\s*\"(\\d{2}:\\d{2})\\s*[–-]\\s*(\\d{2}:\\d{2})\"/g; let m; let n = 0; while ((m = re.exec(text))) { n++; const a = toSec(m[1]), b = toSec(m[2]); if (a === null || b === null || (dur !== null && b > dur)) bad.push({ start: m.index, end: m.index + m[0].length, why: 'span not mm:ss inside duration' }); } return { ok: bad.length === 0, detail: bad.length ? bad.length + ' bad span(s)' : 'spans inside duration', spans: bad }; }"
+     ],
+     "means": [
+      "Each span is mm:ss and ends inside the clip's duration."
+     ]
+    }
+   }
+  },
+  {
+   "requirementId": "x3",
+   "statement": "Every flagged category carries a risk level: Low, Medium or High.",
+   "appliesWhen": "GENERAL",
+   "kind": "GENERATIVE",
+   "authority": "EXPERT_AUTHORED",
+   "provenance": "EXPERT_STATED",
+   "evidence": null,
+   "evidenceItemId": null,
+   "wouldBeAbsentIf": null,
+   "materiality": "REQUIRED",
+   "realizationTolerance": null,
+   "outputShape": null,
+   "obligation": "DELIVERABLE",
+   "measurement": {
+    "observer": "CHECK",
+    "params": {
+     "source": [
+      "(text) => {",
+      "  const spans = [];",
+      "  const re = /\"risk\"\\s*:\\s*\"([^\"]*)\"/g;",
+      "  let m;",
+      "  while ((m = re.exec(text))) {",
+      "    if (m[1] === 'Floor') continue;",
+      "    if (!/^(Low|Medium|High)$/.test(m[1])) spans.push({start: m.index, end: m.index + m[0].length, why: 'risk not Low, Medium or High'});",
+      "  }",
+      "  return {",
+      "    ok: spans.length === 0,",
+      "    detail: spans.length ? spans.length + ' bad risk value(s)' : 'all risk values valid',",
+      "    spans",
+      "  };",
+      "}"
+     ],
+     "means": [
+      "Each category's risk field must be Low, Medium or High."
+     ]
+    }
+   }
+  },
+  {
+   "requirementId": "x4",
+   "statement": "\"High\" risk requires an explicit depiction in the clip: a described act, injury, blood, a weapon fired, an explicit sexual act. A reference, a mention or a discussion is Medium at most.",
+   "appliesWhen": "GENERAL",
+   "kind": "BOUNDARY",
+   "authority": "EXPERT_AUTHORED",
+   "provenance": "EXPERT_STATED",
+   "evidence": null,
+   "evidenceItemId": null,
+   "wouldBeAbsentIf": null,
+   "materiality": null,
+   "realizationTolerance": null,
+   "outputShape": null,
+   "obligation": "JUDGEMENT"
+  },
+  {
+   "requirementId": "x5",
+   "statement": "A clip labelled \"Firearms – depiction\" or \"Firearms – use\" is never also labelled \"Floor – all brands\".",
+   "appliesWhen": "GENERAL",
+   "kind": "BOUNDARY",
+   "authority": "EXPERT_AUTHORED",
+   "provenance": "EXPERT_STATED",
+   "evidence": null,
+   "evidenceItemId": null,
+   "wouldBeAbsentIf": null,
+   "materiality": null,
+   "realizationTolerance": null,
+   "outputShape": null,
+   "obligation": "DELIVERABLE",
+   "measurement": {
+    "observer": "CHECK",
+    "params": {
+     "source": [
+      "(text) => { const hasFw = /Firearms\\s*[–-]\\s*(depiction|use)/.test(text); const hasFloor = /Floor\\s*[–-]\\s*all brands/.test(text); const ok = !(hasFw && hasFloor); return { ok, detail: ok ? 'no conflicting firearms and floor labels' : 'firearms label carried with Floor – all brands', spans: ok ? [] : [{ start: 0, end: text.length, why: 'firearms and Floor labels together' }] }; }"
+     ],
+     "means": [
+      "A label does not hold both a Firearms category and Floor – all brands."
+     ]
+    }
+   }
+  },
+  {
+   "requirementId": "x6",
+   "statement": "A clip with no flagged category is labelled \"Floor – all brands\" with risk Floor and no timecode.",
+   "appliesWhen": "GENERAL",
+   "kind": "GENERATIVE",
+   "authority": "EXPERT_AUTHORED",
+   "provenance": "EXPERT_STATED",
+   "evidence": null,
+   "evidenceItemId": null,
+   "wouldBeAbsentIf": null,
+   "materiality": null,
+   "realizationTolerance": null,
+   "outputShape": null,
+   "obligation": "DELIVERABLE",
+   "measurement": {
+    "observer": "CHECK",
+    "params": {
+     "source": [
+      "(text) => {",
+      "  const labelled = /\"category\"\\s*:\\s*\"Floor\\s*[–-]\\s*all brands\"/.test(text);",
+      "  const cats = (text.match(/\"category\"\\s*:/g) || []).length;",
+      "  const bad = [];",
+      "  if (cats === 0 && !labelled) bad.push({ start: 0, end: text.length, why: 'no flagged category but not labelled Floor – all brands' });",
+      "  if (cats > 0 && labelled) {",
+      "    const floorRe = /\"category\"\\s*:\\s*\"Floor\\s*[–-]\\s*all brands\"/g;",
+      "    let m;",
+      "    while ((m = floorRe.exec(text)) !== null) {",
+      "      const block = text.slice(m.index, m.index + 400);",
+      "      if (!/\"span\"\\s*:\\s*null/.test(block)) {",
+      "        bad.push({ start: m.index, end: m.index + m[0].length, why: 'Floor – all brands carries a span or other flagged categories present' });",
+      "      }",
+      "    }",
+      "    const nonFloor = (text.match(/\"category\"\\s*:\\s*\"(?!Floor\\s*[–-]\\s*all brands\")[^\"]*\"/g) || []).length;",
+      "    if (nonFloor > 0 && bad.length === 0 && false) bad.push({ start: 0, end: text.length, why: 'unexpected' });",
+      "  }",
+      "  return { ok: bad.length === 0, detail: bad.length ? bad[0].why : 'floor rule held', spans: bad };",
+      "}"
+     ],
+     "means": [
+      "A clip with no categories carries Floor – all brands and no span; a clip with categories does not carry Floor – all brands."
+     ]
+    }
+   }
+  },
+  {
+   "requirementId": "x7",
+   "statement": "Every flagged category carries evidence: the words of the transcript, copied, that support it.",
+   "appliesWhen": "GENERAL",
+   "kind": "GENERATIVE",
+   "authority": "EXPERT_AUTHORED",
+   "provenance": "EXPERT_STATED",
+   "evidence": null,
+   "evidenceItemId": null,
+   "wouldBeAbsentIf": null,
+   "materiality": null,
+   "realizationTolerance": null,
+   "outputShape": null,
+   "obligation": "DELIVERABLE",
+   "measurement": {
+    "observer": "CHECK",
+    "params": {
+     "source": [
+      "(text) => { const spans = []; const cats = (text.match(/\"category\"\\s*:/g) || []).length; const ev = (text.match(/\"evidence\"\\s*:\\s*\"[^\"]+\"/g) || []).length; if (ev < cats) spans.push({start:0,end:0,why:'a category has no evidence'}); return { ok: spans.length === 0, detail: spans.length ? 'missing evidence' : 'every category has evidence', spans }; }"
+     ],
+     "means": [
+      "Each category must carry a non-empty evidence field; that the words are copied from the transcript is checked under step 17."
+     ]
+    }
+   }
+  },
+  {
+   "requirementId": "x8",
+   "statement": "\"Violence – graphic\" requires described injury or blood; a scuffle, a push or a threat is \"Violence – minor\".",
+   "appliesWhen": "GENERAL",
+   "kind": "BOUNDARY",
+   "authority": "EXPERT_AUTHORED",
+   "provenance": "EXPERT_STATED",
+   "evidence": null,
+   "evidenceItemId": null,
+   "wouldBeAbsentIf": null,
+   "materiality": null,
+   "realizationTolerance": null,
+   "outputShape": null,
+   "obligation": "JUDGEMENT"
+  },
+  {
+   "requirementId": "x9",
+   "statement": "\"Language – strong\" requires a word of the strong list in the transcript; \"Language – mild\" otherwise.",
+   "appliesWhen": "GENERAL",
+   "kind": "BOUNDARY",
+   "authority": "EXPERT_AUTHORED",
+   "provenance": "EXPERT_STATED",
+   "evidence": null,
+   "evidenceItemId": null,
+   "wouldBeAbsentIf": null,
+   "materiality": null,
+   "realizationTolerance": null,
+   "outputShape": null,
+   "obligation": "JUDGEMENT"
+  },
+  {
+   "requirementId": "x10",
+   "statement": "A label carries no category the transcript does not support with evidence.",
+   "appliesWhen": "GENERAL",
+   "kind": "BOUNDARY",
+   "authority": "EXPERT_AUTHORED",
+   "provenance": "EXPERT_STATED",
+   "evidence": null,
+   "evidenceItemId": null,
+   "wouldBeAbsentIf": null,
+   "materiality": null,
+   "realizationTolerance": null,
+   "outputShape": null,
+   "obligation": "DELIVERABLE",
+   "measurement": {
+    "observer": "CHECK",
+    "params": {
+     "source": [
+      "(text, request, material) => { const cats = text.match(/\"category\"\\s*:/g) || []; const ev = text.match(/\"evidence\"\\s*:\\s*\"[^\"]+\"/g) || []; const ok = cats.length === 0 || ev.length >= cats.length; return { ok, detail: ok ? 'each category carries evidence' : 'a category has no evidence', spans: [] }; }"
+     ],
+     "means": [
+      "Every category in the label has a non-empty evidence field (the transcript support itself needs judgement)."
+     ]
+    }
+   }
+  },
+  {
+   "requirementId": "x11",
+   "statement": "Risk is the highest of the flagged categories' risk levels, carried once at the top of the label as overall.",
+   "appliesWhen": "GENERAL",
+   "kind": "GENERATIVE",
+   "authority": "EXPERT_AUTHORED",
+   "provenance": "EXPERT_STATED",
+   "evidence": null,
+   "evidenceItemId": null,
+   "wouldBeAbsentIf": null,
+   "materiality": null,
+   "realizationTolerance": null,
+   "outputShape": null,
+   "obligation": "DELIVERABLE",
+   "measurement": {
+    "observer": "CHECK",
+    "params": {
+     "source": [
+      "(text) => { const order = {Floor:0, Low:1, Medium:2, High:3}; const ov = text.match(/\"overall\"\\s*:\\s*\"([^\"]*)\"/); const risks = [...text.matchAll(/\"risk\"\\s*:\\s*\"([^\"]*)\"/g)].map(m=>m[1]); if (!ov) return { ok:false, detail:'no overall field', spans:[] }; const max = risks.length ? risks.reduce((a,b)=> (order[b]??-1) > (order[a]??-1) ? b : a) : 'Floor'; const ok = ov[1] === max; return { ok, detail: ok ? 'overall matches highest risk' : 'overall is ' + ov[1] + ' but highest is ' + max, spans: ok ? [] : [{start: ov.index, end: ov.index + ov[0].length, why:'overall not highest risk'}] }; }"
+     ],
+     "means": [
+      "The overall field equals the highest risk among the categories (Low < Medium < High; Floor when there are none)."
+     ]
+    }
+   }
+  },
+  {
+   "requirementId": "x12",
+   "statement": "A span's end is after its start, and no span runs past the duration.",
+   "appliesWhen": "GENERAL",
+   "kind": "BOUNDARY",
+   "authority": "EXPERT_AUTHORED",
+   "provenance": "EXPERT_STATED",
+   "evidence": null,
+   "evidenceItemId": null,
+   "wouldBeAbsentIf": null,
+   "materiality": "REQUIRED",
+   "realizationTolerance": null,
+   "outputShape": null,
+   "obligation": "DELIVERABLE",
+   "measurement": {
+    "observer": "CHECK",
+    "params": {
+     "source": [
+      "(text) => { const spans = []; const dm = text.match(/\"duration\"\\s*:\\s*\"(\\d{2}):(\\d{2})\"/); const dur = dm ? (+dm[1])*60 + (+dm[2]) : null; const re = /\"span\"\\s*:\\s*\"(\\d{2}):(\\d{2})–(\\d{2}):(\\d{2})\"/g; let m; while ((m = re.exec(text))) { const s = (+m[1])*60+(+m[2]); const e = (+m[3])*60+(+m[4]); if (e <= s) spans.push({start:m.index,end:m.index+m[0].length,why:'end not after start'}); else if (dur !== null && e > dur) spans.push({start:m.index,end:m.index+m[0].length,why:'runs past duration'}); } return { ok: spans.length === 0, detail: spans.length ? spans.length + ' bad span(s)' : 'all spans ordered and within duration', spans }; }"
+     ],
+     "means": [
+      "Each span's end time is later than its start time, and no span ends past the duration."
+     ]
+    }
+   }
+  },
+  {
+   "requirementId": "x13",
+   "statement": "Where the same act is both \"Violence\" and \"Dangerous acts\", both are flagged, each with its own evidence.",
+   "appliesWhen": "GENERAL",
+   "kind": "GENERATIVE",
+   "authority": "EXPERT_AUTHORED",
+   "provenance": "EXPERT_STATED",
+   "evidence": null,
+   "evidenceItemId": null,
+   "wouldBeAbsentIf": null,
+   "materiality": null,
+   "realizationTolerance": null,
+   "outputShape": null,
+   "obligation": "JUDGEMENT"
+  },
+  {
+   "requirementId": "x14",
+   "statement": "A news report of a disaster is \"Disaster – news\", Medium at most; graphic footage described is \"Disaster – graphic\".",
+   "appliesWhen": "GENERAL",
+   "kind": "BOUNDARY",
+   "authority": "EXPERT_AUTHORED",
+   "provenance": "EXPERT_STATED",
+   "evidence": null,
+   "evidenceItemId": null,
+   "wouldBeAbsentIf": null,
+   "materiality": null,
+   "realizationTolerance": null,
+   "outputShape": null,
+   "obligation": "JUDGEMENT"
+  },
+  {
+   "requirementId": "x15",
+   "statement": "A reference to alcohol in passing is \"Alcohol – reference\", Low; drinking described is \"Alcohol – consumption\", Medium.",
+   "appliesWhen": "GENERAL",
+   "kind": "BOUNDARY",
+   "authority": "EXPERT_AUTHORED",
+   "provenance": "EXPERT_STATED",
+   "evidence": null,
+   "evidenceItemId": null,
+   "wouldBeAbsentIf": null,
+   "materiality": null,
+   "realizationTolerance": null,
+   "outputShape": null,
+   "obligation": "JUDGEMENT"
+  },
+  {
+   "requirementId": "x16",
+   "statement": "Numbers in a span are seconds and minutes only: no frame counts.",
+   "appliesWhen": "GENERAL",
+   "kind": "BOUNDARY",
+   "authority": "EXPERT_AUTHORED",
+   "provenance": "EXPERT_STATED",
+   "evidence": null,
+   "evidenceItemId": null,
+   "wouldBeAbsentIf": null,
+   "materiality": "REQUIRED",
+   "realizationTolerance": null,
+   "outputShape": null,
+   "obligation": "DELIVERABLE",
+   "measurement": {
+    "observer": "CHECK",
+    "params": {
+     "source": [
+      "(text) => { const bad = []; const re = /\"span\"\\s*:\\s*\"([^\"]*)\"/g; let m; while ((m = re.exec(text))) { if (/\\b\\d{1,3}\\s*(f|fr|frames?)\\b/i.test(m[1]) || /:\\d{2}:\\d{2}/.test(m[1])) bad.push({ start: m.index, end: m.index + m[0].length, why: 'span uses frame counts or extra units' }); } return { ok: bad.length === 0, detail: bad.length ? bad.length + ' span(s) with frame counts' : 'spans in seconds and minutes only', spans: bad }; }"
+     ],
+     "means": [
+      "Span values hold only minutes and seconds, with no frame numbers."
+     ]
+    }
+   }
+  },
+  {
+   "requirementId": "x17",
+   "statement": "Evidence is copied from the transcript, never paraphrased.",
+   "appliesWhen": "GENERAL",
+   "kind": "BOUNDARY",
+   "authority": "EXPERT_AUTHORED",
+   "provenance": "EXPERT_STATED",
+   "evidence": null,
+   "evidenceItemId": null,
+   "wouldBeAbsentIf": null,
+   "materiality": null,
+   "realizationTolerance": null,
+   "outputShape": null,
+   "obligation": "JUDGEMENT"
+  },
+  {
+   "requirementId": "x18",
+   "statement": "A category flagged twice is listed once, with the earliest span.",
+   "appliesWhen": "GENERAL",
+   "kind": "BOUNDARY",
+   "authority": "EXPERT_AUTHORED",
+   "provenance": "EXPERT_STATED",
+   "evidence": null,
+   "evidenceItemId": null,
+   "wouldBeAbsentIf": null,
+   "materiality": "REQUIRED",
+   "realizationTolerance": null,
+   "outputShape": null,
+   "obligation": "DELIVERABLE",
+   "measurement": {
+    "observer": "CHECK",
+    "params": {
+     "source": [
+      "(text) => { const spans = []; const re = /\"category\"\\s*:\\s*\"([^\"]*)\"/g; const seen = new Set(); let m; while ((m = re.exec(text))) { if (seen.has(m[1])) spans.push({start:m.index,end:m.index+m[0].length,why:'category listed twice'}); seen.add(m[1]); } return { ok: spans.length === 0, detail: spans.length ? spans.length + ' duplicate category(ies)' : 'each category listed once', spans }; }"
+     ],
+     "means": [
+      "No category name appears twice in categories; the span kept is the earliest."
+     ]
+    }
+   }
+  },
+  {
+   "requirementId": "x19",
+   "statement": "The label is JSON with the keys clip, duration, overall, categories; nothing else.",
+   "appliesWhen": "GENERAL",
+   "kind": "BOUNDARY",
+   "authority": "EXPERT_AUTHORED",
+   "provenance": "EXPERT_STATED",
+   "evidence": null,
+   "evidenceItemId": null,
+   "wouldBeAbsentIf": null,
+   "materiality": null,
+   "realizationTolerance": null,
+   "outputShape": null,
+   "obligation": "DELIVERABLE",
+   "measurement": {
+    "observer": "CHECK",
+    "params": {
+     "source": [
+      "(text) => { let obj; try { obj = JSON.parse(text); } catch (e) { return { ok:false, detail:'not valid JSON', spans:[] }; } const keys = Object.keys(obj).sort().join(','); const want = ['categories','clip','duration','overall'].join(','); const ok = keys === want; return { ok, detail: ok ? 'exact keys' : 'keys are ' + keys, spans: [] }; }"
+     ],
+     "means": [
+      "The label parses as JSON and its top-level keys are exactly clip, duration, overall, categories."
+     ]
+    }
+   }
+  },
+  {
+   "requirementId": "x20",
+   "statement": "Where a clip's transcript is empty, the label is \"Floor – all brands\" and says so in evidence.",
+   "appliesWhen": "GENERAL",
+   "kind": "GENERATIVE",
+   "authority": "EXPERT_AUTHORED",
+   "provenance": "EXPERT_STATED",
+   "evidence": null,
+   "evidenceItemId": null,
+   "wouldBeAbsentIf": null,
+   "materiality": null,
+   "realizationTolerance": null,
+   "outputShape": null,
+   "obligation": "DELIVERABLE",
+   "measurement": {
+    "observer": "CHECK",
+    "params": {
+     "source": [
+      "(text) => {",
+      "  const m = text.match(/\"category\"\\s*:\\s*\"Floor – all brands\"[\\s\\S]*?\"evidence\"\\s*:\\s*\"([^\"]*)\"/);",
+      "  if (!m) return null;",
+      "  const ok = /(empty|no transcript|no speech|nothing in the transcript|nothing is flagged)/i.test(m[1]);",
+      "  return {",
+      "    ok,",
+      "    detail: ok ? 'floor label states the transcript is empty' : 'floor label does not say the transcript is empty',",
+      "    spans: ok ? [] : [{start:0,end:0,why:'evidence does not say transcript empty'}]",
+      "  };",
+      "}"
+     ],
+     "means": [
+      "If the label is Floor – all brands with an empty transcript, the evidence says the transcript is empty; the step does not apply to a label with a flagged category."
+     ]
+    }
+   }
+  },
+  {
+   "requirementId": "x21",
+   "statement": "My pieces run 224 to 452 characters; a new piece stays between 1 and 680.",
+   "appliesWhen": "GENERAL",
+   "kind": "GENERATIVE",
+   "authority": "EXPERT_RATIFIED",
+   "provenance": "MACHINE_DISCOVERED",
+   "evidence": null,
+   "evidenceItemId": null,
+   "wouldBeAbsentIf": null,
+   "materiality": "PREFERRED",
+   "realizationTolerance": null,
+   "outputShape": null,
+   "obligation": "DELIVERABLE",
+   "wordedFromCheck": true,
+   "measurement": {
+    "observer": "SHAPE",
+    "params": {
+     "shape": [
+      "characters"
+     ],
+     "min": 1,
+     "max": 680
+    }
+   }
+  },
+  {
+   "requirementId": "x22",
+   "statement": "My pieces run 23 to 53 words; a new piece stays between 1 and 83.",
+   "appliesWhen": "GENERAL",
+   "kind": "GENERATIVE",
+   "authority": "EXPERT_RATIFIED",
+   "provenance": "MACHINE_DISCOVERED",
+   "evidence": null,
+   "evidenceItemId": null,
+   "wouldBeAbsentIf": null,
+   "materiality": "PREFERRED",
+   "realizationTolerance": null,
+   "outputShape": null,
+   "obligation": "DELIVERABLE",
+   "wordedFromCheck": true,
+   "measurement": {
+    "observer": "SHAPE",
+    "params": {
+     "shape": [
+      "words"
+     ],
+     "min": 1,
+     "max": 83
+    }
+   }
+  },
+  {
+   "requirementId": "x23",
+   "statement": "My pieces run 1 sentence; a new piece has at most 2.",
+   "appliesWhen": "GENERAL",
+   "kind": "GENERATIVE",
+   "authority": "EXPERT_RATIFIED",
+   "provenance": "MACHINE_DISCOVERED",
+   "evidence": null,
+   "evidenceItemId": null,
+   "wouldBeAbsentIf": null,
+   "materiality": "PREFERRED",
+   "realizationTolerance": null,
+   "outputShape": null,
+   "obligation": "DELIVERABLE",
+   "wordedFromCheck": true,
+   "measurement": {
+    "observer": "SHAPE",
+    "params": {
+     "shape": [
+      "sentences"
+     ],
+     "max": 2
+    }
+   }
+  },
+  {
+   "requirementId": "x24",
+   "statement": "The longest sentence in my pieces runs 23 to 53 words; in a new piece it stays at most 83 words.",
+   "appliesWhen": "GENERAL",
+   "kind": "GENERATIVE",
+   "authority": "EXPERT_RATIFIED",
+   "provenance": "MACHINE_DISCOVERED",
+   "evidence": null,
+   "evidenceItemId": null,
+   "wouldBeAbsentIf": null,
+   "materiality": "PREFERRED",
+   "realizationTolerance": null,
+   "outputShape": null,
+   "obligation": "DELIVERABLE",
+   "wordedFromCheck": true,
+   "measurement": {
+    "observer": "SHAPE",
+    "params": {
+     "shape": [
+      "longestSentence"
+     ],
+     "max": 83
+    }
+   }
+  },
+  {
+   "requirementId": "x25",
+   "statement": "At most 24 line breaks: my pieces carry 12 to 18.",
+   "appliesWhen": "GENERAL",
+   "kind": "GENERATIVE",
+   "authority": "EXPERT_RATIFIED",
+   "provenance": "MACHINE_DISCOVERED",
+   "evidence": null,
+   "evidenceItemId": null,
+   "wouldBeAbsentIf": null,
+   "materiality": "PREFERRED",
+   "realizationTolerance": null,
+   "outputShape": null,
+   "obligation": "DELIVERABLE",
+   "wordedFromCheck": true,
+   "measurement": {
+    "observer": "SHAPE",
+    "params": {
+     "shape": [
+      "lineBreaks"
+     ],
+     "max": 24
+    }
+   }
+  },
+  {
+   "requirementId": "x26",
+   "statement": "No blank lines: none of my pieces has one.",
+   "appliesWhen": "GENERAL",
+   "kind": "GENERATIVE",
+   "authority": "EXPERT_RATIFIED",
+   "provenance": "MACHINE_DISCOVERED",
+   "evidence": null,
+   "evidenceItemId": null,
+   "wouldBeAbsentIf": null,
+   "materiality": "PREFERRED",
+   "realizationTolerance": null,
+   "outputShape": null,
+   "obligation": "DELIVERABLE",
+   "wordedFromCheck": true,
+   "measurement": {
+    "observer": "SHAPE",
+    "params": {
+     "shape": [
+      "blankLines"
+     ],
+     "max": 0
+    }
+   }
+  },
+  {
+   "requirementId": "x27",
+   "statement": "No hashtags: none of my pieces has one.",
+   "appliesWhen": "GENERAL",
+   "kind": "GENERATIVE",
+   "authority": "EXPERT_RATIFIED",
+   "provenance": "MACHINE_DISCOVERED",
+   "evidence": null,
+   "evidenceItemId": null,
+   "wouldBeAbsentIf": null,
+   "materiality": "PREFERRED",
+   "realizationTolerance": null,
+   "outputShape": null,
+   "obligation": "DELIVERABLE",
+   "wordedFromCheck": true,
+   "measurement": {
+    "observer": "SHAPE",
+    "params": {
+     "shape": [
+      "hashtags"
+     ],
+     "max": 0
+    }
+   }
+  },
+  {
+   "requirementId": "x28",
+   "statement": "No mentions (@): none of my pieces has one.",
+   "appliesWhen": "GENERAL",
+   "kind": "GENERATIVE",
+   "authority": "EXPERT_RATIFIED",
+   "provenance": "MACHINE_DISCOVERED",
+   "evidence": null,
+   "evidenceItemId": null,
+   "wouldBeAbsentIf": null,
+   "materiality": "PREFERRED",
+   "realizationTolerance": null,
+   "outputShape": null,
+   "obligation": "DELIVERABLE",
+   "wordedFromCheck": true,
+   "measurement": {
+    "observer": "SHAPE",
+    "params": {
+     "shape": [
+      "mentions"
+     ],
+     "max": 0
+    }
+   }
+  },
+  {
+   "requirementId": "x29",
+   "statement": "No links: none of my pieces has one.",
+   "appliesWhen": "GENERAL",
+   "kind": "GENERATIVE",
+   "authority": "EXPERT_RATIFIED",
+   "provenance": "MACHINE_DISCOVERED",
+   "evidence": null,
+   "evidenceItemId": null,
+   "wouldBeAbsentIf": null,
+   "materiality": "PREFERRED",
+   "realizationTolerance": null,
+   "outputShape": null,
+   "obligation": "DELIVERABLE",
+   "wordedFromCheck": true,
+   "measurement": {
+    "observer": "SHAPE",
+    "params": {
+     "shape": [
+      "links"
+     ],
+     "max": 0
+    }
+   }
+  },
+  {
+   "requirementId": "x30",
+   "statement": "No emoji: none of my pieces has one.",
+   "appliesWhen": "GENERAL",
+   "kind": "GENERATIVE",
+   "authority": "EXPERT_RATIFIED",
+   "provenance": "MACHINE_DISCOVERED",
+   "evidence": null,
+   "evidenceItemId": null,
+   "wouldBeAbsentIf": null,
+   "materiality": "PREFERRED",
+   "realizationTolerance": null,
+   "outputShape": null,
+   "obligation": "DELIVERABLE",
+   "wordedFromCheck": true,
+   "measurement": {
+    "observer": "SHAPE",
+    "params": {
+     "shape": [
+      "emoji"
+     ],
+     "max": 0
+    }
+   }
+  },
+  {
+   "requirementId": "x31",
+   "statement": "Open on a claim, as my pieces do.",
+   "appliesWhen": "GENERAL",
+   "kind": "GENERATIVE",
+   "authority": "EXPERT_RATIFIED",
+   "provenance": "MACHINE_DISCOVERED",
+   "evidence": null,
+   "evidenceItemId": null,
+   "wouldBeAbsentIf": null,
+   "materiality": "PREFERRED",
+   "realizationTolerance": null,
+   "outputShape": null,
+   "obligation": "DELIVERABLE",
+   "wordedFromCheck": true,
+   "measurement": {
+    "observer": "SHAPE",
+    "params": {
+     "shape": [
+      "opening"
+     ],
+     "kinds": [
+      "claim"
+     ]
+    }
+   }
+  },
+  {
+   "requirementId": "x32",
+   "statement": "Close on a statement, as my pieces do.",
+   "appliesWhen": "GENERAL",
+   "kind": "GENERATIVE",
+   "authority": "EXPERT_RATIFIED",
+   "provenance": "MACHINE_DISCOVERED",
+   "evidence": null,
+   "evidenceItemId": null,
+   "wouldBeAbsentIf": null,
+   "materiality": "PREFERRED",
+   "realizationTolerance": null,
+   "outputShape": null,
+   "obligation": "DELIVERABLE",
+   "wordedFromCheck": true,
+   "measurement": {
+    "observer": "SHAPE",
+    "params": {
+     "shape": [
+      "closing"
+     ],
+     "kinds": [
+      "statement"
+     ]
+    }
+   }
+  },
+  {
+   "requirementId": "x33",
+   "statement": "The first word is a symbol or emoji, as in every piece of mine.",
+   "appliesWhen": "GENERAL",
+   "kind": "GENERATIVE",
+   "authority": "EXPERT_RATIFIED",
+   "provenance": "MACHINE_DISCOVERED",
+   "evidence": null,
+   "evidenceItemId": null,
+   "wouldBeAbsentIf": null,
+   "materiality": "PREFERRED",
+   "realizationTolerance": null,
+   "outputShape": null,
+   "obligation": "DELIVERABLE",
+   "wordedFromCheck": true,
+   "measurement": {
+    "observer": "SHAPE",
+    "params": {
+     "shape": [
+      "firstWord"
+     ],
+     "kinds": [
+      "symbol"
+     ]
+    }
+   }
+  },
+  {
+   "requirementId": "x34",
+   "statement": "Quoted phrases: about 53 per 100 words in my pieces; a new piece carries no more than its length expects.",
+   "appliesWhen": "GENERAL",
+   "kind": "GENERATIVE",
+   "authority": "EXPERT_RATIFIED",
+   "provenance": "MACHINE_DISCOVERED",
+   "evidence": null,
+   "evidenceItemId": null,
+   "wouldBeAbsentIf": null,
+   "materiality": "PREFERRED",
+   "realizationTolerance": null,
+   "outputShape": null,
+   "wordedFromCheck": true,
+   "measurement": {
+    "observer": "FEATURE",
+    "params": {
+     "feature": [
+      "quoted"
+     ],
+     "pooledPerWord": 0.5296,
+     "pooledWords": 355
+    }
+   }
+  },
+  {
+   "requirementId": "x35",
+   "statement": "Colons: about 28.2 per 100 words in my pieces; a new piece carries about as many as its length expects.",
+   "appliesWhen": "GENERAL",
+   "kind": "GENERATIVE",
+   "authority": "EXPERT_RATIFIED",
+   "provenance": "MACHINE_DISCOVERED",
+   "evidence": null,
+   "evidenceItemId": null,
+   "wouldBeAbsentIf": null,
+   "materiality": "PREFERRED",
+   "realizationTolerance": null,
+   "outputShape": null,
+   "wordedFromCheck": true,
+   "measurement": {
+    "observer": "FEATURE",
+    "params": {
+     "feature": [
+      "colon"
+     ],
+     "pooledPerWord": 0.2817,
+     "pooledWords": 355
+    }
+   }
+  },
+  {
+   "requirementId": "x36",
+   "statement": "Figures written in digits: about 20.8 per 100 words in my pieces; a new piece carries no more than its length expects.",
+   "appliesWhen": "GENERAL",
+   "kind": "GENERATIVE",
+   "authority": "EXPERT_RATIFIED",
+   "provenance": "MACHINE_DISCOVERED",
+   "evidence": null,
+   "evidenceItemId": null,
+   "wouldBeAbsentIf": null,
+   "materiality": "PREFERRED",
+   "realizationTolerance": null,
+   "outputShape": null,
+   "wordedFromCheck": true,
+   "measurement": {
+    "observer": "FEATURE",
+    "params": {
+     "feature": [
+      "numbers"
+     ],
+     "pooledPerWord": 0.2085,
+     "pooledWords": 355
+    }
+   }
+  },
+  {
+   "requirementId": "x37",
+   "statement": "Nominalisations (-tion, -ment, -ness, -ity, -ance, -ence): about 8.7 per 100 words in my pieces; a new piece carries about as many as its length expects.",
+   "appliesWhen": "GENERAL",
+   "kind": "GENERATIVE",
+   "authority": "EXPERT_RATIFIED",
+   "provenance": "MACHINE_DISCOVERED",
+   "evidence": null,
+   "evidenceItemId": null,
+   "wouldBeAbsentIf": null,
+   "materiality": "PREFERRED",
+   "realizationTolerance": null,
+   "outputShape": null,
+   "wordedFromCheck": true,
+   "measurement": {
+    "observer": "FEATURE",
+    "params": {
+     "feature": [
+      "nominalisation"
+     ],
+     "pooledPerWord": 0.0873,
+     "pooledWords": 355
+    }
+   }
+  },
+  {
+   "requirementId": "x38",
+   "statement": "Runs of five or more one-syllable words: about 2.8 per 100 words in my pieces; a new piece carries about as many as its length expects.",
+   "appliesWhen": "GENERAL",
+   "kind": "GENERATIVE",
+   "authority": "EXPERT_RATIFIED",
+   "provenance": "MACHINE_DISCOVERED",
+   "evidence": null,
+   "evidenceItemId": null,
+   "wouldBeAbsentIf": null,
+   "materiality": "PREFERRED",
+   "realizationTolerance": null,
+   "outputShape": null,
+   "wordedFromCheck": true,
+   "measurement": {
+    "observer": "FEATURE",
+    "params": {
+     "feature": [
+      "monosyllabicRun"
+     ],
+     "pooledPerWord": 0.0282,
+     "pooledWords": 355
+    }
+   }
+  },
+  {
+   "requirementId": "x39",
+   "statement": "I keep paragraphs to 2 sentences at most.",
+   "appliesWhen": "GENERAL",
+   "kind": "GENERATIVE",
+   "authority": "EXPERT_RATIFIED",
+   "provenance": "MACHINE_DISCOVERED",
+   "evidence": null,
+   "evidenceItemId": null,
+   "wouldBeAbsentIf": null,
+   "materiality": "PREFERRED",
+   "realizationTolerance": null,
+   "outputShape": null,
+   "wordedFromCheck": true,
+   "measurement": {
+    "observer": "PARAGRAPH_LENGTH",
+    "params": {
+     "maxSentences": 2
+    }
+   }
+  },
+  {
+   "requirementId": "x40",
+   "statement": "Write none of the moves that mark text as machine-written (announcing an insight others \"miss\", grading your own list, \"the single most\", announcing candour, \"that's the whole game\", reading the reader's mind, one thing \"wearing another's clothes\", a contrastive verdict as the opening line, an em dash, a run of three or more very short sentences).",
+   "appliesWhen": "GENERAL",
+   "kind": "GENERATIVE",
+   "authority": "EXPERT_RATIFIED",
+   "provenance": "MACHINE_DISCOVERED",
+   "evidence": null,
+   "evidenceItemId": null,
+   "wouldBeAbsentIf": null,
+   "materiality": "REQUIRED",
+   "realizationTolerance": null,
+   "outputShape": null,
+   "wordedFromCheck": true,
+   "measurement": {
+    "observer": "PATTERN_RATE",
+    "params": {
+     "pattern": [
+      "MACHINE_TELL"
+     ],
+     "maxPer1000": 0.3,
+     "never": [
+      "INSIGHT_CLAIM",
+      "RETRO_EMPHASIS",
+      "SUPERLATIVE",
+      "EPOCH",
+      "CANDOUR",
+      "TOTALISER",
+      "MIND_READING",
+      "COSTUME",
+      "GOES_TO_DIE",
+      "STACCATO_NOT",
+      "REFRAME_ANNOUNCE",
+      "RECURRING_THOUGHT",
+      "AWKWARD_SIZE",
+      "EM_DASH",
+      "STACCATO_RUN",
+      "VERDICT_OPENER"
+     ],
+     "role": [
+      "machine-tell"
+     ]
+    }
+   }
+  },
+  {
+   "requirementId": "x41",
+   "statement": "No mechanical errors: spelling, agreement, punctuation.",
+   "appliesWhen": "GENERAL",
+   "kind": "GENERATIVE",
+   "authority": "EXPERT_RATIFIED",
+   "provenance": "MACHINE_DISCOVERED",
+   "evidence": null,
+   "evidenceItemId": null,
+   "wouldBeAbsentIf": null,
+   "materiality": "REQUIRED",
+   "realizationTolerance": null,
+   "outputShape": null,
+   "wordedFromCheck": true,
+   "measurement": {
+    "observer": "GRAMMAR",
+    "params": {}
+   }
+  }
+ ],
+ "latitude": {
+  "level": "STRICT",
+  "evidence": [
+   "Every category in a label is one of the 39 categories of the taxonomy, written exactly as the taxonomy writes it.",
+   "Every flagged category carries evidence: the words of the transcript, copied, that support it.",
+   "The label is JSON with the keys clip, duration, overall, categories; nothing else."
+  ],
+  "by": "model"
+ },
+ "authorityState": "RATIFIED",
+ "mintedAt": "2026-10-22T06:15:59.882Z",
+ "supersedes": null,
+ "reason": null,
+ "qualifications": {
+  "x1": {
+   "examples": {
+    "passed": 11,
+    "read": 11,
+    "of": 11
+   },
+   "own": {
+    "caught": 1,
+    "of": 1
+   },
+   "cross": {
+    "fired": 0,
+    "of": 25
+   },
+   "qualified": true,
+   "why": null
+  },
+  "x2": {
+   "examples": {
+    "passed": 11,
+    "read": 11,
+    "of": 11
+   },
+   "own": {
+    "caught": 0,
+    "of": 1
+   },
+   "cross": {
+    "fired": 0,
+    "of": 25
+   },
+   "qualified": false,
+   "why": "it caught 0 of 1 edits that break the step (needs 1)"
+  },
+  "x3": {
+   "examples": {
+    "passed": 11,
+    "read": 11,
+    "of": 11
+   },
+   "own": {
+    "caught": 1,
+    "of": 1
+   },
+   "cross": {
+    "fired": 1,
+    "of": 25
+   },
+   "qualified": true,
+   "why": null
+  },
+  "x5": {
+   "examples": {
+    "passed": 11,
+    "read": 11,
+    "of": 11
+   },
+   "own": {
+    "caught": 2,
+    "of": 3
+   },
+   "cross": {
+    "fired": 0,
+    "of": 23
+   },
+   "qualified": false,
+   "why": "it caught 2 of 3 edits that break the step (needs 3)"
+  },
+  "x6": {
+   "examples": {
+    "passed": 11,
+    "read": 11,
+    "of": 11
+   },
+   "own": {
+    "caught": 1,
+    "of": 4
+   },
+   "cross": {
+    "fired": 1,
+    "of": 22
+   },
+   "qualified": false,
+   "why": "it caught 1 of 4 edits that break the step (needs 4)"
+  },
+  "x7": {
+   "examples": {
+    "passed": 11,
+    "read": 11,
+    "of": 11
+   },
+   "own": {
+    "caught": 1,
+    "of": 1
+   },
+   "cross": {
+    "fired": 2,
+    "of": 25
+   },
+   "qualified": false,
+   "why": "it fired on 2 of 25 edits that break other steps"
+  },
+  "x10": {
+   "examples": {
+    "passed": 11,
+    "read": 11,
+    "of": 11
+   },
+   "own": {
+    "caught": 1,
+    "of": 2
+   },
+   "cross": {
+    "fired": 2,
+    "of": 24
+   },
+   "qualified": false,
+   "why": "it caught 1 of 2 edits that break the step (needs 2)"
+  },
+  "x11": {
+   "examples": {
+    "passed": 11,
+    "read": 11,
+    "of": 11
+   },
+   "own": {
+    "caught": 2,
+    "of": 3
+   },
+   "cross": {
+    "fired": 3,
+    "of": 23
+   },
+   "qualified": false,
+   "why": "it caught 2 of 3 edits that break the step (needs 3)"
+  },
+  "x12": {
+   "examples": {
+    "passed": 11,
+    "read": 11,
+    "of": 11
+   },
+   "own": {
+    "caught": 1,
+    "of": 1
+   },
+   "cross": {
+    "fired": 0,
+    "of": 25
+   },
+   "qualified": true,
+   "why": null
+  },
+  "x16": {
+   "examples": {
+    "passed": 11,
+    "read": 11,
+    "of": 11
+   },
+   "own": {
+    "caught": 1,
+    "of": 1
+   },
+   "cross": {
+    "fired": 0,
+    "of": 25
+   },
+   "qualified": true,
+   "why": null
+  },
+  "x18": {
+   "examples": {
+    "passed": 11,
+    "read": 11,
+    "of": 11
+   },
+   "own": {
+    "caught": 2,
+    "of": 2
+   },
+   "cross": {
+    "fired": 0,
+    "of": 24
+   },
+   "qualified": true,
+   "why": null
+  },
+  "x19": {
+   "examples": {
+    "passed": 11,
+    "read": 11,
+    "of": 11
+   },
+   "own": {
+    "caught": 3,
+    "of": 3
+   },
+   "cross": {
+    "fired": 2,
+    "of": 23
+   },
+   "qualified": false,
+   "why": "it fired on 2 of 23 edits that break other steps"
+  },
+  "x20": {
+   "examples": {
+    "passed": 1,
+    "read": 1,
+    "of": 11
+   },
+   "own": {
+    "caught": 1,
+    "of": 3
+   },
+   "cross": {
+    "fired": 1,
+    "of": 23
+   },
+   "qualified": false,
+   "why": "it caught 1 of 3 edits that break the step (needs 3)"
+  }
+ }
+}

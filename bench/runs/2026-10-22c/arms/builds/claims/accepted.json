@@ -1,0 +1,36 @@
+{
+ "accepted": [
+  "x1"
+ ],
+ "notAccepted": [
+  {
+   "id": "x3",
+   "reason": "OBSERVER_UNQUALIFIED",
+   "reads": "FULL"
+  },
+  {
+   "id": "x4",
+   "reason": "OBSERVER_UNQUALIFIED",
+   "reads": "FULL"
+  },
+  {
+   "id": "x5",
+   "reason": "OBSERVER_UNQUALIFIED",
+   "reads": "FULL"
+  },
+  {
+   "id": "x6",
+   "reason": "OBSERVER_UNQUALIFIED",
+   "reads": "FULL"
+  },
+  {
+   "id": "x8",
+   "reason": "OBSERVER_UNQUALIFIED",
+   "reads": "FULL"
+  }
+ ],
+ "standardAfter": "4823666957968b33",
+ "acceptedInStandard": [
+  "x1"
+ ]
+}
