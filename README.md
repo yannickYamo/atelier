@@ -165,7 +165,7 @@ Evals and optimizers improve the average over many runs. Atelier inspects this o
 A guardrail checks a rule a developer wrote. Atelier compiles the rules the experts hold, from their own documents, and states which it can measure, which it can only read, and which it could not capture. A rule a model reads never blocks until it has proved its error rate on the owner's labels.
 
 **Does Atelier change outputs automatically?**
-Only where a measurable rule broke, and only the span that broke it. A repair is kept only if it re-verifies clean on every rule it touched; a rewrite that changes a claim or a figure is refused. A missing section is not a repair: in a run the work is written again; in `verify` it stays blocked and says so. Anything that needs judgment goes to a person with the evidence.
+Only where a measurable rule broke, and only the span that broke it. A repair is kept only if it re-verifies clean on every rule it touched; a rewrite that changes a claim or a figure is refused. A missing section is not a repair: in a run the work is written again; in `verify` it stays blocked and says so. What happens to anything a check could not settle is the skill's consequence table, set by its latitude and overridable by the owner: on a strict skill an unread judgement goes to a person with the evidence; on a grounded or creative one the work ships labelled with what was not read.
 
 **Who decides what "good" means?**
 The owner of the standard. Every rule is approved before it binds, versioned by content apart from the model, and a model's reading cannot alter it. A new reader model starts unqualified and reports until the owner's labels qualify it.

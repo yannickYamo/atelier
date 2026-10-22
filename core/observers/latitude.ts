@@ -83,17 +83,25 @@ export const LATITUDE: Reading<LatitudeInput, LatitudeReading> = {
 export interface RequestLatitudeInput { readonly level: LatitudeLevel; readonly request: string }
 export interface RequestLatitude { readonly level: LatitudeLevel; readonly quote: string | null }
 
+/**
+ * A CLOSED CHOICE WITH NONE. The reader answers a level, or NONE where the request sets no level of its own.
+ * FALLBACK, SAFE SIDE: NONE, an answer looser than the skill's, an answer that cannot quote the request, and a reading that
+ * could not be made all hold the run at the SKILL'S OWN LEVEL, the level the owner ratified (never looser, never a guess
+ * stricter). Tested in tests/atelier-delivery.test.ts.
+ */
 export const REQUEST_LATITUDE: Reading<RequestLatitudeInput, RequestLatitude> = {
-  id: 'request-latitude', version: '1',
-  system: `A skill holds its work at one of three levels:\n\n${LEVELS_TEXT}\n\nYou read one request made of the skill and say whether THIS request must be held more strictly than the skill's level: a factual announcement, a figure to be published, a commitment or a decision asked of a creative skill; a binding clause asked of a grounded one. Answer the level the request needs, never looser than the skill's, and quote the words of the request that make it stricter (none when it is not).`,
-  schema: { type: 'object', properties: { level: { type: 'string', enum: [...LATITUDE_LEVELS] }, quote: { type: ['string', 'null'] } }, required: ['level', 'quote'], additionalProperties: false },
-  toolName: 'emit_request_latitude', toolDescription: 'The level this request is held at: the skill\'s, or stricter, with the words of the request that make it so.',
+  id: 'request-latitude', version: '2',
+  system: `A skill holds its work at one of three levels:\n\n${LEVELS_TEXT}\n\nYou read one request made of the skill and say whether THIS request must be held more strictly than the skill's level: a factual announcement, a figure to be published, a commitment or a decision asked of a creative skill; a binding clause asked of a grounded one. Answer the level the request needs, never looser than the skill's, and quote the words of the request that make it stricter. Answer NONE, with no quote, when the request sets no level of its own.`,
+  schema: { type: 'object', properties: { level: { type: 'string', enum: [...LATITUDE_LEVELS, 'NONE'] }, quote: { type: ['string', 'null'] } }, required: ['level', 'quote'], additionalProperties: false },
+  toolName: 'emit_request_latitude', toolDescription: 'The level this request is held at: the skill\'s, or stricter, with the words of the request that make it so; NONE when it sets none.',
   maxTokens: 200, estimateUsd: 0.005,
   prompt(input) { return `The skill's level: ${input.level}\n\nThe request:\n${input.request.slice(0, 4000)}`; },
   // Nothing is stricter than STRICT, and an empty request asks for nothing: code decides both.
   decide(input) { return input.level === 'STRICT' || !input.request.trim() ? { level: input.level, quote: null } : null; },
   ground(raw, input) {
     const r = raw as { level?: unknown; quote?: unknown } | null;
+    // NONE: the request sets no level, so the skill's own holds.
+    if (r?.level === 'NONE') return { level: input.level, quote: null };
     const level = parseLatitude(typeof r?.level === 'string' ? r.level : null);
     if (!level) return null;
     // NEVER LOOSER: an answer looser than the skill's level is the skill's level.

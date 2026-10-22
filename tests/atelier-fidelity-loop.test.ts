@@ -430,7 +430,7 @@ describe('through the binary: discovery builds the profile, invoke steers and re
   }, 60_000);
   it('every run says how typical of you it is; --until-typical writes more rounds toward a target and keeps the best', () => {
     const out = run('invoke', '--skill', 'posts', 'Write a post about the outage', '--until-typical', '0.99', '--shape-rounds', '2', '--panel');
-    expect(out).not.toMatch(/^EXIT:/);
+    expect(out).not.toMatch(/^EXIT:(?!1\n)/);   // the scripted drafts break c1 by design: a blocked delivery exits 1
     // A text farther than every piece says so instead of a share that cannot go below 1/(n+1).
     expect(out).toMatch(/typical of you {4}(?:as typical as \d+% of your own pieces|beyond every piece of yours: distance)/);
     expect(out).toMatch(/shape rounds {6}3 written toward 99% typical; kept round \d/);
@@ -498,7 +498,7 @@ describe('through the binary: discovery builds the profile, invoke steers and re
     expect(run('invoke', '--skill', 'posts', '--no-taste', 'write about the rollback')).toMatch(/^EXIT:3\n/);
     expect(run('fidelity', '--skill', 'posts', '--set', 'delivery=maybe')).toMatch(/"delivery" is strict or open/);
     run('fidelity', '--skill', 'posts', '--rollback');
-    expect(run('invoke', '--skill', 'posts', '--no-taste', 'write about the rollback')).not.toMatch(/^EXIT:/);
+    expect(run('invoke', '--skill', 'posts', '--no-taste', 'write about the rollback')).toMatch(/^EXIT:1\n/);   // not strict: the blocked draft is printed, marked, and exits 1 (not 3)
   }, 300_000);
 
   it('strict delivery on a skill that answers: general specifics are no reason to refuse, and a claim of work nobody did is never delivered', async () => {
@@ -666,7 +666,7 @@ describe('through the binary: discovery builds the profile, invoke steers and re
     const rule = /^\s{2}(c\d+|p\d+|m\d+)\b/m.exec(plan)?.[1] ?? 'p1';
     expect(run('amend', '--skill', 'posts', '--rule', rule, '--materiality', 'PREFERRED', '--reason', 'test: an owner reweighs a rule')).not.toMatch(/^EXIT:/);
     const after = run('invoke', '--skill', 'posts', 'Write a post about the outage', '--panel');
-    expect(after).not.toMatch(/^EXIT:/);
+    expect(after).not.toMatch(/^EXIT:(?!1\n)/);   // the scripted drafts break c1 by design: a blocked delivery exits 1
     expect(after).toMatch(/FIDELITY {2}descriptive/);
     expect(after).toMatch(/typical of you/);
     expect(run('fidelity', '--skill', 'posts')).toMatch(/the first release under standard [0-9a-f]+: your profile and passages carried/);

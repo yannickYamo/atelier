@@ -244,7 +244,8 @@ describe('in fix, a deterministic regression means a REQUIRED rule got worse', (
     run(data, proj, 'ratify-close', '--work-type', 'writing');
     run(data, proj, 'build', '--name', 'focus');
     await setByTool({ emit_piece: { piece: 'the synergy answer' } });
-    expect(run(data, proj, 'invoke', '--skill', 'focus', '--task', 'write the recommendation', '--no-repair'), 'seeding invoke failed').not.toMatch(/^EXIT:/);
+    // The seed is blocked by design (it says synergy), and a blocked delivery exits 1: anything else is a failed seed.
+    expect(run(data, proj, 'invoke', '--skill', 'focus', '--task', 'write the recommendation', '--no-repair'), 'seeding invoke failed').not.toMatch(/^EXIT:(?!1\n)/);
     return { data, proj };
   };
   const gateOf = (data: string): string | undefined =>

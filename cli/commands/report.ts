@@ -16,7 +16,8 @@ import { describeController } from '../../core/loop/controller.js';
 import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import * as store from '../../core/state/store.js';
-import { getEval, putRating, REASON_CODES, type ReasonCode } from '../../core/state/eval-store.js';
+import { getEval, putRating, listEvals, latestRatings, REASON_CODES, type ReasonCode } from '../../core/state/eval-store.js';
+import { requalifySkill, movedLine } from '../../core/method/requalify.js';
 import { renderPanel } from '../../core/eval/summary.js';
 import { renderRunCard } from '../../core/eval/run-card.js';
 import { renderSkillCard } from '../../core/eval/skill-card.js';
@@ -55,7 +56,35 @@ function locate(id: string): { L: store.StoreLayout; rec: InvocationRecord } {
   return die(`no run called ${id}${named ? ` in "${named}"` : ''}. Runs are listed by: atelier history`);
 }
 
+/** The skills a command over every skill reads: the one named, or every skill in the store. */
+const skillsNamed = (): string[] => { const n = flag('--skill'); return n ? [n] : existsSync(join(DATA, 'skills')) ? readdirSync(join(DATA, 'skills')) : []; };
+
+/**
+ * THE RUNS WAITING FOR A PERSON (`atelier report --pending`): every run whose delivery was PERSON (core/eval/consequence.ts)
+ * and that nobody has ruled on yet, newest first, each with the rows of the table that sent it there.
+ */
+export function pendingRuns(L: store.StoreLayout): { invocationId: string; at: string; skill: string; rows: { finding: string; entries: readonly string[] }[] }[] {
+  const ruled = new Set(latestRatings(L).map((r) => r.invocationId));
+  return listEvals(L).filter((e) => e.record?.delivery?.decision === 'PERSON' && !ruled.has(e.invocationId))
+    .map((e) => ({ invocationId: e.invocationId, at: e.at, skill: L.skillName, rows: (e.record?.delivery?.why ?? []).filter((w) => w.action === 'person').map((w) => ({ finding: w.finding, entries: w.entries })) }));
+}
+
 export function report(): void {
+  if (argv.includes('--pending')) {
+    const pending = skillsNamed().flatMap((n) => pendingRuns({ root: DATA, skillName: n })).sort((a, b) => b.at.localeCompare(a.at));
+    if (argv.includes('--json')) { console.log(JSON.stringify({ pending }, null, 1)); return; }
+    if (!pending.length) { console.log('Nothing waits for you: no run sent to a person is left unruled.'); return; }
+    console.log(`${pending.length} run${pending.length === 1 ? '' : 's'} sent to you, newest first. Rule on each: atelier rate <run> yes|no [--rule <id>]`);
+    for (const p of pending) console.log(`  ${p.invocationId}  ${p.skill}  ${p.at.slice(0, 16).replace('T', ' ')}  ${p.rows.map((r) => `${r.finding} (${r.entries.join(', ')})`).join('; ')}`);
+    return;
+  }
+  if (argv.includes('--requalify')) {
+    // THE OWNER'S RULINGS HOLD THE WRITTEN CHECKS AGAIN (core/method/requalify.ts): counting, no model.
+    const all = skillsNamed().map((n) => ({ n, r: requalifySkill({ root: DATA, skillName: n }) }));
+    if (argv.includes('--json')) { console.log(JSON.stringify({ requalified: all.map((x) => ({ skill: x.n, held: x.r.held, moved: x.r.moved })) }, null, 1)); return; }
+    for (const { n, r } of all) console.log(`${n}: ${r.held} written check${r.held === 1 ? '' : 's'} held to your rulings${r.moved.length ? '' : '; none moved'}.${r.moved.map((m) => `\n  ${movedLine(m)}`).join('')}`);
+    return;
+  }
   // With no run named and no skill either: the last run made in this project, which is the one a person means.
   const last = runFile('last-invocation.json');
   const id = positional([]) ?? (!flag('--skill') && existsSync(last) ? readJson<{ invocationId: string }>(last, { what: 'the last run' }).invocationId : undefined);
@@ -191,4 +220,6 @@ export function rate(): void {
   const { rule, ruleStatement } = ship ? { rule: null, ruleStatement: null } : named(madeUnder ? store.getStandard(L, madeUnder.standardVersionHash) : null);
   putRating(L, { invocationId: rec.invocationId, ship, why: why.join(' ').trim() || null, at: new Date().toISOString(), release: rec.fidelity?.release ?? null, ...(reasons.length ? { reasons } : {}), ...(rule ? { rule, ...(ruleStatement ? { ruleStatement } : {}) } : {}) });
   console.log(`Recorded: ${ship ? 'yes, you would ship' : 'no, you would not ship'} ${rec.invocationId} as is.${ship ? '' : ' To have it written again: atelier fix "<what was wrong>" (add --always to change the skill for every run)'}`);
+  // YOUR RULING HOLDS THE WRITTEN CHECKS AGAIN, NOW (core/method/requalify.ts): a check that qualifies on it decides the next run.
+  for (const m of requalifySkill(L).moved) console.log(movedLine(m));
 }

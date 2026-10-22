@@ -447,3 +447,22 @@ describe('an exported value nothing calls is wired, deleted, or listed with a re
       .toEqual([]);
   });
 });
+
+describe('automated delivery is on the path every door takes', () => {
+  it('the consequence table decides the record every surface prints', () => {
+    expect(cli).toMatch(/withDelivery\(buildRecord\(/);
+    expect(cli).toMatch(/tableOf\(x\.std, level\)/);
+  });
+  it('invoke, run, verify and the hook act on the delivery', () => {
+    expect(cli).toMatch(/decided\?\.decision === 'BLOCK'\) process\.exitCode = 1/);
+    expect(cli).toMatch(/record\.delivery\?\.decision === 'BLOCK'\) process\.exitCode = 1/);
+    expect(cli).toMatch(/e\.record\.delivery \? e\.record\.delivery\.decision === 'BLOCK'/);
+    expect(cli).toMatch(/decided\?\.decision === 'BLOCK' \? decided\.why/);
+  });
+  it('the owner sets a row with amend; pending runs and requalification are reachable, and rulings requalify', () => {
+    expect(cli).toMatch(/parseConsequences\(consequenceAsked/);
+    expect(cli).toMatch(/argv\.includes\('--pending'\)/);
+    expect(cli).toMatch(/argv\.includes\('--requalify'\)/);
+    expect((cli.match(/requalifySkill\(/g) ?? []).length).toBeGreaterThanOrEqual(3);   // report --requalify, rate, build
+  });
+});

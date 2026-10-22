@@ -98,13 +98,23 @@ export function qualifyCheck(check: Measurement, examples: readonly { text: stri
   const passed = onExamples.filter((v) => v === 'MET').length;
   const caught = own.filter((x) => verdict(x) === 'VIOLATED').length;
   const fired = others.filter((x) => verdict(x) === 'VIOLATED').length;
+  return barred({ examples: { passed, read, of: examples.length }, own: { caught, of: own.length }, cross: { fired, of: others.length } });
+}
+
+/**
+ * THE THREE BARS, ON COUNTS: every example it reads passed, at least MUTANT_RECALL of its own breaks caught, at most
+ * MUTANT_CROSS of the others' fired on. Shared by the build (`qualifyCheck`) and by the owner's rulings folded in later
+ * (core/method/requalify.ts), so a check is held to one bar however its cases came.
+ */
+export function barred(c: Pick<Qualification, 'examples' | 'own' | 'cross'>): Qualification {
+  const { passed, read } = c.examples; const { caught, of: ownOf } = c.own; const { fired, of: othersOf } = c.cross;
   const whyNot = read === 0 ? 'it read none of your examples'
     : passed < read ? `it fails ${read - passed} of the ${read} examples it can read`
-      : own.length === 0 ? 'no edit of your examples that breaks only this step could be written'
-        : caught < Math.ceil(own.length * MUTANT_RECALL) ? `it caught ${caught} of ${own.length} edits that break the step (needs ${Math.ceil(own.length * MUTANT_RECALL)})`
-          : fired > Math.floor(others.length * MUTANT_CROSS) ? `it fired on ${fired} of ${others.length} edits that break other steps`
+      : ownOf === 0 ? 'no edit of your examples that breaks only this step could be written'
+        : caught < Math.ceil(ownOf * MUTANT_RECALL) ? `it caught ${caught} of ${ownOf} edits that break the step (needs ${Math.ceil(ownOf * MUTANT_RECALL)})`
+          : fired > Math.floor(othersOf * MUTANT_CROSS) ? `it fired on ${fired} of ${othersOf} edits that break other steps`
             : null;
-  return { examples: { passed, read, of: examples.length }, own: { caught, of: own.length }, cross: { fired, of: others.length }, qualified: whyNot === null, why: whyNot };
+  return { examples: c.examples, own: c.own, cross: c.cross, qualified: whyNot === null, why: whyNot };
 }
 
 /** One line for the build screen. */

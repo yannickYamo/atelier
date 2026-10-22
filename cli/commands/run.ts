@@ -8,6 +8,7 @@
 // It runs the engine as it is, in a process of its own, and reads the record it writes: there is one way a run
 // happens, and this is a way of showing it.
 
+import { deliveryLine } from '../../core/eval/consequence.js';
 import { execFile, spawnSync } from 'node:child_process';
 import { DATA, VALUED_OPTIONS, argv, die, flag, loadSession, boundMaterial } from '../runtime.js';
 import * as store from '../../core/state/store.js';
@@ -77,11 +78,12 @@ export function cardFor(run: EngineRun): RunCard | null {
 }
 
 /**
- * CAN THE WORK BE USED AS IT STANDS, AS AN EXIT CODE: the same rule however the run was asked for. Blocked is 1.
- * A run with no record is judged by the engine's own bar where it has one (a structured output held by its
- * contract), and is 1 where nothing evaluated it at all.
+ * CAN THE WORK BE USED AS IT STANDS, AS AN EXIT CODE: the same rule however the run was asked for. Its delivery
+ * (core/eval/consequence.ts) decides: BLOCK is 1; shipped, labelled or sent to a person is 0. A record written before
+ * delivery was decided is read by its state. A run with no record is judged by the engine's own bar where it has one (a
+ * structured output held by its contract), and is 1 where nothing evaluated it at all.
  */
-export const exitFor = (e: EvalSummary | null | undefined): number => (e?.record ? (e.record.state === 'BLOCKED' ? 1 : 0) : e ? (e.result.conformant ? 0 : 1) : 1);
+export const exitFor = (e: EvalSummary | null | undefined): number => (e?.record ? ((e.record.delivery ? e.record.delivery.decision === 'BLOCK' : e.record.state === 'BLOCKED') ? 1 : 0) : e ? (e.result.conformant ? 0 : 1) : 1);
 
 /** The evaluation of the run a machine asked for: from its JSON, or (for the bare answer) the one it stored since it began. */
 function evalOfMachineRun(stdout: string, L: store.StoreLayout, began: string): EvalSummary | null {
@@ -128,11 +130,15 @@ export async function run(): Promise<void> {
   try { result = JSON.parse(engine.out) as EngineRun; } catch { /* the engine said why on its own stream */ }
   const work = result?.output ?? null;
   if (!result || work === null) { process.stderr.write(engine.err); process.exitCode = engine.code || 1; return; }
-  console.log(`${work.trimEnd()}\n`);
+  const goes = result.eval?.record?.delivery?.decision;
+  console.log(`${goes === 'PERSON' ? 'FOR YOUR REVIEW (sent to a person, not shipped as checked):\n\n' : goes === 'BLOCK' ? 'BLOCKED (not for use as it is):\n\n' : ''}${work.trimEnd()}\n`);
   // THE EVALUATION IS PART OF WHAT A RUN RETURNS, not a report behind a flag: every rule, as it fared.
   const card = cardFor(result);
   const without = result.eval ? `  A structured output, held by its contract: ${result.eval.result.conformant ? 'it conforms' : `it does not conform (${result.eval.result.reasons.join('; ')})`}.` : '  This run was not evaluated: nothing is known about whether it holds your rules. See why: add --report';
   for (const l of card ? renderRunCard(card, process.stdout.columns || 100) : ['── Evaluation ──', without]) console.log(l);
+  // WHAT WAS DONE WITH IT (core/eval/consequence.ts), and where it waits when it went to a person.
+  const delivery = result.eval?.record?.delivery;
+  if (delivery) console.log(`\n${deliveryLine(delivery)}${delivery.decision === 'PERSON' ? `\nSent to a person: it waits in atelier report --pending; rule on it with atelier rate ${result.invocationId} yes|no [--rule <id>].` : ''}`);
   if (typed.report) console.log(`\n${result.report.join('\n')}`);
   process.exitCode = engine.code !== 0 ? engine.code : exitFor(result.eval);
 }

@@ -234,10 +234,14 @@ describe('a repair that cannot run delivers the draft', () => {
   afterAll(() => { backend.kill(); });
   it('with a one-call budget the draft is printed and recorded, and the record says why', () => {
     const { data, proj, env } = seedSkill();
-    const out = execFileSync('node', [CLIP, 'invoke', '--skill', 'nodrink', 'say it', '--max-calls', '1',
+    // The draft still breaks the rule, so its delivery is BLOCK: printed, marked, and exit 1.
+    let out: string; let code = 0;
+    try { out = execFileSync('node', [CLIP, 'invoke', '--skill', 'nodrink', 'say it', '--max-calls', '1',
       '--provider', 'openai-compatible', '--base-url', `http://127.0.0.1:${port}`, '--model', 'scripted'],
-    { encoding: 'utf8', cwd: proj, env: { ...env, ATELIER_PRICE_IN: '1', ATELIER_PRICE_OUT: '1' } });
+    { encoding: 'utf8', cwd: proj, env: { ...env, ATELIER_PRICE_IN: '1', ATELIER_PRICE_OUT: '1' }, stdio: ['ignore', 'pipe', 'ignore'] }); }
+    catch (e) { const x = e as { stdout?: string; status?: number }; out = x.stdout ?? ''; code = x.status ?? -1; }
     expect(out).toContain('I drink tea.');
+    expect([code, out.includes('BLOCKED (not for use as it is)')]).toEqual([1, true]);
     const [rec] = store.listInvocations({ root: data, skillName: 'nodrink' });
     expect(rec.repair?.why).toMatch(/could not run/);
   });

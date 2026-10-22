@@ -17,6 +17,7 @@ import { QUALIFIED_READERS, DISPUTED_WHY, NO_MATERIAL, type ClaimAct } from '../
 import type { EvalSummary } from '../core/eval/summary.js';
 import { buildRecord } from '../core/eval/record-build.js';
 import { standingOf, type EvaluationRecord } from '../core/eval/record.js';
+import { tableOf, withDelivery, shipped } from '../core/eval/consequence.js';
 import type { InvocationRecord, StandardVersion, LatitudeLevel } from '../core/state/canonical-state.js';
 import { latitudeOf } from '../core/state/canonical-state.js';
 import type { FidelityProfile } from '../core/fidelity/types.js';
@@ -201,7 +202,7 @@ export function buildRunEval(x: RunEvalInput): EvalSummary {
         missing: x.coverage.parts.filter((p) => p.covered === false && !p.deferred).map((p) => p.words), unclear: x.coverage.parts.filter((p) => p.covered === null).length,
         ...(x.coverage.parts.some((p) => p.deferred) ? { heldBack: x.coverage.parts.filter((p) => p.deferred).map((p) => p.words) } : {}) } } : {}),
     },
-    ...(x.strict ? { delivery: { mode: 'strict' as const, delivered: standing.deliverable || x.strict.allowed, redraws: x.strict.redraws } } : {}),
+    ...(x.strict ? { delivery: { mode: 'strict' as const, delivered: (record?.delivery ? shipped(record.delivery) : standing.deliverable) || x.strict.allowed, redraws: x.strict.redraws } } : {}),
     ...(vr ? { voice: { mode: vr.mode, register: { status: vr.register.status, request: vr.register.request, corpus: vr.register.corpus, distance: vr.register.distance },
       carried: vr.carried.length, notCarried: vr.notCarried.length,
       passed: (vr.paragraphs ?? []).filter((p) => p.kept).length, refused: (vr.paragraphs ?? []).filter((p) => !p.kept && p.check !== 'not-tried').length,
@@ -238,8 +239,10 @@ export function recordForText(x: { L: store.StoreLayout; std: StandardVersion; t
   const voice = store.getVoice(x.L); const served = copyGuardPieces(voice);
   // WHAT THE PERSON SUPPLIED IS NOT COPYING: a transcript quoted as evidence shares runs with every example that quoted it.
   const shared = served.length ? overlapIndex(served, [...(voice?.standardWording ?? []), ...suppliedWording(x.material ?? '')], { words: true })(formTokensOut(x.text, served, x.material ?? '')) : null;
-  return buildRecord({
-    requirements: x.std.requirements, waived: x.waived ?? new Map(), request: x.request ?? null,
+  // WHAT IS DONE WITH IT (core/eval/consequence.ts): the standard's table at the level the text was held at.
+  const level = x.level ?? latitudeOf(x.std);
+  return withDelivery(buildRecord({
+    requirements: x.std.requirements, ...(x.std.qualifications ? { qualifications: x.std.qualifications } : {}), waived: x.waived ?? new Map(), request: x.request ?? null,
     checked: x.report ? x.report.checked.filter((c) => !isClaimLine(c.requirementId)).map((c) => ({ id: c.requirementId, statement: c.statement, required: acts(c), verdict: c.result.verdict, detail: c.result.detail })) : null,
     claims: { state, bound: x.unmeasured !== NO_MATERIAL || spans('UNSOURCED') > 0, qualified: deciding, why: x.unmeasured,
       delivered: spans('UNSOURCED'), open: spans(INCONCLUSIVE) + spans(CLAIMS_TO_CHECK) + spans(PUBLIC_FACTS), cut: x.cut ?? 0, unconfirmed: spans(INCONCLUSIVE) },
@@ -249,7 +252,7 @@ export function recordForText(x: { L: store.StoreLayout; std: StandardVersion; t
     // How strictly it was held, and what the owner accepted unmeasured: from the standard, the run's level where it tightened.
     ...(x.std.latitude ? { latitude: x.level ?? latitudeOf(x.std) } : {}), accepted: new Set(x.std.acceptedUnmeasured ?? []),
     replaced: new Set(x.request ? x.std.requirements.filter((r) => x.waived?.has(r.requirementId) && r.measurement?.observer === 'LENGTH' && !r.measurement.params.in).map((r) => r.requirementId) : []),
-  });
+  }), tableOf(x.std, level));
 }
 
 /**

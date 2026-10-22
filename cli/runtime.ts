@@ -95,6 +95,8 @@ export const VALUED_OPTIONS: readonly string[] = ['correcting', 'moves',
   'authors', 'admire', 'conflict',
   // how strictly output is held (cli/latitude.ts), and whether the rules no check reads are accepted unmeasured
   'latitude', 'unmeasured', 'accept-unmeasured',
+  // what is done with an output, by what was found (core/eval/consequence.ts): the owner's rows of the table
+  'consequence',
   'rule', 'set', 'skill', 'source-author', 'statement', 'strict-schema',
   'structured-output', 'supersedes', 'target-backend', 'target-base-url', 'target-model',
   'target-price-in', 'target-price-out', 'target-provider', 'target-strict-schema', 'target-structured-output',
@@ -108,6 +110,8 @@ export const BOOLEAN_OPTIONS: readonly string[] = [
   'ai-assisted', 'blind-expert', 'delivery-proven', 'no-ai-assist', 'per-passage',
   'regenerate',
   'review', 'score', 'skip', 'skip-methods', 'yes', 'baseline', 'qualify', 'promote',
+  // the runs waiting for a person, and the written checks held again to the owner's rulings (cli/commands/report.ts)
+  'pending', 'requalify',
   'cut', 'no-cut', 'draft-examples',
   'reflect', 'no-reflect', 'report', 'phrase', 'calibrate', 'placeholders', 'no-placeholders', 'no-unsourced-note', 'no-redraft', 'no-model', 'always', 'evaluation', 'learn', 'include-reserved', 'taste', 'no-taste', 'no-brief', 'examples-first', 'no-infer-method', 'voices', 'setup', 'auto', 'no-fidelity', 'fidelity', 'rollback', 'distill', 'next', 'sections', 'panel', 'quiet', 'label', 'typicality', 'read-subjects', 'strict', 'allow-nonconformant', 'full', 'no-index', 'test-run',
 ];

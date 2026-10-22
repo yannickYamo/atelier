@@ -300,9 +300,12 @@ describe('through the binary: every output is read, labels earn authority, and t
     expect(withDetails(ranked)).toMatch(/taste rule\(s\) read as missed/);
     expect(ranked).not.toMatch(/^EXIT/);
 
-    // And verify --taste now fails on a miss, as a broken REQUIRED rule does.
+    // And verify --taste now reads the miss as a failure on the record; what is done with it is the consequence table's:
+    // held as grounded (no latitude), a qualified reader's miss goes to a person, and verify exits 0.
     const bad = join(proj, 'bad.md'); writeFileSync(bad, draft);
-    expect(run(data, proj, 'verify', '--skill', 'voice', bad, '--taste')).toMatch(/^EXIT:1/);
+    const checked = run(data, proj, 'verify', '--skill', 'voice', bad, '--taste');
+    expect(checked).not.toMatch(/^EXIT/);
+    expect(checked).toMatch(/BLOCKED · [\s\S]*Delivery: person; judgement-missed \(x1\): person/);
   }, 180_000);
 
   it('verify --taste fails on a miss only where the reader holds VETO; MCP returns the verdicts', async () => {

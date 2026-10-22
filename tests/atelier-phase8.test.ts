@@ -201,7 +201,8 @@ describe('through the binary: one round of optimize', () => {
     const { data, proj } = await seed(10);
     const L = { root: data, skillName: 'focus' };
     await post({ byTool: { emit_piece: { piece: 'the synergy answer, synergy upon synergy' }, emit_proposals: { proposals: [] } } });
-    expect(run(data, proj, 'invoke', '--skill', 'focus', '--task', 'write the recommendation')).not.toMatch(/^EXIT:/);
+    // Blocked by design (synergy), and a blocked delivery exits 1: anything else is a failed seed.
+    expect(run(data, proj, 'invoke', '--skill', 'focus', '--task', 'write the recommendation')).not.toMatch(/^EXIT:(?!1\n)/);
     run(data, proj, 'floor', '--skill', 'focus', '--baseline');
     for (let i = 0; i < 6; i++) run(data, proj, 'floor', '--skill', 'focus', '--qualify');
     await post({ byTool: { emit_piece: { piece: 'the synergy answer, synergy upon synergy' }, emit_proposals: { proposals: [] },

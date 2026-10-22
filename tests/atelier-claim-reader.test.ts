@@ -5,7 +5,7 @@
 // source; nothing it says is taken on its word. These pin the decision in code, the fallback, and the
 // check reaching a structured output, through the binary where the failure was visible there.
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
-import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
+import { execFileSync, spawn, spawnSync, type ChildProcess } from 'node:child_process';
 import { mkdtempSync, existsSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -261,11 +261,10 @@ describe('through the binary: the reader runs on the person\'s own backend when 
   const setup = (): { run: (env: Record<string, string>, ...a: string[]) => { out: string; code: number }; file: string } => {
     const data = mkdtempSync(join(tmpdir(), 'atelier-claims-data-')); const proj = mkdtempSync(join(tmpdir(), 'atelier-claims-proj-'));
     const base = { ...process.env, ATELIER_DATA: data, ATELIER_PROJECT_DIR: proj, ATELIER_PRICE_IN: '1', ATELIER_PRICE_OUT: '1' };
+    // stdout then stderr, whatever the exit: a run that goes to a person exits 0 and says the loud warning on stderr all the same.
     const run = (env: Record<string, string>, ...a: string[]): { out: string; code: number } => {
-      try { return { out: execFileSync('node', [CLI, ...a], { encoding: 'utf8', cwd: proj, env: { ...base, ...env }, stdio: ['ignore', 'pipe', 'pipe'] }), code: 0 }; } catch (e) {
-        const x = e as { stdout?: string; stderr?: string; status?: number };
-        return { out: `${x.stdout ?? ''}${x.stderr ?? ''}`, code: x.status ?? 1 };
-      }
+      const x = spawnSync('node', [CLI, ...a], { encoding: 'utf8', cwd: proj, env: { ...base, ...env }, stdio: ['ignore', 'pipe', 'pipe'] });
+      return { out: `${x.stdout ?? ''}${x.stderr ?? ''}`, code: x.status ?? 1 };
     };
     run({}, 'add', '--statement', 'Never say leverage.', '--kind', 'BOUNDARY', '--applies-when', 'GENERAL', '--materiality', 'REQUIRED', '--measure', 'LEXICON:leverage');
     run({}, 'ratify-close', '--work-type', 'writing');
@@ -293,8 +292,10 @@ describe('through the binary: the reader runs on the person\'s own backend when 
     expect(byReader.out).toMatch(/not qualified/);
     // The escape hatch: the same reader gates, and says loudly that it is unmeasured.
     const gated = run({ ATELIER_CLAIMS: 'model', ATELIER_CLAIMS_MODEL: 'my-small-model', ATELIER_CLAIMS_GATE: 'reader' }, 'verify', '--skill', 'house', file, ...remote(port));
-    expect(gated.code).toBe(1);
+    // It fails the check; on a standard held as grounded (it has no latitude) an untraced specific goes to a person: exit 0.
+    expect(gated.code).toBe(0);
     expect(gated.out).toMatch(/FAIL {2}UNSOURCED {2}Never/);
+    expect(gated.out).toMatch(/Delivery: person; untraced-specific \(specifics\): person/);
     expect(gated.out).toMatch(/ATELIER_CLAIMS_GATE=reader: claim reader \(my-small-model, prompt \w+\) is NOT QUALIFIED/);
   });
 
@@ -605,9 +606,10 @@ describe('the audit of the invented-claim check', () => {
       await script({ byTool: { emit_specifics: { specifics: [{ sentence: 1, text: '94 minutes', kind: 'FIGURE', attributed: false, source: 'NONE', support: '' }] } } });
       const r = run({ ATELIER_CLAIMS: 'model', ATELIER_CLAIMS_MODEL: 'my-small-model', ATELIER_CLAIMS_GATE: 'reader' },
         'verify', '--skill', 'house', file, '--repair', '--json', ...remote());
-      // It exits 1 (a REQUIRED rule fails), so stderr follows the JSON object: read the object alone.
-      expect(r.code).toBe(1);
-      const j = JSON.parse(r.out.slice(0, r.out.indexOf('\n}') + 2)) as { output: string; repair: { storiesCut?: string[]; violatedAfter: string[] } };
+      // The check fails; held as grounded (no latitude), an untraced specific goes to a person, so it exits 0. Read the object alone.
+      expect(r.code).toBe(0);
+      const j = JSON.parse(r.out.slice(0, r.out.indexOf('\n}') + 2)) as { output: string; delivery: { decision: string } | null; repair: { storiesCut?: string[]; violatedAfter: string[] } };
+      expect(j.delivery?.decision).toBe('PERSON');
       expect(j.output).toContain('94 minutes');
       expect(j.repair.storiesCut ?? []).toEqual([]);
       expect(j.repair.violatedAfter).toContain('UNSOURCED');

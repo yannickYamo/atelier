@@ -482,7 +482,9 @@ export function ratifyClose(): void {
   const priorStd = (s.run.standardVersionHash && existsSync(priorPath) ? readJson<StandardVersion>(priorPath, { what: 'the previous standard' }) : null) ?? builtStandard(s.skillName);
   const latitude = s.latitude ?? priorStd?.latitude ?? null;
   const accepted = acceptedCarried(latitudeOf(latitude ? { latitude } : null), kept, unmeasuredSaid(), priorStd, acceptedNamed(kept, s.qualifications));
-  const body = { evidenceId: s.evidence?.evidenceId ?? null, workType, requirements: kept, ...(latitude ? { latitude } : {}), ...(accepted.length ? { acceptedUnmeasured: accepted } : {}) };
+  // The owner's consequence table, as they set it on the skill: carried, as the latitude is (core/eval/consequence.ts).
+  const consequences = priorStd?.consequences && Object.keys(priorStd.consequences).length ? priorStd.consequences : null;
+  const body = { evidenceId: s.evidence?.evidenceId ?? null, workType, requirements: kept, ...(latitude ? { latitude } : {}), ...(accepted.length ? { acceptedUnmeasured: accepted } : {}), ...(consequences ? { consequences } : {}) };
   const hash = standardHashOf(body);
   // ── CLOSING AGAIN IS A SUPERSESSION, NOT A MUTATION ──────────────────────────────────────
   //

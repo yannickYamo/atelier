@@ -362,6 +362,23 @@ export type AuthorityState = 'DRAFT' | 'RATIFIED';
  * the owner ratified, and a machine's measurement of a check changes nothing they said. A rebuild that qualifies the
  * same check differently leaves the standard's identity where it was and says so here.
  */
+/** A finding kind of the consequence table (core/eval/consequence.ts). */
+export type ConsequenceFinding = 'trusted-fail' | 'untrusted-fail' | 'untrusted-pass' | 'judgement-unread' | 'judgement-missed' | 'untraced-specific' | 'claim-flagged' | 'not-run' | 'listed' | 'clean';
+/** What the table does with a finding, once repair has run: ship, ship labelled, send to a person, block. */
+export type ConsequenceAction = 'ship' | 'label' | 'person' | 'block';
+
+/** One written check held again to the owner's rulings: where it started, what was folded in, and when. */
+export interface Requalification {
+  readonly base: CheckQualification;
+  /** from when ratings count: rulings before it were in the build's own count */
+  readonly since: string;
+  /** rated runs folded in: accepted (extra examples), rejected naming this step (its own breaks), rejected naming another written step */
+  readonly accepted: readonly string[];
+  readonly rejected: readonly string[];
+  readonly cross: readonly string[];
+  readonly at: string;
+}
+
 export interface CheckQualification {
   readonly examples: { readonly passed: number; readonly read: number; readonly of: number };
   readonly own: { readonly caught: number; readonly of: number };
@@ -400,8 +417,19 @@ export interface StandardVersion {
    * their account. Each stays listed on the record and the certificate. The owner's: inside the hash.
    */
   readonly acceptedUnmeasured?: readonly string[];
+  /**
+   * The rows of the consequence table the owner set differently from their latitude's defaults (core/eval/consequence.ts):
+   * only the overrides, by finding. The owner's: inside the hash. Absent: every row is the latitude's default.
+   */
+  readonly consequences?: Readonly<Partial<Record<ConsequenceFinding, ConsequenceAction>>>;
   /** by requirement id, for the written checks of this standard; absent where none was ever qualified. Not hashed. */
   readonly qualifications?: Readonly<Record<string, CheckQualification>>;
+  /**
+   * WRITTEN CHECKS HELD AGAIN TO THE OWNER'S RULINGS (core/method/requalify.ts), by requirement id: the standing the build
+   * gave (`base`), the rated runs folded into it since, and when. `qualifications` holds the result. Not hashed: a ruling
+   * changes what a check has earned, never what the owner said.
+   */
+  readonly requalified?: Readonly<Record<string, Requalification>>;
   /**
    * The sealed corpus this standard was recovered from, when there was one.
    *
@@ -614,6 +642,12 @@ export interface InvocationSettings {
     readonly latitude?: { readonly skill: LatitudeLevel; readonly run: LatitudeLevel; readonly tightenedBy: string | null; readonly setBy: 'owner' | 'model' | 'floor' | 'default' };
     /** rules the owner accepted as unmeasured: listed here and on the record, never a reason to send the run to review */
     readonly acceptedUnmeasured?: readonly { readonly id: string; readonly statement: string; /** for a rule a check reads, the part accepted unread */ readonly part?: string }[];
+    /** the owner's rows of the consequence table, where they set any (core/eval/consequence.ts); the rest are the latitude's */
+    readonly consequences?: Readonly<Partial<Record<ConsequenceFinding, ConsequenceAction>>>;
+    /** written checks held again to the owner's rulings since the build: whether each was qualified, is now, and on how many rated runs */
+    readonly requalified?: readonly { readonly id: string; readonly statement: string; readonly was: boolean; readonly now: boolean; readonly accepted: number; readonly rejected: number; readonly cross: number; readonly at: string }[];
+    /** what was done with this output: SHIP, SHIP_LABELLED, PERSON or BLOCK (carried by the record head) */
+    readonly delivery?: 'SHIP' | 'SHIP_LABELLED' | 'PERSON' | 'BLOCK';
     /** the delivered-error bound on the owner's labels; null, with why, until the audit sample exists */
     readonly errorBound: { readonly alpha: number; readonly n: number } | null;
     readonly why: string | null;
@@ -941,21 +975,24 @@ export function assertFeedbackDidNotMutate(before: StandardVersion, after: Stand
  * every read: a file whose content no longer hashes to its name was edited by hand, and serving it
  * would put words the person never ratified under an identity they did.
  */
-export const standardHashOf = (v: Pick<StandardVersion, 'evidenceId' | 'workType' | 'requirements' | 'latitude' | 'acceptedUnmeasured'>): string =>
+export const standardHashOf = (v: Pick<StandardVersion, 'evidenceId' | 'workType' | 'requirements' | 'latitude' | 'acceptedUnmeasured' | 'consequences'>): string =>
   createHash('sha256').update(hashedBody(v)).digest('hex').slice(0, 16);
 
 /**
  * The text a standard's hash is taken over. The latitude's level and the rules accepted as unmeasured are the owner's
  * and are in it; a standard minted before they existed carries neither, and hashes exactly as it did.
  */
-export const hashedBody = (v: Pick<StandardVersion, 'evidenceId' | 'workType' | 'requirements' | 'latitude' | 'acceptedUnmeasured'>): string =>
+export const hashedBody = (v: Pick<StandardVersion, 'evidenceId' | 'workType' | 'requirements' | 'latitude' | 'acceptedUnmeasured' | 'consequences'>): string =>
   JSON.stringify({ evidenceId: v.evidenceId, workType: v.workType, requirements: v.requirements,
-    ...(v.latitude ? { latitude: v.latitude.level } : {}), ...(v.acceptedUnmeasured?.length ? { acceptedUnmeasured: [...v.acceptedUnmeasured].sort() } : {}) });
+    ...(v.latitude ? { latitude: v.latitude.level } : {}), ...(v.acceptedUnmeasured?.length ? { acceptedUnmeasured: [...v.acceptedUnmeasured].sort() } : {}),
+    // The owner's overrides of the consequence table, in a fixed order: a standard with none hashes as it did.
+    ...(v.consequences && Object.keys(v.consequences).length ? { consequences: Object.fromEntries(Object.entries(v.consequences).sort(([a], [b]) => a.localeCompare(b))) } : {}) });
 
-/** What a supersession carries of the owner's settings that sit beside the rules: the latitude, and the accepted rules still in it. */
-export const carriedSettings = (prev: Pick<StandardVersion, 'latitude' | 'acceptedUnmeasured'>, kept: readonly Requirement[]): Pick<StandardVersion, 'latitude' | 'acceptedUnmeasured'> => {
+/** What a supersession carries of the owner's settings that sit beside the rules: the latitude, the accepted rules still in it, and their consequence table. */
+export const carriedSettings = (prev: Pick<StandardVersion, 'latitude' | 'acceptedUnmeasured' | 'consequences'>, kept: readonly Requirement[]): Pick<StandardVersion, 'latitude' | 'acceptedUnmeasured' | 'consequences'> => {
   const accepted = (prev.acceptedUnmeasured ?? []).filter((id) => kept.some((r) => r.requirementId === id));
-  return { ...(prev.latitude ? { latitude: prev.latitude } : {}), ...(accepted.length ? { acceptedUnmeasured: accepted } : {}) };
+  return { ...(prev.latitude ? { latitude: prev.latitude } : {}), ...(accepted.length ? { acceptedUnmeasured: accepted } : {}),
+    ...(prev.consequences && Object.keys(prev.consequences).length ? { consequences: prev.consequences } : {}) };
 };
 
 /**
@@ -1035,9 +1072,12 @@ export function assertSupersessionRecorded(v: StandardVersion): void {
  */
 /** DRAFT the moment anything in it is unconfirmed. Computed at mint; never passed in by a caller. */
 /** The qualifications a supersession keeps: those of the written checks still in it, unchanged. */
-export const carriedQualifications = (prev: Pick<StandardVersion, 'qualifications'>, kept: readonly Requirement[]): Pick<StandardVersion, 'qualifications'> => {
-  const q = Object.fromEntries(Object.entries(prev.qualifications ?? {}).filter(([id]) => kept.some((r) => r.requirementId === id && r.measurement?.observer === 'CHECK')));
-  return Object.keys(q).length ? { qualifications: q } : {};
+export const carriedQualifications = (prev: Pick<StandardVersion, 'qualifications' | 'requalified'>, kept: readonly Requirement[]): Pick<StandardVersion, 'qualifications' | 'requalified'> => {
+  const live = ([id]: [string, unknown]): boolean => kept.some((r) => r.requirementId === id && r.measurement?.observer === 'CHECK');
+  const q = Object.fromEntries(Object.entries(prev.qualifications ?? {}).filter(live));
+  // What the owner's rulings folded in is carried with the standing it produced, so a ruling is never counted twice.
+  const rq = Object.fromEntries(Object.entries(prev.requalified ?? {}).filter(live));
+  return { ...(Object.keys(q).length ? { qualifications: q } : {}), ...(Object.keys(rq).length ? { requalified: rq } : {}) };
 };
 
 export const authorityStateOf = (rs: readonly Requirement[]): AuthorityState =>

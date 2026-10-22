@@ -441,6 +441,19 @@ export function clearMaterial(l: StoreLayout): void {
  * ratified — the one edit the whole append-only layout exists to make visible. Both the file name and the
  * hash field must match the recomputed hash: a copied file with a stale field is the same defect.
  */
+/**
+ * WHAT THE WRITTEN CHECKS HAVE EARNED, REWRITTEN BESIDE A STANDARD (core/method/requalify.ts). Only the fields outside the
+ * hash change; the owner's words, levels and table do not, and the file still hashes to its name.
+ */
+export function putQualifications(l: StoreLayout, hash: string, q: Pick<StandardVersion, 'qualifications' | 'requalified'>): StandardVersion | null {
+  const v = getStandard(l, hash);
+  if (!v) return null;
+  const next: StandardVersion = { ...v, ...(q.qualifications ? { qualifications: q.qualifications } : {}), ...(q.requalified ? { requalified: q.requalified } : {}) };
+  if (hashedContent(next) !== hashedContent(v)) throw new Error(`STORE: requalifying ${hash} would change what its hash covers.`);
+  writeAtomic(join(dirs(l).standards, `${hash}.json`), JSON.stringify(next, null, 1));
+  return next;
+}
+
 export const getStandard = (l: StoreLayout, hash: string): StandardVersion | null => {
   const p = join(dirs(l).standards, `${hash}.json`);
   if (!existsSync(p)) return null;

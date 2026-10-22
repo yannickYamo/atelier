@@ -58,7 +58,7 @@ const TOOLS = [
     inputSchema: { type: 'object', properties: {}, additionalProperties: false } },
   { name: 'atelier_rules', description: "A skill's ratified standard: every rule, its weight (REQUIRED instructs), and how it is checked.",
     inputSchema: { type: 'object', properties: { skill: { type: 'string' } }, required: ['skill'], additionalProperties: false } },
-  { name: 'atelier_verify', description: 'Check a text against every measured rule of an Atelier skill, and for invented specifics (stories told as lived, quotations, attributions, links, figures) that do not trace to the skill\'s material (UNSOURCED). With no material stored or passed, or on a kind of work the claim check was not measured on, those are returned as a list to check and do not fail. Returns each violation with the exact span; failed=true when a REQUIRED rule is broken. Rewrite only the spans it names; where UNSOURCED fails, delete each such sentence outright: do not reword it, and never replace it with another invented claim. Where it is only listed, leave the text and tell the person.',
+  { name: 'atelier_verify', description: 'Check a text against every measured rule of an Atelier skill, and for invented specifics (stories told as lived, quotations, attributions, links, figures) that do not trace to the skill\'s material (UNSOURCED). With no material stored or passed, or on a kind of work the claim check was not measured on, those are returned as a list to check and do not fail. Returns each violation with the exact span; failed=true when a REQUIRED rule is broken; delivery is what the skill\'s consequence table does with the text (SHIP, SHIP_LABELLED, PERSON: ask the person, BLOCK). Rewrite only the spans it names; where UNSOURCED fails, delete each such sentence outright: do not reword it, and never replace it with another invented claim. Where it is only listed, leave the text and tell the person.',
     inputSchema: { type: 'object', properties: { skill: { type: 'string' }, text: { type: 'string' },
       class: { type: 'string', description: 'the kind of document the text is ("blog-post", "support-reply"); refused when the skill measures another kind' },
       material: { type: 'string', description: 'notes, figures or sources the text may draw on, beyond the skill\'s own material' },
@@ -75,7 +75,7 @@ const TOOLS = [
       name: { type: 'string', description: 'the skill\'s name; read from the folder when left out' },
       approve: { type: 'boolean', description: 'true only when the person has seen the screen and said to build it' } },
     required: ['work'], additionalProperties: false } },
-  { name: 'atelier_run', description: 'New work with a skill: written, checked against every rule, repaired where a required rule broke, recorded. Returns the work and its whole record (state VERIFIED, NEEDS REVIEW or BLOCKED, the rules as they fared, the run id). Calls a model.',
+  { name: 'atelier_run', description: 'New work with a skill: written, checked against every rule, repaired where a required rule broke, recorded. Returns the work and its whole record (state VERIFIED, NEEDS REVIEW or BLOCKED, its delivery SHIP, SHIP_LABELLED, PERSON or BLOCK, the rules as they fared, the run id). A run whose delivery is PERSON waits for the person\'s ruling: show it to them. Calls a model.',
     inputSchema: { type: 'object', properties: { skill: { type: 'string' }, task: { type: 'string', description: 'the request, in the person\'s words' },
       material: { type: 'string', description: 'notes, figures or sources the work must draw on' },
       files: { type: 'array', items: { type: 'string' }, description: 'paths of material files to bind for this run' } },
@@ -172,7 +172,7 @@ const call = async (name: string, args: Record<string, unknown>): Promise<{ text
         taste = { text: `(the taste reader could not run: ${(e as Error).message.split('\n')[0]})`, failed: false, verdicts: [], couldNotRun: true };
       }
     }
-    return { isError: false, text: `${describeVerify(report, partlyChecked(record))}${taste ? `\n\n${taste.text}` : ''}${cls.note ? `\n(${cls.note})` : ''}\n\n${record.state.replace('_', ' ')}: ${stateLine(record)}\n\n${JSON.stringify({ failed: record.state === 'BLOCKED' || (taste?.failed ?? false), state: record.state,
+    return { isError: false, text: `${describeVerify(report, partlyChecked(record))}${taste ? `\n\n${taste.text}` : ''}${cls.note ? `\n(${cls.note})` : ''}\n\n${record.state.replace('_', ' ')}: ${stateLine(record)}\n\n${JSON.stringify({ failed: record.state === 'BLOCKED' || (taste?.failed ?? false), state: record.state, delivery: record.delivery ?? null,
       notVerified: record.entries.filter(needsReview).map((e) => ({ rule: e.id, statement: e.statement, why: e.reason, ...(e.observation.unchecked ? { unchecked: e.observation.unchecked } : {}) })),
       violations: report.checked.filter((c) => c.result.verdict === 'VIOLATED').map((c) => ({ rule: c.requirementId, materiality: c.materiality,
         detail: c.result.detail, spans: c.result.spans.map((s) => ({ text: s.text, start: s.start, end: s.end, why: s.why })) })),

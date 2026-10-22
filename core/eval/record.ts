@@ -43,6 +43,14 @@ export interface Observation {
    * its own line, and it never moves the run's state either way.
    */
   readonly listed?: true;
+  /**
+   * What an observer that may not be believed returned (a written check not qualified on the owner's examples, a claim
+   * reader not measured on this kind): never a verdict on the record, which stays UNVERIFIED; what delivery reads to tell a
+   * check that found something from one that found nothing (core/eval/consequence.ts).
+   */
+  readonly found?: 'MET' | 'VIOLATED';
+  /** the observer was the taste reader, earned on this rule by the owner's labels (core/taste/calibration.ts) */
+  readonly reader?: 'TASTE';
 }
 
 export interface Entry {
@@ -62,7 +70,18 @@ export interface Entry {
  * How strictly the output was held (core/observers/latitude.ts): carried with the record so a reader of it knows what
  * an untraced specific met. Absent on a record of a standard minted before latitude existed.
  */
-export interface EvaluationRecord { readonly schema: 1; readonly state: RunState; readonly entries: readonly Entry[]; readonly latitude?: 'STRICT' | 'GROUNDED' | 'CREATIVE' }
+export interface EvaluationRecord { readonly schema: 1; readonly state: RunState; readonly entries: readonly Entry[]; readonly latitude?: 'STRICT' | 'GROUNDED' | 'CREATIVE';
+  /**
+   * WHAT IS DONE WITH THE OUTPUT, kept apart from its state (core/eval/consequence.ts): the state says what was observed,
+   * this says whether it ships, ships labelled, goes to a person or is blocked, and which rows of the standard's
+   * consequence table decided it. Absent on a record written before delivery was decided.
+   */
+  readonly delivery?: Delivery }
+
+export type DeliveryDecision = 'SHIP' | 'SHIP_LABELLED' | 'PERSON' | 'BLOCK';
+/** One row of the consequence table that fired on this output: the finding, what the table does with it, and the entries it fired on. */
+export interface DeliveryRow { readonly finding: string; readonly action: 'ship' | 'label' | 'person' | 'block'; readonly entries: readonly string[] }
+export interface Delivery { readonly decision: DeliveryDecision; readonly why: readonly DeliveryRow[] }
 
 export interface Observed {
   /**
@@ -149,7 +168,9 @@ export const partlyChecked = (r: EvaluationRecord): Map<string, string> => new M
 /** An entry, with its result decided here and nowhere else. */
 export function entry(e: Omit<Entry, 'result' | 'reason'> & { readonly applies?: Observed['applies']; readonly verdict: Observed['verdict'] }): Entry {
   const { applies, verdict, ...rest } = e;
-  return { ...rest, ...judge({ applies: applies ?? true, verdict, coverage: e.observation.coverage, qualification: e.observation.qualification, listed: e.observation.listed === true }) };
+  const judged = judge({ applies: applies ?? true, verdict, coverage: e.observation.coverage, qualification: e.observation.qualification, listed: e.observation.listed === true });
+  // What an unbelieved observer returned is kept beside the result, never as it: delivery reads it, the state does not.
+  return { ...rest, ...(judged.reason === 'OBSERVER_UNQUALIFIED' && verdict ? { observation: { ...rest.observation, found: verdict } } : {}), ...judged };
 }
 
 export const recordOf = (entries: readonly Entry[], latitude?: EvaluationRecord['latitude']): EvaluationRecord => ({ schema: 1, state: stateOf(entries), entries, ...(latitude ? { latitude } : {}) });

@@ -54,7 +54,7 @@ describe('the moves, placed and selected', () => {
     // nothing to read when no move has a case: a standing move applies by code; the brief's own reading is untouched
     expect(MOVE_CASES.decide({ request, material: [], moves: eligible })).toBeNull();
     expect(MOVE_CASES.decide({ request, material: [], moves: [units[2]] })).toEqual({ stance: { applies: 'applies', why: null } });
-    expect(EXECUTION_BRIEF.version).toBe('5');
+    expect(EXECUTION_BRIEF.version).toBe('6');
   });
   it('a move is placed only on a quote of the request or material; does not hold needs none; the prompt numbers the cases M1, M2', () => {
     const eligible = eligibleMoves(units);

@@ -9,7 +9,7 @@
 //
 // Nothing here decides what a result means: each entry states its facts and `entry` (./record.ts) judges them.
 
-import type { Requirement } from '../state/canonical-state.js';
+import type { Requirement, StandardVersion } from '../state/canonical-state.js';
 import { planFor, type PlannedRule } from '../plan/execution-plan.js';
 import { entry, recordOf, type Entry, type EvaluationRecord, type Observation } from './record.js';
 import { GRAMMAR_NOT_RUN, GRAMMAR_LISTED } from '../observers/grammar.js';
@@ -20,6 +20,8 @@ export interface CheckedLine { readonly id: string; readonly statement?: string;
 export interface RecordFacts {
   /** the standard's live requirements, in the owner's order */
   readonly requirements: readonly Requirement[];
+  /** the written checks' standing beside the standard (core/state/canonical-state.ts): a check qualified since its build is enforced */
+  readonly qualifications?: StandardVersion['qualifications'];
   /** every line of the check of the delivered text; null when the check could not run */
   readonly checked: readonly CheckedLine[] | null;
   /** rules set aside for this run, each with why */
@@ -109,7 +111,7 @@ function readEntry(p: PlannedRule, f: RecordFacts): Entry {
   const quoted = r.quote ? `: "${r.quote}"` : '';
   const evidence = `${partly ? `${e.observation.evidence ?? ''}; ` : ''}${r.verdict === 'FOLLOWED' ? 'read as followed' : 'read as missed'} by the taste reader on "${part}", which your labels have qualified to act on this rule${quoted}`;
   return entry({ id: e.id, dimension: e.dimension, source: e.source, statement: e.statement, required: e.required,
-    observation: { proposition: e.observation.proposition ?? p.statement, coverage: 'FULL', qualification: 'QUALIFIED', evidence },
+    observation: { proposition: e.observation.proposition ?? p.statement, coverage: 'FULL', qualification: 'QUALIFIED', evidence, reader: 'TASTE' },
     verdict: r.verdict === 'FOLLOWED' ? 'MET' : 'VIOLATED' });
 }
 
@@ -120,6 +122,10 @@ function plannedEntry(p: PlannedRule, f: RecordFacts): Entry {
   const o = p.check;
   // ACCEPTED UNMEASURED BY THE OWNER: no check reads it, and they said a run need not wait on it. Listed, never a review.
   if (!o && required && f.accepted?.has(p.id)) return entry({ ...base, observation: { ...NOTHING, evidence: 'accepted by you as unmeasured: no check reads it, and the run is not held for it', listed: true }, verdict: null });
+  // SET ASIDE FOR THIS REQUEST, a step no check reads as well: recorded as set aside (the state still leaves it to the
+  // owner), never as unread, so delivery never waits on a step the request lifted (core/eval/consequence.ts).
+  const aside = f.waived.get(p.id);
+  if (!o && aside && aside !== MATERIAL_NOT_BOUND) return entry({ ...base, observation: { ...NOTHING, evidence: aside }, applies: { setAside: aside }, verdict: null });
   if (!o) return entry({ ...base, observation: NOTHING, verdict: null });
   const line = f.checked?.find((c) => c.id === p.id);
   const why = f.waived.get(p.id);
@@ -219,6 +225,6 @@ function evidenceEntries(f: RecordFacts): Entry[] {
 /** The record of one output. */
 export function buildRecord(f: RecordFacts): EvaluationRecord {
   // A habit with no check is nothing a run can say anything about: it is the writer's to have been shown.
-  const rules = planFor({ requirements: f.requirements }).rules.filter((p) => p.role !== 'HABIT' || p.check);
+  const rules = planFor({ requirements: f.requirements, ...(f.qualifications ? { qualifications: f.qualifications } : {}) }).rules.filter((p) => p.role !== 'HABIT' || p.check);
   return recordOf([...rules.map((p) => standardEntry(p, f)), ...systemEntries(f), ...requestEntries(f), ...evidenceEntries(f)], f.latitude);
 }

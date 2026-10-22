@@ -4,6 +4,7 @@
 // the provider factory, host selection — lives in ../runtime.js and is imported, so a
 // command file reads as one job rather than as a slice of everything.
 
+import { requalifySkill, movedLine } from '../../core/method/requalify.js';
 import type { StoredSignal } from '../../core/observers/selection.js';
 import { compositeVoiceOf, pieceLengthOpen, type CompositeRecord } from '../../core/composite/selection.js';
 import { withoutFrontMatter } from '../../core/composite/authors.js';
@@ -767,6 +768,8 @@ export async function build(nameArg?: string, opts: { closing?: boolean } = {}):
   // Said in the whole account and by `status`; under `atelier new` the short screen stays the owner's.
   if (!orchestrated() || argv.includes('--report')) console.log(describeStages(receipt.stages));
   store.setActive(L, skill.skillVersionHash);
+  // THE OWNER'S RULINGS SINCE THE LAST BUILD HOLD THE WRITTEN CHECKS AGAIN (core/method/requalify.ts): counting, no model.
+  for (const m of requalifySkill(L).moved) console.log(movedLine(m));
 
   // ── IMPROVE: WRITE INTO THE USER'S OWN SKILL ───────────────────────────────────────────────
   //

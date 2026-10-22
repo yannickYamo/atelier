@@ -79,6 +79,37 @@ than the skill (a figure to publish, asked of a creative skill) is held stricter
 never looser. The record and the certificate of every run say the level it was held at. A level you set, and the rules
 you accepted unmeasured, stay when the skill is built again; a rule given a check leaves the accepted list.
 
+### What is done with the work: the consequence table
+
+The record says what was observed (VERIFIED, NEEDS REVIEW, BLOCKED). What is done with the work is a separate decision,
+its **delivery**, made after repair by one table with a row per kind of finding. The latitude gives the defaults:
+
+| finding | strict | grounded | creative |
+|---|---|---|---|
+| `trusted-fail`: a counted or qualified check fails | block | block | label |
+| `untrusted-fail`: a written check not yet qualified fails | person | person | label |
+| `untrusted-pass`: it finds nothing | label | label | label |
+| `judgement-unread`: a judgement rule, or the unread part of a rule | person | label | label |
+| `judgement-missed`: the taste reader, qualified on the rule, read it as missed | person | person | label |
+| `untraced-specific`: a figure, date or citation decided absent from the material | block | person | label |
+| `claim-flagged`: a specific only an unmeasured claim reader flagged or could not find | person | person | label |
+| `not-run`: a check could not run, or its material was not bound | person | label | label |
+| `listed`: listed for you only (accepted unmeasured, possible slips) | label | label | label |
+| `clean`: nothing found anywhere | ship | ship | ship |
+
+The work is delivered by the most severe row that fired: **SHIP**, **SHIP LABELLED** (out, with what was not read named
+on it), **PERSON** (out, marked for your review; exit 0) or **BLOCK** (exit 1, and exit 2 from the hook). A step set
+aside for the request never holds it. `--strict` refuses what was not shipped. `atelier amend --skill <name>
+--consequence untrusted-fail=block --reason "<why>"` sets a row (`=default` takes it back); only the rows you set are
+kept, in the standard's hash. The record head and the certificate of every run carry the decision and the rows behind it.
+
+**The loop runs itself.** `atelier report --pending` lists the runs sent to you and not yet ruled on, newest first. Your
+ruling (`atelier rate <run> yes`, or `no --rule <rule>`) holds every written check again at once: a run you would ship is
+one more example each check must pass, one you would not, naming a step, one more break its check must catch and the
+others must not fire on. A check that now qualifies is enforced, so its failures are repaired, then blocked, instead of
+sent to you; the certificate lists what moved (`requalified`). It is counting, with no model call, and runs again on every
+build and on `atelier report --requalify`.
+
 A document of your material is named the way you cite it, at the build and at a run alike: the file's name without its
 folder or extension, `-` and `_` read as spaces (`notice-of-loss.txt` is "notice of loss"); `--with <name>=<file>` keeps
 the name you give. A check written against your examples' material reads the same names on new work.
@@ -238,7 +269,7 @@ kinds and says, for each check, what it looks for and how your examples fare on 
 A check is kept only when every example holds it, and once built it is kept: a rebuild reads a step's check again
 only when the step's wording or the examples changed, so rewording one step changes that step's check and no other.
 An output you reject naming the rule it breaks (`atelier rate <run> no "why" --rule <rule>`) is one more edit a
-written check must catch to qualify, and that step's check is read again at the next build. The rule is named in the
+written check must catch to qualify: the check is held to it at once, and that step's check is read again at the next build. The rule is named in the
 standard the output was made under and kept by its words, so building again with the steps renumbered does not move
 it. Every sentence of your note is a step, beside a list or not; which are instructions and which explain is read and
 shown at the build. A skill from rules alone, built again after you rated drafted answers, keeps the rules you
@@ -399,14 +430,15 @@ or as a `## Request` section followed by `## Answer`. The request is never read 
 
 ### Strict delivery
 
-`atelier invoke --skill <name> --strict "<task>"` delivers the output only when it conforms. A reply that leaves out
+`atelier invoke --skill <name> --strict "<task>"` delivers the output only when its delivery ships it (SHIP or SHIP
+LABELLED, above); one that goes to a person or is blocked is refused. A reply that leaves out
 part of what the request asks is written once more; a draft that breaks a REQUIRED rule is written again
 (`--redraws <n>`, default 2); what still does not conform is refused with its reasons and exit code 3, and
 `atelier report <run>` shows the text. `--allow-nonconformant` delivers it anyway, marked. To make it the skill's
 way of running: `atelier fidelity --skill <name> --set delivery=strict`. It holds the REQUIRED rules that have a
 measurement and the claim check; a REQUIRED rule in prose with no measurement is outside the guarantee.
 
-Delivered under `--strict` means nothing required was seen to fail and every check finished. It does not mean
+Delivered under `--strict` means the consequence table shipped it. It does not mean
 verified: where a check read only part of a rule, or a rule is yours to judge, the run says how many such rules
 there are, and `eval.record.state` is `NEEDS_REVIEW`. A check that could not finish (the claim reader could not
 run, or left specifics undecided) is refused, never passed.

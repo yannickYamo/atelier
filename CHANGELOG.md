@@ -7,6 +7,33 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+### Delivered is not verified: a consequence table decides what is done with the work, and the owner's rulings requalify the checks
+
+- **Delivery is its own decision.** The record keeps its state (VERIFIED, NEEDS REVIEW, BLOCKED: what was observed) and
+  gains `delivery`: SHIP, SHIP_LABELLED, PERSON or BLOCK, with the rows that decided it. It is decided after repair by a
+  consequence table, one row per kind of finding (a trusted check fails, an unqualified one fails or finds nothing, a
+  judgement rule unread, the qualified taste reader reads a miss, a specific decided absent from the material, one only an
+  unmeasured claim reader flagged, a check that could not run, what is only listed, nothing found). The defaults follow the
+  latitude; `atelier amend --consequence <finding>=<action>` sets a row, and only the rows the owner set are kept in the
+  standard, inside its hash. A standard minted before is held by its latitude's defaults (grounded where it has none). The
+  record head and the certificate carry the decision.
+- **Every door acts on it.** `run` and `invoke` print shipped work as before, work sent to a person marked for review with
+  the entries to read and a line saying where it waits (exit 0), and exit 1 on BLOCK; `--strict` refuses what was not
+  shipped. `verify` exits 1 on BLOCK only and shows the decision; the hook exits 2 on BLOCK only, with a note where the
+  work goes to a person. A taste reader's qualified miss is in the record and the table decides what it does.
+- **The loop runs itself.** `atelier report --pending` lists the runs sent to a person and not yet ruled on. A rating holds
+  every written check again at once, and so does every build and `atelier report --requalify`: a run rated yes is one more
+  example each check must pass, one rated no with `--rule` one more break its check must catch and the others must not fire
+  on. Counting, no model call; what the build already counted is not counted twice. A check that now qualifies is
+  enforced, so its failures move from "person" to "repair, then block"; the certificate lists what moved (`requalified`).
+- **The run-time readings are closed choices with NONE, NONE to the safe side.** The request's latitude reading answers a
+  level or NONE: NONE, a looser answer and a reading that fails all hold the skill's own level. The steps-that-apply
+  reading answers HOLDS, DOES_NOT_HOLD or NONE per case: the step applies unless the request's own words lift it. A step
+  set aside for the request, a judgement step included, is recorded as set aside and never holds delivery.
+- Read offline against the saved records of the 2026-10-22c study under the default table: claims 20 of 20 strict runs
+  would go to a person (an unqualified written check failing, x8 in 15 and x5 in 5; the claim reader in 15); labels 1
+  blocked, 6 shipped labelled, 13 to a person (the claim reader). Grounded gives the same; creative ships every one labelled.
+
 ### A rewrite names what no check read, a label's form is not copying, and a written check reads what it says
 
 - **A repair says which required rules no check read on its rewrite.** A rewrite was already refused when it newly

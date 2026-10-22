@@ -15,6 +15,7 @@ import { answerSentences, judgedSituations } from '../../core/loop/answer-claims
 import { groundCarried } from '../../core/loop/grounding.js';
 import { withoutServedNotes } from '../../core/loop/echo.js';
 import { certificateFor, claimStandingOf, recordHead, RECORD_SCHEMA } from '../../core/eval/certificate.js';
+import { shipped as shippedDecision, deliveryLine } from '../../core/eval/consequence.js';
 import { runLatitude, type RunLatitude } from '../latitude.js';
 import { latitudeBrief } from '../../core/observers/latitude.js';
 import { SLOT_NOTE } from '../../renderers/agent-skill/render.js';
@@ -853,7 +854,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
     || formatOf(flag('--class') ?? store.getDocClass(L))?.claims === 'list';
   const listed = lists && materialBound && !argv.includes('--no-unsourced-note') ? rec.repair?.claimsToCheck ?? [] : [];
   const shipped = markUnsupported(rec.output, listed);
-  if (!machine && !strict) console.log(`\n${shipped}\n`);
+  // The work is printed once its delivery is decided (core/eval/consequence.ts), below: marked where it goes to a person.
   if (adoptedCarry && !methodCarry) report.say(store.CARRY_RETIRED);
   for (const c of completions) report.say(c);
   reportChecks(report, rec, std, checks);
@@ -907,15 +908,28 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const showPanel = evaluation && !argv.includes('--quiet') && (argv.includes('--panel') || (!machine && process.stdout.isTTY));
   // STRICT DELIVERY: THE VERDICT DECIDES. An output that does not conform (or whose evaluation could not be built) is
   // not delivered: the reasons are, with a failing exit. The record keeps the text, for `atelier report`.
-  const nonconformant = strict && !evaluation?.result.conformant;
+  // WHAT IS DONE WITH THE WORK IS THE RECORD'S DELIVERY (core/eval/consequence.ts): SHIP and SHIP LABELLED go out, PERSON
+  // goes out marked for the owner's review and waits in `atelier report --pending`, BLOCK exits 1. Under --strict only what
+  // shipped is delivered. A run with no record (a structured output held by its contract) keeps its contract's verdict.
+  const decided = evaluation?.record?.delivery ?? null;
+  const nonconformant = strict && (decided ? !shippedDecision(decided) : !evaluation?.result.conformant);
   const refused = nonconformant && !argv.includes('--allow-nonconformant');
   if (nonconformant) process.exitCode = STRICT_EXIT;
-  // ONE RUN, ONE EXIT CODE. Read by a machine (--json, --answer-only), a blocked run exits 1, as `atelier run` does for the
-  // same run (run.ts, `exitFor`): a script that reads only the code must not take a blocked output for a usable one.
-  else if (machine && evaluation?.record?.state === 'BLOCKED') process.exitCode = 1;
-  if (strict && !machine && !refused) console.log(`\n${nonconformant ? 'NOT CONFORMANT, delivered because --allow-nonconformant was given:\n\n' : ''}${rec.output}\n`);
+  // ONE RUN, ONE EXIT CODE, the same however it was asked for (run.ts, `exitFor`): a blocked run exits 1, so a script that
+  // reads only the code never takes it for a usable one; a run sent to a person exits 0, and says so.
+  else if (decided?.decision === 'BLOCK') process.exitCode = 1;
+  if (!machine && !refused) {
+    const head = nonconformant ? 'NOT CONFORMANT, delivered because --allow-nonconformant was given:\n\n'
+      : decided?.decision === 'PERSON' ? 'FOR YOUR REVIEW (sent to a person, not shipped as checked):\n\n' : decided?.decision === 'BLOCK' ? 'BLOCKED (not for use as it is):\n\n' : '';
+    console.log(`\n${head}${strict ? rec.output : shipped}\n`);
+  }
+  if (decided && !machine) console.error(`atelier: ${deliveryLine(decided)}.`);
+  if (decided?.decision === 'PERSON' && !refused) {
+    const toRead = decided.why.filter((w) => w.action === 'person').flatMap((w) => w.entries);
+    console.error(`atelier: sent to a person: read ${toRead.join(', ') || 'the entries named above'}. It waits in atelier report --pending; rule on it with atelier rate ${rec.invocationId} yes|no [--rule <id>].`);
+  }
   if (refused) {
-    const why = evaluation ? evaluation.result.reasons.join('; ') : 'the run could not be evaluated';
+    const why = evaluation ? [...evaluation.result.reasons, ...(decided ? [deliveryLine(decided)] : [])].join('; ') : 'the run could not be evaluated';
     console.error(`atelier: not delivered (strict delivery): ${why}. The text is kept with the record: atelier report ${rec.invocationId}. To deliver it anyway, marked: --allow-nonconformant.`);
   }
   // DELIVERED UNDER STRICT IS NOT VERIFIED. Strict refuses what was seen to fail and what could not be evaluated;

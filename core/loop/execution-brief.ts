@@ -65,9 +65,9 @@ export const EXECUTION_BRIEF_SYSTEM = `You read one request, the material that c
 
 - HOLDS: this request, or its material, is the case named. Quote the words of the request or material that show it.
 - DOES_NOT_HOLD: the request plainly is not the case named. Quote the words of the request that show it; without such words, answer UNRESOLVED.
-- UNRESOLVED: the request does not say.
+- NONE: the request does not say.
 
-Then, over the steps listed under "Steps that apply always" and any case that holds, name a step only when its decision CANNOT BE MADE AT ALL without a specific fact the request and material do not contain: a number, a date, a name, what happened in the person's case. Say which fact is missing. A judgement a reasonable expert could make from what was given (which defect is worst in this diff, which option to recommend from these notes, what verdict this change deserves) is supported, even where more facts would help: it is the writer's to make, and is never named here. A step whose case you answered UNRESOLVED is never named here either: its open question is its case, already said.
+Then, over the steps listed under "Steps that apply always" and any case that holds, name a step only when its decision CANNOT BE MADE AT ALL without a specific fact the request and material do not contain: a number, a date, a name, what happened in the person's case. Say which fact is missing. A judgement a reasonable expert could make from what was given (which defect is worst in this diff, which option to recommend from these notes, what verdict this change deserves) is supported, even where more facts would help: it is the writer's to make, and is never named here. A step whose case you answered NONE is never named here either: its open question is its case, already said.
 
 Last, name any step the request asks against in so many words ("skip the summary", "no verdict needed"), with the request's words. Such a step is not set aside: the method stands, and the writer is told.
 
@@ -76,7 +76,7 @@ Quote character for character. Never decide a case on a guess: the person wrote 
 export const EXECUTION_BRIEF_SCHEMA: Record<string, unknown> = {
   type: 'object',
   properties: {
-    placed: { type: 'array', items: { type: 'object', properties: { n: { type: 'number' }, holds: { type: 'string', enum: ['HOLDS', 'DOES_NOT_HOLD', 'UNRESOLVED'] }, quote: { type: ['string', 'null'] } },
+    placed: { type: 'array', items: { type: 'object', properties: { n: { type: 'number' }, holds: { type: 'string', enum: ['HOLDS', 'DOES_NOT_HOLD', 'NONE'] }, quote: { type: ['string', 'null'] } },
       required: ['n', 'holds', 'quote'], additionalProperties: false } },
     unsupported: { type: 'array', items: { type: 'object', properties: { n: { type: 'number' }, missing: { type: 'string' } }, required: ['n', 'missing'], additionalProperties: false } },
     contradicted: { type: 'array', items: { type: 'object', properties: { n: { type: 'number' }, quote: { type: 'string' } }, required: ['n', 'quote'], additionalProperties: false } },
@@ -86,8 +86,15 @@ export const EXECUTION_BRIEF_SCHEMA: Record<string, unknown> = {
 
 const givenText = (input: BriefInput): string => `${input.request}\n${input.material.map((m) => `${m.name}\n${m.head}`).join('\n')}`;
 
+/**
+ * A CLOSED CHOICE WITH NONE, PER CASE: HOLDS, DOES_NOT_HOLD or NONE (the request does not say; `UNRESOLVED`, its name before
+ * version 6, is read the same way). FALLBACK, SAFE SIDE: the step APPLIES. NONE, a DOES_NOT_HOLD that cannot quote the
+ * request, a step the reading did not place, and a reading that could not be made all leave the step applying; a step is
+ * set aside only on the request's own words, and a step set aside never holds delivery (core/eval/consequence.ts).
+ * Tested in tests/atelier-delivery.test.ts.
+ */
 export const EXECUTION_BRIEF: Reading<BriefInput, Brief> = {
-  id: 'execution-brief', version: '5',
+  id: 'execution-brief', version: '6',
   system: EXECUTION_BRIEF_SYSTEM, schema: EXECUTION_BRIEF_SCHEMA,
   toolName: 'emit_execution_brief', toolDescription: 'For each conditional step whether this request falls under it, with the words that show it; and the steps whose decision nothing given supports.',
   maxTokens: 1500, estimateUsd: 0.01,
@@ -117,7 +124,7 @@ export const EXECUTION_BRIEF: Reading<BriefInput, Brief> = {
       if (!step || !c) continue;
       const quote = typeof p.quote === 'string' && p.quote.trim() ? p.quote.trim() : null;
       // Which way the case cuts is code's: a holding case keeps a "when" step and lifts an "unless" one.
-      const outcome: Applicability | null = p.holds === 'HOLDS' ? (c.lifts ? 'set-aside' : 'applies') : p.holds === 'DOES_NOT_HOLD' ? (c.lifts ? 'applies' : 'set-aside') : p.holds === 'UNRESOLVED' ? 'unresolved' : null;
+      const outcome: Applicability | null = p.holds === 'HOLDS' ? (c.lifts ? 'set-aside' : 'applies') : p.holds === 'DOES_NOT_HOLD' ? (c.lifts ? 'applies' : 'set-aside') : p.holds === 'NONE' || p.holds === 'UNRESOLVED' ? 'unresolved' : null;
       if (outcome === null) continue;
       grounded += 1;
       if (outcome === 'set-aside') {

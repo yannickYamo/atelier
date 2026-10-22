@@ -44,6 +44,7 @@ import { certificateFor, tasteStandingFor, claimStandingOf, recordHead } from '.
 import { recordForText } from '../eval-run.js';
 import { stateLine } from '../../core/eval/run-card.js';
 import { partlyChecked, blocks, type EvaluationRecord } from '../../core/eval/record.js';
+import { deliveryLine } from '../../core/eval/consequence.js';
 
 export { verifyText, describeVerify, describeMeasurement } from '../../core/observers/verify.js';
 
@@ -126,9 +127,10 @@ export async function verify(): Promise<void> {
     const listed = r.report.checked.filter(grammarListed).map((c) => ({ rule: c.requirementId, statement: c.statement,
       items: c.result.spans.map((s) => ({ text: s.text, start: s.start, end: s.end, why: s.why })) }));
     const slips = listed.flatMap((l) => l.items);
+    // THE SAME RECORD OF THE REPAIRED TEXT a run carries, and its delivery: the exit code is that delivery's.
+    const after = recordForText({ L, std: v, text: r.output, report: r.report, sensor: checks.claimSensor, claimsOff: argv.includes('--allow-unsourced'), answers: checks.format?.claims === 'list', unmeasured: checks.listsBecause ?? null, act: checks.claimAct, material: checks.evidence ?? '' });
     if (argv.includes('--json')) {
-      // THE SAME RECORD OF THE REPAIRED TEXT a run carries, under the one record head (core/eval/certificate.ts).
-      const after = recordForText({ L, std: v, text: r.output, report: r.report, sensor: checks.claimSensor, claimsOff: argv.includes('--allow-unsourced'), answers: checks.format?.claims === 'list', unmeasured: checks.listsBecause ?? null, act: checks.claimAct, material: checks.evidence ?? '' });
+      // Under the one record head (core/eval/certificate.ts).
       console.log(JSON.stringify({ ...recordHead({ state: after.state, standardVersionHash: v.standardVersionHash, skillVersion: active, certificate: certificateFor(v, tasteStandingFor(L, v, readerModel()), claimStandingOf(checks.claimSensor)), record: after }),
         output: r.output, failed: after.state === 'BLOCKED', violated: violatedOf(after), repair: r.repair, spentUsd: budget.spentUsd,
         ...(listed.length ? { unverified: listed.map((l) => l.rule), listed } : {}) }, null, 1));
@@ -138,8 +140,9 @@ export async function verify(): Promise<void> {
         : slips.length ? `(nothing changed: ${slips.length} possible slip${slips.length === 1 ? ' is' : 's are'} listed for you to check)`
           : '(nothing to repair: every REQUIRED measured rule holds)');
       for (const l of listed) console.error(`  ${l.rule} unverified, listed for you to check: ${toCheckList(l.items, l.items.length)}`);
+      if (after.delivery) console.error(`(${deliveryLine(after.delivery)})`);
     }
-    if (r.report.failed) process.exitCode = 1;
+    if (after.delivery?.decision === 'BLOCK') process.exitCode = 1;
     return;
   }
   const report = await checkDraftAsync(name, v, text, checks);
@@ -172,9 +175,13 @@ export async function verify(): Promise<void> {
   const profile = argv.includes('--profile') ? profileOf(text, bands.filter((b, i) => bands.findIndex((x) => x.id === b.id) === i)) : null;
   // THE SAME RECORD A RUN CARRIES (cli/eval-run.ts): this text, under this standard, judged the same way.
   const record = recordForText({ L, std: v, text, report, readings: tasteRead, sensor: checks.claimSensor, claimsOff: argv.includes('--allow-unsourced'), answers: checks.format?.claims === 'list', unmeasured: checks.listsBecause ?? null, act: checks.claimAct, material: checks.evidence ?? '' });
-  // THE HOOK'S ANSWER: exit 2 and the broken rules on stderr where something required was seen to fail; 0 otherwise.
+  // THE HOOK'S ANSWER IS THE DELIVERY'S (core/eval/consequence.ts): exit 2 and the rules that decided it on stderr where the
+  // table blocks; 0 otherwise, with a note where the work goes to a person.
   if (hookMode) {
-    const broken = record.entries.filter(blocks);
+    const decided = record.delivery;
+    const blocking = new Set(decided?.decision === 'BLOCK' ? decided.why.filter((w) => w.action === 'block').flatMap((w) => w.entries) : []);
+    const broken = record.entries.filter((e) => blocking.has(e.id));
+    if (decided?.decision === 'PERSON') console.error(`atelier: this goes to a person under the "${name}" standard (${deliveryLine(decided)}); nothing was blocked.`);
     if (broken.length) {
       console.error(`atelier: this breaks ${broken.length} required rule(s) of the "${name}" standard. Rewrite only what each names, keep everything else as it is:`);
       for (const e of broken) console.error(`  - ${e.statement.replace(/[.]$/, '')}${e.observation.evidence ? `: ${e.observation.evidence}` : ''}`);
@@ -200,6 +207,7 @@ export async function verify(): Promise<void> {
   } else {
     console.log(describeVerify(report, partlyChecked(record)));
     console.log(`\n${record.state.replace('_', ' ')} · ${stateLine(record)}`);
+    if (record.delivery) console.log(deliveryLine(record.delivery));
     // WHAT FAILED, BY NAME: a check the record holds beyond the rule lines above (copying from an example, the request's
     // own checks) is named here, so the text output says what blocked the work, not only --json.
     for (const e of record.entries.filter(blocks)) console.log(`  ✗ ${e.statement.replace(/[.]$/, '')}${e.observation.evidence ? `: ${e.observation.evidence}` : ''}`);
@@ -231,9 +239,9 @@ export async function verify(): Promise<void> {
     }
     if (taste) console.log(`\n${taste.text}`);
   }
-  if (taste?.failed) process.exitCode = 1;
-  // THE EXIT CODE IS THE RECORD'S: 1 where something required was seen to fail, and only there.
-  if (record.state === 'BLOCKED') process.exitCode = 1;
+  // THE EXIT CODE IS THE DELIVERY'S (core/eval/consequence.ts): 1 where the standard's consequence table blocks the text,
+  // and only there. A taste reader's qualified miss is in the record, and the table decides what it does.
+  if (record.delivery?.decision === 'BLOCK') process.exitCode = 1;
 }
 
 /**
