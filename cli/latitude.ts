@@ -10,6 +10,10 @@ import { readContext } from '../core/inference/reading.js';
 import { LATITUDE, REQUEST_LATITUDE, parseLatitude, type LatitudeInput } from '../core/observers/latitude.js';
 import type { Latitude, LatitudeLevel, StandardVersion } from '../core/state/canonical-state.js';
 import { latitudeOf } from '../core/state/canonical-state.js';
+import type { Requirement } from '../core/state/canonical-state.js';
+import { resolveRule } from '../core/state/rule-key.js';
+import { observes } from '../core/eval/observes.js';
+import { qualifiedIn } from '../core/observers/written.js';
 
 const noModel = (): boolean => argv.includes('--no-model') || process.env.ATELIER_BUILD_NO_MODEL === '1' || !canReach('discovery');
 
@@ -52,6 +56,29 @@ export const unmeasuredSaid = (): 'accept' | 'review' | undefined => {
   const u = flag('--unmeasured')?.trim().toLowerCase();
   return u === 'accept' || u === 'review' ? u : undefined;
 };
+
+/**
+ * THE RULES THE OWNER NAMED AS ACCEPTED UNMEASURED (`--accept-unmeasured <rule,...>`, at the build or with `atelier amend`):
+ * each by its id, its key or its number in the plan, resolved in the standard being minted. A rule no check reads is
+ * accepted whole; one a check reads only in part, or whose written check has not qualified, is accepted for what no
+ * qualified check reads, and the record lists it as such. A rule a qualified or counted check reads in full needs no
+ * acceptance, and a name that is no rule is said: neither stops anything.
+ */
+export function acceptedNamed(kept: readonly Requirement[], qualifications: StandardVersion['qualifications'], say: (line: string) => void = (l) => { console.log(l); }): string[] {
+  const asked = flag('--accept-unmeasured');
+  if (asked === undefined) return [];
+  const live = kept.filter((r) => r.authority !== 'EXPERT_REJECTED');
+  const ids: string[] = [];
+  for (const ref of asked.split(',').map((x) => x.trim()).filter(Boolean)) {
+    const found = resolveRule(live, ref);
+    if ('error' in found) { say(`Accepted unmeasured: not "${ref}", ${found.error.replace(/^no rule "[^"]*" in this standard\. /, 'no such rule. ')}`); continue; }
+    const r = found.rule;
+    const full = r.measurement && observes(r)?.coverage === 'FULL' && (r.measurement.observer !== 'CHECK' || qualifiedIn({ requirements: live, ...(qualifications ? { qualifications } : {}) }, r.requirementId));
+    if (full) { say(`Accepted unmeasured: not ${r.requirementId}, a check reads it in full ("${r.statement.slice(0, 60)}").`); continue; }
+    ids.push(r.requirementId);
+  }
+  return ids;
+}
 
 /** The one line the build screen says about the latitude, and how to change it. */
 export function latitudeLine(v: Pick<StandardVersion, 'latitude' | 'acceptedUnmeasured'>): string {

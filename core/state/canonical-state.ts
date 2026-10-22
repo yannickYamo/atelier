@@ -613,7 +613,7 @@ export interface InvocationSettings {
      */
     readonly latitude?: { readonly skill: LatitudeLevel; readonly run: LatitudeLevel; readonly tightenedBy: string | null; readonly setBy: 'owner' | 'model' | 'floor' | 'default' };
     /** rules the owner accepted as unmeasured: listed here and on the record, never a reason to send the run to review */
-    readonly acceptedUnmeasured?: readonly { readonly id: string; readonly statement: string }[];
+    readonly acceptedUnmeasured?: readonly { readonly id: string; readonly statement: string; /** for a rule a check reads, the part accepted unread */ readonly part?: string }[];
     /** the delivered-error bound on the owner's labels; null, with why, until the audit sample exists */
     readonly errorBound: { readonly alpha: number; readonly n: number } | null;
     readonly why: string | null;
@@ -969,26 +969,35 @@ export const defaultAccepted = (level: LatitudeLevel, kept: readonly Requirement
     : kept.filter((r) => r.authority !== 'EXPERT_REJECTED' && !r.measurement).map((r) => r.requirementId);
 
 /**
- * THE RULES ACCEPTED AS UNMEASURED IN A NEW VERSION. What the owner said now (`--unmeasured`) decides; otherwise a rule the
- * previous version knew as unmeasured keeps the standing it had there (found by its words, or by its id where its words
- * changed), and a rule that was not unmeasured there (new, or one whose check was taken away) gets the level's default.
- * A rule with a check is never accepted unmeasured.
+ * THE RULES ACCEPTED AS UNMEASURED IN A NEW VERSION. What the owner said now (`--unmeasured`) decides the rules no check
+ * reads; otherwise a rule the previous version knew as unmeasured keeps the standing it had there (found by its words, or by
+ * its id where its words changed), and a rule that was not unmeasured there (new, or one whose check was taken away) gets
+ * the level's default. A rule with a check is accepted only where the owner NAMED it (`--accept-unmeasured`: the part of it
+ * no qualified check reads, cli/latitude.ts `acceptedNamed`); that acceptance is kept while the rule keeps a check, and a
+ * rule that gains a check leaves the list. `named` are the ids the owner named now.
  */
 export function acceptedCarried(level: LatitudeLevel, kept: readonly Requirement[], said: 'accept' | 'review' | undefined,
-  prior: Pick<StandardVersion, 'requirements' | 'acceptedUnmeasured' | 'latitude'> | null | undefined): string[] {
+  prior: Pick<StandardVersion, 'requirements' | 'acceptedUnmeasured' | 'latitude'> | null | undefined, named: readonly string[] = []): string[] {
+  const live = kept.filter((r) => r.authority !== 'EXPERT_REJECTED');
+  const withNamed = (ids: readonly string[]): string[] => [...new Set([...ids, ...named.filter((id) => live.some((r) => r.requirementId === id))])];
   const fresh = new Set(defaultAccepted(level, kept, said));
-  if (said !== undefined || !prior) return [...fresh];
+  if (!prior) return withNamed([...fresh]);
   const was = new Set(prior.acceptedUnmeasured ?? []);
-  // What the previous level proposed and nobody changed is that level's default, not a choice: a new level proposes its own.
-  const proposed = defaultAccepted(latitudeOf(prior), prior.requirements);
-  if (latitudeOf(prior) !== level && proposed.length === was.size && proposed.every((id) => was.has(id))) return [...fresh];
   const words = new Set(kept.map((r) => r.statement));
   const priorOf = (r: Requirement): Requirement | undefined => prior.requirements.find((p) => p.statement === r.statement)
     ?? prior.requirements.find((p) => p.requirementId === r.requirementId && !words.has(p.statement));
-  return kept.filter((r) => r.authority !== 'EXPERT_REJECTED' && !r.measurement).filter((r) => {
+  // A rule the owner named with its check is theirs to have named: kept while it has a check, unless they now say review.
+  const namedBefore = said === 'review' ? [] : live.filter((r) => r.measurement).filter((r) => { const p = priorOf(r); return p?.measurement && was.has(p.requirementId); }).map((r) => r.requirementId);
+  if (said !== undefined) return withNamed([...fresh, ...namedBefore]);
+  // What the previous level proposed and nobody changed is that level's default, not a choice: a new level proposes its own.
+  const proposed = defaultAccepted(latitudeOf(prior), prior.requirements);
+  const unmeasuredWas = prior.requirements.filter((p) => !p.measurement && was.has(p.requirementId));
+  if (latitudeOf(prior) !== level && proposed.length === unmeasuredWas.length && proposed.every((id) => was.has(id))) return withNamed([...fresh, ...namedBefore]);
+  const unmeasured = live.filter((r) => !r.measurement).filter((r) => {
     const p = priorOf(r);
     return p && !p.measurement ? was.has(p.requirementId) : fresh.has(r.requirementId);
   }).map((r) => r.requirementId);
+  return withNamed([...unmeasured, ...namedBefore]);
 }
 
 /** The level a standard is held at: its own, or GROUNDED for one minted before latitude existed. */

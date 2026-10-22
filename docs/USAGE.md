@@ -68,10 +68,20 @@ one line:
   no check reads are accepted as unmeasured by default, so a run isn't held for your review on their account.
 
 It is yours: `--latitude strict|grounded|creative` on the build, or `atelier amend --skill <name> --latitude <level>
---reason "<why>"` after, and `--unmeasured accept|review` for the rules no check reads. A request that needs more care
+--reason "<why>"` after, and `--unmeasured accept|review` for the rules no check reads. On a strict skill nothing is
+accepted unless you say so; `--accept-unmeasured <rule,...>` (at the build, or with `atelier amend`) accepts the rules
+you name, by id, key or number: a rule no check reads, whole, and a rule a check reads only in part (the "one paragraph"
+of a Summary step) or whose written check has not qualified, for the part no qualified check reads. Every accepted rule
+is listed on the record and the certificate, a partly read one with the part you accepted. An output in which every
+required rule was read in full and held, nothing is listed, and every other rule is accepted or does not apply, is
+VERIFIED at every level. A request that needs more care
 than the skill (a figure to publish, asked of a creative skill) is held stricter for that run, on its own words, and
 never looser. The record and the certificate of every run say the level it was held at. A level you set, and the rules
 you accepted unmeasured, stay when the skill is built again; a rule given a check leaves the accepted list.
+
+A document of your material is named the way you cite it, at the build and at a run alike: the file's name without its
+folder or extension, `-` and `_` read as spaces (`notice-of-loss.txt` is "notice of loss"); `--with <name>=<file>` keeps
+the name you give. A check written against your examples' material reads the same names on new work.
 
 With your material bound, a run in which every specific is found in it reads VERIFIED at any level (where everything
 else required was read in full and held); what is blocked, flagged or listed by the level is what keeps it from that.
@@ -177,14 +187,15 @@ A rule you wrote is required whether or not a check can read it, so work with ju
 a machine on its own: it is yours to finish reading, until the taste reader has earned a say on that rule. Once your
 labels have qualified the reader on a rule (`atelier taste --skill <name> --label ...`, see TASTE.md), its reading of
 the part no count reads is a qualified observation: read as followed, the rule is verified in full; read as missed, it
-fails. That is the one path by which work with judgement in it reads VERIFIED. A rule you stated stays required when your own examples do not follow
+fails. That is the one path by which work with judgement in it reads VERIFIED, besides your accepting a rule as unmeasured. A rule you stated stays required when your own examples do not follow
 it. The build never stops for that: the rule is checked and shown on every run, and blocks nothing until you
-confirm it (`--yes`) or change the method. `atelier verify`, `atelier report`,
+confirm it (`--yes`) or change the method. A step whose written check has not qualified on your examples is yours
+the same way: required, its check shown, and the run left for your review on it. `atelier verify`, `atelier report`,
 `--json` and the MCP check carry the same record (`record`), so they cannot disagree with the card; `verify --json`
 lists what blocked the text under `violated`, from that record. A run asked for `--json` that stops before its record
 prints `{"schema", "state": "ERROR", "error"}`, never nothing. As a hook, `verify --hook` names any required rule it
 could not read on the event (a check that reads your material, where the event binds none) and blocks nothing on its
-account.
+account; an event that is not a JSON object exits 2, so a guard wired wrong is seen.
 
 `atelier fix "<what was wrong>"` goes one of three ways, and you choose by saying so:
 

@@ -12,6 +12,7 @@ import type { StandardVersion, InvocationSettings, LatitudeLevel } from '../stat
 import { latitudeOf } from '../state/canonical-state.js';
 import type { EvaluationRecord, RunState } from './record.js';
 import { qualifiedIn } from '../observers/written.js';
+import { observes } from './observes.js';
 import { QUALIFIED_READERS } from '../loop/claim-extract.js';
 import { tasteRules } from '../taste/reader.js';
 import { tastePermissions } from '../taste/calibration.js';
@@ -55,7 +56,13 @@ export function certificateFor(std: StandardVersion, taste: TasteStanding | null
     },
     // HOW STRICTLY IT WAS HELD, AND WHAT THE OWNER ACCEPTED UNREAD: carried on every certificate, whichever door.
     latitude: { skill: latitudeOf(std), run: held?.level ?? latitudeOf(std), tightenedBy: held && held.level !== latitudeOf(std) ? held.quote : null, setBy: std.latitude?.by ?? 'default' },
-    acceptedUnmeasured: (std.acceptedUnmeasured ?? []).flatMap((id) => { const r = std.requirements.find((q) => q.requirementId === id); return r ? [{ id, statement: r.statement }] : []; }),
+    // A rule a check reads in part, or whose written check has not qualified, is accepted for what no qualified check reads: said.
+    acceptedUnmeasured: (std.acceptedUnmeasured ?? []).flatMap((id) => {
+      const r = std.requirements.find((q) => q.requirementId === id); if (!r) return [];
+      const o = r.measurement ? observes(r) : null;
+      const part = !r.measurement ? null : o && o.coverage !== 'FULL' ? o.unchecked ?? 'the part its check does not read' : r.measurement.observer === 'CHECK' && !qualifiedIn(std, id) ? 'what its check, not qualified on your examples, reads' : null;
+      return [{ id, statement: r.statement, ...(part ? { part } : {}) }];
+    }),
     errorBound: null,
     why: 'no delivered-error bound: it needs an audit sample of your own labels, drawn like the work this skill does; the checks and readers above are what this output was held to',
   };

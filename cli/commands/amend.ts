@@ -18,7 +18,7 @@ import type { Measurement, Requirement, StandardVersion } from '../../core/state
 import { fitToCorpus, piecesBreaking, restateLimits } from '../../core/observers/derive.js';
 import { authorityStateOf, assertSupersessionRecorded, carriedQualifications, carriedSettings, standardHashOf, acceptedCarried, latitudeOf } from '../../core/state/canonical-state.js';
 import { parseLatitude } from '../../core/observers/latitude.js';
-import { unmeasuredSaid, latitudeLine } from '../latitude.js';
+import { unmeasuredSaid, latitudeLine, acceptedNamed } from '../latitude.js';
 import { compileArchitecture } from '../../core/architecture/compile.js';
 import { renderAgentSkill, assertPortable, defaultDescription } from '../../renderers/agent-skill/render.js';
 import * as store from '../../core/state/store.js';
@@ -48,8 +48,8 @@ export function amend(): void {
   // THE LATITUDE AND THE RULES ACCEPTED AS UNMEASURED ARE THE OWNER'S TOO (core/observers/latitude.ts): changed here, on
   // their own, with no rule named; a new version with the reason, like any amendment.
   const latitudeAsked = flag('--latitude'); const unmeasuredAsked = unmeasuredSaid();
-  const settingOnly = flag('--rule') === undefined && (latitudeAsked !== undefined || unmeasuredAsked !== undefined);
-  const ruleRef = settingOnly ? '' : flag('--rule') ?? die('--rule required: the rule\'s id, its key (R-…) or its number in atelier plan (or --latitude strict|grounded|creative, --unmeasured accept|review, for the whole skill)');
+  const settingOnly = flag('--rule') === undefined && (latitudeAsked !== undefined || unmeasuredAsked !== undefined || flag('--accept-unmeasured') !== undefined);
+  const ruleRef = settingOnly ? '' : flag('--rule') ?? die('--rule required: the rule\'s id, its key (R-…) or its number in atelier plan (or --latitude strict|grounded|creative, --unmeasured accept|review, --accept-unmeasured <rule,...>, for the whole skill)');
   const statement = flag('--statement');
   const materiality = flag('--materiality');
   const measureSpec = flag('--measure');
@@ -83,7 +83,7 @@ export function amend(): void {
   const kept = carriedSettings(prev, requirements);
   const latitude = level ? { level, evidence: [], by: 'owner' as const } : kept.latitude;
   // What the owner accepted unmeasured is carried; a rule that gains a check leaves it, one that loses its check gets the level's default.
-  const accepted = acceptedCarried(latitudeOf({ latitude }), requirements, unmeasuredAsked, prev);
+  const accepted = acceptedCarried(latitudeOf({ latitude }), requirements, unmeasuredAsked, prev, acceptedNamed(requirements, prev.qualifications));
   const body = { evidenceId: prev.evidenceId, workType: prev.workType, requirements, ...(latitude ? { latitude } : {}), ...(accepted.length ? { acceptedUnmeasured: accepted } : {}) };
   if (settingOnly) console.log(latitudeLine(body));
   // An amended check is a new check: its standing is not carried; the others keep theirs.

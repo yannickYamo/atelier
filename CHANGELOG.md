@@ -7,6 +7,31 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+### A strict skill can deliver, a method step keeps its authority, and the material has one name
+
+- **One name for a document of the material.** At the build an example's material was named by its path
+  (`e01.material/notice-of-loss.txt`) and at a run by its `--with` name, so a citation check written against the
+  examples failed every one of them and never qualified. Both now name a file the way a person cites it: its name
+  without folder or extension, `-` and `_` read as spaces ("notice of loss"); `--with <name>=<file>` keeps the name
+  given, and the material stored with `atelier material` is named the same way. The readings that write and mend a
+  check are told the same names.
+- **A method step whose written check did not qualify stays the owner's rule.** It was planned as a habit: it neither
+  blocked nor sent a run to review. It is now required, its check reports, and a run is left for the owner's review on
+  it until the check qualifies or the owner accepts the step as unmeasured. A qualified check enforces, as before.
+- **Repair may say a banned judgement with a negation.** A rewrite that takes out a banned word like "suspicious" may
+  need "not" to say what is left ("is not contradicted by the documents"). A negation is allowed where it stands in place
+  of a banned word the rewrite took out; one added anywhere else is still refused.
+- **The hook refuses an event that is not a JSON object** with exit 2 and the reason, as the documentation said; a JSON
+  string passed as "nothing to check". The rules it names as not read on an event are every required rule, a step whose
+  check has not qualified included.
+- **Strict delivery.** An output in which every required rule was read in full and held, nothing is listed, and every
+  other rule is accepted or does not apply, is VERIFIED at every level. On a strict skill nothing is accepted by default;
+  `--accept-unmeasured <rule,...>`, at the build or with `atelier amend`, accepts the rules the owner names: a judgement
+  rule whole, and a rule a check reads only in part (or whose written check has not qualified) for its unread part. The
+  record lists each with what its check read and the part accepted, and the certificate lists every accepted rule, a
+  partly read one with its part. A rule a qualified or counted check reads in full needs no acceptance, and a name that
+  is no rule is said; neither stops the command.
+
 ### Studies: tests A and C after the gap fixes (about $5.90 in all)
 
 Claims, labels and the public `i-have-adhd` skill, writer `claude-sonnet-5-5`, every call metered; every table and output

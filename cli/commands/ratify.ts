@@ -22,7 +22,7 @@ import { standardHashOf, acceptedCarried, latitudeOf, discoveryRecall, declaredG
 import { writeAtomic } from '../../core/state/fs-atomic.js';
 import { die, argv, flag, loadSession, saveSession, step, runFile, orchestrated, authoredIdAllocator, type Session } from '../runtime.js';
 import { existsSync, readFileSync } from 'node:fs';
-import { unmeasuredSaid, latitudeLine, builtStandard } from '../latitude.js';
+import { unmeasuredSaid, latitudeLine, builtStandard, acceptedNamed } from '../latitude.js';
 import { readJson } from '../../core/state/read-json.js';
 import { decide, type DecisionVerb } from '../../core/ratification/authority.js';
 import { roleFor } from '../../core/architecture/compile.js';
@@ -481,7 +481,7 @@ export function ratifyClose(): void {
   // this run's previous close, or the skill as built now.
   const priorStd = (s.run.standardVersionHash && existsSync(priorPath) ? readJson<StandardVersion>(priorPath, { what: 'the previous standard' }) : null) ?? builtStandard(s.skillName);
   const latitude = s.latitude ?? priorStd?.latitude ?? null;
-  const accepted = acceptedCarried(latitudeOf(latitude ? { latitude } : null), kept, unmeasuredSaid(), priorStd);
+  const accepted = acceptedCarried(latitudeOf(latitude ? { latitude } : null), kept, unmeasuredSaid(), priorStd, acceptedNamed(kept, s.qualifications));
   const body = { evidenceId: s.evidence?.evidenceId ?? null, workType, requirements: kept, ...(latitude ? { latitude } : {}), ...(accepted.length ? { acceptedUnmeasured: accepted } : {}) };
   const hash = standardHashOf(body);
   // ── CLOSING AGAIN IS A SUPERSESSION, NOT A MUTATION ──────────────────────────────────────

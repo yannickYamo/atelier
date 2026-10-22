@@ -80,6 +80,24 @@ export const CONDITIONAL_NOT_BOUND = 'the material it needs is not bound, and it
  * or a rule held back for material the run was not given.
  */
 function standardEntry(p: PlannedRule, f: RecordFacts): Entry {
+  return acceptedPart(p, readEntry(p, f), f);
+}
+
+/**
+ * THE PART THE OWNER ACCEPTED UNREAD. A rule they named as accepted unmeasured that a check reads only in part ("one
+ * paragraph" of a Summary step), or whose written check has not qualified, is listed for them where it would otherwise
+ * send the run to review: what the check read is kept in the evidence, with the part accepted. A rule seen to fail by a
+ * check that may block, a check that did not finish, or a rule set aside, is left as it stands.
+ */
+function acceptedPart(p: PlannedRule, e: Entry, f: RecordFacts): Entry {
+  if (!f.accepted?.has(p.id) || !e.required || e.observation.incomplete) return e;
+  if (e.reason !== 'PARTLY_CHECKED' && e.reason !== 'OBSERVER_UNQUALIFIED') return e;
+  const part = e.reason === 'PARTLY_CHECKED' ? e.observation.unchecked ?? 'the rest of it' : 'what its check, not qualified on your examples, reads';
+  return entry({ id: e.id, dimension: e.dimension, source: e.source, statement: e.statement, required: e.required,
+    observation: { ...e.observation, evidence: `${e.observation.evidence ? `${e.observation.evidence}; ` : ''}accepted by you as unmeasured for ${part}`, listed: true }, verdict: null });
+}
+
+function readEntry(p: PlannedRule, f: RecordFacts): Entry {
   const e = plannedEntry(p, f);
   const r = f.read?.get(p.id);
   if (!r?.acts || p.notEnforced !== null || e.result !== 'UNVERIFIED') return e;
@@ -113,7 +131,8 @@ function plannedEntry(p: PlannedRule, f: RecordFacts): Entry {
   const held = (required && !p.enforced) || p.notEnforced === 'UNRATIFIED';
   const whyNot = p.notEnforced === 'UNRATIFIED' ? 'Nobody has confirmed this rule yet, so it blocks nothing'
     : p.notEnforced === 'DISPUTED_BY_EXAMPLES' ? 'Your own examples do not do this, so the rule blocks nothing until you confirm it'
-    : p.notEnforced === 'RELATED_CHECK' ? 'This check reads something near your rule and not the rule itself, so it blocks nothing' : 'You have not made this check required, so it blocks nothing';
+    : p.notEnforced === 'RELATED_CHECK' ? 'This check reads something near your rule and not the rule itself, so it blocks nothing'
+    : p.notEnforced === 'UNQUALIFIED' ? 'This check has not qualified on your examples, so it blocks nothing and the rule is yours to read' : 'You have not made this check required, so it blocks nothing';
   const seen = (evidence: string | null): Observation => ({ proposition: o.proposition, coverage: o.coverage, qualification: held ? 'UNQUALIFIED' : 'DETERMINISTIC',
     evidence: held && evidence ? `${evidence}. ${whyNot}` : evidence, ...(o.unchecked ? { unchecked: o.unchecked } : {}) });
   // A REQUIRED rule held back for want of material is not set aside: it was not checked, and the work cannot read as

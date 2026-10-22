@@ -415,7 +415,7 @@ export async function method(): Promise<void> {
   // words, when a model was there to read: what it read, or why it read nothing. With no model set up the screen stays
   // as it was (`atelier new` has said so once already), and what the owner asked for (--persona none) is not said back.
   // Everything the build said is in --report.
-  if (!whole) for (const l of said.filter((x) => /^(Latitude: |Work form: |Persona: |Scope: |\(no persona: \d|\(the persona could not be derived|\(the examples could not be read for scope|\(a fidelity profile in this project)/.test(x))) console.log(l);
+  if (!whole) for (const l of said.filter((x) => /^(Latitude: |Accepted unmeasured: |Work form: |Persona: |Scope: |\(no persona: \d|\(the persona could not be derived|\(the examples could not be read for scope|\(a fidelity profile in this project)/.test(x))) console.log(l);
   // Required is what a run is held to. What the example showed is checked and reported, and fails nothing: said apart,
   // so that the count of what is enforced is never larger than it is.
   // The screen above already said what is checked and what is theirs: all that is left to say is that it is ready.
