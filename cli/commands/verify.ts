@@ -30,7 +30,8 @@ import { checksFor, shortFormRequest } from '../checks.js';
 import { readFileSync, existsSync } from 'node:fs';
 import * as store from '../../core/state/store.js';
 import * as fstore from '../../core/state/fidelity-store.js';
-import { describeVerify, acts } from '../../core/observers/verify.js';
+import { describeVerify } from '../../core/observers/verify.js';
+import { planFor } from '../../core/plan/execution-plan.js';
 import { MATERIAL_UNREAD } from '../../core/observers/written.js';
 import { checkDraftAsync, refineToStandard, REPAIR_PASSES } from '../../core/loop/run-repair.js';
 import { checkClass } from '../../core/observers/doc-class.js';
@@ -82,7 +83,12 @@ export async function verify(): Promise<void> {
     let data = '';
     if (!process.stdin.isTTY) for await (const chunk of process.stdin) data += (chunk as Buffer).toString();
     let event: { tool_input?: { content?: unknown; file_path?: unknown }; last_assistant_message?: unknown; transcript_path?: unknown } = {};
-    try { event = JSON.parse(data || '{}') as typeof event; } catch { fail('the hook event on stdin is not JSON: the hook is not wired as Claude Code sends it; nothing was checked'); }
+    let parsed: unknown = null;
+    try { parsed = JSON.parse(data || '{}'); } catch { fail('the hook event on stdin is not JSON: the hook is not wired as Claude Code sends it; nothing was checked'); }
+    // AN EVENT IS AN OBJECT. A JSON string or list ("this is not an event") parsed, carried nothing, and passed as "nothing to
+    // check": a guard wired wrong was never seen. It cannot check at all, so it says so and exits 2.
+    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) fail('the hook event on stdin is not a JSON object: the hook is not wired as Claude Code sends it; nothing was checked');
+    event = parsed as typeof event;
     const path = typeof event.tool_input?.file_path === 'string' ? event.tool_input.file_path : null;
     text = typeof event.tool_input?.content === 'string' ? event.tool_input.content
       : path && existsSync(path) ? readFileSync(path, 'utf8')
@@ -177,7 +183,9 @@ export async function verify(): Promise<void> {
     }
     // WHAT WAS NOT READ IS SAID, AND BLOCKS NOTHING: a required rule whose check could not read this text (one that reads
     // the material, on an event that binds none) is named, so a pass is never mistaken for every rule holding.
-    const unread = report.checked.filter((c) => acts(c) && c.result.verdict === 'NOT_APPLICABLE' && c.result.detail.startsWith(MATERIAL_UNREAD));
+    // Required is the plan's word: an owner's step whose check has not qualified is required too, and named when unread.
+    const required = new Set(planFor(v).rules.filter((p) => p.role !== 'HABIT').map((p) => p.id));
+    const unread = report.checked.filter((c) => required.has(c.requirementId) && c.result.verdict === 'NOT_APPLICABLE' && c.result.detail.startsWith(MATERIAL_UNREAD));
     if (unread.length) {
       console.error(`atelier: ${unread.length} required rule(s) of the "${name}" standard were not read on this text, so nothing was blocked on ${unread.length === 1 ? 'its' : 'their'} account:`);
       for (const c of unread) console.error(`  - ${c.statement.replace(/[.]$/, '')}: ${c.result.detail}`);

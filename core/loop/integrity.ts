@@ -150,6 +150,32 @@ export function namesIn(s: string): string[] {
 /** The qualifiers and soft modals a stretch of text carries: the hedge words a rewrite is otherwise held to keep. */
 export const hedgesIn = (s: string): string[] => [...QUALIFIERS.filter((q) => termCount(s, q) > 0), ...WEAK_MODALS.filter((m) => modalCount(s, m) > 0)];
 
+/**
+ * THE NEGATIONS A REWRITE PUT WHERE A BANNED WORD STOOD. The span and its rewrite are aligned word by word (the longest
+ * common subsequence); each run of words the rewrite inserted stands in place of the run of the span's words it replaced.
+ * A negation in an inserted run counts here only where the words it replaced held a term the rule asked to remove: "is
+ * suspicious" → "is not consistent with the file". One inserted anywhere else ("was damaged" → "was not damaged") is not
+ * counted, and stays an added negation. FORM: an alignment of words; nothing is read for meaning.
+ */
+export function negationsInPlaceOfDrops(original: string, replacement: string, drops: readonly string[]): number {
+  if (!drops.length) return 0;
+  const words = (t: string): string[] => t.split(/\s+/).filter(Boolean);
+  const key = (w: string): string => w.toLowerCase().replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, '');
+  const a = words(original); const b = words(replacement);
+  // LCS table over the words, compared without case or the punctuation around them.
+  const L: number[][] = Array.from({ length: a.length + 1 }, () => new Array<number>(b.length + 1).fill(0));
+  for (let i = a.length - 1; i >= 0; i--) for (let j = b.length - 1; j >= 0; j--) L[i][j] = key(a[i]) === key(b[j]) ? L[i + 1][j + 1] + 1 : Math.max(L[i + 1][j], L[i][j + 1]);
+  let n = 0; let i = 0; let j = 0; let gone: string[] = []; let added: string[] = [];
+  const close = (): void => { if (added.length && gone.length && drops.some((d) => hasTerm(gone.join(' '), d))) n += count(added.join(' '), NEGATION); gone = []; added = []; };
+  while (i < a.length || j < b.length) {
+    if (i < a.length && j < b.length && key(a[i]) === key(b[j])) { close(); i++; j++; }
+    else if (j < b.length && (i >= a.length || L[i][j + 1] >= L[i + 1][j])) added.push(b[j++]);
+    else gone.push(a[i++]);
+  }
+  close();
+  return n;
+}
+
 /** Whether a rewrite kept what its span claimed; `lost` names each figure, negation, qualifier, name or slot it dropped. */
 export interface Integrity { readonly ok: boolean; readonly lost: readonly string[] }
 
@@ -187,8 +213,10 @@ export function spanIntegrity(fullOriginal: string, replacement: string, allowed
   // and may never rise: an added "not" flips a claim as surely as a dropped one.
   const negBefore = count(original, NEGATION); const negAfter = count(replacement, NEGATION);
   const negLicensed = drops.reduce((n, d) => n + count(d, NEGATION), 0);
-  // Said as what happened: a negation added is not one lost.
-  if (negAfter > count(fullOriginal, NEGATION)) lost.push(`added a negation (${negBefore} → ${negAfter})`);
+  // Said as what happened: a negation added is not one lost. A banned word that was itself the judgement ("suspicious")
+  // may need one to be said otherwise ("not consistent with"): a negation is allowed where it stands in place of a banned
+  // word the rewrite took out, and nowhere else (`negationsInPlaceOfDrops`).
+  if (negAfter - negationsInPlaceOfDrops(original, replacement, drops) > count(fullOriginal, NEGATION)) lost.push(`added a negation (${negBefore} → ${negAfter})`);
   else if (negBefore - negAfter > negLicensed) lost.push(`negation (${negBefore} → ${negAfter})`);
   // A qualifier the rule named for removal may go. One named only to be SWAPPED may change into another
   // qualifier ("may" → "might") but not vanish, so across swapped qualifiers the total must hold.
