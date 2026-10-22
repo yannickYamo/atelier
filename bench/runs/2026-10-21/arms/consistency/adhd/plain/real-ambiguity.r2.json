@@ -1,0 +1,12 @@
+{
+ "fixture": "adhd",
+ "arm": "plain",
+ "task": "real-ambiguity",
+ "run": 2,
+ "text": "Reply with what \"it\" is: the service name, or \"the current directory.\"\n\nOnce I know, I'll show the exact deploy command and wait for your \"go\" before running anything in production.",
+ "costUsd": 0.007962,
+ "stop": "end_turn",
+ "error": null,
+ "meterUsd": 0.007962000000000025,
+ "seconds": 3.899
+}

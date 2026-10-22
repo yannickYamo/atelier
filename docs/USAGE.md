@@ -47,10 +47,75 @@ write.
 Your stories, figures and sources are yours to supply. A small model reads every draft for specifics:
 figures, dates, quotations, attributions, links, and stories told as lived. It says where each one came
 from, and code checks the claim against what you actually gave it: the passage it quotes must be in your
-material, the numbers must be there, and the specific must really be where the reader said it was. Anything
-that doesn't trace is cut and listed, so you can add the real one. That needs your material bound
-(`atelier material`, or `--with`) and a skill whose kind of work is an essay or a post: with no material, or on
-any other kind of work, what doesn't trace is listed and nothing is deleted.
+material, the numbers must be there, and the specific must really be where the reader said it was. What
+doesn't trace meets the skill's latitude (below): on a strict skill a figure, date or citation not in your material
+stops the work, on a grounded one it is flagged for your review, on a creative one it is listed for you. Nothing is
+deleted unless you choose it (`atelier material --skill <name> --cut`), and then only where a reader qualified on
+that kind of work found it. With no material bound, every specific is listed as unverifiable, and a check that looks
+things up in your material says it was not checked.
+
+### How strictly the work is held
+
+Every skill has a latitude, read at the build from your examples, your method and what the skill is for, and said in
+one line:
+
+- **strict** (a contract, a policy, a claims decision, a label): house language and defined terms; a figure, date or
+  citation not in your material stops the work.
+- **grounded** (a report, an analysis, a support answer): free in wording within the method; what doesn't trace goes
+  to your review.
+- **creative** (a post, an essay, a newsletter): the writer composes freely, argues, takes positions and uses marked
+  hypotheticals; only facts presented as real need a source, and those it can't trace are listed for you. The rules
+  no check reads are accepted as unmeasured by default, so a run isn't held for your review on their account.
+
+It is yours: `--latitude strict|grounded|creative` on the build, or `atelier amend --skill <name> --latitude <level>
+--reason "<why>"` after, and `--unmeasured accept|review` for the rules no check reads. On a strict skill nothing is
+accepted unless you say so; `--accept-unmeasured <rule,...>` (at the build, or with `atelier amend`) accepts the rules
+you name, by id, key or number: a rule no check reads, whole, and a rule a check reads only in part (the "one paragraph"
+of a Summary step) or whose written check has not qualified, for the part no qualified check reads. Every accepted rule
+is listed on the record and the certificate, a partly read one with the part you accepted. An output in which every
+required rule was read in full and held, nothing is listed, and every other rule is accepted or does not apply, is
+VERIFIED at every level. A request that needs more care
+than the skill (a figure to publish, asked of a creative skill) is held stricter for that run, on its own words, and
+never looser. The record and the certificate of every run say the level it was held at. A level you set, and the rules
+you accepted unmeasured, stay when the skill is built again; a rule given a check leaves the accepted list.
+
+### What is done with the work: the consequence table
+
+The record says what was observed (VERIFIED, NEEDS REVIEW, BLOCKED). What is done with the work is a separate decision,
+its **delivery**, made after repair by one table with a row per kind of finding. The latitude gives the defaults:
+
+| finding | strict | grounded | creative |
+|---|---|---|---|
+| `trusted-fail`: a counted or qualified check fails | block | block | label |
+| `untrusted-fail`: a written check not yet qualified fails | person | person | label |
+| `untrusted-pass`: it finds nothing | label | label | label |
+| `judgement-unread`: a judgement rule, or the unread part of a rule | person | label | label |
+| `judgement-missed`: the taste reader, qualified on the rule, read it as missed | person | person | label |
+| `untraced-specific`: a figure, date or citation decided absent from the material | block | person | label |
+| `claim-flagged`: a specific only an unmeasured claim reader flagged or could not find | person | person | label |
+| `not-run`: a check could not run, or its material was not bound | person | label | label |
+| `listed`: listed for you only (accepted unmeasured, possible slips) | label | label | label |
+| `clean`: nothing found anywhere | ship | ship | ship |
+
+The work is delivered by the most severe row that fired: **SHIP**, **SHIP LABELLED** (out, with what was not read named
+on it), **PERSON** (out, marked for your review; exit 0) or **BLOCK** (exit 1, and exit 2 from the hook). A step set
+aside for the request never holds it. `--strict` refuses what was not shipped. `atelier amend --skill <name>
+--consequence untrusted-fail=block --reason "<why>"` sets a row (`=default` takes it back); only the rows you set are
+kept, in the standard's hash. The record head and the certificate of every run carry the decision and the rows behind it.
+
+**The loop runs itself.** `atelier report --pending` lists the runs sent to you and not yet ruled on, newest first. Your
+ruling (`atelier rate <run> yes`, or `no --rule <rule>`) holds every written check again at once: a run you would ship is
+one more example each check must pass, one you would not, naming a step, one more break its check must catch and the
+others must not fire on. A check that now qualifies is enforced, so its failures are repaired, then blocked, instead of
+sent to you; the certificate lists what moved (`requalified`). It is counting, with no model call, and runs again on every
+build and on `atelier report --requalify`.
+
+A document of your material is named the way you cite it, at the build and at a run alike: the file's name without its
+folder or extension, `-` and `_` read as spaces (`notice-of-loss.txt` is "notice of loss"); `--with <name>=<file>` keeps
+the name you give. A check written against your examples' material reads the same names on new work.
+
+With your material bound, a run in which every specific is found in it reads VERIFIED at any level (where everything
+else required was read in full and held); what is blocked, flagged or listed by the level is what keeps it from that.
 
 - A figure credited to a study, a quote from a named person, or a link offered as a source is yours to
   supply. It never passes as "general knowledge".
@@ -63,9 +128,9 @@ any other kind of work, what doesn't trace is listed and nothing is deleted.
   left 41 of 48 clean drafts alone ([result](../studies/CLAIM_READER_V3_QUALIFICATION_RESULT.md)). Most of
   its false flags were the author's own true stories, so bind yours with `atelier material`.
 - Headings and tables are read. A claim the reader flagged is still cut if the reader fails partway through.
-- It deletes only in an essay or a post with your material bound (`atelier material --skill <name> <notes>`, or
-  `--with`). Anywhere else it lists what it could not find and deletes nothing. Where it does delete, expect it
-  to cut a true detail now and then: add the detail to your material and it stays.
+- It deletes only where you chose `--cut`, with your material bound, on a kind of work the reader was measured on.
+  Anywhere else it blocks, flags or lists by the latitude and deletes nothing. Where it does delete, expect it to cut
+  a true detail now and then: add the detail to your material and it stays.
 
 ## What it builds: the whole harness
 
@@ -153,10 +218,15 @@ A rule you wrote is required whether or not a check can read it, so work with ju
 a machine on its own: it is yours to finish reading, until the taste reader has earned a say on that rule. Once your
 labels have qualified the reader on a rule (`atelier taste --skill <name> --label ...`, see TASTE.md), its reading of
 the part no count reads is a qualified observation: read as followed, the rule is verified in full; read as missed, it
-fails. That is the one path by which work with judgement in it reads VERIFIED. A rule you stated stays required when your own examples do not follow
+fails. That is the one path by which work with judgement in it reads VERIFIED, besides your accepting a rule as unmeasured. A rule you stated stays required when your own examples do not follow
 it. The build never stops for that: the rule is checked and shown on every run, and blocks nothing until you
-confirm it (`--yes`) or change the method. `atelier verify`, `atelier report`,
-`--json` and the MCP check carry the same record (`record`), so they cannot disagree with the card.
+confirm it (`--yes`) or change the method. A step whose written check has not qualified on your examples is yours
+the same way: required, its check shown, and the run left for your review on it. `atelier verify`, `atelier report`,
+`--json` and the MCP check carry the same record (`record`), so they cannot disagree with the card; `verify --json`
+lists what blocked the text under `violated`, from that record. A run asked for `--json` that stops before its record
+prints `{"schema", "state": "ERROR", "error"}`, never nothing. As a hook, `verify --hook` names any required rule it
+could not read on the event (a check that reads your material, where the event binds none) and blocks nothing on its
+account; an event that is not a JSON object exits 2, so a guard wired wrong is seen.
 
 `atelier fix "<what was wrong>"` goes one of three ways, and you choose by saying so:
 
@@ -196,7 +266,14 @@ kinds and says, for each check, what it looks for and how your examples fare on 
   citation is looked up, and the material is shown to the writer with its line numbers so that none is counted.
 - **Judgement.** Everything else: shown to the writer, reported as not measured, never called checked.
 
-A check is kept only when every example holds it. A step that a piece of yours does not do is named with the piece
+A check is kept only when every example holds it, and once built it is kept: a rebuild reads a step's check again
+only when the step's wording or the examples changed, so rewording one step changes that step's check and no other.
+An output you reject naming the rule it breaks (`atelier rate <run> no "why" --rule <rule>`) is one more edit a
+written check must catch to qualify: the check is held to it at once, and that step's check is read again at the next build. The rule is named in the
+standard the output was made under and kept by its words, so building again with the steps renumbered does not move
+it. Every sentence of your note is a step, beside a list or not; which are instructions and which explain is read and
+shown at the build. A skill from rules alone, built again after you rated drafted answers, keeps the rules you
+accepted: `atelier skill --yes --name <name>`. A step that a piece of yours does not do is named with the piece
 and left for you to judge; change the note or the example and build again to have it checked. Building again in
 the same folder makes a new version of the same skill. With three or more
 examples, the pieces are served with the skill and their lengths recorded, so a draft is chosen by how near it runs
@@ -233,8 +310,8 @@ LinkedIn posts, with `--class linkedin-post`, and it also holds each post to wha
 For answers rather than published writing (a coding assistant, support replies, review comments), use
 `--class assistant-reply`; `atelier skill` picks it when its rules are about replies. Its answers name
 versions, costs and estimates you never supplied, so specifics the claim check cannot trace are listed for
-you to check, not cut. In essays and posts with your material bound, an invented story, claim of evidence or quotation is cut; anywhere
-else it is listed.
+you to check, not cut. Elsewhere an invented story, claim of evidence or quotation meets the skill's latitude, and is
+cut only where you chose `atelier material --cut`.
 
 A standard can also say what a piece must contain: `atelier amend --skill <name> --rule <rule> --measure
 "PRESENCE:in=last,starts=next"` makes "end on the next step" a counted rule, and `PRESENCE:sections=…`
@@ -353,14 +430,15 @@ or as a `## Request` section followed by `## Answer`. The request is never read 
 
 ### Strict delivery
 
-`atelier invoke --skill <name> --strict "<task>"` delivers the output only when it conforms. A reply that leaves out
+`atelier invoke --skill <name> --strict "<task>"` delivers the output only when its delivery ships it (SHIP or SHIP
+LABELLED, above); one that goes to a person or is blocked is refused. A reply that leaves out
 part of what the request asks is written once more; a draft that breaks a REQUIRED rule is written again
 (`--redraws <n>`, default 2); what still does not conform is refused with its reasons and exit code 3, and
 `atelier report <run>` shows the text. `--allow-nonconformant` delivers it anyway, marked. To make it the skill's
 way of running: `atelier fidelity --skill <name> --set delivery=strict`. It holds the REQUIRED rules that have a
 measurement and the claim check; a REQUIRED rule in prose with no measurement is outside the guarantee.
 
-Delivered under `--strict` means nothing required was seen to fail and every check finished. It does not mean
+Delivered under `--strict` means the consequence table shipped it. It does not mean
 verified: where a check read only part of a rule, or a rule is yours to judge, the run says how many such rules
 there are, and `eval.record.state` is `NEEDS_REVIEW`. A check that could not finish (the claim reader could not
 run, or left specifics undecided) is refused, never passed.

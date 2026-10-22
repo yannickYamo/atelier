@@ -136,6 +136,7 @@ export interface TraitTable { readonly rows: readonly TraitRow[]; readonly confl
 
 const STOP = new Set(['i', 'the', 'a', 'an', 'of', 'to', 'in', 'on', 'at', 'with', 'and', 'or', 'for', 'my', 'it', 'its', 'is', 'are', 'be',
   'that', 'this', 'as', 'by', 'from', 'when', 'then', 'than', 'so', 'if', 'each', 'every', 'one', 'all', 'most', 'keep', 'use', 'write', 'give', 'make']);
+/** Function words of negation, dropped from the words two statements are compared by (a stop list, read for no meaning). */
 const NEGATION = /\b(never|no|not|avoid|without|don't|do not|rarely)\b/i;
 const contentWords = (s: string): Set<string> => new Set((s.toLowerCase().match(/[a-z][a-z'-]+/g) ?? [])
   .map((w) => w.replace(/'s$/, '').replace(/(?<=[a-z]{3})s$/, '')).filter((w) => !STOP.has(w) && !NEGATION.test(w)));
@@ -297,13 +298,11 @@ export function plainlyOpposed(a: string, b: string): boolean {
   });
 }
 
-/** Whether a statement bans something outright (not a kind of it, not past a cap). */
-const bansOutright = (statement: string): boolean => {
-  const r = readPolarity(statement);
-  if ([...r.subjects.values()].includes('neg')) return true;
-  if ([...r.subjects.values()].includes('scoped') || r.narrowed) return false;
-  return NEGATION.test(statement) && !boundedNumber(statement);
-};
+/**
+ * Whether a rule bans: what the polarity reading said of it (core/observers/rule-polarity.ts, carried as its kind), or a
+ * subject it names that the subject reading above finds banned outright. A negative word found in it decides nothing.
+ */
+const bans = (r: ReadRule): boolean => r.kind === 'BOUNDARY' || [...readPolarity(r.statement).subjects.values()].includes('neg');
 
 /**
  * HEADINGS AND LISTS, ASKED FOR OR BANNED OUTRIGHT, against a count of them or another rule's words: "use headings"
@@ -405,7 +404,7 @@ export function relationOf(a: ReadRule, b: ReadRule): Relation {
   const related = (k: string, j: string): boolean => k === j || KIND_OF[k] === j || KIND_OF[j] === k;
   if ([...ra.subjects.keys()].some((k) => [...rb.subjects.keys()].some((j) => related(k, j)))) return 'SAME';
   // The same subject, and one bans outright where the other does not: a conflict. (A boundary against a generative rule too.)
-  const na = bansOutright(a.statement) || a.kind === 'BOUNDARY'; const nb = bansOutright(b.statement) || b.kind === 'BOUNDARY';
+  const na = bans(a); const nb = bans(b);
   return na === nb ? 'SAME' : 'CONFLICT';
 }
 

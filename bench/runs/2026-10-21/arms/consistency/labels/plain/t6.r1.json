@@ -1,0 +1,12 @@
+{
+ "fixture": "labels",
+ "arm": "plain",
+ "task": "t6",
+ "run": 1,
+ "text": "```json\n{\n  \"clip\": \"c19\",\n  \"duration\": \"01:01\",\n  \"overall\": \"Medium\",\n  \"categories\": [\n    {\n      \"category\": \"Firearms – depiction\",\n      \"span\": \"00:20–00:50\",\n      \"risk\": \"Medium\",\n      \"evidence\": \"The officer holds up the evidence bag with the pistol inside.\"\n    },\n    {\n      \"category\": \"Crime – reference\",\n      \"span\": \"00:04–00:20\",\n      \"risk\": \"Low\",\n      \"evidence\": \"We recovered a pistol from the car.\"\n    }\n  ]\n}\n```",
+ "costUsd": 0.012102,
+ "stop": "end_turn",
+ "error": null,
+ "meterUsd": 0.012102000000000057,
+ "seconds": 7.353
+}

@@ -16,7 +16,8 @@ import { describeController } from '../../core/loop/controller.js';
 import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import * as store from '../../core/state/store.js';
-import { getEval, putRating, REASON_CODES, type ReasonCode } from '../../core/state/eval-store.js';
+import { getEval, putRating, listEvals, latestRatings, REASON_CODES, type ReasonCode } from '../../core/state/eval-store.js';
+import { requalifySkill, movedLine } from '../../core/method/requalify.js';
 import { renderPanel } from '../../core/eval/summary.js';
 import { renderRunCard } from '../../core/eval/run-card.js';
 import { renderSkillCard } from '../../core/eval/skill-card.js';
@@ -24,7 +25,8 @@ import { skillCardFor } from '../skill-card.js';
 import { reproductionFile } from './reproduce.js';
 import { renderReproduction, type ReproductionRecord } from '../../core/eval/reproduce.js';
 import { featureOf } from '../../core/observers/features.js';
-import type { InvocationRecord } from '../../core/state/canonical-state.js';
+import type { InvocationRecord, StandardVersion, Requirement } from '../../core/state/canonical-state.js';
+import { resolveRule } from '../../core/state/rule-key.js';
 import type { EvalSummary } from '../../core/eval/summary.js';
 import { DATA, die, argv, flag, positional, positionals, runFile } from '../runtime.js';
 import { readJson } from '../../core/state/read-json.js';
@@ -33,6 +35,15 @@ import { describeComposite } from '../../core/composite/selection.js';
 import { openLine } from './composite.js';
 
 /** The skill a run belongs to: named, or found by its id across the store. */
+/** The skill an answer drafted for the owner belongs to (`d1`…), or null when `id` names none. */
+function draftedById(id: string): { L: store.StoreLayout } | null {
+  if (!/^d\d+$/.test(id)) return null;
+  const named = flag('--skill');
+  const skills = named ? [named] : existsSync(join(DATA, 'skills')) ? readdirSync(join(DATA, 'skills')) : [];
+  for (const s of skills) { const L: store.StoreLayout = { root: DATA, skillName: s }; if (store.getDrafted(L).some((d) => d.id === id)) return { L }; }
+  return null;
+}
+
 function locate(id: string): { L: store.StoreLayout; rec: InvocationRecord } {
   if (!/^[A-Za-z0-9_-]+$/.test(id)) die(`"${id}" is not an invocation id (they look like i40a84c1ab).`);
   const named = flag('--skill');
@@ -45,7 +56,35 @@ function locate(id: string): { L: store.StoreLayout; rec: InvocationRecord } {
   return die(`no run called ${id}${named ? ` in "${named}"` : ''}. Runs are listed by: atelier history`);
 }
 
+/** The skills a command over every skill reads: the one named, or every skill in the store. */
+const skillsNamed = (): string[] => { const n = flag('--skill'); return n ? [n] : existsSync(join(DATA, 'skills')) ? readdirSync(join(DATA, 'skills')) : []; };
+
+/**
+ * THE RUNS WAITING FOR A PERSON (`atelier report --pending`): every run whose delivery was PERSON (core/eval/consequence.ts)
+ * and that nobody has ruled on yet, newest first, each with the rows of the table that sent it there.
+ */
+export function pendingRuns(L: store.StoreLayout): { invocationId: string; at: string; skill: string; rows: { finding: string; entries: readonly string[] }[] }[] {
+  const ruled = new Set(latestRatings(L).map((r) => r.invocationId));
+  return listEvals(L).filter((e) => e.record?.delivery?.decision === 'PERSON' && !ruled.has(e.invocationId))
+    .map((e) => ({ invocationId: e.invocationId, at: e.at, skill: L.skillName, rows: (e.record?.delivery?.why ?? []).filter((w) => w.action === 'person').map((w) => ({ finding: w.finding, entries: w.entries })) }));
+}
+
 export function report(): void {
+  if (argv.includes('--pending')) {
+    const pending = skillsNamed().flatMap((n) => pendingRuns({ root: DATA, skillName: n })).sort((a, b) => b.at.localeCompare(a.at));
+    if (argv.includes('--json')) { console.log(JSON.stringify({ pending }, null, 1)); return; }
+    if (!pending.length) { console.log('Nothing waits for you: no run sent to a person is left unruled.'); return; }
+    console.log(`${pending.length} run${pending.length === 1 ? '' : 's'} sent to you, newest first. Rule on each: atelier rate <run> yes|no [--rule <id>]`);
+    for (const p of pending) console.log(`  ${p.invocationId}  ${p.skill}  ${p.at.slice(0, 16).replace('T', ' ')}  ${p.rows.map((r) => `${r.finding} (${r.entries.join(', ')})`).join('; ')}`);
+    return;
+  }
+  if (argv.includes('--requalify')) {
+    // THE OWNER'S RULINGS HOLD THE WRITTEN CHECKS AGAIN (core/method/requalify.ts): counting, no model.
+    const all = skillsNamed().map((n) => ({ n, r: requalifySkill({ root: DATA, skillName: n }) }));
+    if (argv.includes('--json')) { console.log(JSON.stringify({ requalified: all.map((x) => ({ skill: x.n, held: x.r.held, moved: x.r.moved })) }, null, 1)); return; }
+    for (const { n, r } of all) console.log(`${n}: ${r.held} written check${r.held === 1 ? '' : 's'} held to your rulings${r.moved.length ? '' : '; none moved'}.${r.moved.map((m) => `\n  ${movedLine(m)}`).join('')}`);
+    return;
+  }
   // With no run named and no skill either: the last run made in this project, which is the one a person means.
   const last = runFile('last-invocation.json');
   const id = positional([]) ?? (!flag('--skill') && existsSync(last) ? readJson<{ invocationId: string }>(last, { what: 'the last run' }).invocationId : undefined);
@@ -142,16 +181,45 @@ export function traceOf(rec: InvocationRecord): [string, string[]][] {
   return out;
 }
 
+/** A rule named by its id, key or number in a standard, with its words; or, where none is, the rules it could name. */
+export function ruleNamed(requirements: readonly Requirement[], ref: string): { id: string; statement: string } | { error: string } {
+  const r = resolveRule(requirements, ref);
+  if ('rule' in r) return { id: r.rule.requirementId, statement: r.rule.statement };
+  return { error: `no rule "${ref}" in the standard this was made under. Name one of:\n${requirements.map((q) => `  ${q.requirementId}: ${q.statement}`).join('\n')}` };
+}
+
 export function rate(): void {
   const [id, answer, ...why] = positionals();
   if (!id || !answer) die('usage: atelier rate <invocation> yes|no ["why"]');
   const ship = /^(y|yes|ship|1|true)$/i.test(answer) ? true : /^(n|no|0|false)$/i.test(answer) ? false : die(`answer yes or no: would you ship this as is? (got "${answer}")`);
+  // THE RULE A REJECTED OUTPUT BREAKS, when the owner names it: the output joins that rule's mutants at the next build.
+  // Named in the standard the output was made under, and kept by its words: ids move when the skill is built again.
+  const ref = flag('--rule') ?? null;
+  const named = (std: StandardVersion | null): { rule: string | null; ruleStatement: string | null } => {
+    if (ref === null || !std) return { rule: ref, ruleStatement: null };
+    const r = ruleNamed(std.requirements.filter((q) => q.authority !== 'EXPERT_REJECTED'), ref);
+    return 'error' in r ? die(r.error) : { rule: r.id, ruleStatement: r.statement };
+  };
+  // AN ANSWER DRAFTED FOR THE OWNER (`atelier skill --draft-examples`, ids d1…): kept or rejected, for the next build.
+  const drafted = draftedById(id);
+  if (drafted) {
+    const active = store.getActive(drafted.L); const sv = active ? store.getSkillVersion(drafted.L, active) : null;
+    const { rule, ruleStatement } = named(sv ? store.getStandard(drafted.L, sv.standardVersionHash) : null);
+    store.setDrafted(drafted.L, store.getDrafted(drafted.L).map((d) => (d.id === id ? { ...d, kept: ship, why: why.join(' ').trim() || null, rule, ruleStatement } : d)));
+    const all = store.getDrafted(drafted.L);
+    console.log(`Recorded: ${id} ${ship ? 'kept as finished work of yours' : `rejected${rule ? `, as breaking ${rule}` : ''}`}. ${all.filter((d) => d.kept === null).length} drafted answer(s) left to rate. Build again to qualify the skill's checks on the ones you kept: atelier skill --yes --name ${drafted.L.skillName}`);
+    return;
+  }
   const { L, rec } = locate(id);
   // optional reasons from the closed list: --reason missing-necessary,too-long
   const said = (flag('--reason') ?? '').split(',').map((x) => x.trim()).filter(Boolean);
   const bad = said.filter((x) => !(REASON_CODES as readonly string[]).includes(x));
   if (bad.length) die(`unknown reason ${bad.join(', ')}: use any of ${REASON_CODES.join(', ')}`);
   const reasons = said as ReasonCode[];
-  putRating(L, { invocationId: rec.invocationId, ship, why: why.join(' ').trim() || null, at: new Date().toISOString(), release: rec.fidelity?.release ?? null, ...(reasons.length ? { reasons } : {}) });
+  const madeUnder = store.getSkillVersion(L, rec.skillVersionHash);
+  const { rule, ruleStatement } = ship ? { rule: null, ruleStatement: null } : named(madeUnder ? store.getStandard(L, madeUnder.standardVersionHash) : null);
+  putRating(L, { invocationId: rec.invocationId, ship, why: why.join(' ').trim() || null, at: new Date().toISOString(), release: rec.fidelity?.release ?? null, ...(reasons.length ? { reasons } : {}), ...(rule ? { rule, ...(ruleStatement ? { ruleStatement } : {}) } : {}) });
   console.log(`Recorded: ${ship ? 'yes, you would ship' : 'no, you would not ship'} ${rec.invocationId} as is.${ship ? '' : ' To have it written again: atelier fix "<what was wrong>" (add --always to change the skill for every run)'}`);
+  // YOUR RULING HOLDS THE WRITTEN CHECKS AGAIN, NOW (core/method/requalify.ts): a check that qualifies on it decides the next run.
+  for (const m of requalifySkill(L).moved) console.log(movedLine(m));
 }

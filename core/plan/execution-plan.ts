@@ -26,9 +26,11 @@ export type Role = 'RULE' | 'JUDGEMENT' | 'HABIT';
  */
 export type OnMiss = 'REDRAFT' | 'REWRITE' | 'SHOW' | 'NONE';
 /** Why a rule with a check does not block when the check fails; null where it does. */
-export type NotEnforced = 'NOT_REQUIRED' | 'DISPUTED_BY_EXAMPLES' | 'RELATED_CHECK' | 'UNRATIFIED' | null;
+export type NotEnforced = 'NOT_REQUIRED' | 'DISPUTED_BY_EXAMPLES' | 'RELATED_CHECK' | 'UNRATIFIED' | 'UNQUALIFIED' | null;
 // (RELATED_CHECK: the check reads something near the owner's rule, not the rule; its failing is not the rule broken.)
 // (DISPUTED only until the owner settles it: confirming the rule at a build, or making it required themselves, ends the dispute.)
+// (UNQUALIFIED: the owner's own step, whose written check has not qualified on their examples: required, reported, and
+// unverified on every run until it qualifies or they accept it as unmeasured; never a habit.)
 
 export interface PlannedRule {
   readonly id: string;
@@ -55,16 +57,24 @@ export interface ExecutionPlan {
 const wholeLengthInWords = (r: Requirement): boolean => r.measurement?.observer === 'LENGTH' && !r.measurement.params.in
   && ((r.measurement.params.unit as readonly string[] | undefined)?.[0] ?? 'words').toLowerCase() === 'words';
 
-function planned(r: Requirement): PlannedRule {
+function planned(r: Requirement, earned: ReadonlySet<string>): PlannedRule {
   const m = r.measurement; const o = observes(r);
   // NOBODY CONFIRMED IT, SO IT SHAPES NOTHING. A requirement nobody ratified (DERIVED_UNRATIFIED) can carry a materiality
   // in its fields; the field is not the owner's word. The plan reads authority before it reads materiality, so no
   // path that writes REQUIRED onto an unratified requirement can make it block.
   const unratified = r.authority === 'DERIVED_UNRATIFIED';
-  const required = !unratified && (r.materiality === 'REQUIRED' || r.obligation === 'JUDGEMENT' || Boolean(r.contested) || Boolean(r.related));
+  // THE OWNER'S STEP STAYS THEIRS WHEN ITS WRITTEN CHECK DID NOT QUALIFY. A stated step whose check a model wrote and the
+  // owner's examples did not qualify is minted with no weight (cli/commands/method.ts, `decideSteps`): it was planned as a
+  // habit, and so neither blocked nor sent a run to review. It is required, and its check reports.
+  // A CHECK THAT HAS SINCE QUALIFIED (core/method/requalify.ts: held again to the owner's rulings, its standing beside the
+  // standard says qualified) is enforced like one qualified at the build. Its step was the owner's and required all along;
+  // only whether its observer may be believed changed, and that is Atelier's to measure.
+  const unqualified = !unratified && r.materiality === null && inOwnerWords(r) && m?.observer === 'CHECK' && !earned.has(r.requirementId);
+  const requalified = !unratified && r.materiality === null && inOwnerWords(r) && m?.observer === 'CHECK' && earned.has(r.requirementId);
+  const required = !unratified && (r.materiality === 'REQUIRED' || r.obligation === 'JUDGEMENT' || Boolean(r.contested) || Boolean(r.related) || unqualified || requalified);
   const role: Role = !required ? 'HABIT' : m ? 'RULE' : 'JUDGEMENT';
   const check = m && o ? { ...o, observer: m.observer, reads: targetOf(m.observer) } : null;
-  const notEnforced: NotEnforced = !check ? null : unratified ? 'UNRATIFIED' : r.materiality === 'REQUIRED' ? null : r.contested ? 'DISPUTED_BY_EXAMPLES' : r.related ? 'RELATED_CHECK' : 'NOT_REQUIRED';
+  const notEnforced: NotEnforced = !check ? null : unratified ? 'UNRATIFIED' : r.materiality === 'REQUIRED' ? null : r.contested ? 'DISPUTED_BY_EXAMPLES' : r.related ? 'RELATED_CHECK' : unqualified ? 'UNQUALIFIED' : requalified ? null : 'NOT_REQUIRED';
   const enforced = Boolean(check) && notEnforced === null;
   // What no sentence rewrite fixes is written again: a part the work must contain, a citation that is no line of
   // the material, a test the work never named. Everything else that is enforced is a sentence's to fix.
@@ -73,9 +83,11 @@ function planned(r: Requirement): PlannedRule {
 }
 
 /** The plan of a standard: every rule the owner did not reject, in their order. */
-export function planFor(std: Pick<StandardVersion, 'requirements'>): ExecutionPlan {
+export function planFor(std: Pick<StandardVersion, 'requirements'> & Partial<Pick<StandardVersion, 'qualifications'>>): ExecutionPlan {
   const live = std.requirements.filter((r) => r.authority !== 'EXPERT_REJECTED');
-  const rules = live.map(planned); const owned = new Set(rules.filter((p) => p.role === 'RULE').map((p) => p.id));
+  // Written checks whose standing beside the standard is qualified: the build's, or earned since on the owner's rulings.
+  const earned = new Set(Object.entries(std.qualifications ?? {}).filter(([, q]) => q.qualified).map(([id]) => id));
+  const rules = live.map((r) => planned(r, earned)); const owned = new Set(rules.filter((p) => p.role === 'RULE').map((p) => p.id));
   // A length the owner stated is the length whether or not its check may block yet: their examples never add a
   // second one to write toward, least of all while the two disagree.
   return { rules, readsMaterial: rules.some((p) => p.enforced && p.check?.reads === 'BOUND_MATERIAL'),
@@ -87,7 +99,7 @@ const WORDS: Record<OnMiss, string> = { REDRAFT: 'written again', REWRITE: 'the 
 export function describePlan(plan: ExecutionPlan): string[] {
   return plan.rules.map((p) => {
     const reads = p.check ? `${p.check.coverage === 'FULL' ? 'checked' : 'checked in part'}${p.check.reads === 'BOUND_MATERIAL' ? ' against your material' : ''}` : 'no check';
-    const blocks = p.enforced ? 'blocks when it fails' : p.notEnforced === 'DISPUTED_BY_EXAMPLES' ? 'does not block: your examples dispute it' : p.notEnforced === 'RELATED_CHECK' ? 'does not block: it reads something near your rule, not the rule' : p.notEnforced === 'UNRATIFIED' ? 'does not block: nobody has confirmed it yet' : p.role === 'HABIT' ? 'does not block: a habit' : 'does not block';
+    const blocks = p.enforced ? 'blocks when it fails' : p.notEnforced === 'DISPUTED_BY_EXAMPLES' ? 'does not block: your examples dispute it' : p.notEnforced === 'RELATED_CHECK' ? 'does not block: it reads something near your rule, not the rule' : p.notEnforced === 'UNRATIFIED' ? 'does not block: nobody has confirmed it yet' : p.notEnforced === 'UNQUALIFIED' ? 'does not block: its check has not qualified on your examples; yours to read' : p.role === 'HABIT' ? 'does not block: a habit' : 'does not block';
     return `  ${p.id.padEnd(5)} ${p.role.toLowerCase().padEnd(10)} ${reads} · ${blocks} · on a miss: ${WORDS[p.onMiss]}\n        ${p.statement.replace(/\s+/g, ' ').slice(0, 110)}`;
   });
 }

@@ -1,0 +1,149 @@
+{
+ "golden": "e10.md",
+ "state": "NEEDS_REVIEW",
+ "accepted": [
+  {
+   "id": "x1",
+   "statement": "Open with a Summary section: one paragraph on who, what, where, and the decision.",
+   "part": "one paragraph"
+  }
+ ],
+ "entries": [
+  {
+   "id": "x1",
+   "required": true,
+   "result": "UNVERIFIED",
+   "reason": "LISTED_FOR_YOU",
+   "reads": "PARTIAL",
+   "statement": "Open with a Summary section: one paragraph on who, what, where, and th"
+  },
+  {
+   "id": "x2",
+   "required": true,
+   "result": "PASS",
+   "reason": "MET",
+   "reads": "FULL",
+   "statement": "Then a Facts section. Every fact cites the document in the file it com"
+  },
+  {
+   "id": "x3",
+   "required": true,
+   "result": "UNVERIFIED",
+   "reason": "OBSERVER_UNQUALIFIED",
+   "reads": "FULL",
+   "statement": "Then a Coverage analysis section. The coverage conclusion cites the po"
+  },
+  {
+   "id": "x4",
+   "required": true,
+   "result": "UNVERIFIED",
+   "reason": "OBSERVER_UNQUALIFIED",
+   "reads": "FULL",
+   "statement": "Then a Decision section: covered or not covered, and under which claus"
+  },
+  {
+   "id": "x5",
+   "required": true,
+   "result": "UNVERIFIED",
+   "reason": "OBSERVER_UNQUALIFIED",
+   "reads": "FULL",
+   "statement": "End with a Reserve section. The reserve equals the sum of the invoices"
+  },
+  {
+   "id": "x6",
+   "required": true,
+   "result": "UNVERIFIED",
+   "reason": "OBSERVER_UNQUALIFIED",
+   "reads": "FULL",
+   "statement": "Never speculate about the insured's intent or honesty."
+  },
+  {
+   "id": "x7",
+   "required": true,
+   "result": "PASS",
+   "reason": "MET",
+   "reads": "FULL",
+   "statement": "Never use the words \"fraud\", \"scam\", \"liar\" or \"suspicious\"."
+  },
+  {
+   "id": "x8",
+   "required": true,
+   "result": "UNVERIFIED",
+   "reason": "OBSERVER_UNQUALIFIED",
+   "reads": "FULL",
+   "statement": "Take every date, name and figure from the file: add none of your own."
+  },
+  {
+   "id": "x9",
+   "required": false,
+   "result": "UNVERIFIED",
+   "reason": "PARTLY_CHECKED",
+   "reads": "PARTIAL",
+   "statement": "Every figure in the work is one the request or the material gives."
+  },
+  {
+   "id": "x10",
+   "required": false,
+   "result": "PASS",
+   "reason": "MET",
+   "reads": "FULL",
+   "statement": "I keep paragraphs to 5 sentences at most."
+  },
+  {
+   "id": "x11",
+   "required": false,
+   "result": "PASS",
+   "reason": "MET",
+   "reads": "FULL",
+   "statement": "I hedge rarely: at most 2 hedging words per thousand."
+  },
+  {
+   "id": "x12",
+   "required": false,
+   "result": "PASS",
+   "reason": "MET",
+   "reads": "FULL",
+   "statement": "The Summary section runs 25 to 33 words in my pieces."
+  },
+  {
+   "id": "x13",
+   "required": false,
+   "result": "PASS",
+   "reason": "MET",
+   "reads": "FULL",
+   "statement": "The Facts section runs 47 to 65 words in my pieces."
+  },
+  {
+   "id": "x14",
+   "required": true,
+   "result": "PASS",
+   "reason": "MET",
+   "reads": "FULL",
+   "statement": "Write none of the moves that mark text as machine-written (announcing "
+  },
+  {
+   "id": "x15",
+   "required": true,
+   "result": "UNVERIFIED",
+   "reason": "LISTED_FOR_YOU",
+   "reads": "NONE",
+   "statement": "No mechanical errors: spelling, agreement, punctuation."
+  },
+  {
+   "id": "specifics",
+   "required": true,
+   "result": "PASS",
+   "reason": "MET",
+   "reads": "FULL",
+   "statement": "Every specific in the work is found in what you supplied"
+  },
+  {
+   "id": "lifted",
+   "required": true,
+   "result": "PASS",
+   "reason": "MET",
+   "reads": "FULL",
+   "statement": "No passage is lifted from one of your examples"
+  }
+ ]
+}

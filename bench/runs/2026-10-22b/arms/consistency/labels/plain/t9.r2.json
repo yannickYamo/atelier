@@ -1,0 +1,12 @@
+{
+ "fixture": "labels",
+ "arm": "plain",
+ "task": "t9",
+ "run": 2,
+ "text": "```json\n{\n  \"clip\": \"c22\",\n  \"duration\": \"00:44\",\n  \"overall\": \"Low\",\n  \"categories\": [\n    {\n      \"category\": \"Language – mild\",\n      \"span\": \"00:20–00:38\",\n      \"risk\": \"Low\",\n      \"evidence\": \"Shape it like a damn pillow, gently.\"\n    }\n  ]\n}\n```\n\nThe extract doesn't include the strong-word list. I treated \"damn\" as mild under rule 9, so the clip is not labelled \"Floor – all brands\". If your strong list includes \"damn\", the category becomes \"Language – strong\".",
+ "costUsd": 0.009586,
+ "stop": "end_turn",
+ "error": null,
+ "meterUsd": 0.00958599999999965,
+ "seconds": 5.296
+}

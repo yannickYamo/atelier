@@ -1,0 +1,48 @@
+{
+ "fixture": "adhd",
+ "arm": "atelier",
+ "task": "debugging-cause",
+ "run": 3,
+ "text": "Add the header to the test request:\n\n```\nheaders: { Authorization: `Bearer ${token}` }\n```\n\nCause: the endpoint requires auth, and the request has no Authorization header, so the server returns 401 before it reaches the handler. The test's expected 200 is fine; the request is missing credentials.\n\nWhat I can't confirm from here: that a Bearer token is the scheme this API uses (it could be Basic or an API-key header), and where your test gets a valid token. The check that settles it is the auth middleware or the API docs for the scheme.\n\n1. Add the header above using a valid test token (from a fixture, env var, or login helper), then rerun the test.\n\nStep 1 of 1 done: diagnosis and fix given. Next: open the auth middleware and confirm the scheme name (Bearer vs. Basic vs. custom header).",
+ "state": "NEEDS_REVIEW",
+ "costUsd": 0.0059,
+ "exit": 0,
+ "standard": "03fcfcea922b8e6a",
+ "headKeys": [
+  "schema",
+  "state",
+  "standardVersionHash",
+  "skillVersion",
+  "certificate",
+  "record"
+ ],
+ "certificate": {
+  "standardVersionHash": "03fcfcea922b8e6a",
+  "checks": {
+   "total": 6,
+   "counted": 0,
+   "written": 6,
+   "writtenQualified": 0
+  },
+  "readers": {
+   "taste": {
+    "veto": [],
+    "labelledMisses": 0,
+    "falseBlockUpper95": null
+   },
+   "claims": {
+    "instrument": "pattern check (no material bound: a model reading of specifics could only list them)",
+    "version": null,
+    "gate": "pattern",
+    "qualified": false,
+    "measured": null,
+    "kinds": []
+   }
+  },
+  "errorBound": null,
+  "why": "no delivered-error bound: it needs an audit sample of your own labels, drawn like the work this skill does; the checks and readers above are what this output was held to"
+ },
+ "stderr": "No notes of yours are bound, so a story, source or figure in the draft cannot be checked against anything of yours, and is listed for you, not cut. Add yours: --with notes=<file>, or atelier material --skill i-have-adhd <file>.\nJudgement reader: not run (reporting only until your labels qualify it; --taste reads this run and records readings to label: atelier taste --skill i-have-adhd --calibrate)",
+ "meterUsd": 0.005886180000000074,
+ "seconds": 9.115
+}

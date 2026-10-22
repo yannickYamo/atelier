@@ -1,0 +1,284 @@
+$ atelier new bench/standing/domains/labels/examples --method bench/standing/domains/labels/method.md --name labels --yes --report --model claude-sonnet-5-5
+
+(which check each step asks for: every one kept from the build that ratified it; nothing read.)
+Method: method.md  ·  11 examples from examples; checks read from e01.md, then held against the rest with 3 file(s) of material
+
+20 step(s) from your method.
+
+Checked on every output: what the work must contain (13)
+  - Every category in a label is one of the 39 categories of the taxonomy, written exactly as the taxonomy writes it.
+      checks for: Checks each category name in the label has the Family – form the taxonomy uses; the full list of 39 is not in the material, so only the form is checked. (a check written for this step); your example: qualified: passes 11 of 11 example(s) it reads, catches 1 of 1 edit(s) that break the step, fires on 0 of 27 that break others
+      not checked, yours to read: how much of this rule the check reads is not known
+  - Every flagged category carries a timecode span, start–end in mm:ss, inside the clip's duration.
+      checks for: Each span is read as mm:ss start and end; the end must be after the start and inside the clip duration. (a check written for this step); your example: not qualified, reports only: passes 11 of 11 example(s) it reads, catches 1 of 2 edit(s) that break the step, fires on 2 of 26 that break others (it caught 1 of 2 edits that break the step (needs 2))
+      not checked, yours to read: how much of this rule the check reads is not known
+  - Every flagged category carries a risk level: Low, Medium or High.
+      checks for: Each category entry's risk must be Low, Medium or High. (a check written for this step); your example: qualified: passes 11 of 11 example(s) it reads, catches 1 of 1 edit(s) that break the step, fires on 0 of 27 that break others
+      not checked, yours to read: how much of this rule the check reads is not known
+  - A clip labelled "Firearms – depiction" or "Firearms – use" is never also labelled "Floor – all brands".
+      checks for: Checks that a firearm category and the Floor label do not both appear in the label. (a check written for this step); your example: not qualified, reports only: passes 11 of 11 example(s) it reads, catches 2 of 4 edit(s) that break the step, fires on 0 of 24 that break others (it caught 2 of 4 edits that break the step (needs 4))
+      not checked, yours to read: how much of this rule the check reads is not known
+  - A clip with no flagged category is labelled "Floor – all brands" with risk Floor and no timecode.
+      checks for: If the label holds no categories, it must carry risk Floor and no span. Otherwise the rule does not apply. (a check written for this step); your example: not qualified, reports only: passes 11 of 11 example(s) it reads, catches 1 of 2 edit(s) that break the step, fires on 0 of 26 that break others (it caught 1 of 2 edits that break the step (needs 2))
+      not checked, yours to read: how much of this rule the check reads is not known
+  - Every flagged category carries evidence: the words of the transcript, copied, that support it.
+      checks for: Each category entry has a non-empty evidence string. Whether the words are copied from the transcript is not checked here. (a check written for this step); your example: qualified: passes 11 of 11 example(s) it reads, catches 1 of 1 edit(s) that break the step, fires on 0 of 27 that break others
+      not checked, yours to read: how much of this rule the check reads is not known
+  - Risk is the highest of the flagged categories' risk levels, carried once at the top of the label as overall.
+      checks for: The overall value must equal the highest risk among the categories. (a check written for this step); your example: not qualified, reports only: passes 11 of 11 example(s) it reads, catches 2 of 2 edit(s) that break the step, fires on 3 of 26 that break others (it fired on 3 of 26 edits that break other steps)
+      not checked, yours to read: how much of this rule the check reads is not known
+  - A span's end is after its start, and no span runs past the duration.
+      checks for: Each span's end is after its start and does not exceed the clip duration. (a check written for this step); your example: qualified: passes 11 of 11 example(s) it reads, catches 2 of 2 edit(s) that break the step, fires on 1 of 26 that break others
+      not checked, yours to read: how much of this rule the check reads is not known
+  - Numbers in a span are seconds and minutes only: no frame counts.
+      checks for: Spans contain no frame-count notation. (a check written for this step); your example: qualified: passes 11 of 11 example(s) it reads, catches 2 of 2 edit(s) that break the step, fires on 0 of 26 that break others
+      not checked, yours to read: how much of this rule the check reads is not known
+  - Evidence is copied from the transcript, never paraphrased.
+      checks for: Each evidence string must appear word for word in the material (case and spacing aside). (a check written for this step); your example: not qualified, reports only: passes 11 of 11 example(s) it reads, catches 4 of 4 edit(s) that break the step, fires on 2 of 24 that break others (it fired on 2 of 24 edits that break other steps)
+      not checked, yours to read: how much of this rule the check reads is not known
+  - A category flagged twice is listed once, with the earliest span.
+      checks for: No category name appears twice in the categories list. Choice of earliest span is not checked. (a check written for this step); your example: not qualified, reports only: passes 11 of 11 example(s) it reads, catches 0 of 0 edit(s) that break the step, fires on 0 of 28 that break others (no edit of your examples that breaks only this step could be written)
+      not checked, yours to read: how much of this rule the check reads is not known
+  - The label is JSON with the keys clip, duration, overall, categories; nothing else.
+      checks for: The label parses as JSON and has exactly the four keys clip, duration, overall, categories. (a check written for this step); your example: not qualified, reports only: passes 11 of 11 example(s) it reads, catches 3 of 3 edit(s) that break the step, fires on 3 of 25 that break others (it fired on 3 of 25 edits that break other steps)
+      not checked, yours to read: how much of this rule the check reads is not known
+  - Where a clip's transcript is empty, the label is "Floor – all brands" and says so in evidence.
+      checks for: When the transcript is empty, the label is Floor – all brands and the evidence says the transcript is empty. (a check written for this step); your example: not qualified, reports only: passes 0 of 0 example(s) it reads, catches 0 of 4 edit(s) that break the step, fires on 0 of 24 that break others (it read none of your examples)
+      not checked, yours to read: how much of this rule the check reads is not known
+
+Judgement: shown to the writer, reported as not measured (7)
+  - "High" risk requires an explicit depiction in the clip: a described act, injury, blood, a weapon fired, an explicit sexual act. A reference, a mention or a discussion is Medium at most.
+  - "Violence – graphic" requires described injury or blood; a scuffle, a push or a threat is "Violence – minor".
+  - "Language – strong" requires a word of the strong list in the transcript; "Language – mild" otherwise.
+  - A label carries no category the transcript does not support with evidence.
+  - Where the same act is both "Violence" and "Dangerous acts", both are flagged, each with its own evidence.
+  - A news report of a disaster is "Disaster – news", Medium at most; graphic footage described is "Disaster – graphic".
+  - A reference to alcohol in passing is "Alcohol – reference", Low; drinking described is "Alcohol – consumption", Medium.
+
+Counted from your examples, and not in your method: required, since every example meets it. Checked on every output, and it blocks (2)
+  - Write none of the moves that mark text as machine-written (announcing an insight others "miss", grading your own list, "the single most", announcing candour, "that's the whole game", reading the reader's mind, one thing "wearing another's clothes", a contrastive verdict as the opening line, an em dash, a run of three or more very short sentences).
+      checks for: machine-writing moves (announced insights, self-graded lists, stacked superlatives, announced candour, totalisers, mind-reading, costumes): none of 16 kind(s) you never use, and at most 0.3 per 1,000 words of the rest; 11 of 11 example(s) hold it
+  - No mechanical errors: spelling, agreement, punctuation.
+      checks for: no mechanical error with no legitimate reading: a known misspelling in lower case, an agreement no variety uses ("he are"), a/an before a lower-case common word, two commas, a space before a comma or a full stop; a capitalised word, a word repeated, a dialect's agreement ("they was"), "an" before "h" or a word read as letters, "::", "..", a space before "!", "?", ":" or ";", any other word the checker does not know, and anything else it proposes, is only listed; code, quotations, addresses, figures and names are never touched; 11 of 11 example(s) hold it; their own words are never flagged
+
+Counted from your examples, and not in your method: how they are written. Shown to the writer and used to choose between drafts; required only if you say so (19)
+  - My pieces run 224 to 452 characters; a new piece stays between 1 and 680.
+      checks for: 1 to 680 characters; 224 to 452 characters over 11 pieces; all 11 of your examples meet it; steered toward and never required unless you say so
+  - My pieces run 23 to 53 words; a new piece stays between 1 and 83.
+      checks for: 1 to 83 words; 23 to 53 words over 11 pieces; all 11 of your examples meet it; steered toward and never required unless you say so
+  - My pieces run 1 sentence; a new piece has at most 2.
+      checks for: at most 2 sentences; 1 to 1 sentences over 11 pieces; all 11 of your examples meet it; steered toward and never required unless you say so
+  - The longest sentence in my pieces runs 23 to 53 words; in a new piece it stays at most 83 words.
+      checks for: the longest sentence at most 83 words; 23 to 53 words in the longest sentence over 11 pieces; all 11 of your examples meet it; steered toward and never required unless you say so
+  - At most 24 line breaks: my pieces carry 12 to 18.
+      checks for: at most 24 line breaks; 12 to 18 over 11 pieces; all 11 of your examples meet it; steered toward and never required unless you say so
+  - No blank lines: none of my pieces has one.
+      checks for: no blank lines; none in 11 pieces; all 11 of your examples meet it; steered toward and never required unless you say so
+  - No hashtags: none of my pieces has one.
+      checks for: no hashtags; none in 11 pieces; all 11 of your examples meet it; steered toward and never required unless you say so
+  - No mentions (@): none of my pieces has one.
+      checks for: no mentions (@); none in 11 pieces; all 11 of your examples meet it; steered toward and never required unless you say so
+  - No links: none of my pieces has one.
+      checks for: no links; none in 11 pieces; all 11 of your examples meet it; steered toward and never required unless you say so
+  - No emoji: none of my pieces has one.
+      checks for: no emoji; none in 11 pieces; all 11 of your examples meet it; steered toward and never required unless you say so
+  - Open on a claim, as my pieces do.
+      checks for: opens on a claim; over 11 pieces: a claim (11); all 11 of your examples meet it; steered toward and never required unless you say so
+  - Close on a statement, as my pieces do.
+      checks for: closes on a statement; over 11 pieces: a statement (11); all 11 of your examples meet it; steered toward and never required unless you say so
+  - The first word is a symbol or emoji, as in every piece of mine.
+      checks for: the first word a symbol or emoji; over 11 pieces: a symbol or emoji (11); all 11 of your examples meet it; steered toward and never required unless you say so
+  - Quoted phrases: about 53 per 100 words in my pieces; a new piece carries no more than its length expects.
+      checks for: quoted phrases: about 53 per 100 words, read over 355 words of your pieces; a short piece is held to the count expected of its length; 188 in 355 words over 11 pieces; all 11 of your examples meet it; a rate chooses between drafts and never blocks
+  - Colons: about 28.2 per 100 words in my pieces; a new piece carries about as many as its length expects.
+      checks for: colons: about 28.2 per 100 words, read over 355 words of your pieces; a short piece is held to the count expected of its length; 100 in 355 words over 11 pieces; all 11 of your examples meet it; a rate chooses between drafts and never blocks
+  - Figures written in digits: about 20.8 per 100 words in my pieces; a new piece carries no more than its length expects.
+      checks for: figures written in digits: about 20.9 per 100 words, read over 355 words of your pieces; a short piece is held to the count expected of its length; 74 in 355 words over 11 pieces; all 11 of your examples meet it; a rate chooses between drafts and never blocks
+  - Nominalisations (-tion, -ment, -ness, -ity, -ance, -ence): about 8.7 per 100 words in my pieces; a new piece carries about as many as its length expects.
+      checks for: nominalisations (-tion, -ment, -ness, -ity, -ance, -ence): about 8.7 per 100 words, read over 355 words of your pieces; a short piece is held to the count expected of its length; 31 in 355 words over 11 pieces; all 11 of your examples meet it; a rate chooses between drafts and never blocks
+  - Runs of five or more one-syllable words: about 2.8 per 100 words in my pieces; a new piece carries about as many as its length expects.
+      checks for: runs of five or more one-syllable words: about 2.8 per 100 words, read over 355 words of your pieces; a short piece is held to the count expected of its length; 10 in 355 words over 11 pieces; all 11 of your examples meet it; a rate chooses between drafts and never blocks
+  - I keep paragraphs to 2 sentences at most.
+      checks for: paragraphs of at most 2 sentences; set where all 11 of your examples meet it
+
+Short form: 11 short pieces: median 27 words, 224 to 452 characters
+Short form: 13 shape bands (characters, words, sentences, the longest sentence (words), line breaks, blank lines, hashtags, mentions (@), links, emoji, what it opens on, what it closes on, the first word) read from 11 examples: drafts are steered toward them and chosen by them, never failed. Make one required with --set <id>=required.
+Short form: 5 rates pooled over 355 words (quoted phrases, colons, figures written in digits, nominalisations (-tion, -ment, -ness, -ity, -ance, -ence), …): a new piece is held to the count its length expects; shown and used to choose between drafts, never blocking.
+Short form: No platform limit: none was given (--limit <chars> sets one).
+(this folder had no run of its own; it took a copy of the run that built "labels", which was at <scratch>/data/build-labels-1-YfBDQq/project.)
+(what each step asks the writer to decide: read by claude-haiku-5-5.)
+
+What each step asks the writer to decide:
+  1. Every category in a label is one of the 39 categories of the taxonomy, written exactly as 
+      criterion · from: the 39-category taxonomy
+  2. Every flagged category carries a timecode span, start–end in mm:ss, inside the clip's dura
+      criterion · from: clip duration · when: "Every flagged category"
+  3. Every flagged category carries a risk level: Low, Medium or High.
+      criterion · decides: risk level for each flagged category (Low, Medium or High) · when: "Every flagged category" · puts: risk level per flagged category
+  4. "High" risk requires an explicit depiction in the clip: a described act, injury, blood, a 
+      criterion · decides: whether risk is High · from: transcript · when: ""High" risk requires an explicit depiction in the clip" · except: "A reference, a mention or a discussion is Medium at most."
+  5. A clip labelled "Firearms – depiction" or "Firearms – use" is never also labelled "Floor –
+      criterion · decides: whether a clip carries Firearms and Floor labels together · from: clip labels · when: "A clip labelled "Firearms – depiction" or "Firearms – use""
+  6. A clip with no flagged category is labelled "Floor – all brands" with risk Floor and no ti
+      instruction · decides: label as Floor when no category is flagged · from: transcript · when: "A clip with no flagged category" · puts: label "Floor – all brands" with risk Floor and no timecode
+  7. Every flagged category carries evidence: the words of the transcript, copied, that support
+      instruction · from: transcript · when: "Every flagged category" · puts: transcript words supporting each flagged category
+  8. "Violence – graphic" requires described injury or blood; a scuffle, a push or a threat is 
+      instruction · decides: Violence – graphic or Violence – minor · from: transcript · when: ""Violence – graphic" requires described injury or blood" · puts: Violence category choice · except: "a scuffle, a push or a threat is "Violence – minor"."
+  9. "Language – strong" requires a word of the strong list in the transcript; "Language – mild
+      instruction · decides: Language – strong or Language – mild · from: transcript, strong word list · when: ""Language – strong" requires a word of the strong list in the transcript" · puts: Language category choice · except: ""Language – mild" otherwise."
+  10. A label carries no category the transcript does not support with evidence.
+      criterion · decides: whether a category is supported by evidence · from: transcript · after: 7
+  11. Risk is the highest of the flagged categories' risk levels, carried once at the top of the
+      instruction · from: flagged categories' risk levels · puts: overall risk, the highest of the flagged risks, carried once at the top of the label · after: 3
+  12. A span's end is after its start, and no span runs past the duration.
+      criterion · from: clip duration · after: 2
+  13. Where the same act is both "Violence" and "Dangerous acts", both are flagged, each with it
+      instruction · decides: flag both Violence and Dangerous acts for the same act · from: transcript · when: "Where the same act is both "Violence" and "Dangerous acts"" · puts: both categories flagged, each with its own evidence · after: 7
+  14. A news report of a disaster is "Disaster – news", Medium at most; graphic footage describe
+      instruction · decides: Disaster – news or Disaster – graphic · from: transcript · when: "A news report of a disaster" · puts: "Disaster – news", Medium at most · except: "graphic footage described is "Disaster – graphic"."
+  15. A reference to alcohol in passing is "Alcohol – reference", Low; drinking described is "Al
+      instruction · decides: Alcohol – reference or Alcohol – consumption · from: transcript · when: "A reference to alcohol in passing" · puts: "Alcohol – reference", Low
+  16. Numbers in a span are seconds and minutes only: no frame counts.
+      criterion · puts: span numbers in seconds and minutes only · after: 2
+  17. Evidence is copied from the transcript, never paraphrased.
+      criterion · from: transcript · after: 7
+  18. A category flagged twice is listed once, with the earliest span.
+      instruction · decides: keep earliest span for a repeated category · when: "A category flagged twice" · puts: category listed once with its earliest span · after: 2
+  19. The label is JSON with the keys clip, duration, overall, categories; nothing else.
+      template · puts: JSON label with keys clip, duration, overall, categories only
+  20. Where a clip's transcript is empty, the label is "Floor – all brands" and says so in evide
+      instruction · decides: label as Floor when transcript is empty · from: transcript · when: "Where a clip's transcript is empty" · puts: label "Floor – all brands" with evidence stating the transcript is empty
+Standard 9de6ca6a4326ee0e minted from your rulings. Instructing: x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15, x16, x17, x18, x19, x20, x40, x41. Shown as examples: 19.
+Latitude: strict, read from "Every category in a label is one of the 39 categories of the taxonomy, written exactly as the taxonomy writes it.". Change: --latitude strict|grounded|creative, --unmeasured accept|review; or atelier amend --latitude <level>.
+The exemplar is installed with the skill (examples/exemplar.md). If the skill directory is committed, so is the piece.
+Your own pieces: 11 of 11 meet every required rule that is counted.
+What each rule became, and why: <scratch>/data/series-labels-QenZ95/runs/project-53fb72cbf161f111/proposal.md
+Implementation release f8d074bdf29a4c76: 2 drafts (the first alone when it holds every rule), up to 0 structural edit(s).
+Stages: method ✓ (20 step(s) served whole) · counted rules ✓ (21 rule(s) counted off the pieces) · work form ✓ (documents) · persona ✓ (9 points (4 always, 3 often, 2 sometimes)) · moves ✓ (9 moves: 7 standing, 2 situational, 0 occasional (kept)) · scope — the work does not answer requests · author profile ✓ (0 feature(s) banded) · signals — fewer than 2 model drafts · model contrast — no model-read corpus: a method, stated rules, or fewer than four pieces
+12 file(s) in the previous install are not part of this package (SKILL.md, examples/exemplar.md, examples/voice-1.md, examples/voice-10.md, …). They were moved, not deleted: <scratch>/data/series-labels-QenZ95/project/.claude/.atelier-backups/labels-2026-10-21T22-02-01-154Z
+
+Your skill is ready: /labels <your task>   (installed for claude-code at <scratch>/data/series-labels-QenZ95/project/.claude/skills/labels)
+(claude-code is not seen to load EXAMPLE; everything is delivered by: atelier invoke --skill labels "<your task>")
+
+── Atelier · skill labels · version ca2cc98e · standard 9de6ca6a ─────────────────────────────────────────────
+
+  EVERY OUTPUT IS CHECKED BY
+    your rules        41 in force (20 written by you, 21 read from your work): 7 required
+                      34 counted on every output · 7 read by the taste reader
+    invented claims   pattern check, with claim reader (claude-haiku-4-5, prompt 47d18891) reporting only:
+                      not qualified: no material is stored with the skill (bind it with atelier material, or
+                      --with on a run); what it finds is listed, never cut
+    copying           a run of 12 or more words shared with your pieces fails
+
+  YOUR RANGE  descriptive, profile 0f9f4adc
+    features          0 measured on your pieces, 0 steer drafts, the rest monitored
+    by layer          
+    baseline          none: no reserved piece to compare with (reserve some with atelier new --reserve)
+    operators         not measured: rebuild to use them
+
+  RELEASE f8d074bd  2 drafts · 0 sentence rewrite(s) · 0 passage(s) retrieved · 0 note(s)
+                      the full loop is opt-in (--fidelity)
+  TASTE READER  7 rule(s) only a reading can check
+                      not validated: 0 label(s) so far (atelier taste --skill labels --calibrate)
+
+  SIZE  stored 2,939 words in 12 files · exported 3,146 words (19,087 bytes)
+    the export        rules and instructions 1,241 · your pieces 928 (10 files) · how I sound 691
+                      framing 207 · exemplar 79 (1 file)
+    per run           what a run sent, and what it cost by purpose: atelier report <run>
+
+  not measured: the reading-based rules, until the taste reader is validated by your labels; voice beyond the
+                      0 counted features
+  next: atelier invoke --skill labels "<task>" · atelier report <run> · atelier rate <run> yes|no
+                      atelier eval --skill labels · atelier qualify --skill labels
+                      atelier taste --skill labels --calibrate
+
+
+What a run does with each rule:
+  x1    rule       checked in part · blocks when it fails · on a miss: written again
+        Every category in a label is one of the 39 categories of the taxonomy, written exactly as the taxonomy writes 
+  x2    habit      checked in part · does not block: a habit · on a miss: shown, nothing done
+        Every flagged category carries a timecode span, start–end in mm:ss, inside the clip's duration.
+  x3    rule       checked in part · blocks when it fails · on a miss: written again
+        Every flagged category carries a risk level: Low, Medium or High.
+  x4    judgement  no check · does not block · on a miss: yours to judge
+        "High" risk requires an explicit depiction in the clip: a described act, injury, blood, a weapon fired, an exp
+  x5    habit      checked in part · does not block: a habit · on a miss: shown, nothing done
+        A clip labelled "Firearms – depiction" or "Firearms – use" is never also labelled "Floor – all brands".
+  x6    habit      checked in part · does not block: a habit · on a miss: shown, nothing done
+        A clip with no flagged category is labelled "Floor – all brands" with risk Floor and no timecode.
+  x7    rule       checked in part · blocks when it fails · on a miss: written again
+        Every flagged category carries evidence: the words of the transcript, copied, that support it.
+  x8    judgement  no check · does not block · on a miss: yours to judge
+        "Violence – graphic" requires described injury or blood; a scuffle, a push or a threat is "Violence – minor".
+  x9    judgement  no check · does not block · on a miss: yours to judge
+        "Language – strong" requires a word of the strong list in the transcript; "Language – mild" otherwise.
+  x10   judgement  no check · does not block · on a miss: yours to judge
+        A label carries no category the transcript does not support with evidence.
+  x11   habit      checked in part · does not block: a habit · on a miss: shown, nothing done
+        Risk is the highest of the flagged categories' risk levels, carried once at the top of the label as overall.
+  x12   rule       checked in part · blocks when it fails · on a miss: written again
+        A span's end is after its start, and no span runs past the duration.
+  x13   judgement  no check · does not block · on a miss: yours to judge
+        Where the same act is both "Violence" and "Dangerous acts", both are flagged, each with its own evidence.
+  x14   judgement  no check · does not block · on a miss: yours to judge
+        A news report of a disaster is "Disaster – news", Medium at most; graphic footage described is "Disaster – gra
+  x15   judgement  no check · does not block · on a miss: yours to judge
+        A reference to alcohol in passing is "Alcohol – reference", Low; drinking described is "Alcohol – consumption"
+  x16   rule       checked in part · blocks when it fails · on a miss: written again
+        Numbers in a span are seconds and minutes only: no frame counts.
+  x17   habit      checked in part · does not block: a habit · on a miss: shown, nothing done
+        Evidence is copied from the transcript, never paraphrased.
+  x18   habit      checked in part · does not block: a habit · on a miss: shown, nothing done
+        A category flagged twice is listed once, with the earliest span.
+  x19   habit      checked in part · does not block: a habit · on a miss: shown, nothing done
+        The label is JSON with the keys clip, duration, overall, categories; nothing else.
+  x20   habit      checked in part · does not block: a habit · on a miss: shown, nothing done
+        Where a clip's transcript is empty, the label is "Floor – all brands" and says so in evidence.
+  x21   habit      checked · does not block: a habit · on a miss: shown, nothing done
+        My pieces run 224 to 452 characters; a new piece stays between 1 and 680.
+  x22   habit      checked · does not block: a habit · on a miss: shown, nothing done
+        My pieces run 23 to 53 words; a new piece stays between 1 and 83.
+  x23   habit      checked · does not block: a habit · on a miss: shown, nothing done
+        My pieces run 1 sentence; a new piece has at most 2.
+  x24   habit      checked · does not block: a habit · on a miss: shown, nothing done
+        The longest sentence in my pieces runs 23 to 53 words; in a new piece it stays at most 83 words.
+  x25   habit      checked · does not block: a habit · on a miss: shown, nothing done
+        At most 24 line breaks: my pieces carry 12 to 18.
+  x26   habit      checked · does not block: a habit · on a miss: shown, nothing done
+        No blank lines: none of my pieces has one.
+  x27   habit      checked · does not block: a habit · on a miss: shown, nothing done
+        No hashtags: none of my pieces has one.
+  x28   habit      checked · does not block: a habit · on a miss: shown, nothing done
+        No mentions (@): none of my pieces has one.
+  x29   habit      checked · does not block: a habit · on a miss: shown, nothing done
+        No links: none of my pieces has one.
+  x30   habit      checked · does not block: a habit · on a miss: shown, nothing done
+        No emoji: none of my pieces has one.
+  x31   habit      checked · does not block: a habit · on a miss: shown, nothing done
+        Open on a claim, as my pieces do.
+  x32   habit      checked · does not block: a habit · on a miss: shown, nothing done
+        Close on a statement, as my pieces do.
+  x33   habit      checked · does not block: a habit · on a miss: shown, nothing done
+        The first word is a symbol or emoji, as in every piece of mine.
+  x34   habit      checked · does not block: a habit · on a miss: shown, nothing done
+        Quoted phrases: about 53 per 100 words in my pieces; a new piece carries no more than its length expects.
+  x35   habit      checked · does not block: a habit · on a miss: shown, nothing done
+        Colons: about 28.2 per 100 words in my pieces; a new piece carries about as many as its length expects.
+  x36   habit      checked · does not block: a habit · on a miss: shown, nothing done
+        Figures written in digits: about 20.8 per 100 words in my pieces; a new piece carries no more than its length 
+  x37   habit      checked · does not block: a habit · on a miss: shown, nothing done
+        Nominalisations (-tion, -ment, -ness, -ity, -ance, -ence): about 8.7 per 100 words in my pieces; a new piece c
+  x38   habit      checked · does not block: a habit · on a miss: shown, nothing done
+        Runs of five or more one-syllable words: about 2.8 per 100 words in my pieces; a new piece carries about as ma
+  x39   habit      checked · does not block: a habit · on a miss: shown, nothing done
+        I keep paragraphs to 2 sentences at most.
+  x40   rule       checked · blocks when it fails · on a miss: the sentence rewritten
+        Write none of the moves that mark text as machine-written (announcing an insight others "miss", grading your o
+  x41   rule       checked · blocks when it fails · on a miss: the sentence rewritten
+        No mechanical errors: spelling, agreement, punctuation.
+
+Your skill "labels" is ready.
+  Use it: atelier run "<the task>"   (or /labels in Claude Code)
+
+--- stderr ---

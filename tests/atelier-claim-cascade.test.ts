@@ -10,7 +10,6 @@
 import { describe, it, expect } from 'vitest';
 import { enforceClaims, claimMemory, heavyCut, refineToStandard, checkDraft, INCONCLUSIVE } from '../core/loop/run-repair.js';
 import { FORMATS } from '../core/observers/formats.js';
-import { isReplyWork } from '../cli/commands/skill.js';
 import { modelSensor, READER_VERSION } from '../core/loop/claim-extract.js';
 import { uncarriedSections } from '../core/ratification/grounding.js';
 import type { InferenceClient } from '../core/inference/client.js';
@@ -130,10 +129,6 @@ describe('assistant replies: specifics are listed for the reader to check, never
     expect(out.output).not.toContain('cost 12 is plenty');
   });
 
-  it('atelier skill reads reply work as replies, and other writing as writing', () => {
-    for (const w of ['assistant replies', 'coding assistant answers', 'customer support replies', 'code review comments']) expect(isReplyWork(w), w).toBe(true);
-    for (const w of ['blog posts', 'essays', 'LinkedIn posts', 'writing']) expect(isReplyWork(w), w).toBe(false);
-  });
 });
 
 describe('the balance: when the check flags much of a draft, only the unambiguous inventions are cut', () => {

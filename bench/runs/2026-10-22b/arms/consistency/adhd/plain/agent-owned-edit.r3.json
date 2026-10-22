@@ -1,0 +1,12 @@
+{
+ "fixture": "adhd",
+ "arm": "plain",
+ "task": "agent-owned-edit",
+ "run": 3,
+ "text": "Read `README.md` and find the typo.\n\n1. Read `README.md` and scan for misspellings.\n2. Fix the typo with a one-line edit.\n3. Run `git diff README.md` to confirm only that line changed.\n\nAbout 2 minutes. I won't commit unless you ask.\n\nNext: if you know which line has the typo, send me the line number and I'll skip the scan.",
+ "costUsd": 0.009604,
+ "stop": "end_turn",
+ "error": null,
+ "meterUsd": 0.00960400000000039,
+ "seconds": 4.392
+}

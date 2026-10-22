@@ -123,10 +123,6 @@ describe('a mistake in what the person gave never stops the work', () => {
       expect(card(r).replace(/\s+/g, ' ')).toContain('checked, and not enforced: a table with 2 of 2 column(s). Your own examples do not do this, so the rule blocks nothing until you confirm it');
     }
   });
-  it('a comment at the top of a method note is not what the work is called', async () => {
-    const { kindOfWork } = await import('../cli/commands/method.js');
-    expect(kindOfWork('<!-- QUICK_MODE\nfocus: x\n-->\n\n# Competitive teardown\n\n1. Classify the competitor.', 'td', undefined)).toBe('competitive-teardown');
-  });
 });
 
 describe('one length at a time', () => {

@@ -1,0 +1,12 @@
+{
+ "fixture": "adhd",
+ "arm": "plain",
+ "task": "agent-owned-edit",
+ "run": 1,
+ "text": "Open `README.md` and find the typo.\n\n1. Read `README.md` and locate the typo. If you named a specific word or line, go straight to it. Otherwise run a spell check, e.g. `npx cspell README.md`.\n2. Fix only that typo. Leave the rest of the file as is.\n3. Run `git diff README.md` to confirm the change is one line.\n4. Commit: `git commit -am \"Fix typo in README\"`.\n\nTime: about 2 minutes.\n\nNext: open `README.md`. If you tell me the typo or its line number, I'll skip step 1.",
+ "costUsd": 0.008994,
+ "stop": "end_turn",
+ "error": null,
+ "meterUsd": 0.008993999999999946,
+ "seconds": 3.523
+}

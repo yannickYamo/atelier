@@ -7,6 +7,221 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+### Delivered is not verified: a consequence table decides what is done with the work, and the owner's rulings requalify the checks
+
+- **Delivery is its own decision.** The record keeps its state (VERIFIED, NEEDS REVIEW, BLOCKED: what was observed) and
+  gains `delivery`: SHIP, SHIP_LABELLED, PERSON or BLOCK, with the rows that decided it. It is decided after repair by a
+  consequence table, one row per kind of finding (a trusted check fails, an unqualified one fails or finds nothing, a
+  judgement rule unread, the qualified taste reader reads a miss, a specific decided absent from the material, one only an
+  unmeasured claim reader flagged, a check that could not run, what is only listed, nothing found). The defaults follow the
+  latitude; `atelier amend --consequence <finding>=<action>` sets a row, and only the rows the owner set are kept in the
+  standard, inside its hash. A standard minted before is held by its latitude's defaults (grounded where it has none). The
+  record head and the certificate carry the decision.
+- **Every door acts on it.** `run` and `invoke` print shipped work as before, work sent to a person marked for review with
+  the entries to read and a line saying where it waits (exit 0), and exit 1 on BLOCK; `--strict` refuses what was not
+  shipped. `verify` exits 1 on BLOCK only and shows the decision; the hook exits 2 on BLOCK only, with a note where the
+  work goes to a person. A taste reader's qualified miss is in the record and the table decides what it does.
+- **The loop runs itself.** `atelier report --pending` lists the runs sent to a person and not yet ruled on. A rating holds
+  every written check again at once, and so does every build and `atelier report --requalify`: a run rated yes is one more
+  example each check must pass, one rated no with `--rule` one more break its check must catch and the others must not fire
+  on. Counting, no model call; what the build already counted is not counted twice. A check that now qualifies is
+  enforced, so its failures move from "person" to "repair, then block"; the certificate lists what moved (`requalified`).
+- **The run-time readings are closed choices with NONE, NONE to the safe side.** The request's latitude reading answers a
+  level or NONE: NONE, a looser answer and a reading that fails all hold the skill's own level. The steps-that-apply
+  reading answers HOLDS, DOES_NOT_HOLD or NONE per case: the step applies unless the request's own words lift it. A step
+  set aside for the request, a judgement step included, is recorded as set aside and never holds delivery.
+- Read offline against the saved records of the 2026-10-22c study under the default table: claims 20 of 20 strict runs
+  would go to a person (an unqualified written check failing, x8 in 15 and x5 in 5; the claim reader in 15); labels 1
+  blocked, 6 shipped labelled, 13 to a person (the claim reader). Grounded gives the same; creative ships every one labelled.
+
+### A rewrite names what no check read, a label's form is not copying, and a written check reads what it says
+
+- **A repair says which required rules no check read on its rewrite.** A rewrite was already refused when it newly
+  broke any rule a check reads, the one it was made for or another, qualified or not. A rule no check reads, or reads
+  only in part, cannot refuse one, and no pattern is made up to stand in for it: a kept rewrite now names each such rule
+  on its step ("not read on the rewrite by a check, yours to read: x6 (its check does not read "Never speculate")"). A
+  rule accepted as unmeasured is not named.
+- **The copying check leaves out the form of a JSON output with prose around it.** A label followed by a paragraph was
+  read as prose, and its keys and the values every label of its kind carries counted as a lifted passage. The JSON is
+  now found where it opens and closes a line (or in a code fence); its keys, and the values the material holds or that
+  recur across the examples (in as many as the standard wording asks), are out of the count. The prose around it, and
+  free text inside a value, are counted as before.
+- **A written check reads what its own words say.** It was recorded as reading its whole step. Its `means` line is now
+  read word by word against the step, as any check against its words: in full only where that line accounts for every
+  word of the step, otherwise in part, with the part named ("written exactly as the taxonomy writes it"). Words in the
+  check's code count for nothing.
+
+### A strict skill can deliver, a method step keeps its authority, and the material has one name
+
+- **One name for a document of the material.** At the build an example's material was named by its path
+  (`e01.material/notice-of-loss.txt`) and at a run by its `--with` name, so a citation check written against the
+  examples failed every one of them and never qualified. Both now name a file the way a person cites it: its name
+  without folder or extension, `-` and `_` read as spaces ("notice of loss"); `--with <name>=<file>` keeps the name
+  given, and the material stored with `atelier material` is named the same way. The readings that write and mend a
+  check are told the same names.
+- **A method step whose written check did not qualify stays the owner's rule.** It was planned as a habit: it neither
+  blocked nor sent a run to review. It is now required, its check reports, and a run is left for the owner's review on
+  it until the check qualifies or the owner accepts the step as unmeasured. A qualified check enforces, as before.
+- **Repair may say a banned judgement with a negation.** A rewrite that takes out a banned word like "suspicious" may
+  need "not" to say what is left ("is not contradicted by the documents"). A negation is allowed where it stands in place
+  of a banned word the rewrite took out; one added anywhere else is still refused.
+- **The hook refuses an event that is not a JSON object** with exit 2 and the reason, as the documentation said; a JSON
+  string passed as "nothing to check". The rules it names as not read on an event are every required rule, a step whose
+  check has not qualified included.
+- **Strict delivery.** An output in which every required rule was read in full and held, nothing is listed, and every
+  other rule is accepted or does not apply, is VERIFIED at every level. On a strict skill nothing is accepted by default;
+  `--accept-unmeasured <rule,...>`, at the build or with `atelier amend`, accepts the rules the owner names: a judgement
+  rule whole, and a rule a check reads only in part (or whose written check has not qualified) for its unread part. The
+  record lists each with what its check read and the part accepted, and the certificate lists every accepted rule, a
+  partly read one with its part. A rule a qualified or counted check reads in full needs no acceptance, and a name that
+  is no rule is said; neither stops the command.
+
+### Studies: the failed pass lines of 10-22b run again ($2.20)
+
+Claims and labels at efa0050, writer `claude-sonnet-5-5`, every call metered, two runs per task; every table and output
+is in `bench/runs/2026-10-22c/` (RESULTS.md, report.md). The owner's choice, stated before the runs: on a strict skill
+accept as unmeasured the judgement steps and the unread part of a partly read required rule, never a rule a check reads
+in full. Accepted: claims x1 (the Summary's "one paragraph"); labels x4, x8, x9, x13, x14, x15, x17 (judgement).
+
+- **Still nothing delivered** (claims 0 of 20, labels 0 of 20). A step whose written check did not qualify is recorded
+  as read in full, so the owner's choice does not accept it, and it holds every run: claims x3, x4, x5, x6, x8; labels
+  x2, x5, x6, x7, x10, x11, x19. Had those been accepted too, 5 and 6 of 20 would have been delivered; the claims reader
+  held the rest. One labels run was blocked by the copying check on the keys and values every Floor label shares.
+- **The margin over the model given the same examples holds on claims:** every oracle rule held in 19 of 20 Atelier
+  memos against 7 of 20 (+60 points, interval 37 to 83). The examples arm was run again: the served examples of the
+  earlier build were not kept, so its prompt could not be shown identical.
+- **Repair fixes 2 of 5** (0 of 5 before): the banned words and the uncited fact. The banned-word rewrite says "raises a
+  concern that may warrant further verification", the doubt step 6 forbids; that step has no qualified check. Nothing
+  else was added, dropped or negated.
+- **Hook passes:** an event that is not JSON exits 2 with the reason; the held-out golden exits 0 and names the 4
+  required rules it could not read.
+- **Planted defects named by their own step with the passage: claims 3 of 5 (2 with the defect's own passage), labels
+  2 of 5**, against 3 and 3. Labels step 17 is judgement in this build, and the taxonomy step's qualified check reads
+  only the form of a category, so "Violence – scuffle" passes.
+- The material-naming fix worked: claims step 2's citation check qualified (9 of 9 examples, 4 of 4 breaking edits).
+- Found and not fixed: a qualified check that reads only part of its step is recorded as reading it in full; an
+  unqualified written check is "read in full" on the record and "partly read" to `--accept-unmeasured`; the copying
+  check blocks a Floor label; repair can swap a banned word for an insinuation.
+
+### Studies: tests A and C after the gap fixes (about $5.90 in all)
+
+Claims, labels and the public `i-have-adhd` skill, writer `claude-sonnet-5-5`, every call metered; every table and output
+is in `bench/runs/2026-10-22b/` (RESULTS.md, report.md). Test C read 30 labelled skills five times each.
+
+- **A skill rebuilt from unchanged inputs keeps one standard.** Builds 2 to 5 in the folder of build 1 gave build 1's hash
+  on claims and labels, for about a tenth of a cent each. A reworded step changed only that step's requirement (claims
+  15 to 15 rules, labels 41 to 41), and the latitude was kept. Built from scratch in five fresh folders, the same inputs
+  still gave five hashes on each fixture: every written check is drawn anew, and some steps moved between required,
+  judgement and habit.
+- **No held-out golden was blocked** (claims e10 and labels e12 both NEEDS REVIEW; labels had 10 of 12 blocked by the
+  copying check on 10-21).
+- **Planted defects.** The defect's own step named it with its passage in 3 of 5 on claims and 3 of 5 on labels, and
+  blocked it in 1 of 5 on each. Not named: the added date and the unaddressed exclusion (claims), "High" without a
+  depiction and a category outside the taxonomy (labels).
+- **No claims or labels run was delivered.** All 60 ended NEEDS REVIEW: on a strict skill nothing is accepted unmeasured
+  by default, and a required step a check reads only in part (the Summary's "one paragraph") can never be. i-have-adhd
+  was read as creative work and delivered 30 of 30. The test fails on its delivery line.
+- **The margin over the model given the same examples holds on claims, not on labels.** Every oracle rule held in 29 of
+  30 Atelier memos against 18 of 30 with the method and the examples the skill serves (36.7 points, interval 18.0 to
+  55.3), and 0 of 30 with the method alone. Labels: 30 of 30 against 30 of 30 with the examples, 25 of 30 with the
+  method alone.
+- **Progress lines.** 2 of 30 i-have-adhd replies carry one, none on a casual or direct question (23 of 30 on 10-21).
+- **Repair still fixes nothing** (0 of 5) and changes nothing else: the speculation rewrite was refused for adding a
+  negation, and the other four defects had no enforced rule broken in a sentence.
+- **Hook.** Exit 2 on the speculation defect in under a second, 0 on the held-out golden with no note: no rule that reads
+  material is required in this build.
+- **Record head on every output** (110 of 110), and an ERROR head on an unknown skill and on an unknown model.
+- **Test C passes:** 30 of 30 cases right in at least 4 of 5 draws (150 of 150 draws), no strict case read creative, for
+  under two cents.
+- Found and not fixed: material is named by its folder path at build and by its `--with` name at run, so a written
+  citation check failed all nine of the owner's examples and never qualified; a method step whose written check did not
+  qualify is stored as a habit, so it neither blocks nor sends a run to review; a hook event that is not JSON exits 0.
+
+### A clean run can be verified, a skill built again keeps what the owner decided, and every door says what it did
+
+- **VERIFIED with material bound.** The claim check decides from what it does at the level and the instrument that
+  gates (`claimDecides`, cli/eval-run.ts): with material bound, a check that cuts, blocks or flags decides when the pattern
+  check or a qualified reader gates, so a run in which every specific was found reads VERIFIED; review only where
+  something is listed or open. A creative skill, which only lists, and a run with nothing bound decide nothing. A standard
+  minted before latitude existed reads VERIFIED again on a clean run, and its record carries no latitude.
+- **A skill built again is decided again.** Building a method again, even from a copied project that took a copy of the
+  run, starts its decisions afresh: no rule twice. The owner's latitude and the rules they accepted unmeasured are kept
+  (found by the rule's words); a level that only proposed its default gives way to a new level's. `atelier amend
+  --measure` moves a rule out of the accepted list when it gains a check, and gives one that loses its check the level's
+  default. What each step is (a prohibition or a thing to do) is frozen with its check, so an unchanged method reads
+  nothing again and mints the same standard. A step's frozen check is read again once an output is rejected naming it.
+- **A skill from rules, built again on the answers kept.** `atelier skill --yes --name <name>` keeps the rules accepted,
+  reads only their checks again on the kept answers, replaces the decisions and records why the version changed; `atelier
+  rate` prints that command. `--rule` is resolved in the standard the output was made under and kept by its words; a rule
+  it does not hold is refused with the ones it does.
+- **The owner's cut is a qualified reader's.** Where the pattern check gates (no qualified reader, or one whose read
+  failed), an owner-chosen cut falls back to the level's action and nothing is deleted.
+- **Repair.** A banned word's hedge may go when the rewrite takes its whole clause out ("and may be a scam"); a hedge
+  elsewhere is held. A written check that names the sentences it fails on has them rewritten, and a citation naming a
+  document of the bound material is no slot left to fill.
+- **What each door says.** `verify --hook` names the required rules it could not read on the event, and blocks nothing
+  on their account. `verify --json` lists what blocked the text under `violated`, from the record its state comes from.
+  The keys of a JSON output and values the examples share are its form, not a lifted passage. `invoke --json` that stops
+  before its record prints `{schema, state: "ERROR", error}`. A written check qualified under the old in-check marker
+  keeps its standing.
+- **Readings, not word lists.** Whether a composite rule bans is its kind (the polarity reading), never a negative word
+  found in it. Every sentence of a method note is a step, beside a list or not: which instruct is the units reading's,
+  shown at the build. What a skill is for is read by the intent reading wherever `review` and the composite path ask.
+- **Provider.** Calls side by side refused for `thinking: disabled` are each sent again with `between_tools`; a reply
+  under `tool_choice: auto` that ends with no tool call is asked for once more; the proposer's token limit grows with the
+  corpus (4,000 up to eight pieces, at most 12,000).
+
+### The kind of work sets how strictly output is held, the owner ratifies it, and a check once ratified stays put
+
+- **Latitude, read at the build and ratified by the owner** (`core/observers/latitude.ts`, `cli/latitude.ts`). Every
+  skill is held at one of three levels: STRICT (house language; a figure, date or citation not in the bound material
+  stops the work), GROUNDED (free within the method; an untraced fact goes to review) and CREATIVE (free composition,
+  argument, analogy and marked hypotheticals; an untraced fact is listed for the author, never cut). At every level a
+  fact presented as real needs a source. The level is a reading on the house pattern: a small model reads the examples,
+  the method and what the skill is for, names a level and quotes the words it stands on; code keeps the answer only
+  where a quote is in what it was shown; with no model, or nothing grounded, the level is GROUNDED. It is said in one
+  line on the build screen, stored in the standard and inside its hash (it is the owner's), changed with
+  `--latitude strict|grounded|creative` at the build or `atelier amend --latitude <level> --reason "<why>"` after.
+  A standard minted before it existed hashes as it did and is held as GROUNDED.
+- **A request may only tighten the level.** At a run, a reading of the request may hold it stricter than the skill (a
+  figure to publish asked of a creative skill), on the request's own quoted words; never looser. The run's level and
+  the words that tightened it are on the certificate and the record.
+- **The writer is told the level.** One brief builder, three texts, in this request's notes: creative composes freely
+  and sources only facts presented as real; strict uses the house language and invents no analogy, hypothetical or
+  position; grounded sits between. A standard with no latitude is served as before.
+- **What an untraced specific meets is the level's** (`core/loop/claim-extract.ts`, `claimAction`, replacing
+  `listsBecause`). Cut only where the owner chose it (`atelier material --cut`), material is bound and the reader is
+  qualified on the kind of work. Otherwise STRICT blocks a figure, date or citation code finds missing from the material
+  and never cuts it (what only the reader found goes to review), GROUNDED flags for review, CREATIVE lists. With no
+  material bound nothing is blocked for being untraced: every specific, and every bracketed citation, is listed as
+  unverifiable. The "essay or post with material bound is cut" rule is gone, and with it the kind of work read off the
+  method note's title (`kindOfWork`) and the reply form read off the skill's name (`isReplyWork`): the work-form floor is
+  now a document, which reads no words.
+- **Rules the owner accepts as unmeasured** (`StandardVersion.acceptedUnmeasured`, inside the hash). A rule no check
+  reads, accepted by the owner, is listed on the record and the certificate and no longer holds a run at NEEDS REVIEW.
+  The level proposes which: CREATIVE accepts every such rule, GROUNDED and STRICT none; shown on the build screen,
+  `--unmeasured accept|review` to say otherwise. A listed claim still sends a run to review.
+- **A step's check is frozen when the skill is built** (`core/method/freeze.ts`). Keyed by the step's words and the
+  examples, a rebuild reuses each check and its qualification and reads only the steps whose wording or examples
+  changed; best-of-three draws run only there. Rewording one step changes that step's check and no other.
+- **A check that reads the material is not applicable without it** (`core/observers/written.ts`). A written check whose
+  body uses its material parameter, run with none bound (a hook event, a verify with no `--with`), is unverified and
+  named, never failed: the golden memo no longer blocks a hook. A repair that ends with a rule still broken says which,
+  never that every rule holds.
+- **Material is not copying.** Wording the bound material supplies (a transcript quoted as evidence) is left out of the
+  lifted-passage count.
+- **Owner-rejected outputs join the mutants.** `atelier rate <run> no "why" --rule <id>` makes the rejected output an
+  edit that breaks that rule: at the next build, a written check for it must catch it to qualify, beside the mutants a
+  model wrote.
+- **A skill from rules alone says so, and offers drafts.** `atelier skill "<rules>" --yes` with no finished examples
+  says its written checks report until qualified, and `atelier skill "<rules>" --draft-examples` has the writer draft
+  ten answers, printed whole and kept for the owner to rate (`atelier rate d3 yes|no`). The next `atelier skill` build
+  is a new proposal, its written checks read and qualified on the answers kept; a rejected one naming a rule joins that
+  rule's mutants.
+- **Bench.** The claims oracle's R8 reads the claim file itself: a figure in any material file (a policy number, a
+  report reference) is the file's. Each domain keeps one golden held out of every build (`held-out/`), and test 3
+  verifies those, never a served example against itself.
+
 ### The reading is drawn three times and code keeps the agreement; a check's standing sits beside the standard; one record head, a hook, and the last word pattern gone
 
 - **Best of three draws** (`cli/commands/method.ts`, `stepPlan`, `CHECK_DRAWS`). The step-check reading varies between
@@ -47,6 +262,44 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
   and the blind-reference loop no longer each carry their own `2`.
 - **License.** Atelier is source-available: unmodified copies may be used and redistributed, and changes are made only
   by the authors (LICENSE). It was MIT before this change.
+
+### Studies: the acceptance tests on two enterprise domains and one public skill (about $5.90 in all)
+
+Claims memos, brand-safety labels and the public `i-have-adhd` skill, each built three times with `claude-sonnet-5-5`
+as the writer and the default readers; every table, count and output is in `bench/runs/2026-10-21/` (RESULTS.md).
+
+- **The build is not yet reproducible.** Three builds from the same inputs gave three standard hashes on every fixture.
+  Claims kept 7 of 8 steps in the same column across builds, labels 18 of 20; the step that moved went between a
+  written check and judgement. Qualification moved more: on labels 2, 6 and 4 written checks qualified, and no step's
+  check qualified in all three builds. Best-of-three draws narrowed the variance, it did not remove it.
+- **Planted defects are named more often than they are blocked.** Of five planted defects per domain, the defect's own
+  step named it with its passage in 2, 5 and 4 claims builds and 2, 3 and 3 labels builds; it blocked where a counted
+  rule or a qualified check held the step: 1, 2, 1 and 0, 1, 2. "High without an explicit depiction" and "a category
+  outside the taxonomy" were named in no build.
+- **Goldens.** No claims example was blocked (0 of 30 verifies). 30 of 36 labels examples were blocked by the copying
+  check: a short JSON label shares a run of more than twelve words with itself. That is a false block of the owner's
+  own work, and the test fails on it.
+- **Repair is safe and did nothing.** On the five claims defects, `verify --repair` changed no figure, added, dropped or
+  negated no sentence, and fixed none: the speculation rewrite was refused for adding a negation, and the other four
+  rules were unqualified or omissions. One repair record read "every REQUIRED measured rule now holds" while its state
+  was BLOCKED; that sentence is wrong.
+- **Grounding on a memo.** An invented figure and an invented citation were both listed with the material bound and
+  neither was cut; without material the figure was listed and the citation was not.
+- **Record and certificate.** All six head keys on 95 of 95 `run` and `verify --repair` outputs; error bound null with
+  its reason on 191 of 191 certificates, each naming the claim instrument and its gate.
+- **Hook.** `verify --hook` exits 2 on a planted defect in 0.86 to 0.88 seconds, on a Write event and on a Stop event
+  read from a transcript. It also blocks a golden memo: a hook event carries no material, and the qualified citation
+  check needs it.
+- **Authority.** No standard changed at run time; the hash recomputed from the ratified fields equals each file's name,
+  and qualifications sit beside them, outside it.
+- **Consistency, 10 tasks by 3 runs.** Claims: every oracle rule held in 29 of 30 Atelier memos against 0 of 30 from the
+  model given the method alone (difference 96.7 points, interval 90.2 to 100). Given the method and the examples as well,
+  the model held 25 of 30 once the oracle's figure rule is read against the material (the oracle counts the policy
+  number as invented): Atelier's margin is 16.7 points, interval 3.3 to 30.0. Labels: 30 of 30 against 24 of 30 with the
+  method alone (evidence copied from the transcript), and 30 of 30 for both with the examples. i-have-adhd: the one
+  rule code decided differently was "restate where things stand", which the compiled skill met by writing "Step 1 of 1
+  done" into replies to "thanks, that solved it" and "what is 17 times 6"; that is not counted as a gain, and the six
+  rules no code checks were not scored. Every Atelier run ended NEEDS REVIEW.
 
 ### Which check a step asks for is read, not matched: a model names it or writes it, and code holds it
 

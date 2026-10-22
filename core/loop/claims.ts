@@ -227,6 +227,16 @@ export const STATED_FIGURE_WHY = 'a figure stated as fact that is not in your ma
 export const LINE_REF = /\blines?\s+\d+(?:\s*(?:-|–|to|and|through)\s*\d+)?|(?<=\S):\d+(?::\d+)?\b/gi;
 export const IN_A_NAME = /`[^`]*`|\b[A-Za-z_][\w-]*?\d[\w.-]*/g;
 const SUPPOSED = /\b(?:if|suppose|supposing|assum(?:e|ing)|imagine|hypothetically|for (?:example|instance)|let['’]?s say|say,?\s+(?:about\s+|roughly\s+)?[$€£]?\d)\b|\be\.g\./i;
+/**
+ * A SENTENCE THAT CITES A SOURCE IN BRACKETS ("[police report]", "[Smith 2021]", "[3]"), for a run with no material to
+ * look it up in: listed as unverifiable, never cut. FORM only: a bracketed name of at least two characters that is not
+ * a link's text ("[docs](https://…)") or a checkbox ("[ ]", "[x]").
+ */
+export const UNVERIFIABLE_CITATION_WHY = 'a citation with nothing to look it up in: no material is bound, so it is listed as unverifiable; bind your material (atelier material, or --with) to have it checked';
+export function bracketCitations(text: string): Claim[] {
+  return claimUnitsOf(text).filter((s) => /\[[^\]\n]{2,80}\](?!\()/.test(s.text)).map((s) => ({ ...s, kind: 'SOURCE' as const, why: UNVERIFIABLE_CITATION_WHY }));
+}
+
 export function statedFigureClaims(text: string, material: string, derived: (sentence: string) => boolean = () => false): Claim[] {
   const known = new Set(numbersIn(material));
   const out: Claim[] = [];

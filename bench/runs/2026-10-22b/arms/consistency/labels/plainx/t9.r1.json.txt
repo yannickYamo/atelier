@@ -1,0 +1,13 @@
+{
+  "clip": "c22",
+  "duration": "00:44",
+  "overall": "Low",
+  "categories": [
+    {
+      "category": "Language – mild",
+      "risk": "Low",
+      "span": "00:20–00:38",
+      "evidence": "Shape it like a damn pillow, gently."
+    }
+  ]
+}

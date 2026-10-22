@@ -14,7 +14,7 @@ import { readContext } from '../../core/inference/reading.js';
 import * as store from '../../core/state/store.js';
 import { decide } from '../../core/ratification/authority.js';
 import { draftHash, appendDecision, stampVersion } from '../../core/ratification/decision-record.js';
-import { authorityStateOf, assertSupersessionRecorded, carriedQualifications, type Requirement, type StandardVersion } from '../../core/state/canonical-state.js';
+import { authorityStateOf, assertSupersessionRecorded, carriedQualifications, carriedSettings, standardHashOf, type Requirement, type StandardVersion } from '../../core/state/canonical-state.js';
 import { compileArchitecture } from '../../core/architecture/compile.js';
 import { renderAgentSkill, assertPortable, defaultDescription } from '../../renderers/agent-skill/render.js';
 import { describeBackup } from '../../adapters/install-tree.js';
@@ -44,8 +44,8 @@ export function addRuleToActive(L: store.StoreLayout, name: string, statement: s
     wouldBeAbsentIf: null, materiality: null, realizationTolerance: null, outputShape: null };
   const outcome = decide(base, { verb: 'APPROVE', materiality });
   const requirements = [...baseStandard.requirements, outcome.requirement];
-  const body = { evidenceId: baseStandard.evidenceId, workType: baseStandard.workType, requirements };
-  const minted: StandardVersion = { standardVersionHash: sha(JSON.stringify(body)), ...body,
+  const body = { evidenceId: baseStandard.evidenceId, workType: baseStandard.workType, requirements, ...carriedSettings(baseStandard, requirements) };
+  const minted: StandardVersion = { standardVersionHash: standardHashOf(body), ...body,
     authorityState: authorityStateOf(requirements), mintedAt: new Date().toISOString(),
     supersedes: baseStandard.standardVersionHash, reason, ...carriedQualifications(baseStandard, requirements) };
   assertSupersessionRecorded(minted);

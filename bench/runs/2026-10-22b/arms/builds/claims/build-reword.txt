@@ -1,0 +1,161 @@
+$ atelier new bench/standing/domains/claims/examples --method method-claims-reworded.md --name claims --yes --report --model claude-sonnet-5-5 --reason one step of the method reworded (study A1)
+
+(this folder had no run of its own; it took a copy of the run that built "claims", which was at <scratch>/data/build-claims-1-Xs7OwZ/project.)
+(what each step is, a prohibition or a thing to do: read by claude-haiku-5-5.)
+(which check each step asks for: read 3 times by claude-haiku-5-5, the draws' agreement kept.)
+   7. measure: LEXICON:fraud|scam|liar|suspicious [3 of 3 draws]
+(7 step checks kept from the build that ratified them: the step and the examples are unchanged.)
+Method: method-claims-reworded.md  ·  9 examples from examples; checks read from e01.md, then held against the rest with 5 file(s) of material
+
+8 step(s) from your method.
+
+Checked on every output: what the work must contain (6)
+  - Open with a Summary section: one paragraph on who, what, where, and the decision.
+      checks for: the sections "Summary", "Facts", "Coverage analysis", "Decision", "Reserve", in that order, with something in it, opening the work; your example: held in all 9 of your examples
+      not checked, yours to read: one paragraph
+  - Then a Facts section. Every fact cites the document in the file it comes from, in square brackets: [notice of loss], [police report], [invoice 1].
+      checks for: Every sentence in the Facts section carries at least one square-bracketed document name that matches a file in the material. (a check written for this step); your example: not qualified, reports only: passes 0 of 9 example(s) it reads, catches 4 of 4 edit(s) that break the step, fires on 12 of 12 that break others (it fails 9 of the 9 examples it can read)
+      not checked, yours to read: how much of this rule the check reads is not known
+      ! 9 of your examples do not do this: e01.md (5 uncited fact sentence(s)); e02.md (5 uncited fact sentence(s)); e03.md (4 uncited fact sentence(s)); and 6 more. Checked and shown on every run; it blocks nothing until you confirm it (--yes).
+  - Then a Coverage analysis section. The coverage conclusion cites the policy clause it rests on, and every exclusion that could apply is addressed and cited.
+      checks for: The Coverage analysis section cites at least one policy clause and every exclusion it names is cited to the policy. (a check written for this step); your example: not qualified, reports only: passes 9 of 9 example(s) it reads, catches 0 of 4 edit(s) that break the step, fires on 0 of 12 that break others (it caught 0 of 4 edits that break the step (needs 4))
+      not checked, yours to read: how much of this rule the check reads is not known
+  - End with a Reserve section. The reserve equals the sum of the invoices in the file, less any excess the schedule applies, and cites the invoices.
+      checks for: The Reserve figure equals the sum of the invoice amounts found in the material, and the Reserve section cites the invoices. (a check written for this step); your example: not qualified, reports only: passes 7 of 9 example(s) it reads, catches 2 of 4 edit(s) that break the step, fires on 0 of 12 that break others (it fails 2 of the 9 examples it can read)
+      not checked, yours to read: how much of this rule the check reads is not known
+      ! 2 of your examples do not do this: e02.md (reserve does not cite invoices); e06.md (reserve does not cite invoices). Checked and shown on every run; it blocks nothing until you confirm it (--yes).
+  - Do not write the words "fraud", "scam", "liar" or "suspicious" anywhere in the memo.
+      checks for: none of: fraud, scam, liar, suspicious; your example: held in all 9 of your examples
+      not checked, yours to read: anywhere in the memo
+  - Take every date, name and figure from the file: add none of your own.
+      checks for: Every date in the memo appears in the material, so no date is added that the file does not hold. (a check written for this step); your example: not qualified, reports only: passes 9 of 9 example(s) it reads, catches 2 of 4 edit(s) that break the step, fires on 0 of 12 that break others (it caught 2 of 4 edits that break the step (needs 4))
+      not checked, yours to read: how much of this rule the check reads is not known
+
+Judgement: shown to the writer, reported as not measured (2)
+  - Then a Decision section: covered or not covered, and under which clause.
+  - Never speculate about the insured's intent or honesty.
+
+Shown by your example, and not in your method: shown to the writer, required only if you say so (1)
+  - Every figure in the work is one the request or the material gives.
+      the work must be made from; your example: held in all 9 of your examples
+
+Counted from your examples, and not in your method: required, since every example meets it. Checked on every output, and it blocks (2)
+  - Write none of the moves that mark text as machine-written (announcing an insight others "miss", grading your own list, "the single most", announcing candour, "that's the whole game", reading the reader's mind, one thing "wearing another's clothes", a contrastive verdict as the opening line, an em dash, a run of three or more very short sentences).
+      checks for: machine-writing moves (announced insights, self-graded lists, stacked superlatives, announced candour, totalisers, mind-reading, costumes): none of 16 kind(s) you never use, and at most 0.3 per 1,000 words of the rest; 9 of 9 example(s) hold it
+  - No mechanical errors: spelling, agreement, punctuation.
+      checks for: no mechanical error with no legitimate reading: a known misspelling in lower case, an agreement no variety uses ("he are"), a/an before a lower-case common word, two commas, a space before a comma or a full stop; a capitalised word, a word repeated, a dialect's agreement ("they was"), "an" before "h" or a word read as letters, "::", "..", a space before "!", "?", ":" or ";", any other word the checker does not know, and anything else it proposes, is only listed; code, quotations, addresses, figures and names are never touched; 9 of 9 example(s) hold it; their own words are never flagged
+
+Counted from your examples, and not in your method: how they are written. Shown to the writer and used to choose between drafts; required only if you say so (4)
+  - I keep paragraphs to 5 sentences at most.
+      checks for: paragraphs of at most 5 sentences; set where all 9 of your examples meet it
+  - I hedge rarely: at most 2 hedging words per thousand.
+      checks for: at most 2 hedging words per thousand; set where all 9 of your examples meet it
+  - The Summary section runs 25 to 33 words in my pieces.
+      checks for: the "Summary" section: 16 to 42 words; set where all 9 of your examples meet it
+  - The Facts section runs 47 to 65 words in my pieces.
+      checks for: the "Facts" section: 29 to 83 words; set where all 9 of your examples meet it
+(this folder had no run of its own; it took a copy of the run that built "claims", which was at <scratch>/data/build-claims-1-Xs7OwZ/project.)
+(what each step is, a prohibition or a thing to do: read by claude-haiku-5-5.)
+(what each step asks the writer to decide: read by claude-haiku-5-5.)
+
+What each step asks the writer to decide:
+  1. Open with a Summary section: one paragraph on who, what, where, and the decision.
+      instruction · puts: Summary section: one paragraph on who, what, where, and the decision
+  2. Then a Facts section. Every fact cites the document in the file it comes from, in square b
+      instruction · from: file documents · puts: Facts section; each fact cites its source document in square brackets · after: 1
+  3. Then a Coverage analysis section. The coverage conclusion cites the policy clause it rests
+      instruction (by the words alone)
+  4. Then a Decision section: covered or not covered, and under which clause.
+      instruction (by the words alone)
+  5. End with a Reserve section. The reserve equals the sum of the invoices in the file, less a
+      instruction (by the words alone)
+  6. Never speculate about the insured's intent or honesty.
+      instruction (by the words alone)
+  7. Do not write the words "fraud", "scam", "liar" or "suspicious" anywhere in the memo.
+      instruction (by the words alone)
+  8. Take every date, name and figure from the file: add none of your own.
+      instruction (by the words alone)
+Standard 1c4ad5ab3f1b86ee minted from your rulings. Instructing: x1, x2, x3, x4, x5, x6, x7, x8, x14, x15. Shown as examples: 5.
+Latitude: strict, read from "Every fact cites the document in the file it comes from, in square brackets". Change: --latitude strict|grounded|creative, --unmeasured accept|review; or atelier amend --latitude <level>.
+The exemplar is installed with the skill (examples/exemplar.md). If the skill directory is committed, so is the piece.
+Your own pieces: 9 of 9 meet every required rule that is counted.
+What each rule became, and why: <scratch>/data/build-claims-reword-zbQP8D/runs/project-0f077d11c297fcc6/proposal.md
+Implementation release 02c6ebe2656ff92d: 2 drafts (the first alone when it holds every rule), up to 0 structural edit(s).
+Stages: method ✓ (8 step(s) served whole) · counted rules ✓ (7 rule(s) counted off the pieces) · work form ✓ (documents) · persona ✓ (10 points (6 always, 4 often)) · moves ✓ (10 moves: 10 standing, 0 situational, 0 occasional (kept)) · scope — the work does not answer requests · author profile ✓ (50 feature(s) banded) · signals — fewer than 2 model drafts · model contrast — no model-read corpus: a method, stated rules, or fewer than four pieces
+
+Your skill is ready: /claims <your task>   (installed for claude-code at <scratch>/data/build-claims-reword-zbQP8D/project/.claude/skills/claims)
+(claude-code is not seen to load EXAMPLE; everything is delivered by: atelier invoke --skill claims "<your task>")
+1 pattern(s) you seem to avoid are watched, not enforced: x9. Confirm one: atelier confirm --skill claims --rule <id>   (or --drop)
+
+── Atelier · skill claims · version ec01af4f · standard 1c4ad5ab ─────────────────────────────────────────────
+
+  EVERY OUTPUT IS CHECKED BY
+    your rules        15 in force (8 written by you, 7 read from your work): 4 required
+                      13 counted on every output · 2 read by the taste reader
+    invented claims   pattern check, with claim reader (claude-haiku-4-5, prompt 47d18891) reporting only:
+                      not qualified: no material is stored with the skill (bind it with atelier material, or
+                      --with on a run); what it finds is listed, never cut
+    copying           a run of 116 or more words shared with your pieces fails
+
+  YOUR RANGE  descriptive, profile 9ba56187
+    features          50 measured on your pieces, 0 steer drafts, the rest monitored
+    by layer          punctuation and typography 0/8 · sentence architecture 0/10 · page and document 0/9
+                      lexicon and wording 0/15 · argument and movement 0/2 · narrator and stance 0/1
+                      content and specifics 0/1 · sound 0/3 · irregularity 0/1
+    by length         bands of their own for medium pieces, where they qualified
+    baseline          none: no reserved piece to compare with (reserve some with atelier new --reserve)
+    operators         not measured: rebuild to use them
+
+  RELEASE 02c6ebe2  2 drafts · 0 sentence rewrite(s) · 0 passage(s) retrieved · 0 note(s)
+                      the full loop is opt-in (--fidelity)
+  TASTE READER  2 rule(s) only a reading can check
+                      not validated: 0 label(s) so far (atelier taste --skill claims --calibrate)
+
+  SIZE  stored 3,636 words in 10 files · exported 3,837 words (22,525 bytes)
+    the export        your pieces 1,824 (8 files) · rules and instructions 828 · how I sound 750
+                      exemplar 234 (1 file) · framing 201
+    per run           what a run sent, and what it cost by purpose: atelier report <run>
+
+  not measured: the reading-based rules, until the taste reader is validated by your labels; voice beyond the
+                      50 counted features
+  next: atelier invoke --skill claims "<task>" · atelier report <run> · atelier rate <run> yes|no
+                      atelier eval --skill claims · atelier qualify --skill claims
+                      atelier taste --skill claims --calibrate
+
+
+What a run does with each rule:
+  x1    rule       checked in part · blocks when it fails · on a miss: written again
+        Open with a Summary section: one paragraph on who, what, where, and the decision.
+  x2    habit      checked in part · does not block: a habit · on a miss: shown, nothing done
+        Then a Facts section. Every fact cites the document in the file it comes from, in square brackets: [notice of 
+  x3    habit      checked in part · does not block: a habit · on a miss: shown, nothing done
+        Then a Coverage analysis section. The coverage conclusion cites the policy clause it rests on, and every exclu
+  x4    judgement  no check · does not block · on a miss: yours to judge
+        Then a Decision section: covered or not covered, and under which clause.
+  x5    habit      checked in part · does not block: a habit · on a miss: shown, nothing done
+        End with a Reserve section. The reserve equals the sum of the invoices in the file, less any excess the schedu
+  x6    judgement  no check · does not block · on a miss: yours to judge
+        Never speculate about the insured's intent or honesty.
+  x7    rule       checked in part · blocks when it fails · on a miss: the sentence rewritten
+        Do not write the words "fraud", "scam", "liar" or "suspicious" anywhere in the memo.
+  x8    habit      checked in part · does not block: a habit · on a miss: shown, nothing done
+        Take every date, name and figure from the file: add none of your own.
+  x9    habit      checked in part against your material · does not block: a habit · on a miss: shown, nothing done
+        Every figure in the work is one the request or the material gives.
+  x10   habit      checked · does not block: a habit · on a miss: shown, nothing done
+        I keep paragraphs to 5 sentences at most.
+  x11   habit      checked · does not block: a habit · on a miss: shown, nothing done
+        I hedge rarely: at most 2 hedging words per thousand.
+  x12   habit      checked · does not block: a habit · on a miss: shown, nothing done
+        The Summary section runs 25 to 33 words in my pieces.
+  x13   habit      checked · does not block: a habit · on a miss: shown, nothing done
+        The Facts section runs 47 to 65 words in my pieces.
+  x14   rule       checked · blocks when it fails · on a miss: the sentence rewritten
+        Write none of the moves that mark text as machine-written (announcing an insight others "miss", grading your o
+  x15   rule       checked · blocks when it fails · on a miss: the sentence rewritten
+        No mechanical errors: spelling, agreement, punctuation.
+
+Your skill "claims" is ready.
+  Use it: atelier run "<the task>"   (or /claims in Claude Code)
+
+--- stderr ---

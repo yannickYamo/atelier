@@ -123,6 +123,7 @@ function once(q) {
   try { out = execFileSync('node', [CLI, 'invoke', '--skill', q.skill, q.request, '--strict', '--redraws', arg('--redraws', '2'), '--json', '--cap', arg('--cap-per-run', '4'), ...PASS_THROUGH],
     { encoding: 'utf8', cwd: PROJECT, env: { ...process.env, ATELIER_DATA: DATA, ATELIER_PROJECT_DIR: PROJECT }, maxBuffer: 64 * 1024 * 1024, stdio: ['pipe', 'pipe', 'pipe'] }); } catch (e) { out = `${e.stdout ?? ''}`; err = `${e.stderr ?? ''}`; code = e.status ?? -1; }
   let j = null; try { j = JSON.parse(out.slice(out.indexOf('{'))); } catch { /* a run that printed no JSON */ }
+  if (j?.state === 'ERROR') j = null;   // a run that stopped before its record: no result
   return { j, code, err };
 }
 for (const { q, k, key } of RUNS) {

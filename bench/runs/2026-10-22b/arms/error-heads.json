@@ -1,0 +1,12 @@
+{
+ "no-such-skill": {
+  "exit": 1,
+  "stdout": "{\"schema\":\"atelier-record/1\",\"state\":\"ERROR\",\"error\":\"no active version for nosuch. Build it first.\"}\n",
+  "stderr": "atelier: no active version for nosuch. Build it first.\n"
+ },
+ "unknown-model": {
+  "exit": 1,
+  "stdout": "{\"schema\":\"atelier-record/1\",\"state\":\"ERROR\",\"error\":\"TARGET_BINDING_MISMATCH\\n\\nEverything recorded against SkillVersion 0ba55845afb1f7f6 was produced somewhere else:\\n\\n  model              recorded: claude-sonnet-5-5\\n                     now:      claude-nonexistent-0\\n\\nThe package is unchanged and the standard is untouched. What does not carry over is the evidence:\\nevery observation on this version describes how the other runtime behaved, and nothing here has\\nestablished how this one does.\\n\\n  Run it anyway, on a fresh record:  --accept-new-binding\\n  Go back to the recorded runtime:   change the model or provider back\"}\n",
+  "stderr": "atelier: TARGET_BINDING_MISMATCH\n\nEverything recorded against SkillVersion 0ba55845afb1f7f6 was produced somewhere else:\n\n  model              recorded: claude-sonnet-5-5\n                     now:      claude-nonexistent-0\n\nThe package is unchanged and the standard is untouched. What does not carry over is the evidence:\nevery observation on this version describes how the other runtime behaved, and nothing here has\nestablished how this one does.\n\n  Run it anyway, on a fresh record:  --accept-new-binding\n  Go back to the recorded runtime:   change the model or provider back\n\n"
+ }
+}

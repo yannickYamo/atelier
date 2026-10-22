@@ -1,0 +1,223 @@
+[
+ {
+  "label": "with material",
+  "exit": 1,
+  "state": "BLOCKED",
+  "figureSeen": true,
+  "citationSeen": true,
+  "unsourced": [
+   "The insured has made 4 earlier claims under this policy, totalling 9,350 dollars.",
+   "A witness statement confirms the items were in use that day [witness statement]."
+  ],
+  "violated": [
+   {
+    "id": "x2",
+    "materiality": "REQUIRED",
+    "enforced": true,
+    "spans": [
+     "\nThe insured has made 4 earlier claims under this policy, totalling 9,350 dollars."
+    ],
+    "detail": "1 uncited or unmatched fact(s)"
+   },
+   {
+    "id": "x3",
+    "materiality": null,
+    "enforced": false,
+    "spans": [
+     "## Coverage analysis"
+    ],
+    "detail": "coverage section lacks a cited policy clause or source"
+   },
+   {
+    "id": "x4",
+    "materiality": null,
+    "enforced": false,
+    "spans": [
+     "## Decision"
+    ],
+    "detail": "decision lacks outcome or clause"
+   },
+   {
+    "id": "x8",
+    "materiality": null,
+    "enforced": false,
+    "spans": [
+     "9,350"
+    ],
+    "detail": "1 date(s) or figure(s) not in the file"
+   },
+   {
+    "id": "x9",
+    "materiality": "PREFERRED",
+    "enforced": false,
+    "spans": [
+     "9,350"
+    ],
+    "detail": "5 of 6 figure(s) are in the request or the material (invoice 1, invoice 2, notice of loss, police report, policy)"
+   },
+   {
+    "id": "x10",
+    "materiality": "PREFERRED",
+    "enforced": false,
+    "spans": [
+     "The insured has made 4 earlier claims under this policy, totalling 9,350 dollars. Mossbank Analytics Inc reported the loss on 8 April 2026 [notice of loss]. The"
+    ],
+    "detail": "1 paragraph(s) over 5 sentences"
+   },
+   {
+    "id": "UNSOURCED·check",
+    "materiality": "PREFERRED",
+    "enforced": false,
+    "spans": [
+     "The insured has made 4 earlier claims under this policy, totalling 9,350 dollars.",
+     "A witness statement confirms the items were in use that day [witness statement]."
+    ],
+    "detail": "2 specific(s) to check [pattern check (the gate: the claim reader is not qualified)]"
+   }
+  ],
+  "claimsReader": {
+   "instrument": "pattern check, with claim reader (claude-haiku-4-5, prompt 47d18891) reporting only: not qualified",
+   "version": "47d18891",
+   "gate": "pattern",
+   "qualified": false,
+   "measured": null,
+   "kinds": []
+  },
+  "recordHead": [
+   "schema",
+   "state",
+   "standardVersionHash",
+   "skillVersion",
+   "certificate",
+   "record"
+  ]
+ },
+ {
+  "label": "without material",
+  "exit": 1,
+  "state": "BLOCKED",
+  "figureSeen": true,
+  "citationSeen": false,
+  "unsourced": [
+   "Declined under exclusion 7.1.",
+   "The insured has made 4 earlier claims under this policy, totalling 9,350 dollars.",
+   "Mossbank Analytics Inc reported the loss on 8 April 2026 [notice of loss].",
+   "The theft was reported to the police on 10 April 2026 [police report].",
+   "The loss falls under clause 4.2 of the policy, which covers theft of or damage to business contents in the insured's custody [policy].",
+   "Exclusion 7.1 applies: the items were unattended in a shared space and not in a locked container [police report], [policy].",
+   "Exclusion 7.5 does not apply: the loss was reported to the police within seven days [police report], [policy].",
+   "Not covered: exclusion 7.1 applies."
+  ],
+  "violated": [
+   {
+    "id": "x2",
+    "materiality": "REQUIRED",
+    "enforced": true,
+    "spans": [
+     "\nThe insured has made 4 earlier claims under this policy, totalling 9,350 dollars.",
+     "Mossbank Analytics Inc reported the loss on 8 April 2026 [notice of loss].",
+     "The loss occurred at the insured's office on Harbour Lane [notice of loss]."
+    ],
+    "detail": "6 uncited or unmatched fact(s)"
+   },
+   {
+    "id": "x3",
+    "materiality": null,
+    "enforced": false,
+    "spans": [
+     "## Coverage analysis"
+    ],
+    "detail": "coverage section lacks a cited policy clause or source"
+   },
+   {
+    "id": "x4",
+    "materiality": null,
+    "enforced": false,
+    "spans": [
+     "## Decision"
+    ],
+    "detail": "decision lacks outcome or clause"
+   },
+   {
+    "id": "x8",
+    "materiality": null,
+    "enforced": false,
+    "spans": [
+     "8 April 2026",
+     "10 April 2026",
+     "4"
+    ],
+    "detail": "8 date(s) or figure(s) not in the file"
+   },
+   {
+    "id": "x9",
+    "materiality": "PREFERRED",
+    "enforced": false,
+    "spans": [
+     "7.1",
+     "9,350",
+     "7.1"
+    ],
+    "detail": "1 of 6 figure(s) are in the request (no material was bound)"
+   },
+   {
+    "id": "x10",
+    "materiality": "PREFERRED",
+    "enforced": false,
+    "spans": [
+     "The insured has made 4 earlier claims under this policy, totalling 9,350 dollars. Mossbank Analytics Inc reported the loss on 8 April 2026 [notice of loss]. The"
+    ],
+    "detail": "1 paragraph(s) over 5 sentences"
+   },
+   {
+    "id": "UNSOURCED·check",
+    "materiality": "PREFERRED",
+    "enforced": false,
+    "spans": [
+     "Declined under exclusion 7.1.",
+     "The insured has made 4 earlier claims under this policy, totalling 9,350 dollars.",
+     "Mossbank Analytics Inc reported the loss on 8 April 2026 [notice of loss]."
+    ],
+    "detail": "8 specific(s) to check [pattern check (no material bound: a model reading of specifics could only list them)]"
+   }
+  ],
+  "claimsReader": {
+   "instrument": "pattern check (no material bound: a model reading of specifics could only list them)",
+   "version": null,
+   "gate": "pattern",
+   "qualified": false,
+   "measured": null,
+   "kinds": []
+  },
+  "recordHead": [
+   "schema",
+   "state",
+   "standardVersionHash",
+   "skillVersion",
+   "certificate",
+   "record"
+  ]
+ },
+ {
+  "label": "repair with material",
+  "exit": 1,
+  "state": "BLOCKED",
+  "keys": [
+   "schema",
+   "state",
+   "standardVersionHash",
+   "skillVersion",
+   "certificate",
+   "record",
+   "output",
+   "failed",
+   "repair",
+   "spentUsd",
+   "unverified",
+   "listed"
+  ],
+  "figureKept": true,
+  "citationKept": true,
+  "outputLength": 1263
+ }
+]

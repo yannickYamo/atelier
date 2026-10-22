@@ -51,8 +51,12 @@ export function compileCheck(src: string): { fn: CompiledCheck; problem?: undefi
   const s = src.trim();
   if (!s) return { problem: 'the check has no source' };
   if (s.length > CHECK_SOURCE_MAX) return { problem: `the check's source is longer than ${CHECK_SOURCE_MAX} characters` };
-  // No way out of the sandbox is given: the only names in it are the language's own, and the two this file sets.
-  const sandbox: { __fn?: unknown; __args?: { text: string; request: string; material: { name: string; text: string }[] } } = Object.create(null) as typeof sandbox;
+  // No way out of the sandbox is given: the only names in it are the language's own, and the two this file sets. NOTHING
+  // OF THE HOST'S REALM CROSSES IN: the arguments go in as one JSON string and are parsed inside the context, so no
+  // object the check can reach carries a host prototype (a host array's `constructor.constructor` is the host's
+  // Function, which the context's code-generation ban does not cover, and `("return process")()` from it read the
+  // process environment: confirmed against the built module before this line was written).
+  const sandbox: { __fn?: unknown; __json?: string } = Object.create(null) as typeof sandbox;
   const context: Context = createContext(sandbox, { codeGeneration: { strings: false, wasm: false } });
   try {
     const wrapped = /^\s*function\s+check\b/.test(s) ? `${s}; check` : `(${s})`;
@@ -61,10 +65,15 @@ export function compileCheck(src: string): { fn: CompiledCheck; problem?: undefi
   if (typeof sandbox.__fn !== 'function') return { problem: 'the check is not a function' };
   // EVERY CALL RUNS INSIDE THE TIMED EVALUATION. A function handed out of the context and called from here would run
   // with no limit; so the call is itself a script of the context, and a loop that never ends is stopped there.
-  const call = new Script('__fn(__args.text, __args.request, __args.material)', { filename: 'check-call.js' });
+  // THE RESULT CROSSES BACK AS ONE JSON STRING, MADE INSIDE THE TIMED SCRIPT. An object handed out of the context would
+  // be read by the host after the time limit ended: a getter or a Proxy trap on `ok` ran context code with no limit and
+  // hung the host (confirmed with `get ok() { while (true) {} }` before this line). Serialised inside, every getter runs
+  // under the limit, and the host only ever reads plain data.
+  const call = new Script('(() => { const __p = JSON.parse(__json); const __r = __fn(__p.text, __p.request, __p.material); return __r === undefined ? "null" : JSON.stringify(__r); })()', { filename: 'check-call.js' });
   const compiled: CompiledCheck = (text, ctx) => {
-    sandbox.__args = { text, request: ctx?.request ?? '', material: (ctx?.material ?? []).map((m) => ({ name: m.name, text: m.text })) };
-    const r: unknown = call.runInContext(context, { timeout: CHECK_TIME_LIMIT_MS });
+    sandbox.__json = JSON.stringify({ text, request: ctx?.request ?? '', material: (ctx?.material ?? []).map((m) => ({ name: m.name, text: m.text })) });
+    const out: unknown = call.runInContext(context, { timeout: CHECK_TIME_LIMIT_MS });
+    const r: unknown = typeof out === 'string' ? JSON.parse(out) : null;
     if (r === null || r === undefined) return null;
     if (typeof r !== 'object' || typeof (r as { ok?: unknown }).ok !== 'boolean') throw new Error('the check returned no { ok } object');
     const x = r as { ok: boolean; detail?: unknown; spans?: unknown; value?: unknown };
@@ -89,6 +98,23 @@ export function runCheck(fn: CompiledCheck, text: string, context: CheckContext 
   return { verdict: r.ok ? 'MET' : 'VIOLATED', spans: r.ok ? [] : spans, value: r.value ?? null, detail: r.detail ?? (r.ok ? `${what}: held` : `${what}: not held`) };
 }
 
+/** What a check that reads the material says where none is bound: not applicable, unverified, named (core/eval/record-build.ts). */
+export const MATERIAL_UNREAD = 'reads your material, and none is bound';
+
+/**
+ * DOES THE CHECK READ THE MATERIAL. Read off the check's own code, as code: the name of its third parameter in its
+ * parameter list (a form, `(text, request, material) =>` or `function check(text, request, files)`), and whether its
+ * body uses that name. No meaning is read: a check that never touches the parameter does not read what it holds.
+ */
+export function checkReadsMaterial(src: string): boolean {
+  // FORM: the parameter list of an arrow function or of a function declaration named check.
+  const head = /^\s*(?:function\s+check\s*)?\(([^)]*)\)/.exec(src);
+  const name = head?.[1].split(',')[2]?.replace(/=.*$/s, '').trim();
+  if (!head || !name || !/^[A-Za-z_$][\w$]*$/.test(name)) return false;
+  // FORM: the name as a whole identifier in the rest of the code.
+  return new RegExp(`(?<![\\w$.])${name.replace(/\$/g, '\\$')}(?![\\w$])`).test(src.slice(head[0].length));
+}
+
 /**
  * The check as a measurement: `source` is its code (one line per array element), `means` says in words what it
  * checks. Whether it is qualified is not in it: that is read beside the standard (`qualifiedIn`).
@@ -105,12 +131,22 @@ export const CHECK: Observer = {
     return null;
   },
   observe(text, p, context): ObserverResult {
+    // A CHECK THAT READS THE MATERIAL CANNOT READ WHAT WAS NOT GIVEN: with none bound it is not applicable, never failed.
+    if (!context?.material?.length && checkReadsMaterial(source(p))) return { verdict: 'NOT_APPLICABLE', spans: [], value: null, detail: `${MATERIAL_UNREAD}: ${means(p)} was not checked` };
     const c = compileCheck(source(p));
     if (!c.fn) return { verdict: 'NOT_APPLICABLE', spans: [], value: null, detail: `the check could not run (${c.problem})` };
     return runCheck(c.fn, text, context, means(p));
   },
 };
 
-/** Whether this standard's written check for `requirementId` is qualified on the owner's examples and its mutants. */
-export const qualifiedIn = (v: Pick<StandardVersion, 'requirements' | 'qualifications'>, requirementId: string): boolean =>
-  v.requirements.find((r) => r.requirementId === requirementId)?.measurement?.observer === 'CHECK' && v.qualifications?.[requirementId]?.qualified === true;
+/**
+ * Whether this standard's written check for `requirementId` is qualified on the owner's examples and its mutants. The
+ * standing beside the standard decides; a standard minted while it was marked on the check itself (`qualified: 1`) has none
+ * beside it, and the mark stands.
+ */
+export const qualifiedIn = (v: Pick<StandardVersion, 'requirements' | 'qualifications'>, requirementId: string): boolean => {
+  const m = v.requirements.find((r) => r.requirementId === requirementId)?.measurement;
+  if (m?.observer !== 'CHECK') return false;
+  const beside = v.qualifications?.[requirementId];
+  return beside ? beside.qualified : m.params.qualified === 1;
+};

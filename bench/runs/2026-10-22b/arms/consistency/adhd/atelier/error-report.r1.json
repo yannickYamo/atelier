@@ -1,0 +1,81 @@
+{
+ "fixture": "adhd",
+ "arm": "atelier",
+ "task": "error-report",
+ "run": 1,
+ "text": "Create the missing file: `mkdir -p config && echo '{}' > config/app.json`\n\n**Cause:** `build.ts:88` reads `config/app.json`. The file does not exist, so Node throws `ENOENT`.\n\n**Fix:**\n\n1. From the project root, run the command above. If you have a template, copy it instead: `cp config/app.example.json config/app.json`.\n2. Fill in any keys that `build.ts` reads from the config. Line 88 and the lines after it show which ones.\n\n**Verify:**\n\n1. Run `ls config/app.json`. The path should print with no error.\n2. Run your build command (for example `npx ts-node build.ts`). The `ENOENT` at `build.ts:88` should be gone.\n\nIf the build now fails on a missing key instead, that is a separate error from an empty `{}` config. Add the key it names to `config/app.json`.\n\n**Next action (under 2 minutes):** run the `mkdir` command, then rerun the build.",
+ "state": "NEEDS_REVIEW",
+ "costUsd": 0.0061,
+ "exit": 0,
+ "standard": "d497e8fdd36f3852",
+ "headKeys": [
+  "schema",
+  "state",
+  "standardVersionHash",
+  "skillVersion",
+  "certificate",
+  "record"
+ ],
+ "certificate": {
+  "standardVersionHash": "d497e8fdd36f3852",
+  "checks": {
+   "total": 6,
+   "counted": 0,
+   "written": 6,
+   "writtenQualified": 0
+  },
+  "readers": {
+   "taste": {
+    "veto": [],
+    "labelledMisses": 0,
+    "falseBlockUpper95": null
+   },
+   "claims": {
+    "instrument": "pattern check (no material bound: a model reading of specifics could only list them)",
+    "version": null,
+    "gate": "pattern",
+    "qualified": false,
+    "measured": null,
+    "kinds": []
+   }
+  },
+  "latitude": {
+   "skill": "CREATIVE",
+   "run": "GROUNDED",
+   "tightenedBy": "Report this failure clearly: build.ts:88 throws ENOENT because config/app.json is missing. Include the fix and verification.",
+   "setBy": "model"
+  },
+  "acceptedUnmeasured": [
+   {
+    "id": "x1",
+    "statement": "Lead with the next action: the first line is something the reader can do, and a command, path, or snippet goes first with prose after, if at all."
+   },
+   {
+    "id": "x3",
+    "statement": "End with one concrete next action the reader can do in under two minutes."
+   },
+   {
+    "id": "x4",
+    "statement": "Finish the first issue, then offer the second as a separate question rather than mixing it in; answer mid-work questions yourself if you can, and if one still needs the reader, surface it once at the end."
+   },
+   {
+    "id": "x5",
+    "statement": "Restate the current state every turn, e.g. which step is done and what is next, and use the harness's task or plan tool for multi-step work instead of also narrating the plan as prose."
+   },
+   {
+    "id": "x7",
+    "statement": "Show what now works in concrete terms, with how to try it, instead of burying wins in a recap."
+   },
+   {
+    "id": "x12",
+    "statement": "Keep these rules on for every response for the rest of the session, even when the topic changes, and turn them off only when the reader says \"stop adhd mode\" or \"normal mode\" (confirm in one line, then return to default style)."
+   }
+  ],
+  "errorBound": null,
+  "why": "no delivered-error bound: it needs an audit sample of your own labels, drawn like the work this skill does; the checks and readers above are what this output was held to"
+ },
+ "error": null,
+ "stderr": "No notes of yours are bound, so a story, source or figure in the draft cannot be checked against anything of yours, and is listed for you, not cut. Add yours: --with notes=<file>, or atelier material --skill i-have-adhd <file>.\nHeld grounded for this request (the skill is creative): \"Report this failure clearly: build.ts:88 throws ENOENT because config/app.json is missing. Include the fix and verification.\".\nJudgement reader: not run (reporting only until your labels qualify it; --taste reads this run and records readings to label: atelier taste --skill i-have-adhd --calibrate).\nRead before writing: 1 thing(s) asked for · could act on \"build.ts\".\nChecked: every REQUIRED measured rule holds.\n1 specific(s) are not in your material: left in for you to check before you use this (listed in the details).\n$0.01 · everything this run checked: <scratch>/data/build-adhd-1-9ZmSOB/runs/project-194d0492abd9d831/last-invocation.txt · not right? atelier fix \"<what was wrong>\"\n",
+ "meterUsd": 0.006065839999999767,
+ "seconds": 9.021
+}

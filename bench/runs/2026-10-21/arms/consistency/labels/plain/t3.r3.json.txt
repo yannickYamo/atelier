@@ -1,0 +1,12 @@
+```json
+{
+  "clip": "c16",
+  "duration": "01:06",
+  "overall": "Floor",
+  "categories": [
+    {
+      "category": "Floor – all brands"
+    }
+  ]
+}
+```

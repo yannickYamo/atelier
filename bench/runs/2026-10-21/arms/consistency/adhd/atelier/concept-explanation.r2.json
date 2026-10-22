@@ -1,0 +1,48 @@
+{
+ "fixture": "adhd",
+ "arm": "atelier",
+ "task": "concept-explanation",
+ "run": 2,
+ "text": "Default to merge unless you have a specific reason to rebase. Merge is safer because it never rewrites history.\n\n**Merge**\n`git checkout main && git merge feature`\n\n- Joins two branches by creating a new \"merge commit\" with two parents.\n- Existing commits stay exactly as they were.\n- History shows the real shape: where the branch split and where it came back.\n- Downside: with many branches, the log gets tangled with merge commits.\n\n**Rebase**\n`git checkout feature && git rebase main`\n\n- Takes your branch's commits and replays them on top of the latest `main`.\n- Each replayed commit is a new commit with a new hash. The old ones are abandoned.\n- History becomes one straight line, with no merge commit.\n- Downside: it rewrites history. If anyone else has your branch, their copy no longer matches yours.\n\n**The one rule that keeps you safe**\n\nNever rebase commits that other people already have, such as `main` or a shared branch. Rebase only your own local or personal branch.\n\n**How to choose**\n\n1. Is the branch shared, or already pulled by someone else? Use **merge**.\n2. Is it your own branch and you want it current with `main` before opening a PR? Use **rebase**.\n3. Not sure? Use **merge**. It is always recoverable.\n\n**If you already pushed a rebased branch**\n\nGit will reject a normal push. Use `git push --force-with-lease`, not `--force`. It refuses to overwrite work you have not seen. Do this only on a branch that is yours alone.\n\n**If a rebase goes wrong**\n\n- `git rebase --abort` returns you to where you started.\n- After a finished rebase, `git reflog` lists your old commits so you can reset back to one.\n\n**Conflicts**\n\n- Merge: you resolve conflicts once, in one merge commit.\n- Rebase: you may resolve conflicts once per replayed commit. Fix the files, run `git add <file>`, then `git rebase --continue`.\n\nNext: in a scratch repo, make a branch with two commits, run `git rebase main`, then `git log --oneline --graph` to see the straight line (about 2 minutes).",
+ "state": "NEEDS_REVIEW",
+ "costUsd": 0.0096,
+ "exit": 0,
+ "standard": "03fcfcea922b8e6a",
+ "headKeys": [
+  "schema",
+  "state",
+  "standardVersionHash",
+  "skillVersion",
+  "certificate",
+  "record"
+ ],
+ "certificate": {
+  "standardVersionHash": "03fcfcea922b8e6a",
+  "checks": {
+   "total": 6,
+   "counted": 0,
+   "written": 6,
+   "writtenQualified": 0
+  },
+  "readers": {
+   "taste": {
+    "veto": [],
+    "labelledMisses": 0,
+    "falseBlockUpper95": null
+   },
+   "claims": {
+    "instrument": "pattern check (no material bound: a model reading of specifics could only list them)",
+    "version": null,
+    "gate": "pattern",
+    "qualified": false,
+    "measured": null,
+    "kinds": []
+   }
+  },
+  "errorBound": null,
+  "why": "no delivered-error bound: it needs an audit sample of your own labels, drawn like the work this skill does; the checks and readers above are what this output was held to"
+ },
+ "stderr": "No notes of yours are bound, so a story, source or figure in the draft cannot be checked against anything of yours, and is listed for you, not cut. Add yours: --with notes=<file>, or atelier material --skill i-have-adhd <file>.\nJudgement reader: not run (reporting only until your labels qualify it; --taste reads this run and records readings to label: atelier taste --skill i-have-adhd --calibrate)",
+ "meterUsd": 0.00961968000000013,
+ "seconds": 15.269
+}

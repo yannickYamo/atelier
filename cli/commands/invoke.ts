@@ -6,7 +6,7 @@
 
 import { wordsOf as overlapWords } from '../../core/observers/overlap.js';
 import { inRepairChain, stepGuarded, outOfStepCalls } from '../../core/inference/step-guard.js';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeSync } from 'node:fs';
 import { methodReading, methodLine } from '../../core/eval/obligations.js';
 import type { CheckContext } from '../../core/observers/registry.js';
 import { checksFor, claimInstrumentOf, contextJudgeFor, contextJudgeModel, smallReaderFor, CLAIMS_MODEL_DEFAULT, shortFormRequest } from '../checks.js';
@@ -14,7 +14,10 @@ import { regressions, readAtLength, featureParamsOf, ruleParamsOf, enforcedNever
 import { answerSentences, judgedSituations } from '../../core/loop/answer-claims.js';
 import { groundCarried } from '../../core/loop/grounding.js';
 import { withoutServedNotes } from '../../core/loop/echo.js';
-import { certificateFor, claimStandingOf, recordHead } from '../../core/eval/certificate.js';
+import { certificateFor, claimStandingOf, recordHead, RECORD_SCHEMA } from '../../core/eval/certificate.js';
+import { shipped as shippedDecision, deliveryLine } from '../../core/eval/consequence.js';
+import { runLatitude, type RunLatitude } from '../latitude.js';
+import { latitudeBrief } from '../../core/observers/latitude.js';
 import { SLOT_NOTE } from '../../renderers/agent-skill/render.js';
 import { EXECUTION_BRIEF, briefNote, applyingSteps, setAsideSteps, unresolvedSteps, type BriefStep, selectMoves, type MoveSelection } from '../../core/loop/execution-brief.js';
 import { MOVE_CASES, eligibleMoves } from '../../core/loop/move-cases.js';
@@ -66,14 +69,13 @@ import { checkClass } from '../../core/observers/doc-class.js';
 import { readTaste, tasteRules, describeTaste, applicabilityFor, vetoMisses, readCoverage, type TasteReading, type ReadBounds } from '../../core/taste/reader.js';
 import { tastePermissions } from '../../core/taste/calibration.js';
 import { refineTaste } from '../../core/taste/repair.js';
-import { overlapIndex, sentencesKept, sentencesAdded } from '../../core/observers/overlap.js';
+import { overlapIndex, formTokensOut, sentencesKept, sentencesAdded } from '../../core/observers/overlap.js';
 import { recordTaste, readerModel, readerClient as readerClientFor } from './taste.js';
 import { processSpentUsd, processSpendByPurpose, spendBetween, type Budget, type InferenceClient, type SpendPurpose } from '../../core/inference/client.js';
 import { countWords, wordsWritten } from '../../core/eval/size.js';
 import { MATERIAL_NOT_BOUND, CONDITIONAL_NOT_BOUND } from '../../core/eval/record-build.js';
 import { statedLength, statedLengths, againstStated, statedBounds, notHeldBecause, inWords, ownLengthBand, againstBand, type StatedLength } from '../../core/intake/length.js';
 import { proseWords } from '../../core/observers/style.js';
-import { isReplyWork } from '../../core/observers/formats.js';
 import { citesLines, numbered, citedLines } from '../../core/loop/locators.js';
 import { composeServed, forThisRequest, withoutPersonaBlocks } from '../served.js';
 import { findOwnershipBreaches, describeBreaches } from '../../core/state/output-ownership.js';
@@ -81,7 +83,6 @@ import { assertHistoryNotServed, foldRepairs } from '../../core/architecture/rep
 import type { SkillVersion, InvocationSettings } from '../../core/state/canonical-state.js';
 import * as store from '../../core/state/store.js';
 import { copyGuardPieces } from '../../core/compiler/voice.js';
-import { listsBecause, unmeasuredKind } from '../../core/loop/claim-extract.js';
 import { formatOf } from '../../core/observers/formats.js';
 import { planFor } from '../../core/plan/execution-plan.js';
 import { checkSatisfiable, describeSatisfiability, type SatisfiabilityVerdict } from '../../core/state/prerequisite.js';
@@ -323,8 +324,22 @@ export async function invoke(): Promise<void> {
   const machine = argv.includes('--json') ? 'json' as const : argv.includes('--answer-only') ? 'answer' as const : null;
   const log = console.log;
   if (machine) console.log = (...a: unknown[]) => { console.error(...a); };
-  try { await invokeRun(machine); } finally { console.log = log; }
+  // A RUN ASKED FOR JSON THAT STOPS BEFORE ITS RECORD IS WRITTEN still answers with one object: the record head, the
+  // state ERROR, and why. Said on the way out, so a stop anywhere (a refusal, a provider that cannot be reached) is covered.
+  let why: string | null = null;
+  const err = console.error;
+  const onExit = (code: number): void => {
+    if (machine !== 'json' || jsonWritten || code === 0) return;
+    writeSync(1, `${JSON.stringify({ schema: RECORD_SCHEMA, state: 'ERROR', error: why ?? 'the run stopped before its record was written' })}\n`);
+  };
+  if (machine === 'json') {
+    console.error = (...a: unknown[]) => { const m = a.map(String).join(' '); if (m.startsWith('atelier: ')) why = m.slice('atelier: '.length).trim(); err(...a); };
+    process.on('exit', onExit);
+  }
+  try { await invokeRun(machine); } catch (e) { why = (e as Error).message.split('\n')[0]; throw e; } finally { console.log = log; console.error = err; }
 }
+/** Set once the run's JSON object is on stdout: nothing more is said there. */
+let jsonWritten = false;
 
 async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const started = Date.now();
@@ -406,16 +421,10 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const strict = (argv.includes('--strict') || runSettings?.delivery === 'strict') && std !== null && contractFile === null;
   if (argv.includes('--strict') && argv.includes('--no-repair')) die('--strict delivers only a checked output, and --no-repair turns the checks off: drop one of them.');
   const redraws = strict && !argv.includes('--no-repair') ? Math.max(0, Math.floor(numericFlag('--redraws', 2))) : 0;
-  // STRICT NEEDS A CLAIM CHECK THAT DECIDES. On a kind of work the skill names and nobody measured the check on,
-  // its findings are listed and nothing fails on them, so "delivered only when conformant" would promise a check
-  // that did not decide. Said before anything is spent. A skill that names no kind, or a run with no material
-  // bound, has no claim check to wait for: strict holds the rest of the standard, and the verdict says the
-  // specifics were listed and why. --allow-unsourced turns the claim check off, and with it this stop.
+  // STRICT DELIVERY AND THE CLAIM CHECK. What an untraced specific meets is the skill's latitude (core/loop/claim-extract.ts,
+  // `claimAction`): on a strict skill it blocks, and strict delivery refuses it; on a grounded or creative one it is
+  // flagged or listed, and the verdict says so. The run is never stopped before it starts for it.
   const materialBound = store.getMaterial(L).length > 0 || boundMaterial().length > 0;
-  const unmeasuredNamed = unmeasuredKind(flag('--class') ?? store.getDocClass(L));
-  if (strict && unmeasuredNamed && !argv.includes('--allow-unsourced')) {
-    die(`Strict delivery needs a claim check that decides, and here the claim check is not measured on ${unmeasuredNamed}. Nothing was written. Run without --strict to get a draft with unsourced sentences listed.`);
-  }
   const shapeRounds = Math.max(shapeAsked ? Math.floor(numericFlag('--shape-rounds', 3)) : 0, redraws);
   if (shapeAsked && shapeRounds < 1) die('--shape-rounds must be at least 1: each round is one more draft.');
   if (shapeAsked && argv.includes('--no-repair')) die('--until-typical and --until-author check each round before keeping it, and --no-repair turns the checks off: drop one of them.');
@@ -542,9 +551,9 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   // abstract. Where material is bound (a diff, a term sheet) the facts are the material's: a specific not in it is
   // listed for the reader, never slotted (a Must fix finding became "[your own story, figure or source goes here]").
   // Replies list too. `--placeholders` asks for slots anywhere; `--no-placeholders` asks for cuts on a document.
-  // A skill built before the form was read falls to the name of the work, as the compiler did.
+  // A skill built before the form was read is a document: no word of its name decides.
   const placeholdersOn = argv.includes('--placeholders') || (!argv.includes('--no-placeholders') && material.length === 0
-    && (store.getWorkForm(L) ?? (std && isReplyWork(std.workType) ? 'REPLY' : 'DOCUMENT')) === 'DOCUMENT');
+    && (store.getWorkForm(L) ?? 'DOCUMENT') === 'DOCUMENT');
   const needsLine = materialLine(satisfiable, material.length > 0, !argv.includes('--allow-unsourced'), name, placeholdersOn);
   if (needsLine) report.say(needsLine);
   if (nDrafts > 1 && (!std || contractFile !== null)) {
@@ -661,6 +670,11 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
     contextJudgeModel() ? contextReaderClient() : null, contextJudgeModel(), { spentUsd: 0, capUsd: 0.03, maxCalls: 1 }) : null;
   const selection: MoveSelection | null = brief && placement ? selectMoves(placement.value, brief.value, eligible, briefSteps) : null;
   const briefNoteText = brief ? briefNote(brief.value, briefSteps, material, movesMode === 'serve' ? selection : null) : '';
+  // HOW STRICTLY THIS RUN IS HELD (cli/latitude.ts): the skill's latitude, tightened by the request where the reading quotes
+  // it, never loosened. Said to the writer in this request's notes, recorded on the run's certificate, and the level the
+  // claim check acts by. A standard minted before latitude existed is held as it always was, and told nothing new.
+  const held = std?.latitude ? await runLatitude(std, asked, contextJudgeModel()) : null;
+  if (held && held.level !== held.skill) report.say(`Held ${held.level.toLowerCase()} for this request (the skill is ${held.skill.toLowerCase()}): "${held.quote ?? ''}".`);
   const briefText = briefNoteText && inferredMethod ? `(My usual steps, named below, were read from my own pieces and are not rules I wrote: follow them as my habit, not as requirements.)\n${briefNoteText}` : briefNoteText;
   if (selection && profile && placement) report.say(`Moves of mine for this request: ${selection.placed.length} placed (${movesMode === 'serve' ? 'served to the writer' : 'observed, not served'}; about ${selection.budget} a piece), ${selection.standing.length} standing (how I always am, in the skill), ${selection.notPlaced.length} not this case, ${selection.unresolved.length} unresolved and never served; read by ${placement.by === 'model' ? 'the context reader' : placement.by}; profile ${profile.hash}.`);
   // HOW MUCH THE READER MAY READ THIS RUN: nothing on a short request unless asked, four calls on a long one (two
@@ -680,7 +694,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
     const off = setAsideSteps(brief.value, briefSteps); const open = unresolvedSteps(brief.value, briefSteps);
     if (off.length || open.length || brief.value.unsupported.length || brief.value.contradicted.length) report.say(`For this request: ${off.length ? `${off.length} step(s) of the method set aside (${off.map((s) => s.n).join(', ')})` : 'every step applies'}${open.length ? `; ${open.length} not decided by the request, held as applying (${open.map((s) => s.n).join(', ')})` : ''}${brief.value.unsupported.length ? `; ${brief.value.unsupported.length} decision(s) need a specific not given (said, and decided on what is given)` : ''}${brief.value.contradicted.length ? `; the request asks against ${brief.value.contradicted.length} step(s), which stand` : ''} (${brief.by === 'model' ? 'read' : brief.by === 'code' ? 'nothing to read' : `by default: ${brief.why ?? ''}`}).`);
   }
-  const checks = { ...checksFor(L, { material: materialText, task: asked, context: { request: asked, material }, guardClaims: !argv.includes('--allow-unsourced'), placeholders: placeholdersOn, ...(judge ? { judge } : {}) }),
+  const checks = { ...checksFor(L, { material: materialText, task: asked, context: { request: asked, material }, guardClaims: !argv.includes('--allow-unsourced'), placeholders: placeholdersOn, ...(judge ? { judge } : {}), ...(held ? { level: held.level } : {}) }),
     ...(short.format ? { format: short.format } : {}),
     ...(transfer ? { doesNotApply: transfer.doesNotApply } : {}),
     ...(waived.size ? { waived } : {}), ...(graded !== undefined ? { graded, gradedProfile: carried } : {}) };
@@ -735,7 +749,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const needs = intent?.document ? undefined : intent?.needs;
   if (needs && !needsNothing(needs)) report.say(`Read before writing: ${[needs.deliver.length ? `${needs.deliver.length} thing(s) asked for` : '', needs.unknowns.length ? `turns on ${needs.unknowns.map((u) => u.what).join('; ')}` : '', needs.actOn ? `could act on "${needs.actOn}"` : '', needs.irreversible ? `cannot be undone: "${needs.irreversible}"` : ''].filter(Boolean).join(' · ')}.`);
   // The slot shape is said for the run that wants slots (a document, no material bound), never in the skill (SLOT_NOTE).
-  const requestNotes = forThisRequest(withheld.filter((w) => !needMaterial.includes(w)), briefText, impl.passages, lengthNote, needsNote(needs), placeholdersOn ? SLOT_NOTE : '');
+  const requestNotes = forThisRequest(withheld.filter((w) => !needMaterial.includes(w)), briefText, impl.passages, lengthNote, needsNote(needs), placeholdersOn ? SLOT_NOTE : '', held ? latitudeBrief(held.level) : '');
   const servedBase = examplesFirst ? withoutPersonaBlocks(servedText) : servedText;
   if (examplesFirst) report.say(`Examples first: served without the description of how I sound or my repertoire${servedBase === servedText ? ' (the skill carried none)' : ''}; my moves are read on the work and never served.`);
   const servedForRun = `${needMaterial.length ? withoutRules(servedBase, needMaterial) : servedBase}${impl.notes ? `\n\n${impl.notes}` : ''}${carryBlock}${requestNotes}`;
@@ -761,7 +775,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const completions: string[] = [];
   // THE AUTHOR'S OWN LENGTH, WHERE IT APPLIES (`ownLengthApplies`): one more thing the drafts are chosen by.
   const ownBand = ownLengthApplies({ shortForm: Boolean(transfer), stated: Boolean(stated), asked: Boolean(lengthAsked), shape: shape === 'SHAPE', contract: contractFile !== null,
-    answers: checks.format?.claims === 'list' || (std ? (store.getWorkForm(L) ?? (isReplyWork(std.workType) ? 'REPLY' : 'DOCUMENT')) === 'REPLY' : false), outOfRegister: register?.status === 'out', sections: argv.includes('--sections'), ruled: lengthIsRuled(std) })
+    answers: checks.format?.claims === 'list' || (std ? store.getWorkForm(L) === 'REPLY' : false), outOfRegister: register?.status === 'out', sections: argv.includes('--sections'), ruled: lengthIsRuled(std) })
     ? ownLengthBand(store.getVoice(L)?.lengthSpan) : null;
   // THE AUTHOR'S LENGTH IS NEVER A REASON TO WRITE A DRAFT AGAIN (owner's ruling): the task decides how much is
   // needed, and the method how it is done. Their usual length is said to the writer as guidance and reported against
@@ -812,7 +826,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
       unresolved: unresolvedSteps(brief.value, briefSteps).map((s) => s.id), unsupported: brief.value.unsupported.map((u) => u.id), contradicted: brief.value.contradicted.map((c) => c.id),
       ...(examplesFirst ? { served: 'examples-first' as const } : {}),
       ...(inferredMethod ? { inferred: true as const } : {}),
-      ...(selection && profile && placement ? { moves: { by: placement.by, mode: movesMode, profile: profile.hash, placed: selection.placed.map((u) => u.id), standing: selection.standing.map((u) => u.id), notPlaced: selection.notPlaced.map((x) => x.id), unresolved: selection.unresolved, budget: selection.budget } } : {}) } : null, std),
+      ...(selection && profile && placement ? { moves: { by: placement.by, mode: movesMode, profile: profile.hash, placed: selection.placed.map((u) => u.id), standing: selection.standing.map((u) => u.id), notPlaced: selection.notPlaced.map((x) => x.id), unresolved: selection.unresolved, budget: selection.budget } } : {}) } : null, std, held),
     // A structured output is JSON, not prose: no reading of it means anything against a prose range.
     fid && std && contractFile === null ? (output: string) => fidelityRecord(fid, output, trace, impl.retrieved, applicability(name, std, output, waived, withheld, checks.context, transfer?.doesNotApply), ledger,
       { ...(runSettings ?? fid.release.settings), drafts: nDrafts, editBudget, ...(voiceMode === 'incontext' ? { voice: 'incontext' as const } : { voice: undefined }),
@@ -836,11 +850,11 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   // A sentence that cannot be found as written is listed after the text, as before.
   // Only where the claim check lists and does not cut (a kind nobody measured, or one that lists by design): where it
   // cuts, what it leaves is what a qualified reading kept, and marks in finished prose are noise.
-  const lists = Boolean(listsBecause({ cls: flag('--class') ?? store.getDocClass(L), bound: materialBound, slots: placeholdersOn }))
+  const lists = checks.claimAct !== 'cut'
     || formatOf(flag('--class') ?? store.getDocClass(L))?.claims === 'list';
   const listed = lists && materialBound && !argv.includes('--no-unsourced-note') ? rec.repair?.claimsToCheck ?? [] : [];
   const shipped = markUnsupported(rec.output, listed);
-  if (!machine && !strict) console.log(`\n${shipped}\n`);
+  // The work is printed once its delivery is decided (core/eval/consequence.ts), below: marked where it goes to a person.
   if (adoptedCarry && !methodCarry) report.say(store.CARRY_RETIRED);
   for (const c of completions) report.say(c);
   reportChecks(report, rec, std, checks);
@@ -875,7 +889,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
     const finalReport = !std || contractFile !== null ? null : kept?.output === rec.output ? kept.report
       : await checkDraftAsync(name, std, rec.output, checks).catch(() => null);
     evaluation = buildRunEval({ L, rec, std, sensor: checks.claimSensor, claimsOff: argv.includes('--allow-unsourced'), readings: taste?.readingsOf(rec.output),
-      answers: checks.format?.claims === 'list', unmeasured: checks.listsBecause ?? null, profile: fid?.profile ?? null,
+      answers: checks.format?.claims === 'list', unmeasured: checks.listsBecause ?? null, claimAct: checks.claimAct, material: checks.evidence ?? '', profile: fid?.profile ?? null,
       format: { words: formatAsked ?? null, shape, withheld: presentationWithheld }, taste: tasteMonitor, moves: movesMonitor, costUsd: spent,
       // Where the cost went (core/inference/client.ts, `SpendPurpose`) and what the writer was sent, in words.
       spend: spentBy,
@@ -894,15 +908,28 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const showPanel = evaluation && !argv.includes('--quiet') && (argv.includes('--panel') || (!machine && process.stdout.isTTY));
   // STRICT DELIVERY: THE VERDICT DECIDES. An output that does not conform (or whose evaluation could not be built) is
   // not delivered: the reasons are, with a failing exit. The record keeps the text, for `atelier report`.
-  const nonconformant = strict && !evaluation?.result.conformant;
+  // WHAT IS DONE WITH THE WORK IS THE RECORD'S DELIVERY (core/eval/consequence.ts): SHIP and SHIP LABELLED go out, PERSON
+  // goes out marked for the owner's review and waits in `atelier report --pending`, BLOCK exits 1. Under --strict only what
+  // shipped is delivered. A run with no record (a structured output held by its contract) keeps its contract's verdict.
+  const decided = evaluation?.record?.delivery ?? null;
+  const nonconformant = strict && (decided ? !shippedDecision(decided) : !evaluation?.result.conformant);
   const refused = nonconformant && !argv.includes('--allow-nonconformant');
   if (nonconformant) process.exitCode = STRICT_EXIT;
-  // ONE RUN, ONE EXIT CODE. Read by a machine (--json, --answer-only), a blocked run exits 1, as `atelier run` does for the
-  // same run (run.ts, `exitFor`): a script that reads only the code must not take a blocked output for a usable one.
-  else if (machine && evaluation?.record?.state === 'BLOCKED') process.exitCode = 1;
-  if (strict && !machine && !refused) console.log(`\n${nonconformant ? 'NOT CONFORMANT, delivered because --allow-nonconformant was given:\n\n' : ''}${rec.output}\n`);
+  // ONE RUN, ONE EXIT CODE, the same however it was asked for (run.ts, `exitFor`): a blocked run exits 1, so a script that
+  // reads only the code never takes it for a usable one; a run sent to a person exits 0, and says so.
+  else if (decided?.decision === 'BLOCK') process.exitCode = 1;
+  if (!machine && !refused) {
+    const head = nonconformant ? 'NOT CONFORMANT, delivered because --allow-nonconformant was given:\n\n'
+      : decided?.decision === 'PERSON' ? 'FOR YOUR REVIEW (sent to a person, not shipped as checked):\n\n' : decided?.decision === 'BLOCK' ? 'BLOCKED (not for use as it is):\n\n' : '';
+    console.log(`\n${head}${strict ? rec.output : shipped}\n`);
+  }
+  if (decided && !machine) console.error(`atelier: ${deliveryLine(decided)}.`);
+  if (decided?.decision === 'PERSON' && !refused) {
+    const toRead = decided.why.filter((w) => w.action === 'person').flatMap((w) => w.entries);
+    console.error(`atelier: sent to a person: read ${toRead.join(', ') || 'the entries named above'}. It waits in atelier report --pending; rule on it with atelier rate ${rec.invocationId} yes|no [--rule <id>].`);
+  }
   if (refused) {
-    const why = evaluation ? evaluation.result.reasons.join('; ') : 'the run could not be evaluated';
+    const why = evaluation ? [...evaluation.result.reasons, ...(decided ? [deliveryLine(decided)] : [])].join('; ') : 'the run could not be evaluated';
     console.error(`atelier: not delivered (strict delivery): ${why}. The text is kept with the record: atelier report ${rec.invocationId}. To deliver it anyway, marked: --allow-nonconformant.`);
   }
   // DELIVERED UNDER STRICT IS NOT VERIFIED. Strict refuses what was seen to fail and what could not be evaluated;
@@ -912,6 +939,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   if (showPanel && evaluation) console.log(`\n${renderPanel(evaluation, { width: process.stdout.columns || 110, color: !process.env.NO_COLOR && process.stdout.isTTY && !machine })}\n`);
   if (machine === 'answer' && !refused) process.stdout.write(`${shipped}\n`);
   if (machine === 'json') {
+    jsonWritten = true;
     process.stdout.write(`${JSON.stringify({
       // THE ONE RECORD HEAD every door prints (core/eval/certificate.ts): the same keys `atelier verify --json` gives.
       ...recordHead({ state: evaluation?.record?.state ?? null, standardVersionHash: sv.standardVersionHash, skillVersion: sv.skillVersionHash, certificate: rec.settings?.certificate ?? null, record: evaluation?.record ?? null }),
@@ -2585,11 +2613,11 @@ function draftScore(r: Awaited<ReturnType<typeof checkDraftAsync>>, std: Standar
 
 /** What this run was configured with, beyond the binding and the package: enough to re-run a study arm from its record. */
 type BriefFlag = NonNullable<InvocationSettings['flags']['brief']>;
-function settingsFor(checks: Checks, taste: TasteSession | null, nDrafts: number, carryNote = '', brief: BriefFlag | null = null, std: Standard | null = null): InvocationSettings {
+function settingsFor(checks: Checks, taste: TasteSession | null, nDrafts: number, carryNote = '', brief: BriefFlag | null = null, std: Standard | null = null, held: RunLatitude | null = null): InvocationSettings {
   const temperature = flag('--temperature') === undefined ? undefined : Number(flag('--temperature'));
   return {
     atelierVersion: version(),
-    ...(std ? { certificate: certificateFor(std, taste, claimStandingOf(checks.claimSensor)) } : {}),
+    ...(std ? { certificate: certificateFor(std, taste, claimStandingOf(checks.claimSensor), held) } : {}),
     claimInstrument: checks.claimSensor?.instrument ?? null,
     // Read when the record is written, after the run: a reader that degraded mid-run says so here.
     get claim() { return claimInstrumentOf(checks); },
@@ -2688,7 +2716,7 @@ export function withoutWaiting(veto: ReadonlySet<string>, rules: readonly { rule
  */
 export function materialLine(v: SatisfiabilityVerdict, materialBound: boolean, guardClaims: boolean, name: string, placeholders = false): string | null {
   const cut = !guardClaims ? null : placeholders ? 'a story, source or figure the draft invents is replaced by a slot for yours'
-    : materialBound ? 'any story, source or figure not found in what you bound is cut, or listed where the check is not measured'
+    : materialBound ? 'any story, source or figure not found in what you bound is blocked, flagged or listed by the skill\'s latitude, and cut only where you chose that'
     : 'a story, source or figure in the draft cannot be checked against anything of yours, and is listed for you, not cut';
   if (v.kind === 'DEGRADED') {
     const ids = [...new Set(v.missing.map((m) => m.requirementId))];
@@ -2912,7 +2940,7 @@ function reportIntegrity(report: RunReport, rec: Invocation, classNote: string |
   const voice = store.getVoice(L);
   const served = copyGuardPieces(voice);
   if (served.length) {
-    const overlap = overlapIndex(served, voice?.standardWording ?? [])(rec.output); const lifted = overlap.longestShared;
+    const overlap = overlapIndex(served, voice?.standardWording ?? [])(formTokensOut(rec.output, served, '')); const lifted = overlap.longestShared;
     if (overlap.standard) report.detail(`(${overlap.standard} six-word run(s) shared with three or more of your pieces: your standard wording, not counted as copying)`);
     // ONE LIMIT, ONE WORDING: the evaluation's (cli/eval-run.ts, `copyLimit`; core/eval/record-build.ts, the lifted entry).
     const line = liftedLine(lifted, copyLimit(voice));

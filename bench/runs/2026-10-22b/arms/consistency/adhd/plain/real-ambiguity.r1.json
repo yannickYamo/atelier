@@ -1,0 +1,12 @@
+{
+ "fixture": "adhd",
+ "arm": "plain",
+ "task": "real-ambiguity",
+ "run": 1,
+ "text": "Paste the command or script you use to deploy (for example `npm run deploy`), or name the project.\n\nThis chat has no project context, and production deploys are hard to undo, so I won't guess at what \"it\" is.",
+ "costUsd": 0.009092,
+ "stop": "end_turn",
+ "error": null,
+ "meterUsd": 0.009091999999999878,
+ "seconds": 4.368
+}

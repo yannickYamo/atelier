@@ -1,0 +1,48 @@
+{
+ "fixture": "adhd",
+ "arm": "atelier",
+ "task": "real-ambiguity",
+ "run": 1,
+ "text": "Reply \"deploy\" to confirm, and name the project and branch or commit. I have not deployed anything.\n\nStep 0 of 3 done: nothing run. Next: you confirm the target.\n\n\"It\" is not specified, and a production deploy can't be undone, so I won't guess. To settle it, run this and paste the output (under 1 minute):\n\n```\ngit status -sb && git log -1 --oneline\n```\n\nOnce you reply, the steps are:\n\n1. Run the test suite on that commit and confirm it passes.\n2. Deploy that commit to production.\n3. Hit the health endpoint to verify it is live.",
+ "state": "NEEDS_REVIEW",
+ "costUsd": 0.0039,
+ "exit": 0,
+ "standard": "03fcfcea922b8e6a",
+ "headKeys": [
+  "schema",
+  "state",
+  "standardVersionHash",
+  "skillVersion",
+  "certificate",
+  "record"
+ ],
+ "certificate": {
+  "standardVersionHash": "03fcfcea922b8e6a",
+  "checks": {
+   "total": 6,
+   "counted": 0,
+   "written": 6,
+   "writtenQualified": 0
+  },
+  "readers": {
+   "taste": {
+    "veto": [],
+    "labelledMisses": 0,
+    "falseBlockUpper95": null
+   },
+   "claims": {
+    "instrument": "pattern check (no material bound: a model reading of specifics could only list them)",
+    "version": null,
+    "gate": "pattern",
+    "qualified": false,
+    "measured": null,
+    "kinds": []
+   }
+  },
+  "errorBound": null,
+  "why": "no delivered-error bound: it needs an audit sample of your own labels, drawn like the work this skill does; the checks and readers above are what this output was held to"
+ },
+ "stderr": "No notes of yours are bound, so a story, source or figure in the draft cannot be checked against anything of yours, and is listed for you, not cut. Add yours: --with notes=<file>, or atelier material --skill i-have-adhd <file>.\nJudgement reader: not run (reporting only until your labels qualify it; --taste reads this run and records readings to label: atelier taste --skill i-have-adhd --calibrate)",
+ "meterUsd": 0.003924089999999936,
+ "seconds": 9.542
+}

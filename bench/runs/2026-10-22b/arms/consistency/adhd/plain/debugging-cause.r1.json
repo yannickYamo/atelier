@@ -1,0 +1,12 @@
+{
+ "fixture": "adhd",
+ "arm": "plain",
+ "task": "debugging-cause",
+ "run": 1,
+ "text": "Add the header to the failing request in the test:\n\n```js\n.set('Authorization', `Bearer ${token}`)\n```\n\n**Cause:** The endpoint requires auth. The test sends no `Authorization` header, so the server correctly returns 401.\n\n**Steps:**\n1. Open the failing test and find the request call.\n2. Add the `.set(...)` line above to it. (In `fetch` or `axios`, use `headers: { Authorization: \\`Bearer ${token}\\` }`.)\n3. Run that test file.\n\n**Time:** About 2 minutes if the test suite already has a token helper. About 10 if you need to create one.\n\n**If it's still 401:** the token is invalid or expired, not missing.\n\nNext: open the failing test and find the request call.",
+ "costUsd": 0.010584,
+ "stop": "end_turn",
+ "error": null,
+ "meterUsd": 0.010584000000000149,
+ "seconds": 4.728
+}

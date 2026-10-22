@@ -1,0 +1,56 @@
+{
+ "fixture": "claims",
+ "arm": "atelier",
+ "task": "t3",
+ "run": 2,
+ "text": "## Summary\n\nZephyr Point Media Ltd: theft from a locked van of a 3D printer and filament stock at a shared workshop on Tanner Row. Covered under clause 4.2; reserve 6,264 dollars.\n\n## Facts\n\nZephyr Point Media Ltd reported the loss on 20 April 2026 [notice of loss]. The loss occurred at a shared workshop on Tanner Row [notice of loss]. The items are a 3D printer and filament stock [invoice 1], [invoice 2]. The theft was reported to the police on 22 April 2026 [police report]. The items were in a locked container at the time [police report].\n\n## Coverage analysis\n\nThe loss falls under clause 4.2 of the policy, which covers loss of or damage to business contents at the premises named in the schedule, and at any other premises while in the insured's custody, caused by theft, fire, storm or escape of water [policy]. Exclusion 7.1 does not apply: the items were in a locked container [police report], [policy]. Exclusion 7.5 does not apply: the loss was reported to the police within seven days [police report], [policy].\n\n## Decision\n\nCovered under clause 4.2. The claim is accepted.\n\n## Reserve\n\nThe reserve is 6,264 dollars, the sum of the two invoices (5,181 dollars and 1,083 dollars) [invoice 1], [invoice 2]; the schedule applies no excess [policy].",
+ "state": "NEEDS_REVIEW",
+ "costUsd": 0.027,
+ "exit": 0,
+ "standard": "15ff9349666bb38a",
+ "headKeys": [
+  "schema",
+  "state",
+  "standardVersionHash",
+  "skillVersion",
+  "certificate",
+  "record"
+ ],
+ "certificate": {
+  "standardVersionHash": "15ff9349666bb38a",
+  "checks": {
+   "total": 13,
+   "counted": 9,
+   "written": 4,
+   "writtenQualified": 0
+  },
+  "readers": {
+   "taste": {
+    "veto": [],
+    "labelledMisses": 0,
+    "falseBlockUpper95": null
+   },
+   "claims": {
+    "instrument": "pattern check, with claim reader (claude-haiku-4-5, prompt 47d18891) reporting only: not qualified",
+    "version": "47d18891",
+    "gate": "pattern",
+    "qualified": false,
+    "measured": null,
+    "kinds": []
+   }
+  },
+  "latitude": {
+   "skill": "STRICT",
+   "run": "STRICT",
+   "tightenedBy": null,
+   "setBy": "model"
+  },
+  "acceptedUnmeasured": [],
+  "errorBound": null,
+  "why": "no delivered-error bound: it needs an audit sample of your own labels, drawn like the work this skill does; the checks and readers above are what this output was held to"
+ },
+ "error": null,
+ "stderr": "Judgement reader: not run (reporting only until your labels qualify it; --taste reads this run and records readings to label: atelier taste --skill claims --calibrate).\nMethod: contains 2 of 2 thing(s) it must · 2 judgement step(s) not measured.\nGrammar, listed for you to check and never changed (1): \"## Coverage analysis\" (the checker proposes a change this rule does not make).\nChecked: every REQUIRED measured rule that could be checked holds; listed for you to check: x15.\n16 specific(s) are not in your material: left in for you to check before you use this (listed in the details).\nLength: 216 words. The request names none; your pieces run 146 to 194, shortest to longest.\n$0.03 · everything this run checked: <scratch>/data/build-claims-1-Xs7OwZ/runs/project-ab6dcbda2a6633ca/last-invocation.txt · not right? atelier fix \"<what was wrong>\"\n",
+ "meterUsd": 0.027044280000000143,
+ "seconds": 25.505
+}

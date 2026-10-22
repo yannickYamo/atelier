@@ -226,9 +226,11 @@ describe('steps, as the review found them misread', () => {
   const example = { task: 'Review the retry change.', material: [{ name: 'diff.md', text: 'The diff adds a retry loop.' }],
     reference: '## Verdict\n\nSafe to merge once the delay is capped.\n\n## Risks\n\nThe loop can spin for ever.\n\n## Sources\n\nThe diff, and the incident note.\n' };
   const of = (note: string, re: RegExp): ReturnType<typeof methodProposals>[number] | undefined => mp(note, example).find((p) => re.test(p.statement));
-  it('an instruction written as a sentence is kept', () => {
+  it('an instruction written as a sentence beside a list is kept where the units reading reads it as one; with no reading, the list is the method', () => {
     const note = '# Review\n\nMake sure that you never give the verdict before reading the diff. It is important that you always cite the file. State which risks must be fixed before merge.\n\n- Open with a Verdict section.\n';
-    expect(stepsOf(note).map((s) => s.text)).toEqual(['Open with a Verdict section.', 'Make sure that you never give the verdict before reading the diff.', 'It is important that you always cite the file.', 'State which risks must be fixed before merge.']);
+    const read = new Set(['Make sure that you never give the verdict before reading the diff.', 'It is important that you always cite the file.', 'State which risks must be fixed before merge.']);
+    expect(stepsOf(note, read).map((s) => s.text)).toEqual(['Open with a Verdict section.', 'Make sure that you never give the verdict before reading the diff.', 'It is important that you always cite the file.', 'State which risks must be fixed before merge.']);
+    expect(stepsOf(note).map((s) => s.text)).toEqual(['Open with a Verdict section.']);
   });
   it('a word like "first" or "last" inside a step says nothing of where the section is', () => {
     expect(of('- Include a Risks section listing the first three risks.\n', /^Include a Risks/)).toMatchObject({ obligation: 'DELIVERABLE', measurement: { params: { sections: ['Risks'], body: 1 } } });
@@ -292,9 +294,10 @@ describe('a step is a step when it tells the writer what to do, however its sent
     expect(of(note, /^Never give/)).toMatchObject({ obligation: 'JUDGEMENT', measurement: null });
     expect(of(note, /^Keep the Background/)).toMatchObject({ obligation: 'JUDGEMENT', measurement: null });
   });
-  it('a sentence that describes the work is not an instruction because it holds the word "never"', () => {
+  it('a sentence that describes the work is not a step: beside a list, only what the units reading calls an instruction is kept', () => {
     const note = '# Handover\n\nIt is read in under two minutes by a registrar who has never met the patient.\n\nNever recommend before the assessment.\n\n- Include a Background section.\n';
-    expect(stepsOf(note).map((s) => s.text)).toEqual(['Include a Background section.', 'Never recommend before the assessment.']);
+    expect(stepsOf(note).map((s) => s.text)).toEqual(['Include a Background section.']);
+    expect(stepsOf(note, new Set(['Never recommend before the assessment.'])).map((s) => s.text)).toEqual(['Include a Background section.', 'Never recommend before the assessment.']);
   });
   it('work whose sections are labels, not headings, is read as it is written', () => {
     const sbar = { task: 'Hand over bed 9.', material: [], reference: 'Situation: Mrs Hale, bed 9, is bleeding again after her procedure.\n\nBackground: She was admitted on Tuesday with a peptic ulcer.\n\nRecommendation: Review within the hour, please.\n' };

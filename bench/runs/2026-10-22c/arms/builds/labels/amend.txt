@@ -1,0 +1,9 @@
+$ atelier amend --skill labels --accept-unmeasured x4,x8,x9,x13,x14,x15,x17 --reason "..."
+
+Latitude: strict, read from "Every category in a label is one of the 39 categories of the taxonomy, written exactly as the taxonomy writes it."; 7 unmeasured rules accepted (listed, not sent to review). Change: --latitude strict|grounded|creative, --unmeasured accept|review; or atelier amend --latitude <level>.
+12 file(s) in the previous install are not part of this package (SKILL.md, examples/exemplar.md, examples/voice-1.md, examples/voice-10.md, …). They were moved, not deleted: <scratch>/data/build-labels-1-JMlLs8/project/.claude/.atelier-backups/labels-2026-10-22T06-17-56-965Z
+
+StandardVersion 4833d2ab138de82b supersedes 41190182644e50ff
+  reason: the owner's choice: judgement steps and the unread part of a partly read required rule are accepted unmeasured (study 2026-10-22c)
+
+--- stderr ---

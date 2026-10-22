@@ -1,0 +1,12 @@
+{
+ "fixture": "labels",
+ "arm": "plainx",
+ "task": "t9",
+ "run": 1,
+ "text": "```json\n{\n  \"clip\": \"c22\",\n  \"duration\": \"00:44\",\n  \"overall\": \"Low\",\n  \"categories\": [\n    {\n      \"category\": \"Language – mild\",\n      \"risk\": \"Low\",\n      \"span\": \"00:20–00:25\",\n      \"evidence\": \"Shape it like a damn pillow, gently.\"\n    }\n  ]\n}\n```",
+ "costUsd": 0.01072,
+ "stop": "end_turn",
+ "error": null,
+ "meterUsd": 0.010720000000000063,
+ "seconds": 3.335
+}

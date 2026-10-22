@@ -42,6 +42,7 @@ import { mkdirSync } from 'node:fs';
 import { readJson } from '../state/read-json.js';
 import { writeAtomic } from '../state/fs-atomic.js';
 import { join } from 'node:path';
+import type { LatitudeLevel } from '../state/canonical-state.js';
 
 /** What a claim reader returns for one text: the unsupported claims, and the public specifics to check. */
 export interface ClaimReading {
@@ -258,28 +259,37 @@ export function unmeasuredKind(cls: string | null | undefined, list: readonly Qu
   if (formatOf(kind) ?? formatOf(one)) return null;
   return list.some((q) => [kind, one].some((k) => q.classes?.includes(k))) ? null : kind;
 }
-/**
- * WHY THE CLAIM CHECK LISTS HERE AND DOES NOT CUT, or null where it may cut.
- *
- * A deletion is the one thing the check does that a person cannot undo by reading, so it is made only where two
- * things hold together. Material is bound (`atelier material`, `--with`): with none, every specific the writer
- * chose reads as unsourced, and on ten explanations built from twelve examples the check deleted the author's own
- * kind of analogy from three and a required closing line from a fourth. And the kind of work is one a
- * qualification covers: a skill that names none says nothing about where its sentences come from. Anywhere else
- * every finding is listed for the person, and the reason is the one returned here, said wherever the list is.
- * Decided from what the skill and the run carry, never from a list of cases to spare. `--placeholders` is the
- * person asking for a visible slot where a story was not theirs: nothing is lost from sight, so it needs no
- * material, only a kind of work the check was not shown to misread.
- */
 /** Why the claim check lists and does not decide, where nothing was supplied to look a specific up in. */
 export const NO_MATERIAL = 'no material was bound to check against';
 
-export function listsBecause(ctx: { readonly cls?: string | null; readonly bound: boolean; readonly slots?: boolean }, list: readonly QualifiedReader[] = QUALIFIED_READERS): string | null {
-  if (ctx.slots) { const k = unmeasuredKind(ctx.cls, list); return k ? `the claim check is not measured on ${k}` : null; }
-  if (!ctx.bound) return NO_MATERIAL;
-  if (!ctx.cls?.trim() || ctx.cls.trim().toLowerCase() === 'none') return 'the skill names no kind of work the claim check was measured on';
-  const kind = unmeasuredKind(ctx.cls, list);
-  return kind ? `the claim check is not measured on ${kind}` : null;
+/**
+ * WHAT THE CLAIM CHECK DOES WITH A SPECIFIC IT CANNOT TRACE, by the skill's latitude (core/observers/latitude.ts).
+ *
+ *   cut     the owner chose cut (`atelier material --cut`), material is bound, and the reader is qualified on this kind
+ *           of work (QUALIFIED_READERS): the one case where a sentence is deleted, because only there has anyone
+ *           measured how often a deletion is wrong
+ *   block   STRICT: a figure, a date or a citation the code finds missing from the bound material stops the work; it is
+ *           never cut, and what only a reader found goes to review
+ *   review  GROUNDED: every finding is flagged for the owner to review
+ *   list    CREATIVE: every finding is listed for the author; never cut
+ *
+ * With no material bound nothing is blocked for being untraced: every specific is listed as unverifiable. Decided
+ * from the level, what is bound and what the owner chose; never from a kind of work. `slots` is the person asking for a
+ * visible slot where a story was not theirs (`--placeholders`): nothing is lost from sight, so it needs no material,
+ * only a kind of work the check was not shown to misread.
+ */
+export type ClaimAct = 'cut' | 'block' | 'review' | 'list';
+export function claimAction(ctx: { readonly level: LatitudeLevel; readonly bound: boolean; readonly ownerCut?: boolean; readonly cls?: string | null; readonly slots?: boolean },
+  list: readonly QualifiedReader[] = QUALIFIED_READERS): { readonly act: ClaimAct; readonly why: string | null; readonly otherwise?: { readonly act: ClaimAct; readonly why: string | null } } {
+  if (ctx.slots) { const k = unmeasuredKind(ctx.cls, list); return k ? { act: 'list', why: `the claim check is not measured on ${k}` } : { act: 'cut', why: null }; }
+  if (!ctx.bound) return { act: 'list', why: NO_MATERIAL };
+  const qualified = Boolean(ctx.cls?.trim()) && ctx.cls?.trim().toLowerCase() !== 'none' && !unmeasuredKind(ctx.cls, list);
+  // A cut is the qualified reader's: where the pattern check gates the text (no qualified reader, or one that failed a
+  // read), the level's action stands in its place (./run-repair.ts).
+  if (ctx.ownerCut && qualified) return { act: 'cut', why: null, otherwise: claimAction({ ...ctx, ownerCut: false }, list) };
+  if (ctx.level === 'STRICT') return { act: 'block', why: 'the skill is held strict: a figure, date or citation not in your material stops the work, and nothing is cut' };
+  if (ctx.level === 'GROUNDED') return { act: 'review', why: 'the skill is held grounded: what is not in your material is flagged for your review, never cut' };
+  return { act: 'list', why: 'the skill is held creative: what is not in your material is listed for you, never cut' };
 }
 const STOP = new Set(['the', 'and', 'that', 'with', 'this', 'from', 'were', 'was', 'have', 'had', 'into', 'about', 'their', 'there', 'then', 'than', 'when', 'what', 'which', 'would', 'could', 'because']);
 const contentWords = (s: string): string[] => wordsOf(s).map((w) => w.toLowerCase()).filter((w) => w.length >= 4 && !STOP.has(w));

@@ -1,0 +1,108 @@
+{
+ "claims": {
+  "n": 30,
+  "delivered": 0,
+  "states": {
+   "NEEDS_REVIEW": 30
+  },
+  "causes": {
+   "x1 PARTLY_CHECKED: Open with a Summary section: one paragraph on who, what, whe": 30,
+   "x4 NOT_MACHINE_CHECKABLE: Then a Decision section: covered or not covered, and under w": 30,
+   "x6 NOT_MACHINE_CHECKABLE: Never speculate about the insured's intent or honesty.": 30,
+   "specifics PARTLY_CHECKED: Every specific in the work is found in what you supplied": 22
+  },
+  "heads": {
+   "full": 30,
+   "error": 0,
+   "none": []
+  },
+  "latitude": {
+   "skill": "STRICT",
+   "run": "STRICT",
+   "tightenedBy": null,
+   "setBy": "model"
+  },
+  "acceptedUnmeasured": []
+ },
+ "labels": {
+  "n": 30,
+  "delivered": 0,
+  "states": {
+   "NEEDS_REVIEW": 30
+  },
+  "causes": {
+   "x1 PARTLY_CHECKED: Every category in a label is one of the 39 categories of the": 30,
+   "x3 PARTLY_CHECKED: Every flagged category carries a risk level: Low, Medium or ": 30,
+   "x4 NOT_MACHINE_CHECKABLE: \"High\" risk requires an explicit depiction in the clip: a de": 30,
+   "x7 PARTLY_CHECKED: Every flagged category carries evidence: the words of the tr": 30,
+   "x8 NOT_MACHINE_CHECKABLE: \"Violence – graphic\" requires described injury or blood; a s": 30,
+   "x9 NOT_MACHINE_CHECKABLE: \"Language – strong\" requires a word of the strong list in th": 30,
+   "x10 NOT_MACHINE_CHECKABLE: A label carries no category the transcript does not support ": 30,
+   "x12 PARTLY_CHECKED: A span's end is after its start, and no span runs past the d": 30,
+   "x13 NOT_MACHINE_CHECKABLE: Where the same act is both \"Violence\" and \"Dangerous acts\", ": 30,
+   "x14 NOT_MACHINE_CHECKABLE: A news report of a disaster is \"Disaster – news\", Medium at ": 30,
+   "x15 NOT_MACHINE_CHECKABLE: A reference to alcohol in passing is \"Alcohol – reference\", ": 30,
+   "x16 PARTLY_CHECKED: Numbers in a span are seconds and minutes only: no frame cou": 30,
+   "specifics PARTLY_CHECKED: Every specific in the work is found in what you supplied": 18
+  },
+  "heads": {
+   "full": 30,
+   "error": 0,
+   "none": []
+  },
+  "latitude": {
+   "skill": "STRICT",
+   "run": "STRICT",
+   "tightenedBy": null,
+   "setBy": "model"
+  },
+  "acceptedUnmeasured": []
+ },
+ "adhd": {
+  "n": 30,
+  "delivered": 30,
+  "states": {
+   "NEEDS_REVIEW": 30
+  },
+  "causes": {
+   "specifics NOT_MACHINE_CHECKABLE: Every specific in the work is found in what you supplied": 30
+  },
+  "heads": {
+   "full": 30,
+   "error": 0,
+   "none": []
+  },
+  "latitude": {
+   "skill": "CREATIVE",
+   "run": "CREATIVE",
+   "tightenedBy": null,
+   "setBy": "model"
+  },
+  "acceptedUnmeasured": [
+   {
+    "id": "x1",
+    "statement": "Lead with the next action: the first line is something the reader can do, and a command, path, or snippet goes first with prose after, if at all."
+   },
+   {
+    "id": "x3",
+    "statement": "End with one concrete next action the reader can do in under two minutes."
+   },
+   {
+    "id": "x4",
+    "statement": "Finish the first issue, then offer the second as a separate question rather than mixing it in; answer mid-work questions yourself if you can, and if one still needs the reader, surface it once at the end."
+   },
+   {
+    "id": "x5",
+    "statement": "Restate the current state every turn, e.g. which step is done and what is next, and use the harness's task or plan tool for multi-step work instead of also narrating the plan as prose."
+   },
+   {
+    "id": "x7",
+    "statement": "Show what now works in concrete terms, with how to try it, instead of burying wins in a recap."
+   },
+   {
+    "id": "x12",
+    "statement": "Keep these rules on for every response for the rest of the session, even when the topic changes, and turn them off only when the reader says \"stop adhd mode\" or \"normal mode\" (confirm in one line, then return to default style)."
+   }
+  ]
+ }
+}

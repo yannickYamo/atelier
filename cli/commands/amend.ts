@@ -16,7 +16,10 @@ import { selectForProbing, prepareProbe, foldAnswer } from '../../core/discovery
 import type { Budget } from '../../core/inference/client.js';
 import type { Measurement, Requirement, StandardVersion } from '../../core/state/canonical-state.js';
 import { fitToCorpus, piecesBreaking, restateLimits } from '../../core/observers/derive.js';
-import { authorityStateOf, assertSupersessionRecorded, carriedQualifications } from '../../core/state/canonical-state.js';
+import { authorityStateOf, assertSupersessionRecorded, carriedQualifications, carriedSettings, standardHashOf, acceptedCarried, latitudeOf } from '../../core/state/canonical-state.js';
+import { parseLatitude } from '../../core/observers/latitude.js';
+import { unmeasuredSaid, latitudeLine, acceptedNamed } from '../latitude.js';
+import { parseConsequences, describeTable } from '../../core/eval/consequence.js';
 import { compileArchitecture } from '../../core/architecture/compile.js';
 import { renderAgentSkill, assertPortable, defaultDescription } from '../../renderers/agent-skill/render.js';
 import * as store from '../../core/state/store.js';
@@ -43,7 +46,14 @@ import { draftHash, appendDecision, stampVersion } from '../../core/ratification
  */
 export function amend(): void {
   const name = skillArg();
-  const ruleRef = flag('--rule') ?? die('--rule required: the rule\'s id, its key (R-…) or its number in atelier plan');
+  // THE LATITUDE AND THE RULES ACCEPTED AS UNMEASURED ARE THE OWNER'S TOO (core/observers/latitude.ts): changed here, on
+  // their own, with no rule named; a new version with the reason, like any amendment.
+  const latitudeAsked = flag('--latitude'); const unmeasuredAsked = unmeasuredSaid();
+  // THE CONSEQUENCE TABLE IS THE OWNER'S AS WELL (core/eval/consequence.ts): `--consequence <finding>=<action>,…` sets a row
+  // otherwise than the latitude's default, `<finding>=default` takes it back; the overrides are kept inside the hash.
+  const consequenceAsked = flag('--consequence');
+  const settingOnly = flag('--rule') === undefined && (latitudeAsked !== undefined || unmeasuredAsked !== undefined || flag('--accept-unmeasured') !== undefined || consequenceAsked !== undefined);
+  const ruleRef = settingOnly ? '' : flag('--rule') ?? die('--rule required: the rule\'s id, its key (R-…) or its number in atelier plan (or --latitude strict|grounded|creative, --unmeasured accept|review, --accept-unmeasured <rule,...>, --consequence <finding>=<action>, for the whole skill)');
   const statement = flag('--statement');
   const materiality = flag('--materiality');
   const measureSpec = flag('--measure');
@@ -53,7 +63,7 @@ export function amend(): void {
   const appliesWhen = flag('--applies-when');
   // Scope alone is an amendment. `verify` tells the owner of a conditional measured rule to widen it to
   // GENERAL, and this guard used to refuse exactly that command unless something else changed with it.
-  if (!statement && !materiality && measureSpec === undefined && !phase && !appliesWhen) {
+  if (!settingOnly && !statement && !materiality && measureSpec === undefined && !phase && !appliesWhen) {
     die('--statement "<the rule in your words>", --materiality REQUIRED|PREFERRED|…, --measure <observer>:<params>|none, --phase ACCURACY|STYLE or --applies-when <condition>|GENERAL required');
   }
   const measurement = measureSpec === undefined ? undefined : measureSpec.trim().toLowerCase() === 'none' ? null : parseMeasure(measureSpec);
@@ -62,17 +72,29 @@ export function amend(): void {
   const activeHash = store.getActive(L) ?? die(`no active version for ${name}.`);
   const sv = store.getSkillVersion(L, activeHash) ?? die(`skill version ${activeHash} is missing.`);
   const prev = store.getStandard(L, sv.standardVersionHash) ?? die('standard missing.');
-  const found = resolveRule(prev.requirements, ruleRef);
-  if ('error' in found) return void die(found.error);
-  const target = found.rule; const ruleId = target.requirementId;
-
-  let amended;
-  try { amended = decide(target, { verb: 'AMEND', statement, appliesWhen, materiality, phase, ...(measurement === undefined ? {} : { measurement }) }); }
-  catch (e) { return void die((e as Error).message); }
-  const requirements = prev.requirements.map((r) => r.requirementId === ruleId ? amended.requirement : r);
-  const body = { evidenceId: prev.evidenceId, workType: prev.workType, requirements };
+  let requirements = prev.requirements; let ruleId: string | null = null;
+  let target: Requirement | null = null; let amended: ReturnType<typeof decide> | null = null;
+  if (!settingOnly) {
+    const found = resolveRule(prev.requirements, ruleRef);
+    if ('error' in found) return void die(found.error);
+    target = found.rule; const id = target.requirementId; ruleId = id;
+    try { amended = decide(target, { verb: 'AMEND', statement, appliesWhen, materiality, phase, ...(measurement === undefined ? {} : { measurement }) }); }
+    catch (e) { return void die((e as Error).message); }
+    const changed = amended.requirement;
+    requirements = prev.requirements.map((r) => r.requirementId === id ? changed : r);
+  }
+  const level = latitudeAsked === undefined ? null : parseLatitude(latitudeAsked) ?? die(`--latitude takes strict, grounded or creative, not "${latitudeAsked}".`);
+  const kept = carriedSettings(prev, requirements);
+  const latitude = level ? { level, evidence: [], by: 'owner' as const } : kept.latitude;
+  // What the owner accepted unmeasured is carried; a rule that gains a check leaves it, one that loses its check gets the level's default.
+  const accepted = acceptedCarried(latitudeOf({ latitude }), requirements, unmeasuredAsked, prev, acceptedNamed(requirements, prev.qualifications));
+  const consequences = consequenceAsked === undefined ? kept.consequences ?? {} : parseConsequences(consequenceAsked, kept.consequences, (l) => { console.log(l); });
+  const body = { evidenceId: prev.evidenceId, workType: prev.workType, requirements, ...(latitude ? { latitude } : {}), ...(accepted.length ? { acceptedUnmeasured: accepted } : {}),
+    ...(Object.keys(consequences).length ? { consequences } : {}) };
+  if (settingOnly) console.log(latitudeLine(body));
+  if (consequenceAsked !== undefined) console.log(`What is done with an output, by what was found (after repair):\n${describeTable(body).join('\n')}`);
   // An amended check is a new check: its standing is not carried; the others keep theirs.
-  const minted: StandardVersion = { standardVersionHash: sha(JSON.stringify(body)), ...body,
+  const minted: StandardVersion = { standardVersionHash: standardHashOf(body), ...body,
     authorityState: authorityStateOf(requirements), mintedAt: new Date().toISOString(),
     supersedes: prev.standardVersionHash, reason, ...carriedQualifications(prev, requirements.filter((r) => r.requirementId !== ruleId || measurement === undefined)) };
   assertSupersessionRecorded(minted);
@@ -100,6 +122,7 @@ export function amend(): void {
   if (!inst.ok) return void die(`install failed: ${inst.reason}\n  Nothing was amended: the active version is unchanged.`);
   store.setActive(L, skill.skillVersionHash);
 
+  if (!target || !amended) { console.log(`\nStandardVersion ${next.standardVersionHash} supersedes ${prev.standardVersionHash}\n  reason: ${reason}`); return; }
   // The act is a ratification decision like any other, and until now it left no ledger record —
   // docs/AUTHORITY.md promised one for "every one of these decisions" and only the session flow kept it.
   const ledger = stampVersion(appendDecision({ standardDraftHash: draftHash([target]), records: [] },

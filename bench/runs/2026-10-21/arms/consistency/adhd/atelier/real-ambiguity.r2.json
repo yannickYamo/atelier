@@ -1,0 +1,48 @@
+{
+ "fixture": "adhd",
+ "arm": "atelier",
+ "task": "real-ambiguity",
+ "run": 2,
+ "text": "Reply with the name of the service or repo and the branch or commit to deploy. I haven't deployed anything.\n\n\"It\" isn't specified, and a production deploy is hard to undo, so I need both before I run anything.\n\nStep 1 of 3 done: held the deploy. Next: you name the target.\n\nWhile you answer, run this to confirm what would ship (about 30 seconds):\n\n```\ngit status && git log origin/main..HEAD --oneline\n```\n\nEmpty output from the second command means nothing unpushed. Once you reply with the target, I'll ask for a final \"yes, deploy\" before touching production.",
+ "state": "NEEDS_REVIEW",
+ "costUsd": 0.0044,
+ "exit": 0,
+ "standard": "03fcfcea922b8e6a",
+ "headKeys": [
+  "schema",
+  "state",
+  "standardVersionHash",
+  "skillVersion",
+  "certificate",
+  "record"
+ ],
+ "certificate": {
+  "standardVersionHash": "03fcfcea922b8e6a",
+  "checks": {
+   "total": 6,
+   "counted": 0,
+   "written": 6,
+   "writtenQualified": 0
+  },
+  "readers": {
+   "taste": {
+    "veto": [],
+    "labelledMisses": 0,
+    "falseBlockUpper95": null
+   },
+   "claims": {
+    "instrument": "pattern check (no material bound: a model reading of specifics could only list them)",
+    "version": null,
+    "gate": "pattern",
+    "qualified": false,
+    "measured": null,
+    "kinds": []
+   }
+  },
+  "errorBound": null,
+  "why": "no delivered-error bound: it needs an audit sample of your own labels, drawn like the work this skill does; the checks and readers above are what this output was held to"
+ },
+ "stderr": "No notes of yours are bound, so a story, source or figure in the draft cannot be checked against anything of yours, and is listed for you, not cut. Add yours: --with notes=<file>, or atelier material --skill i-have-adhd <file>.\nJudgement reader: not run (reporting only until your labels qualify it; --taste reads this run and records readings to label: atelier taste --skill i-have-adhd --calibrate)",
+ "meterUsd": 0.004415190000000457,
+ "seconds": 8.931
+}

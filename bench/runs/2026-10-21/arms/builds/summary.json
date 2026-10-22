@@ -1,0 +1,543 @@
+{
+ "claims": {
+  "builds": [
+   {
+    "build": 1,
+    "hash": "d3431f98a24a1f0e",
+    "reader": "claude-haiku-5-5",
+    "measurable": 2,
+    "written": 5,
+    "writtenQualified": 0,
+    "judgement": 1
+   },
+   {
+    "build": 2,
+    "hash": "8e9fa261657f5f22",
+    "reader": "claude-haiku-5-5",
+    "measurable": 2,
+    "written": 5,
+    "writtenQualified": 1,
+    "judgement": 1
+   },
+   {
+    "build": 3,
+    "hash": "4f9bee7711912f2c",
+    "reader": "claude-haiku-5-5",
+    "measurable": 2,
+    "written": 4,
+    "writtenQualified": 0,
+    "judgement": 2
+   }
+  ],
+  "perStep": [
+   {
+    "step": 1,
+    "columns": [
+     "measure",
+     "measure",
+     "measure"
+    ],
+    "same": true,
+    "qualified": [
+     null,
+     null,
+     null
+    ]
+   },
+   {
+    "step": 2,
+    "columns": [
+     "written",
+     "written",
+     "written"
+    ],
+    "same": true,
+    "qualified": [
+     false,
+     true,
+     false
+    ]
+   },
+   {
+    "step": 3,
+    "columns": [
+     "written",
+     "written",
+     "written"
+    ],
+    "same": true,
+    "qualified": [
+     false,
+     false,
+     false
+    ]
+   },
+   {
+    "step": 4,
+    "columns": [
+     "written",
+     "written",
+     "judgement"
+    ],
+    "same": false,
+    "qualified": [
+     false,
+     false,
+     null
+    ]
+   },
+   {
+    "step": 5,
+    "columns": [
+     "written",
+     "written",
+     "written"
+    ],
+    "same": true,
+    "qualified": [
+     false,
+     false,
+     false
+    ]
+   },
+   {
+    "step": 6,
+    "columns": [
+     "judgement",
+     "judgement",
+     "judgement"
+    ],
+    "same": true,
+    "qualified": [
+     null,
+     null,
+     null
+    ]
+   },
+   {
+    "step": 7,
+    "columns": [
+     "measure",
+     "measure",
+     "measure"
+    ],
+    "same": true,
+    "qualified": [
+     null,
+     null,
+     null
+    ]
+   },
+   {
+    "step": 8,
+    "columns": [
+     "written",
+     "written",
+     "written"
+    ],
+    "same": true,
+    "qualified": [
+     false,
+     false,
+     false
+    ]
+   }
+  ],
+  "stepsSameColumn": 7,
+  "of": 8,
+  "sameHash": false,
+  "distinctHashes": 3
+ },
+ "labels": {
+  "builds": [
+   {
+    "build": 1,
+    "hash": "e83251c579f44c09",
+    "reader": null,
+    "measurable": 0,
+    "written": 11,
+    "writtenQualified": 2,
+    "judgement": 9
+   },
+   {
+    "build": 2,
+    "hash": "d0f9945acba80cad",
+    "reader": "claude-haiku-5-5",
+    "measurable": 0,
+    "written": 13,
+    "writtenQualified": 6,
+    "judgement": 7
+   },
+   {
+    "build": 3,
+    "hash": "dea79e2ab37879be",
+    "reader": "claude-haiku-5-5",
+    "measurable": 0,
+    "written": 12,
+    "writtenQualified": 4,
+    "judgement": 8
+   }
+  ],
+  "perStep": [
+   {
+    "step": 1,
+    "columns": [
+     "written",
+     "written",
+     "written"
+    ],
+    "same": true,
+    "qualified": [
+     false,
+     true,
+     false
+    ]
+   },
+   {
+    "step": 2,
+    "columns": [
+     "written",
+     "written",
+     "written"
+    ],
+    "same": true,
+    "qualified": [
+     false,
+     false,
+     false
+    ]
+   },
+   {
+    "step": 3,
+    "columns": [
+     "written",
+     "written",
+     "written"
+    ],
+    "same": true,
+    "qualified": [
+     true,
+     true,
+     false
+    ]
+   },
+   {
+    "step": 4,
+    "columns": [
+     "judgement",
+     "judgement",
+     "judgement"
+    ],
+    "same": true,
+    "qualified": [
+     null,
+     null,
+     null
+    ]
+   },
+   {
+    "step": 5,
+    "columns": [
+     "written",
+     "written",
+     "written"
+    ],
+    "same": true,
+    "qualified": [
+     false,
+     false,
+     false
+    ]
+   },
+   {
+    "step": 6,
+    "columns": [
+     "written",
+     "written",
+     "written"
+    ],
+    "same": true,
+    "qualified": [
+     false,
+     false,
+     false
+    ]
+   },
+   {
+    "step": 7,
+    "columns": [
+     "written",
+     "written",
+     "written"
+    ],
+    "same": true,
+    "qualified": [
+     false,
+     true,
+     true
+    ]
+   },
+   {
+    "step": 8,
+    "columns": [
+     "judgement",
+     "judgement",
+     "judgement"
+    ],
+    "same": true,
+    "qualified": [
+     null,
+     null,
+     null
+    ]
+   },
+   {
+    "step": 9,
+    "columns": [
+     "judgement",
+     "judgement",
+     "judgement"
+    ],
+    "same": true,
+    "qualified": [
+     null,
+     null,
+     null
+    ]
+   },
+   {
+    "step": 10,
+    "columns": [
+     "judgement",
+     "judgement",
+     "judgement"
+    ],
+    "same": true,
+    "qualified": [
+     null,
+     null,
+     null
+    ]
+   },
+   {
+    "step": 11,
+    "columns": [
+     "written",
+     "written",
+     "written"
+    ],
+    "same": true,
+    "qualified": [
+     false,
+     false,
+     false
+    ]
+   },
+   {
+    "step": 12,
+    "columns": [
+     "written",
+     "written",
+     "written"
+    ],
+    "same": true,
+    "qualified": [
+     false,
+     true,
+     true
+    ]
+   },
+   {
+    "step": 13,
+    "columns": [
+     "judgement",
+     "judgement",
+     "judgement"
+    ],
+    "same": true,
+    "qualified": [
+     null,
+     null,
+     null
+    ]
+   },
+   {
+    "step": 14,
+    "columns": [
+     "judgement",
+     "judgement",
+     "judgement"
+    ],
+    "same": true,
+    "qualified": [
+     null,
+     null,
+     null
+    ]
+   },
+   {
+    "step": 15,
+    "columns": [
+     "judgement",
+     "judgement",
+     "judgement"
+    ],
+    "same": true,
+    "qualified": [
+     null,
+     null,
+     null
+    ]
+   },
+   {
+    "step": 16,
+    "columns": [
+     "written",
+     "written",
+     "written"
+    ],
+    "same": true,
+    "qualified": [
+     false,
+     true,
+     false
+    ]
+   },
+   {
+    "step": 17,
+    "columns": [
+     "judgement",
+     "written",
+     "written"
+    ],
+    "same": false,
+    "qualified": [
+     null,
+     false,
+     true
+    ]
+   },
+   {
+    "step": 18,
+    "columns": [
+     "written",
+     "written",
+     "written"
+    ],
+    "same": true,
+    "qualified": [
+     true,
+     true,
+     false
+    ]
+   },
+   {
+    "step": 19,
+    "columns": [
+     "written",
+     "written",
+     "written"
+    ],
+    "same": true,
+    "qualified": [
+     false,
+     false,
+     true
+    ]
+   },
+   {
+    "step": 20,
+    "columns": [
+     "judgement",
+     "written",
+     "judgement"
+    ],
+    "same": false,
+    "qualified": [
+     null,
+     false,
+     null
+    ]
+   }
+  ],
+  "stepsSameColumn": 18,
+  "of": 20,
+  "sameHash": false,
+  "distinctHashes": 3
+ },
+ "adhd": {
+  "builds": [
+   {
+    "build": 1,
+    "hash": "03fcfcea922b8e6a",
+    "rules": 12,
+    "writtenChecks": 6,
+    "writtenQualified": 0,
+    "codeChecked": 0,
+    "instructing": 0,
+    "ruleTexts": [
+     "Lead with the next action: make the first line something the reader can do, not context or a plan.",
+     "If the answer is a command, path, or snippet, put it first and put prose after, if at all.",
+     "Write a numbered list where each step is one bounded action, with no step containing \"and then\" twice.",
+     "Use the fewest steps that still work: cut any step the reader does not need and fold trivial steps into the one before.",
+     "End with ONE concrete next action the reader can do in under two minutes.",
+     "Finish the first issue, then offer any second issue as a separate question instead of mixing it in.",
+     "Restate where things stand every turn, for example \"Step 3 of 5 done: X. Next: Y.\"",
+     "Give time estimates in concrete units, not vague phrases.",
+     "Show what now works in concrete terms and say how to try it, instead of burying wins in a recap.",
+     "State the cause and the fix in a matter-of-fact tone; never use \"Uh oh,\" \"Oh no,\" or \"There seems to be a problem.\"",
+     "Group related items, rank the most relevant first, and show no more than five items per group, keeping the rest available for when the user asks or they become next.",
+     "No preamble, no recap, no closing pleasantries: start with the answer and end when it is done."
+    ]
+   },
+   {
+    "build": 2,
+    "hash": "da6e9d17d41bf71b",
+    "rules": 12,
+    "writtenChecks": 6,
+    "writtenQualified": 0,
+    "codeChecked": 0,
+    "instructing": 0,
+    "ruleTexts": [
+     "Lead with the next action: the first line is something the reader can do, and any command, path, or snippet goes first, with prose after, if at all.",
+     "Write a numbered list where each step is one bounded action, using the fewest steps that still work.",
+     "End with one concrete next action the reader can do in under two minutes.",
+     "Finish the first issue, then offer any second issue as a separate question instead of mixing it in.",
+     "Restate where things stand every turn: which step is done, what is next, and ask whether to proceed.",
+     "Give time estimates in concrete units, not vague phrases.",
+     "Show what now works in concrete terms, with how to try it, and do not bury wins in a recap.",
+     "State cause and fix in a matter-of-fact tone, never using \"Uh oh,\" \"Oh no,\" or \"There seems to be a problem.\"",
+     "Group related items and rank the most relevant first, showing no more than five items per group, while retaining the rest internally and displaying them only when asked or when they become the next items to address.",
+     "Do not open with preamble such as \"Great question,\" \"Let me...\", \"I'll...\", \"Sure!\", \"Looking at your...\", or \"To answer your question...\"; start with the answer.",
+     "Do not recap what was just done, e.g. \"I've now done X, Y, and Z, which means...\"",
+     "Do not use closing pleasantries such as \"Let me know if you need anything else,\" \"Hope this helps,\" \"Happy to clarify,\" or \"Feel free to ask\"; end when the answer is done."
+    ]
+   },
+   {
+    "build": 3,
+    "hash": "37d03a25d6689656",
+    "rules": 12,
+    "writtenChecks": 3,
+    "writtenQualified": 0,
+    "codeChecked": 0,
+    "instructing": 0,
+    "ruleTexts": [
+     "Lead with the next action: the first line is something the reader can do, not context or a plan.",
+     "If the answer is a command, path, or snippet, put it first and put prose after, if at all.",
+     "Write a numbered list, each step one bounded action, using the fewest steps that still work and folding trivial steps into the one before.",
+     "End with ONE concrete next action the reader can do in under two minutes.",
+     "Finish the first issue, then offer any second issue as a separate question instead of mixing it in.",
+     "Restate where things stand every turn: what step is done, what is next.",
+     "Give time estimates in concrete units, not vague wording.",
+     "Show what now works in concrete terms, with how to try it, instead of burying wins in a recap.",
+     "State cause and fix matter-of-factly; never use \"Uh oh,\" \"Oh no,\" or \"There seems to be a problem.\"",
+     "Group long lists, rank the most relevant first, and show no more than five items per group, keeping the rest available for when asked or when they become next.",
+     "No preamble, no recap, no closing pleasantries: start with the answer and end when it is done.",
+     "Do not ask the reader to keep anything in mind; put what they need on screen."
+    ]
+   }
+  ],
+  "sameHash": false,
+  "distinctHashes": 3
+ }
+}

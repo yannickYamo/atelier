@@ -1,0 +1,81 @@
+{
+ "fixture": "adhd",
+ "arm": "atelier",
+ "task": "debugging-cause",
+ "run": 2,
+ "text": "Add the header to the test request:\n\n```\nAuthorization: Bearer <valid-test-token>\n```\n\nExample (supertest style):\n\n```js\nrequest(app).get('/endpoint').set('Authorization', `Bearer ${token}`).expect(200)\n```\n\nCause: the endpoint requires authentication, and the request has no Authorization header, so the server returns 401 before the handler runs.\n\nUnknown: the auth scheme. I assumed Bearer; if your API uses Basic or an API key, the header format differs. Check the auth middleware (or the API docs) for the scheme it parses, and use that format.\n\nNext action (under 2 minutes): open the auth middleware file, find the line that reads `req.headers.authorization`, and note the expected prefix.",
+ "state": "NEEDS_REVIEW",
+ "costUsd": 0.0048,
+ "exit": 0,
+ "standard": "d497e8fdd36f3852",
+ "headKeys": [
+  "schema",
+  "state",
+  "standardVersionHash",
+  "skillVersion",
+  "certificate",
+  "record"
+ ],
+ "certificate": {
+  "standardVersionHash": "d497e8fdd36f3852",
+  "checks": {
+   "total": 6,
+   "counted": 0,
+   "written": 6,
+   "writtenQualified": 0
+  },
+  "readers": {
+   "taste": {
+    "veto": [],
+    "labelledMisses": 0,
+    "falseBlockUpper95": null
+   },
+   "claims": {
+    "instrument": "pattern check (no material bound: a model reading of specifics could only list them)",
+    "version": null,
+    "gate": "pattern",
+    "qualified": false,
+    "measured": null,
+    "kinds": []
+   }
+  },
+  "latitude": {
+   "skill": "CREATIVE",
+   "run": "GROUNDED",
+   "tightenedBy": "A test says: expected status 200, received 401. The request has no Authorization header. Diagnose it and give the smallest fix.",
+   "setBy": "model"
+  },
+  "acceptedUnmeasured": [
+   {
+    "id": "x1",
+    "statement": "Lead with the next action: the first line is something the reader can do, and a command, path, or snippet goes first with prose after, if at all."
+   },
+   {
+    "id": "x3",
+    "statement": "End with one concrete next action the reader can do in under two minutes."
+   },
+   {
+    "id": "x4",
+    "statement": "Finish the first issue, then offer the second as a separate question rather than mixing it in; answer mid-work questions yourself if you can, and if one still needs the reader, surface it once at the end."
+   },
+   {
+    "id": "x5",
+    "statement": "Restate the current state every turn, e.g. which step is done and what is next, and use the harness's task or plan tool for multi-step work instead of also narrating the plan as prose."
+   },
+   {
+    "id": "x7",
+    "statement": "Show what now works in concrete terms, with how to try it, instead of burying wins in a recap."
+   },
+   {
+    "id": "x12",
+    "statement": "Keep these rules on for every response for the rest of the session, even when the topic changes, and turn them off only when the reader says \"stop adhd mode\" or \"normal mode\" (confirm in one line, then return to default style)."
+   }
+  ],
+  "errorBound": null,
+  "why": "no delivered-error bound: it needs an audit sample of your own labels, drawn like the work this skill does; the checks and readers above are what this output was held to"
+ },
+ "error": null,
+ "stderr": "No notes of yours are bound, so a story, source or figure in the draft cannot be checked against anything of yours, and is listed for you, not cut. Add yours: --with notes=<file>, or atelier material --skill i-have-adhd <file>.\nHeld grounded for this request (the skill is creative): \"A test says: expected status 200, received 401. The request has no Authorization header. Diagnose it and give the smallest fix.\".\nJudgement reader: not run (reporting only until your labels qualify it; --taste reads this run and records readings to label: atelier taste --skill i-have-adhd --calibrate).\nRead before writing: 1 thing(s) asked for · turns on whether the endpoint is meant to require auth or the test is meant to be authenticated.\nChecked: every REQUIRED measured rule holds.\n2 specific(s) are not in your material: left in for you to check before you use this (listed in the details).\n$0.00 · everything this run checked: <scratch>/data/build-adhd-1-9ZmSOB/runs/project-194d0492abd9d831/last-invocation.txt · not right? atelier fix \"<what was wrong>\"\n",
+ "meterUsd": 0.004803840000000115,
+ "seconds": 8.669
+}

@@ -1,0 +1,48 @@
+{
+ "fixture": "adhd",
+ "arm": "atelier",
+ "task": "long-form-request",
+ "run": 2,
+ "text": "Step 1 of 8 done: you asked for the OAuth authorization code flow with PKCE. Next: the 8 steps below.\n\n**Try it first (under 2 minutes):** generate a PKCE pair in a terminal and keep it open while you read:\n\n```\nverifier=$(openssl rand -base64 48 | tr -d '=+/' | cut -c1-64); challenge=$(printf %s \"$verifier\" | openssl dgst -sha256 -binary | openssl base64 -A | tr '+/' '-_' | tr -d '='); echo \"verifier=$verifier\"; echo \"challenge=$challenge\"\n```\n\n**The cast**\n- **Client**: your app (SPA, mobile, or native app that can't keep a secret).\n- **Authorization server (AS)**: issues tokens (Auth0, Okta, Keycloak, Google).\n- **Resource server (API)**: accepts the access token.\n- **User + browser**: the person who approves access.\n\n**Why PKCE exists**\nThe plain code flow returns a short-lived `code` through the browser redirect. On public clients, another app or a browser extension can intercept that code and trade it for tokens, because the client has no secret to prove who it is. PKCE (Proof Key for Code Exchange, RFC 7636) fixes this: the client commits to a one-time secret at the start and reveals it at the end. A stolen code is useless without it.\n\n**The flow, step by step**\n\n1. **Client creates the PKCE pair.**\n   - `code_verifier`: random string, 43-128 characters (`A-Z a-z 0-9 - . _ ~`).\n   - `code_challenge` = `BASE64URL(SHA256(code_verifier))`.\n   - `code_challenge_method` = `S256`.\n   - Also create a random `state` value (CSRF protection). Store the verifier and state locally (memory or session storage). The verifier never leaves the client yet.\n\n2. **Client sends the user to the authorization endpoint** (browser redirect):\n   ```\n   GET https://as.example.com/authorize\n     ?response_type=code\n     &client_id=my-app\n     &redirect_uri=https://app.example.com/callback\n     &scope=openid profile api.read\n     &state=xyz123\n     &code_challenge=E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM\n     &code_challenge_method=S256\n   ```\n   The AS stores the `code_challenge` against this request.\n\n3. **User authenticates and consents.** The AS shows a login page and a consent screen (\"my-app wants to read your data\"). The client never sees the user's credentials.\n\n4. **AS redirects back with an authorization code:**\n   ```\n   https://app.example.com/callback?code=SplxlOBeZQQYbYS6WxSbIA&state=xyz123\n   ```\n   The code is single-use, short-lived (typically under 60 seconds), and bound to the `code_challenge`, `client_id`, and `redirect_uri`.\n\n5. **Client validates `state`.** Compare the returned `state` to the stored one. If it differs, abort. This blocks forged callbacks.\n\n6. **Client exchanges the code for tokens** (back-channel POST, not a browser redirect):\n   ```\n   POST https://as.example.com/oauth/token\n   Content-Type: application/x-www-form-urlencoded\n\n   grant_type=authorization_code\n   &code=SplxlOBeZQQYbYS6WxSbIA\n   &redirect_uri=https://app.example.com/callback\n   &client_id=my-app\n   &code_verifier=dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk\n   ```\n   This is where the verifier is revealed for the first time.\n\n7. **AS verifies PKCE.** It computes `BASE64URL(SHA256(code_verifier))` and compares it to the stored `code_challenge`.\n   - Match: it issues tokens.\n   - No match: it returns `invalid_grant`.\n   An attacker who intercepted only the code in step 4 never saw the verifier, so they fail here.\n\n8. **AS returns tokens:**\n   ```json\n   {\n     \"access_token\": \"eyJhbGciOi...\",\n     \"token_type\": \"Bearer\",\n     \"expires_in\": 3600,\n     \"refresh_token\": \"8xLOxBtZp8\",\n     \"id_token\": \"eyJhbGciOi...\"\n   }\n   ```\n   The client calls the API with `Authorization: Bearer <access_token>`. When it expires, the client uses the refresh token at the same `/oauth/token` endpoint (`grant_type=refresh_token`).\n\n**What the AS checks at the token endpoint**\n- The code is valid, unexpired, and unused (a reused code should also revoke tokens already issued from it).\n- `client_id` and `redirect_uri` exactly match the original request.\n- The `code_verifier` hashes to the stored challenge.\n\n**Security rules to keep**\n- Always use `S256`. Use `plain` only if SHA-256 is truly impossible.\n- Generate the verifier with a cryptographically secure random source, new for every request.\n- Register exact `redirect_uri` values; no wildcards.\n- Always check `state`.\n- Use the system browser for native apps (RFC 8252), not an embedded webview.\n- PKCE is now recommended for all clients, including confidential ones (OAuth 2.1 requires it).\n- Don't store tokens in `localStorage` if you can avoid it; prefer in-memory or a backend-for-frontend pattern.\n\n**Common errors**\n- `invalid_grant`: the verifier doesn't match the challenge, the code was reused or expired, or `redirect_uri` differs. Fix: confirm you send the same verifier you hashed in step 1 and the identical `redirect_uri`.\n- `invalid_request` at `/authorize`: `code_challenge` is missing or the method is unsupported. Fix: send both `code_challenge` and `code_challenge_method=S256`.\n- State mismatch: the stored state was lost, often due to a page reload or a different tab. Fix: persist state in `sessionStorage` before redirecting.\n\n**Next action (under 2 minutes):** paste the `challenge` from the command above into a manual `/authorize` URL for your AS's test client and confirm the login page loads without an `invalid_request` error.",
+ "state": "NEEDS_REVIEW",
+ "costUsd": 0.0238,
+ "exit": 0,
+ "standard": "03fcfcea922b8e6a",
+ "headKeys": [
+  "schema",
+  "state",
+  "standardVersionHash",
+  "skillVersion",
+  "certificate",
+  "record"
+ ],
+ "certificate": {
+  "standardVersionHash": "03fcfcea922b8e6a",
+  "checks": {
+   "total": 6,
+   "counted": 0,
+   "written": 6,
+   "writtenQualified": 0
+  },
+  "readers": {
+   "taste": {
+    "veto": [],
+    "labelledMisses": 0,
+    "falseBlockUpper95": null
+   },
+   "claims": {
+    "instrument": "pattern check (no material bound: a model reading of specifics could only list them)",
+    "version": null,
+    "gate": "pattern",
+    "qualified": false,
+    "measured": null,
+    "kinds": []
+   }
+  },
+  "errorBound": null,
+  "why": "no delivered-error bound: it needs an audit sample of your own labels, drawn like the work this skill does; the checks and readers above are what this output was held to"
+ },
+ "stderr": "No notes of yours are bound, so a story, source or figure in the draft cannot be checked against anything of yours, and is listed for you, not cut. Add yours: --with notes=<file>, or atelier material --skill i-have-adhd <file>.\nJudgement reader: not run (reporting only until your labels qualify it; --taste reads this run and records readings to label: atelier taste --skill i-have-adhd --calibrate)",
+ "meterUsd": 0.0237760800000002,
+ "seconds": 23.818
+}

@@ -30,7 +30,8 @@ export const INTENT_MODE_SCHEMA: Record<string, unknown> = {
   required: ['mode', 'quote'], additionalProperties: false,
 };
 
-const WHY: Readonly<Record<SkillMode, string>> = {
+/** What each mode means for the rules kept, said to the person. */
+export const WHY: Readonly<Record<SkillMode, string>> = {
   RESPOND: 'you described answering people, so every rule you keep is a policy the answers must follow',
   GUARD: 'you described holding outputs to the standard, so the rules you keep default to required',
   GENERATE: 'you described producing new work, so rules default to required only where the evidence is strong',

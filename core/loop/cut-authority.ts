@@ -17,6 +17,11 @@ export type CutAuthority =
    * about what counts as a failure, not a measurement, and only a measurement may delete.
    */
   | 'owner-override'
+  /**
+   * a skill held STRICT (core/observers/latitude.ts): what code finds missing from the material stops the work, and is
+   * left in place for the owner to see. A block is a decision about what fails, never a deletion.
+   */
+  | 'owner-block'
   /** a reader nobody has measured at the version that ran */
   | 'unqualified-reader'
   /** the context judge (./context-judge.ts): not measured; it may flag, never cut */

@@ -1,0 +1,12 @@
+{
+ "fixture": "adhd",
+ "arm": "plain",
+ "task": "multi-step-progress",
+ "run": 2,
+ "text": "Step 3 of 5: backfill the new column. Schema change is done.\n\n1. Count the rows to fill (under 1 minute):\n   ```sql\n   SELECT COUNT(*) FROM <table> WHERE <new_column> IS NULL;\n   ```\n2. Test the backfill on 1,000 rows, or on staging, and check the values.\n3. Run in batches of 10,000 (Postgres syntax) and repeat until 0 rows update:\n   ```sql\n   UPDATE <table>\n   SET <new_column> = <value_expr>\n   WHERE id IN (\n     SELECT id FROM <table>\n     WHERE <new_column> IS NULL\n     LIMIT 10000\n   );\n   ```\n4. Re-run the count from step 1. Expect 0.\n\n**Estimate:** about 5 to 10 minutes under 5M rows. Longer if the table has triggers or heavy indexes.\n\n**Next:** run the count query and paste the number. I'll adjust the batch size and give you the real script.",
+ "costUsd": 0.01779,
+ "stop": "end_turn",
+ "error": null,
+ "meterUsd": 0.01778999999999975,
+ "seconds": 10.834
+}

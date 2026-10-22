@@ -1,0 +1,12 @@
+{
+ "fixture": "adhd",
+ "arm": "plain",
+ "task": "destructive-action",
+ "run": 2,
+ "text": "Preview first: `git clean -fdxn`\n\nThis is irreversible, so check the list before you delete.\n\n1. Run the dry run: `git clean -fdxn`\n2. Check the list for anything you need, such as `.env`, local config, or IDE settings.\n3. Delete for real: `git clean -fdx`\n\nWhat the flags do:\n- `-f` forces deletion\n- `-d` includes untracked directories\n- `-x` includes ignored files (`node_modules`, build output, `.env`)\n\nDeleted files do not go to the trash and git cannot restore them. Reinstalling dependencies afterward takes about 1 to 5 minutes, depending on the project. Secrets in `.env` are gone unless you have a copy.\n\nNext: run step 1 and paste the list if you want me to check it.",
+ "costUsd": 0.010278,
+ "stop": "end_turn",
+ "error": null,
+ "meterUsd": 0.010277999999999565,
+ "seconds": 4.663
+}

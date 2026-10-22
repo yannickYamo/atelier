@@ -1,0 +1,12 @@
+{
+ "fixture": "labels",
+ "arm": "plain",
+ "task": "t0",
+ "run": 2,
+ "text": "```json\n{\n  \"clip\": \"c13\",\n  \"duration\": \"00:58\",\n  \"overall\": \"Low\",\n  \"categories\": [\n    {\n      \"category\": \"Alcohol – reference\",\n      \"span\": \"00:04–00:40\",\n      \"risk\": \"Low\",\n      \"evidence\": \"The old brewery, now a museum. They brewed a dark ale here until 1960.\"\n    }\n  ]\n}\n```",
+ "costUsd": 0.010116,
+ "stop": "end_turn",
+ "error": null,
+ "meterUsd": 0.010116000000000014,
+ "seconds": 5.221
+}

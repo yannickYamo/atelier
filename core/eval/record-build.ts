@@ -9,16 +9,19 @@
 //
 // Nothing here decides what a result means: each entry states its facts and `entry` (./record.ts) judges them.
 
-import type { Requirement } from '../state/canonical-state.js';
+import type { Requirement, StandardVersion } from '../state/canonical-state.js';
 import { planFor, type PlannedRule } from '../plan/execution-plan.js';
 import { entry, recordOf, type Entry, type EvaluationRecord, type Observation } from './record.js';
 import { GRAMMAR_NOT_RUN, GRAMMAR_LISTED } from '../observers/grammar.js';
+import { MATERIAL_UNREAD } from '../observers/written.js';
 
 export interface CheckedLine { readonly id: string; readonly statement?: string; readonly required: boolean; readonly verdict: 'MET' | 'VIOLATED' | 'NOT_APPLICABLE'; readonly detail: string }
 
 export interface RecordFacts {
   /** the standard's live requirements, in the owner's order */
   readonly requirements: readonly Requirement[];
+  /** the written checks' standing beside the standard (core/state/canonical-state.ts): a check qualified since its build is enforced */
+  readonly qualifications?: StandardVersion['qualifications'];
   /** every line of the check of the delivered text; null when the check could not run */
   readonly checked: readonly CheckedLine[] | null;
   /** rules set aside for this run, each with why */
@@ -46,6 +49,13 @@ export interface RecordFacts {
   readonly unmeasured?: ReadonlySet<string>;
   /** the taste reader's reading of the delivered text, by requirement id, with whether the reader may act on that rule */
   readonly read?: ReadonlyMap<string, RuleReading>;
+  /** how strictly the output was held: the run's level, carried on the record */
+  readonly latitude?: EvaluationRecord['latitude'];
+  /**
+   * Rules the owner accepted as unmeasured (core/state/canonical-state.ts, `acceptedUnmeasured`): a rule no check reads
+   * is listed for them, and the run is not sent to review on its account.
+   */
+  readonly accepted?: ReadonlySet<string>;
 }
 
 /**
@@ -72,6 +82,24 @@ export const CONDITIONAL_NOT_BOUND = 'the material it needs is not bound, and it
  * or a rule held back for material the run was not given.
  */
 function standardEntry(p: PlannedRule, f: RecordFacts): Entry {
+  return acceptedPart(p, readEntry(p, f), f);
+}
+
+/**
+ * THE PART THE OWNER ACCEPTED UNREAD. A rule they named as accepted unmeasured that a check reads only in part ("one
+ * paragraph" of a Summary step), or whose written check has not qualified, is listed for them where it would otherwise
+ * send the run to review: what the check read is kept in the evidence, with the part accepted. A rule seen to fail by a
+ * check that may block, a check that did not finish, or a rule set aside, is left as it stands.
+ */
+function acceptedPart(p: PlannedRule, e: Entry, f: RecordFacts): Entry {
+  if (!f.accepted?.has(p.id) || !e.required || e.observation.incomplete) return e;
+  if (e.reason !== 'PARTLY_CHECKED' && e.reason !== 'OBSERVER_UNQUALIFIED') return e;
+  const part = e.reason === 'PARTLY_CHECKED' ? e.observation.unchecked ?? 'the rest of it' : 'what its check, not qualified on your examples, reads';
+  return entry({ id: e.id, dimension: e.dimension, source: e.source, statement: e.statement, required: e.required,
+    observation: { ...e.observation, evidence: `${e.observation.evidence ? `${e.observation.evidence}; ` : ''}accepted by you as unmeasured for ${part}`, listed: true }, verdict: null });
+}
+
+function readEntry(p: PlannedRule, f: RecordFacts): Entry {
   const e = plannedEntry(p, f);
   const r = f.read?.get(p.id);
   if (!r?.acts || p.notEnforced !== null || e.result !== 'UNVERIFIED') return e;
@@ -83,7 +111,7 @@ function standardEntry(p: PlannedRule, f: RecordFacts): Entry {
   const quoted = r.quote ? `: "${r.quote}"` : '';
   const evidence = `${partly ? `${e.observation.evidence ?? ''}; ` : ''}${r.verdict === 'FOLLOWED' ? 'read as followed' : 'read as missed'} by the taste reader on "${part}", which your labels have qualified to act on this rule${quoted}`;
   return entry({ id: e.id, dimension: e.dimension, source: e.source, statement: e.statement, required: e.required,
-    observation: { proposition: e.observation.proposition ?? p.statement, coverage: 'FULL', qualification: 'QUALIFIED', evidence },
+    observation: { proposition: e.observation.proposition ?? p.statement, coverage: 'FULL', qualification: 'QUALIFIED', evidence, reader: 'TASTE' },
     verdict: r.verdict === 'FOLLOWED' ? 'MET' : 'VIOLATED' });
 }
 
@@ -92,6 +120,12 @@ function plannedEntry(p: PlannedRule, f: RecordFacts): Entry {
   const required = p.role !== 'HABIT';
   const base = { id: p.id, statement: p.statement, dimension: required ? 'STANDARD' as const : 'HABIT' as const, source: p.stated ? 'METHOD' as const : 'EXAMPLE' as const, required };
   const o = p.check;
+  // ACCEPTED UNMEASURED BY THE OWNER: no check reads it, and they said a run need not wait on it. Listed, never a review.
+  if (!o && required && f.accepted?.has(p.id)) return entry({ ...base, observation: { ...NOTHING, evidence: 'accepted by you as unmeasured: no check reads it, and the run is not held for it', listed: true }, verdict: null });
+  // SET ASIDE FOR THIS REQUEST, a step no check reads as well: recorded as set aside (the state still leaves it to the
+  // owner), never as unread, so delivery never waits on a step the request lifted (core/eval/consequence.ts).
+  const aside = f.waived.get(p.id);
+  if (!o && aside && aside !== MATERIAL_NOT_BOUND) return entry({ ...base, observation: { ...NOTHING, evidence: aside }, applies: { setAside: aside }, verdict: null });
   if (!o) return entry({ ...base, observation: NOTHING, verdict: null });
   const line = f.checked?.find((c) => c.id === p.id);
   const why = f.waived.get(p.id);
@@ -103,7 +137,8 @@ function plannedEntry(p: PlannedRule, f: RecordFacts): Entry {
   const held = (required && !p.enforced) || p.notEnforced === 'UNRATIFIED';
   const whyNot = p.notEnforced === 'UNRATIFIED' ? 'Nobody has confirmed this rule yet, so it blocks nothing'
     : p.notEnforced === 'DISPUTED_BY_EXAMPLES' ? 'Your own examples do not do this, so the rule blocks nothing until you confirm it'
-    : p.notEnforced === 'RELATED_CHECK' ? 'This check reads something near your rule and not the rule itself, so it blocks nothing' : 'You have not made this check required, so it blocks nothing';
+    : p.notEnforced === 'RELATED_CHECK' ? 'This check reads something near your rule and not the rule itself, so it blocks nothing'
+    : p.notEnforced === 'UNQUALIFIED' ? 'This check has not qualified on your examples, so it blocks nothing and the rule is yours to read' : 'You have not made this check required, so it blocks nothing';
   const seen = (evidence: string | null): Observation => ({ proposition: o.proposition, coverage: o.coverage, qualification: held ? 'UNQUALIFIED' : 'DETERMINISTIC',
     evidence: held && evidence ? `${evidence}. ${whyNot}` : evidence, ...(o.unchecked ? { unchecked: o.unchecked } : {}) });
   // A REQUIRED rule held back for want of material is not set aside: it was not checked, and the work cannot read as
@@ -113,7 +148,8 @@ function plannedEntry(p: PlannedRule, f: RecordFacts): Entry {
   // The check could not run, or had nothing to read the rule against (no material bound): nothing was observed.
   // Only a check of the text that did not run at all is an evaluation that did not finish. A check that ran and has
   // no line for this rule left it out on purpose (it applies under a condition, which is a judgement): the owner's.
-  if (!line || (line.verdict === 'NOT_APPLICABLE' && o.reads === 'BOUND_MATERIAL')) {
+  // A written check that reads the material, run with none bound (core/observers/written.ts, `MATERIAL_UNREAD`), is the same.
+  if (!line || (line.verdict === 'NOT_APPLICABLE' && (o.reads === 'BOUND_MATERIAL' || line.detail.startsWith(MATERIAL_UNREAD)))) {
     return entry({ ...base, observation: { ...seen(line?.detail ?? 'the check did not run'), coverage: 'NONE', ...(f.checked === null ? { incomplete: `not checked: ${p.id} (the check did not run)` } : {}) }, verdict: null });
   }
   // A check whose engine could not run did not read the text: unverified, with the reason, never "does not apply".
@@ -189,6 +225,6 @@ function evidenceEntries(f: RecordFacts): Entry[] {
 /** The record of one output. */
 export function buildRecord(f: RecordFacts): EvaluationRecord {
   // A habit with no check is nothing a run can say anything about: it is the writer's to have been shown.
-  const rules = planFor({ requirements: f.requirements }).rules.filter((p) => p.role !== 'HABIT' || p.check);
-  return recordOf([...rules.map((p) => standardEntry(p, f)), ...systemEntries(f), ...requestEntries(f), ...evidenceEntries(f)]);
+  const rules = planFor({ requirements: f.requirements, ...(f.qualifications ? { qualifications: f.qualifications } : {}) }).rules.filter((p) => p.role !== 'HABIT' || p.check);
+  return recordOf([...rules.map((p) => standardEntry(p, f)), ...systemEntries(f), ...requestEntries(f), ...evidenceEntries(f)], f.latitude);
 }

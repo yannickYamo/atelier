@@ -1,0 +1,863 @@
+{
+ "D1": {
+  "fixture": "claims",
+  "n": 20,
+  "delivered": 0,
+  "states": {
+   "NEEDS_REVIEW": 20
+  },
+  "held": {
+   "x3 UNVERIFIED/OBSERVER_UNQUALIFIED": 20,
+   "x4 UNVERIFIED/OBSERVER_UNQUALIFIED": 20,
+   "x5 UNVERIFIED/OBSERVER_UNQUALIFIED": 20,
+   "x6 UNVERIFIED/OBSERVER_UNQUALIFIED": 20,
+   "x8 UNVERIFIED/OBSERVER_UNQUALIFIED": 20,
+   "specifics UNVERIFIED/PARTLY_CHECKED": 15
+  },
+  "rows": [
+   {
+    "run": "t0.r1",
+    "state": "NEEDS_REVIEW",
+    "heldBy": [
+     "x3 OBSERVER_UNQUALIFIED",
+     "x4 OBSERVER_UNQUALIFIED",
+     "x5 OBSERVER_UNQUALIFIED",
+     "x6 OBSERVER_UNQUALIFIED",
+     "x8 OBSERVER_UNQUALIFIED",
+     "specifics PARTLY_CHECKED"
+    ]
+   },
+   {
+    "run": "t0.r2",
+    "state": "NEEDS_REVIEW",
+    "heldBy": [
+     "x3 OBSERVER_UNQUALIFIED",
+     "x4 OBSERVER_UNQUALIFIED",
+     "x5 OBSERVER_UNQUALIFIED",
+     "x6 OBSERVER_UNQUALIFIED",
+     "x8 OBSERVER_UNQUALIFIED",
+     "specifics PARTLY_CHECKED"
+    ]
+   },
+   {
+    "run": "t1.r1",
+    "state": "NEEDS_REVIEW",
+    "heldBy": [
+     "x3 OBSERVER_UNQUALIFIED",
+     "x4 OBSERVER_UNQUALIFIED",
+     "x5 OBSERVER_UNQUALIFIED",
+     "x6 OBSERVER_UNQUALIFIED",
+     "x8 OBSERVER_UNQUALIFIED"
+    ]
+   },
+   {
+    "run": "t1.r2",
+    "state": "NEEDS_REVIEW",
+    "heldBy": [
+     "x3 OBSERVER_UNQUALIFIED",
+     "x4 OBSERVER_UNQUALIFIED",
+     "x5 OBSERVER_UNQUALIFIED",
+     "x6 OBSERVER_UNQUALIFIED",
+     "x8 OBSERVER_UNQUALIFIED"
+    ]
+   },
+   {
+    "run": "t2.r1",
+    "state": "NEEDS_REVIEW",
+    "heldBy": [
+     "x3 OBSERVER_UNQUALIFIED",
+     "x4 OBSERVER_UNQUALIFIED",
+     "x5 OBSERVER_UNQUALIFIED",
+     "x6 OBSERVER_UNQUALIFIED",
+     "x8 OBSERVER_UNQUALIFIED",
+     "specifics PARTLY_CHECKED"
+    ]
+   },
+   {
+    "run": "t2.r2",
+    "state": "NEEDS_REVIEW",
+    "heldBy": [
+     "x3 OBSERVER_UNQUALIFIED",
+     "x4 OBSERVER_UNQUALIFIED",
+     "x5 OBSERVER_UNQUALIFIED",
+     "x6 OBSERVER_UNQUALIFIED",
+     "x8 OBSERVER_UNQUALIFIED",
+     "specifics PARTLY_CHECKED"
+    ]
+   },
+   {
+    "run": "t3.r1",
+    "state": "NEEDS_REVIEW",
+    "heldBy": [
+     "x3 OBSERVER_UNQUALIFIED",
+     "x4 OBSERVER_UNQUALIFIED",
+     "x5 OBSERVER_UNQUALIFIED",
+     "x6 OBSERVER_UNQUALIFIED",
+     "x8 OBSERVER_UNQUALIFIED",
+     "specifics PARTLY_CHECKED"
+    ]
+   },
+   {
+    "run": "t3.r2",
+    "state": "NEEDS_REVIEW",
+    "heldBy": [
+     "x3 OBSERVER_UNQUALIFIED",
+     "x4 OBSERVER_UNQUALIFIED",
+     "x5 OBSERVER_UNQUALIFIED",
+     "x6 OBSERVER_UNQUALIFIED",
+     "x8 OBSERVER_UNQUALIFIED",
+     "specifics PARTLY_CHECKED"
+    ]
+   },
+   {
+    "run": "t4.r1",
+    "state": "NEEDS_REVIEW",
+    "heldBy": [
+     "x3 OBSERVER_UNQUALIFIED",
+     "x4 OBSERVER_UNQUALIFIED",
+     "x5 OBSERVER_UNQUALIFIED",
+     "x6 OBSERVER_UNQUALIFIED",
+     "x8 OBSERVER_UNQUALIFIED",
+     "specifics PARTLY_CHECKED"
+    ]
+   },
+   {
+    "run": "t4.r2",
+    "state": "NEEDS_REVIEW",
+    "heldBy": [
+     "x3 OBSERVER_UNQUALIFIED",
+     "x4 OBSERVER_UNQUALIFIED",
+     "x5 OBSERVER_UNQUALIFIED",
+     "x6 OBSERVER_UNQUALIFIED",
+     "x8 OBSERVER_UNQUALIFIED",
+     "specifics PARTLY_CHECKED"
+    ]
+   },
+   {
+    "run": "t5.r1",
+    "state": "NEEDS_REVIEW",
+    "heldBy": [
+     "x3 OBSERVER_UNQUALIFIED",
+     "x4 OBSERVER_UNQUALIFIED",
+     "x5 OBSERVER_UNQUALIFIED",
+     "x6 OBSERVER_UNQUALIFIED",
+     "x8 OBSERVER_UNQUALIFIED"
+    ]
+   },
+   {
+    "run": "t5.r2",
+    "state": "NEEDS_REVIEW",
+    "heldBy": [
+     "x3 OBSERVER_UNQUALIFIED",
+     "x4 OBSERVER_UNQUALIFIED",
+     "x5 OBSERVER_UNQUALIFIED",
+     "x6 OBSERVER_UNQUALIFIED",
+     "x8 OBSERVER_UNQUALIFIED"
+    ]
+   },
+   {
+    "run": "t6.r1",
+    "state": "NEEDS_REVIEW",
+    "heldBy": [
+     "x3 OBSERVER_UNQUALIFIED",
+     "x4 OBSERVER_UNQUALIFIED",
+     "x5 OBSERVER_UNQUALIFIED",
+     "x6 OBSERVER_UNQUALIFIED",
+     "x8 OBSERVER_UNQUALIFIED"
+    ]
+   },
+   {
+    "run": "t6.r2",
+    "state": "NEEDS_REVIEW",
+    "heldBy": [
+     "x3 OBSERVER_UNQUALIFIED",
+     "x4 OBSERVER_UNQUALIFIED",
+     "x5 OBSERVER_UNQUALIFIED",
+     "x6 OBSERVER_UNQUALIFIED",
+     "x8 OBSERVER_UNQUALIFIED",
+     "specifics PARTLY_CHECKED"
+    ]
+   },
+   {
+    "run": "t7.r1",
+    "state": "NEEDS_REVIEW",
+    "heldBy": [
+     "x3 OBSERVER_UNQUALIFIED",
+     "x4 OBSERVER_UNQUALIFIED",
+     "x5 OBSERVER_UNQUALIFIED",
+     "x6 OBSERVER_UNQUALIFIED",
+     "x8 OBSERVER_UNQUALIFIED",
+     "specifics PARTLY_CHECKED"
+    ]
+   },
+   {
+    "run": "t7.r2",
+    "state": "NEEDS_REVIEW",
+    "heldBy": [
+     "x3 OBSERVER_UNQUALIFIED",
+     "x4 OBSERVER_UNQUALIFIED",
+     "x5 OBSERVER_UNQUALIFIED",
+     "x6 OBSERVER_UNQUALIFIED",
+     "x8 OBSERVER_UNQUALIFIED",
+     "specifics PARTLY_CHECKED"
+    ]
+   },
+   {
+    "run": "t8.r1",
+    "state": "NEEDS_REVIEW",
+    "heldBy": [
+     "x3 OBSERVER_UNQUALIFIED",
+     "x4 OBSERVER_UNQUALIFIED",
+     "x5 OBSERVER_UNQUALIFIED",
+     "x6 OBSERVER_UNQUALIFIED",
+     "x8 OBSERVER_UNQUALIFIED",
+     "specifics PARTLY_CHECKED"
+    ]
+   },
+   {
+    "run": "t8.r2",
+    "state": "NEEDS_REVIEW",
+    "heldBy": [
+     "x3 OBSERVER_UNQUALIFIED",
+     "x4 OBSERVER_UNQUALIFIED",
+     "x5 OBSERVER_UNQUALIFIED",
+     "x6 OBSERVER_UNQUALIFIED",
+     "x8 OBSERVER_UNQUALIFIED",
+     "specifics PARTLY_CHECKED"
+    ]
+   },
+   {
+    "run": "t9.r1",
+    "state": "NEEDS_REVIEW",
+    "heldBy": [
+     "x3 OBSERVER_UNQUALIFIED",
+     "x4 OBSERVER_UNQUALIFIED",
+     "x5 OBSERVER_UNQUALIFIED",
+     "x6 OBSERVER_UNQUALIFIED",
+     "x8 OBSERVER_UNQUALIFIED",
+     "specifics PARTLY_CHECKED"
+    ]
+   },
+   {
+    "run": "t9.r2",
+    "state": "NEEDS_REVIEW",
+    "heldBy": [
+     "x3 OBSERVER_UNQUALIFIED",
+     "x4 OBSERVER_UNQUALIFIED",
+     "x5 OBSERVER_UNQUALIFIED",
+     "x6 OBSERVER_UNQUALIFIED",
+     "x8 OBSERVER_UNQUALIFIED",
+     "specifics PARTLY_CHECKED"
+    ]
+   }
+  ],
+  "accepted": [
+   "x1"
+  ],
+  "ifUnqualifiedAccepted": 5
+ },
+ "D2": {
+  "fixture": "labels",
+  "n": 20,
+  "delivered": 0,
+  "states": {
+   "BLOCKED": 1,
+   "NEEDS_REVIEW": 19
+  },
+  "held": {
+   "x2 UNVERIFIED/OBSERVER_UNQUALIFIED": 20,
+   "x5 UNVERIFIED/OBSERVER_UNQUALIFIED": 20,
+   "x6 UNVERIFIED/OBSERVER_UNQUALIFIED": 20,
+   "x7 UNVERIFIED/OBSERVER_UNQUALIFIED": 20,
+   "x10 UNVERIFIED/OBSERVER_UNQUALIFIED": 20,
+   "x11 UNVERIFIED/OBSERVER_UNQUALIFIED": 20,
+   "x19 UNVERIFIED/OBSERVER_UNQUALIFIED": 20,
+   "x20 UNVERIFIED/OBSERVER_UNQUALIFIED": 5,
+   "specifics UNVERIFIED/PARTLY_CHECKED": 14,
+   "lifted FAIL/NOT_MET": 1
+  },
+  "rows": [
+   {
+    "run": "t0.r1",
+    "state": "BLOCKED",
+    "heldBy": [
+     "lifted FAIL",
+     "x2 OBSERVER_UNQUALIFIED",
+     "x5 OBSERVER_UNQUALIFIED",
+     "x6 OBSERVER_UNQUALIFIED",
+     "x7 OBSERVER_UNQUALIFIED",
+     "x10 OBSERVER_UNQUALIFIED",
+     "x11 OBSERVER_UNQUALIFIED",
+     "x19 OBSERVER_UNQUALIFIED",
+     "x20 OBSERVER_UNQUALIFIED",
+     "specifics PARTLY_CHECKED"
+    ]
+   },
+   {
+    "run": "t0.r2",
+    "state": "NEEDS_REVIEW",
+    "heldBy": [
+     "x2 OBSERVER_UNQUALIFIED",
+     "x5 OBSERVER_UNQUALIFIED",
+     "x6 OBSERVER_UNQUALIFIED",
+     "x7 OBSERVER_UNQUALIFIED",
+     "x10 OBSERVER_UNQUALIFIED",
+     "x11 OBSERVER_UNQUALIFIED",
+     "x19 OBSERVER_UNQUALIFIED"
+    ]
+   },
+   {
+    "run": "t1.r1",
+    "state": "NEEDS_REVIEW",
+    "heldBy": [
+     "x2 OBSERVER_UNQUALIFIED",
+     "x5 OBSERVER_UNQUALIFIED",
+     "x6 OBSERVER_UNQUALIFIED",
+     "x7 OBSERVER_UNQUALIFIED",
+     "x10 OBSERVER_UNQUALIFIED",
+     "x11 OBSERVER_UNQUALIFIED",
+     "x19 OBSERVER_UNQUALIFIED",
+     "specifics PARTLY_CHECKED"
+    ]
+   },
+   {
+    "run": "t1.r2",
+    "state": "NEEDS_REVIEW",
+    "heldBy": [
+     "x2 OBSERVER_UNQUALIFIED",
+     "x5 OBSERVER_UNQUALIFIED",
+     "x6 OBSERVER_UNQUALIFIED",
+     "x7 OBSERVER_UNQUALIFIED",
+     "x10 OBSERVER_UNQUALIFIED",
+     "x11 OBSERVER_UNQUALIFIED",
+     "x19 OBSERVER_UNQUALIFIED",
+     "specifics PARTLY_CHECKED"
+    ]
+   },
+   {
+    "run": "t2.r1",
+    "state": "NEEDS_REVIEW",
+    "heldBy": [
+     "x2 OBSERVER_UNQUALIFIED",
+     "x5 OBSERVER_UNQUALIFIED",
+     "x6 OBSERVER_UNQUALIFIED",
+     "x7 OBSERVER_UNQUALIFIED",
+     "x10 OBSERVER_UNQUALIFIED",
+     "x11 OBSERVER_UNQUALIFIED",
+     "x19 OBSERVER_UNQUALIFIED",
+     "specifics PARTLY_CHECKED"
+    ]
+   },
+   {
+    "run": "t2.r2",
+    "state": "NEEDS_REVIEW",
+    "heldBy": [
+     "x2 OBSERVER_UNQUALIFIED",
+     "x5 OBSERVER_UNQUALIFIED",
+     "x6 OBSERVER_UNQUALIFIED",
+     "x7 OBSERVER_UNQUALIFIED",
+     "x10 OBSERVER_UNQUALIFIED",
+     "x11 OBSERVER_UNQUALIFIED",
+     "x19 OBSERVER_UNQUALIFIED",
+     "specifics PARTLY_CHECKED"
+    ]
+   },
+   {
+    "run": "t3.r1",
+    "state": "NEEDS_REVIEW",
+    "heldBy": [
+     "x2 OBSERVER_UNQUALIFIED",
+     "x5 OBSERVER_UNQUALIFIED",
+     "x6 OBSERVER_UNQUALIFIED",
+     "x7 OBSERVER_UNQUALIFIED",
+     "x10 OBSERVER_UNQUALIFIED",
+     "x11 OBSERVER_UNQUALIFIED",
+     "x19 OBSERVER_UNQUALIFIED",
+     "x20 OBSERVER_UNQUALIFIED",
+     "specifics PARTLY_CHECKED"
+    ]
+   },
+   {
+    "run": "t3.r2",
+    "state": "NEEDS_REVIEW",
+    "heldBy": [
+     "x2 OBSERVER_UNQUALIFIED",
+     "x5 OBSERVER_UNQUALIFIED",
+     "x6 OBSERVER_UNQUALIFIED",
+     "x7 OBSERVER_UNQUALIFIED",
+     "x10 OBSERVER_UNQUALIFIED",
+     "x11 OBSERVER_UNQUALIFIED",
+     "x19 OBSERVER_UNQUALIFIED",
+     "x20 OBSERVER_UNQUALIFIED",
+     "specifics PARTLY_CHECKED"
+    ]
+   },
+   {
+    "run": "t4.r1",
+    "state": "NEEDS_REVIEW",
+    "heldBy": [
+     "x2 OBSERVER_UNQUALIFIED",
+     "x5 OBSERVER_UNQUALIFIED",
+     "x6 OBSERVER_UNQUALIFIED",
+     "x7 OBSERVER_UNQUALIFIED",
+     "x10 OBSERVER_UNQUALIFIED",
+     "x11 OBSERVER_UNQUALIFIED",
+     "x19 OBSERVER_UNQUALIFIED",
+     "specifics PARTLY_CHECKED"
+    ]
+   },
+   {
+    "run": "t4.r2",
+    "state": "NEEDS_REVIEW",
+    "heldBy": [
+     "x2 OBSERVER_UNQUALIFIED",
+     "x5 OBSERVER_UNQUALIFIED",
+     "x6 OBSERVER_UNQUALIFIED",
+     "x7 OBSERVER_UNQUALIFIED",
+     "x10 OBSERVER_UNQUALIFIED",
+     "x11 OBSERVER_UNQUALIFIED",
+     "x19 OBSERVER_UNQUALIFIED",
+     "specifics PARTLY_CHECKED"
+    ]
+   },
+   {
+    "run": "t5.r1",
+    "state": "NEEDS_REVIEW",
+    "heldBy": [
+     "x2 OBSERVER_UNQUALIFIED",
+     "x5 OBSERVER_UNQUALIFIED",
+     "x6 OBSERVER_UNQUALIFIED",
+     "x7 OBSERVER_UNQUALIFIED",
+     "x10 OBSERVER_UNQUALIFIED",
+     "x11 OBSERVER_UNQUALIFIED",
+     "x19 OBSERVER_UNQUALIFIED",
+     "x20 OBSERVER_UNQUALIFIED"
+    ]
+   },
+   {
+    "run": "t5.r2",
+    "state": "NEEDS_REVIEW",
+    "heldBy": [
+     "x2 OBSERVER_UNQUALIFIED",
+     "x5 OBSERVER_UNQUALIFIED",
+     "x6 OBSERVER_UNQUALIFIED",
+     "x7 OBSERVER_UNQUALIFIED",
+     "x10 OBSERVER_UNQUALIFIED",
+     "x11 OBSERVER_UNQUALIFIED",
+     "x19 OBSERVER_UNQUALIFIED",
+     "x20 OBSERVER_UNQUALIFIED"
+    ]
+   },
+   {
+    "run": "t6.r1",
+    "state": "NEEDS_REVIEW",
+    "heldBy": [
+     "x2 OBSERVER_UNQUALIFIED",
+     "x5 OBSERVER_UNQUALIFIED",
+     "x6 OBSERVER_UNQUALIFIED",
+     "x7 OBSERVER_UNQUALIFIED",
+     "x10 OBSERVER_UNQUALIFIED",
+     "x11 OBSERVER_UNQUALIFIED",
+     "x19 OBSERVER_UNQUALIFIED",
+     "specifics PARTLY_CHECKED"
+    ]
+   },
+   {
+    "run": "t6.r2",
+    "state": "NEEDS_REVIEW",
+    "heldBy": [
+     "x2 OBSERVER_UNQUALIFIED",
+     "x5 OBSERVER_UNQUALIFIED",
+     "x6 OBSERVER_UNQUALIFIED",
+     "x7 OBSERVER_UNQUALIFIED",
+     "x10 OBSERVER_UNQUALIFIED",
+     "x11 OBSERVER_UNQUALIFIED",
+     "x19 OBSERVER_UNQUALIFIED",
+     "specifics PARTLY_CHECKED"
+    ]
+   },
+   {
+    "run": "t7.r1",
+    "state": "NEEDS_REVIEW",
+    "heldBy": [
+     "x2 OBSERVER_UNQUALIFIED",
+     "x5 OBSERVER_UNQUALIFIED",
+     "x6 OBSERVER_UNQUALIFIED",
+     "x7 OBSERVER_UNQUALIFIED",
+     "x10 OBSERVER_UNQUALIFIED",
+     "x11 OBSERVER_UNQUALIFIED",
+     "x19 OBSERVER_UNQUALIFIED",
+     "specifics PARTLY_CHECKED"
+    ]
+   },
+   {
+    "run": "t7.r2",
+    "state": "NEEDS_REVIEW",
+    "heldBy": [
+     "x2 OBSERVER_UNQUALIFIED",
+     "x5 OBSERVER_UNQUALIFIED",
+     "x6 OBSERVER_UNQUALIFIED",
+     "x7 OBSERVER_UNQUALIFIED",
+     "x10 OBSERVER_UNQUALIFIED",
+     "x11 OBSERVER_UNQUALIFIED",
+     "x19 OBSERVER_UNQUALIFIED",
+     "specifics PARTLY_CHECKED"
+    ]
+   },
+   {
+    "run": "t8.r1",
+    "state": "NEEDS_REVIEW",
+    "heldBy": [
+     "x2 OBSERVER_UNQUALIFIED",
+     "x5 OBSERVER_UNQUALIFIED",
+     "x6 OBSERVER_UNQUALIFIED",
+     "x7 OBSERVER_UNQUALIFIED",
+     "x10 OBSERVER_UNQUALIFIED",
+     "x11 OBSERVER_UNQUALIFIED",
+     "x19 OBSERVER_UNQUALIFIED"
+    ]
+   },
+   {
+    "run": "t8.r2",
+    "state": "NEEDS_REVIEW",
+    "heldBy": [
+     "x2 OBSERVER_UNQUALIFIED",
+     "x5 OBSERVER_UNQUALIFIED",
+     "x6 OBSERVER_UNQUALIFIED",
+     "x7 OBSERVER_UNQUALIFIED",
+     "x10 OBSERVER_UNQUALIFIED",
+     "x11 OBSERVER_UNQUALIFIED",
+     "x19 OBSERVER_UNQUALIFIED",
+     "specifics PARTLY_CHECKED"
+    ]
+   },
+   {
+    "run": "t9.r1",
+    "state": "NEEDS_REVIEW",
+    "heldBy": [
+     "x2 OBSERVER_UNQUALIFIED",
+     "x5 OBSERVER_UNQUALIFIED",
+     "x6 OBSERVER_UNQUALIFIED",
+     "x7 OBSERVER_UNQUALIFIED",
+     "x10 OBSERVER_UNQUALIFIED",
+     "x11 OBSERVER_UNQUALIFIED",
+     "x19 OBSERVER_UNQUALIFIED"
+    ]
+   },
+   {
+    "run": "t9.r2",
+    "state": "NEEDS_REVIEW",
+    "heldBy": [
+     "x2 OBSERVER_UNQUALIFIED",
+     "x5 OBSERVER_UNQUALIFIED",
+     "x6 OBSERVER_UNQUALIFIED",
+     "x7 OBSERVER_UNQUALIFIED",
+     "x10 OBSERVER_UNQUALIFIED",
+     "x11 OBSERVER_UNQUALIFIED",
+     "x19 OBSERVER_UNQUALIFIED"
+    ]
+   }
+  ],
+  "accepted": [
+   "x4",
+   "x8",
+   "x9",
+   "x13",
+   "x14",
+   "x15",
+   "x17"
+  ],
+  "ifUnqualifiedAccepted": 6
+ },
+ "D3": {
+  "atelier": {
+   "n": 20,
+   "clean": 19,
+   "per": {
+    "R5": 1
+   },
+   "costUsd": 0.49076432000000036
+  },
+  "plainx": {
+   "n": 20,
+   "clean": 7,
+   "per": {
+    "R2": 5,
+    "R8": 8,
+    "R3": 1,
+    "R3c": 1,
+    "R8b": 2
+   },
+   "costUsd": 0.582584
+  },
+  "diff": 0.6,
+  "lo": 0.3701696277686519,
+  "hi": 0.829830372231348,
+  "pass": true
+ },
+ "D4": {
+  "fixed": 2,
+  "rows": [
+   {
+    "defect": "date",
+    "rule": "R8c",
+    "foundBefore": true,
+    "fixed": false,
+    "stateAfter": "NEEDS_REVIEW",
+    "added": 0,
+    "dropped": 0,
+    "negationFlips": 0,
+    "figuresLost": 0,
+    "oracleAfter": [
+     "R8c the date cited to the report is the report's date"
+    ]
+   },
+   {
+    "defect": "exclusion",
+    "rule": "R3b",
+    "foundBefore": true,
+    "fixed": false,
+    "stateAfter": "NEEDS_REVIEW",
+    "added": 0,
+    "dropped": 0,
+    "negationFlips": 0,
+    "figuresLost": 0,
+    "oracleAfter": [
+     "R3b exclusion 7.1 is addressed on a theft"
+    ]
+   },
+   {
+    "defect": "reserve",
+    "rule": "R5",
+    "foundBefore": true,
+    "fixed": false,
+    "stateAfter": "NEEDS_REVIEW",
+    "added": 0,
+    "dropped": 0,
+    "negationFlips": 0,
+    "figuresLost": 0,
+    "oracleAfter": [
+     "R5 the reserve equals the invoices"
+    ]
+   },
+   {
+    "defect": "speculation",
+    "rule": "R7",
+    "foundBefore": true,
+    "fixed": true,
+    "stateAfter": "NEEDS_REVIEW",
+    "added": 1,
+    "dropped": 1,
+    "negationFlips": 0,
+    "figuresLost": 0,
+    "oracleAfter": []
+   },
+   {
+    "defect": "uncited",
+    "rule": "R2",
+    "foundBefore": true,
+    "fixed": true,
+    "stateAfter": "NEEDS_REVIEW",
+    "added": 1,
+    "dropped": 1,
+    "negationFlips": 0,
+    "figuresLost": 0,
+    "oracleAfter": []
+   }
+  ]
+ },
+ "D5": {
+  "notJson": {
+   "label": "not-json",
+   "exit": 2,
+   "seconds": 0.14,
+   "stderr": "atelier: the hook event on stdin is not a JSON object: the hook is not wired as Claude Code sends it; nothing was checked\n"
+  },
+  "heldOut": {
+   "label": "write:heldout-e10",
+   "exit": 0,
+   "seconds": 0.86,
+   "stderr": "atelier: 4 required rule(s) of the \"claims\" standard were not read on this text, so nothing was blocked on their account:\n  - Then a Facts section. Every fact cites the document in the file it comes from, in square brackets: [notice of loss], [police report], [invoice 1]: reads your material, and none is bound: Each sentence in the Facts section carries a bracketed citation, and each cited name is a document in the material. was not checked\n  - Then a Coverage analysis section. The coverage conclusion cites the policy clause it rests on, and every exclusion that could apply is addressed and cited: reads your material, and none is bound: The Coverage analysis section cites a policy clause for its conclusion, and each exclusion it names is followed by a bracketed document citation. Whether every applicable exclusion was addressed is le was not checked\n  - End with a Reserve section. The reserve equals the sum of the invoices in the file, less any excess the schedule applies, and cites the invoices: reads your material, and none is bound: The figure in the Reserve section equals the sum of the invoice amounts in the material, and each invoice is cited there. Excess is left to the schedule and judged by a person. was not checked\n  - Take every date, name and figure from the file: add none of your own: reads your material, and none is bound: Every number in the text appears in the material or the request; no figure is added. was not checked\n  To have the material read, bind it to the skill: atelier material --skill claims <file>\n"
+  },
+  "pass": false
+ },
+ "D6:claims": {
+  "namedWithPassage": 3,
+  "n": 5,
+  "rows": [
+   {
+    "defect": "date",
+    "step": 8,
+    "ids": [
+     "x8"
+    ],
+    "named": true,
+    "withPassage": true,
+    "enforced": false,
+    "state": "NEEDS_REVIEW"
+   },
+   {
+    "defect": "exclusion",
+    "step": 3,
+    "ids": [],
+    "named": false,
+    "withPassage": false,
+    "enforced": null,
+    "state": "NEEDS_REVIEW"
+   },
+   {
+    "defect": "reserve",
+    "step": 5,
+    "ids": [
+     "x5"
+    ],
+    "named": true,
+    "withPassage": false,
+    "enforced": false,
+    "state": "NEEDS_REVIEW"
+   },
+   {
+    "defect": "speculation",
+    "step": 7,
+    "ids": [
+     "x7"
+    ],
+    "named": true,
+    "withPassage": true,
+    "enforced": true,
+    "state": "BLOCKED"
+   },
+   {
+    "defect": "uncited",
+    "step": 2,
+    "ids": [
+     "x2"
+    ],
+    "named": true,
+    "withPassage": true,
+    "enforced": true,
+    "state": "BLOCKED"
+   }
+  ],
+  "goldens": [
+   {
+    "id": "e10",
+    "state": "NEEDS_REVIEW"
+   }
+  ]
+ },
+ "D6:labels": {
+  "namedWithPassage": 2,
+  "n": 5,
+  "rows": [
+   {
+    "defect": "firearms-floor",
+    "step": 5,
+    "ids": [
+     "x5"
+    ],
+    "named": true,
+    "withPassage": true,
+    "enforced": false,
+    "state": "NEEDS_REVIEW"
+   },
+   {
+    "defect": "high",
+    "step": 4,
+    "ids": [],
+    "named": false,
+    "withPassage": false,
+    "enforced": null,
+    "state": "NEEDS_REVIEW"
+   },
+   {
+    "defect": "paraphrase",
+    "step": 17,
+    "ids": [],
+    "named": false,
+    "withPassage": false,
+    "enforced": null,
+    "state": "NEEDS_REVIEW"
+   },
+   {
+    "defect": "span",
+    "step": 12,
+    "ids": [
+     "x12"
+    ],
+    "named": true,
+    "withPassage": true,
+    "enforced": true,
+    "state": "BLOCKED"
+   },
+   {
+    "defect": "taxonomy",
+    "step": 1,
+    "ids": [],
+    "named": false,
+    "withPassage": false,
+    "enforced": null,
+    "state": "NEEDS_REVIEW"
+   }
+  ],
+  "goldens": [
+   {
+    "id": "e12",
+    "state": "NEEDS_REVIEW"
+   }
+  ]
+ },
+ "spend": {
+  "total": 2.201187505,
+  "byTag": {
+   "build:claims:1": {
+    "usd": 0.16826803,
+    "calls": 27
+   },
+   "build:labels:1": {
+    "usd": 0.12221565500000002,
+    "calls": 33
+   },
+   "verify:claims:b1": {
+    "usd": 0.075884,
+    "calls": 12
+   },
+   "verify:labels:b1": {
+    "usd": 0.05651400000000001,
+    "calls": 12
+   },
+   "repair:e01.speculation.md": {
+    "usd": 0.0146885,
+    "calls": 5
+   },
+   "repair:e01.uncited.md": {
+    "usd": 0.013585,
+    "calls": 5
+   },
+   "grounding:with material": {
+    "usd": 0.007786,
+    "calls": 2
+   },
+   "grounding:repair": {
+    "usd": 0.018179,
+    "calls": 5
+   },
+   "t5:claims:atelier": {
+    "usd": 0.4907643199999998,
+    "calls": 160
+   },
+   "t5:labels:atelier": {
+    "usd": 0.34791700000000025,
+    "calls": 152
+   },
+   "t5:claims:plainx": {
+    "usd": 0.582584,
+    "calls": 20
+   },
+   "t5:labels:plainx": {
+    "usd": 0.302802,
+    "calls": 20
+   }
+  }
+ }
+}

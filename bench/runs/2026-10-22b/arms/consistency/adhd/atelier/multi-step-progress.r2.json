@@ -1,0 +1,81 @@
+{
+ "fixture": "adhd",
+ "arm": "atelier",
+ "task": "multi-step-progress",
+ "run": 2,
+ "text": "Run the backfill for the new column now (step 3 of 5):\n\n```sql\n-- Replace <table>, <new_col>, and <source_expr> with your values.\n-- Batch it so locks stay short; repeat until 0 rows are updated.\nUPDATE <table>\nSET <new_col> = <source_expr>\nWHERE <new_col> IS NULL\n  AND id IN (SELECT id FROM <table> WHERE <new_col> IS NULL LIMIT 10000);\n```\n\n**State:** Step 1 and 2 are done, including the schema change. Step 3 (backfill) is next. Step 4 and 5 wait on it.\n\n1. Run the batch above in a loop until it reports 0 rows updated.\n2. Verify: `SELECT COUNT(*) FROM <table> WHERE <new_col> IS NULL;` returns 0.\n\n**Open:** I do not have the table name, column name, or source expression for the backfill, so the placeholders above need your values.\n\n**Do this in under 2 minutes:** paste the table name, the new column name, and where its value comes from, and I will return the exact statement.",
+ "state": "NEEDS_REVIEW",
+ "costUsd": 0.0062,
+ "exit": 0,
+ "standard": "d497e8fdd36f3852",
+ "headKeys": [
+  "schema",
+  "state",
+  "standardVersionHash",
+  "skillVersion",
+  "certificate",
+  "record"
+ ],
+ "certificate": {
+  "standardVersionHash": "d497e8fdd36f3852",
+  "checks": {
+   "total": 6,
+   "counted": 0,
+   "written": 6,
+   "writtenQualified": 0
+  },
+  "readers": {
+   "taste": {
+    "veto": [],
+    "labelledMisses": 0,
+    "falseBlockUpper95": null
+   },
+   "claims": {
+    "instrument": "pattern check (no material bound: a model reading of specifics could only list them)",
+    "version": null,
+    "gate": "pattern",
+    "qualified": false,
+    "measured": null,
+    "kinds": []
+   }
+  },
+  "latitude": {
+   "skill": "CREATIVE",
+   "run": "GROUNDED",
+   "tightenedBy": "We are on step 3 of 5 in a database migration. The schema change is done; the next task is backfilling the new column. Give the next update.",
+   "setBy": "model"
+  },
+  "acceptedUnmeasured": [
+   {
+    "id": "x1",
+    "statement": "Lead with the next action: the first line is something the reader can do, and a command, path, or snippet goes first with prose after, if at all."
+   },
+   {
+    "id": "x3",
+    "statement": "End with one concrete next action the reader can do in under two minutes."
+   },
+   {
+    "id": "x4",
+    "statement": "Finish the first issue, then offer the second as a separate question rather than mixing it in; answer mid-work questions yourself if you can, and if one still needs the reader, surface it once at the end."
+   },
+   {
+    "id": "x5",
+    "statement": "Restate the current state every turn, e.g. which step is done and what is next, and use the harness's task or plan tool for multi-step work instead of also narrating the plan as prose."
+   },
+   {
+    "id": "x7",
+    "statement": "Show what now works in concrete terms, with how to try it, instead of burying wins in a recap."
+   },
+   {
+    "id": "x12",
+    "statement": "Keep these rules on for every response for the rest of the session, even when the topic changes, and turn them off only when the reader says \"stop adhd mode\" or \"normal mode\" (confirm in one line, then return to default style)."
+   }
+  ],
+  "errorBound": null,
+  "why": "no delivered-error bound: it needs an audit sample of your own labels, drawn like the work this skill does; the checks and readers above are what this output was held to"
+ },
+ "error": null,
+ "stderr": "No notes of yours are bound, so a story, source or figure in the draft cannot be checked against anything of yours, and is listed for you, not cut. Add yours: --with notes=<file>, or atelier material --skill i-have-adhd <file>.\nHeld grounded for this request (the skill is creative): \"We are on step 3 of 5 in a database migration. The schema change is done; the next task is backfilling the new column. Give the next update.\".\nJudgement reader: not run (reporting only until your labels qualify it; --taste reads this run and records readings to label: atelier taste --skill i-have-adhd --calibrate).\nRead after writing: the reply may leave out 2 part(s) of the request (\"Give the next update\"; \"the next task is backfilling the new column\"); listed for you, not written again (--strict writes it again).\nChecked: every REQUIRED measured rule holds.\n5 specific(s) are not in your material: left in for you to check before you use this (listed in the details).\n$0.01 · everything this run checked: <scratch>/data/build-adhd-1-9ZmSOB/runs/project-194d0492abd9d831/last-invocation.txt · not right? atelier fix \"<what was wrong>\"\n",
+ "meterUsd": 0.00615414000000003,
+ "seconds": 9.131
+}

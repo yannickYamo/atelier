@@ -1,0 +1,291 @@
+2026-10-21T06:51:22.685Z build claims #1: exit 0, 48s, $0.0000, standard d3431f98a24a1f0e; [spend] running total $0.0000
+2026-10-21T06:54:08.797Z build claims #2: exit 0, 83s, $0.1400, standard 8e9fa261657f5f22; [spend] running total $0.1400
+2026-10-21T06:55:03.704Z build claims #3: exit 0, 48s, $0.0486, standard 4f9bee7711912f2c; [spend] running total $0.1885
+2026-10-21T06:56:29.601Z build labels #1: exit 0, 86s, $0.1127, standard e83251c579f44c09; [spend] running total $0.3013
+2026-10-21T06:58:08.147Z build labels #2: exit 0, 99s, $0.1077, standard d0f9945acba80cad; [spend] running total $0.4090
+2026-10-21T06:59:40.554Z build labels #3: exit 0, 92s, $0.1281, standard dea79e2ab37879be; [spend] running total $0.5371
+2026-10-21T06:59:40.714Z build adhd #1: exit 1, 0s, $0.0000, standard null; [spend] running total $0.5371
+2026-10-21T06:59:40.873Z build adhd #2: exit 1, 0s, $0.0000, standard null; [spend] running total $0.5371
+2026-10-21T06:59:41.037Z build adhd #3: exit 1, 0s, $0.0000, standard null; [spend] running total $0.5371
+2026-10-21T07:00:15.863Z build adhd #1: exit 0, 22s, $0.0272, standard 03fcfcea; [spend] running total $0.5643
+2026-10-21T15:04:31.813Z build adhd #2: exit 0, 21s, $0.0294, standard da6e9d17; [spend] running total $0.5937
+2026-10-21T15:04:50.201Z build adhd #3: exit 0, 18s, $0.0231, standard 37d03a25; [spend] running total $0.6169
+2026-10-21T15:08:48.209Z verify claims b1: 15 files; [spend] running total $0.6169
+2026-10-21T15:12:02.584Z verify claims b2: 15 files; [spend] running total $0.6169
+2026-10-21T15:15:17.002Z verify claims b3: 15 files; [spend] running total $0.6169
+2026-10-21T15:17:51.700Z verify labels b1: 17 files; [spend] running total $0.6169
+2026-10-21T15:20:25.831Z verify labels b2: 17 files; [spend] running total $0.6169
+2026-10-21T16:23:59.664Z verify labels b3: 17 files; [spend] running total $0.6169
+2026-10-21T16:24:48.903Z verify claims b1: 15 files; [spend] running total $0.6169
+2026-10-21T16:25:10.818Z verify claims b2: 15 files; [spend] running total $0.6169
+2026-10-21T16:25:33.293Z verify claims b3: 15 files; [spend] running total $0.6169
+2026-10-21T16:25:52.894Z verify labels b1: 17 files; [spend] running total $0.6169
+2026-10-21T16:26:12.105Z verify labels b2: 17 files; [spend] running total $0.6169
+2026-10-21T16:26:31.672Z verify labels b3: 17 files; [spend] running total $0.6169
+2026-10-21T16:26:51.426Z repair e01.date.md: state NEEDS_REVIEW, oracle 1->1, figures lost 0; [spend] running total $0.6169
+2026-10-21T16:26:52.342Z repair e01.exclusion.md: state NEEDS_REVIEW, oracle 1->1, figures lost 0; [spend] running total $0.6169
+2026-10-21T16:26:53.238Z repair e01.reserve.md: state NEEDS_REVIEW, oracle 1->1, figures lost 0; [spend] running total $0.6169
+2026-10-21T16:26:57.691Z repair e01.speculation.md: state BLOCKED, oracle 1->1, figures lost 0; [spend] running total $0.6218
+2026-10-21T16:26:58.592Z repair e01.uncited.md: state BLOCKED, oracle 1->1, figures lost 0; [spend] running total $0.6218
+2026-10-21T16:27:13.908Z hook write:speculation: exit 2 in 0.86s
+2026-10-21T16:27:14.777Z hook stop:speculation: exit 2 in 0.87s
+2026-10-21T16:27:15.641Z hook write:uncited: exit 2 in 0.86s
+2026-10-21T16:27:16.502Z hook stop:uncited: exit 2 in 0.86s
+2026-10-21T16:27:17.377Z hook write:reserve: exit 2 in 0.87s
+2026-10-21T16:27:18.258Z hook stop:reserve: exit 2 in 0.88s
+2026-10-21T16:27:19.119Z hook write:golden-e01: exit 2 in 0.86s
+2026-10-21T16:27:19.259Z hook not-json: exit 0 in 0.14s
+2026-10-21T16:27:25.889Z grounding with material: state BLOCKED, figure seen true, citation seen true
+2026-10-21T16:27:26.758Z grounding without material: state BLOCKED, figure seen true, citation seen false
+2026-10-21T16:27:27.693Z grounding repair: figure kept true, citation kept true
+2026-10-21T16:27:27.696Z hook/grounding/authority done; [spend] running total $0.6218
+2026-10-21T16:28:10.002Z t5 claims atelier t0 r1: NO TEXT  cost $0.0000 meter $0.0000; [spend] running total $1.6837
+2026-10-21T16:28:14.023Z t5 claims atelier t1 r1: NO TEXT  cost $0.0000 meter $0.0000; [spend] running total $1.6837
+2026-10-21T16:28:18.176Z t5 claims atelier t2 r1: NO TEXT  cost $0.0000 meter $0.0000; [spend] running total $1.6837
+2026-10-21T16:28:22.329Z t5 claims atelier t3 r1: NO TEXT  cost $0.0000 meter $0.0000; [spend] running total $1.6837
+2026-10-21T16:28:26.411Z t5 claims atelier t4 r1: NO TEXT  cost $0.0000 meter $0.0000; [spend] running total $1.6837
+2026-10-21T16:28:30.456Z t5 claims atelier t5 r1: NO TEXT  cost $0.0000 meter $0.0000; [spend] running total $1.6837
+2026-10-21T16:28:34.862Z t5 claims atelier t6 r1: NO TEXT  cost $0.0000 meter $0.0000; [spend] running total $1.6837
+2026-10-21T16:28:39.208Z t5 claims atelier t7 r1: NO TEXT  cost $0.0000 meter $0.0000; [spend] running total $1.6837
+2026-10-21T16:28:43.324Z t5 claims atelier t8 r1: NO TEXT  cost $0.0000 meter $0.0000; [spend] running total $1.6837
+2026-10-21T16:28:47.552Z t5 claims atelier t9 r1: NO TEXT  cost $0.0000 meter $0.0000; [spend] running total $1.6837
+2026-10-21T16:29:24.278Z t5 claims atelier t0 r1: ok NEEDS_REVIEW cost $0.0437 meter $0.0437; [spend] running total $1.7275
+2026-10-21T16:29:50.104Z t5 claims atelier t1 r1: ok NEEDS_REVIEW cost $0.0177 meter $0.0297; [spend] running total $1.7668
+2026-10-21T16:30:13.183Z t5 claims atelier t2 r1: ok NEEDS_REVIEW cost $0.0258 meter $0.0258; [spend] running total $1.7926
+2026-10-21T16:30:36.359Z t5 claims atelier t3 r1: ok NEEDS_REVIEW cost $0.0245 meter $0.0245; [spend] running total $1.8171
+2026-10-21T16:30:56.986Z t5 claims atelier t4 r1: ok NEEDS_REVIEW cost $0.0235 meter $0.0235; [spend] running total $1.8406
+2026-10-21T16:31:15.503Z t5 claims atelier t5 r1: ok NEEDS_REVIEW cost $0.0206 meter $0.0206; [spend] running total $1.8612
+2026-10-21T16:31:39.159Z t5 claims atelier t6 r1: ok NEEDS_REVIEW cost $0.0251 meter $0.0251; [spend] running total $1.8863
+2026-10-21T16:31:59.714Z t5 claims atelier t7 r1: ok NEEDS_REVIEW cost $0.0230 meter $0.0230; [spend] running total $1.9094
+2026-10-21T16:32:16.027Z t5 claims atelier t8 r1: ok NEEDS_REVIEW cost $0.0177 meter $0.0177; [spend] running total $1.9271
+2026-10-21T16:32:35.423Z t5 claims atelier t9 r1: ok NEEDS_REVIEW cost $0.0225 meter $0.0225; [spend] running total $1.9495
+2026-10-21T16:32:52.958Z t5 claims atelier t0 r2: ok NEEDS_REVIEW cost $0.0213 meter $0.0213; [spend] running total $1.9708
+2026-10-21T16:33:11.390Z t5 claims atelier t1 r2: ok NEEDS_REVIEW cost $0.0207 meter $0.0207; [spend] running total $1.9915
+2026-10-21T16:33:33.637Z t5 claims atelier t2 r2: ok NEEDS_REVIEW cost $0.0251 meter $0.0251; [spend] running total $2.0166
+2026-10-21T16:33:52.813Z t5 claims atelier t3 r2: ok NEEDS_REVIEW cost $0.0227 meter $0.0227; [spend] running total $2.0393
+2026-10-21T16:34:11.819Z t5 claims atelier t4 r2: ok NEEDS_REVIEW cost $0.0226 meter $0.0226; [spend] running total $2.0619
+2026-10-21T16:34:26.604Z t5 claims atelier t5 r2: ok NEEDS_REVIEW cost $0.0186 meter $0.0186; [spend] running total $2.0804
+2026-10-21T16:34:48.933Z t5 claims atelier t6 r2: ok NEEDS_REVIEW cost $0.0250 meter $0.0250; [spend] running total $2.1055
+2026-10-21T16:35:08.521Z t5 claims atelier t7 r2: ok NEEDS_REVIEW cost $0.0215 meter $0.0215; [spend] running total $2.1270
+2026-10-21T16:35:32.678Z t5 claims atelier t8 r2: ok NEEDS_REVIEW cost $0.0246 meter $0.0246; [spend] running total $2.1516
+2026-10-21T16:35:50.092Z t5 claims atelier t9 r2: ok NEEDS_REVIEW cost $0.0203 meter $0.0203; [spend] running total $2.1719
+2026-10-21T16:36:12.760Z t5 claims atelier t0 r3: ok NEEDS_REVIEW cost $0.0241 meter $0.0241; [spend] running total $2.1960
+2026-10-21T16:36:21.075Z t5 claims atelier t1 r3: ok NEEDS_REVIEW cost $0.0100 meter $0.0100; [spend] running total $2.2060
+2026-10-21T16:36:45.690Z t5 claims atelier t2 r3: ok NEEDS_REVIEW cost $0.0268 meter $0.0268; [spend] running total $2.2328
+2026-10-21T16:36:54.162Z t5 claims atelier t3 r3: ok NEEDS_REVIEW cost $0.0105 meter $0.0105; [spend] running total $2.2432
+2026-10-21T16:37:18.562Z t5 claims atelier t4 r3: ok NEEDS_REVIEW cost $0.0243 meter $0.0243; [spend] running total $2.2676
+2026-10-21T16:37:27.220Z t5 claims atelier t5 r3: ok NEEDS_REVIEW cost $0.0099 meter $0.0099; [spend] running total $2.2774
+2026-10-21T16:37:56.043Z t5 claims atelier t6 r3: ok NEEDS_REVIEW cost $0.0282 meter $0.0282; [spend] running total $2.3057
+2026-10-21T16:38:16.859Z t5 claims atelier t7 r3: ok NEEDS_REVIEW cost $0.0221 meter $0.0221; [spend] running total $2.3277
+2026-10-21T16:38:31.361Z t5 claims atelier t8 r3: ok NEEDS_REVIEW cost $0.0164 meter $0.0164; [spend] running total $2.3441
+2026-10-21T16:38:53.743Z t5 claims atelier t9 r3: ok NEEDS_REVIEW cost $0.0239 meter $0.0239; [spend] running total $2.3680
+2026-10-21T16:39:12.343Z t5 claims plain t0 r1: ok  cost $0.0277 meter $0.0277; [spend] running total $2.3957
+2026-10-21T16:39:33.467Z t5 claims plain t1 r1: ok  cost $0.0322 meter $0.0322; [spend] running total $2.4279
+2026-10-21T16:39:50.967Z t5 claims plain t2 r1: ok  cost $0.0269 meter $0.0269; [spend] running total $2.4548
+2026-10-21T16:40:11.731Z t5 claims plain t3 r1: ok  cost $0.0315 meter $0.0315; [spend] running total $2.4863
+2026-10-21T16:40:27.137Z t5 claims plain t4 r1: ok  cost $0.0242 meter $0.0242; [spend] running total $2.5105
+2026-10-21T16:40:45.443Z t5 claims plain t5 r1: ok  cost $0.0278 meter $0.0278; [spend] running total $2.5383
+2026-10-21T16:41:05.623Z t5 claims plain t6 r1: ok  cost $0.0305 meter $0.0305; [spend] running total $2.5688
+2026-10-21T16:41:26.101Z t5 claims plain t7 r1: ok  cost $0.0313 meter $0.0313; [spend] running total $2.6000
+2026-10-21T16:41:42.384Z t5 claims plain t8 r1: ok  cost $0.0276 meter $0.0276; [spend] running total $2.6276
+2026-10-21T16:42:01.934Z t5 claims plain t9 r1: ok  cost $0.0289 meter $0.0289; [spend] running total $2.6565
+2026-10-21T16:42:21.100Z t5 claims plain t0 r2: ok  cost $0.0290 meter $0.0290; [spend] running total $2.6855
+2026-10-21T16:42:40.136Z t5 claims plain t1 r2: ok  cost $0.0302 meter $0.0302; [spend] running total $2.7157
+2026-10-21T16:42:56.916Z t5 claims plain t2 r2: ok  cost $0.0268 meter $0.0268; [spend] running total $2.7425
+2026-10-21T16:43:15.049Z t5 claims plain t3 r2: ok  cost $0.0297 meter $0.0297; [spend] running total $2.7722
+2026-10-21T16:43:29.823Z t5 claims plain t4 r2: ok  cost $0.0247 meter $0.0247; [spend] running total $2.7969
+2026-10-21T16:43:51.187Z t5 claims plain t5 r2: ok  cost $0.0326 meter $0.0326; [spend] running total $2.8296
+2026-10-21T16:44:12.953Z t5 claims plain t6 r2: ok  cost $0.0325 meter $0.0325; [spend] running total $2.8621
+2026-10-21T16:44:33.682Z t5 claims plain t7 r2: ok  cost $0.0302 meter $0.0302; [spend] running total $2.8923
+2026-10-21T16:44:51.727Z t5 claims plain t8 r2: ok  cost $0.0258 meter $0.0258; [spend] running total $2.9181
+2026-10-21T16:45:10.710Z t5 claims plain t9 r2: ok  cost $0.0281 meter $0.0281; [spend] running total $2.9462
+2026-10-21T16:45:29.406Z t5 claims plain t0 r3: ok  cost $0.0268 meter $0.0268; [spend] running total $2.9729
+2026-10-21T16:45:48.764Z t5 claims plain t1 r3: ok  cost $0.0295 meter $0.0295; [spend] running total $3.0024
+2026-10-21T16:46:05.243Z t5 claims plain t2 r3: ok  cost $0.0245 meter $0.0245; [spend] running total $3.0270
+2026-10-21T16:46:22.994Z t5 claims plain t3 r3: ok  cost $0.0285 meter $0.0285; [spend] running total $3.0555
+2026-10-21T16:46:42.208Z t5 claims plain t4 r3: ok  cost $0.0268 meter $0.0268; [spend] running total $3.0823
+2026-10-21T16:47:01.573Z t5 claims plain t5 r3: ok  cost $0.0301 meter $0.0301; [spend] running total $3.1124
+2026-10-21T16:47:23.659Z t5 claims plain t6 r3: ok  cost $0.0332 meter $0.0332; [spend] running total $3.1456
+2026-10-21T16:47:43.151Z t5 claims plain t7 r3: ok  cost $0.0284 meter $0.0284; [spend] running total $3.1740
+2026-10-21T16:47:59.186Z t5 claims plain t8 r3: ok  cost $0.0259 meter $0.0259; [spend] running total $3.1999
+2026-10-21T16:48:16.805Z t5 claims plain t9 r3: ok  cost $0.0277 meter $0.0277; [spend] running total $3.2276
+2026-10-21T16:48:33.549Z t5 labels atelier t0 r1: ok NEEDS_REVIEW cost $0.0349 meter $0.0349; [spend] running total $3.2626
+2026-10-21T16:48:57.376Z t5 labels atelier t1 r1: ok NEEDS_REVIEW cost $0.0249 meter $0.0249; [spend] running total $3.2875
+2026-10-21T16:49:15.475Z t5 labels atelier t2 r1: ok NEEDS_REVIEW cost $0.0183 meter $0.0183; [spend] running total $3.3058
+2026-10-21T16:49:31.979Z t5 labels atelier t3 r1: ok NEEDS_REVIEW cost $0.0176 meter $0.0176; [spend] running total $3.3234
+2026-10-21T16:49:52.968Z t5 labels atelier t4 r1: ok NEEDS_REVIEW cost $0.0203 meter $0.0203; [spend] running total $3.3438
+2026-10-21T16:50:11.641Z t5 labels atelier t5 r1: ok NEEDS_REVIEW cost $0.0187 meter $0.0187; [spend] running total $3.3625
+2026-10-21T16:50:33.521Z t5 labels atelier t6 r1: ok NEEDS_REVIEW cost $0.0231 meter $0.0231; [spend] running total $3.3856
+2026-10-21T16:50:51.353Z t5 labels atelier t7 r1: ok NEEDS_REVIEW cost $0.0193 meter $0.0193; [spend] running total $3.4049
+2026-10-21T16:51:11.303Z t5 labels atelier t8 r1: ok NEEDS_REVIEW cost $0.0217 meter $0.0217; [spend] running total $3.4266
+2026-10-21T16:51:32.240Z t5 labels atelier t9 r1: ok NEEDS_REVIEW cost $0.0208 meter $0.0208; [spend] running total $3.4473
+2026-10-21T16:51:53.294Z t5 labels atelier t0 r2: ok NEEDS_REVIEW cost $0.0211 meter $0.0211; [spend] running total $3.4684
+2026-10-21T16:52:11.664Z t5 labels atelier t1 r2: ok NEEDS_REVIEW cost $0.0204 meter $0.0204; [spend] running total $3.4888
+2026-10-21T16:52:34.959Z t5 labels atelier t2 r2: ok NEEDS_REVIEW cost $0.0217 meter $0.0217; [spend] running total $3.5105
+2026-10-21T16:52:51.849Z t5 labels atelier t3 r2: ok NEEDS_REVIEW cost $0.0182 meter $0.0182; [spend] running total $3.5287
+2026-10-21T16:53:11.547Z t5 labels atelier t4 r2: ok NEEDS_REVIEW cost $0.0211 meter $0.0211; [spend] running total $3.5498
+2026-10-21T16:53:26.923Z t5 labels atelier t5 r2: ok NEEDS_REVIEW cost $0.0167 meter $0.0167; [spend] running total $3.5665
+2026-10-21T16:53:47.796Z t5 labels atelier t6 r2: ok NEEDS_REVIEW cost $0.0221 meter $0.0221; [spend] running total $3.5886
+2026-10-21T16:54:00.926Z t5 labels atelier t7 r2: ok NEEDS_REVIEW cost $0.0107 meter $0.0107; [spend] running total $3.5993
+2026-10-21T16:54:21.325Z t5 labels atelier t8 r2: ok NEEDS_REVIEW cost $0.0211 meter $0.0211; [spend] running total $3.6204
+2026-10-21T16:54:32.079Z t5 labels atelier t9 r2: ok NEEDS_REVIEW cost $0.0106 meter $0.0106; [spend] running total $3.6309
+2026-10-21T16:54:53.246Z t5 labels atelier t0 r3: ok NEEDS_REVIEW cost $0.0229 meter $0.0229; [spend] running total $3.6538
+2026-10-21T16:55:07.339Z t5 labels atelier t1 r3: ok NEEDS_REVIEW cost $0.0137 meter $0.0137; [spend] running total $3.6675
+2026-10-21T16:55:19.614Z t5 labels atelier t2 r3: ok NEEDS_REVIEW cost $0.0118 meter $0.0118; [spend] running total $3.6793
+2026-10-21T16:55:31.959Z t5 labels atelier t3 r3: ok NEEDS_REVIEW cost $0.0119 meter $0.0119; [spend] running total $3.6912
+2026-10-21T16:55:52.469Z t5 labels atelier t4 r3: ok NEEDS_REVIEW cost $0.0226 meter $0.0226; [spend] running total $3.7138
+2026-10-21T16:56:11.242Z t5 labels atelier t5 r3: ok NEEDS_REVIEW cost $0.0188 meter $0.0188; [spend] running total $3.7326
+2026-10-21T16:56:32.772Z t5 labels atelier t6 r3: ok NEEDS_REVIEW cost $0.0228 meter $0.0228; [spend] running total $3.7553
+2026-10-21T16:56:47.003Z t5 labels atelier t7 r3: ok NEEDS_REVIEW cost $0.0120 meter $0.0120; [spend] running total $3.7673
+2026-10-21T16:57:08.293Z t5 labels atelier t8 r3: ok NEEDS_REVIEW cost $0.0239 meter $0.0239; [spend] running total $3.7912
+2026-10-21T16:57:28.082Z t5 labels atelier t9 r3: ok NEEDS_REVIEW cost $0.0190 meter $0.0190; [spend] running total $3.8102
+2026-10-21T16:57:32.686Z t5 labels plain t0 r1: ok  cost $0.0095 meter $0.0095; [spend] running total $3.8197
+2026-10-21T16:57:41.059Z t5 labels plain t1 r1: ok  cost $0.0146 meter $0.0146; [spend] running total $3.8343
+2026-10-21T16:57:46.402Z t5 labels plain t2 r1: ok  cost $0.0097 meter $0.0097; [spend] running total $3.8440
+2026-10-21T16:57:51.062Z t5 labels plain t3 r1: ok  cost $0.0091 meter $0.0091; [spend] running total $3.8530
+2026-10-21T16:57:57.232Z t5 labels plain t4 r1: ok  cost $0.0112 meter $0.0112; [spend] running total $3.8642
+2026-10-21T16:58:00.943Z t5 labels plain t5 r1: ok  cost $0.0085 meter $0.0085; [spend] running total $3.8727
+2026-10-21T16:58:08.303Z t5 labels plain t6 r1: ok  cost $0.0121 meter $0.0121; [spend] running total $3.8848
+2026-10-21T16:58:13.332Z t5 labels plain t7 r1: ok  cost $0.0094 meter $0.0094; [spend] running total $3.8941
+2026-10-21T16:58:19.082Z t5 labels plain t8 r1: ok  cost $0.0116 meter $0.0116; [spend] running total $3.9057
+2026-10-21T16:58:24.094Z t5 labels plain t9 r1: ok  cost $0.0095 meter $0.0095; [spend] running total $3.9152
+2026-10-21T16:58:29.322Z t5 labels plain t0 r2: ok  cost $0.0101 meter $0.0101; [spend] running total $3.9253
+2026-10-21T16:58:37.081Z t5 labels plain t1 r2: ok  cost $0.0122 meter $0.0122; [spend] running total $3.9375
+2026-10-21T16:58:43.679Z t5 labels plain t2 r2: ok  cost $0.0105 meter $0.0105; [spend] running total $3.9480
+2026-10-21T16:58:47.723Z t5 labels plain t3 r2: ok  cost $0.0083 meter $0.0083; [spend] running total $3.9562
+2026-10-21T16:58:54.725Z t5 labels plain t4 r2: ok  cost $0.0122 meter $0.0122; [spend] running total $3.9684
+2026-10-21T16:58:58.590Z t5 labels plain t5 r2: ok  cost $0.0081 meter $0.0081; [spend] running total $3.9765
+2026-10-21T16:59:04.521Z t5 labels plain t6 r2: ok  cost $0.0113 meter $0.0113; [spend] running total $3.9878
+2026-10-21T16:59:09.932Z t5 labels plain t7 r2: ok  cost $0.0104 meter $0.0104; [spend] running total $3.9982
+2026-10-21T16:59:15.783Z t5 labels plain t8 r2: ok  cost $0.0116 meter $0.0116; [spend] running total $4.0098
+2026-10-21T16:59:20.683Z t5 labels plain t9 r2: ok  cost $0.0091 meter $0.0091; [spend] running total $4.0189
+2026-10-21T16:59:26.351Z t5 labels plain t0 r3: ok  cost $0.0105 meter $0.0105; [spend] running total $4.0294
+2026-10-21T16:59:33.740Z t5 labels plain t1 r3: ok  cost $0.0131 meter $0.0131; [spend] running total $4.0426
+2026-10-21T16:59:39.866Z t5 labels plain t2 r3: ok  cost $0.0101 meter $0.0101; [spend] running total $4.0526
+2026-10-21T16:59:44.894Z t5 labels plain t3 r3: ok  cost $0.0091 meter $0.0091; [spend] running total $4.0618
+2026-10-21T16:59:51.096Z t5 labels plain t4 r3: ok  cost $0.0116 meter $0.0116; [spend] running total $4.0733
+2026-10-21T16:59:54.083Z t5 labels plain t5 r3: ok  cost $0.0071 meter $0.0071; [spend] running total $4.0805
+2026-10-21T17:00:01.454Z t5 labels plain t6 r3: ok  cost $0.0125 meter $0.0125; [spend] running total $4.0930
+2026-10-21T17:00:05.779Z t5 labels plain t7 r3: ok  cost $0.0087 meter $0.0087; [spend] running total $4.1017
+2026-10-21T17:00:11.847Z t5 labels plain t8 r3: ok  cost $0.0125 meter $0.0125; [spend] running total $4.1142
+2026-10-21T17:00:17.354Z t5 labels plain t9 r3: ok  cost $0.0102 meter $0.0102; [spend] running total $4.1243
+2026-10-21T17:00:24.910Z t5 adhd atelier direct-answer r1: ok NEEDS_REVIEW cost $0.0068 meter $0.0068; [spend] running total $4.1311
+2026-10-21T17:00:32.205Z t5 adhd atelier agent-owned-edit r1: ok NEEDS_REVIEW cost $0.0042 meter $0.0042; [spend] running total $4.1354
+2026-10-21T17:00:41.753Z t5 adhd atelier debugging-cause r1: ok NEEDS_REVIEW cost $0.0059 meter $0.0059; [spend] running total $4.1412
+2026-10-21T17:00:55.716Z t5 adhd atelier concept-explanation r1: ok NEEDS_REVIEW cost $0.0121 meter $0.0121; [spend] running total $4.1533
+2026-10-21T17:01:05.002Z t5 adhd atelier destructive-action r1: ok NEEDS_REVIEW cost $0.0041 meter $0.0041; [spend] running total $4.1575
+2026-10-21T17:01:14.559Z t5 adhd atelier real-ambiguity r1: ok NEEDS_REVIEW cost $0.0039 meter $0.0039; [spend] running total $4.1614
+2026-10-21T17:01:22.305Z t5 adhd atelier multi-step-progress r1: ok NEEDS_REVIEW cost $0.0047 meter $0.0047; [spend] running total $4.1661
+2026-10-21T17:01:44.273Z t5 adhd atelier long-form-request r1: ok NEEDS_REVIEW cost $0.0223 meter $0.0223; [spend] running total $4.1884
+2026-10-21T17:01:53.976Z t5 adhd atelier error-report r1: ok NEEDS_REVIEW cost $0.0064 meter $0.0064; [spend] running total $4.1949
+2026-10-21T17:02:00.704Z t5 adhd atelier casual-message r1: ok NEEDS_REVIEW cost $0.0021 meter $0.0021; [spend] running total $4.1970
+2026-10-21T17:02:07.597Z t5 adhd atelier direct-answer r2: ok NEEDS_REVIEW cost $0.0020 meter $0.0020; [spend] running total $4.1989
+2026-10-21T17:02:17.115Z t5 adhd atelier agent-owned-edit r2: ok NEEDS_REVIEW cost $0.0043 meter $0.0043; [spend] running total $4.2032
+2026-10-21T17:02:27.499Z t5 adhd atelier debugging-cause r2: ok NEEDS_REVIEW cost $0.0057 meter $0.0057; [spend] running total $4.2089
+2026-10-21T17:02:42.784Z t5 adhd atelier concept-explanation r2: ok NEEDS_REVIEW cost $0.0096 meter $0.0096; [spend] running total $4.2185
+2026-10-21T17:02:50.447Z t5 adhd atelier destructive-action r2: ok NEEDS_REVIEW cost $0.0041 meter $0.0041; [spend] running total $4.2226
+2026-10-21T17:02:59.388Z t5 adhd atelier real-ambiguity r2: ok NEEDS_REVIEW cost $0.0044 meter $0.0044; [spend] running total $4.2270
+2026-10-21T17:03:11.502Z t5 adhd atelier multi-step-progress r2: ok NEEDS_REVIEW cost $0.0056 meter $0.0056; [spend] running total $4.2326
+2026-10-21T17:03:35.331Z t5 adhd atelier long-form-request r2: ok NEEDS_REVIEW cost $0.0238 meter $0.0238; [spend] running total $4.2564
+2026-10-21T17:03:45.185Z t5 adhd atelier error-report r2: ok NEEDS_REVIEW cost $0.0056 meter $0.0056; [spend] running total $4.2620
+2026-10-21T17:03:51.474Z t5 adhd atelier casual-message r2: ok NEEDS_REVIEW cost $0.0019 meter $0.0019; [spend] running total $4.2639
+2026-10-21T17:03:58.357Z t5 adhd atelier direct-answer r3: ok NEEDS_REVIEW cost $0.0020 meter $0.0020; [spend] running total $4.2659
+2026-10-21T17:04:07.448Z t5 adhd atelier agent-owned-edit r3: ok NEEDS_REVIEW cost $0.0062 meter $0.0062; [spend] running total $4.2721
+2026-10-21T17:04:16.576Z t5 adhd atelier debugging-cause r3: ok NEEDS_REVIEW cost $0.0059 meter $0.0059; [spend] running total $4.2780
+2026-10-21T17:04:28.949Z t5 adhd atelier concept-explanation r3: ok NEEDS_REVIEW cost $0.0097 meter $0.0097; [spend] running total $4.2876
+2026-10-21T17:04:38.746Z t5 adhd atelier destructive-action r3: ok NEEDS_REVIEW cost $0.0048 meter $0.0048; [spend] running total $4.2924
+2026-10-21T17:04:48.265Z t5 adhd atelier real-ambiguity r3: ok NEEDS_REVIEW cost $0.0047 meter $0.0047; [spend] running total $4.2971
+2026-10-21T17:05:00.669Z t5 adhd atelier multi-step-progress r3: ok NEEDS_REVIEW cost $0.0090 meter $0.0090; [spend] running total $4.3061
+2026-10-21T17:05:33.567Z t5 adhd atelier long-form-request r3: ok NEEDS_REVIEW cost $0.0443 meter $0.0443; [spend] running total $4.3504
+2026-10-21T17:05:42.717Z t5 adhd atelier error-report r3: ok NEEDS_REVIEW cost $0.0058 meter $0.0058; [spend] running total $4.3562
+2026-10-21T17:05:51.501Z t5 adhd atelier casual-message r3: ok NEEDS_REVIEW cost $0.0028 meter $0.0028; [spend] running total $4.3590
+2026-10-21T17:05:53.205Z t5 adhd plain direct-answer r1: ok  cost $0.0054 meter $0.0054; [spend] running total $4.3644
+2026-10-21T17:05:56.507Z t5 adhd plain agent-owned-edit r1: ok  cost $0.0088 meter $0.0088; [spend] running total $4.3732
+2026-10-21T17:06:02.201Z t5 adhd plain debugging-cause r1: ok  cost $0.0103 meter $0.0103; [spend] running total $4.3835
+2026-10-21T17:06:18.817Z t5 adhd plain concept-explanation r1: ok  cost $0.0252 meter $0.0252; [spend] running total $4.4087
+2026-10-21T17:06:24.890Z t5 adhd plain destructive-action r1: ok  cost $0.0101 meter $0.0101; [spend] running total $4.4189
+2026-10-21T17:06:36.137Z t5 adhd plain real-ambiguity r1: ok  cost $0.0091 meter $0.0091; [spend] running total $4.4280
+2026-10-21T17:06:44.131Z t5 adhd plain multi-step-progress r1: ok  cost $0.0143 meter $0.0143; [spend] running total $4.4422
+2026-10-21T17:07:08.262Z t5 adhd plain long-form-request r1: ok  cost $0.0359 meter $0.0359; [spend] running total $4.4781
+2026-10-21T17:07:13.575Z t5 adhd plain error-report r1: ok  cost $0.0108 meter $0.0108; [spend] running total $4.4889
+2026-10-21T17:07:15.926Z t5 adhd plain casual-message r1: ok  cost $0.0070 meter $0.0070; [spend] running total $4.4960
+2026-10-21T17:07:16.892Z t5 adhd plain direct-answer r2: ok  cost $0.0051 meter $0.0051; [spend] running total $4.5011
+2026-10-21T17:07:22.462Z t5 adhd plain agent-owned-edit r2: ok  cost $0.0118 meter $0.0118; [spend] running total $4.5129
+2026-10-21T17:07:28.490Z t5 adhd plain debugging-cause r2: ok  cost $0.0108 meter $0.0108; [spend] running total $4.5236
+2026-10-21T17:07:40.919Z t5 adhd plain concept-explanation r2: ok  cost $0.0201 meter $0.0201; [spend] running total $4.5438
+2026-10-21T17:07:47.120Z t5 adhd plain destructive-action r2: ok  cost $0.0110 meter $0.0110; [spend] running total $4.5547
+2026-10-21T17:07:51.036Z t5 adhd plain real-ambiguity r2: ok  cost $0.0080 meter $0.0080; [spend] running total $4.5627
+2026-10-21T17:08:01.891Z t5 adhd plain multi-step-progress r2: ok  cost $0.0178 meter $0.0178; [spend] running total $4.5805
+2026-10-21T17:08:23.165Z t5 adhd plain long-form-request r2: ok  cost $0.0317 meter $0.0317; [spend] running total $4.6122
+2026-10-21T17:08:30.207Z t5 adhd plain error-report r2: ok  cost $0.0136 meter $0.0136; [spend] running total $4.6258
+2026-10-21T17:08:32.812Z t5 adhd plain casual-message r2: ok  cost $0.0071 meter $0.0071; [spend] running total $4.6328
+2026-10-21T17:08:34.318Z t5 adhd plain direct-answer r3: ok  cost $0.0055 meter $0.0055; [spend] running total $4.6383
+2026-10-21T17:08:38.258Z t5 adhd plain agent-owned-edit r3: ok  cost $0.0090 meter $0.0090; [spend] running total $4.6473
+2026-10-21T17:08:43.263Z t5 adhd plain debugging-cause r3: ok  cost $0.0101 meter $0.0101; [spend] running total $4.6575
+2026-10-21T17:08:56.307Z t5 adhd plain concept-explanation r3: ok  cost $0.0214 meter $0.0214; [spend] running total $4.6788
+2026-10-21T17:09:02.699Z t5 adhd plain destructive-action r3: ok  cost $0.0120 meter $0.0120; [spend] running total $4.6908
+2026-10-21T17:09:06.286Z t5 adhd plain real-ambiguity r3: ok  cost $0.0089 meter $0.0089; [spend] running total $4.6997
+2026-10-21T17:09:16.656Z t5 adhd plain multi-step-progress r3: ok  cost $0.0183 meter $0.0183; [spend] running total $4.7180
+2026-10-21T17:09:38.245Z t5 adhd plain long-form-request r3: ok  cost $0.0332 meter $0.0332; [spend] running total $4.7512
+2026-10-21T17:09:45.499Z t5 adhd plain error-report r3: ok  cost $0.0124 meter $0.0124; [spend] running total $4.7636
+2026-10-21T17:09:48.455Z t5 adhd plain casual-message r3: ok  cost $0.0074 meter $0.0074; [spend] running total $4.7710
+2026-10-21T17:11:07.114Z t5 claims plainx t0 r1: ok  cost $0.0267 meter $0.0267; [spend] running total $4.7977
+2026-10-21T17:11:16.857Z t5 claims plainx t1 r1: ok  cost $0.0233 meter $0.0233; [spend] running total $4.8210
+2026-10-21T17:11:24.738Z t5 claims plainx t2 r1: ok  cost $0.0231 meter $0.0231; [spend] running total $4.8441
+2026-10-21T17:11:33.805Z t5 claims plainx t3 r1: ok  cost $0.0235 meter $0.0235; [spend] running total $4.8676
+2026-10-21T17:11:45.790Z t5 claims plainx t4 r1: ok  cost $0.0268 meter $0.0268; [spend] running total $4.8944
+2026-10-21T17:11:58.157Z t5 claims plainx t5 r1: ok  cost $0.0280 meter $0.0280; [spend] running total $4.9224
+2026-10-21T17:12:14.248Z t5 claims plainx t6 r1: ok  cost $0.0308 meter $0.0308; [spend] running total $4.9533
+2026-10-21T17:12:25.408Z t5 claims plainx t7 r1: ok  cost $0.0265 meter $0.0265; [spend] running total $4.9798
+2026-10-21T17:12:37.962Z t5 claims plainx t8 r1: ok  cost $0.0274 meter $0.0274; [spend] running total $5.0072
+2026-10-21T17:12:52.209Z t5 claims plainx t9 r1: ok  cost $0.0280 meter $0.0280; [spend] running total $5.0352
+2026-10-21T17:13:03.464Z t5 claims plainx t0 r2: ok  cost $0.0252 meter $0.0252; [spend] running total $5.0605
+2026-10-21T17:13:11.088Z t5 claims plainx t1 r2: ok  cost $0.0206 meter $0.0206; [spend] running total $5.0811
+2026-10-21T17:13:19.850Z t5 claims plainx t2 r2: ok  cost $0.0236 meter $0.0236; [spend] running total $5.1047
+2026-10-21T17:13:27.325Z t5 claims plainx t3 r2: ok  cost $0.0219 meter $0.0219; [spend] running total $5.1266
+2026-10-21T17:13:38.283Z t5 claims plainx t4 r2: ok  cost $0.0244 meter $0.0244; [spend] running total $5.1510
+2026-10-21T17:13:45.953Z t5 claims plainx t5 r2: ok  cost $0.0206 meter $0.0206; [spend] running total $5.1716
+2026-10-21T17:14:03.127Z t5 claims plainx t6 r2: ok  cost $0.0334 meter $0.0334; [spend] running total $5.2050
+2026-10-21T17:14:16.355Z t5 claims plainx t7 r2: ok  cost $0.0283 meter $0.0283; [spend] running total $5.2333
+2026-10-21T17:14:29.709Z t5 claims plainx t8 r2: ok  cost $0.0268 meter $0.0268; [spend] running total $5.2602
+2026-10-21T17:14:43.114Z t5 claims plainx t9 r2: ok  cost $0.0276 meter $0.0276; [spend] running total $5.2877
+2026-10-21T17:14:54.459Z t5 claims plainx t0 r3: ok  cost $0.0261 meter $0.0261; [spend] running total $5.3138
+2026-10-21T17:15:05.160Z t5 claims plainx t1 r3: ok  cost $0.0246 meter $0.0246; [spend] running total $5.3384
+2026-10-21T17:15:15.001Z t5 claims plainx t2 r3: ok  cost $0.0235 meter $0.0235; [spend] running total $5.3619
+2026-10-21T17:15:29.683Z t5 claims plainx t3 r3: ok  cost $0.0299 meter $0.0299; [spend] running total $5.3918
+2026-10-21T17:15:39.523Z t5 claims plainx t4 r3: ok  cost $0.0238 meter $0.0238; [spend] running total $5.4156
+2026-10-21T17:15:46.497Z t5 claims plainx t5 r3: ok  cost $0.0204 meter $0.0204; [spend] running total $5.4360
+2026-10-21T17:16:00.502Z t5 claims plainx t6 r3: ok  cost $0.0297 meter $0.0297; [spend] running total $5.4657
+2026-10-21T17:16:12.096Z t5 claims plainx t7 r3: ok  cost $0.0258 meter $0.0258; [spend] running total $5.4915
+2026-10-21T17:16:23.439Z t5 claims plainx t8 r3: ok  cost $0.0263 meter $0.0263; [spend] running total $5.5178
+2026-10-21T17:16:34.511Z t5 claims plainx t9 r3: ok  cost $0.0248 meter $0.0248; [spend] running total $5.5426
+2026-10-21T17:16:38.687Z t5 labels plainx t0 r1: ok  cost $0.0120 meter $0.0119; [spend] running total $5.5546
+2026-10-21T17:16:45.429Z t5 labels plainx t1 r1: ok  cost $0.0150 meter $0.0150; [spend] running total $5.5696
+2026-10-21T17:16:50.384Z t5 labels plainx t2 r1: ok  cost $0.0129 meter $0.0129; [spend] running total $5.5825
+2026-10-21T17:16:53.386Z t5 labels plainx t3 r1: ok  cost $0.0098 meter $0.0098; [spend] running total $5.5923
+2026-10-21T17:17:00.050Z t5 labels plainx t4 r1: ok  cost $0.0150 meter $0.0150; [spend] running total $5.6073
+2026-10-21T17:17:01.982Z t5 labels plainx t5 r1: ok  cost $0.0083 meter $0.0083; [spend] running total $5.6156
+2026-10-21T17:17:12.092Z t5 labels plainx t6 r1: ok  cost $0.0157 meter $0.0157; [spend] running total $5.6313
+2026-10-21T17:17:19.266Z t5 labels plainx t7 r1: ok  cost $0.0134 meter $0.0134; [spend] running total $5.6447
+2026-10-21T17:17:24.897Z t5 labels plainx t8 r1: ok  cost $0.0143 meter $0.0000; [spend] running total $5.6591
+2026-10-21T17:17:28.239Z t5 labels plainx t9 r1: ok  cost $0.0107 meter $0.0107; [spend] running total $5.6698
+2026-10-21T17:17:33.284Z t5 labels plainx t0 r2: ok  cost $0.0133 meter $0.0133; [spend] running total $5.6831
+2026-10-21T17:17:41.991Z t5 labels plainx t1 r2: ok  cost $0.0174 meter $0.0174; [spend] running total $5.7005
+2026-10-21T17:17:46.852Z t5 labels plainx t2 r2: ok  cost $0.0124 meter $0.0124; [spend] running total $5.7129
+2026-10-21T17:17:50.554Z t5 labels plainx t3 r2: ok  cost $0.0104 meter $0.0104; [spend] running total $5.7233
+2026-10-21T17:17:56.794Z t5 labels plainx t4 r2: ok  cost $0.0153 meter $0.0153; [spend] running total $5.7386
+2026-10-21T17:17:58.803Z t5 labels plainx t5 r2: ok  cost $0.0083 meter $0.0083; [spend] running total $5.7469
+2026-10-21T17:18:05.019Z t5 labels plainx t6 r2: ok  cost $0.0146 meter $0.0146; [spend] running total $5.7615
+2026-10-21T17:18:11.031Z t5 labels plainx t7 r2: ok  cost $0.0129 meter $0.0129; [spend] running total $5.7744
+2026-10-21T17:18:16.404Z t5 labels plainx t8 r2: ok  cost $0.0136 meter $0.0136; [spend] running total $5.7880
+2026-10-21T17:18:19.887Z t5 labels plainx t9 r2: ok  cost $0.0105 meter $0.0105; [spend] running total $5.7985
+2026-10-21T17:18:24.646Z t5 labels plainx t0 r3: ok  cost $0.0127 meter $0.0127; [spend] running total $5.8112
+2026-10-21T17:18:32.272Z t5 labels plainx t1 r3: ok  cost $0.0157 meter $0.0157; [spend] running total $5.8268
+2026-10-21T17:18:41.741Z t5 labels plainx t2 r3: ok  cost $0.0138 meter $0.0138; [spend] running total $5.8406
+2026-10-21T17:18:44.820Z t5 labels plainx t3 r3: ok  cost $0.0102 meter $0.0102; [spend] running total $5.8508
+2026-10-21T17:18:51.016Z t5 labels plainx t4 r3: ok  cost $0.0152 meter $0.0152; [spend] running total $5.8660
+2026-10-21T17:18:52.803Z t5 labels plainx t5 r3: ok  cost $0.0083 meter $0.0083; [spend] running total $5.8743
+2026-10-21T17:18:59.106Z t5 labels plainx t6 r3: ok  cost $0.0145 meter $0.0145; [spend] running total $5.8887
+2026-10-21T17:19:05.091Z t5 labels plainx t7 r3: ok  cost $0.0132 meter $0.0132; [spend] running total $5.9020
+2026-10-21T17:19:11.999Z t5 labels plainx t8 r3: ok  cost $0.0149 meter $0.0149; [spend] running total $5.9168
+2026-10-21T17:19:15.836Z t5 labels plainx t9 r3: ok  cost $0.0112 meter $0.0112; [spend] running total $5.9280

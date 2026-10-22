@@ -69,7 +69,7 @@ describe('the compiled skill of a skill that answers', () => {
     aRequirement({ requirementId: 'p9', statement: 'I close with the next check.', materiality: 'PREFERRED', evidence: '' }),
   ];
   const std = { standardVersionHash: 's', evidenceId: 'e', workType: 'answers', requirements: rules, authorityState: 'RATIFIED', mintedAt: '2026-10-05T00:00:00Z' } as unknown as StandardVersion;
-  const voice: Voice = { passages: [], lengthWords: null, corpusPieces: 24, holdsBack: ['p5'],
+  const voice: Voice = { passages: [], lengthWords: null, corpusPieces: 24, holdsBack: ['p5'], form: 'REPLY',
     persona: { dropped: 0, points: [
       { aspect: 'directness', description: 'Gives the answer in the first line.', frequency: 'ALWAYS', quote: 'git reset' },
       { aspect: 'risk', description: 'Asks one question first, and nothing else.', frequency: 'SOMETIMES', quote: 'is anyone else on this branch?' }] } };
@@ -107,7 +107,7 @@ describe('the compiled skill of a skill that answers', () => {
   });
   it('for writing, a move keeps its rate and its per-piece cap', () => {
     const w = { ...std, workType: 'writing' } as unknown as StandardVersion;
-    const m = renderAgentSkill(w, compileArchitecture(w), 'x', 'd', null, [], { ...voice, holdsBack: [] }).files['SKILL.md'];
+    const m = renderAgentSkill(w, compileArchitecture(w), 'x', 'd', null, [], { ...voice, holdsBack: [], form: 'DOCUMENT' }).files['SKILL.md'];
     expect(m).toContain('I lead with the one-sentence mechanism. (in 1 of 1 of my pieces where it could apply)');
   });
 });

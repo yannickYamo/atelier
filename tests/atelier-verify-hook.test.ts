@@ -58,10 +58,17 @@ describe('verify --hook and the record head (through the binary)', () => {
     const bad = run(JSON.stringify({ tool_input: { file_path: join(proj, 'bad.md') } }), 'verify', '--skill', 'posts', '--hook');
     expect(bad.code).toBe(2);
   });
-  it('an event with nothing to check, or not JSON, says so and exits 0: a guard never blocks on its own failure', () => {
+  it('a Stop event is checked by the last assistant message of the transcript', () => {
+    const t = join(proj, 'transcript.jsonl');
+    writeFileSync(t, [JSON.stringify({ type: 'user', message: { content: 'write it' } }), JSON.stringify({ type: 'assistant', message: { content: [{ type: 'text', text: BAD }] } })].join('\n'));
+    expect(run(JSON.stringify({ hook_event_name: 'Stop', transcript_path: t, stop_hook_active: false }), 'verify', '--skill', 'posts', '--hook').code).toBe(2);
+    writeFileSync(t, JSON.stringify({ type: 'assistant', message: { content: GOOD } }));
+    expect(run(JSON.stringify({ hook_event_name: 'Stop', transcript_path: t }), 'verify', '--skill', 'posts', '--hook').code).toBe(0);
+  });
+  it('an event with nothing to check exits 0 and says so; a guard that cannot check at all exits 2: never passed silently', () => {
     expect(run(JSON.stringify({ hook_event_name: 'Stop', stop_hook_active: false }), 'verify', '--skill', 'posts', '--hook')).toMatchObject({ code: 0, err: expect.stringContaining('nothing to check in this hook event') as string });
-    expect(run('not json', 'verify', '--skill', 'posts', '--hook')).toMatchObject({ code: 0, err: expect.stringContaining('not JSON') as string });
-    // and the same missing skill without --hook is still "could not check": 2
+    expect(run('not json', 'verify', '--skill', 'posts', '--hook')).toMatchObject({ code: 2, err: expect.stringContaining('not JSON') as string });
+    expect(run(JSON.stringify({ tool_input: { content: GOOD } }), 'verify', '--skill', 'nope', '--hook')).toMatchObject({ code: 2, err: expect.stringContaining('no built skill') as string });
     expect(run(null, 'verify', '--skill', 'nope', 'good.md').code).toBe(2);
   });
   it('--json opens with the one record head: schema, state, standard, skill version, certificate, record', () => {

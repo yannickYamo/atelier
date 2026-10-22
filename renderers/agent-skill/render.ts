@@ -13,7 +13,6 @@
 
 import { describeScope, groundScope } from '../../core/compiler/scope.js';
 import { moveEvidence, ownerWrote, HOLDS_BACK } from '../../core/compiler/applicability.js';
-import { isReplyWork } from '../../core/observers/formats.js';
 import { renderContrastFile, type ContrastPair } from '../../core/compiler/contrast-examples.js';
 import { EXCERPT_GAP, isExcerpt, pieceLabel, type Voice } from '../../core/compiler/voice.js';
 import { describePersona, describeRepertoire, standingPoints, conditionalPoints } from '../../core/compiler/persona.js';
@@ -275,7 +274,7 @@ export function renderAgentSkill(
   }
   // A skill that answers people is compiled in the words of answers, not essays (the length is a default the
   // request overrides; the line against invention names results, files and commands, not stories).
-  const answers = voice?.form ? voice.form === 'REPLY' : isReplyWork(v.workType);
+  const answers = voice?.form === 'REPLY';
   // SECTION ROUTING IS BY AUTHORITY AND KIND, NEVER BY COMPONENT ID.
   //
   // The first version keyed on an id prefix (`do:` / `avoid:` / `observe:`). That made the safety of

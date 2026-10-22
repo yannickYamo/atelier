@@ -1,0 +1,48 @@
+{
+ "fixture": "claims",
+ "arm": "atelier",
+ "task": "t4",
+ "run": 2,
+ "text": "## Summary\n\nAlder Mews Architects: accidental drop during transport of a tablet and a drawing display at a hotel meeting room in Leeds. Covered under clause 4.5; reserve 3,642 dollars.\n\n## Facts\n\nAlder Mews Architects reported the loss on 25 June 2026 [notice of loss]. The loss occurred at a hotel meeting room in Leeds [notice of loss]. The items are a tablet and a drawing display [invoice 1], [invoice 2]. The incident was recorded on 27 June 2026 [incident report]. The incident was an accidental drop during transport, with no third party involved [incident report].\n\n## Coverage analysis\n\nThe loss falls under clause 4.5 of the policy, which covers accidental loss of or damage to portable equipment while being carried between premises [policy]. Exclusion 7.1 does not apply: no theft is alleged [incident report], [policy]. Exclusion 7.3 does not apply: the loss is an accidental drop and not gradual deterioration [incident report], [policy]. Exclusion 7.5 does not apply: no theft is alleged [incident report], [policy].\n\n## Decision\n\nCovered under clause 4.5. The claim is accepted.\n\n## Reserve\n\nThe reserve is 3,642 dollars, the sum of the two invoices (2,018 dollars and 1,624 dollars) [invoice 1], [invoice 2]; the schedule applies no excess [policy].",
+ "state": "NEEDS_REVIEW",
+ "costUsd": 0.0226,
+ "exit": 0,
+ "standard": "8e9fa261657f5f22",
+ "headKeys": [
+  "schema",
+  "state",
+  "standardVersionHash",
+  "skillVersion",
+  "certificate",
+  "record"
+ ],
+ "certificate": {
+  "standardVersionHash": "8e9fa261657f5f22",
+  "checks": {
+   "total": 14,
+   "counted": 9,
+   "written": 5,
+   "writtenQualified": 1
+  },
+  "readers": {
+   "taste": {
+    "veto": [],
+    "labelledMisses": 0,
+    "falseBlockUpper95": null
+   },
+   "claims": {
+    "instrument": "pattern check, with claim reader (claude-haiku-4-5, prompt 47d18891) reporting only: not qualified",
+    "version": "47d18891",
+    "gate": "pattern",
+    "qualified": false,
+    "measured": null,
+    "kinds": []
+   }
+  },
+  "errorBound": null,
+  "why": "no delivered-error bound: it needs an audit sample of your own labels, drawn like the work this skill does; the checks and readers above are what this output was held to"
+ },
+ "stderr": "Judgement reader: not run (reporting only until your labels qualify it; --taste reads this run and records readings to label: atelier taste --skill claims --calibrate).\nMethod: contains 3 of 3 thing(s) it must · 1 judgement step(s) not measured.\nGrammar, listed for you to check and never changed (1): \"## Coverage analysis\" (the checker proposes a change this rule does not make).\nChecked: every REQ",
+ "meterUsd": 0.02257288000000024,
+ "seconds": 19.001
+}

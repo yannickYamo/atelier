@@ -1,0 +1,81 @@
+{
+ "fixture": "adhd",
+ "arm": "atelier",
+ "task": "concept-explanation",
+ "run": 3,
+ "text": "Run `git merge main` on your feature branch when you want to bring in someone else's work without rewriting anything; run `git rebase main` only on commits that exist just on your machine.\n\n**Merge**\n\n`git merge main` (while on your feature branch) creates one new \"merge commit\" that joins the two lines of history. Your commits and main's commits keep their original hashes and their original order of creation.\n\n- History shows what actually happened, including the fact that two lines of work ran in parallel.\n- It is non-destructive. Nothing existing is changed, only a commit is added.\n- The cost is a busier log with merge commits that carry no work of their own.\n\n**Rebase**\n\n`git rebase main` (while on your feature branch) takes your commits, sets them aside, moves your branch to the tip of main, and replays your commits on top, one at a time. Imagine picking up your sticky notes from a wall, laying down the updated wall, and re-sticking them in the same order.\n\n- History becomes a straight line, which is easier to read and bisect.\n- The replayed commits are new commits. They have the same changes but different hashes.\n- You may have to resolve conflicts once per replayed commit, not once total.\n\n**The rule that keeps you safe**\n\nNever rebase commits that other people may have pulled. Rebasing rewrites them, and anyone who already has the old versions will see duplicated or diverging history when they next pull. Merge never causes this.\n\n**How to choose**\n\n| Situation | Use |\n|---|---|\n| Updating your private feature branch with the latest main | Rebase (or merge, both are fine) |\n| Branch already pushed and others are working on it | Merge |\n| Landing a finished feature into main on a shared repo | Whatever your team's convention is; ask |\n| You are unsure | Merge, because it cannot rewrite history |\n\n**Undo options**\n\n- After a merge you dislike, and before pushing: `git reset --hard ORIG_HEAD`.\n- After a rebase gone wrong: `git rebase --abort` while it is in progress, or find the old tip with `git reflog` and run `git reset --hard <old-hash>`.\n\nRebasing a pushed branch also means a plain `git push` is rejected, and you would need `git push --force-with-lease`. If you find yourself reaching for that on a shared branch, stop and merge instead.\n\n**Next action (under 2 minutes):** in a throwaway repo, create a branch, add one commit on it and one on main, run `git merge main`, note the `git log --oneline --graph` output, then `git reset --hard ORIG_HEAD` and run `git rebase main` to compare the two graphs.\n\nAnalogy (\"sticky notes\") and the \"imagine\" hypothetical are the freely composed parts; no facts beyond standard Git behavior are asserted, and the `ORIG_HEAD` and `--force-with-lease` details are worth a quick check against your Git version's docs.*",
+ "state": "NEEDS_REVIEW",
+ "costUsd": 0.013,
+ "exit": 0,
+ "standard": "d497e8fdd36f3852",
+ "headKeys": [
+  "schema",
+  "state",
+  "standardVersionHash",
+  "skillVersion",
+  "certificate",
+  "record"
+ ],
+ "certificate": {
+  "standardVersionHash": "d497e8fdd36f3852",
+  "checks": {
+   "total": 6,
+   "counted": 0,
+   "written": 6,
+   "writtenQualified": 0
+  },
+  "readers": {
+   "taste": {
+    "veto": [],
+    "labelledMisses": 0,
+    "falseBlockUpper95": null
+   },
+   "claims": {
+    "instrument": "pattern check (no material bound: a model reading of specifics could only list them)",
+    "version": null,
+    "gate": "pattern",
+    "qualified": false,
+    "measured": null,
+    "kinds": []
+   }
+  },
+  "latitude": {
+   "skill": "CREATIVE",
+   "run": "CREATIVE",
+   "tightenedBy": null,
+   "setBy": "model"
+  },
+  "acceptedUnmeasured": [
+   {
+    "id": "x1",
+    "statement": "Lead with the next action: the first line is something the reader can do, and a command, path, or snippet goes first with prose after, if at all."
+   },
+   {
+    "id": "x3",
+    "statement": "End with one concrete next action the reader can do in under two minutes."
+   },
+   {
+    "id": "x4",
+    "statement": "Finish the first issue, then offer the second as a separate question rather than mixing it in; answer mid-work questions yourself if you can, and if one still needs the reader, surface it once at the end."
+   },
+   {
+    "id": "x5",
+    "statement": "Restate the current state every turn, e.g. which step is done and what is next, and use the harness's task or plan tool for multi-step work instead of also narrating the plan as prose."
+   },
+   {
+    "id": "x7",
+    "statement": "Show what now works in concrete terms, with how to try it, instead of burying wins in a recap."
+   },
+   {
+    "id": "x12",
+    "statement": "Keep these rules on for every response for the rest of the session, even when the topic changes, and turn them off only when the reader says \"stop adhd mode\" or \"normal mode\" (confirm in one line, then return to default style)."
+   }
+  ],
+  "errorBound": null,
+  "why": "no delivered-error bound: it needs an audit sample of your own labels, drawn like the work this skill does; the checks and readers above are what this output was held to"
+ },
+ "error": null,
+ "stderr": "No notes of yours are bound, so a story, source or figure in the draft cannot be checked against anything of yours, and is listed for you, not cut. Add yours: --with notes=<file>, or atelier material --skill i-have-adhd <file>.\nJudgement reader: not run (reporting only until your labels qualify it; --taste reads this run and records readings to label: atelier taste --skill i-have-adhd --calibrate).\nRead before writing: 1 thing(s) asked for.\nChecked: every REQUIRED measured rule holds (UNSOURCED held once what could not be traced to your material was cut).\n1 specific(s) are not in your material: left in for you to check before you use this (listed in the details).\nCut 1 invented stor(ies), quotation(s) or figure(s); your own would fit where they were (listed in the details).\n$0.01 · everything this run checked: <scratch>/data/build-adhd-1-9ZmSOB/runs/project-194d0492abd9d831/last-invocation.txt · not right? atelier fix \"<what was wrong>\"\n",
+ "meterUsd": 0.01296294000000131,
+ "seconds": 16.01
+}

@@ -1,0 +1,12 @@
+{
+ "fixture": "adhd",
+ "arm": "plain",
+ "task": "debugging-cause",
+ "run": 3,
+ "text": "Add the header to the test request:\n\n```ts\nawait request(app)\n  .get('/your-route')\n  .set('Authorization', `Bearer ${token}`)\n  .expect(200);\n```\n\n**Cause:** The auth middleware rejects requests with no `Authorization` header, so it returns 401 before the handler runs.\n\n**Where the token comes from:** Use whatever the other passing tests use. If none do, sign one with your test secret, e.g. `jwt.sign({ sub: 'test-user' }, process.env.JWT_SECRET)`.\n\n**Exception:** If this route is meant to be public, the bug is in the app, not the test. Remove the auth middleware from that route instead.\n\nAbout 2 minutes either way.\n\nNext: tell me which case applies (protected or public route), or paste the test's request lines and I'll adapt the fix.",
+ "costUsd": 0.010134,
+ "stop": "end_turn",
+ "error": null,
+ "meterUsd": 0.010133999999999865,
+ "seconds": 4.993
+}

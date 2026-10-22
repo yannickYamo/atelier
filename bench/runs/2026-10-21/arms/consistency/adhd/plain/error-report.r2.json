@@ -1,0 +1,12 @@
+{
+ "fixture": "adhd",
+ "arm": "plain",
+ "task": "error-report",
+ "run": 2,
+ "text": "Restore `config/app.json`, then rerun the build.\n\n**Failure:** `build.ts:88` throws `ENOENT`. Cause: `config/app.json` does not exist.\n\n**Fix (about 5 minutes):**\n1. Run `git status config/`.\n2. If it shows `app.json` as deleted, run `git restore config/app.json`.\n3. If it was never tracked, run `cp config/app.json.example config/app.json`. If there is no example file, create `config/app.json` with `{}` and add the keys `build.ts` reads.\n\n**Verify:**\n1. `ls config/app.json` prints the path.\n2. `npm run build` finishes with exit code 0 and no `ENOENT`.\n\nIf `build.ts:88` still throws, the path is resolved from the wrong working directory. Check how line 88 builds the path.\n\nNext: run `git status config/` and paste the output.",
+ "costUsd": 0.01359,
+ "stop": "end_turn",
+ "error": null,
+ "meterUsd": 0.013589999999999769,
+ "seconds": 7.026
+}

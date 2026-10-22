@@ -1,0 +1,48 @@
+{
+ "fixture": "adhd",
+ "arm": "atelier",
+ "task": "concept-explanation",
+ "run": 1,
+ "text": "Default rule: use merge for shared branches, rebase only for your own local branch that nobody else has pulled.\n\nStep 1 of 1 done: the rule above. Next: pick the row below that matches your situation.\n\n**What each one does**\n\n- **Merge** joins two branches by creating a new \"merge commit\" with two parents. Existing commits are untouched. History shows exactly what happened, including the branching.\n- **Rebase** takes your commits and replays them, one by one, on top of another branch. Each replayed commit gets a new hash. History looks like a straight line, as if you had started your work later.\n\n**Same situation, two results**\n\nYou branched `feature` off `main`. Then `main` got new commits.\n\n```\nMerge:  git switch feature\n        git merge main\n        -> adds one merge commit; your original commits keep their hashes\n\nRebase: git switch feature\n        git rebase main\n        -> your commits are rewritten on top of main's tip; hashes change\n```\n\n**How to choose**\n\n1. Is the branch shared (pushed, and others may have pulled it)? Use **merge**. Never rebase it.\n2. Is it your own private branch, not yet pushed or only pushed by you? **Rebase** is safe and gives a cleaner history.\n3. Are you bringing a finished feature into `main`? Use **merge** (or your team's pull request setting, such as \"squash\" or \"merge commit\").\n4. Not sure? Use **merge**. It is always safe.\n\n**Why rebase is risky**\n\nRebase rewrites history. If a teammate already has your old commits and you push the rewritten ones, your histories diverge. That leads to duplicate commits and painful conflicts for them. Git will make you use `git push --force` to publish a rebased branch that was already pushed. That force is the warning sign.\n\nIf you must force-push after rebasing your own branch, use the safer form:\n\n```\ngit push --force-with-lease\n```\n\nIt refuses to overwrite work you have not seen.\n\n**Conflicts**\n\n- Merge: you resolve conflicts once, in one merge commit.\n- Rebase: you may resolve conflicts once per replayed commit. Continue with `git rebase --continue`, or back out with `git rebase --abort`.\n- Merge equivalent of backing out: `git merge --abort`.\n\n**Quick comparison**\n\n| | Merge | Rebase |\n|---|---|---|\n| History | Preserved, with branches visible | Linear, rewritten |\n| Commit hashes | Unchanged | Changed |\n| Safe on shared branches | Yes | No |\n| Conflict handling | Once | Possibly per commit |\n| Undo mid-way | `git merge --abort` | `git rebase --abort` |\n\n**Recovery if a rebase goes wrong**\n\nRun `git reflog`, find the entry from before the rebase, then `git reset --hard <that-hash>`. Your old commits are still there for a while.\n\n**Next action (under 2 minutes):** in a throwaway repo, make a branch with two commits, run `git rebase main`, then run `git log --oneline` and compare the hashes to before.",
+ "state": "NEEDS_REVIEW",
+ "costUsd": 0.0121,
+ "exit": 0,
+ "standard": "03fcfcea922b8e6a",
+ "headKeys": [
+  "schema",
+  "state",
+  "standardVersionHash",
+  "skillVersion",
+  "certificate",
+  "record"
+ ],
+ "certificate": {
+  "standardVersionHash": "03fcfcea922b8e6a",
+  "checks": {
+   "total": 6,
+   "counted": 0,
+   "written": 6,
+   "writtenQualified": 0
+  },
+  "readers": {
+   "taste": {
+    "veto": [],
+    "labelledMisses": 0,
+    "falseBlockUpper95": null
+   },
+   "claims": {
+    "instrument": "pattern check (no material bound: a model reading of specifics could only list them)",
+    "version": null,
+    "gate": "pattern",
+    "qualified": false,
+    "measured": null,
+    "kinds": []
+   }
+  },
+  "errorBound": null,
+  "why": "no delivered-error bound: it needs an audit sample of your own labels, drawn like the work this skill does; the checks and readers above are what this output was held to"
+ },
+ "stderr": "No notes of yours are bound, so a story, source or figure in the draft cannot be checked against anything of yours, and is listed for you, not cut. Add yours: --with notes=<file>, or atelier material --skill i-have-adhd <file>.\nChecked: every REQUIRED measured rule holds.\n2 specific(s) are not in your material: left in for you to check before you use this (listed in the details).\n$0.01 · everythin",
+ "meterUsd": 0.012103380000000108,
+ "seconds": 13.952
+}

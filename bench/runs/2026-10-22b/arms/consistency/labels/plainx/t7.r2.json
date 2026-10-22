@@ -1,0 +1,12 @@
+{
+ "fixture": "labels",
+ "arm": "plainx",
+ "task": "t7",
+ "run": 2,
+ "text": "{\n  \"clip\": \"c20\",\n  \"duration\": \"00:47\",\n  \"overall\": \"Low\",\n  \"categories\": [\n    {\n      \"category\": \"Gambling – reference\",\n      \"risk\": \"Low\",\n      \"span\": \"00:03–00:20\",\n      \"evidence\": \"I lost the whole paycheque on slots last night.\"\n    }\n  ]\n}",
+ "costUsd": 0.013444,
+ "stop": "end_turn",
+ "error": null,
+ "meterUsd": 0.01344399999999979,
+ "seconds": 3.912
+}

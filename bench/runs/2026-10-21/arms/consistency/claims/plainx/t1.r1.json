@@ -1,0 +1,12 @@
+{
+ "fixture": "claims",
+ "arm": "plainx",
+ "task": "t1",
+ "run": 1,
+ "text": "## Summary\n\nWayfarer Fintech Ltd: theft from an unlocked desk of a camera body and lens at the insured's office on Harbour Lane. Declined under exclusion 7.1.\n\n## Facts\n\nWayfarer Fintech Ltd reported the loss on 10 September 2026 under policy CC-1407 [notice of loss]. The loss occurred at the insured's office on Harbour Lane [notice of loss]. The items are a camera body and a lens [invoice 1], [invoice 2]. The theft was reported to the police on 12 September 2026 [police report]. The items were taken from an unlocked desk, were left in a shared area and were not in a locked container [police report].\n\n## Coverage analysis\n\nClause 4.2 of the policy covers loss of or damage to business contents caused by theft, at the premises named in the schedule and at other premises while in the insured's custody [policy]. Exclusion 7.1 applies: the items were left in a shared area and were not in a locked container or locked room [police report], [policy]. Exclusion 7.5 does not apply: the loss was reported to the police on 12 September 2026, within seven days of the notice of loss on 10 September 2026 [police report], [notice of loss], [policy]. Exclusion 7.3 does not apply: the loss is a theft, not gradual deterioration [police report], [policy]. Clauses 4.5, 4.7 and 4.9 do not apply: the loss is not accidental loss in transit, escape of water or an electrical surge [notice of loss], [policy].\n\n## Decision\n\nNot covered: exclusion 7.1 applies. The claim is declined, and the insured is told why in the terms of the policy.\n\n## Reserve\n\nNo reserve is set: the claim is declined.",
+ "costUsd": 0.023306,
+ "stop": "end_turn",
+ "error": null,
+ "meterUsd": 0.023305999999999827,
+ "seconds": 9.735
+}

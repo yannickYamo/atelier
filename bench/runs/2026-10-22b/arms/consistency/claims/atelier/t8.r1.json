@@ -1,0 +1,56 @@
+{
+ "fixture": "claims",
+ "arm": "atelier",
+ "task": "t8",
+ "run": 1,
+ "text": "## Summary\n\nElmhurst Clinics LLP: fire damage in a neighbouring unit of a label printer and a barcode scanner at a storage unit on Mill Road. Covered under clause 4.2; reserve 3,254 dollars.\n\n## Facts\n\nElmhurst Clinics LLP reported the loss on 21 June 2026 [notice of loss]. The loss occurred at a storage unit on Mill Road [notice of loss]. The items are a label printer and a barcode scanner [invoice 1], [invoice 2]. The incident was recorded on 23 June 2026 [incident report]. The cause was fire damage in a neighbouring unit [incident report]. No third party was involved [incident report].\n\n## Coverage analysis\n\nThe loss falls under clause 4.2 of the policy, which covers loss of or damage to business contents caused by theft, fire, storm or escape of water [policy]. Exclusion 7.1 does not apply: no theft is alleged [policy]. Exclusion 7.5 does not apply: no theft is alleged [policy]. Exclusion 7.3 does not apply: the damage was caused by fire and not by gradual deterioration [incident report], [policy].\n\n## Decision\n\nCovered under clause 4.2. The claim is accepted.\n\n## Reserve\n\nThe reserve is 3,254 dollars, the sum of the two invoices (1,666 dollars and 1,588 dollars) [invoice 1], [invoice 2]; no excess is shown in the schedule, so none applies under clause 9.1 [policy].",
+ "state": "NEEDS_REVIEW",
+ "costUsd": 0.0233,
+ "exit": 0,
+ "standard": "15ff9349666bb38a",
+ "headKeys": [
+  "schema",
+  "state",
+  "standardVersionHash",
+  "skillVersion",
+  "certificate",
+  "record"
+ ],
+ "certificate": {
+  "standardVersionHash": "15ff9349666bb38a",
+  "checks": {
+   "total": 13,
+   "counted": 9,
+   "written": 4,
+   "writtenQualified": 0
+  },
+  "readers": {
+   "taste": {
+    "veto": [],
+    "labelledMisses": 0,
+    "falseBlockUpper95": null
+   },
+   "claims": {
+    "instrument": "pattern check, with claim reader (claude-haiku-4-5, prompt 47d18891) reporting only: not qualified",
+    "version": "47d18891",
+    "gate": "pattern",
+    "qualified": false,
+    "measured": null,
+    "kinds": []
+   }
+  },
+  "latitude": {
+   "skill": "STRICT",
+   "run": "STRICT",
+   "tightenedBy": null,
+   "setBy": "model"
+  },
+  "acceptedUnmeasured": [],
+  "errorBound": null,
+  "why": "no delivered-error bound: it needs an audit sample of your own labels, drawn like the work this skill does; the checks and readers above are what this output was held to"
+ },
+ "error": null,
+ "stderr": "Judgement reader: not run (reporting only until your labels qualify it; --taste reads this run and records readings to label: atelier taste --skill claims --calibrate).\nMethod: contains 2 of 2 thing(s) it must · 2 judgement step(s) not measured.\nGrammar, listed for you to check and never changed (4): \"Elmhurst\" (a name, an acronym or a coined word is the author's); \"Elmhurst\" (a name, an acronym or a coined word is the author's); \"## Coverage analysis\" (the checker proposes a change this rule does not make); \"storm\" (the checker proposes a change this rule does not make).\nChecked: every REQUIRED measured rule that could be checked holds; listed for you to check: x15.\n1 specific(s) are not in your material: left in for you to check before you use this (listed in the details).\nLength: 219 words. The request names none; your pieces run 146 to 194, shortest to longest.\n$0.02 · everything this run checked: <scratch>/data/build-claims-1-Xs7OwZ/runs/project-ab6dcbda2a6633ca/last-invocation.txt · not right? atelier fix \"<what was wrong>\"\n",
+ "meterUsd": 0.02327208000000014,
+ "seconds": 19.814
+}

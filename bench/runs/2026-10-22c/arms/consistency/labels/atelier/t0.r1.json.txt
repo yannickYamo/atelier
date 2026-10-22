@@ -1,0 +1,15 @@
+{
+  "clip": "c13",
+  "duration": "00:58",
+  "overall": "Floor",
+  "categories": [
+    {
+      "category": "Floor – all brands",
+      "risk": "Floor",
+      "span": null,
+      "evidence": "The old brewery, now a museum. They brewed a dark ale here until 1960. The copper is original."
+    }
+  ]
+}
+
+Check to settle: "They brewed a dark ale here until 1960" at 00:22 is a historical mention of brewing in a museum setting, with no drinking described. If a reviewer reads it as an alcohol reference, the label becomes "Alcohol – reference", risk Low, span 00:22–00:30, and overall Low, with Floor – all brands removed.

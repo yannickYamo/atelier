@@ -1,0 +1,767 @@
+{
+ "schema": "atelier-record/1",
+ "state": "BLOCKED",
+ "standardVersionHash": "8e9fa261657f5f22",
+ "skillVersion": "7688fcbf9009358c",
+ "certificate": {
+  "standardVersionHash": "8e9fa261657f5f22",
+  "checks": {
+   "total": 14,
+   "counted": 9,
+   "written": 5,
+   "writtenQualified": 1
+  },
+  "readers": {
+   "taste": {
+    "veto": [],
+    "labelledMisses": 0,
+    "falseBlockUpper95": null
+   },
+   "claims": {
+    "instrument": "pattern check (no material bound: a model reading of specifics could only list them)",
+    "version": null,
+    "gate": "pattern",
+    "qualified": false,
+    "measured": null,
+    "kinds": []
+   }
+  },
+  "errorBound": null,
+  "why": "no delivered-error bound: it needs an audit sample of your own labels, drawn like the work this skill does; the checks and readers above are what this output was held to"
+ },
+ "record": {
+  "schema": 1,
+  "state": "BLOCKED",
+  "entries": [
+   {
+    "id": "x1",
+    "statement": "Open with a Summary section: one paragraph on who, what, where, and the decision.",
+    "dimension": "STANDARD",
+    "source": "METHOD",
+    "required": true,
+    "observation": {
+     "proposition": "the sections \"Summary\", \"Facts\", \"Coverage analysis\", \"Decision\", \"Reserve\", in that order, with something in it, opening the work",
+     "coverage": "PARTIAL",
+     "qualification": "DETERMINISTIC",
+     "evidence": "everything it must contain is there",
+     "unchecked": "one paragraph"
+    },
+    "result": "UNVERIFIED",
+    "reason": "PARTLY_CHECKED"
+   },
+   {
+    "id": "x2",
+    "statement": "Then a Facts section. Every fact cites the document in the file it comes from, in square brackets: [notice of loss], [police report], [invoice 1].",
+    "dimension": "STANDARD",
+    "source": "METHOD",
+    "required": true,
+    "observation": {
+     "proposition": "Every sentence in the Facts section carries a bracketed citation naming a document in the material. (a check written for this step)",
+     "coverage": "PARTIAL",
+     "qualification": "DETERMINISTIC",
+     "evidence": "6 uncited or unmatched fact(s)",
+     "unchecked": "how much of this rule the check reads is not known"
+    },
+    "result": "FAIL",
+    "reason": "NOT_MET"
+   },
+   {
+    "id": "x3",
+    "statement": "Then a Coverage analysis section. The coverage conclusion cites the policy clause it rests on, and every exclusion that could apply is addressed and cited.",
+    "dimension": "HABIT",
+    "source": "METHOD",
+    "required": false,
+    "observation": {
+     "proposition": "The Coverage analysis section names a policy clause number and cites a source. Whether every applicable exclusion is addressed is judgement. (a check written for this step)",
+     "coverage": "PARTIAL",
+     "qualification": "DETERMINISTIC",
+     "evidence": "coverage section lacks a cited policy clause or source",
+     "unchecked": "how much of this rule the check reads is not known"
+    },
+    "result": "FAIL",
+    "reason": "NOT_MET"
+   },
+   {
+    "id": "x4",
+    "statement": "Then a Decision section: covered or not covered, and under which clause.",
+    "dimension": "HABIT",
+    "source": "METHOD",
+    "required": false,
+    "observation": {
+     "proposition": "The Decision section states covered or not covered and names a clause number. (a check written for this step)",
+     "coverage": "PARTIAL",
+     "qualification": "DETERMINISTIC",
+     "evidence": "decision lacks outcome or clause",
+     "unchecked": "how much of this rule the check reads is not known"
+    },
+    "result": "FAIL",
+    "reason": "NOT_MET"
+   },
+   {
+    "id": "x5",
+    "statement": "End with a Reserve section. The reserve equals the sum of the invoices in the file, less any excess the schedule applies, and cites the invoices.",
+    "dimension": "HABIT",
+    "source": "METHOD",
+    "required": false,
+    "observation": {
+     "proposition": "The first figure in the Reserve section equals the sum of the invoice amounts found in the material, or one of them. (a check written for this step)",
+     "coverage": "PARTIAL",
+     "qualification": "DETERMINISTIC",
+     "evidence": "no invoice amounts in material; nothing to compare",
+     "unchecked": "how much of this rule the check reads is not known"
+    },
+    "result": "UNVERIFIED",
+    "reason": "PARTLY_CHECKED"
+   },
+   {
+    "id": "x6",
+    "statement": "Never speculate about the insured's intent or honesty.",
+    "dimension": "STANDARD",
+    "source": "METHOD",
+    "required": true,
+    "observation": {
+     "proposition": null,
+     "coverage": "NONE",
+     "qualification": "UNAVAILABLE",
+     "evidence": null
+    },
+    "result": "UNVERIFIED",
+    "reason": "NOT_MACHINE_CHECKABLE"
+   },
+   {
+    "id": "x7",
+    "statement": "Never use the words \"fraud\", \"scam\", \"liar\" or \"suspicious\".",
+    "dimension": "STANDARD",
+    "source": "METHOD",
+    "required": true,
+    "observation": {
+     "proposition": "none of: fraud, scam, liar, suspicious",
+     "coverage": "FULL",
+     "qualification": "DETERMINISTIC",
+     "evidence": "none used"
+    },
+    "result": "PASS",
+    "reason": "MET"
+   },
+   {
+    "id": "x8",
+    "statement": "Take every date, name and figure from the file: add none of your own.",
+    "dimension": "HABIT",
+    "source": "METHOD",
+    "required": false,
+    "observation": {
+     "proposition": "Every date and figure in the memo appears in the request or the material. (a check written for this step)",
+     "coverage": "PARTIAL",
+     "qualification": "DETERMINISTIC",
+     "evidence": "8 date(s) or figure(s) not in the file",
+     "unchecked": "how much of this rule the check reads is not known"
+    },
+    "result": "FAIL",
+    "reason": "NOT_MET"
+   },
+   {
+    "id": "x9",
+    "statement": "Every figure in the work is one the request or the material gives.",
+    "dimension": "HABIT",
+    "source": "EXAMPLE",
+    "required": false,
+    "observation": {
+     "proposition": "every figure is one the request or the material gives",
+     "coverage": "PARTIAL",
+     "qualification": "DETERMINISTIC",
+     "evidence": "1 of 6 figure(s) are in the request (no material was bound)",
+     "unchecked": "whether each figure names its source, and whether it is used as the source means it"
+    },
+    "result": "FAIL",
+    "reason": "NOT_MET"
+   },
+   {
+    "id": "x10",
+    "statement": "I keep paragraphs to 5 sentences at most.",
+    "dimension": "HABIT",
+    "source": "EXAMPLE",
+    "required": false,
+    "observation": {
+     "proposition": "paragraphs of at most 5 sentences",
+     "coverage": "FULL",
+     "qualification": "DETERMINISTIC",
+     "evidence": "1 paragraph(s) over 5 sentences"
+    },
+    "result": "FAIL",
+    "reason": "NOT_MET"
+   },
+   {
+    "id": "x11",
+    "statement": "I hedge rarely: at most 2 hedging words per thousand.",
+    "dimension": "HABIT",
+    "source": "EXAMPLE",
+    "required": false,
+    "observation": {
+     "proposition": "at most 2 hedging words per thousand",
+     "coverage": "FULL",
+     "qualification": "DETERMINISTIC",
+     "evidence": "0 per thousand words (target ≤ 2)"
+    },
+    "result": "PASS",
+    "reason": "MET"
+   },
+   {
+    "id": "x12",
+    "statement": "The Summary section runs 25 to 33 words in my pieces.",
+    "dimension": "HABIT",
+    "source": "EXAMPLE",
+    "required": false,
+    "observation": {
+     "proposition": "the \"Summary\" section: 16 to 42 words",
+     "coverage": "FULL",
+     "qualification": "DETERMINISTIC",
+     "evidence": "\"Summary\": 25 words (16 to 42)"
+    },
+    "result": "PASS",
+    "reason": "MET"
+   },
+   {
+    "id": "x13",
+    "statement": "The Facts section runs 47 to 65 words in my pieces.",
+    "dimension": "HABIT",
+    "source": "EXAMPLE",
+    "required": false,
+    "observation": {
+     "proposition": "the \"Facts\" section: 29 to 83 words",
+     "coverage": "FULL",
+     "qualification": "DETERMINISTIC",
+     "evidence": "\"Facts\": 77 words (29 to 83)"
+    },
+    "result": "PASS",
+    "reason": "MET"
+   },
+   {
+    "id": "x14",
+    "statement": "Write none of the moves that mark text as machine-written (announcing an insight others \"miss\", grading your own list, \"the single most\", announcing candour, \"that's the whole game\", reading the reader's mind, one thing \"wearing another's clothes\", a contrastive verdict as the opening line, an em dash, a run of three or more very short sentences).",
+    "dimension": "STANDARD",
+    "source": "EXAMPLE",
+    "required": true,
+    "observation": {
+     "proposition": "machine-writing moves (announced insights, self-graded lists, stacked superlatives, announced candour, totalisers, mind-reading, costumes): none of 16 kind(s) you never use, and at most 0.3 per 1,000 words of the rest",
+     "coverage": "FULL",
+     "qualification": "DETERMINISTIC",
+     "evidence": "0 per 1,000 words"
+    },
+    "result": "PASS",
+    "reason": "MET"
+   },
+   {
+    "id": "x15",
+    "statement": "No mechanical errors: spelling, agreement, punctuation.",
+    "dimension": "STANDARD",
+    "source": "EXAMPLE",
+    "required": true,
+    "observation": {
+     "proposition": "no mechanical error with no legitimate reading: a known misspelling in lower case, an agreement no variety uses (\"he are\"), a/an before a lower-case common word, two commas, a space before a comma or a full stop; a capitalised word, a word repeated, a dialect's agreement (\"they was\"), \"an\" before \"h\" or a word read as letters, \"::\", \"..\", a space before \"!\", \"?\", \":\" or \";\", any other word the checker does not know, and anything else it proposes, is only listed; code, quotations, addresses, figures and names are never touched",
+     "coverage": "NONE",
+     "qualification": "DETERMINISTIC",
+     "evidence": "listed for you to check: 3 possible slips: \"Mossbank\" (a name, an acronym or a coined word is the author's); \"Mossbank\" (a name, an acronym or a coined word is the author's); \"## Coverage analysis\" (the checker proposes a change this rule does not make)",
+     "listed": true
+    },
+    "result": "UNVERIFIED",
+    "reason": "LISTED_FOR_YOU"
+   },
+   {
+    "id": "specifics",
+    "dimension": "EVIDENCE",
+    "source": "SYSTEM",
+    "statement": "Every specific in the work is found in what you supplied",
+    "required": true,
+    "observation": {
+     "proposition": "each figure, name, date and quotation, looked for in the request and the material",
+     "coverage": "NONE",
+     "qualification": "UNAVAILABLE",
+     "evidence": "no material was supplied to look them up in: 8 listed for you"
+    },
+    "result": "UNVERIFIED",
+    "reason": "NOT_MACHINE_CHECKABLE"
+   },
+   {
+    "id": "lifted",
+    "dimension": "EVIDENCE",
+    "source": "SYSTEM",
+    "statement": "No passage is lifted from one of your examples",
+    "required": true,
+    "observation": {
+     "proposition": "the longest run of words shared with one example, less wording that recurs across them (at most 115: what your own examples share with one another, and never fewer than 11)",
+     "coverage": "FULL",
+     "qualification": "DETERMINISTIC",
+     "evidence": "the longest shared run is 26 words"
+    },
+    "result": "PASS",
+    "reason": "MET"
+   }
+  ]
+ },
+ "skill": "claims",
+ "checked": [
+  {
+   "requirementId": "x1",
+   "statement": "Open with a Summary section: one paragraph on who, what, where, and the decision.",
+   "materiality": "REQUIRED",
+   "enforced": true,
+   "result": {
+    "verdict": "MET",
+    "spans": [],
+    "value": 0,
+    "detail": "everything it must contain is there"
+   },
+   "observer": "PRESENCE",
+   "phase": "STYLE",
+   "obligation": "DELIVERABLE"
+  },
+  {
+   "requirementId": "x2",
+   "statement": "Then a Facts section. Every fact cites the document in the file it comes from, in square brackets: [notice of loss], [police report], [invoice 1].",
+   "materiality": "REQUIRED",
+   "enforced": true,
+   "result": {
+    "verdict": "VIOLATED",
+    "spans": [
+     {
+      "start": 169,
+      "end": 251,
+      "text": "\nThe insured has made 4 earlier claims under this policy, totalling 9,350 dollars.",
+      "why": "fact without a document citation"
+     },
+     {
+      "start": 252,
+      "end": 326,
+      "text": "Mossbank Analytics Inc reported the loss on 8 April 2026 [notice of loss].",
+      "why": "citation not a document in the file"
+     },
+     {
+      "start": 327,
+      "end": 402,
+      "text": "The loss occurred at the insured's office on Harbour Lane [notice of loss].",
+      "why": "citation not a document in the file"
+     },
+     {
+      "start": 403,
+      "end": 463,
+      "text": "The items are camera body and lens [invoice 1], [invoice 2].",
+      "why": "citation not a document in the file"
+     },
+     {
+      "start": 464,
+      "end": 534,
+      "text": "The theft was reported to the police on 10 April 2026 [police report].",
+      "why": "citation not a document in the file"
+     },
+     {
+      "start": 535,
+      "end": 604,
+      "text": "The items were not in a locked container at the time [police report].",
+      "why": "citation not a document in the file"
+     }
+    ],
+    "value": null,
+    "detail": "6 uncited or unmatched fact(s)"
+   },
+   "observer": "CHECK",
+   "phase": "STYLE",
+   "obligation": "DELIVERABLE"
+  },
+  {
+   "requirementId": "x3",
+   "statement": "Then a Coverage analysis section. The coverage conclusion cites the policy clause it rests on, and every exclusion that could apply is addressed and cited.",
+   "materiality": null,
+   "enforced": false,
+   "result": {
+    "verdict": "VIOLATED",
+    "spans": [
+     {
+      "start": 606,
+      "end": 626,
+      "text": "## Coverage analysis",
+      "why": "no cited policy clause in coverage analysis"
+     }
+    ],
+    "value": null,
+    "detail": "coverage section lacks a cited policy clause or source"
+   },
+   "observer": "CHECK",
+   "phase": "STYLE",
+   "obligation": "DELIVERABLE"
+  },
+  {
+   "requirementId": "x4",
+   "statement": "Then a Decision section: covered or not covered, and under which clause.",
+   "materiality": null,
+   "enforced": false,
+   "result": {
+    "verdict": "VIOLATED",
+    "spans": [
+     {
+      "start": 1080,
+      "end": 1091,
+      "text": "## Decision",
+      "why": "decision missing outcome or clause"
+     }
+    ],
+    "value": null,
+    "detail": "decision lacks outcome or clause"
+   },
+   "observer": "CHECK",
+   "phase": "STYLE",
+   "obligation": "DELIVERABLE"
+  },
+  {
+   "requirementId": "x5",
+   "statement": "End with a Reserve section. The reserve equals the sum of the invoices in the file, less any excess the schedule applies, and cites the invoices.",
+   "materiality": null,
+   "enforced": false,
+   "result": {
+    "verdict": "MET",
+    "spans": [],
+    "value": null,
+    "detail": "no invoice amounts in material; nothing to compare"
+   },
+   "observer": "CHECK",
+   "phase": "STYLE",
+   "obligation": "DELIVERABLE"
+  },
+  {
+   "requirementId": "x7",
+   "statement": "Never use the words \"fraud\", \"scam\", \"liar\" or \"suspicious\".",
+   "materiality": "REQUIRED",
+   "enforced": true,
+   "result": {
+    "verdict": "MET",
+    "spans": [],
+    "value": 0,
+    "detail": "none used"
+   },
+   "observer": "LEXICON",
+   "phase": "STYLE",
+   "obligation": "DELIVERABLE"
+  },
+  {
+   "requirementId": "x8",
+   "statement": "Take every date, name and figure from the file: add none of your own.",
+   "materiality": null,
+   "enforced": false,
+   "result": {
+    "verdict": "VIOLATED",
+    "spans": [
+     {
+      "start": 296,
+      "end": 308,
+      "text": "8 April 2026",
+      "why": "date not in the file or request"
+     },
+     {
+      "start": 504,
+      "end": 517,
+      "text": "10 April 2026",
+      "why": "date not in the file or request"
+     },
+     {
+      "start": 191,
+      "end": 192,
+      "text": "4",
+      "why": "figure not in the file or request"
+     },
+     {
+      "start": 237,
+      "end": 242,
+      "text": "9,350",
+      "why": "figure not in the file or request"
+     },
+     {
+      "start": 737,
+      "end": 740,
+      "text": "4.2",
+      "why": "figure not in the file or request"
+     },
+     {
+      "start": 854,
+      "end": 857,
+      "text": "7.1",
+      "why": "figure not in the file or request"
+     },
+     {
+      "start": 978,
+      "end": 981,
+      "text": "7.5",
+      "why": "figure not in the file or request"
+     },
+     {
+      "start": 1116,
+      "end": 1119,
+      "text": "7.1",
+      "why": "figure not in the file or request"
+     }
+    ],
+    "value": null,
+    "detail": "8 date(s) or figure(s) not in the file"
+   },
+   "observer": "CHECK",
+   "phase": "STYLE",
+   "obligation": "DELIVERABLE"
+  },
+  {
+   "requirementId": "x9",
+   "statement": "Every figure in the work is one the request or the material gives.",
+   "materiality": "PREFERRED",
+   "enforced": false,
+   "result": {
+    "verdict": "VIOLATED",
+    "value": 5,
+    "detail": "1 of 6 figure(s) are in the request (no material was bound)",
+    "spans": [
+     {
+      "start": 154,
+      "end": 157,
+      "text": "7.1",
+      "why": "the figure 7.1 is in neither the request nor the material"
+     },
+     {
+      "start": 237,
+      "end": 242,
+      "text": "9,350",
+      "why": "the figure 9,350 is in neither the request nor the material"
+     },
+     {
+      "start": 854,
+      "end": 857,
+      "text": "7.1",
+      "why": "the figure 7.1 is in neither the request nor the material"
+     },
+     {
+      "start": 978,
+      "end": 981,
+      "text": "7.5",
+      "why": "the figure 7.5 is in neither the request nor the material"
+     },
+     {
+      "start": 1116,
+      "end": 1119,
+      "text": "7.1",
+      "why": "the figure 7.1 is in neither the request nor the material"
+     }
+    ]
+   },
+   "observer": "CITED",
+   "phase": "STYLE",
+   "obligation": "EXECUTION"
+  },
+  {
+   "requirementId": "x10",
+   "statement": "I keep paragraphs to 5 sentences at most.",
+   "materiality": "PREFERRED",
+   "enforced": false,
+   "result": {
+    "verdict": "VIOLATED",
+    "spans": [
+     {
+      "start": 170,
+      "end": 604,
+      "text": "The insured has made 4 earlier claims under this policy, totalling 9,350 dollars. Mossbank Analytics Inc reported the loss on 8 April 2026 [notice of loss]. The loss occurred at the insured's office on Harbour Lane [notice of loss]. The items are camera body and lens [invoice 1], [invoice 2]. The theft was reported to the police on 10 April 2026 [police report]. The items were not in a locked container at the time [police report].",
+      "why": "6 sentences, over 5"
+     }
+    ],
+    "value": 6,
+    "detail": "1 paragraph(s) over 5 sentences"
+   },
+   "observer": "PARAGRAPH_LENGTH",
+   "phase": "STYLE"
+  },
+  {
+   "requirementId": "x11",
+   "statement": "I hedge rarely: at most 2 hedging words per thousand.",
+   "materiality": "PREFERRED",
+   "enforced": false,
+   "result": {
+    "verdict": "MET",
+    "spans": [],
+    "value": 0,
+    "detail": "0 per thousand words (target ≤ 2)"
+   },
+   "observer": "HEDGE_RATE",
+   "phase": "STYLE"
+  },
+  {
+   "requirementId": "x12",
+   "statement": "The Summary section runs 25 to 33 words in my pieces.",
+   "materiality": "PREFERRED",
+   "enforced": false,
+   "result": {
+    "verdict": "MET",
+    "spans": [],
+    "value": 25,
+    "detail": "\"Summary\": 25 words (16 to 42)"
+   },
+   "observer": "LENGTH",
+   "phase": "STYLE",
+   "obligation": "DELIVERABLE"
+  },
+  {
+   "requirementId": "x13",
+   "statement": "The Facts section runs 47 to 65 words in my pieces.",
+   "materiality": "PREFERRED",
+   "enforced": false,
+   "result": {
+    "verdict": "MET",
+    "spans": [],
+    "value": 77,
+    "detail": "\"Facts\": 77 words (29 to 83)"
+   },
+   "observer": "LENGTH",
+   "phase": "STYLE",
+   "obligation": "DELIVERABLE"
+  },
+  {
+   "requirementId": "x14",
+   "statement": "Write none of the moves that mark text as machine-written (announcing an insight others \"miss\", grading your own list, \"the single most\", announcing candour, \"that's the whole game\", reading the reader's mind, one thing \"wearing another's clothes\", a contrastive verdict as the opening line, an em dash, a run of three or more very short sentences).",
+   "materiality": "REQUIRED",
+   "enforced": true,
+   "result": {
+    "verdict": "MET",
+    "spans": [],
+    "value": 0,
+    "detail": "0 per 1,000 words"
+   },
+   "observer": "PATTERN_RATE",
+   "phase": "STYLE",
+   "pattern": "MACHINE_TELL"
+  },
+  {
+   "requirementId": "x15",
+   "statement": "No mechanical errors: spelling, agreement, punctuation.",
+   "materiality": "REQUIRED",
+   "enforced": true,
+   "result": {
+    "verdict": "NOT_APPLICABLE",
+    "spans": [
+     {
+      "start": 12,
+      "end": 20,
+      "text": "Mossbank",
+      "why": "a name, an acronym or a coined word is the author's (SpellCheck: Did you mean to spell `Mossbank` this way?)"
+     },
+     {
+      "start": 252,
+      "end": 260,
+      "text": "Mossbank",
+      "why": "a name, an acronym or a coined word is the author's (SpellCheck: Did you mean to spell `Mossbank` this way?)"
+     },
+     {
+      "start": 606,
+      "end": 626,
+      "text": "## Coverage analysis",
+      "why": "the checker proposes a change this rule does not make (UseTitleCase: Try to use title case in headings.)"
+     }
+    ],
+    "value": 3,
+    "detail": "listed for you to check: 3 possible slips: \"Mossbank\" (a name, an acronym or a coined word is the author's); \"Mossbank\" (a name, an acronym or a coined word is the author's); \"## Coverage analysis\" (the checker proposes a change this rule does not make)"
+   },
+   "observer": "GRAMMAR",
+   "phase": "STYLE"
+  },
+  {
+   "requirementId": "UNSOURCED",
+   "statement": "Never invent a story, a quotation, an attribution or a specific the person did not supply.",
+   "materiality": "REQUIRED",
+   "phase": "ACCURACY",
+   "authority": "unqualified-reader",
+   "result": {
+    "verdict": "MET",
+    "spans": [],
+    "value": 0,
+    "detail": "no material was bound to check against: 8 sentence(s) listed to check, none cut [pattern check (no material bound: a model reading of specifics could only list them)]"
+   }
+  },
+  {
+   "requirementId": "UNSOURCED·check",
+   "statement": "Not found in what you supplied: listed for you to check, never cut, because no material was bound to check against.",
+   "materiality": "PREFERRED",
+   "phase": "ACCURACY",
+   "result": {
+    "verdict": "VIOLATED",
+    "spans": [
+     {
+      "start": 129,
+      "end": 158,
+      "text": "Declined under exclusion 7.1.",
+      "words": 5,
+      "kind": "FIGURE",
+      "why": "a figure stated as fact that is not in your material or your request: listed for you to check, never cut; if it is yours, add it to your material (atelier material)"
+     },
+     {
+      "start": 170,
+      "end": 251,
+      "text": "The insured has made 4 earlier claims under this policy, totalling 9,350 dollars.",
+      "words": 14,
+      "kind": "FIGURE",
+      "why": "a figure stated as fact that is not in your material or your request: listed for you to check, never cut; if it is yours, add it to your material (atelier material)"
+     },
+     {
+      "start": 252,
+      "end": 326,
+      "text": "Mossbank Analytics Inc reported the loss on 8 April 2026 [notice of loss].",
+      "words": 13,
+      "kind": "FIGURE",
+      "why": "a figure stated as fact that is not in your material or your request: listed for you to check, never cut; if it is yours, add it to your material (atelier material)"
+     },
+     {
+      "start": 464,
+      "end": 534,
+      "text": "The theft was reported to the police on 10 April 2026 [police report].",
+      "words": 13,
+      "kind": "FIGURE",
+      "why": "a figure stated as fact that is not in your material or your request: listed for you to check, never cut; if it is yours, add it to your material (atelier material)"
+     },
+     {
+      "start": 709,
+      "end": 843,
+      "text": "The loss falls under clause 4.2 of the policy, which covers theft of or damage to business contents in the insured's custody [policy].",
+      "words": 24,
+      "kind": "FIGURE",
+      "why": "a figure stated as fact that is not in your material or your request: listed for you to check, never cut; if it is yours, add it to your material (atelier material)"
+     },
+     {
+      "start": 844,
+      "end": 967,
+      "text": "Exclusion 7.1 applies: the items were unattended in a shared space and not in a locked container [police report], [policy].",
+      "words": 21,
+      "kind": "FIGURE",
+      "why": "a figure stated as fact that is not in your material or your request: listed for you to check, never cut; if it is yours, add it to your material (atelier material)"
+     },
+     {
+      "start": 968,
+      "end": 1078,
+      "text": "Exclusion 7.5 does not apply: the loss was reported to the police within seven days [police report], [policy].",
+      "words": 19,
+      "kind": "FIGURE",
+      "why": "a figure stated as fact that is not in your material or your request: listed for you to check, never cut; if it is yours, add it to your material (atelier material)"
+     },
+     {
+      "start": 1093,
+      "end": 1128,
+      "text": "Not covered: exclusion 7.1 applies.",
+      "words": 6,
+      "kind": "FIGURE",
+      "why": "a figure stated as fact that is not in your material or your request: listed for you to check, never cut; if it is yours, add it to your material (atelier material)"
+     }
+    ],
+    "value": 8,
+    "detail": "8 specific(s) to check [pattern check (no material bound: a model reading of specifics could only list them)]"
+   }
+  }
+ ],
+ "unchecked": [
+  {
+   "requirementId": "x6",
+   "statement": "Never speculate about the insured's intent or honesty."
+  }
+ ],
+ "conditional": [],
+ "failed": true,
+ "note": "checked as claims, the class this standard measures; declare --class if the text is something else"
+}

@@ -1,0 +1,63 @@
+{
+ "accepted": [
+  "x4",
+  "x8",
+  "x9",
+  "x13",
+  "x14",
+  "x15",
+  "x17"
+ ],
+ "notAccepted": [
+  {
+   "id": "x2",
+   "reason": "OBSERVER_UNQUALIFIED",
+   "reads": "FULL"
+  },
+  {
+   "id": "x5",
+   "reason": "OBSERVER_UNQUALIFIED",
+   "reads": "FULL"
+  },
+  {
+   "id": "x6",
+   "reason": "OBSERVER_UNQUALIFIED",
+   "reads": "FULL"
+  },
+  {
+   "id": "x7",
+   "reason": "OBSERVER_UNQUALIFIED",
+   "reads": "FULL"
+  },
+  {
+   "id": "x10",
+   "reason": "OBSERVER_UNQUALIFIED",
+   "reads": "FULL"
+  },
+  {
+   "id": "x11",
+   "reason": "OBSERVER_UNQUALIFIED",
+   "reads": "FULL"
+  },
+  {
+   "id": "x19",
+   "reason": "OBSERVER_UNQUALIFIED",
+   "reads": "FULL"
+  },
+  {
+   "id": "x20",
+   "reason": "OBSERVER_UNQUALIFIED",
+   "reads": "FULL"
+  }
+ ],
+ "standardAfter": "4833d2ab138de82b",
+ "acceptedInStandard": [
+  "x4",
+  "x8",
+  "x9",
+  "x13",
+  "x14",
+  "x15",
+  "x17"
+ ]
+}

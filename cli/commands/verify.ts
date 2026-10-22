@@ -10,10 +10,12 @@
 //
 //   atelier verify --skill house-style --hook        (a Claude Code PostToolUse or Stop hook)
 //
-// `--hook` reads the host's hook JSON on stdin (the written file's content or path, or the last answer), checks it, and
-// exits 2 with the broken rules on stderr where something REQUIRED was seen to fail, which is what blocks the host and
-// hands the reasons back to the model; 0 otherwise. A hook that could not check (no text in the event, no file) says
-// so and exits 0: a guard's own failure never blocks the person's work.
+// `--hook` reads the host's hook JSON on stdin (a Write's content, an Edit's file by its path, or on a Stop event the
+// last assistant message of the transcript), checks it, and exits 2 with the broken rules on stderr where something
+// REQUIRED was seen to fail, which is what blocks the host and hands the reasons back to the model; 0 otherwise. An
+// event that carries nothing to check (a Stop with no assistant text yet, an Edit whose file is gone) says so and
+// exits 0. A guard that cannot check AT ALL (no such skill, an event that is not JSON) exits 2 and says why: a
+// misconfigured guard must be seen on its first event, never passed silently.
 //
 //   atelier verify --skill house-style draft.md --repair
 //
@@ -29,6 +31,8 @@ import { readFileSync, existsSync } from 'node:fs';
 import * as store from '../../core/state/store.js';
 import * as fstore from '../../core/state/fidelity-store.js';
 import { describeVerify } from '../../core/observers/verify.js';
+import { planFor } from '../../core/plan/execution-plan.js';
+import { MATERIAL_UNREAD } from '../../core/observers/written.js';
 import { checkDraftAsync, refineToStandard, REPAIR_PASSES } from '../../core/loop/run-repair.js';
 import { checkClass } from '../../core/observers/doc-class.js';
 import { grammarListed, toCheckList } from '../../core/observers/grammar.js';
@@ -39,9 +43,14 @@ import { recordTaste, readerModel } from './taste.js';
 import { certificateFor, tasteStandingFor, claimStandingOf, recordHead } from '../../core/eval/certificate.js';
 import { recordForText } from '../eval-run.js';
 import { stateLine } from '../../core/eval/run-card.js';
-import { partlyChecked, blocks } from '../../core/eval/record.js';
+import { partlyChecked, blocks, type EvaluationRecord } from '../../core/eval/record.js';
+import { deliveryLine } from '../../core/eval/consequence.js';
 
 export { verifyText, describeVerify, describeMeasurement } from '../../core/observers/verify.js';
+
+/** What blocked the text, from the record its state is read from: the rule lines and the record's own checks alike (copying, the request). */
+const violatedOf = (record: EvaluationRecord): { id: string; statement: string; required: boolean; evidence: string | null }[] =>
+  record.entries.filter(blocks).map((e) => ({ id: e.id, statement: e.statement, required: e.required, evidence: e.observation.evidence ?? null }));
 
 /**
  * The author's range as the skill card counts it (core/eval/skill-card.ts): the features of the fidelity profile the
@@ -74,13 +83,19 @@ export async function verify(): Promise<void> {
     // THE HOST'S EVENT, NOT A FILE: what was written (a Write's content, an Edit's result by its path) or what was answered.
     let data = '';
     if (!process.stdin.isTTY) for await (const chunk of process.stdin) data += (chunk as Buffer).toString();
-    let event: { tool_input?: { content?: unknown; file_path?: unknown }; last_assistant_message?: unknown } = {};
-    try { event = JSON.parse(data || '{}') as typeof event; } catch { fail('the hook event on stdin is not JSON; nothing was checked'); }
+    let event: { tool_input?: { content?: unknown; file_path?: unknown }; last_assistant_message?: unknown; transcript_path?: unknown } = {};
+    let parsed: unknown = null;
+    try { parsed = JSON.parse(data || '{}'); } catch { fail('the hook event on stdin is not JSON: the hook is not wired as Claude Code sends it; nothing was checked'); }
+    // AN EVENT IS AN OBJECT. A JSON string or list ("this is not an event") parsed, carried nothing, and passed as "nothing to
+    // check": a guard wired wrong was never seen. It cannot check at all, so it says so and exits 2.
+    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) fail('the hook event on stdin is not a JSON object: the hook is not wired as Claude Code sends it; nothing was checked');
+    event = parsed as typeof event;
     const path = typeof event.tool_input?.file_path === 'string' ? event.tool_input.file_path : null;
     text = typeof event.tool_input?.content === 'string' ? event.tool_input.content
       : path && existsSync(path) ? readFileSync(path, 'utf8')
-        : typeof event.last_assistant_message === 'string' ? event.last_assistant_message : '';
-    if (!text.trim()) fail('nothing to check in this hook event (no written content, no file at its path, no answer); nothing was checked');
+        : typeof event.last_assistant_message === 'string' ? event.last_assistant_message
+          : typeof event.transcript_path === 'string' ? textFromTranscript(event.transcript_path) : '';
+    if (!text.trim()) { console.error('atelier: nothing to check in this hook event (no written content, no file at its path, no assistant text in the transcript)'); return; }
   } else if (file && file !== '-') {
     if (!existsSync(file)) fail(`there is no file at ${file}.`);
     text = readFileSync(file, 'utf8');
@@ -112,11 +127,12 @@ export async function verify(): Promise<void> {
     const listed = r.report.checked.filter(grammarListed).map((c) => ({ rule: c.requirementId, statement: c.statement,
       items: c.result.spans.map((s) => ({ text: s.text, start: s.start, end: s.end, why: s.why })) }));
     const slips = listed.flatMap((l) => l.items);
+    // THE SAME RECORD OF THE REPAIRED TEXT a run carries, and its delivery: the exit code is that delivery's.
+    const after = recordForText({ L, std: v, text: r.output, report: r.report, sensor: checks.claimSensor, claimsOff: argv.includes('--allow-unsourced'), answers: checks.format?.claims === 'list', unmeasured: checks.listsBecause ?? null, act: checks.claimAct, material: checks.evidence ?? '' });
     if (argv.includes('--json')) {
-      // THE SAME RECORD OF THE REPAIRED TEXT a run carries, under the one record head (core/eval/certificate.ts).
-      const after = recordForText({ L, std: v, text: r.output, report: r.report, sensor: checks.claimSensor, claimsOff: argv.includes('--allow-unsourced'), answers: checks.format?.claims === 'list', unmeasured: checks.listsBecause ?? null });
+      // Under the one record head (core/eval/certificate.ts).
       console.log(JSON.stringify({ ...recordHead({ state: after.state, standardVersionHash: v.standardVersionHash, skillVersion: active, certificate: certificateFor(v, tasteStandingFor(L, v, readerModel()), claimStandingOf(checks.claimSensor)), record: after }),
-        output: r.output, failed: r.report.failed, repair: r.repair, spentUsd: budget.spentUsd,
+        output: r.output, failed: after.state === 'BLOCKED', violated: violatedOf(after), repair: r.repair, spentUsd: budget.spentUsd,
         ...(listed.length ? { unverified: listed.map((l) => l.rule), listed } : {}) }, null, 1));
     } else {
       console.log(r.output);
@@ -124,8 +140,9 @@ export async function verify(): Promise<void> {
         : slips.length ? `(nothing changed: ${slips.length} possible slip${slips.length === 1 ? ' is' : 's are'} listed for you to check)`
           : '(nothing to repair: every REQUIRED measured rule holds)');
       for (const l of listed) console.error(`  ${l.rule} unverified, listed for you to check: ${toCheckList(l.items, l.items.length)}`);
+      if (after.delivery) console.error(`(${deliveryLine(after.delivery)})`);
     }
-    if (r.report.failed) process.exitCode = 1;
+    if (after.delivery?.decision === 'BLOCK') process.exitCode = 1;
     return;
   }
   const report = await checkDraftAsync(name, v, text, checks);
@@ -157,24 +174,40 @@ export async function verify(): Promise<void> {
   }), ...store.getSignals(L).map((s) => ({ id: s.id, band: s.band })), ...profileBands(L)];
   const profile = argv.includes('--profile') ? profileOf(text, bands.filter((b, i) => bands.findIndex((x) => x.id === b.id) === i)) : null;
   // THE SAME RECORD A RUN CARRIES (cli/eval-run.ts): this text, under this standard, judged the same way.
-  const record = recordForText({ L, std: v, text, report, readings: tasteRead, sensor: checks.claimSensor, claimsOff: argv.includes('--allow-unsourced'), answers: checks.format?.claims === 'list', unmeasured: checks.listsBecause ?? null });
-  // THE HOOK'S ANSWER: exit 2 and the broken rules on stderr where something required was seen to fail; 0 otherwise.
+  const record = recordForText({ L, std: v, text, report, readings: tasteRead, sensor: checks.claimSensor, claimsOff: argv.includes('--allow-unsourced'), answers: checks.format?.claims === 'list', unmeasured: checks.listsBecause ?? null, act: checks.claimAct, material: checks.evidence ?? '' });
+  // THE HOOK'S ANSWER IS THE DELIVERY'S (core/eval/consequence.ts): exit 2 and the rules that decided it on stderr where the
+  // table blocks; 0 otherwise, with a note where the work goes to a person.
   if (hookMode) {
-    const broken = record.entries.filter(blocks);
+    const decided = record.delivery;
+    const blocking = new Set(decided?.decision === 'BLOCK' ? decided.why.filter((w) => w.action === 'block').flatMap((w) => w.entries) : []);
+    const broken = record.entries.filter((e) => blocking.has(e.id));
+    if (decided?.decision === 'PERSON') console.error(`atelier: this goes to a person under the "${name}" standard (${deliveryLine(decided)}); nothing was blocked.`);
     if (broken.length) {
       console.error(`atelier: this breaks ${broken.length} required rule(s) of the "${name}" standard. Rewrite only what each names, keep everything else as it is:`);
       for (const e of broken) console.error(`  - ${e.statement.replace(/[.]$/, '')}${e.observation.evidence ? `: ${e.observation.evidence}` : ''}`);
       process.exitCode = 2;
+      return;
+    }
+    // WHAT WAS NOT READ IS SAID, AND BLOCKS NOTHING: a required rule whose check could not read this text (one that reads
+    // the material, on an event that binds none) is named, so a pass is never mistaken for every rule holding.
+    // Required is the plan's word: an owner's step whose check has not qualified is required too, and named when unread.
+    const required = new Set(planFor(v).rules.filter((p) => p.role !== 'HABIT').map((p) => p.id));
+    const unread = report.checked.filter((c) => required.has(c.requirementId) && c.result.verdict === 'NOT_APPLICABLE' && c.result.detail.startsWith(MATERIAL_UNREAD));
+    if (unread.length) {
+      console.error(`atelier: ${unread.length} required rule(s) of the "${name}" standard were not read on this text, so nothing was blocked on ${unread.length === 1 ? 'its' : 'their'} account:`);
+      for (const c of unread) console.error(`  - ${c.statement.replace(/[.]$/, '')}: ${c.result.detail}`);
+      if (!named.length) console.error(`  To have the material read, bind it to the skill: atelier material --skill ${name} <file>`);
     }
     return;
   }
   if (argv.includes('--json')) {
     console.log(JSON.stringify({ ...recordHead({ state: record.state, standardVersionHash: v.standardVersionHash, skillVersion: active, certificate: certificateFor(v, tasteStandingFor(L, v, readerModel()), claimStandingOf(checks.claimSensor)), record }),
-      ...report, ...(profile ? { profile } : {}), failed: record.state === 'BLOCKED' || (taste?.failed ?? false), ...(classNote ? { note: classNote } : {}),
+      ...report, ...(profile ? { profile } : {}), failed: record.state === 'BLOCKED' || (taste?.failed ?? false), violated: violatedOf(record), ...(classNote ? { note: classNote } : {}),
       ...(taste ? { taste: { failed: taste.failed, verdicts: taste.verdicts } } : {}) }, null, 1));
   } else {
     console.log(describeVerify(report, partlyChecked(record)));
     console.log(`\n${record.state.replace('_', ' ')} · ${stateLine(record)}`);
+    if (record.delivery) console.log(deliveryLine(record.delivery));
     // WHAT FAILED, BY NAME: a check the record holds beyond the rule lines above (copying from an example, the request's
     // own checks) is named here, so the text output says what blocked the work, not only --json.
     for (const e of record.entries.filter(blocks)) console.log(`  ✗ ${e.statement.replace(/[.]$/, '')}${e.observation.evidence ? `: ${e.observation.evidence}` : ''}`);
@@ -206,16 +239,38 @@ export async function verify(): Promise<void> {
     }
     if (taste) console.log(`\n${taste.text}`);
   }
-  if (taste?.failed) process.exitCode = 1;
-  // THE EXIT CODE IS THE RECORD'S: 1 where something required was seen to fail, and only there.
-  if (record.state === 'BLOCKED') process.exitCode = 1;
+  // THE EXIT CODE IS THE DELIVERY'S (core/eval/consequence.ts): 1 where the standard's consequence table blocks the text,
+  // and only there. A taste reader's qualified miss is in the record, and the table decides what it does.
+  if (record.delivery?.decision === 'BLOCK') process.exitCode = 1;
+}
+
+/**
+ * THE LAST ASSISTANT MESSAGE OF A CLAUDE CODE TRANSCRIPT, as text: what a Stop event is about. The transcript is JSON
+ * lines; the last line of type "assistant" holds the message, its content a string or blocks of which the text ones
+ * are taken. Absent, unreadable or malformed is no text, never a crash.
+ */
+export function textFromTranscript(path: string): string {
+  try {
+    if (!existsSync(path)) return '';
+    const lines = readFileSync(path, 'utf8').split('\n');
+    for (let i = lines.length - 1; i >= 0; i--) {
+      if (!lines[i].includes('"type":"assistant"')) continue;
+      const j = JSON.parse(lines[i]) as { type?: string; message?: { content?: unknown } };
+      if (j.type !== 'assistant') continue;
+      const c = j.message?.content;
+      if (typeof c === 'string') return c;
+      if (Array.isArray(c)) return (c as { type?: string; text?: string }[]).filter((b) => b.type === 'text' && typeof b.text === 'string').map((b) => b.text).join('\n');
+      return '';
+    }
+  } catch { /* a malformed transcript is no text */ }
+  return '';
 }
 
 /**
  * EXIT 2 FOR "COULD NOT CHECK", 1 FOR "CHECKED AND FAILED". A gate that reads exit 1 as a broken rule
- * must not be handed a missing file under the same code. Under --hook, where 2 means "block the host", a guard that
- * could not check says so and exits 0: its own failure is never the person's.
+ * must not be handed a missing file under the same code. Under --hook, 2 is also what blocks the host: a guard that
+ * cannot check at all is seen, never passed silently.
  */
 let hookMode = false;
-const fail = (m: string): never => { console.error(`atelier: ${m}`); process.exit(hookMode ? 0 : 2); };
+const fail = (m: string): never => { console.error(`atelier: ${m}`); process.exit(2); };
 

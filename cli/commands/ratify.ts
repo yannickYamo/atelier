@@ -18,10 +18,11 @@ import { renderRatifyPage } from '../../renderers/ratify-page/render.js';
 import { coverageOf, describeCoverage } from '../../core/coverage/standard-coverage.js';
 import { blindSpotsOf, BLIND_SPOT_QUESTION } from '../../core/coverage/blind-spot.js';
 import type { StandardVersion, Requirement } from '../../core/state/canonical-state.js';
-import { discoveryRecall, declaredGeneralShare, unconfirmedRate, authorityStateOf, isGeneralScope, sourceModeOf } from '../../core/state/canonical-state.js';
+import { standardHashOf, acceptedCarried, latitudeOf, discoveryRecall, declaredGeneralShare, unconfirmedRate, authorityStateOf, isGeneralScope, sourceModeOf } from '../../core/state/canonical-state.js';
 import { writeAtomic } from '../../core/state/fs-atomic.js';
-import { sha, die, argv, flag, loadSession, saveSession, step, runFile, orchestrated, authoredIdAllocator, type Session } from '../runtime.js';
+import { die, argv, flag, loadSession, saveSession, step, runFile, orchestrated, authoredIdAllocator, type Session } from '../runtime.js';
 import { existsSync, readFileSync } from 'node:fs';
+import { unmeasuredSaid, latitudeLine, builtStandard, acceptedNamed } from '../latitude.js';
 import { readJson } from '../../core/state/read-json.js';
 import { decide, type DecisionVerb } from '../../core/ratification/authority.js';
 import { roleFor } from '../../core/architecture/compile.js';
@@ -473,8 +474,18 @@ export function ratifyClose(): void {
   for (const d of s.decided) byId.set(d.requirementId, d);
   const kept = [...byId.values()].filter((d) => d.authority !== 'EXPERT_REJECTED');
   if (!kept.length) die('nothing to compile. A standard with no requirement is not a standard.');
-  const body = { evidenceId: s.evidence?.evidenceId ?? null, workType, requirements: kept };
-  const hash = sha(JSON.stringify(body));
+  // HOW STRICTLY OUTPUT IS HELD, AND WHICH RULES NO CHECK READS THE OWNER ACCEPTS AS UNMEASURED: theirs, so inside the
+  // hash (core/state/canonical-state.ts). The level read or set at this build (cli/latitude.ts); a close with none, as
+  // `atelier add` then `ratify-close` by hand, keeps the previous standard's, or mints none (held as GROUNDED).
+  // What the owner accepted before is carried, by the rule's words (core/state/canonical-state.ts, `acceptedCarried`): from
+  // this run's previous close, or the skill as built now.
+  const priorStd = (s.run.standardVersionHash && existsSync(priorPath) ? readJson<StandardVersion>(priorPath, { what: 'the previous standard' }) : null) ?? builtStandard(s.skillName);
+  const latitude = s.latitude ?? priorStd?.latitude ?? null;
+  const accepted = acceptedCarried(latitudeOf(latitude ? { latitude } : null), kept, unmeasuredSaid(), priorStd, acceptedNamed(kept, s.qualifications));
+  // The owner's consequence table, as they set it on the skill: carried, as the latitude is (core/eval/consequence.ts).
+  const consequences = priorStd?.consequences && Object.keys(priorStd.consequences).length ? priorStd.consequences : null;
+  const body = { evidenceId: s.evidence?.evidenceId ?? null, workType, requirements: kept, ...(latitude ? { latitude } : {}), ...(accepted.length ? { acceptedUnmeasured: accepted } : {}), ...(consequences ? { consequences } : {}) };
+  const hash = standardHashOf(body);
   // ── CLOSING AGAIN IS A SUPERSESSION, NOT A MUTATION ──────────────────────────────────────
   //
   // A run that has already ratified (or built) a standard and closes again with different content
@@ -482,7 +493,8 @@ export function ratifyClose(): void {
   // `abort` — which threw the run away. Adding one more rule after a build is the ordinary way a
   // standard grows; it is recorded as such, with the reason every supersession owes.
   const prior = s.run.standardVersionHash;
-  if (prior && prior === hash) {
+  // (A build that closes for the person, as `atelier skill --yes` built again does, builds what stands: the same standard.)
+  if (prior && prior === hash && !orchestrated()) {
     die(`nothing changed: these decisions are exactly StandardVersion ${prior}, which this run already closed.`
       + '\n  Add a rule (atelier add) or change one before closing again; to build it, atelier build --name <name>.');
   }
@@ -507,6 +519,7 @@ export function ratifyClose(): void {
   writeAtomic(runFile('pending-standard.json'), JSON.stringify(v, null, 1));
   if (stamped) writeAtomic(runFile('ratification-ledger.json'), JSON.stringify(stamped, null, 1));
   const instructing = reportMinted(v, kept, stamped);
+  console.log(latitudeLine(v));
   if (!orchestrated()) {
     console.log(instructing ? 'Run `atelier build --name <name>`.' : 'Or build it as it stands, knowing that: `atelier build --name <name>`.');
   }

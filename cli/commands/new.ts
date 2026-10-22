@@ -16,9 +16,9 @@ import { existsSync, statSync } from 'node:fs';
 import { basename, relative, resolve } from 'node:path';
 import { die, argv, flag, flagAll, positional, loadSession, saveSession, assertReachable, canReach, sourceProvenance, runFile, DATA, contextReaderClient, contextReaderModel } from '../runtime.js';
 import { readContext } from '../../core/inference/reading.js';
-import { INTENT_MODE } from '../../core/observers/intent-mode.js';
+import { INTENT_MODE, WHY } from '../../core/observers/intent-mode.js';
 import { readJson } from '../../core/state/read-json.js';
-import { modeFromIntent, type SkillMode } from '../../core/ratification/suggest.js';
+import type { SkillMode } from '../../core/ratification/suggest.js';
 import * as store from '../../core/state/store.js';
 import { measure } from '../../core/observers/registry.js';
 import { ensureGrammar } from '../../core/observers/grammar.js';
@@ -26,7 +26,8 @@ import { normalizeClass } from '../../core/observers/doc-class.js';
 import { floorDimensions, proposeMargins, buildContract } from '../../core/distinctiveness/measured.js';
 import { extract } from '../../core/intake/extract.js';
 import { authorship } from '../../core/composite/voices.js';
-import { corpusFiles } from '../corpus.js';
+import { corpusFiles, sessionCorpus } from '../corpus.js';
+import { settleLatitude } from '../latitude.js';
 import { intake, examplePieces } from './intake.js';
 import { discover } from './discover.js';
 import { method } from './method.js';
@@ -148,7 +149,7 @@ export async function newSkill(): Promise<void> {
   if (s.run.state === 'EMPTY' || !s.evidence) {
     if (!composite) assertReachable('discovery');
     if (!intent) console.log('No purpose given, so rules are weighed for producing new work. Say what it is for as a second argument.\n');
-    else console.log(`For: "${intent}" — ${declared ? `${mode.toLowerCase()}, as you declared` : read ? read.value.why : modeFromIntent(intent ?? '').why}.\n`);
+    else console.log(`For: "${intent}" — ${declared ? `${mode.toLowerCase()}, as you declared` : read ? read.value.why : WHY[mode]}.\n`);
     // A held-out check without having to know what one is: some of the work is set aside before
     // anything reads it (when there are six or more pieces), unless the person named their own.
     if (!argv.includes('--reserve')) argv.push('--auto-reserve');
@@ -213,6 +214,8 @@ export async function newSkill(): Promise<void> {
     // The purpose becomes how a host decides to load the skill at all — from the run, so a second
     // call without the sentence still carries it.
     if (intent && !argv.includes('--description')) argv.push('--description', `Use when asked to: ${intent.replace(/[.\s]+$/, '')}.`);
+    // HOW STRICTLY OUTPUT IS HELD, read from the pieces and what the skill is for (cli/latitude.ts); minted at the close.
+    await settleLatitude({ purpose: intent ?? s.intent?.text ?? null, method: null, examples: sessionCorpus().slice(0, 6) });
     ratifyClose();
     s = loadSession();
   }

@@ -1,0 +1,12 @@
+{
+ "fixture": "claims",
+ "arm": "plainx",
+ "task": "t1",
+ "run": 1,
+ "text": "## Summary\n\nWayfarer Fintech Ltd (policy CC-1407): theft of a camera body and lens from an unlocked desk at the insured's office on Harbour Lane. Declined under exclusion 7.1.\n\n## Facts\n\nWayfarer Fintech Ltd reported the loss on 10 September 2026 [notice of loss]. The loss is described as theft from an unlocked desk of a camera body and lens at the insured's office on Harbour Lane [notice of loss]. The theft was reported to the police on 12 September 2026 under reference CR/2026/4143 [police report]. The items were left in a shared area and were not in a locked container [police report]. The items are a camera body (3,307 dollars) and a lens (2,201 dollars) [invoice 1], [invoice 2]. The file does not state the date on which the theft occurred.\n\n## Coverage analysis\n\nThe loss is of the kind described in clause 4.2 of the policy, which covers loss of or damage to business contents caused by theft, at the premises named in the schedule and at other premises while in the insured's custody [policy]. The schedule is not in the file, so this memo does not confirm whether the office on Harbour Lane is a named premises.\n\nExclusion 7.1 applies. It removes cover for theft of portable equipment left unattended in a shared or public space, unless the equipment was in a locked container or locked room at the time [policy]. The items were left in a shared area and were not in a locked container [police report]. The file does not show them to have been in a locked room.\n\nExclusion 7.5 excludes theft not reported to the police within seven days [policy]. The police report is dated 12 September 2026, two days after the notice of loss on 10 September 2026 [police report], [notice of loss]. Because the file gives no date of loss, this memo does not conclude whether exclusion 7.5 applies. The decision does not depend on it, as exclusion 7.1 applies on its own.\n\nExclusion 7.3 does not apply: the loss is alleged to be theft, not gradual deterioration [notice of loss], [policy].\n\n## Decision\n\nNot covered: exclusion 7.1 applies. The claim is declined, and the insured is told why in the terms of the policy.\n\n## Reserve\n\nNo reserve is set: the claim is declined.",
+ "costUsd": 0.027816,
+ "stop": "end_turn",
+ "error": null,
+ "meterUsd": 0.027816000000000063,
+ "seconds": 13.003
+}

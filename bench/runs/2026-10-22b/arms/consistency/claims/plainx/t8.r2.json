@@ -1,0 +1,12 @@
+{
+ "fixture": "claims",
+ "arm": "plainx",
+ "task": "t8",
+ "run": 2,
+ "text": "## Summary\n\nElmhurst Clinics LLP: fire damage in a neighbouring unit of a label printer and a barcode scanner at a storage unit on Mill Road. Covered under clause 4.2; reserve 3,254 dollars.\n\n## Facts\n\nElmhurst Clinics LLP reported the loss under policy CC-1666 on 21 June 2026 [notice of loss]. The loss was fire damage in a neighbouring unit [notice of loss], [incident report]. It occurred at a storage unit on Mill Road [notice of loss], [incident report]. The items are a label printer and a barcode scanner [invoice 1], [invoice 2]. The incident was recorded on 23 June 2026 under reference IR/2026/4234 [incident report]. No third party was involved [incident report]. No theft is alleged [notice of loss], [incident report].\n\n## Coverage analysis\n\nThe loss falls under clause 4.2 of the policy, which covers loss of or damage to business contents at the premises named in the schedule, and at any other premises while in the insured's custody, caused by theft, fire, storm or escape of water [policy]. The cause here is fire [notice of loss], [incident report].\n\nThe file does not include the policy schedule, and neither the notice of loss nor the incident report states in terms that the storage unit is a scheduled premises or was in the insured's custody [notice of loss], [incident report], [policy]. The conclusion above treats the items as business contents held at the storage unit by the insured. That should be confirmed against the schedule before payment.\n\nExclusions:\n- Exclusion 7.1 does not apply: it concerns theft of unattended portable equipment, and no theft is alleged [notice of loss], [incident report], [policy].\n- Exclusion 7.3 does not apply: it concerns gradual deterioration, and the loss was caused by fire in a neighbouring unit [incident report], [policy].\n- Exclusion 7.5 does not apply: it operates only where theft is alleged, and none is [notice of loss], [incident report], [policy].\n\n## Decision\n\nCovered under clause 4.2. The claim is accepted.\n\n## Reserve\n\nThe reserve is 3,254 dollars, the sum of the two invoices (1,666 dollars and 1,588 dollars) [invoice 1], [invoice 2]. Clause 9.1 applies an excess of 250 dollars only where the schedule shows one, and none is shown in the file, so none is deducted [policy].",
+ "costUsd": 0.028624,
+ "stop": "end_turn",
+ "error": null,
+ "meterUsd": 0.028624000000000205,
+ "seconds": 12.248
+}

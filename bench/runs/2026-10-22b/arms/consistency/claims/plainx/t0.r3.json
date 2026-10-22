@@ -1,0 +1,12 @@
+{
+ "fixture": "claims",
+ "arm": "plainx",
+ "task": "t0",
+ "run": 3,
+ "text": "## Summary\n\nVellum Press Inc: theft from a locked locker of a laptop and docking station at a co-working space on Fenwick Street. Covered under clause 4.2, subject to confirming the date of loss for exclusion 7.5 (see Coverage analysis). Reserve 4,030 dollars.\n\n## Facts\n\nVellum Press Inc reported the loss on 5 June 2026 under policy CC-1370 [notice of loss]. The loss occurred at a co-working space on Fenwick Street [notice of loss]. The items are a laptop and a docking station [invoice 1], [invoice 2]. The theft was reported to the police on 7 June 2026, reference CR/2026/4130 [police report]. The items were in a locked container at the time [police report]. The file does not state the date on which the loss occurred [notice of loss], [police report].\n\n## Coverage analysis\n\nThe loss falls under clause 4.2 of the policy, which covers loss of or damage to business contents at any other premises while in the insured's custody, caused by theft [policy]. The file records the items as being in a locked locker at the co-working space [notice of loss], [police report].\n\nExclusion 7.1 does not apply: the items were in a locked container at the time [police report], [policy].\n\nExclusion 7.3 does not apply: the loss is a theft, not gradual deterioration [notice of loss], [policy].\n\nExclusion 7.5 requires a police report within seven days where theft is alleged [policy]. The police report is dated 7 June 2026, two days after the notice of loss of 5 June 2026 [police report], [notice of loss]. Because the file gives no date of loss, the seven-day period cannot be measured from the loss itself. The exclusion is not shown to apply, but the date of loss should be obtained and recorded before payment.\n\n## Decision\n\nCovered under clause 4.2. The claim is accepted, subject to the date of loss being confirmed as within seven days of the police report on 7 June 2026 [policy], [police report].\n\n## Reserve\n\nThe reserve is 4,030 dollars, the sum of the two invoices (2,370 dollars and 1,660 dollars) [invoice 1], [invoice 2]. Clause 9.1 deducts the 250 dollar excess only where the schedule applies one, and none applies where no excess is shown [policy]. The file contains no schedule showing an excess, so none is deducted. This should be checked against the full schedule.",
+ "costUsd": 0.030032,
+ "stop": "end_turn",
+ "error": null,
+ "meterUsd": 0.03003200000000028,
+ "seconds": 14.189
+}

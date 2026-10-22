@@ -1,0 +1,8 @@
+$ atelier amend --skill claims --accept-unmeasured x1 --reason "..."
+
+Latitude: strict, read from "Every fact cites the document in the file it comes from, in square brackets"; 1 unmeasured rule accepted (listed, not sent to review). Change: --latitude strict|grounded|creative, --unmeasured accept|review; or atelier amend --latitude <level>.
+
+StandardVersion 4823666957968b33 supersedes f201213421c222c1
+  reason: the owner's choice: judgement steps and the unread part of a partly read required rule are accepted unmeasured (study 2026-10-22c)
+
+--- stderr ---

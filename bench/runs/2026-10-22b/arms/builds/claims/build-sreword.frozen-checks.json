@@ -1,0 +1,251 @@
+{
+ "debab82a54f32455": {
+  "how": "measure",
+  "measurement": {
+   "observer": "PRESENCE",
+   "params": {
+    "sections": [
+     "Summary",
+     "Facts",
+     "Coverage analysis",
+     "Decision",
+     "Reserve"
+    ],
+    "body": 1,
+    "opens": 1
+   }
+  },
+  "quote": "Open with a Summary section: one paragraph on who, what, where, and the decision.",
+  "means": "PRESENCE:sections=Summary|Facts|Coverage analysis|Decision|Reserve,body=1,opens=1",
+  "by": "model",
+  "agreed": {
+   "of": 3,
+   "same": 3
+  },
+  "kind": "GENERATIVE"
+ },
+ "516810be3080f916": {
+  "how": "written",
+  "measurement": {
+   "observer": "CHECK",
+   "params": {
+    "source": [
+     "(text, request, material) => { const norm = s => s.toLowerCase().replace(/\\.[a-z0-9]+$/,'').replace(/[-_]/g,' ').trim(); const names = material.map(m => norm(m.name)); const m = text.match(/^##\\s*Facts\\s*$([\\s\\S]*?)(?=^##\\s|(?![\\s\\S]))/m); if (!m) return null; const body = m[1]; const sents = body.split(/(?<=[.!?])\\s+/).map(s => s.trim()).filter(s => /[A-Za-z]/.test(s)); const spans = []; for (const s of sents) { const cites = [...s.matchAll(/\\[([^\\]]+)\\]/g)].map(x => norm(x[1])); const ok = cites.length > 0 && cites.every(c => names.includes(c) || names.some(n => n.startsWith(c))); if (!ok) { const idx = body.indexOf(s); spans.push({ start: m.index + m[0].indexOf(body) + idx, end: m.index + m[0].indexOf(body) + idx + s.length, why: 'fact without a cited document in the file' }); } } return { ok: spans.length === 0, detail: spans.length ? spans.length + ' uncited fact sentence(s)' : 'every fact cites a file document', spans }; }"
+    ],
+    "means": [
+     "Every sentence in the Facts section carries at least one square-bracketed document name that matches a file in the material."
+    ]
+   }
+  },
+  "quote": "Every fact cites the document in the file it comes from, in square brackets",
+  "means": "Every sentence in the Facts section carries at least one square-bracketed document name that matches a file in the material.",
+  "by": "model",
+  "qualification": {
+   "examples": {
+    "passed": 0,
+    "read": 9,
+    "of": 9
+   },
+   "own": {
+    "caught": 4,
+    "of": 4
+   },
+   "cross": {
+    "fired": 12,
+    "of": 12
+   },
+   "qualified": false,
+   "why": "it fails 9 of the 9 examples it can read"
+  },
+  "agreed": {
+   "of": 3,
+   "same": 1
+  },
+  "kind": "GENERATIVE"
+ },
+ "53183c4b115790ec": {
+  "how": "written",
+  "measurement": {
+   "observer": "CHECK",
+   "params": {
+    "source": [
+     "(text, request, material) => { const m = text.match(/## *Coverage analysis[\\s\\S]*?(?=\\n## |$)/i); if (!m) return null; const body = m[0]; const clause = /clause\\s+\\d+(\\.\\d+)*|\\b\\d+\\.\\d+\\b/i.test(body); const cited = /\\[policy[^\\]]*\\]/i.test(body); const ok = clause && cited; return { ok, detail: ok ? 'clause and policy citation present' : 'missing policy clause or policy citation', spans: [] }; }"
+    ],
+    "means": [
+     "The Coverage analysis section cites at least one policy clause and every exclusion it names is cited to the policy."
+    ]
+   }
+  },
+  "quote": "The coverage conclusion cites the policy clause it rests on, and every exclusion that could apply is addressed and cited.",
+  "means": "The Coverage analysis section cites at least one policy clause and every exclusion it names is cited to the policy.",
+  "by": "model",
+  "qualification": {
+   "examples": {
+    "passed": 9,
+    "read": 9,
+    "of": 9
+   },
+   "own": {
+    "caught": 0,
+    "of": 4
+   },
+   "cross": {
+    "fired": 0,
+    "of": 12
+   },
+   "qualified": false,
+   "why": "it caught 0 of 4 edits that break the step (needs 4)"
+  },
+  "agreed": {
+   "of": 3,
+   "same": 1
+  },
+  "kind": "GENERATIVE"
+ },
+ "73966b9794cb902f": {
+  "how": "judgement",
+  "measurement": null,
+  "quote": "Then a Decision section: covered or not covered, and under which clause.",
+  "means": "The Decision states covered or not covered and the clause, and the person checks the decision follows from the analysis.",
+  "by": "model",
+  "agreed": {
+   "of": 3,
+   "same": 2
+  },
+  "kind": "GENERATIVE"
+ },
+ "fe5aaa164d5e4d10": {
+  "how": "written",
+  "measurement": {
+   "observer": "CHECK",
+   "params": {
+    "source": [
+     "(text, request, material) => { const m = text.match(/^##\\s*Reserve\\s*$([\\s\\S]*)/m); if (!m) return null; const body = m[1]; const amt = s => parseFloat(s.replace(/,/g,'')); let total = 0; const inv = material.filter(x => /invoice/i.test(x.name)); for (const d of inv) { const nums = [...d.text.matchAll(/(?:total|amount|subtotal)[^\\d\\n]{0,20}([\\d,]+(?:\\.\\d+)?)/gi)].map(x => amt(x[1])); if (nums.length) total += nums[nums.length-1]; } const figs = [...body.matchAll(/([\\d,]+(?:\\.\\d+)?)\\s*(?:dollars|\\$)?/g)].map(x => amt(x[1])).filter(n => !isNaN(n)); const cited = /\\[invoice[^\\]]*\\]/i.test(body); const reserveFig = figs.length ? figs[0] : NaN; const spans = []; if (!cited) spans.push({start: m.index, end: m.index + body.length, why: 'reserve does not cite invoices'}); if (total > 0 && Math.abs(reserveFig - total) > 0.005) spans.push({start: m.index, end: m.index + body.length, why: 'reserve figure differs from invoice sum ' + total}); return { ok: spans.length === 0, detail: spans.length ? spans.map(s=>s.why).join('; ') : 'reserve matches invoice sum and cites invoices', spans }; }"
+    ],
+    "means": [
+     "The Reserve figure equals the sum of the invoice amounts found in the material, and the Reserve section cites the invoices."
+    ]
+   }
+  },
+  "quote": "The reserve equals the sum of the invoices in the file, less any excess the schedule applies, and cites the invoices.",
+  "means": "The Reserve figure equals the sum of the invoice amounts found in the material, and the Reserve section cites the invoices.",
+  "by": "model",
+  "qualification": {
+   "examples": {
+    "passed": 7,
+    "read": 9,
+    "of": 9
+   },
+   "own": {
+    "caught": 2,
+    "of": 4
+   },
+   "cross": {
+    "fired": 0,
+    "of": 12
+   },
+   "qualified": false,
+   "why": "it fails 2 of the 9 examples it can read"
+  },
+  "agreed": {
+   "of": 3,
+   "same": 1
+  },
+  "kind": "GENERATIVE"
+ },
+ "e569cd7a60bd484f": {
+  "how": "judgement",
+  "measurement": null,
+  "quote": "Never speculate about the insured's intent or honesty.",
+  "means": "Whether the memo speculates about the insured's intent or honesty; this reads tone and inference, which code cannot decide.",
+  "by": "model",
+  "agreed": {
+   "of": 3,
+   "same": 3
+  },
+  "kind": "BOUNDARY"
+ },
+ "3a94e53a4e6b2b85": {
+  "how": "measure",
+  "measurement": {
+   "observer": "LEXICON",
+   "params": {
+    "terms": [
+     "fraud",
+     "scam",
+     "liar",
+     "suspicious"
+    ]
+   }
+  },
+  "quote": "Never use the words \"fraud\", \"scam\", \"liar\" or \"suspicious\".",
+  "means": "LEXICON:fraud|scam|liar|suspicious",
+  "by": "model",
+  "agreed": {
+   "of": 3,
+   "same": 3
+  },
+  "kind": "BOUNDARY"
+ },
+ "eb06d0a3e32ea394": {
+  "how": "written",
+  "measurement": {
+   "observer": "CHECK",
+   "params": {
+    "source": [
+     "(text, request, material) => { const dates = [...text.matchAll(/\\b\\d{1,2}\\s+(?:January|February|March|April|May|June|July|August|September|October|November|December)\\s+\\d{4}\\b/g)]; const src = material.map(m => m.text).join(' '); const spans = []; for (const d of dates) { if (!src.includes(d[0])) spans.push({start: d.index, end: d.index + d[0].length, why: 'date not in material'}); } return { ok: spans.length === 0, detail: spans.length ? spans.length + ' date(s) not in material' : 'every date is in the material', spans }; }"
+    ],
+    "means": [
+     "Every date in the memo appears in the material, so no date is added that the file does not hold."
+    ]
+   }
+  },
+  "quote": "Take every date, name and figure from the file: add none of your own.",
+  "means": "Every date in the memo appears in the material, so no date is added that the file does not hold.",
+  "by": "model",
+  "qualification": {
+   "examples": {
+    "passed": 9,
+    "read": 9,
+    "of": 9
+   },
+   "own": {
+    "caught": 2,
+    "of": 4
+   },
+   "cross": {
+    "fired": 0,
+    "of": 12
+   },
+   "qualified": false,
+   "why": "it caught 2 of 4 edits that break the step (needs 4)"
+  },
+  "agreed": {
+   "of": 3,
+   "same": 1
+  },
+  "kind": "BOUNDARY"
+ },
+ "43e9350552213862": {
+  "how": "measure",
+  "measurement": {
+   "observer": "LEXICON",
+   "params": {
+    "terms": [
+     "fraud",
+     "scam",
+     "liar",
+     "suspicious"
+    ]
+   }
+  },
+  "quote": "Do not write the words \"fraud\", \"scam\", \"liar\" or \"suspicious\" anywhere in the memo.",
+  "means": "LEXICON:fraud|scam|liar|suspicious",
+  "by": "model",
+  "agreed": {
+   "of": 3,
+   "same": 3
+  },
+  "kind": "BOUNDARY"
+ }
+}

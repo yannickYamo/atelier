@@ -1,0 +1,13 @@
+{
+  "clip": "c14",
+  "duration": "01:20",
+  "overall": "Medium",
+  "categories": [
+    {
+      "category": "Medical – procedure",
+      "risk": "Medium",
+      "span": "00:05–01:10",
+      "evidence": "The surgeon opens the chest. Blood is suctioned as the graft is placed."
+    }
+  ]
+}

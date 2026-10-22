@@ -1,0 +1,48 @@
+{
+ "fixture": "adhd",
+ "arm": "atelier",
+ "task": "error-report",
+ "run": 1,
+ "text": "Run this from the repo root:\n\n```\nls config/app.json || cp config/app.example.json config/app.json\n```\n\n**Error:** `build.ts:88` throws `ENOENT` because it reads `config/app.json` and the file does not exist at that path.\n\n**Cause to confirm:** the file is either never created (it is usually gitignored and copied from a template) or the build is running from the wrong working directory. Check which one:\n\n1. Run `ls config/` from the repo root. If `app.json` is absent and a template such as `app.example.json` is there, copy it (command above) and fill in any required values.\n2. If no template exists, create `config/app.json` with the keys that `build.ts` reads near line 88 (`sed -n '80,95p' build.ts` shows them).\n3. If `config/app.json` exists at the root, the build is running from another directory. Run it from the repo root, or resolve the path from `__dirname` in `build.ts:88` instead of the current directory.\n\n**Verify:** run `ls config/app.json && npm run build` (swap in your build command). The `ENOENT` is gone and the build exits with code 0.\n\nStep 0 of 3 done: error diagnosed. Next: run `ls config/` from the repo root and see whether `app.json` or a template is listed.",
+ "state": "NEEDS_REVIEW",
+ "costUsd": 0.0064,
+ "exit": 0,
+ "standard": "03fcfcea922b8e6a",
+ "headKeys": [
+  "schema",
+  "state",
+  "standardVersionHash",
+  "skillVersion",
+  "certificate",
+  "record"
+ ],
+ "certificate": {
+  "standardVersionHash": "03fcfcea922b8e6a",
+  "checks": {
+   "total": 6,
+   "counted": 0,
+   "written": 6,
+   "writtenQualified": 0
+  },
+  "readers": {
+   "taste": {
+    "veto": [],
+    "labelledMisses": 0,
+    "falseBlockUpper95": null
+   },
+   "claims": {
+    "instrument": "pattern check (no material bound: a model reading of specifics could only list them)",
+    "version": null,
+    "gate": "pattern",
+    "qualified": false,
+    "measured": null,
+    "kinds": []
+   }
+  },
+  "errorBound": null,
+  "why": "no delivered-error bound: it needs an audit sample of your own labels, drawn like the work this skill does; the checks and readers above are what this output was held to"
+ },
+ "stderr": "No notes of yours are bound, so a story, source or figure in the draft cannot be checked against anything of yours, and is listed for you, not cut. Add yours: --with notes=<file>, or atelier material --skill i-have-adhd <file>.\nJudgement reader: not run (reporting only until your labels qualify it; --taste reads this run and records readings to label: atelier taste --skill i-have-adhd --calibrate)",
+ "meterUsd": 0.006438880000000147,
+ "seconds": 9.681
+}

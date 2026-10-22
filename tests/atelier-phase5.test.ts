@@ -188,6 +188,8 @@ describe('through the binary: class and UNSOURCED on verify, invoke and the MCP 
     run('ratify-close', '--work-type', 'writing');
     const b = run('build', '--name', 'nodrink', '--class', 'Blog Post');
     expect(b.out).toContain('Document class: blog-post');
+    // the owner's choice to have what is not in the material cut (on a kind the claim check is measured on)
+    expect(run('material', '--skill', 'nodrink', '--cut').out).toContain('cut where a qualified claim reader finds them');
     return { data, proj, env, run };
   };
   it('verify refuses a text declared as another class with exit 2, and notes the assumption otherwise', () => {
@@ -204,7 +206,7 @@ describe('through the binary: class and UNSOURCED on verify, invoke and the MCP 
     expect(ok.out).toContain('checked as blog-post');
     expect(run('verify', '--skill', 'nodrink', f, '--class', 'blog post').out).not.toContain('checked as');
   });
-  it('verify fails an invented figure as UNSOURCED, and passes it once it is in the material', () => {
+  it('verify flags an invented figure for review where no qualified reader may cut, and passes it once it is in the material', () => {
     const { proj, run } = seed();
     const f = join(proj, 'd.md'); writeFileSync(f, 'According to a 2023 survey, 73% of teams drink coffee.');
     // with nothing bound there is nothing to check a figure against: it is listed, and nothing fails
@@ -213,9 +215,12 @@ describe('through the binary: class and UNSOURCED on verify, invoke and the MCP 
     expect(unbound.out).toContain('no material was bound to check against');
     const other = join(proj, 'other.md'); writeFileSync(other, 'We like coffee in the morning.');
     run('material', '--skill', 'nodrink', other);
+    // the owner chose cut, and no qualified reader reads here: the pattern check never cuts nor fails, the level's action
+    // stands (a standard with no latitude is held grounded: flagged for review)
     const bad = run('verify', '--skill', 'nodrink', f);
-    expect(bad.code).toBe(1);
-    expect(bad.out).toContain('UNSOURCED');
+    expect(bad.code, bad.out).toBe(0);
+    expect(bad.out).toContain('the skill is held grounded');
+    expect(bad.out).toContain('73% of teams drink coffee');
     const notes = join(proj, 'notes.md'); writeFileSync(notes, 'The 2023 survey: 73% of teams drink coffee.');
     run('material', '--skill', 'nodrink', notes);
     expect(run('verify', '--skill', 'nodrink', f).code).toBe(0);
@@ -249,10 +254,11 @@ describe('through the binary: class and UNSOURCED on verify, invoke and the MCP 
     const out = execFileSync('node', [CLI, 'mcp'], { encoding: 'utf8', cwd: proj, env, input }).trim().split('\n')
       .map((l) => JSON.parse(l) as { result: { content: { text: string }[]; isError?: boolean } });
     expect(out[0].result.isError).toBe(true);
-    // nothing bound: listed, not failed; material that does not hold the figure: UNSOURCED
+    // nothing bound: listed, not failed; material that does not hold the figure: flagged for review, with no qualified reader to cut
     expect(out[1].result.content[0].text).toMatch(/"failed":false/);
     expect(out[1].result.content[0].text).toContain('no material was bound to check against');
     expect(out[2].result.content[0].text).toMatch(/"failed":false/);
-    expect(out[3].result.content[0].text).toMatch(/"rule":"UNSOURCED"/);
+    expect(out[3].result.content[0].text).toMatch(/"rule":"UNSOURCED·check"/);
+    expect(out[3].result.content[0].text).toMatch(/"failed":false/);
   });
 });

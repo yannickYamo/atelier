@@ -26,6 +26,17 @@ export type CaseClass =
 
 export interface CaseMaterial { readonly name: string; readonly text: string }
 
+/**
+ * THE NAME A DOCUMENT OF THE MATERIAL CARRIES, at the build and at a run alike: the file's own name without its folder or
+ * its extension, "-" and "_" read as spaces, the way a person cites it ("notice of loss" for
+ * `e01.material/notice-of-loss.txt`). A check written against an example's material reads the same names on new work.
+ * `--with <name>=<file>` keeps the name given. FORM: a path's last segment, nothing read for meaning.
+ */
+export const materialName = (path: string): string => {
+  const last = path.split(/[\\/]/).filter(Boolean).pop() ?? path;
+  return (last.replace(/\.[^.]+$/, '') || last).replace(/[-_\s]+/g, ' ').trim() || last;
+};
+
 export interface GoldenCase {
   readonly id: string;
   /** what was asked, in the asker's words; null when the example does not carry it */

@@ -1,0 +1,12 @@
+{
+ "fixture": "claims",
+ "arm": "plainx",
+ "task": "t1",
+ "run": 2,
+ "text": "## Summary\n\nWayfarer Fintech Ltd (policy CC-1407): theft from an unlocked desk of a camera body and lens at the insured's office on Harbour Lane. Declined under exclusion 7.1.\n\n## Facts\n\nWayfarer Fintech Ltd reported the loss on 10 September 2026 [notice of loss]. The loss occurred at the insured's office on Harbour Lane [notice of loss]. The items are a camera body and a lens [invoice 1], [invoice 2]. The theft was reported to the police on 12 September 2026, reference CR/2026/4143 [police report]. The items were left in a shared area on an unlocked desk and were not in a locked container [police report]. The file does not state the date of the theft.\n\n## Coverage analysis\n\nThe loss falls within clause 4.2 of the policy, which covers loss of or damage to business contents caused by theft at the premises named in the schedule, and at other premises while in the insured's custody [policy].\n\nExclusion 7.1 applies. It removes cover for theft of portable equipment left unattended in a shared or public space, unless the equipment was in a locked container or locked room at the time [policy]. The items were left in a shared area and were not in a locked container [police report].\n\nExclusion 7.5 is not relied on. It removes cover where theft is alleged and the loss was not reported to the police within seven days [policy]. The police report is dated 12 September 2026 [police report], and the notice of loss is dated 10 September 2026 [notice of loss], but the file does not give the date of the theft. The seven-day period therefore cannot be confirmed from the file, and the decision does not depend on it.\n\nExclusion 7.3 does not apply: the loss is a theft and no gradual deterioration is alleged [notice of loss], [policy].\n\n## Decision\n\nNot covered: exclusion 7.1 applies. The claim is declined, and the insured is told why in the terms of the policy.\n\n## Reserve\n\nNo reserve is set: the claim is declined. For reference, the invoices in the file total 5,508 dollars (3,307 dollars and 2,201 dollars) [invoice 1], [invoice 2].",
+ "costUsd": 0.026726,
+ "stop": "end_turn",
+ "error": null,
+ "meterUsd": 0.026726000000000028,
+ "seconds": 11.912
+}

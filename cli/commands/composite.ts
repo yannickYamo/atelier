@@ -10,12 +10,13 @@
 // single-author review uses, and says ONE line. Nothing is asked and nothing is left open; the whole table is in the
 // run's record and `atelier report --skill <name>`, and `atelier fix "<what was wrong>"` changes any of it.
 
-import { die, flagAll, flagEach, loadSession, saveSession, sha, runFile, canReach, clientFor, proposerModel, numericFlag, type Session } from '../runtime.js';
+import { die, argv, flagAll, flagEach, loadSession, saveSession, sha, runFile, canReach, clientFor, proposerModel, numericFlag, contextReaderClient, contextReaderModel, type Session } from '../runtime.js';
 import { existsSync } from 'node:fs';
 import { writeAtomic } from '../../core/state/fs-atomic.js';
 import { readJson } from '../../core/state/read-json.js';
 import type { Requirement } from '../../core/state/canonical-state.js';
-import { suggestAll, modeFromIntent, type Suggestion, type SkillMode } from '../../core/ratification/suggest.js';
+import { suggestAll, type Suggestion, type SkillMode } from '../../core/ratification/suggest.js';
+import { intentModeOf } from '../intent.js';
 import { buildTraitTable, type TraitClass, type TraitTable } from '../../core/composite/traits.js';
 import { weighTraits, inferredChoice, inferenceRecord, likingIn } from '../../core/composite/infer.js';
 import { quantitiesOf, describeQuantity } from '../../core/composite/quantity.js';
@@ -218,7 +219,8 @@ export async function compositeReview(_opts: ReviewOptions = {}): Promise<boolea
   const record: CompositeRecord = { ...composed, inference: inferenceRecord(composed, authors, s.voices ?? null, weights, preference, length) };
 
   // ── THE RULINGS ─────────────────────────────────────────────────────────────────────────────
-  const mode: SkillMode = s.intent?.mode ?? modeFromIntent(s.intent?.text ?? '').mode;
+  const off = !canReach('discovery') || argv.includes('--no-model');
+  const mode: SkillMode = await intentModeOf(s.intent, off ? null : contextReaderClient(), off ? null : contextReaderModel());
   const sugg = suggestionsByAuthor(pending, s, mode);
   // A range's rule shows what each voice's pieces showed of it, not its carrier's alone.
   const ranged = rangeEvidence(record, s.proposals);

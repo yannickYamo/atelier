@@ -1,0 +1,12 @@
+{
+ "fixture": "adhd",
+ "arm": "plain",
+ "task": "error-report",
+ "run": 3,
+ "text": "**Create `config/app.json`.** `build.ts:88` throws ENOENT because the file does not exist.\n\n**Cause:** `build.ts` reads `config/app.json` at line 88, and the path is missing from disk.\n\n**Fix (about 2 minutes):**\n1. Run `ls config/` and look for a template such as `app.example.json`.\n2. Copy it: `cp config/app.example.json config/app.json`\n3. If there is no template, restore from git: `git checkout -- config/app.json`\n4. If neither works, create it with `echo '{}' > config/app.json`, then add the keys `build.ts` reads.\n\n**Verify:**\n1. Run `ls config/app.json`. Expected: the path prints, no error.\n2. Run the build command. Expected: no ENOENT at `build.ts:88`, and the build moves past that line.\n\n**Next:** run `ls config/` and paste the output.",
+ "costUsd": 0.01244,
+ "stop": "end_turn",
+ "error": null,
+ "meterUsd": 0.012439999999999785,
+ "seconds": 7.247
+}

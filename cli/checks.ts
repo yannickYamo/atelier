@@ -8,14 +8,15 @@
 import type { CheckContext } from '../core/observers/registry.js';
 import * as store from '../core/state/store.js';
 import type { CheckOptions } from '../core/loop/run-repair.js';
-import { modelSensor, patternSensor, listsBecause, withRules, type ClaimSensor } from '../core/loop/claim-extract.js';
+import { modelSensor, patternSensor, claimAction, withRules, type ClaimSensor } from '../core/loop/claim-extract.js';
 import { modelJudge, type ContextJudge } from '../core/loop/context-judge.js';
 import type { Budget, InferenceClient } from '../core/inference/client.js';
 import { argv, flag, providerFor, clientAndBinding, boundMaterial, DATA, CONTEXT_READER_DEFAULT } from './runtime.js';
 import { join } from 'node:path';
 import { formatOf, type FormatProfile } from '../core/observers/formats.js';
 import { shortFormOptions, shortFormTransfer, type ShortTransfer } from '../core/observers/short-form.js';
-import type { Requirement } from '../core/state/canonical-state.js';
+import type { Requirement, LatitudeLevel, StandardVersion } from '../core/state/canonical-state.js';
+import { latitudeOf } from '../core/state/canonical-state.js';
 
 /**
  * WHAT A SHORT-FORM REQUEST CHANGES (core/observers/short-form.ts): the format the output is held to (the class's, with
@@ -152,6 +153,8 @@ export function checksFor(L: store.StoreLayout, opts: {
   readonly bound?: boolean;
   /** the kind of work named for this one check (the MCP tool's `class`), over the flag and the skill's own */
   readonly cls?: string | null;
+  /** the level this output is held at, where a run tightened it (cli/latitude.ts); the skill's own otherwise */
+  readonly level?: LatitudeLevel;
 }): CheckOptions {
   const guardClaims = opts.guardClaims ?? true;
   const placeholders = opts.placeholders ?? false;
@@ -177,8 +180,10 @@ export function checksFor(L: store.StoreLayout, opts: {
   const bound = opts.bound ?? (store.getMaterial(L).length > 0 || boundMaterial().length > 0);
   const sensor = (): ClaimSensor => (opts.offline ? patternSensor(material, placeholders, 'pattern check (offline)')
     : claimSensorFor(evidence, opts.task ?? '', placeholders, format?.strictSpecifics ?? false, bound, own));
-  const unmeasured = listsBecause({ cls: opts.cls ?? flag('--class') ?? store.getDocClass(L), bound, slots: placeholders });
-  return { material, evidence, ...(examples ? { examples } : {}), ...(approved ? { approved } : {}), guardClaims, placeholders, format, ...(unmeasured ? { listsBecause: unmeasured } : {}), ...(opts.context ? { context: opts.context } : {}), ...(judge ? { judge } : {}),
+  // WHAT AN UNTRACED SPECIFIC MEETS, by the latitude (core/loop/claim-extract.ts, `claimAction`): cut only where the owner
+  // chose it and a qualified reader found it; otherwise blocked, sent to review or listed.
+  const action = claimAction({ level: opts.level ?? latitudeOf(activeStandard(L)), bound, ownerCut: store.getClaimsCut(L), cls: opts.cls ?? flag('--class') ?? store.getDocClass(L), slots: placeholders });
+  return { material, evidence, ...(examples ? { examples } : {}), ...(approved ? { approved } : {}), guardClaims, placeholders, format, ...(action.why ? { listsBecause: action.why } : {}), claimAct: action.act, ...(action.otherwise ? { cutOtherwise: action.otherwise } : {}), ...(opts.context ? { context: opts.context } : {}), ...(judge ? { judge } : {}),
     learnedTells: store.activeTells(store.getTells(L)),
     ...(guardClaims ? { claimSensor: sensor() } : {}) };
 }
@@ -190,12 +195,16 @@ export function servedExamples(L: store.StoreLayout): string {
     ...(ex ? [ex.text, ex.request ?? ''] : [])].filter((t) => t.trim()).join('\n\n');
 }
 
-/** The statements of the active skill's approved rules, or none when the skill is not built yet. */
-function standardStatements(L: store.StoreLayout): string[] {
+/** The active skill's standard, or null when the skill is not built yet. */
+function activeStandard(L: store.StoreLayout): StandardVersion | null {
   const active = store.getActive(L);
   const sv = active ? store.getSkillVersion(L, active) : null;
-  const v = sv ? store.getStandard(L, sv.standardVersionHash) : null;
-  return (v?.requirements ?? []).filter((r) => r.authority !== 'EXPERT_REJECTED').map((r) => r.statement);
+  return sv ? store.getStandard(L, sv.standardVersionHash) : null;
+}
+
+/** The statements of the active skill's approved rules, or none when the skill is not built yet. */
+function standardStatements(L: store.StoreLayout): string[] {
+  return (activeStandard(L)?.requirements ?? []).filter((r) => r.authority !== 'EXPERT_REJECTED').map((r) => r.statement);
 }
 
 /** What `invoke` records about the invented-claim check that ran: which instrument, and on whose word. */

@@ -26,7 +26,7 @@
 //
 // A score, not a gate: it exits 0 whatever the number, and 2 when it could not score.
 
-import { basename } from 'node:path';
+import { materialName } from '../../core/golden/case.js';
 import { readFileSync, existsSync } from 'node:fs';
 import * as store from '../../core/state/store.js';
 import * as fstore from '../../core/state/fidelity-store.js';
@@ -133,7 +133,7 @@ export async function score(): Promise<void> {
   const materialFile = flag('--material');
   if (materialFile && !existsSync(materialFile)) fail(`there is no material file at ${materialFile}.`);
   const material = [task, materialFile ? readFileSync(materialFile, 'utf8') : '', ...store.getMaterial(L).map((m) => m.text)].filter(Boolean).join('\n\n');
-  const named = [...(materialFile ? [{ name: basename(materialFile), text: readFileSync(materialFile, 'utf8') }] : []), ...store.getMaterial(L).map((m) => ({ name: m.name, text: m.text }))];
+  const named = [...(materialFile ? [{ name: materialName(materialFile), text: readFileSync(materialFile, 'utf8') }] : []), ...store.getMaterial(L).map((m) => ({ name: m.name, text: m.text }))];
   const checks = checksFor(L, { material, task, context: { ...(task ? { request: task } : {}), material: named }, guardClaims: true, offline: true, bound: Boolean(materialFile) || store.getMaterial(L).length > 0 });
   const report = await checkDraftAsync(name, v, text, checks);
   const activeRelease = fstore.getActiveRelease(L);

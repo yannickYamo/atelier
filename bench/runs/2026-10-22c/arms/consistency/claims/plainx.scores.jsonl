@@ -1,0 +1,20 @@
+{"task":"t0","run":1,"fails":[]}
+{"task":"t0","run":2,"fails":["R2 every fact cites a document in the file"]}
+{"task":"t1","run":1,"fails":["R2 every fact cites a document in the file"]}
+{"task":"t1","run":2,"fails":["R2 every fact cites a document in the file"]}
+{"task":"t2","run":1,"fails":["R8 figure(s) the file does not give: 6736"]}
+{"task":"t2","run":2,"fails":["R8 figure(s) the file does not give: 6736"]}
+{"task":"t3","run":1,"fails":[]}
+{"task":"t3","run":2,"fails":["R8 figure(s) the file does not give: 6014"]}
+{"task":"t4","run":1,"fails":["R8 figure(s) the file does not give: 3392"]}
+{"task":"t4","run":2,"fails":["R2 every fact cites a document in the file","R8 figure(s) the file does not give: 3392"]}
+{"task":"t5","run":1,"fails":[]}
+{"task":"t5","run":2,"fails":[]}
+{"task":"t6","run":1,"fails":["R3 the coverage conclusion cites the policy clause","R3c the clause the loss falls under (4.9)"]}
+{"task":"t6","run":2,"fails":["R2 every fact cites a document in the file"]}
+{"task":"t7","run":1,"fails":[]}
+{"task":"t7","run":2,"fails":["R8b a date the file does not give","R8 figure(s) the file does not give: 11"]}
+{"task":"t8","run":1,"fails":[]}
+{"task":"t8","run":2,"fails":["R8 figure(s) the file does not give: 3004"]}
+{"task":"t9","run":1,"fails":["R8b a date the file does not give","R8 figure(s) the file does not give: 21"]}
+{"task":"t9","run":2,"fails":[]}

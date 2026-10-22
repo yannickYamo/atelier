@@ -1,0 +1,12 @@
+{
+ "fixture": "labels",
+ "arm": "plainx",
+ "task": "t1",
+ "run": 3,
+ "text": "{\n  \"clip\": \"c14\",\n  \"duration\": \"01:20\",\n  \"overall\": \"High\",\n  \"categories\": [\n    {\n      \"category\": \"Medical – procedure\",\n      \"risk\": \"Medium\",\n      \"span\": \"00:05–00:30\",\n      \"evidence\": \"The surgeon opens the chest.\"\n    },\n    {\n      \"category\": \"Medical – graphic\",\n      \"risk\": \"High\",\n      \"span\": \"00:30–01:10\",\n      \"evidence\": \"Blood is suctioned as the graft is placed.\"\n    }\n  ]\n}",
+ "costUsd": 0.021072,
+ "stop": "end_turn",
+ "error": null,
+ "meterUsd": 0.0210720000000002,
+ "seconds": 9.488
+}

@@ -358,7 +358,9 @@ function runtimeCell(t, remaining) {
       ...(backend.passPrices ? ['--price-in', opt(args, 'price-in'), '--price-out', opt(args, 'price-out')] : []), ...withArgs, ...(runtimeSpec.args ?? []), t.prompt];
     const done = spawnSync(process.execPath, cmd, { cwd: runtimeSpec.proj, env: { ...process.env, ATELIER_DATA: runtimeSpec.data, ATELIER_PROJECT_DIR: runtimeSpec.proj },
       encoding: 'utf8', timeout: 900_000, maxBuffer: 64 * 1024 * 1024 });
+    // A run that stopped before its record prints {state: "ERROR"}: no record, as before.
     let rec = null; try { rec = JSON.parse(done.stdout); } catch { /* no record: the run failed before its end */ }
+    if (rec?.state === 'ERROR') rec = null;
     // A STRICT REFUSAL IS AN ANSWER TO THE QUESTION "what did the person get", NOT AN ERROR. Exit 3 with "not
     // delivered (strict delivery)" used to be thrown, retried twice and then end the whole run, so a refusal cost
     // three runs and a refused task was never recorded. It is written as a row with no response and its reasons.

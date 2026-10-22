@@ -4,6 +4,7 @@
 // the provider factory, host selection — lives in ../runtime.js and is imported, so a
 // command file reads as one job rather than as a slice of everything.
 
+import { requalifySkill, movedLine } from '../../core/method/requalify.js';
 import type { StoredSignal } from '../../core/observers/selection.js';
 import { compositeVoiceOf, pieceLengthOpen, type CompositeRecord } from '../../core/composite/selection.js';
 import { withoutFrontMatter } from '../../core/composite/authors.js';
@@ -26,6 +27,7 @@ import { deriveScope, groundScope, spreadByKind, type ScopeProfile } from '../..
 /** The words of example answers a skill that answers shows by default: enough for one of each kind of request and a few more. */
 const ANSWER_EXAMPLE_WORDS = 1200;
 import { WORK_FORM, type WorkForm } from '../../core/observers/work-form.js';
+import { formatOf } from '../../core/observers/formats.js';
 import { readContext } from '../../core/inference/reading.js';
 import { METHOD_INFER, noteOf, type InferredMethod } from '../../core/method/infer.js';
 import { METHOD_UNITS } from '../../core/method/decision-units.js';
@@ -766,6 +768,8 @@ export async function build(nameArg?: string, opts: { closing?: boolean } = {}):
   // Said in the whole account and by `status`; under `atelier new` the short screen stays the owner's.
   if (!orchestrated() || argv.includes('--report')) console.log(describeStages(receipt.stages));
   store.setActive(L, skill.skillVersionHash);
+  // THE OWNER'S RULINGS SINCE THE LAST BUILD HOLD THE WRITTEN CHECKS AGAIN (core/method/requalify.ts): counting, no model.
+  for (const m of requalifySkill(L).moved) console.log(movedLine(m));
 
   // ── IMPROVE: WRITE INTO THE USER'S OWN SKILL ───────────────────────────────────────────────
   //
@@ -1026,7 +1030,9 @@ async function workFormFor(L: store.StoreLayout, v: StandardVersion, method: { t
   const storedPieces = store.getVoice(L)?.pieces ?? [];
   // The one worked example counts as evidence too: a single sectioned piece is a document.
   const examples = fromSession.length ? fromSession : storedPieces.length ? storedPieces.map((t) => ({ text: withoutFrontMatter(t), request: null })) : exemplar ? [{ text: exemplar.text, request: exemplar.request ?? null }] : [];
-  const input = { workType: v.workType, examples, method: method?.text ?? null };
+  // What the owner's choices already say: a class of work that answers people (its format lists specifics for the reader).
+  const declared = formatOf(flag('--class') ?? store.getDocClass(L))?.claims === 'list' ? 'REPLY' as const : null;
+  const input = { workType: v.workType, examples, method: method?.text ?? null, declared };
   const model = NO_MODEL() ? null : contextReaderModel();
   const d = await readContext(WORK_FORM, input, NO_MODEL() ? null : contextReaderClient(), model, { spentUsd: 0, capUsd: 0.2, maxCalls: 1 });
   // `--review` writes nothing: the reading is made and said, and kept only by a build that commits.

@@ -1,0 +1,2087 @@
+{
+ "schema": "atelier-record/1",
+ "state": "NEEDS_REVIEW",
+ "standardVersionHash": "9de6ca6a4326ee0e",
+ "skillVersion": "ca2cc98ee11da5f5",
+ "certificate": {
+  "standardVersionHash": "9de6ca6a4326ee0e",
+  "checks": {
+   "total": 34,
+   "counted": 21,
+   "written": 13,
+   "writtenQualified": 5
+  },
+  "readers": {
+   "taste": {
+    "veto": [],
+    "labelledMisses": 0,
+    "falseBlockUpper95": null
+   },
+   "claims": {
+    "instrument": "pattern check, with claim reader (claude-haiku-4-5, prompt 47d18891) reporting only: not qualified",
+    "version": "47d18891",
+    "gate": "pattern",
+    "qualified": false,
+    "measured": null,
+    "kinds": []
+   }
+  },
+  "latitude": {
+   "skill": "STRICT",
+   "run": "STRICT",
+   "tightenedBy": null,
+   "setBy": "model"
+  },
+  "acceptedUnmeasured": [],
+  "errorBound": null,
+  "why": "no delivered-error bound: it needs an audit sample of your own labels, drawn like the work this skill does; the checks and readers above are what this output was held to"
+ },
+ "record": {
+  "schema": 1,
+  "state": "NEEDS_REVIEW",
+  "entries": [
+   {
+    "id": "x1",
+    "statement": "Every category in a label is one of the 39 categories of the taxonomy, written exactly as the taxonomy writes it.",
+    "dimension": "STANDARD",
+    "source": "METHOD",
+    "required": true,
+    "observation": {
+     "proposition": "Checks each category name in the label has the Family – form the taxonomy uses; the full list of 39 is not in the material, so only the form is checked. (a check written for this step)",
+     "coverage": "PARTIAL",
+     "qualification": "DETERMINISTIC",
+     "evidence": "category names well formed",
+     "unchecked": "how much of this rule the check reads is not known"
+    },
+    "result": "UNVERIFIED",
+    "reason": "PARTLY_CHECKED"
+   },
+   {
+    "id": "x2",
+    "statement": "Every flagged category carries a timecode span, start–end in mm:ss, inside the clip's duration.",
+    "dimension": "HABIT",
+    "source": "METHOD",
+    "required": false,
+    "observation": {
+     "proposition": "Each span is read as mm:ss start and end; the end must be after the start and inside the clip duration. (a check written for this step)",
+     "coverage": "PARTIAL",
+     "qualification": "DETERMINISTIC",
+     "evidence": "spans inside duration",
+     "unchecked": "how much of this rule the check reads is not known"
+    },
+    "result": "UNVERIFIED",
+    "reason": "PARTLY_CHECKED"
+   },
+   {
+    "id": "x3",
+    "statement": "Every flagged category carries a risk level: Low, Medium or High.",
+    "dimension": "STANDARD",
+    "source": "METHOD",
+    "required": true,
+    "observation": {
+     "proposition": "Each category entry's risk must be Low, Medium or High. (a check written for this step)",
+     "coverage": "PARTIAL",
+     "qualification": "DETERMINISTIC",
+     "evidence": "risk levels valid",
+     "unchecked": "how much of this rule the check reads is not known"
+    },
+    "result": "UNVERIFIED",
+    "reason": "PARTLY_CHECKED"
+   },
+   {
+    "id": "x4",
+    "statement": "\"High\" risk requires an explicit depiction in the clip: a described act, injury, blood, a weapon fired, an explicit sexual act. A reference, a mention or a discussion is Medium at most.",
+    "dimension": "STANDARD",
+    "source": "METHOD",
+    "required": true,
+    "observation": {
+     "proposition": null,
+     "coverage": "NONE",
+     "qualification": "UNAVAILABLE",
+     "evidence": null
+    },
+    "result": "UNVERIFIED",
+    "reason": "NOT_MACHINE_CHECKABLE"
+   },
+   {
+    "id": "x5",
+    "statement": "A clip labelled \"Firearms – depiction\" or \"Firearms – use\" is never also labelled \"Floor – all brands\".",
+    "dimension": "HABIT",
+    "source": "METHOD",
+    "required": false,
+    "observation": {
+     "proposition": "Checks that a firearm category and the Floor label do not both appear in the label. (a check written for this step)",
+     "coverage": "PARTIAL",
+     "qualification": "DETERMINISTIC",
+     "evidence": "no firearm and floor label together",
+     "unchecked": "how much of this rule the check reads is not known"
+    },
+    "result": "UNVERIFIED",
+    "reason": "PARTLY_CHECKED"
+   },
+   {
+    "id": "x6",
+    "statement": "A clip with no flagged category is labelled \"Floor – all brands\" with risk Floor and no timecode.",
+    "dimension": "HABIT",
+    "source": "METHOD",
+    "required": false,
+    "observation": {
+     "proposition": "If the label holds no categories, it must carry risk Floor and no span. Otherwise the rule does not apply. (a check written for this step)",
+     "coverage": "PARTIAL",
+     "qualification": "DETERMINISTIC",
+     "evidence": "clip has flagged categories; rule does not apply",
+     "unchecked": "how much of this rule the check reads is not known"
+    },
+    "result": "UNVERIFIED",
+    "reason": "PARTLY_CHECKED"
+   },
+   {
+    "id": "x7",
+    "statement": "Every flagged category carries evidence: the words of the transcript, copied, that support it.",
+    "dimension": "STANDARD",
+    "source": "METHOD",
+    "required": true,
+    "observation": {
+     "proposition": "Each category entry has a non-empty evidence string. Whether the words are copied from the transcript is not checked here. (a check written for this step)",
+     "coverage": "PARTIAL",
+     "qualification": "DETERMINISTIC",
+     "evidence": "evidence present",
+     "unchecked": "how much of this rule the check reads is not known"
+    },
+    "result": "UNVERIFIED",
+    "reason": "PARTLY_CHECKED"
+   },
+   {
+    "id": "x8",
+    "statement": "\"Violence – graphic\" requires described injury or blood; a scuffle, a push or a threat is \"Violence – minor\".",
+    "dimension": "STANDARD",
+    "source": "METHOD",
+    "required": true,
+    "observation": {
+     "proposition": null,
+     "coverage": "NONE",
+     "qualification": "UNAVAILABLE",
+     "evidence": null
+    },
+    "result": "UNVERIFIED",
+    "reason": "NOT_MACHINE_CHECKABLE"
+   },
+   {
+    "id": "x9",
+    "statement": "\"Language – strong\" requires a word of the strong list in the transcript; \"Language – mild\" otherwise.",
+    "dimension": "STANDARD",
+    "source": "METHOD",
+    "required": true,
+    "observation": {
+     "proposition": null,
+     "coverage": "NONE",
+     "qualification": "UNAVAILABLE",
+     "evidence": null
+    },
+    "result": "UNVERIFIED",
+    "reason": "NOT_MACHINE_CHECKABLE"
+   },
+   {
+    "id": "x10",
+    "statement": "A label carries no category the transcript does not support with evidence.",
+    "dimension": "STANDARD",
+    "source": "METHOD",
+    "required": true,
+    "observation": {
+     "proposition": null,
+     "coverage": "NONE",
+     "qualification": "UNAVAILABLE",
+     "evidence": null
+    },
+    "result": "UNVERIFIED",
+    "reason": "NOT_MACHINE_CHECKABLE"
+   },
+   {
+    "id": "x11",
+    "statement": "Risk is the highest of the flagged categories' risk levels, carried once at the top of the label as overall.",
+    "dimension": "HABIT",
+    "source": "METHOD",
+    "required": false,
+    "observation": {
+     "proposition": "The overall value must equal the highest risk among the categories. (a check written for this step)",
+     "coverage": "PARTIAL",
+     "qualification": "DETERMINISTIC",
+     "evidence": "overall equals highest risk",
+     "unchecked": "how much of this rule the check reads is not known"
+    },
+    "result": "UNVERIFIED",
+    "reason": "PARTLY_CHECKED"
+   },
+   {
+    "id": "x12",
+    "statement": "A span's end is after its start, and no span runs past the duration.",
+    "dimension": "STANDARD",
+    "source": "METHOD",
+    "required": true,
+    "observation": {
+     "proposition": "Each span's end is after its start and does not exceed the clip duration. (a check written for this step)",
+     "coverage": "PARTIAL",
+     "qualification": "DETERMINISTIC",
+     "evidence": "spans ordered and within duration",
+     "unchecked": "how much of this rule the check reads is not known"
+    },
+    "result": "UNVERIFIED",
+    "reason": "PARTLY_CHECKED"
+   },
+   {
+    "id": "x13",
+    "statement": "Where the same act is both \"Violence\" and \"Dangerous acts\", both are flagged, each with its own evidence.",
+    "dimension": "STANDARD",
+    "source": "METHOD",
+    "required": true,
+    "observation": {
+     "proposition": null,
+     "coverage": "NONE",
+     "qualification": "UNAVAILABLE",
+     "evidence": null
+    },
+    "result": "UNVERIFIED",
+    "reason": "NOT_MACHINE_CHECKABLE"
+   },
+   {
+    "id": "x14",
+    "statement": "A news report of a disaster is \"Disaster – news\", Medium at most; graphic footage described is \"Disaster – graphic\".",
+    "dimension": "STANDARD",
+    "source": "METHOD",
+    "required": true,
+    "observation": {
+     "proposition": null,
+     "coverage": "NONE",
+     "qualification": "UNAVAILABLE",
+     "evidence": null
+    },
+    "result": "UNVERIFIED",
+    "reason": "NOT_MACHINE_CHECKABLE"
+   },
+   {
+    "id": "x15",
+    "statement": "A reference to alcohol in passing is \"Alcohol – reference\", Low; drinking described is \"Alcohol – consumption\", Medium.",
+    "dimension": "STANDARD",
+    "source": "METHOD",
+    "required": true,
+    "observation": {
+     "proposition": null,
+     "coverage": "NONE",
+     "qualification": "UNAVAILABLE",
+     "evidence": null
+    },
+    "result": "UNVERIFIED",
+    "reason": "NOT_MACHINE_CHECKABLE"
+   },
+   {
+    "id": "x16",
+    "statement": "Numbers in a span are seconds and minutes only: no frame counts.",
+    "dimension": "STANDARD",
+    "source": "METHOD",
+    "required": true,
+    "observation": {
+     "proposition": "Spans contain no frame-count notation. (a check written for this step)",
+     "coverage": "PARTIAL",
+     "qualification": "DETERMINISTIC",
+     "evidence": "no frame counts in spans",
+     "unchecked": "how much of this rule the check reads is not known"
+    },
+    "result": "UNVERIFIED",
+    "reason": "PARTLY_CHECKED"
+   },
+   {
+    "id": "x17",
+    "statement": "Evidence is copied from the transcript, never paraphrased.",
+    "dimension": "HABIT",
+    "source": "METHOD",
+    "required": false,
+    "observation": {
+     "proposition": "Each evidence string must appear word for word in the material (case and spacing aside). (a check written for this step)",
+     "coverage": "PARTIAL",
+     "qualification": "DETERMINISTIC",
+     "evidence": "all evidence verbatim",
+     "unchecked": "how much of this rule the check reads is not known"
+    },
+    "result": "UNVERIFIED",
+    "reason": "PARTLY_CHECKED"
+   },
+   {
+    "id": "x18",
+    "statement": "A category flagged twice is listed once, with the earliest span.",
+    "dimension": "HABIT",
+    "source": "METHOD",
+    "required": false,
+    "observation": {
+     "proposition": "No category name appears twice in the categories list. Choice of earliest span is not checked. (a check written for this step)",
+     "coverage": "PARTIAL",
+     "qualification": "DETERMINISTIC",
+     "evidence": "each category listed once",
+     "unchecked": "how much of this rule the check reads is not known"
+    },
+    "result": "UNVERIFIED",
+    "reason": "PARTLY_CHECKED"
+   },
+   {
+    "id": "x19",
+    "statement": "The label is JSON with the keys clip, duration, overall, categories; nothing else.",
+    "dimension": "HABIT",
+    "source": "METHOD",
+    "required": false,
+    "observation": {
+     "proposition": "The label parses as JSON and has exactly the four keys clip, duration, overall, categories. (a check written for this step)",
+     "coverage": "PARTIAL",
+     "qualification": "DETERMINISTIC",
+     "evidence": "JSON with exact keys",
+     "unchecked": "how much of this rule the check reads is not known"
+    },
+    "result": "UNVERIFIED",
+    "reason": "PARTLY_CHECKED"
+   },
+   {
+    "id": "x20",
+    "statement": "Where a clip's transcript is empty, the label is \"Floor – all brands\" and says so in evidence.",
+    "dimension": "HABIT",
+    "source": "METHOD",
+    "required": false,
+    "observation": {
+     "proposition": "When the transcript is empty, the label is Floor – all brands and the evidence says the transcript is empty. (a check written for this step)",
+     "coverage": "PARTIAL",
+     "qualification": "DETERMINISTIC",
+     "evidence": "When the transcript is empty, the label is Floor – all brands and the evidence says the transcript is empty.: nothing in this text to read it on",
+     "unchecked": "how much of this rule the check reads is not known"
+    },
+    "result": "NOT_APPLICABLE",
+    "reason": "DOES_NOT_APPLY"
+   },
+   {
+    "id": "x21",
+    "statement": "My pieces run 224 to 452 characters; a new piece stays between 1 and 680.",
+    "dimension": "HABIT",
+    "source": "EXAMPLE",
+    "required": false,
+    "observation": {
+     "proposition": "1 to 680 characters",
+     "coverage": "FULL",
+     "qualification": "DETERMINISTIC",
+     "evidence": "233 characters (1 to 680)"
+    },
+    "result": "PASS",
+    "reason": "MET"
+   },
+   {
+    "id": "x22",
+    "statement": "My pieces run 23 to 53 words; a new piece stays between 1 and 83.",
+    "dimension": "HABIT",
+    "source": "EXAMPLE",
+    "required": false,
+    "observation": {
+     "proposition": "1 to 83 words",
+     "coverage": "FULL",
+     "qualification": "DETERMINISTIC",
+     "evidence": "23 words (1 to 83)"
+    },
+    "result": "PASS",
+    "reason": "MET"
+   },
+   {
+    "id": "x23",
+    "statement": "My pieces run 1 sentence; a new piece has at most 2.",
+    "dimension": "HABIT",
+    "source": "EXAMPLE",
+    "required": false,
+    "observation": {
+     "proposition": "at most 2 sentences",
+     "coverage": "FULL",
+     "qualification": "DETERMINISTIC",
+     "evidence": "1 sentence (at most 2)"
+    },
+    "result": "PASS",
+    "reason": "MET"
+   },
+   {
+    "id": "x24",
+    "statement": "The longest sentence in my pieces runs 23 to 53 words; in a new piece it stays at most 83 words.",
+    "dimension": "HABIT",
+    "source": "EXAMPLE",
+    "required": false,
+    "observation": {
+     "proposition": "the longest sentence at most 83 words",
+     "coverage": "FULL",
+     "qualification": "DETERMINISTIC",
+     "evidence": "23 words in the longest sentence (at most 83)"
+    },
+    "result": "PASS",
+    "reason": "MET"
+   },
+   {
+    "id": "x25",
+    "statement": "At most 24 line breaks: my pieces carry 12 to 18.",
+    "dimension": "HABIT",
+    "source": "EXAMPLE",
+    "required": false,
+    "observation": {
+     "proposition": "at most 24 line breaks",
+     "coverage": "FULL",
+     "qualification": "DETERMINISTIC",
+     "evidence": "12 line breaks (at most 24)"
+    },
+    "result": "PASS",
+    "reason": "MET"
+   },
+   {
+    "id": "x26",
+    "statement": "No blank lines: none of my pieces has one.",
+    "dimension": "HABIT",
+    "source": "EXAMPLE",
+    "required": false,
+    "observation": {
+     "proposition": "no blank lines",
+     "coverage": "FULL",
+     "qualification": "DETERMINISTIC",
+     "evidence": "0 blank lines (at most 0)"
+    },
+    "result": "PASS",
+    "reason": "MET"
+   },
+   {
+    "id": "x27",
+    "statement": "No hashtags: none of my pieces has one.",
+    "dimension": "HABIT",
+    "source": "EXAMPLE",
+    "required": false,
+    "observation": {
+     "proposition": "no hashtags",
+     "coverage": "FULL",
+     "qualification": "DETERMINISTIC",
+     "evidence": "0 hashtags (at most 0)"
+    },
+    "result": "PASS",
+    "reason": "MET"
+   },
+   {
+    "id": "x28",
+    "statement": "No mentions (@): none of my pieces has one.",
+    "dimension": "HABIT",
+    "source": "EXAMPLE",
+    "required": false,
+    "observation": {
+     "proposition": "no mentions (@)",
+     "coverage": "FULL",
+     "qualification": "DETERMINISTIC",
+     "evidence": "0 mentions (@) (at most 0)"
+    },
+    "result": "PASS",
+    "reason": "MET"
+   },
+   {
+    "id": "x29",
+    "statement": "No links: none of my pieces has one.",
+    "dimension": "HABIT",
+    "source": "EXAMPLE",
+    "required": false,
+    "observation": {
+     "proposition": "no links",
+     "coverage": "FULL",
+     "qualification": "DETERMINISTIC",
+     "evidence": "0 links (at most 0)"
+    },
+    "result": "PASS",
+    "reason": "MET"
+   },
+   {
+    "id": "x30",
+    "statement": "No emoji: none of my pieces has one.",
+    "dimension": "HABIT",
+    "source": "EXAMPLE",
+    "required": false,
+    "observation": {
+     "proposition": "no emoji",
+     "coverage": "FULL",
+     "qualification": "DETERMINISTIC",
+     "evidence": "0 emoji (at most 0)"
+    },
+    "result": "PASS",
+    "reason": "MET"
+   },
+   {
+    "id": "x31",
+    "statement": "Open on a claim, as my pieces do.",
+    "dimension": "HABIT",
+    "source": "EXAMPLE",
+    "required": false,
+    "observation": {
+     "proposition": "opens on a claim",
+     "coverage": "FULL",
+     "qualification": "DETERMINISTIC",
+     "evidence": "what it opens on: a claim"
+    },
+    "result": "PASS",
+    "reason": "MET"
+   },
+   {
+    "id": "x32",
+    "statement": "Close on a statement, as my pieces do.",
+    "dimension": "HABIT",
+    "source": "EXAMPLE",
+    "required": false,
+    "observation": {
+     "proposition": "closes on a statement",
+     "coverage": "FULL",
+     "qualification": "DETERMINISTIC",
+     "evidence": "what it closes on: a statement"
+    },
+    "result": "PASS",
+    "reason": "MET"
+   },
+   {
+    "id": "x33",
+    "statement": "The first word is a symbol or emoji, as in every piece of mine.",
+    "dimension": "HABIT",
+    "source": "EXAMPLE",
+    "required": false,
+    "observation": {
+     "proposition": "the first word a symbol or emoji",
+     "coverage": "FULL",
+     "qualification": "DETERMINISTIC",
+     "evidence": "the first word: a symbol or emoji"
+    },
+    "result": "PASS",
+    "reason": "MET"
+   },
+   {
+    "id": "x34",
+    "statement": "Quoted phrases: about 53 per 100 words in my pieces; a new piece carries no more than its length expects.",
+    "dimension": "HABIT",
+    "source": "EXAMPLE",
+    "required": false,
+    "observation": {
+     "proposition": "quoted phrases: about 53 per 100 words, read over 355 words of your pieces; a short piece is held to the count expected of its length",
+     "coverage": "FULL",
+     "qualification": "DETERMINISTIC",
+     "evidence": "quoted phrases: 14 in 23 words; about 12.2 expected in 23 words (at most 19 is within your rate)"
+    },
+    "result": "PASS",
+    "reason": "MET"
+   },
+   {
+    "id": "x35",
+    "statement": "Colons: about 28.2 per 100 words in my pieces; a new piece carries about as many as its length expects.",
+    "dimension": "HABIT",
+    "source": "EXAMPLE",
+    "required": false,
+    "observation": {
+     "proposition": "colons: about 28.2 per 100 words, read over 355 words of your pieces; a short piece is held to the count expected of its length",
+     "coverage": "FULL",
+     "qualification": "DETERMINISTIC",
+     "evidence": "colons: 8 in 23 words; about 6.5 expected in 23 words (2 to 12 is within your rate)"
+    },
+    "result": "PASS",
+    "reason": "MET"
+   },
+   {
+    "id": "x36",
+    "statement": "Figures written in digits: about 20.8 per 100 words in my pieces; a new piece carries no more than its length expects.",
+    "dimension": "HABIT",
+    "source": "EXAMPLE",
+    "required": false,
+    "observation": {
+     "proposition": "figures written in digits: about 20.9 per 100 words, read over 355 words of your pieces; a short piece is held to the count expected of its length",
+     "coverage": "FULL",
+     "qualification": "DETERMINISTIC",
+     "evidence": "figures written in digits: 2 in 23 words; about 4.8 expected in 23 words (at most 10 is within your rate)"
+    },
+    "result": "PASS",
+    "reason": "MET"
+   },
+   {
+    "id": "x37",
+    "statement": "Nominalisations (-tion, -ment, -ness, -ity, -ance, -ence): about 8.7 per 100 words in my pieces; a new piece carries about as many as its length expects.",
+    "dimension": "HABIT",
+    "source": "EXAMPLE",
+    "required": false,
+    "observation": {
+     "proposition": "nominalisations (-tion, -ment, -ness, -ity, -ance, -ence): about 8.7 per 100 words, read over 355 words of your pieces; a short piece is held to the count expected of its length",
+     "coverage": "FULL",
+     "qualification": "DETERMINISTIC",
+     "evidence": "nominalisations (-tion, -ment, -ness, -ity, -ance, -ence): 2 in 23 words; about 2 expected in 23 words (0 to 5 is within your rate)"
+    },
+    "result": "PASS",
+    "reason": "MET"
+   },
+   {
+    "id": "x38",
+    "statement": "Runs of five or more one-syllable words: about 2.8 per 100 words in my pieces; a new piece carries about as many as its length expects.",
+    "dimension": "HABIT",
+    "source": "EXAMPLE",
+    "required": false,
+    "observation": {
+     "proposition": "runs of five or more one-syllable words: about 2.8 per 100 words, read over 355 words of your pieces; a short piece is held to the count expected of its length",
+     "coverage": "FULL",
+     "qualification": "DETERMINISTIC",
+     "evidence": "runs of five or more one-syllable words: 1 in 23 words; about 0.6 expected in 23 words (0 to 3 is within your rate)"
+    },
+    "result": "PASS",
+    "reason": "MET"
+   },
+   {
+    "id": "x39",
+    "statement": "I keep paragraphs to 2 sentences at most.",
+    "dimension": "HABIT",
+    "source": "EXAMPLE",
+    "required": false,
+    "observation": {
+     "proposition": "paragraphs of at most 2 sentences",
+     "coverage": "FULL",
+     "qualification": "DETERMINISTIC",
+     "evidence": "the request states its own format (\"as JSON\")"
+    },
+    "result": "NOT_APPLICABLE",
+    "reason": "SET_ASIDE"
+   },
+   {
+    "id": "x40",
+    "statement": "Write none of the moves that mark text as machine-written (announcing an insight others \"miss\", grading your own list, \"the single most\", announcing candour, \"that's the whole game\", reading the reader's mind, one thing \"wearing another's clothes\", a contrastive verdict as the opening line, an em dash, a run of three or more very short sentences).",
+    "dimension": "STANDARD",
+    "source": "EXAMPLE",
+    "required": true,
+    "observation": {
+     "proposition": "machine-writing moves (announced insights, self-graded lists, stacked superlatives, announced candour, totalisers, mind-reading, costumes): none of 16 kind(s) you never use, and at most 0.3 per 1,000 words of the rest",
+     "coverage": "FULL",
+     "qualification": "DETERMINISTIC",
+     "evidence": "none of the moves you never make; the rate is not read under 150 words"
+    },
+    "result": "PASS",
+    "reason": "MET"
+   },
+   {
+    "id": "x41",
+    "statement": "No mechanical errors: spelling, agreement, punctuation.",
+    "dimension": "STANDARD",
+    "source": "EXAMPLE",
+    "required": true,
+    "observation": {
+     "proposition": "no mechanical error with no legitimate reading: a known misspelling in lower case, an agreement no variety uses (\"he are\"), a/an before a lower-case common word, two commas, a space before a comma or a full stop; a capitalised word, a word repeated, a dialect's agreement (\"they was\"), \"an\" before \"h\" or a word read as letters, \"::\", \"..\", a space before \"!\", \"?\", \":\" or \";\", any other word the checker does not know, and anything else it proposes, is only listed; code, quotations, addresses, figures and names are never touched",
+     "coverage": "FULL",
+     "qualification": "DETERMINISTIC",
+     "evidence": "no possible slip found"
+    },
+    "result": "PASS",
+    "reason": "MET"
+   },
+   {
+    "id": "specifics",
+    "dimension": "EVIDENCE",
+    "source": "SYSTEM",
+    "statement": "Every specific in the work is found in what you supplied",
+    "required": true,
+    "observation": {
+     "proposition": "each figure, name, date and quotation, looked for in the request and the material",
+     "coverage": "FULL",
+     "qualification": "QUALIFIED",
+     "evidence": "all found"
+    },
+    "result": "PASS",
+    "reason": "MET"
+   },
+   {
+    "id": "lifted",
+    "dimension": "EVIDENCE",
+    "source": "SYSTEM",
+    "statement": "No passage is lifted from one of your examples",
+    "required": true,
+    "observation": {
+     "proposition": "the longest run of words shared with one example, less wording that recurs across them (at most 11: what your own examples share with one another, and never fewer than 11)",
+     "coverage": "FULL",
+     "qualification": "DETERMINISTIC",
+     "evidence": "the longest shared run is 0 words"
+    },
+    "result": "PASS",
+    "reason": "MET"
+   }
+  ],
+  "latitude": "STRICT"
+ },
+ "output": "{\n  \"clip\": \"c13\",\n  \"duration\": \"00:58\",\n  \"overall\": \"Floor\",\n  \"categories\": [\n    {\n      \"category\": \"Floor – all brands\",\n      \"risk\": \"Floor\",\n      \"span\": null,\n      \"evidence\": \"The old brewery, now a museum.\"\n    }\n  ]\n}",
+ "answer": "{\n  \"clip\": \"c13\",\n  \"duration\": \"00:58\",\n  \"overall\": \"Floor\",\n  \"categories\": [\n    {\n      \"category\": \"Floor – all brands\",\n      \"risk\": \"Floor\",\n      \"span\": null,\n      \"evidence\": \"The old brewery, now a museum.\"\n    }\n  ]\n}",
+ "invocationId": "ie7686648ae",
+ "costUsd": 0.0365,
+ "rulesBroken": [],
+ "cut": [],
+ "toCheck": [],
+ "graded": {
+  "features": [
+   "colon",
+   "emoji",
+   "hashtags",
+   "links",
+   "monosyllabicRun",
+   "nominalisation",
+   "numbers",
+   "quoted"
+  ],
+  "targeted": 0,
+  "repaired": 0,
+  "steered": [],
+  "redrafts": 0,
+  "notes": [],
+  "values": {
+   "hashtags": {
+    "before": 0,
+    "after": 0,
+    "lo": null,
+    "hi": 0,
+    "source": "standard"
+   },
+   "links": {
+    "before": 0,
+    "after": 0,
+    "lo": null,
+    "hi": 0,
+    "source": "standard"
+   },
+   "emoji": {
+    "before": 0,
+    "after": 0,
+    "lo": null,
+    "hi": 0,
+    "source": "standard"
+   },
+   "quoted": {
+    "before": 14,
+    "after": 14,
+    "lo": null,
+    "hi": null,
+    "source": "standard"
+   },
+   "colon": {
+    "before": 8,
+    "after": 8,
+    "lo": null,
+    "hi": null,
+    "source": "standard"
+   },
+   "numbers": {
+    "before": 2,
+    "after": 2,
+    "lo": null,
+    "hi": null,
+    "source": "standard"
+   },
+   "nominalisation": {
+    "before": 2,
+    "after": 2,
+    "lo": null,
+    "hi": null,
+    "source": "standard"
+   },
+   "monosyllabicRun": {
+    "before": 1,
+    "after": 1,
+    "lo": null,
+    "hi": null,
+    "source": "standard"
+   }
+  },
+  "edits": {
+   "accepted": 0,
+   "rejected": 0,
+   "reasons": []
+  },
+  "calls": 0,
+  "costUsd": 0,
+  "displacement": {
+   "before": 0,
+   "after": 0,
+   "refusedFor": []
+  },
+  "allowance": {
+   "calls": 3,
+   "usd": 0.4
+  }
+ },
+ "controller": {
+  "policy": "bounded-v1",
+  "decisions": [],
+  "stoppedBecause": "every enforced rule holds and nothing graded is off",
+  "callsUsed": 0,
+  "usdUsed": 0
+ },
+ "rules": {
+  "checked": [
+   {
+    "id": "x1",
+    "statement": "Every category in a label is one of the 39 categories of the taxonomy, written exactly as the taxonomy writes it.",
+    "materiality": "REQUIRED",
+    "verdict": "MET",
+    "detail": "category names well formed"
+   },
+   {
+    "id": "x2",
+    "statement": "Every flagged category carries a timecode span, start–end in mm:ss, inside the clip's duration.",
+    "materiality": null,
+    "verdict": "MET",
+    "detail": "spans inside duration"
+   },
+   {
+    "id": "x3",
+    "statement": "Every flagged category carries a risk level: Low, Medium or High.",
+    "materiality": "REQUIRED",
+    "verdict": "MET",
+    "detail": "risk levels valid"
+   },
+   {
+    "id": "x5",
+    "statement": "A clip labelled \"Firearms – depiction\" or \"Firearms – use\" is never also labelled \"Floor – all brands\".",
+    "materiality": null,
+    "verdict": "MET",
+    "detail": "no firearm and floor label together"
+   },
+   {
+    "id": "x6",
+    "statement": "A clip with no flagged category is labelled \"Floor – all brands\" with risk Floor and no timecode.",
+    "materiality": null,
+    "verdict": "MET",
+    "detail": "clip has flagged categories; rule does not apply"
+   },
+   {
+    "id": "x7",
+    "statement": "Every flagged category carries evidence: the words of the transcript, copied, that support it.",
+    "materiality": "REQUIRED",
+    "verdict": "MET",
+    "detail": "evidence present"
+   },
+   {
+    "id": "x11",
+    "statement": "Risk is the highest of the flagged categories' risk levels, carried once at the top of the label as overall.",
+    "materiality": null,
+    "verdict": "MET",
+    "detail": "overall equals highest risk"
+   },
+   {
+    "id": "x12",
+    "statement": "A span's end is after its start, and no span runs past the duration.",
+    "materiality": "REQUIRED",
+    "verdict": "MET",
+    "detail": "spans ordered and within duration"
+   },
+   {
+    "id": "x16",
+    "statement": "Numbers in a span are seconds and minutes only: no frame counts.",
+    "materiality": "REQUIRED",
+    "verdict": "MET",
+    "detail": "no frame counts in spans"
+   },
+   {
+    "id": "x17",
+    "statement": "Evidence is copied from the transcript, never paraphrased.",
+    "materiality": null,
+    "verdict": "MET",
+    "detail": "all evidence verbatim"
+   },
+   {
+    "id": "x18",
+    "statement": "A category flagged twice is listed once, with the earliest span.",
+    "materiality": null,
+    "verdict": "MET",
+    "detail": "each category listed once"
+   },
+   {
+    "id": "x19",
+    "statement": "The label is JSON with the keys clip, duration, overall, categories; nothing else.",
+    "materiality": null,
+    "verdict": "MET",
+    "detail": "JSON with exact keys"
+   },
+   {
+    "id": "x20",
+    "statement": "Where a clip's transcript is empty, the label is \"Floor – all brands\" and says so in evidence.",
+    "materiality": null,
+    "verdict": "NOT_APPLICABLE",
+    "detail": "When the transcript is empty, the label is Floor – all brands and the evidence says the transcript is empty.: nothing in this text to read it on"
+   },
+   {
+    "id": "x21",
+    "statement": "My pieces run 224 to 452 characters; a new piece stays between 1 and 680.",
+    "materiality": "PREFERRED",
+    "verdict": "MET",
+    "detail": "233 characters (1 to 680)"
+   },
+   {
+    "id": "x22",
+    "statement": "My pieces run 23 to 53 words; a new piece stays between 1 and 83.",
+    "materiality": "PREFERRED",
+    "verdict": "MET",
+    "detail": "23 words (1 to 83)"
+   },
+   {
+    "id": "x23",
+    "statement": "My pieces run 1 sentence; a new piece has at most 2.",
+    "materiality": "PREFERRED",
+    "verdict": "MET",
+    "detail": "1 sentence (at most 2)"
+   },
+   {
+    "id": "x24",
+    "statement": "The longest sentence in my pieces runs 23 to 53 words; in a new piece it stays at most 83 words.",
+    "materiality": "PREFERRED",
+    "verdict": "MET",
+    "detail": "23 words in the longest sentence (at most 83)"
+   },
+   {
+    "id": "x25",
+    "statement": "At most 24 line breaks: my pieces carry 12 to 18.",
+    "materiality": "PREFERRED",
+    "verdict": "MET",
+    "detail": "12 line breaks (at most 24)"
+   },
+   {
+    "id": "x26",
+    "statement": "No blank lines: none of my pieces has one.",
+    "materiality": "PREFERRED",
+    "verdict": "MET",
+    "detail": "0 blank lines (at most 0)"
+   },
+   {
+    "id": "x27",
+    "statement": "No hashtags: none of my pieces has one.",
+    "materiality": "PREFERRED",
+    "verdict": "MET",
+    "detail": "0 hashtags (at most 0)"
+   },
+   {
+    "id": "x28",
+    "statement": "No mentions (@): none of my pieces has one.",
+    "materiality": "PREFERRED",
+    "verdict": "MET",
+    "detail": "0 mentions (@) (at most 0)"
+   },
+   {
+    "id": "x29",
+    "statement": "No links: none of my pieces has one.",
+    "materiality": "PREFERRED",
+    "verdict": "MET",
+    "detail": "0 links (at most 0)"
+   },
+   {
+    "id": "x30",
+    "statement": "No emoji: none of my pieces has one.",
+    "materiality": "PREFERRED",
+    "verdict": "MET",
+    "detail": "0 emoji (at most 0)"
+   },
+   {
+    "id": "x31",
+    "statement": "Open on a claim, as my pieces do.",
+    "materiality": "PREFERRED",
+    "verdict": "MET",
+    "detail": "what it opens on: a claim"
+   },
+   {
+    "id": "x32",
+    "statement": "Close on a statement, as my pieces do.",
+    "materiality": "PREFERRED",
+    "verdict": "MET",
+    "detail": "what it closes on: a statement"
+   },
+   {
+    "id": "x33",
+    "statement": "The first word is a symbol or emoji, as in every piece of mine.",
+    "materiality": "PREFERRED",
+    "verdict": "MET",
+    "detail": "the first word: a symbol or emoji"
+   },
+   {
+    "id": "x34",
+    "statement": "Quoted phrases: about 53 per 100 words in my pieces; a new piece carries no more than its length expects.",
+    "materiality": "PREFERRED",
+    "verdict": "MET",
+    "detail": "quoted phrases: 14 in 23 words; about 12.2 expected in 23 words (at most 19 is within your rate)"
+   },
+   {
+    "id": "x35",
+    "statement": "Colons: about 28.2 per 100 words in my pieces; a new piece carries about as many as its length expects.",
+    "materiality": "PREFERRED",
+    "verdict": "MET",
+    "detail": "colons: 8 in 23 words; about 6.5 expected in 23 words (2 to 12 is within your rate)"
+   },
+   {
+    "id": "x36",
+    "statement": "Figures written in digits: about 20.8 per 100 words in my pieces; a new piece carries no more than its length expects.",
+    "materiality": "PREFERRED",
+    "verdict": "MET",
+    "detail": "figures written in digits: 2 in 23 words; about 4.8 expected in 23 words (at most 10 is within your rate)"
+   },
+   {
+    "id": "x37",
+    "statement": "Nominalisations (-tion, -ment, -ness, -ity, -ance, -ence): about 8.7 per 100 words in my pieces; a new piece carries about as many as its length expects.",
+    "materiality": "PREFERRED",
+    "verdict": "MET",
+    "detail": "nominalisations (-tion, -ment, -ness, -ity, -ance, -ence): 2 in 23 words; about 2 expected in 23 words (0 to 5 is within your rate)"
+   },
+   {
+    "id": "x38",
+    "statement": "Runs of five or more one-syllable words: about 2.8 per 100 words in my pieces; a new piece carries about as many as its length expects.",
+    "materiality": "PREFERRED",
+    "verdict": "MET",
+    "detail": "runs of five or more one-syllable words: 1 in 23 words; about 0.6 expected in 23 words (0 to 3 is within your rate)"
+   },
+   {
+    "id": "x39",
+    "statement": "I keep paragraphs to 2 sentences at most.",
+    "materiality": "PREFERRED",
+    "verdict": "NOT_APPLICABLE",
+    "detail": "withheld for this run: the request states its own format (\"as JSON\")"
+   },
+   {
+    "id": "x40",
+    "statement": "Write none of the moves that mark text as machine-written (announcing an insight others \"miss\", grading your own list, \"the single most\", announcing candour, \"that's the whole game\", reading the reader's mind, one thing \"wearing another's clothes\", a contrastive verdict as the opening line, an em dash, a run of three or more very short sentences).",
+    "materiality": "REQUIRED",
+    "verdict": "MET",
+    "detail": "none of the moves you never make; the rate is not read under 150 words"
+   },
+   {
+    "id": "x41",
+    "statement": "No mechanical errors: spelling, agreement, punctuation.",
+    "materiality": "REQUIRED",
+    "verdict": "MET",
+    "detail": "no possible slip found"
+   },
+   {
+    "id": "UNSOURCED",
+    "statement": "Never invent a story, a quotation, an attribution or a specific the person did not supply.",
+    "materiality": "REQUIRED",
+    "verdict": "MET",
+    "detail": "the skill is held strict: a figure, date or citation not in your material stops the work, and nothing is cut: nothing found, and nothing would be cut [pattern check (the gate: the claim reader is not qualified)]"
+   }
+  ],
+  "unchecked": [
+   {
+    "id": "x4",
+    "statement": "\"High\" risk requires an explicit depiction in the clip: a described act, injury, blood, a weapon fired, an explicit sexual act. A reference, a mention or a discussion is Medium at most."
+   },
+   {
+    "id": "x8",
+    "statement": "\"Violence – graphic\" requires described injury or blood; a scuffle, a push or a threat is \"Violence – minor\"."
+   },
+   {
+    "id": "x9",
+    "statement": "\"Language – strong\" requires a word of the strong list in the transcript; \"Language – mild\" otherwise."
+   },
+   {
+    "id": "x10",
+    "statement": "A label carries no category the transcript does not support with evidence."
+   },
+   {
+    "id": "x13",
+    "statement": "Where the same act is both \"Violence\" and \"Dangerous acts\", both are flagged, each with its own evidence."
+   },
+   {
+    "id": "x14",
+    "statement": "A news report of a disaster is \"Disaster – news\", Medium at most; graphic footage described is \"Disaster – graphic\"."
+   },
+   {
+    "id": "x15",
+    "statement": "A reference to alcohol in passing is \"Alcohol – reference\", Low; drinking described is \"Alcohol – consumption\", Medium."
+   }
+  ]
+ },
+ "withheld": [
+  "\"Language – strong\" requires a word of the strong list in the transcript; \"Language – mild\" otherwise."
+ ],
+ "report": [
+  "The request states its own format (\"as JSON\"): 2 presentation rule(s) withheld for this run.",
+  "Judgement reader: not run (reporting only until your labels qualify it; --taste reads this run and records readings to label: atelier taste --skill labels --calibrate).",
+  "For this request: every step applies; 13 not decided by the request, held as applying (2, 3, 4, 5, 6, 7, 8, 9, 13, 14, 15, 18, 20) (read).",
+  "Read before writing: turns on the clip itself (video or transcript/description); the brand suitability policy text.",
+  "Method: contains 5 of 5 thing(s) it must · 7 judgement step(s) not measured.",
+  "wrote 2 drafts and kept one: the first draft held every rule the drafts are chosen by; 1 planned draft(s) not written.",
+  "checked against the standard: 0 REQUIRED rule(s) broken in the draft (); 0 rewrite pass(es) of only the spans that broke them; nothing to repair.",
+  "graded features (never a failure): colon, emoji, hashtags, links, monosyllabicRun, nominalisation, numbers, quoted; 0 targeted by a rewrite, 0 observed nearer your range; 0 draft(s) written again for them; 0 rewrite(s) kept, 0 not; 0 call(s), $0.0000, on their account; features outside your range: 0 on the first draft, 0 delivered.",
+  "Checked: every REQUIRED measured rule holds.",
+  "invented-claim check: pattern check, with claim reader (claude-haiku-4-5, prompt 47d18891) reporting only: not qualified.",
+  "(invented-claim check: claim reader (claude-haiku-4-5, prompt 47d18891) is not qualified: what it finds is reported as a warning (UNSOURCED·reader), and the pattern check decides what fails)",
+  "used 1 of the 26 fact(s) you supplied: 4.348 specifics per 100 words",
+  "implementation release 030a6d7683f231d6 · profile 0f9f4adc2dba6461",
+  "    x9: waived, withheld for this run (left out of the prompt, or named there as set aside)",
+  "    x20: not applicable, outside what its measurement can judge in this text",
+  "    x39: waived, the request states its own format (\"as JSON\")",
+  "invocation ie7686648ae  ·  SkillVersion ca2cc98ee11da5f5  ·  $0.0365 (claim reader $0.0094)"
+ ],
+ "eval": {
+  "schema": 1,
+  "invocationId": "ie7686648ae",
+  "skill": "labels",
+  "skillVersion": "ca2cc98ee11da5f5",
+  "at": "2026-10-21T22:26:42.677Z",
+  "release": "030a6d7683f231d6",
+  "model": "claude-sonnet-5-5",
+  "drafts": 2,
+  "costUsd": 0.0365,
+  "spend": [
+   {
+    "purpose": "writing",
+    "usd": 0.026312,
+    "calls": 1,
+    "inputTokens": 9386,
+    "outputTokens": 398,
+    "cacheWriteTokens": 7120
+   },
+   {
+    "purpose": "claim reader",
+    "usd": 0.008796,
+    "calls": 2,
+    "inputTokens": 4696,
+    "outputTokens": 820
+   },
+   {
+    "purpose": "context judge",
+    "usd": 0.00079,
+    "calls": 2,
+    "inputTokens": 4595,
+    "outputTokens": 525,
+    "cacheWriteTokens": 2728
+   },
+   {
+    "purpose": "other",
+    "usd": 0.000555,
+    "calls": 1,
+    "inputTokens": 0,
+    "outputTokens": 0
+   }
+  ],
+  "sent": {
+   "skill": 3146,
+   "added": 447,
+   "request": 566
+  },
+  "durationMs": 16776,
+  "result": {
+   "conformant": true,
+   "reasons": []
+  },
+  "record": {
+   "schema": 1,
+   "state": "NEEDS_REVIEW",
+   "entries": [
+    {
+     "id": "x1",
+     "statement": "Every category in a label is one of the 39 categories of the taxonomy, written exactly as the taxonomy writes it.",
+     "dimension": "STANDARD",
+     "source": "METHOD",
+     "required": true,
+     "observation": {
+      "proposition": "Checks each category name in the label has the Family – form the taxonomy uses; the full list of 39 is not in the material, so only the form is checked. (a check written for this step)",
+      "coverage": "PARTIAL",
+      "qualification": "DETERMINISTIC",
+      "evidence": "category names well formed",
+      "unchecked": "how much of this rule the check reads is not known"
+     },
+     "result": "UNVERIFIED",
+     "reason": "PARTLY_CHECKED"
+    },
+    {
+     "id": "x2",
+     "statement": "Every flagged category carries a timecode span, start–end in mm:ss, inside the clip's duration.",
+     "dimension": "HABIT",
+     "source": "METHOD",
+     "required": false,
+     "observation": {
+      "proposition": "Each span is read as mm:ss start and end; the end must be after the start and inside the clip duration. (a check written for this step)",
+      "coverage": "PARTIAL",
+      "qualification": "DETERMINISTIC",
+      "evidence": "spans inside duration",
+      "unchecked": "how much of this rule the check reads is not known"
+     },
+     "result": "UNVERIFIED",
+     "reason": "PARTLY_CHECKED"
+    },
+    {
+     "id": "x3",
+     "statement": "Every flagged category carries a risk level: Low, Medium or High.",
+     "dimension": "STANDARD",
+     "source": "METHOD",
+     "required": true,
+     "observation": {
+      "proposition": "Each category entry's risk must be Low, Medium or High. (a check written for this step)",
+      "coverage": "PARTIAL",
+      "qualification": "DETERMINISTIC",
+      "evidence": "risk levels valid",
+      "unchecked": "how much of this rule the check reads is not known"
+     },
+     "result": "UNVERIFIED",
+     "reason": "PARTLY_CHECKED"
+    },
+    {
+     "id": "x4",
+     "statement": "\"High\" risk requires an explicit depiction in the clip: a described act, injury, blood, a weapon fired, an explicit sexual act. A reference, a mention or a discussion is Medium at most.",
+     "dimension": "STANDARD",
+     "source": "METHOD",
+     "required": true,
+     "observation": {
+      "proposition": null,
+      "coverage": "NONE",
+      "qualification": "UNAVAILABLE",
+      "evidence": null
+     },
+     "result": "UNVERIFIED",
+     "reason": "NOT_MACHINE_CHECKABLE"
+    },
+    {
+     "id": "x5",
+     "statement": "A clip labelled \"Firearms – depiction\" or \"Firearms – use\" is never also labelled \"Floor – all brands\".",
+     "dimension": "HABIT",
+     "source": "METHOD",
+     "required": false,
+     "observation": {
+      "proposition": "Checks that a firearm category and the Floor label do not both appear in the label. (a check written for this step)",
+      "coverage": "PARTIAL",
+      "qualification": "DETERMINISTIC",
+      "evidence": "no firearm and floor label together",
+      "unchecked": "how much of this rule the check reads is not known"
+     },
+     "result": "UNVERIFIED",
+     "reason": "PARTLY_CHECKED"
+    },
+    {
+     "id": "x6",
+     "statement": "A clip with no flagged category is labelled \"Floor – all brands\" with risk Floor and no timecode.",
+     "dimension": "HABIT",
+     "source": "METHOD",
+     "required": false,
+     "observation": {
+      "proposition": "If the label holds no categories, it must carry risk Floor and no span. Otherwise the rule does not apply. (a check written for this step)",
+      "coverage": "PARTIAL",
+      "qualification": "DETERMINISTIC",
+      "evidence": "clip has flagged categories; rule does not apply",
+      "unchecked": "how much of this rule the check reads is not known"
+     },
+     "result": "UNVERIFIED",
+     "reason": "PARTLY_CHECKED"
+    },
+    {
+     "id": "x7",
+     "statement": "Every flagged category carries evidence: the words of the transcript, copied, that support it.",
+     "dimension": "STANDARD",
+     "source": "METHOD",
+     "required": true,
+     "observation": {
+      "proposition": "Each category entry has a non-empty evidence string. Whether the words are copied from the transcript is not checked here. (a check written for this step)",
+      "coverage": "PARTIAL",
+      "qualification": "DETERMINISTIC",
+      "evidence": "evidence present",
+      "unchecked": "how much of this rule the check reads is not known"
+     },
+     "result": "UNVERIFIED",
+     "reason": "PARTLY_CHECKED"
+    },
+    {
+     "id": "x8",
+     "statement": "\"Violence – graphic\" requires described injury or blood; a scuffle, a push or a threat is \"Violence – minor\".",
+     "dimension": "STANDARD",
+     "source": "METHOD",
+     "required": true,
+     "observation": {
+      "proposition": null,
+      "coverage": "NONE",
+      "qualification": "UNAVAILABLE",
+      "evidence": null
+     },
+     "result": "UNVERIFIED",
+     "reason": "NOT_MACHINE_CHECKABLE"
+    },
+    {
+     "id": "x9",
+     "statement": "\"Language – strong\" requires a word of the strong list in the transcript; \"Language – mild\" otherwise.",
+     "dimension": "STANDARD",
+     "source": "METHOD",
+     "required": true,
+     "observation": {
+      "proposition": null,
+      "coverage": "NONE",
+      "qualification": "UNAVAILABLE",
+      "evidence": null
+     },
+     "result": "UNVERIFIED",
+     "reason": "NOT_MACHINE_CHECKABLE"
+    },
+    {
+     "id": "x10",
+     "statement": "A label carries no category the transcript does not support with evidence.",
+     "dimension": "STANDARD",
+     "source": "METHOD",
+     "required": true,
+     "observation": {
+      "proposition": null,
+      "coverage": "NONE",
+      "qualification": "UNAVAILABLE",
+      "evidence": null
+     },
+     "result": "UNVERIFIED",
+     "reason": "NOT_MACHINE_CHECKABLE"
+    },
+    {
+     "id": "x11",
+     "statement": "Risk is the highest of the flagged categories' risk levels, carried once at the top of the label as overall.",
+     "dimension": "HABIT",
+     "source": "METHOD",
+     "required": false,
+     "observation": {
+      "proposition": "The overall value must equal the highest risk among the categories. (a check written for this step)",
+      "coverage": "PARTIAL",
+      "qualification": "DETERMINISTIC",
+      "evidence": "overall equals highest risk",
+      "unchecked": "how much of this rule the check reads is not known"
+     },
+     "result": "UNVERIFIED",
+     "reason": "PARTLY_CHECKED"
+    },
+    {
+     "id": "x12",
+     "statement": "A span's end is after its start, and no span runs past the duration.",
+     "dimension": "STANDARD",
+     "source": "METHOD",
+     "required": true,
+     "observation": {
+      "proposition": "Each span's end is after its start and does not exceed the clip duration. (a check written for this step)",
+      "coverage": "PARTIAL",
+      "qualification": "DETERMINISTIC",
+      "evidence": "spans ordered and within duration",
+      "unchecked": "how much of this rule the check reads is not known"
+     },
+     "result": "UNVERIFIED",
+     "reason": "PARTLY_CHECKED"
+    },
+    {
+     "id": "x13",
+     "statement": "Where the same act is both \"Violence\" and \"Dangerous acts\", both are flagged, each with its own evidence.",
+     "dimension": "STANDARD",
+     "source": "METHOD",
+     "required": true,
+     "observation": {
+      "proposition": null,
+      "coverage": "NONE",
+      "qualification": "UNAVAILABLE",
+      "evidence": null
+     },
+     "result": "UNVERIFIED",
+     "reason": "NOT_MACHINE_CHECKABLE"
+    },
+    {
+     "id": "x14",
+     "statement": "A news report of a disaster is \"Disaster – news\", Medium at most; graphic footage described is \"Disaster – graphic\".",
+     "dimension": "STANDARD",
+     "source": "METHOD",
+     "required": true,
+     "observation": {
+      "proposition": null,
+      "coverage": "NONE",
+      "qualification": "UNAVAILABLE",
+      "evidence": null
+     },
+     "result": "UNVERIFIED",
+     "reason": "NOT_MACHINE_CHECKABLE"
+    },
+    {
+     "id": "x15",
+     "statement": "A reference to alcohol in passing is \"Alcohol – reference\", Low; drinking described is \"Alcohol – consumption\", Medium.",
+     "dimension": "STANDARD",
+     "source": "METHOD",
+     "required": true,
+     "observation": {
+      "proposition": null,
+      "coverage": "NONE",
+      "qualification": "UNAVAILABLE",
+      "evidence": null
+     },
+     "result": "UNVERIFIED",
+     "reason": "NOT_MACHINE_CHECKABLE"
+    },
+    {
+     "id": "x16",
+     "statement": "Numbers in a span are seconds and minutes only: no frame counts.",
+     "dimension": "STANDARD",
+     "source": "METHOD",
+     "required": true,
+     "observation": {
+      "proposition": "Spans contain no frame-count notation. (a check written for this step)",
+      "coverage": "PARTIAL",
+      "qualification": "DETERMINISTIC",
+      "evidence": "no frame counts in spans",
+      "unchecked": "how much of this rule the check reads is not known"
+     },
+     "result": "UNVERIFIED",
+     "reason": "PARTLY_CHECKED"
+    },
+    {
+     "id": "x17",
+     "statement": "Evidence is copied from the transcript, never paraphrased.",
+     "dimension": "HABIT",
+     "source": "METHOD",
+     "required": false,
+     "observation": {
+      "proposition": "Each evidence string must appear word for word in the material (case and spacing aside). (a check written for this step)",
+      "coverage": "PARTIAL",
+      "qualification": "DETERMINISTIC",
+      "evidence": "all evidence verbatim",
+      "unchecked": "how much of this rule the check reads is not known"
+     },
+     "result": "UNVERIFIED",
+     "reason": "PARTLY_CHECKED"
+    },
+    {
+     "id": "x18",
+     "statement": "A category flagged twice is listed once, with the earliest span.",
+     "dimension": "HABIT",
+     "source": "METHOD",
+     "required": false,
+     "observation": {
+      "proposition": "No category name appears twice in the categories list. Choice of earliest span is not checked. (a check written for this step)",
+      "coverage": "PARTIAL",
+      "qualification": "DETERMINISTIC",
+      "evidence": "each category listed once",
+      "unchecked": "how much of this rule the check reads is not known"
+     },
+     "result": "UNVERIFIED",
+     "reason": "PARTLY_CHECKED"
+    },
+    {
+     "id": "x19",
+     "statement": "The label is JSON with the keys clip, duration, overall, categories; nothing else.",
+     "dimension": "HABIT",
+     "source": "METHOD",
+     "required": false,
+     "observation": {
+      "proposition": "The label parses as JSON and has exactly the four keys clip, duration, overall, categories. (a check written for this step)",
+      "coverage": "PARTIAL",
+      "qualification": "DETERMINISTIC",
+      "evidence": "JSON with exact keys",
+      "unchecked": "how much of this rule the check reads is not known"
+     },
+     "result": "UNVERIFIED",
+     "reason": "PARTLY_CHECKED"
+    },
+    {
+     "id": "x20",
+     "statement": "Where a clip's transcript is empty, the label is \"Floor – all brands\" and says so in evidence.",
+     "dimension": "HABIT",
+     "source": "METHOD",
+     "required": false,
+     "observation": {
+      "proposition": "When the transcript is empty, the label is Floor – all brands and the evidence says the transcript is empty. (a check written for this step)",
+      "coverage": "PARTIAL",
+      "qualification": "DETERMINISTIC",
+      "evidence": "When the transcript is empty, the label is Floor – all brands and the evidence says the transcript is empty.: nothing in this text to read it on",
+      "unchecked": "how much of this rule the check reads is not known"
+     },
+     "result": "NOT_APPLICABLE",
+     "reason": "DOES_NOT_APPLY"
+    },
+    {
+     "id": "x21",
+     "statement": "My pieces run 224 to 452 characters; a new piece stays between 1 and 680.",
+     "dimension": "HABIT",
+     "source": "EXAMPLE",
+     "required": false,
+     "observation": {
+      "proposition": "1 to 680 characters",
+      "coverage": "FULL",
+      "qualification": "DETERMINISTIC",
+      "evidence": "233 characters (1 to 680)"
+     },
+     "result": "PASS",
+     "reason": "MET"
+    },
+    {
+     "id": "x22",
+     "statement": "My pieces run 23 to 53 words; a new piece stays between 1 and 83.",
+     "dimension": "HABIT",
+     "source": "EXAMPLE",
+     "required": false,
+     "observation": {
+      "proposition": "1 to 83 words",
+      "coverage": "FULL",
+      "qualification": "DETERMINISTIC",
+      "evidence": "23 words (1 to 83)"
+     },
+     "result": "PASS",
+     "reason": "MET"
+    },
+    {
+     "id": "x23",
+     "statement": "My pieces run 1 sentence; a new piece has at most 2.",
+     "dimension": "HABIT",
+     "source": "EXAMPLE",
+     "required": false,
+     "observation": {
+      "proposition": "at most 2 sentences",
+      "coverage": "FULL",
+      "qualification": "DETERMINISTIC",
+      "evidence": "1 sentence (at most 2)"
+     },
+     "result": "PASS",
+     "reason": "MET"
+    },
+    {
+     "id": "x24",
+     "statement": "The longest sentence in my pieces runs 23 to 53 words; in a new piece it stays at most 83 words.",
+     "dimension": "HABIT",
+     "source": "EXAMPLE",
+     "required": false,
+     "observation": {
+      "proposition": "the longest sentence at most 83 words",
+      "coverage": "FULL",
+      "qualification": "DETERMINISTIC",
+      "evidence": "23 words in the longest sentence (at most 83)"
+     },
+     "result": "PASS",
+     "reason": "MET"
+    },
+    {
+     "id": "x25",
+     "statement": "At most 24 line breaks: my pieces carry 12 to 18.",
+     "dimension": "HABIT",
+     "source": "EXAMPLE",
+     "required": false,
+     "observation": {
+      "proposition": "at most 24 line breaks",
+      "coverage": "FULL",
+      "qualification": "DETERMINISTIC",
+      "evidence": "12 line breaks (at most 24)"
+     },
+     "result": "PASS",
+     "reason": "MET"
+    },
+    {
+     "id": "x26",
+     "statement": "No blank lines: none of my pieces has one.",
+     "dimension": "HABIT",
+     "source": "EXAMPLE",
+     "required": false,
+     "observation": {
+      "proposition": "no blank lines",
+      "coverage": "FULL",
+      "qualification": "DETERMINISTIC",
+      "evidence": "0 blank lines (at most 0)"
+     },
+     "result": "PASS",
+     "reason": "MET"
+    },
+    {
+     "id": "x27",
+     "statement": "No hashtags: none of my pieces has one.",
+     "dimension": "HABIT",
+     "source": "EXAMPLE",
+     "required": false,
+     "observation": {
+      "proposition": "no hashtags",
+      "coverage": "FULL",
+      "qualification": "DETERMINISTIC",
+      "evidence": "0 hashtags (at most 0)"
+     },
+     "result": "PASS",
+     "reason": "MET"
+    },
+    {
+     "id": "x28",
+     "statement": "No mentions (@): none of my pieces has one.",
+     "dimension": "HABIT",
+     "source": "EXAMPLE",
+     "required": false,
+     "observation": {
+      "proposition": "no mentions (@)",
+      "coverage": "FULL",
+      "qualification": "DETERMINISTIC",
+      "evidence": "0 mentions (@) (at most 0)"
+     },
+     "result": "PASS",
+     "reason": "MET"
+    },
+    {
+     "id": "x29",
+     "statement": "No links: none of my pieces has one.",
+     "dimension": "HABIT",
+     "source": "EXAMPLE",
+     "required": false,
+     "observation": {
+      "proposition": "no links",
+      "coverage": "FULL",
+      "qualification": "DETERMINISTIC",
+      "evidence": "0 links (at most 0)"
+     },
+     "result": "PASS",
+     "reason": "MET"
+    },
+    {
+     "id": "x30",
+     "statement": "No emoji: none of my pieces has one.",
+     "dimension": "HABIT",
+     "source": "EXAMPLE",
+     "required": false,
+     "observation": {
+      "proposition": "no emoji",
+      "coverage": "FULL",
+      "qualification": "DETERMINISTIC",
+      "evidence": "0 emoji (at most 0)"
+     },
+     "result": "PASS",
+     "reason": "MET"
+    },
+    {
+     "id": "x31",
+     "statement": "Open on a claim, as my pieces do.",
+     "dimension": "HABIT",
+     "source": "EXAMPLE",
+     "required": false,
+     "observation": {
+      "proposition": "opens on a claim",
+      "coverage": "FULL",
+      "qualification": "DETERMINISTIC",
+      "evidence": "what it opens on: a claim"
+     },
+     "result": "PASS",
+     "reason": "MET"
+    },
+    {
+     "id": "x32",
+     "statement": "Close on a statement, as my pieces do.",
+     "dimension": "HABIT",
+     "source": "EXAMPLE",
+     "required": false,
+     "observation": {
+      "proposition": "closes on a statement",
+      "coverage": "FULL",
+      "qualification": "DETERMINISTIC",
+      "evidence": "what it closes on: a statement"
+     },
+     "result": "PASS",
+     "reason": "MET"
+    },
+    {
+     "id": "x33",
+     "statement": "The first word is a symbol or emoji, as in every piece of mine.",
+     "dimension": "HABIT",
+     "source": "EXAMPLE",
+     "required": false,
+     "observation": {
+      "proposition": "the first word a symbol or emoji",
+      "coverage": "FULL",
+      "qualification": "DETERMINISTIC",
+      "evidence": "the first word: a symbol or emoji"
+     },
+     "result": "PASS",
+     "reason": "MET"
+    },
+    {
+     "id": "x34",
+     "statement": "Quoted phrases: about 53 per 100 words in my pieces; a new piece carries no more than its length expects.",
+     "dimension": "HABIT",
+     "source": "EXAMPLE",
+     "required": false,
+     "observation": {
+      "proposition": "quoted phrases: about 53 per 100 words, read over 355 words of your pieces; a short piece is held to the count expected of its length",
+      "coverage": "FULL",
+      "qualification": "DETERMINISTIC",
+      "evidence": "quoted phrases: 14 in 23 words; about 12.2 expected in 23 words (at most 19 is within your rate)"
+     },
+     "result": "PASS",
+     "reason": "MET"
+    },
+    {
+     "id": "x35",
+     "statement": "Colons: about 28.2 per 100 words in my pieces; a new piece carries about as many as its length expects.",
+     "dimension": "HABIT",
+     "source": "EXAMPLE",
+     "required": false,
+     "observation": {
+      "proposition": "colons: about 28.2 per 100 words, read over 355 words of your pieces; a short piece is held to the count expected of its length",
+      "coverage": "FULL",
+      "qualification": "DETERMINISTIC",
+      "evidence": "colons: 8 in 23 words; about 6.5 expected in 23 words (2 to 12 is within your rate)"
+     },
+     "result": "PASS",
+     "reason": "MET"
+    },
+    {
+     "id": "x36",
+     "statement": "Figures written in digits: about 20.8 per 100 words in my pieces; a new piece carries no more than its length expects.",
+     "dimension": "HABIT",
+     "source": "EXAMPLE",
+     "required": false,
+     "observation": {
+      "proposition": "figures written in digits: about 20.9 per 100 words, read over 355 words of your pieces; a short piece is held to the count expected of its length",
+      "coverage": "FULL",
+      "qualification": "DETERMINISTIC",
+      "evidence": "figures written in digits: 2 in 23 words; about 4.8 expected in 23 words (at most 10 is within your rate)"
+     },
+     "result": "PASS",
+     "reason": "MET"
+    },
+    {
+     "id": "x37",
+     "statement": "Nominalisations (-tion, -ment, -ness, -ity, -ance, -ence): about 8.7 per 100 words in my pieces; a new piece carries about as many as its length expects.",
+     "dimension": "HABIT",
+     "source": "EXAMPLE",
+     "required": false,
+     "observation": {
+      "proposition": "nominalisations (-tion, -ment, -ness, -ity, -ance, -ence): about 8.7 per 100 words, read over 355 words of your pieces; a short piece is held to the count expected of its length",
+      "coverage": "FULL",
+      "qualification": "DETERMINISTIC",
+      "evidence": "nominalisations (-tion, -ment, -ness, -ity, -ance, -ence): 2 in 23 words; about 2 expected in 23 words (0 to 5 is within your rate)"
+     },
+     "result": "PASS",
+     "reason": "MET"
+    },
+    {
+     "id": "x38",
+     "statement": "Runs of five or more one-syllable words: about 2.8 per 100 words in my pieces; a new piece carries about as many as its length expects.",
+     "dimension": "HABIT",
+     "source": "EXAMPLE",
+     "required": false,
+     "observation": {
+      "proposition": "runs of five or more one-syllable words: about 2.8 per 100 words, read over 355 words of your pieces; a short piece is held to the count expected of its length",
+      "coverage": "FULL",
+      "qualification": "DETERMINISTIC",
+      "evidence": "runs of five or more one-syllable words: 1 in 23 words; about 0.6 expected in 23 words (0 to 3 is within your rate)"
+     },
+     "result": "PASS",
+     "reason": "MET"
+    },
+    {
+     "id": "x39",
+     "statement": "I keep paragraphs to 2 sentences at most.",
+     "dimension": "HABIT",
+     "source": "EXAMPLE",
+     "required": false,
+     "observation": {
+      "proposition": "paragraphs of at most 2 sentences",
+      "coverage": "FULL",
+      "qualification": "DETERMINISTIC",
+      "evidence": "the request states its own format (\"as JSON\")"
+     },
+     "result": "NOT_APPLICABLE",
+     "reason": "SET_ASIDE"
+    },
+    {
+     "id": "x40",
+     "statement": "Write none of the moves that mark text as machine-written (announcing an insight others \"miss\", grading your own list, \"the single most\", announcing candour, \"that's the whole game\", reading the reader's mind, one thing \"wearing another's clothes\", a contrastive verdict as the opening line, an em dash, a run of three or more very short sentences).",
+     "dimension": "STANDARD",
+     "source": "EXAMPLE",
+     "required": true,
+     "observation": {
+      "proposition": "machine-writing moves (announced insights, self-graded lists, stacked superlatives, announced candour, totalisers, mind-reading, costumes): none of 16 kind(s) you never use, and at most 0.3 per 1,000 words of the rest",
+      "coverage": "FULL",
+      "qualification": "DETERMINISTIC",
+      "evidence": "none of the moves you never make; the rate is not read under 150 words"
+     },
+     "result": "PASS",
+     "reason": "MET"
+    },
+    {
+     "id": "x41",
+     "statement": "No mechanical errors: spelling, agreement, punctuation.",
+     "dimension": "STANDARD",
+     "source": "EXAMPLE",
+     "required": true,
+     "observation": {
+      "proposition": "no mechanical error with no legitimate reading: a known misspelling in lower case, an agreement no variety uses (\"he are\"), a/an before a lower-case common word, two commas, a space before a comma or a full stop; a capitalised word, a word repeated, a dialect's agreement (\"they was\"), \"an\" before \"h\" or a word read as letters, \"::\", \"..\", a space before \"!\", \"?\", \":\" or \";\", any other word the checker does not know, and anything else it proposes, is only listed; code, quotations, addresses, figures and names are never touched",
+      "coverage": "FULL",
+      "qualification": "DETERMINISTIC",
+      "evidence": "no possible slip found"
+     },
+     "result": "PASS",
+     "reason": "MET"
+    },
+    {
+     "id": "specifics",
+     "dimension": "EVIDENCE",
+     "source": "SYSTEM",
+     "statement": "Every specific in the work is found in what you supplied",
+     "required": true,
+     "observation": {
+      "proposition": "each figure, name, date and quotation, looked for in the request and the material",
+      "coverage": "FULL",
+      "qualification": "QUALIFIED",
+      "evidence": "all found"
+     },
+     "result": "PASS",
+     "reason": "MET"
+    },
+    {
+     "id": "lifted",
+     "dimension": "EVIDENCE",
+     "source": "SYSTEM",
+     "statement": "No passage is lifted from one of your examples",
+     "required": true,
+     "observation": {
+      "proposition": "the longest run of words shared with one example, less wording that recurs across them (at most 11: what your own examples share with one another, and never fewer than 11)",
+      "coverage": "FULL",
+      "qualification": "DETERMINISTIC",
+      "evidence": "the longest shared run is 0 words"
+     },
+     "result": "PASS",
+     "reason": "MET"
+    }
+   ],
+   "latitude": "STRICT"
+  },
+  "gates": {
+   "required": {
+    "held": 7,
+    "applicable": 7,
+    "broken": []
+   },
+   "claims": {
+    "state": "checked",
+    "delivered": 0,
+    "unconfirmed": 0,
+    "cut": 0,
+    "listed": 0,
+    "disputed": 0,
+    "agreement": {
+     "both": 0,
+     "either": 0
+    },
+    "instrument": "pattern check, with claim reader (claude-haiku-4-5, prompt 47d18891) reporting only: not qualified",
+    "answers": false,
+    "unmeasured": "the skill is held strict: a figure, date or citation not in your material stops the work, and nothing is cut",
+    "measured": null
+   },
+   "copying": {
+    "longest": 0,
+    "limit": 12
+   },
+   "format": {
+    "kind": "shape",
+    "words": "as JSON",
+    "withheld": 2,
+    "held": null
+   },
+   "applicability": {
+    "applied": 38,
+    "notApplicable": 1,
+    "waived": [
+     {
+      "id": "x9",
+      "why": "withheld for this run (left out of the prompt, or named there as set aside)"
+     },
+     {
+      "id": "x39",
+      "why": "the request states its own format (\"as JSON\")"
+     }
+    ]
+   }
+  },
+  "fidelity": {
+   "inBand": 0,
+   "measured": 0,
+   "baseline": null,
+   "pieces": 0,
+   "profile": "0f9f4adc2dba6461",
+   "outside": [],
+   "facts": {
+    "used": 1,
+    "supplied": 26
+   },
+   "edits": {
+    "tried": 0,
+    "kept": 0
+   }
+  },
+  "monitors": {
+   "detector": null,
+   "taste": null,
+   "coverage": {
+    "asked": 1,
+    "given": 0,
+    "missing": [],
+    "unclear": 1
+   }
+  },
+  "notMeasured": [
+   "argument, stance and content (read by the taste reader, a monitor)",
+   "voice beyond the 0 counted features"
+  ]
+ },
+ "model": "claude-sonnet-5-5",
+ "thinking": "disabled",
+ "thinkingBlocks": 0,
+ "maxTokens": 12000,
+ "steering": "all",
+ "fidelity": {
+  "release": "030a6d7683f231d6",
+  "inBand": 0,
+  "measured": 0,
+  "outside": [],
+  "detector": null,
+  "edits": [],
+  "applicability": [
+   {
+    "requirementId": "x1",
+    "status": "APPLIED"
+   },
+   {
+    "requirementId": "x2",
+    "status": "APPLIED"
+   },
+   {
+    "requirementId": "x3",
+    "status": "APPLIED"
+   },
+   {
+    "requirementId": "x4",
+    "status": "APPLIED"
+   },
+   {
+    "requirementId": "x5",
+    "status": "APPLIED"
+   },
+   {
+    "requirementId": "x6",
+    "status": "APPLIED"
+   },
+   {
+    "requirementId": "x7",
+    "status": "APPLIED"
+   },
+   {
+    "requirementId": "x8",
+    "status": "APPLIED"
+   },
+   {
+    "requirementId": "x9",
+    "status": "WAIVED",
+    "why": "withheld for this run (left out of the prompt, or named there as set aside)"
+   },
+   {
+    "requirementId": "x10",
+    "status": "APPLIED"
+   },
+   {
+    "requirementId": "x11",
+    "status": "APPLIED"
+   },
+   {
+    "requirementId": "x12",
+    "status": "APPLIED"
+   },
+   {
+    "requirementId": "x13",
+    "status": "APPLIED"
+   },
+   {
+    "requirementId": "x14",
+    "status": "APPLIED"
+   },
+   {
+    "requirementId": "x15",
+    "status": "APPLIED"
+   },
+   {
+    "requirementId": "x16",
+    "status": "APPLIED"
+   },
+   {
+    "requirementId": "x17",
+    "status": "APPLIED"
+   },
+   {
+    "requirementId": "x18",
+    "status": "APPLIED"
+   },
+   {
+    "requirementId": "x19",
+    "status": "APPLIED"
+   },
+   {
+    "requirementId": "x20",
+    "status": "NOT_APPLICABLE",
+    "why": "outside what its measurement can judge in this text"
+   },
+   {
+    "requirementId": "x21",
+    "status": "APPLIED"
+   },
+   {
+    "requirementId": "x22",
+    "status": "APPLIED"
+   },
+   {
+    "requirementId": "x23",
+    "status": "APPLIED"
+   },
+   {
+    "requirementId": "x24",
+    "status": "APPLIED"
+   },
+   {
+    "requirementId": "x25",
+    "status": "APPLIED"
+   },
+   {
+    "requirementId": "x26",
+    "status": "APPLIED"
+   },
+   {
+    "requirementId": "x27",
+    "status": "APPLIED"
+   },
+   {
+    "requirementId": "x28",
+    "status": "APPLIED"
+   },
+   {
+    "requirementId": "x29",
+    "status": "APPLIED"
+   },
+   {
+    "requirementId": "x30",
+    "status": "APPLIED"
+   },
+   {
+    "requirementId": "x31",
+    "status": "APPLIED"
+   },
+   {
+    "requirementId": "x32",
+    "status": "APPLIED"
+   },
+   {
+    "requirementId": "x33",
+    "status": "APPLIED"
+   },
+   {
+    "requirementId": "x34",
+    "status": "APPLIED"
+   },
+   {
+    "requirementId": "x35",
+    "status": "APPLIED"
+   },
+   {
+    "requirementId": "x36",
+    "status": "APPLIED"
+   },
+   {
+    "requirementId": "x37",
+    "status": "APPLIED"
+   },
+   {
+    "requirementId": "x38",
+    "status": "APPLIED"
+   },
+   {
+    "requirementId": "x39",
+    "status": "WAIVED",
+    "why": "the request states its own format (\"as JSON\")"
+   },
+   {
+    "requirementId": "x40",
+    "status": "APPLIED"
+   },
+   {
+    "requirementId": "x41",
+    "status": "APPLIED"
+   }
+  ]
+ }
+}

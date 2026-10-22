@@ -1,0 +1,12 @@
+{
+ "fixture": "labels",
+ "arm": "plain",
+ "task": "t4",
+ "run": 3,
+ "text": "```json\n{\n  \"clip\": \"c17\",\n  \"duration\": \"00:52\",\n  \"overall\": \"Medium\",\n  \"categories\": [\n    {\n      \"category\": \"Disaster – news\",\n      \"risk\": \"Medium\",\n      \"span\": \"00:05–00:52\",\n      \"evidence\": \"Two people died when the bridge gave way. Rescue teams worked through the night. The cause is not known.\"\n    },\n    {\n      \"category\": \"Death – reference\",\n      \"risk\": \"Medium\",\n      \"span\": \"00:05–00:25\",\n      \"evidence\": \"Two people died when the bridge gave way.\"\n    }\n  ]\n}\n```",
+ "costUsd": 0.012682,
+ "stop": "end_turn",
+ "error": null,
+ "meterUsd": 0.01268199999999986,
+ "seconds": 7.084
+}

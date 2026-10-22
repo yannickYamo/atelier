@@ -57,8 +57,20 @@ export interface MethodStep {
  * paragraphs is. A heading says what the steps under it are about, with one exception of form: a NUMBERED heading
  * followed by prose ("### 3. Keep it short", then a paragraph) is a rule written as a heading, and it is one step with
  * its paragraph; a numbered heading over a list is the list's name. Front matter, code and tables are left out.
+ *
+ * WHERE THE NOTE HAS A LIST, ITS PROSE IS MOSTLY EXPLANATION ("Auditors sample one memo in twenty"; "read by a registrar
+ * who has never met the patient"). No word decides which of its sentences instructs: the units reading does
+ * (./decision-units.ts, `asideKept` in cli/commands/method.ts), and only the sentences it read as instructions are kept,
+ * passed here as `keep`. With nothing read (no model) the list is the method and its prose is not.
  */
-export function stepsOf(note: string): MethodStep[] {
+export function asideOf(note: string): MethodStep[] { return splitSteps(note).aside; }
+
+export function stepsOf(note: string, keep: ReadonlySet<string> = new Set()): MethodStep[] {
+  const { steps, aside } = splitSteps(note);
+  return aside.length ? [...steps, ...aside.filter((s) => keep.has(s.text))] : steps;
+}
+
+function splitSteps(note: string): { steps: MethodStep[]; aside: MethodStep[] } {
   const body = (note.charCodeAt(0) === 0xFEFF ? note.slice(1) : note).replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, '').replace(/```[\s\S]*?```/g, '').replace(/<!--[\s\S]*?-->/g, '');
   const lines = body.split(/\r?\n/);
   const items: MethodStep[] = []; const prose: MethodStep[] = [];
@@ -103,15 +115,12 @@ export function stepsOf(note: string): MethodStep[] {
   }
   closeItem(); closePara();
   const clean = (s: MethodStep): MethodStep => ({ ...s, text: s.text.replace(/\*\*|__|`/g, '').replace(/^\[[ x]\]\s*/i, '').trim() });
-  // WHERE A NOTE HAS A LIST, ITS PROSE IS MOSTLY EXPLANATION, and a sentence of it is a step only when it says so
-  // (must, never, always, do not, required). Taken whole, a template's description became a dozen judgement steps;
-  // dropped whole, an instruction written as a sentence under a heading was lost.
-  const RULE = /\b(?:must|never|always|do not|don't|required?|shall|only)\b/i;
-  // A sentence that DESCRIBES the work holds those words too ("read by a registrar who has never met the patient"):
-  // inside a clause about someone or something else, the word instructs nobody.
-  const DESCRIBES = /\b(?:(?:who|whom|whose)\s+(?:\w+\s+){0,3}|(?:which|that)\s+(?:has|have|had|is|are|was|were)\s+(?:\w+\s+){0,2})(?:never|always|only|must|shall)\b/i;
-  const instructs = (t: string): boolean => RULE.test(t) && !(DESCRIBES.test(t) && !RULE.test(t.replace(DESCRIBES, ' ')));
-  const steps = items.length ? [...items, ...prose.filter((s) => instructs(s.text))] : prose;
+  // EVERY SENTENCE OF THE NOTE IS THE OWNER'S, list or prose. Which of them instructs is not read off its words (a list of
+  // "must", "never", "always" once decided it, and called "read by a registrar who has never met the patient" a step): each
+  // is kept as a step, and what it is (an instruction, an explanation, a template, a criterion) is the units reading's
+  // (./decision-units.ts), shown at the build and set aside from the writer's brief where it is no instruction.
+  const steps = items.length ? items : prose;
+  const asideRaw = items.length ? prose : [];
   const seen = new Set<string>();
   // A TEMPLATE'S BLANKS ARE NOT STEPS. "> One-line: [What this competitor is, who they serve] > Evidence ceiling:
   // [Decision-grade / Usable]" is a form to fill in: where the bracketed blanks are most of a line, it instructs nobody.
@@ -120,7 +129,9 @@ export function stepsOf(note: string): MethodStep[] {
   // and a link is not a blank.
   const BLANK = /\[[^\]]{2,}\](?!\()|\{[^}]{2,}\}|<[^<>]{2,}>|_{3,}(?:\s*\([^)]*\))?/g;
   const blanks = (t: string): boolean => { const left = t.replace(BLANK, ' '); return left !== t && /^(?:\s*>?\s*[\p{L}\p{N}' /-]{1,48}:\s*>?\s*)+$/u.test(left); };
-  return steps.filter((s) => !blanks(s.text)).map(clean).filter((s) => s.text.length >= 8 && !seen.has(s.text.toLowerCase()) && Boolean(seen.add(s.text.toLowerCase())));
+  const tidy = (xs: MethodStep[]): MethodStep[] => xs.filter((s) => !blanks(s.text)).map(clean).filter((s) => s.text.length >= 8 && !seen.has(s.text.toLowerCase()) && Boolean(seen.add(s.text.toLowerCase())));
+  const kept = tidy(steps);
+  return { steps: kept, aside: tidy(asideRaw) };
 }
 
 /** A section's name as a rule can carry it: the heading without what is particular to one piece (a bracket, a subtitle). */
@@ -187,7 +198,7 @@ export interface MethodProposal {
  * THE REQUIREMENTS ONE METHOD AND ONE EXAMPLE SUPPORT, in the order a person reads them: the owner's steps first,
  * then what the example shows that no step said.
  */
-export function methodProposals(note: string, example: Pick<GoldenCase, 'task' | 'material' | 'reference'>, plan: StepPlan | null = null): MethodProposal[] {
+export function methodProposals(note: string, example: Pick<GoldenCase, 'task' | 'material' | 'reference'>, plan: StepPlan | null = null, keep: ReadonlySet<string> = new Set()): MethodProposal[] {
   const outline = outlineOf(example.reference);
   const context: CheckContext = { ...(example.task ? { request: example.task } : {}), material: example.material };
   const read = (m: Measurement): { verdict: string; detail: string } => { const r = measure(example.reference, m, context); return { verdict: r.verdict, detail: r.detail }; };
@@ -196,7 +207,7 @@ export function methodProposals(note: string, example: Pick<GoldenCase, 'task' |
   // (A check against the material says nothing of an example handed over without its material.)
   const unreadable = (m: Measurement): boolean => targetOf(m.observer) === 'BOUND_MATERIAL' && !example.material.length;
   const against = (r: { verdict: string; detail: string }, m: Measurement): string | null => (r.verdict === 'VIOLATED' && !unreadable(m) ? `your example does not do this (${r.detail})` : null);
-  for (const step of stepsOf(note)) {
+  for (const step of stepsOf(note, keep)) {
     // THE CHECK THE READING GAVE THE STEP, grounded on this example already (./step-check.ts); none, and the step is
     // the owner's to judge. A written check is a deliverable of the text until it is qualified, and blocks nothing.
     const given = plan?.get(step.text) ?? null; const m = given?.measurement ?? null;
@@ -306,10 +317,10 @@ export function acrossExamples(proposals: readonly MethodProposal[], others: rea
  * all, or broken by some and so put to the owner) is taken; the first by name where several do equally. The owner's steps do not change, only which
  * piece they are read against.
  */
-export function proposalsAcross(note: string, cases: readonly (Pick<GoldenCase, 'task' | 'material' | 'reference'> & { readonly id: string })[], plan: StepPlan | null = null): { lead: number; proposals: MethodProposal[] } {
+export function proposalsAcross(note: string, cases: readonly (Pick<GoldenCase, 'task' | 'material' | 'reference'> & { readonly id: string })[], plan: StepPlan | null = null, keep: ReadonlySet<string> = new Set()): { lead: number; proposals: MethodProposal[] } {
   let best = { lead: 0, proposals: [] as MethodProposal[], held: -Infinity };
   cases.forEach((c, i) => {
-    const own = methodProposals(note, c, plan);
+    const own = methodProposals(note, c, plan, keep);
     const proposals = acrossExamples(own, cases.filter((_, k) => k !== i), c.id);
     // The most steps read as checks; among equals, the piece that itself does what the most steps say, then the one the
     // fewest pieces disagree with. (The checks are read once for every example, so a piece that lacks a section the others

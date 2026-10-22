@@ -86,6 +86,9 @@ const neverRead = (m: Measurement): string | null => {
   return null;
 };
 
+/** The words of a written check's `means` line, each also without a plural "s": what the check says it reads. */
+const meansWords = (m: Measurement): string[] => strings(m.params.means).flatMap((s) => tokens(s).flatMap((t) => [t.w, t.w.replace(/s$/, '')]));
+
 /** The names a check looks for: its sections, columns, options and quoted words. */
 const namedIn = (m: Measurement): Set<string> => new Set(Object.values(m.params).flatMap(strings).flatMap((v) => tokens(v).map((t) => t.w)));
 
@@ -100,9 +103,14 @@ export function observesOf(statement: string, m: Measurement | null | undefined,
   const never = neverRead(m);
   if (never) return { proposition, coverage: 'PARTIAL', unchecked: never };
   if (fromCheck) return { proposition, coverage: 'FULL' };
-  const kind = new Set(kindWords(m));
+  // A CHECK WRITTEN FOR THIS STEP reads what its `means` line says it reads, and nothing its code holds is counted (a
+  // word in a regular expression is no proposition): the step is read word by word against that line, as any other
+  // check against its words, and in full only where the line accounts for every word of it. Whether the check may be
+  // trusted is a separate question, answered by its qualification on the owner's examples (core/method/mutants.ts).
+  const written = m.observer === 'CHECK';
+  const kind = new Set(written ? meansWords(m) : kindWords(m));
   if (!kind.size) return { proposition, coverage: 'PARTIAL', unchecked: 'how much of this rule the check reads is not known' };
-  const named = namedIn(m); const numbers = numbersOf(m);
+  const named = written ? kind : namedIn(m); const numbers = written ? new Set<string>() : numbersOf(m);
   const known = (w: string): boolean => PLAIN.has(w) || kind.has(w) || named.has(w) || numbers.has(w.replace(/,/g, ''));
   const left = tokens(statement).filter((t) => !known(t.w));
   if (!left.length) return { proposition, coverage: 'FULL' };

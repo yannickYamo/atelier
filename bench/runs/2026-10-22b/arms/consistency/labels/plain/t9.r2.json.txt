@@ -1,0 +1,17 @@
+```json
+{
+  "clip": "c22",
+  "duration": "00:44",
+  "overall": "Low",
+  "categories": [
+    {
+      "category": "Language – mild",
+      "span": "00:20–00:38",
+      "risk": "Low",
+      "evidence": "Shape it like a damn pillow, gently."
+    }
+  ]
+}
+```
+
+The extract doesn't include the strong-word list. I treated "damn" as mild under rule 9, so the clip is not labelled "Floor – all brands". If your strong list includes "damn", the category becomes "Language – strong".

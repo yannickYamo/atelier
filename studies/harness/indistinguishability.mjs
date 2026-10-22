@@ -122,6 +122,7 @@ async function generate(c, arm, title, examples) {
     const t0 = Date.now();
     const r = cli(c, ['invoke', '--skill', c.skill, prompt, '--json', '--cap', String(RUN_CAP), ...FLAGS[arm]]);
     let j = null; try { j = JSON.parse(r.out); } catch { /* a failed run */ }
+    if (j?.state === 'ERROR') j = null;   // a run that stopped before its record
     if (!j) {
       // A FAILED RUN IS RECORDED AT ITS CAP and never retried: what it spent is not known, and a resume must not pay
       // twice. A refusal before anything is spent (the CLI's own preflight, back within REFUSAL_MS) costs nothing; it

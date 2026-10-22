@@ -17,7 +17,7 @@
 // a reading is non-deterministic, so the eval runs each case several times and the pass line is stated before
 // the run. The record of a decision says who made it (code, the model, or the floor), so a run can be read back.
 
-import type { Budget, InferenceClient } from './client.js';
+import type { Budget, InferenceClient, SpendPurpose } from './client.js';
 import { spend } from './client.js';
 
 export type DecidedBy = 'code' | 'model' | 'floor';
@@ -57,7 +57,7 @@ export interface Decision<T> {
  * One reading, decided. `client` null means no model is set up: code or the floor decides. A call that fails is a
  * floor decision with its reason, never an exception: a reading is never the reason a build or a run stops.
  */
-export async function readContext<I, T>(reading: Reading<I, T>, input: I, client: InferenceClient | null, model: string | null, budget: Budget): Promise<Decision<T>> {
+export async function readContext<I, T>(reading: Reading<I, T>, input: I, client: InferenceClient | null, model: string | null, budget: Budget, purpose: SpendPurpose = 'other'): Promise<Decision<T>> {
   const tag = `${reading.id}-${reading.version}`;
   const decided = reading.decide(input);
   if (decided !== null) return { value: decided, by: 'code', reader: tag };
@@ -67,7 +67,7 @@ export async function readContext<I, T>(reading: Reading<I, T>, input: I, client
       const x = await client.complete({ stableBlock: reading.system, variableBlock: '', userMessage: reading.prompt(input),
         toolName: reading.toolName, toolDescription: reading.toolDescription, schema: reading.schema, maxTokens: reading.maxTokens, temperature: 0 });
       return { value: x.json, cost: x.cost };
-    });
+    }, purpose);
     const value = reading.ground(raw, input);
     if (value === null) return { value: reading.floor(input), by: 'floor', reader: `${tag}:${model}`, why: 'the reading could not be grounded in the material' };
     return { value, by: 'model', reader: `${tag}:${model}` };

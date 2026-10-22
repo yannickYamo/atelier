@@ -1,0 +1,48 @@
+{
+ "fixture": "adhd",
+ "arm": "atelier",
+ "task": "long-form-request",
+ "run": 3,
+ "text": "Next: generate the PKCE verifier and challenge.\n\nHere is the whole flow, one bounded action per step. The goal: a public client (SPA, mobile app, CLI) gets an access token without a client secret, and a stolen authorization code is useless to an attacker.\n\n**The two PKCE values (you create these first)**\n\n```\ncode_verifier  = random string, 43-128 chars (A-Z a-z 0-9 - . _ ~)\ncode_challenge = BASE64URL(SHA256(code_verifier))\ncode_challenge_method = S256\n```\n\nThe verifier stays secret on the client. The challenge is a one-way hash of it, so it is safe to send through the browser.\n\n**The flow**\n\n1. **Client creates the verifier, challenge, and a `state` value.** Generate `code_verifier` with a cryptographically secure random generator, hash it to get `code_challenge`, and generate a random `state`. Store the verifier and state locally (memory or session storage). The `state` value defends against CSRF; the verifier defends against code interception.\n\n2. **Client redirects the user to the authorization endpoint.**\n\n```\nGET https://auth.example.com/authorize\n  ?response_type=code\n  &client_id=my-app\n  &redirect_uri=https://app.example.com/callback\n  &scope=openid profile email\n  &state=xyz123\n  &code_challenge=E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM\n  &code_challenge_method=S256\n```\n\nThe authorization server saves the `code_challenge` alongside this request.\n\n3. **User authenticates and consents.** This happens entirely on the authorization server's own pages. The client never sees the user's password. The server checks the `client_id`, validates that `redirect_uri` exactly matches a registered one, and shows the requested scopes.\n\n4. **Authorization server redirects back with a code.**\n\n```\nHTTP/1.1 302 Found\nLocation: https://app.example.com/callback?code=SplxlOBeZQQYbYS6WxSbIA&state=xyz123\n```\n\nThe code is short-lived (typically 30-60 seconds) and single-use. It is bound to the stored `code_challenge`.\n\n5. **Client checks `state`.** Compare the returned `state` to the one you stored. If it does not match, abort. This blocks forged callbacks.\n\n6. **Client exchanges the code for tokens at the token endpoint (back channel).**\n\n```\nPOST https://auth.example.com/token\nContent-Type: application/x-www-form-urlencoded\n\ngrant_type=authorization_code\n&code=SplxlOBeZQQYbYS6WxSbIA\n&redirect_uri=https://app.example.com/callback\n&client_id=my-app\n&code_verifier=dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk\n```\n\nThis is a direct HTTPS request from the client to the server, not through the browser's address bar. The client sends the original plaintext `code_verifier` here.\n\n7. **Authorization server verifies PKCE.** It computes `BASE64URL(SHA256(code_verifier))` and compares it to the `code_challenge` saved in step 2. It also confirms the code is unused, unexpired, and issued to this `client_id` and `redirect_uri`. If any check fails, it returns `invalid_grant`.\n\n8. **Server returns tokens.**\n\n```json\n{\n  \"access_token\": \"eyJhbGciOi...\",\n  \"token_type\": \"Bearer\",\n  \"expires_in\": 3600,\n  \"id_token\": \"eyJhbGciOi...\",\n  \"refresh_token\": \"8xLOxBtZp8\"\n}\n```\n\nThe client now calls the API with `Authorization: Bearer <access_token>`.\n\n**Why PKCE stops the attack**\n\nAn attacker who intercepts the redirect in step 4 (for example, a malicious app registered on the same custom URL scheme) gets the `code`. The challenge in the URL is a hash and cannot be reversed to the verifier. Without the verifier, step 7 fails.\n\n**Common mistakes**\n\n- Using `plain` instead of `S256`. Use `S256` unless the client physically cannot hash.\n- Reusing one verifier across logins. Generate a new one per authorization request.\n- Using a weak random source such as `Math.random()`. Use `crypto.getRandomValues` or the platform equivalent.\n- Skipping the `state` check. PKCE does not replace it in every deployment.\n- Loose `redirect_uri` matching on the server. It must be an exact string match.\n\nNext: pick one concrete action below.\n\n```\nv=$(openssl rand -base64 48 | tr '+/' '-_' | tr -d '=\\n'); echo \"verifier:  $v\"; echo \"challenge: $(printf %s \"$v\" | openssl dgst -sha256 -binary | openssl base64 | tr '+/' '-_' | tr -d '=\\n')\"\n```\n\nIf you want, I can cover refresh token handling and rotation as a separate question.",
+ "state": "NEEDS_REVIEW",
+ "costUsd": 0.0443,
+ "exit": 0,
+ "standard": "03fcfcea922b8e6a",
+ "headKeys": [
+  "schema",
+  "state",
+  "standardVersionHash",
+  "skillVersion",
+  "certificate",
+  "record"
+ ],
+ "certificate": {
+  "standardVersionHash": "03fcfcea922b8e6a",
+  "checks": {
+   "total": 6,
+   "counted": 0,
+   "written": 6,
+   "writtenQualified": 0
+  },
+  "readers": {
+   "taste": {
+    "veto": [],
+    "labelledMisses": 0,
+    "falseBlockUpper95": null
+   },
+   "claims": {
+    "instrument": "pattern check (no material bound: a model reading of specifics could only list them)",
+    "version": null,
+    "gate": "pattern",
+    "qualified": false,
+    "measured": null,
+    "kinds": []
+   }
+  },
+  "errorBound": null,
+  "why": "no delivered-error bound: it needs an audit sample of your own labels, drawn like the work this skill does; the checks and readers above are what this output was held to"
+ },
+ "stderr": "No notes of yours are bound, so a story, source or figure in the draft cannot be checked against anything of yours, and is listed for you, not cut. Add yours: --with notes=<file>, or atelier material --skill i-have-adhd <file>.\nJudgement reader: not run (reporting only until your labels qualify it; --taste reads this run and records readings to label: atelier taste --skill i-have-adhd --calibrate)",
+ "meterUsd": 0.04429647999999986,
+ "seconds": 32.879
+}

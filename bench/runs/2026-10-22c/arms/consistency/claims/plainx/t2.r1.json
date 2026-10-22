@@ -1,0 +1,12 @@
+{
+ "fixture": "claims",
+ "arm": "plainx",
+ "task": "t2",
+ "run": 1,
+ "text": "## Summary\n\nYewtree Biotech AS: water damage from a burst pipe to two monitors and a desktop workstation at a client site in Kilburn. Covered under clause 4.7; reserve 6,986 dollars.\n\n## Facts\n\nYewtree Biotech AS reported the loss on 15 March 2026 under policy CC-1444 [notice of loss]. The loss occurred at a client site in Kilburn [notice of loss]. The loss was water damage from a burst pipe [notice of loss], [incident report]. The items are two monitors and a desktop workstation [invoice 1], [invoice 2]. The incident was recorded on 17 March 2026 under reference IR/2026/4156 [incident report]. No third party was involved [incident report]. The monitors are invoiced at 4,244 dollars [invoice 1] and the workstation at 2,742 dollars [invoice 2].\n\n## Coverage analysis\n\nThe loss falls under clause 4.7 of the policy, which covers damage to contents caused by water escaping from any fixed pipe, tank or appliance [policy]. The incident report records the cause as a burst pipe [incident report].\n\n- Exclusion 7.1 does not apply: it concerns theft of unattended portable equipment, and no theft is alleged [incident report], [policy].\n- Exclusion 7.3 does not apply: it concerns gradual deterioration, and the file records the damage as caused by a burst pipe, not by gradual deterioration [incident report], [policy].\n- Exclusion 7.5 does not apply: it applies only where theft is alleged, and no theft is alleged [incident report], [policy].\n\n## Decision\n\nCovered under clause 4.7. The claim is accepted.\n\n## Reserve\n\nThe reserve is 6,986 dollars, the sum of the two invoices (4,244 dollars and 2,742 dollars) [invoice 1], [invoice 2]. Clause 9.1 deducts the 250 dollar excess only where the policy schedule applies one [policy]. The file contains no policy schedule and no excess is shown, so none is deducted. The schedule should be checked before payment: if it applies the 250 dollar excess, the reserve becomes 6,736 dollars [policy].",
+ "costUsd": 0.026596,
+ "stop": "end_turn",
+ "error": null,
+ "meterUsd": 0.026596000000000064,
+ "seconds": 11.596
+}

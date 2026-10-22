@@ -1,0 +1,351 @@
+{
+ "golden": "e12.md",
+ "state": "NEEDS_REVIEW",
+ "accepted": [],
+ "entries": [
+  {
+   "id": "x1",
+   "required": true,
+   "result": "PASS",
+   "reason": "MET",
+   "reads": "FULL",
+   "statement": "Every category in a label is one of the 39 categories of the taxonomy,"
+  },
+  {
+   "id": "x2",
+   "required": true,
+   "result": "UNVERIFIED",
+   "reason": "OBSERVER_UNQUALIFIED",
+   "reads": "FULL",
+   "statement": "Every flagged category carries a timecode span, start–end in mm:ss, in"
+  },
+  {
+   "id": "x3",
+   "required": true,
+   "result": "PASS",
+   "reason": "MET",
+   "reads": "FULL",
+   "statement": "Every flagged category carries a risk level: Low, Medium or High."
+  },
+  {
+   "id": "x4",
+   "required": true,
+   "result": "UNVERIFIED",
+   "reason": "NOT_MACHINE_CHECKABLE",
+   "reads": "NONE",
+   "statement": "\"High\" risk requires an explicit depiction in the clip: a described ac"
+  },
+  {
+   "id": "x5",
+   "required": true,
+   "result": "UNVERIFIED",
+   "reason": "OBSERVER_UNQUALIFIED",
+   "reads": "FULL",
+   "statement": "A clip labelled \"Firearms – depiction\" or \"Firearms – use\" is never al"
+  },
+  {
+   "id": "x6",
+   "required": true,
+   "result": "UNVERIFIED",
+   "reason": "OBSERVER_UNQUALIFIED",
+   "reads": "FULL",
+   "statement": "A clip with no flagged category is labelled \"Floor – all brands\" with "
+  },
+  {
+   "id": "x7",
+   "required": true,
+   "result": "UNVERIFIED",
+   "reason": "OBSERVER_UNQUALIFIED",
+   "reads": "FULL",
+   "statement": "Every flagged category carries evidence: the words of the transcript, "
+  },
+  {
+   "id": "x8",
+   "required": true,
+   "result": "UNVERIFIED",
+   "reason": "NOT_MACHINE_CHECKABLE",
+   "reads": "NONE",
+   "statement": "\"Violence – graphic\" requires described injury or blood; a scuffle, a "
+  },
+  {
+   "id": "x9",
+   "required": true,
+   "result": "UNVERIFIED",
+   "reason": "NOT_MACHINE_CHECKABLE",
+   "reads": "NONE",
+   "statement": "\"Language – strong\" requires a word of the strong list in the transcri"
+  },
+  {
+   "id": "x10",
+   "required": true,
+   "result": "UNVERIFIED",
+   "reason": "OBSERVER_UNQUALIFIED",
+   "reads": "FULL",
+   "statement": "A label carries no category the transcript does not support with evide"
+  },
+  {
+   "id": "x11",
+   "required": true,
+   "result": "UNVERIFIED",
+   "reason": "OBSERVER_UNQUALIFIED",
+   "reads": "FULL",
+   "statement": "Risk is the highest of the flagged categories' risk levels, carried on"
+  },
+  {
+   "id": "x12",
+   "required": true,
+   "result": "PASS",
+   "reason": "MET",
+   "reads": "FULL",
+   "statement": "A span's end is after its start, and no span runs past the duration."
+  },
+  {
+   "id": "x13",
+   "required": true,
+   "result": "UNVERIFIED",
+   "reason": "NOT_MACHINE_CHECKABLE",
+   "reads": "NONE",
+   "statement": "Where the same act is both \"Violence\" and \"Dangerous acts\", both are f"
+  },
+  {
+   "id": "x14",
+   "required": true,
+   "result": "UNVERIFIED",
+   "reason": "NOT_MACHINE_CHECKABLE",
+   "reads": "NONE",
+   "statement": "A news report of a disaster is \"Disaster – news\", Medium at most; grap"
+  },
+  {
+   "id": "x15",
+   "required": true,
+   "result": "UNVERIFIED",
+   "reason": "NOT_MACHINE_CHECKABLE",
+   "reads": "NONE",
+   "statement": "A reference to alcohol in passing is \"Alcohol – reference\", Low; drink"
+  },
+  {
+   "id": "x16",
+   "required": true,
+   "result": "PASS",
+   "reason": "MET",
+   "reads": "FULL",
+   "statement": "Numbers in a span are seconds and minutes only: no frame counts."
+  },
+  {
+   "id": "x17",
+   "required": true,
+   "result": "UNVERIFIED",
+   "reason": "NOT_MACHINE_CHECKABLE",
+   "reads": "NONE",
+   "statement": "Evidence is copied from the transcript, never paraphrased."
+  },
+  {
+   "id": "x18",
+   "required": true,
+   "result": "PASS",
+   "reason": "MET",
+   "reads": "FULL",
+   "statement": "A category flagged twice is listed once, with the earliest span."
+  },
+  {
+   "id": "x19",
+   "required": true,
+   "result": "UNVERIFIED",
+   "reason": "OBSERVER_UNQUALIFIED",
+   "reads": "FULL",
+   "statement": "The label is JSON with the keys clip, duration, overall, categories; n"
+  },
+  {
+   "id": "x20",
+   "required": true,
+   "result": "UNVERIFIED",
+   "reason": "OBSERVER_UNQUALIFIED",
+   "reads": "FULL",
+   "statement": "Where a clip's transcript is empty, the label is \"Floor – all brands\" "
+  },
+  {
+   "id": "x21",
+   "required": false,
+   "result": "PASS",
+   "reason": "MET",
+   "reads": "FULL",
+   "statement": "My pieces run 224 to 452 characters; a new piece stays between 1 and 6"
+  },
+  {
+   "id": "x22",
+   "required": false,
+   "result": "PASS",
+   "reason": "MET",
+   "reads": "FULL",
+   "statement": "My pieces run 23 to 53 words; a new piece stays between 1 and 83."
+  },
+  {
+   "id": "x23",
+   "required": false,
+   "result": "PASS",
+   "reason": "MET",
+   "reads": "FULL",
+   "statement": "My pieces run 1 sentence; a new piece has at most 2."
+  },
+  {
+   "id": "x24",
+   "required": false,
+   "result": "PASS",
+   "reason": "MET",
+   "reads": "FULL",
+   "statement": "The longest sentence in my pieces runs 23 to 53 words; in a new piece "
+  },
+  {
+   "id": "x25",
+   "required": false,
+   "result": "PASS",
+   "reason": "MET",
+   "reads": "FULL",
+   "statement": "At most 24 line breaks: my pieces carry 12 to 18."
+  },
+  {
+   "id": "x26",
+   "required": false,
+   "result": "PASS",
+   "reason": "MET",
+   "reads": "FULL",
+   "statement": "No blank lines: none of my pieces has one."
+  },
+  {
+   "id": "x27",
+   "required": false,
+   "result": "PASS",
+   "reason": "MET",
+   "reads": "FULL",
+   "statement": "No hashtags: none of my pieces has one."
+  },
+  {
+   "id": "x28",
+   "required": false,
+   "result": "PASS",
+   "reason": "MET",
+   "reads": "FULL",
+   "statement": "No mentions (@): none of my pieces has one."
+  },
+  {
+   "id": "x29",
+   "required": false,
+   "result": "PASS",
+   "reason": "MET",
+   "reads": "FULL",
+   "statement": "No links: none of my pieces has one."
+  },
+  {
+   "id": "x30",
+   "required": false,
+   "result": "PASS",
+   "reason": "MET",
+   "reads": "FULL",
+   "statement": "No emoji: none of my pieces has one."
+  },
+  {
+   "id": "x31",
+   "required": false,
+   "result": "PASS",
+   "reason": "MET",
+   "reads": "FULL",
+   "statement": "Open on a claim, as my pieces do."
+  },
+  {
+   "id": "x32",
+   "required": false,
+   "result": "PASS",
+   "reason": "MET",
+   "reads": "FULL",
+   "statement": "Close on a statement, as my pieces do."
+  },
+  {
+   "id": "x33",
+   "required": false,
+   "result": "PASS",
+   "reason": "MET",
+   "reads": "FULL",
+   "statement": "The first word is a symbol or emoji, as in every piece of mine."
+  },
+  {
+   "id": "x34",
+   "required": false,
+   "result": "PASS",
+   "reason": "MET",
+   "reads": "FULL",
+   "statement": "Quoted phrases: about 53 per 100 words in my pieces; a new piece carri"
+  },
+  {
+   "id": "x35",
+   "required": false,
+   "result": "PASS",
+   "reason": "MET",
+   "reads": "FULL",
+   "statement": "Colons: about 28.2 per 100 words in my pieces; a new piece carries abo"
+  },
+  {
+   "id": "x36",
+   "required": false,
+   "result": "PASS",
+   "reason": "MET",
+   "reads": "FULL",
+   "statement": "Figures written in digits: about 20.8 per 100 words in my pieces; a ne"
+  },
+  {
+   "id": "x37",
+   "required": false,
+   "result": "PASS",
+   "reason": "MET",
+   "reads": "FULL",
+   "statement": "Nominalisations (-tion, -ment, -ness, -ity, -ance, -ence): about 8.7 p"
+  },
+  {
+   "id": "x38",
+   "required": false,
+   "result": "PASS",
+   "reason": "MET",
+   "reads": "FULL",
+   "statement": "Runs of five or more one-syllable words: about 2.8 per 100 words in my"
+  },
+  {
+   "id": "x39",
+   "required": false,
+   "result": "PASS",
+   "reason": "MET",
+   "reads": "FULL",
+   "statement": "I keep paragraphs to 2 sentences at most."
+  },
+  {
+   "id": "x40",
+   "required": true,
+   "result": "PASS",
+   "reason": "MET",
+   "reads": "FULL",
+   "statement": "Write none of the moves that mark text as machine-written (announcing "
+  },
+  {
+   "id": "x41",
+   "required": true,
+   "result": "PASS",
+   "reason": "MET",
+   "reads": "FULL",
+   "statement": "No mechanical errors: spelling, agreement, punctuation."
+  },
+  {
+   "id": "specifics",
+   "required": true,
+   "result": "PASS",
+   "reason": "MET",
+   "reads": "FULL",
+   "statement": "Every specific in the work is found in what you supplied"
+  },
+  {
+   "id": "lifted",
+   "required": true,
+   "result": "PASS",
+   "reason": "MET",
+   "reads": "FULL",
+   "statement": "No passage is lifted from one of your examples"
+  }
+ ]
+}

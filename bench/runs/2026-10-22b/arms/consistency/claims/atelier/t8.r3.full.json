@@ -1,0 +1,944 @@
+{
+ "schema": "atelier-record/1",
+ "state": "NEEDS_REVIEW",
+ "standardVersionHash": "15ff9349666bb38a",
+ "skillVersion": "0ba55845afb1f7f6",
+ "certificate": {
+  "standardVersionHash": "15ff9349666bb38a",
+  "checks": {
+   "total": 13,
+   "counted": 9,
+   "written": 4,
+   "writtenQualified": 0
+  },
+  "readers": {
+   "taste": {
+    "veto": [],
+    "labelledMisses": 0,
+    "falseBlockUpper95": null
+   },
+   "claims": {
+    "instrument": "pattern check, with claim reader (claude-haiku-4-5, prompt 47d18891) reporting only: not qualified",
+    "version": "47d18891",
+    "gate": "pattern",
+    "qualified": false,
+    "measured": null,
+    "kinds": []
+   }
+  },
+  "latitude": {
+   "skill": "STRICT",
+   "run": "STRICT",
+   "tightenedBy": null,
+   "setBy": "model"
+  },
+  "acceptedUnmeasured": [],
+  "errorBound": null,
+  "why": "no delivered-error bound: it needs an audit sample of your own labels, drawn like the work this skill does; the checks and readers above are what this output was held to"
+ },
+ "record": {
+  "schema": 1,
+  "state": "NEEDS_REVIEW",
+  "entries": [
+   {
+    "id": "x1",
+    "statement": "Open with a Summary section: one paragraph on who, what, where, and the decision.",
+    "dimension": "STANDARD",
+    "source": "METHOD",
+    "required": true,
+    "observation": {
+     "proposition": "the sections \"Summary\", \"Facts\", \"Coverage analysis\", \"Decision\", \"Reserve\", in that order, with something in it, opening the work",
+     "coverage": "PARTIAL",
+     "qualification": "DETERMINISTIC",
+     "evidence": "everything it must contain is there",
+     "unchecked": "one paragraph"
+    },
+    "result": "UNVERIFIED",
+    "reason": "PARTLY_CHECKED"
+   },
+   {
+    "id": "x2",
+    "statement": "Then a Facts section. Every fact cites the document in the file it comes from, in square brackets: [notice of loss], [police report], [invoice 1].",
+    "dimension": "HABIT",
+    "source": "METHOD",
+    "required": false,
+    "observation": {
+     "proposition": "Every sentence in the Facts section carries at least one square-bracketed document name that matches a file in the material. (a check written for this step)",
+     "coverage": "PARTIAL",
+     "qualification": "DETERMINISTIC",
+     "evidence": "every fact cites a file document",
+     "unchecked": "how much of this rule the check reads is not known"
+    },
+    "result": "UNVERIFIED",
+    "reason": "PARTLY_CHECKED"
+   },
+   {
+    "id": "x3",
+    "statement": "Then a Coverage analysis section. The coverage conclusion cites the policy clause it rests on, and every exclusion that could apply is addressed and cited.",
+    "dimension": "HABIT",
+    "source": "METHOD",
+    "required": false,
+    "observation": {
+     "proposition": "The Coverage analysis section cites at least one policy clause and every exclusion it names is cited to the policy. (a check written for this step)",
+     "coverage": "PARTIAL",
+     "qualification": "DETERMINISTIC",
+     "evidence": "clause and policy citation present",
+     "unchecked": "how much of this rule the check reads is not known"
+    },
+    "result": "UNVERIFIED",
+    "reason": "PARTLY_CHECKED"
+   },
+   {
+    "id": "x4",
+    "statement": "Then a Decision section: covered or not covered, and under which clause.",
+    "dimension": "STANDARD",
+    "source": "METHOD",
+    "required": true,
+    "observation": {
+     "proposition": null,
+     "coverage": "NONE",
+     "qualification": "UNAVAILABLE",
+     "evidence": null
+    },
+    "result": "UNVERIFIED",
+    "reason": "NOT_MACHINE_CHECKABLE"
+   },
+   {
+    "id": "x5",
+    "statement": "End with a Reserve section. The reserve equals the sum of the invoices in the file, less any excess the schedule applies, and cites the invoices.",
+    "dimension": "HABIT",
+    "source": "METHOD",
+    "required": false,
+    "observation": {
+     "proposition": "The Reserve figure equals the sum of the invoice amounts found in the material, and the Reserve section cites the invoices. (a check written for this step)",
+     "coverage": "PARTIAL",
+     "qualification": "DETERMINISTIC",
+     "evidence": "reserve matches invoice sum and cites invoices",
+     "unchecked": "how much of this rule the check reads is not known"
+    },
+    "result": "UNVERIFIED",
+    "reason": "PARTLY_CHECKED"
+   },
+   {
+    "id": "x6",
+    "statement": "Never speculate about the insured's intent or honesty.",
+    "dimension": "STANDARD",
+    "source": "METHOD",
+    "required": true,
+    "observation": {
+     "proposition": null,
+     "coverage": "NONE",
+     "qualification": "UNAVAILABLE",
+     "evidence": null
+    },
+    "result": "UNVERIFIED",
+    "reason": "NOT_MACHINE_CHECKABLE"
+   },
+   {
+    "id": "x7",
+    "statement": "Never use the words \"fraud\", \"scam\", \"liar\" or \"suspicious\".",
+    "dimension": "STANDARD",
+    "source": "METHOD",
+    "required": true,
+    "observation": {
+     "proposition": "none of: fraud, scam, liar, suspicious",
+     "coverage": "FULL",
+     "qualification": "DETERMINISTIC",
+     "evidence": "none used"
+    },
+    "result": "PASS",
+    "reason": "MET"
+   },
+   {
+    "id": "x8",
+    "statement": "Take every date, name and figure from the file: add none of your own.",
+    "dimension": "HABIT",
+    "source": "METHOD",
+    "required": false,
+    "observation": {
+     "proposition": "Every date in the memo appears in the material, so no date is added that the file does not hold. (a check written for this step)",
+     "coverage": "PARTIAL",
+     "qualification": "DETERMINISTIC",
+     "evidence": "every date is in the material",
+     "unchecked": "how much of this rule the check reads is not known"
+    },
+    "result": "UNVERIFIED",
+    "reason": "PARTLY_CHECKED"
+   },
+   {
+    "id": "x9",
+    "statement": "Every figure in the work is one the request or the material gives.",
+    "dimension": "HABIT",
+    "source": "EXAMPLE",
+    "required": false,
+    "observation": {
+     "proposition": "every figure is one the request or the material gives",
+     "coverage": "PARTIAL",
+     "qualification": "DETERMINISTIC",
+     "evidence": "7 of 7 figure(s) are in the request or the material (notice of loss, incident report, invoice 1, invoice 2, policy)",
+     "unchecked": "whether each figure names its source, and whether it is used as the source means it"
+    },
+    "result": "UNVERIFIED",
+    "reason": "PARTLY_CHECKED"
+   },
+   {
+    "id": "x10",
+    "statement": "I keep paragraphs to 5 sentences at most.",
+    "dimension": "HABIT",
+    "source": "EXAMPLE",
+    "required": false,
+    "observation": {
+     "proposition": "paragraphs of at most 5 sentences",
+     "coverage": "FULL",
+     "qualification": "DETERMINISTIC",
+     "evidence": "longest 5 sentences"
+    },
+    "result": "PASS",
+    "reason": "MET"
+   },
+   {
+    "id": "x11",
+    "statement": "I hedge rarely: at most 2 hedging words per thousand.",
+    "dimension": "HABIT",
+    "source": "EXAMPLE",
+    "required": false,
+    "observation": {
+     "proposition": "at most 2 hedging words per thousand",
+     "coverage": "FULL",
+     "qualification": "DETERMINISTIC",
+     "evidence": "0 per thousand words (target ≤ 2)"
+    },
+    "result": "PASS",
+    "reason": "MET"
+   },
+   {
+    "id": "x12",
+    "statement": "The Summary section runs 25 to 33 words in my pieces.",
+    "dimension": "HABIT",
+    "source": "EXAMPLE",
+    "required": false,
+    "observation": {
+     "proposition": "the \"Summary\" section: 16 to 42 words",
+     "coverage": "FULL",
+     "qualification": "DETERMINISTIC",
+     "evidence": "\"Summary\": 33 words (16 to 42)"
+    },
+    "result": "PASS",
+    "reason": "MET"
+   },
+   {
+    "id": "x13",
+    "statement": "The Facts section runs 47 to 65 words in my pieces.",
+    "dimension": "HABIT",
+    "source": "EXAMPLE",
+    "required": false,
+    "observation": {
+     "proposition": "the \"Facts\" section: 29 to 83 words",
+     "coverage": "FULL",
+     "qualification": "DETERMINISTIC",
+     "evidence": "\"Facts\": 57 words (29 to 83)"
+    },
+    "result": "PASS",
+    "reason": "MET"
+   },
+   {
+    "id": "x14",
+    "statement": "Write none of the moves that mark text as machine-written (announcing an insight others \"miss\", grading your own list, \"the single most\", announcing candour, \"that's the whole game\", reading the reader's mind, one thing \"wearing another's clothes\", a contrastive verdict as the opening line, an em dash, a run of three or more very short sentences).",
+    "dimension": "STANDARD",
+    "source": "EXAMPLE",
+    "required": true,
+    "observation": {
+     "proposition": "machine-writing moves (announced insights, self-graded lists, stacked superlatives, announced candour, totalisers, mind-reading, costumes): none of 16 kind(s) you never use, and at most 0.3 per 1,000 words of the rest",
+     "coverage": "FULL",
+     "qualification": "DETERMINISTIC",
+     "evidence": "0 per 1,000 words"
+    },
+    "result": "PASS",
+    "reason": "MET"
+   },
+   {
+    "id": "x15",
+    "statement": "No mechanical errors: spelling, agreement, punctuation.",
+    "dimension": "STANDARD",
+    "source": "EXAMPLE",
+    "required": true,
+    "observation": {
+     "proposition": "no mechanical error with no legitimate reading: a known misspelling in lower case, an agreement no variety uses (\"he are\"), a/an before a lower-case common word, two commas, a space before a comma or a full stop; a capitalised word, a word repeated, a dialect's agreement (\"they was\"), \"an\" before \"h\" or a word read as letters, \"::\", \"..\", a space before \"!\", \"?\", \":\" or \";\", any other word the checker does not know, and anything else it proposes, is only listed; code, quotations, addresses, figures and names are never touched",
+     "coverage": "NONE",
+     "qualification": "DETERMINISTIC",
+     "evidence": "listed for you to check: 3 possible slips: \"Elmhurst\" (a name, an acronym or a coined word is the author's); \"Elmhurst\" (a name, an acronym or a coined word is the author's); \"## Coverage analysis\" (the checker proposes a change this rule does not make)",
+     "listed": true
+    },
+    "result": "UNVERIFIED",
+    "reason": "LISTED_FOR_YOU"
+   },
+   {
+    "id": "specifics",
+    "dimension": "EVIDENCE",
+    "source": "SYSTEM",
+    "statement": "Every specific in the work is found in what you supplied",
+    "required": true,
+    "observation": {
+     "proposition": "each figure, name, date and quotation, looked for in the request and the material",
+     "coverage": "PARTIAL",
+     "qualification": "QUALIFIED",
+     "evidence": "2 could not be found in it: listed for you",
+     "unchecked": "2 specifics listed for you"
+    },
+    "result": "UNVERIFIED",
+    "reason": "PARTLY_CHECKED"
+   },
+   {
+    "id": "lifted",
+    "dimension": "EVIDENCE",
+    "source": "SYSTEM",
+    "statement": "No passage is lifted from one of your examples",
+    "required": true,
+    "observation": {
+     "proposition": "the longest run of words shared with one example, less wording that recurs across them (at most 115: what your own examples share with one another, and never fewer than 11)",
+     "coverage": "FULL",
+     "qualification": "DETERMINISTIC",
+     "evidence": "the longest shared run is 28 words"
+    },
+    "result": "PASS",
+    "reason": "MET"
+   }
+  ],
+  "latitude": "STRICT"
+ },
+ "output": "## Summary\n\nElmhurst Clinics LLP: fire damage in a neighbouring unit of a label printer and a barcode scanner at a storage unit on Mill Road. Covered under clause 4.2; reserve 3,254 dollars.\n\n## Facts\n\nElmhurst Clinics LLP reported the loss on 21 June 2026 [notice of loss]. The loss occurred at a storage unit on Mill Road [notice of loss]. The items are a label printer and a barcode scanner [invoice 1], [invoice 2]. The incident was recorded on 23 June 2026 [incident report]. No third party was involved [incident report].\n\n## Coverage analysis\n\nThe loss falls under clause 4.2 of the policy, which covers loss of or damage to business contents at the premises named in the schedule, and at any other premises while in the insured's custody, caused by theft, fire, storm or escape of water [policy]. Exclusion 7.1 does not apply: no theft is alleged [policy]. Exclusion 7.5 does not apply: no theft is alleged [policy]. Exclusion 7.3 does not apply: the damage was caused by fire in a neighbouring unit and not by gradual deterioration [incident report], [policy].\n\n## Decision\n\nCovered under clause 4.2. The claim is accepted.\n\n## Reserve\n\nThe reserve is 3,254 dollars, the sum of the two invoices (1,666 dollars and 1,588 dollars) [invoice 1], [invoice 2]; no excess is shown in the schedule, so none applies under clause 9.1 [policy].",
+ "answer": "## Summary\n\nElmhurst Clinics LLP: fire damage in a neighbouring unit of a label printer and a barcode scanner at a storage unit on Mill Road. Covered under clause 4.2; reserve 3,254 dollars. [needs verification: not shown in what you supplied]\n\n## Facts\n\nElmhurst Clinics LLP reported the loss on 21 June 2026 [notice of loss]. The loss occurred at a storage unit on Mill Road [notice of loss]. The items are a label printer and a barcode scanner [invoice 1], [invoice 2]. The incident was recorded on 23 June 2026 [incident report]. No third party was involved [incident report]. [needs verification: not shown in what you supplied]\n\n## Coverage analysis\n\nThe loss falls under clause 4.2 of the policy, which covers loss of or damage to business contents at the premises named in the schedule, and at any other premises while in the insured's custody, caused by theft, fire, storm or escape of water [policy]. Exclusion 7.1 does not apply: no theft is alleged [policy]. [needs verification: not shown in what you supplied] Exclusion 7.5 does not apply: no theft is alleged [policy]. [needs verification: not shown in what you supplied] Exclusion 7.3 does not apply: the damage was caused by fire in a neighbouring unit and not by gradual deterioration [incident report], [policy]. [needs verification: not shown in what you supplied]\n\n## Decision\n\nCovered under clause 4.2. [needs verification: not shown in what you supplied] The claim is accepted. [needs verification: not shown in what you supplied]\n\n## Reserve\n\nThe reserve is 3,254 dollars, the sum of the two invoices (1,666 dollars and 1,588 dollars) [invoice 1], [invoice 2]; no excess is shown in the schedule, so non [needs verification: not shown in what you supplied]e applies under clause 9.1 [policy].",
+ "invocationId": "i736e48341c",
+ "costUsd": 0.0237,
+ "rulesBroken": [],
+ "cut": [],
+ "toCheck": [
+  "Covered under clause 4.2; reserve 3,254 dollars.",
+  "The reserve is 3,254 dollars, the sum of the two invoices (1,666 dollars and 1,588 dollars) [invoice 1], [invoice 2]; no excess is shown in the schedule, so non",
+  "No third party was involved [incident report].",
+  "Exclusion 7.1 does not apply: no theft is alleged [policy].",
+  "Exclusion 7.5 does not apply: no theft is alleged [policy].",
+  "Exclusion 7.3 does not apply: the damage was caused by fire in a neighbouring unit and not by gradual deterioration [incident report], [policy].",
+  "Covered under clause 4.2.",
+  "The claim is accepted."
+ ],
+ "rules": {
+  "checked": [
+   {
+    "id": "x1",
+    "statement": "Open with a Summary section: one paragraph on who, what, where, and the decision.",
+    "materiality": "REQUIRED",
+    "verdict": "MET",
+    "detail": "everything it must contain is there"
+   },
+   {
+    "id": "x2",
+    "statement": "Then a Facts section. Every fact cites the document in the file it comes from, in square brackets: [notice of loss], [police report], [invoice 1].",
+    "materiality": null,
+    "verdict": "MET",
+    "detail": "every fact cites a file document"
+   },
+   {
+    "id": "x3",
+    "statement": "Then a Coverage analysis section. The coverage conclusion cites the policy clause it rests on, and every exclusion that could apply is addressed and cited.",
+    "materiality": null,
+    "verdict": "MET",
+    "detail": "clause and policy citation present"
+   },
+   {
+    "id": "x5",
+    "statement": "End with a Reserve section. The reserve equals the sum of the invoices in the file, less any excess the schedule applies, and cites the invoices.",
+    "materiality": null,
+    "verdict": "MET",
+    "detail": "reserve matches invoice sum and cites invoices"
+   },
+   {
+    "id": "x7",
+    "statement": "Never use the words \"fraud\", \"scam\", \"liar\" or \"suspicious\".",
+    "materiality": "REQUIRED",
+    "verdict": "MET",
+    "detail": "none used"
+   },
+   {
+    "id": "x8",
+    "statement": "Take every date, name and figure from the file: add none of your own.",
+    "materiality": null,
+    "verdict": "MET",
+    "detail": "every date is in the material"
+   },
+   {
+    "id": "x9",
+    "statement": "Every figure in the work is one the request or the material gives.",
+    "materiality": "PREFERRED",
+    "verdict": "MET",
+    "detail": "7 of 7 figure(s) are in the request or the material (notice of loss, incident report, invoice 1, invoice 2, policy)"
+   },
+   {
+    "id": "x10",
+    "statement": "I keep paragraphs to 5 sentences at most.",
+    "materiality": "PREFERRED",
+    "verdict": "MET",
+    "detail": "longest 5 sentences"
+   },
+   {
+    "id": "x11",
+    "statement": "I hedge rarely: at most 2 hedging words per thousand.",
+    "materiality": "PREFERRED",
+    "verdict": "MET",
+    "detail": "0 per thousand words (target ≤ 2)"
+   },
+   {
+    "id": "x12",
+    "statement": "The Summary section runs 25 to 33 words in my pieces.",
+    "materiality": "PREFERRED",
+    "verdict": "MET",
+    "detail": "\"Summary\": 33 words (16 to 42)"
+   },
+   {
+    "id": "x13",
+    "statement": "The Facts section runs 47 to 65 words in my pieces.",
+    "materiality": "PREFERRED",
+    "verdict": "MET",
+    "detail": "\"Facts\": 57 words (29 to 83)"
+   },
+   {
+    "id": "x14",
+    "statement": "Write none of the moves that mark text as machine-written (announcing an insight others \"miss\", grading your own list, \"the single most\", announcing candour, \"that's the whole game\", reading the reader's mind, one thing \"wearing another's clothes\", a contrastive verdict as the opening line, an em dash, a run of three or more very short sentences).",
+    "materiality": "REQUIRED",
+    "verdict": "MET",
+    "detail": "0 per 1,000 words"
+   },
+   {
+    "id": "x15",
+    "statement": "No mechanical errors: spelling, agreement, punctuation.",
+    "materiality": "REQUIRED",
+    "verdict": "NOT_APPLICABLE",
+    "detail": "listed for you to check: 3 possible slips: \"Elmhurst\" (a name, an acronym or a coined word is the author's); \"Elmhurst\" (a name, an acronym or a coined word is the author's); \"## Coverage analysis\" (the checker proposes a change this rule does not make)",
+    "listed": [
+     {
+      "text": "Elmhurst",
+      "why": "a name, an acronym or a coined word is the author's (SpellCheck: Did you mean to spell `Elmhurst` this way?)"
+     },
+     {
+      "text": "Elmhurst",
+      "why": "a name, an acronym or a coined word is the author's (SpellCheck: Did you mean to spell `Elmhurst` this way?)"
+     },
+     {
+      "text": "## Coverage analysis",
+      "why": "the checker proposes a change this rule does not make (UseTitleCase: Try to use title case in headings.)"
+     }
+    ]
+   },
+   {
+    "id": "UNSOURCED",
+    "statement": "Never invent a story, a quotation, an attribution or a specific the person did not supply.",
+    "materiality": "REQUIRED",
+    "verdict": "MET",
+    "detail": "the skill is held strict: a figure, date or citation not in your material stops the work, and nothing is cut: 2 sentence(s) listed to check, none cut [pattern check (the gate: the claim reader is not qualified)]"
+   },
+   {
+    "id": "UNSOURCED·check",
+    "statement": "Not found in what you supplied: listed for you to check, never cut, because the skill is held strict: a figure, date or citation not in your material stops the work, and nothing is cut.",
+    "materiality": "PREFERRED",
+    "verdict": "VIOLATED",
+    "detail": "2 specific(s) to check [pattern check (the gate: the claim reader is not qualified); claim reader (claude-haiku-4-5, prompt 47d18891) reporting]"
+   }
+  ],
+  "unchecked": [
+   {
+    "id": "x4",
+    "statement": "Then a Decision section: covered or not covered, and under which clause."
+   },
+   {
+    "id": "x6",
+    "statement": "Never speculate about the insured's intent or honesty."
+   }
+  ]
+ },
+ "withheld": [],
+ "report": [
+  "Judgement reader: not run (reporting only until your labels qualify it; --taste reads this run and records readings to label: atelier taste --skill claims --calibrate).",
+  "Method: contains 2 of 2 thing(s) it must · 2 judgement step(s) not measured.",
+  "Grammar, listed for you to check and never changed (3): \"Elmhurst\" (a name, an acronym or a coined word is the author's); \"Elmhurst\" (a name, an acronym or a coined word is the author's); \"## Coverage analysis\" (the checker proposes a change this rule does not make).",
+  "wrote 2 drafts and kept one: the first draft held every rule the drafts are chosen by; 1 planned draft(s) not written.",
+  "checked against the standard: 0 REQUIRED rule(s) broken in the draft (); 0 rewrite pass(es) of only the spans that broke them; nothing to repair.",
+  "Checked: every REQUIRED measured rule that could be checked holds; listed for you to check: x15.",
+  "invented-claim check: pattern check, with claim reader (claude-haiku-4-5, prompt 47d18891) reporting only: not qualified.",
+  "(invented-claim check: claim reader (claude-haiku-4-5, prompt 47d18891) is not qualified: what it finds is reported as a warning (UNSOURCED·reader), and the pattern check decides what fails)",
+  "8 specific(s) are not in your material: left in for you to check before you use this (listed in the details).",
+  "    check: \"Covered under clause 4.2; reserve 3,254 dollars.\"",
+  "    check: \"The reserve is 3,254 dollars, the sum of the two invoices (1,666 dollars and 1,588 dollars) [invoice 1], [invoice 2]; no excess is shown in the schedule, so non\"",
+  "    check: \"No third party was involved [incident report].\"",
+  "    check: \"Exclusion 7.1 does not apply: no theft is alleged [policy].\"",
+  "    check: \"Exclusion 7.5 does not apply: no theft is alleged [policy].\"",
+  "    check: \"Exclusion 7.3 does not apply: the damage was caused by fire in a neighbouring unit and not by gradual deterioration [incident report], [policy].\"",
+  "    check: \"Covered under clause 4.2.\"",
+  "    check: \"The claim is accepted.\"",
+  "(49 six-word run(s) shared with three or more of your pieces: your standard wording, not counted as copying)",
+  "used 11 of the 25 fact(s) you supplied: 4.681 specifics per 100 words (your pieces carry 5.181)",
+  "implementation release f1407f337496cef6 · profile 9ba5618704ce32de",
+  "    x15: not applicable, outside what its measurement can judge in this text",
+  "Length: 229 words. The request names none; your pieces run 146 to 194, shortest to longest.",
+  "invocation i736e48341c  ·  SkillVersion 0ba55845afb1f7f6  ·  $0.0237 (claim reader $0.0123)"
+ ],
+ "eval": {
+  "schema": 1,
+  "invocationId": "i736e48341c",
+  "skill": "claims",
+  "skillVersion": "0ba55845afb1f7f6",
+  "at": "2026-10-21T23:34:02.836Z",
+  "release": "f1407f337496cef6",
+  "model": "claude-sonnet-5-5",
+  "drafts": 2,
+  "costUsd": 0.0237,
+  "spend": [
+   {
+    "purpose": "claim reader",
+    "usd": 0.012298,
+    "calls": 2,
+    "inputTokens": 4848,
+    "outputTokens": 1490
+   },
+   {
+    "purpose": "writing",
+    "usd": 0.010955,
+    "calls": 1,
+    "inputTokens": 9476,
+    "outputTokens": 704,
+    "cacheReadTokens": 8354
+   },
+   {
+    "purpose": "context judge",
+    "usd": 0.00045,
+    "calls": 2,
+    "inputTokens": 5064,
+    "outputTokens": 378,
+    "cacheReadTokens": 2728
+   }
+  ],
+  "sent": {
+   "skill": 3832,
+   "added": 69,
+   "request": 372
+  },
+  "durationMs": 20027,
+  "result": {
+   "conformant": true,
+   "reasons": []
+  },
+  "record": {
+   "schema": 1,
+   "state": "NEEDS_REVIEW",
+   "entries": [
+    {
+     "id": "x1",
+     "statement": "Open with a Summary section: one paragraph on who, what, where, and the decision.",
+     "dimension": "STANDARD",
+     "source": "METHOD",
+     "required": true,
+     "observation": {
+      "proposition": "the sections \"Summary\", \"Facts\", \"Coverage analysis\", \"Decision\", \"Reserve\", in that order, with something in it, opening the work",
+      "coverage": "PARTIAL",
+      "qualification": "DETERMINISTIC",
+      "evidence": "everything it must contain is there",
+      "unchecked": "one paragraph"
+     },
+     "result": "UNVERIFIED",
+     "reason": "PARTLY_CHECKED"
+    },
+    {
+     "id": "x2",
+     "statement": "Then a Facts section. Every fact cites the document in the file it comes from, in square brackets: [notice of loss], [police report], [invoice 1].",
+     "dimension": "HABIT",
+     "source": "METHOD",
+     "required": false,
+     "observation": {
+      "proposition": "Every sentence in the Facts section carries at least one square-bracketed document name that matches a file in the material. (a check written for this step)",
+      "coverage": "PARTIAL",
+      "qualification": "DETERMINISTIC",
+      "evidence": "every fact cites a file document",
+      "unchecked": "how much of this rule the check reads is not known"
+     },
+     "result": "UNVERIFIED",
+     "reason": "PARTLY_CHECKED"
+    },
+    {
+     "id": "x3",
+     "statement": "Then a Coverage analysis section. The coverage conclusion cites the policy clause it rests on, and every exclusion that could apply is addressed and cited.",
+     "dimension": "HABIT",
+     "source": "METHOD",
+     "required": false,
+     "observation": {
+      "proposition": "The Coverage analysis section cites at least one policy clause and every exclusion it names is cited to the policy. (a check written for this step)",
+      "coverage": "PARTIAL",
+      "qualification": "DETERMINISTIC",
+      "evidence": "clause and policy citation present",
+      "unchecked": "how much of this rule the check reads is not known"
+     },
+     "result": "UNVERIFIED",
+     "reason": "PARTLY_CHECKED"
+    },
+    {
+     "id": "x4",
+     "statement": "Then a Decision section: covered or not covered, and under which clause.",
+     "dimension": "STANDARD",
+     "source": "METHOD",
+     "required": true,
+     "observation": {
+      "proposition": null,
+      "coverage": "NONE",
+      "qualification": "UNAVAILABLE",
+      "evidence": null
+     },
+     "result": "UNVERIFIED",
+     "reason": "NOT_MACHINE_CHECKABLE"
+    },
+    {
+     "id": "x5",
+     "statement": "End with a Reserve section. The reserve equals the sum of the invoices in the file, less any excess the schedule applies, and cites the invoices.",
+     "dimension": "HABIT",
+     "source": "METHOD",
+     "required": false,
+     "observation": {
+      "proposition": "The Reserve figure equals the sum of the invoice amounts found in the material, and the Reserve section cites the invoices. (a check written for this step)",
+      "coverage": "PARTIAL",
+      "qualification": "DETERMINISTIC",
+      "evidence": "reserve matches invoice sum and cites invoices",
+      "unchecked": "how much of this rule the check reads is not known"
+     },
+     "result": "UNVERIFIED",
+     "reason": "PARTLY_CHECKED"
+    },
+    {
+     "id": "x6",
+     "statement": "Never speculate about the insured's intent or honesty.",
+     "dimension": "STANDARD",
+     "source": "METHOD",
+     "required": true,
+     "observation": {
+      "proposition": null,
+      "coverage": "NONE",
+      "qualification": "UNAVAILABLE",
+      "evidence": null
+     },
+     "result": "UNVERIFIED",
+     "reason": "NOT_MACHINE_CHECKABLE"
+    },
+    {
+     "id": "x7",
+     "statement": "Never use the words \"fraud\", \"scam\", \"liar\" or \"suspicious\".",
+     "dimension": "STANDARD",
+     "source": "METHOD",
+     "required": true,
+     "observation": {
+      "proposition": "none of: fraud, scam, liar, suspicious",
+      "coverage": "FULL",
+      "qualification": "DETERMINISTIC",
+      "evidence": "none used"
+     },
+     "result": "PASS",
+     "reason": "MET"
+    },
+    {
+     "id": "x8",
+     "statement": "Take every date, name and figure from the file: add none of your own.",
+     "dimension": "HABIT",
+     "source": "METHOD",
+     "required": false,
+     "observation": {
+      "proposition": "Every date in the memo appears in the material, so no date is added that the file does not hold. (a check written for this step)",
+      "coverage": "PARTIAL",
+      "qualification": "DETERMINISTIC",
+      "evidence": "every date is in the material",
+      "unchecked": "how much of this rule the check reads is not known"
+     },
+     "result": "UNVERIFIED",
+     "reason": "PARTLY_CHECKED"
+    },
+    {
+     "id": "x9",
+     "statement": "Every figure in the work is one the request or the material gives.",
+     "dimension": "HABIT",
+     "source": "EXAMPLE",
+     "required": false,
+     "observation": {
+      "proposition": "every figure is one the request or the material gives",
+      "coverage": "PARTIAL",
+      "qualification": "DETERMINISTIC",
+      "evidence": "7 of 7 figure(s) are in the request or the material (notice of loss, incident report, invoice 1, invoice 2, policy)",
+      "unchecked": "whether each figure names its source, and whether it is used as the source means it"
+     },
+     "result": "UNVERIFIED",
+     "reason": "PARTLY_CHECKED"
+    },
+    {
+     "id": "x10",
+     "statement": "I keep paragraphs to 5 sentences at most.",
+     "dimension": "HABIT",
+     "source": "EXAMPLE",
+     "required": false,
+     "observation": {
+      "proposition": "paragraphs of at most 5 sentences",
+      "coverage": "FULL",
+      "qualification": "DETERMINISTIC",
+      "evidence": "longest 5 sentences"
+     },
+     "result": "PASS",
+     "reason": "MET"
+    },
+    {
+     "id": "x11",
+     "statement": "I hedge rarely: at most 2 hedging words per thousand.",
+     "dimension": "HABIT",
+     "source": "EXAMPLE",
+     "required": false,
+     "observation": {
+      "proposition": "at most 2 hedging words per thousand",
+      "coverage": "FULL",
+      "qualification": "DETERMINISTIC",
+      "evidence": "0 per thousand words (target ≤ 2)"
+     },
+     "result": "PASS",
+     "reason": "MET"
+    },
+    {
+     "id": "x12",
+     "statement": "The Summary section runs 25 to 33 words in my pieces.",
+     "dimension": "HABIT",
+     "source": "EXAMPLE",
+     "required": false,
+     "observation": {
+      "proposition": "the \"Summary\" section: 16 to 42 words",
+      "coverage": "FULL",
+      "qualification": "DETERMINISTIC",
+      "evidence": "\"Summary\": 33 words (16 to 42)"
+     },
+     "result": "PASS",
+     "reason": "MET"
+    },
+    {
+     "id": "x13",
+     "statement": "The Facts section runs 47 to 65 words in my pieces.",
+     "dimension": "HABIT",
+     "source": "EXAMPLE",
+     "required": false,
+     "observation": {
+      "proposition": "the \"Facts\" section: 29 to 83 words",
+      "coverage": "FULL",
+      "qualification": "DETERMINISTIC",
+      "evidence": "\"Facts\": 57 words (29 to 83)"
+     },
+     "result": "PASS",
+     "reason": "MET"
+    },
+    {
+     "id": "x14",
+     "statement": "Write none of the moves that mark text as machine-written (announcing an insight others \"miss\", grading your own list, \"the single most\", announcing candour, \"that's the whole game\", reading the reader's mind, one thing \"wearing another's clothes\", a contrastive verdict as the opening line, an em dash, a run of three or more very short sentences).",
+     "dimension": "STANDARD",
+     "source": "EXAMPLE",
+     "required": true,
+     "observation": {
+      "proposition": "machine-writing moves (announced insights, self-graded lists, stacked superlatives, announced candour, totalisers, mind-reading, costumes): none of 16 kind(s) you never use, and at most 0.3 per 1,000 words of the rest",
+      "coverage": "FULL",
+      "qualification": "DETERMINISTIC",
+      "evidence": "0 per 1,000 words"
+     },
+     "result": "PASS",
+     "reason": "MET"
+    },
+    {
+     "id": "x15",
+     "statement": "No mechanical errors: spelling, agreement, punctuation.",
+     "dimension": "STANDARD",
+     "source": "EXAMPLE",
+     "required": true,
+     "observation": {
+      "proposition": "no mechanical error with no legitimate reading: a known misspelling in lower case, an agreement no variety uses (\"he are\"), a/an before a lower-case common word, two commas, a space before a comma or a full stop; a capitalised word, a word repeated, a dialect's agreement (\"they was\"), \"an\" before \"h\" or a word read as letters, \"::\", \"..\", a space before \"!\", \"?\", \":\" or \";\", any other word the checker does not know, and anything else it proposes, is only listed; code, quotations, addresses, figures and names are never touched",
+      "coverage": "NONE",
+      "qualification": "DETERMINISTIC",
+      "evidence": "listed for you to check: 3 possible slips: \"Elmhurst\" (a name, an acronym or a coined word is the author's); \"Elmhurst\" (a name, an acronym or a coined word is the author's); \"## Coverage analysis\" (the checker proposes a change this rule does not make)",
+      "listed": true
+     },
+     "result": "UNVERIFIED",
+     "reason": "LISTED_FOR_YOU"
+    },
+    {
+     "id": "specifics",
+     "dimension": "EVIDENCE",
+     "source": "SYSTEM",
+     "statement": "Every specific in the work is found in what you supplied",
+     "required": true,
+     "observation": {
+      "proposition": "each figure, name, date and quotation, looked for in the request and the material",
+      "coverage": "PARTIAL",
+      "qualification": "QUALIFIED",
+      "evidence": "2 could not be found in it: listed for you",
+      "unchecked": "2 specifics listed for you"
+     },
+     "result": "UNVERIFIED",
+     "reason": "PARTLY_CHECKED"
+    },
+    {
+     "id": "lifted",
+     "dimension": "EVIDENCE",
+     "source": "SYSTEM",
+     "statement": "No passage is lifted from one of your examples",
+     "required": true,
+     "observation": {
+      "proposition": "the longest run of words shared with one example, less wording that recurs across them (at most 115: what your own examples share with one another, and never fewer than 11)",
+      "coverage": "FULL",
+      "qualification": "DETERMINISTIC",
+      "evidence": "the longest shared run is 28 words"
+     },
+     "result": "PASS",
+     "reason": "MET"
+    }
+   ],
+   "latitude": "STRICT"
+  },
+  "gates": {
+   "required": {
+    "held": 3,
+    "applicable": 3,
+    "broken": []
+   },
+   "claims": {
+    "state": "checked",
+    "delivered": 0,
+    "unconfirmed": 0,
+    "cut": 0,
+    "listed": 2,
+    "disputed": 0,
+    "agreement": {
+     "both": 2,
+     "either": 2
+    },
+    "instrument": "pattern check, with claim reader (claude-haiku-4-5, prompt 47d18891) reporting only: not qualified",
+    "answers": false,
+    "unmeasured": "the skill is held strict: a figure, date or citation not in your material stops the work, and nothing is cut",
+    "measured": null
+   },
+   "copying": {
+    "longest": 28,
+    "limit": 116
+   },
+   "format": {
+    "kind": "none",
+    "words": null,
+    "withheld": 0,
+    "held": null
+   },
+   "applicability": {
+    "applied": 14,
+    "notApplicable": 1,
+    "waived": []
+   }
+  },
+  "fidelity": {
+   "inBand": 0,
+   "measured": 0,
+   "baseline": null,
+   "pieces": 9,
+   "profile": "9ba5618704ce32de",
+   "outside": [],
+   "facts": {
+    "used": 11,
+    "supplied": 25
+   },
+   "edits": {
+    "tried": 0,
+    "kept": 0
+   }
+  },
+  "monitors": {
+   "detector": null,
+   "taste": null,
+   "coverage": {
+    "asked": 1,
+    "given": 0,
+    "missing": [],
+    "unclear": 1
+   }
+  },
+  "notMeasured": [
+   "argument, stance and content (read by the taste reader, a monitor)",
+   "voice beyond the 0 counted features"
+  ]
+ },
+ "model": "claude-sonnet-5-5",
+ "thinking": "disabled",
+ "thinkingBlocks": 0,
+ "maxTokens": 12000,
+ "steering": "all",
+ "fidelity": {
+  "release": "f1407f337496cef6",
+  "inBand": 0,
+  "measured": 0,
+  "outside": [],
+  "detector": null,
+  "edits": [],
+  "applicability": [
+   {
+    "requirementId": "x1",
+    "status": "APPLIED"
+   },
+   {
+    "requirementId": "x2",
+    "status": "APPLIED"
+   },
+   {
+    "requirementId": "x3",
+    "status": "APPLIED"
+   },
+   {
+    "requirementId": "x4",
+    "status": "APPLIED"
+   },
+   {
+    "requirementId": "x5",
+    "status": "APPLIED"
+   },
+   {
+    "requirementId": "x6",
+    "status": "APPLIED"
+   },
+   {
+    "requirementId": "x7",
+    "status": "APPLIED"
+   },
+   {
+    "requirementId": "x8",
+    "status": "APPLIED"
+   },
+   {
+    "requirementId": "x9",
+    "status": "APPLIED"
+   },
+   {
+    "requirementId": "x10",
+    "status": "APPLIED"
+   },
+   {
+    "requirementId": "x11",
+    "status": "APPLIED"
+   },
+   {
+    "requirementId": "x12",
+    "status": "APPLIED"
+   },
+   {
+    "requirementId": "x13",
+    "status": "APPLIED"
+   },
+   {
+    "requirementId": "x14",
+    "status": "APPLIED"
+   },
+   {
+    "requirementId": "x15",
+    "status": "NOT_APPLICABLE",
+    "why": "outside what its measurement can judge in this text"
+   }
+  ]
+ }
+}

@@ -1,0 +1,12 @@
+{
+ "fixture": "adhd",
+ "arm": "plain",
+ "task": "debugging-cause",
+ "run": 1,
+ "text": "Add the header to the failing test's request:\n\n```ts\nconst res = await request(app)\n  .get('/your-route')\n  .set('Authorization', `Bearer ${token}`);\n\nexpect(res.status).toBe(200);\n```\n\n**Cause:** The route requires auth and the test sends none, so the server correctly returns 401. The code is fine and the test is incomplete.\n\n**If the test has no `token` yet:** get one once in a setup block.\n\n```ts\nlet token: string;\nbeforeAll(async () => {\n  const res = await request(app)\n    .post('/login')\n    .send({ email: 'test@example.com', password: 'testpass' });\n  token = res.body.token;\n});\n```\n\n**Time:** about 2 minutes.\n\n**Next:** make the edit, run the test, and paste the result if it still fails. If it returns 401 with the header set, the token is invalid or expired, and that is a different bug.",
+ "costUsd": 0.010294,
+ "stop": "end_turn",
+ "error": null,
+ "meterUsd": 0.010294000000000025,
+ "seconds": 5.674
+}

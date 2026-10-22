@@ -1,0 +1,48 @@
+{
+ "fixture": "labels",
+ "arm": "atelier",
+ "task": "t4",
+ "run": 1,
+ "text": "{\n  \"clip\": \"c17\",\n  \"duration\": \"00:52\",\n  \"overall\": \"Medium\",\n  \"categories\": [\n    {\n      \"category\": \"Disaster – news\",\n      \"risk\": \"Medium\",\n      \"span\": \"00:05–00:52\",\n      \"evidence\": \"Two people died when the bridge gave way.\"\n    }\n  ]\n}",
+ "state": "NEEDS_REVIEW",
+ "costUsd": 0.0203,
+ "exit": 0,
+ "standard": "d0f9945acba80cad",
+ "headKeys": [
+  "schema",
+  "state",
+  "standardVersionHash",
+  "skillVersion",
+  "certificate",
+  "record"
+ ],
+ "certificate": {
+  "standardVersionHash": "d0f9945acba80cad",
+  "checks": {
+   "total": 34,
+   "counted": 21,
+   "written": 13,
+   "writtenQualified": 6
+  },
+  "readers": {
+   "taste": {
+    "veto": [],
+    "labelledMisses": 0,
+    "falseBlockUpper95": null
+   },
+   "claims": {
+    "instrument": "pattern check, with claim reader (claude-haiku-4-5, prompt 47d18891) reporting only: not qualified",
+    "version": "47d18891",
+    "gate": "pattern",
+    "qualified": false,
+    "measured": null,
+    "kinds": []
+   }
+  },
+  "errorBound": null,
+  "why": "no delivered-error bound: it needs an audit sample of your own labels, drawn like the work this skill does; the checks and readers above are what this output was held to"
+ },
+ "stderr": "The request states its own format (\"as JSON\"): 2 presentation rule(s) withheld for this run.\nJudgement reader: not run (reporting only until your labels qualify it; --taste reads this run and records readings to label: atelier taste --skill labels --calibrate).\nFor this request: every step applies; 12 not decided by the request, held as applying (2, 3, 4, 5, 6, 7, 8, 9, 13, 15, 18, 20); 1 decision",
+ "meterUsd": 0.020340889999999945,
+ "seconds": 20.985
+}
