@@ -36,6 +36,7 @@ import { sha, DATA, die, argv, flag, clientFor, numericFlag, assertReachable, sk
 import type { RepairRecord, InvocationRecord, InvocationSettings, TaskSource } from '../../core/state/canonical-state.js';
 import { assertRequestBound } from '../../core/state/canonical-state.js';
 import { asText } from '../../core/discovery/text.js';
+import { workField, workRecord, WORK_FIELD_ASK } from '../../core/loop/work-field.js';
 import { splitServed } from '../served.js';
 import { applyStep, type Proposed } from '../../core/loop/repair.js';
 import { stepLedger, controllerRecord, DEFAULT_COST } from '../../core/loop/controller.js';
@@ -296,7 +297,9 @@ export async function spendOneWithResult(
   variant: DraftVariant = {},
   /** what the ledger charges this call to: a draft is writing, unless a path that only a flag caused names its own purpose */
   purpose: SpendPurpose = 'writing',
-): Promise<{ piece: string; reportedModel: string | null; schemaSent: Record<string, unknown>; servedTask: string; temperatureSent: number | null }> {
+): Promise<{ piece: string; reportedModel: string | null; schemaSent: Record<string, unknown>; servedTask: string; temperatureSent: number | null;
+  /** the reply's work field (core/loop/work-field.ts): whether the piece came inside it, and what stood outside; null for a contract-shaped output */
+  work: ReturnType<typeof workRecord> | null }> {
   const schema = contract?.schema ?? FREE_TEXT_SCHEMA;
   // CAPTURED FROM THE REQUEST OBJECT, not copied from the argument. A proof built from the same
   // variable the caller passed in would agree with itself no matter what was actually transmitted.
@@ -312,7 +315,7 @@ export async function spendOneWithResult(
       // itself." told the writer to write a piece whatever was asked: a thank-you came back as a sixty-word fix. The work
       // is whatever the request asks for, at the length it asks for.
       // a draft's own passages (drafts made to differ) are this draft's, so they go with the request's notes, uncached
-      userMessage: `${forRequest || variant.stableExtra?.trim() ? `For this request only:\n\n${[forRequest, variant.stableExtra?.trim() ?? ''].filter(Boolean).join('\n\n')}\n\n` : ''}${contract ? 'Produce it now, in the required shape.' : 'Do what the request above asks, now, at the length it calls for: the answer, the review, the piece, or one line if one line is all it needs. Output only that, nothing about these instructions.'}${note ? `\n\n${note}` : ''}`,
+      userMessage: `${forRequest || variant.stableExtra?.trim() ? `For this request only:\n\n${[forRequest, variant.stableExtra?.trim() ?? ''].filter(Boolean).join('\n\n')}\n\n` : ''}${contract ? 'Produce it now, in the required shape.' : 'Do what the request above asks, now, at the length it calls for: the answer, the review, the piece, or one line if one line is all it needs. Output only that, nothing about these instructions. ' + WORK_FIELD_ASK}${note ? `\n\n${note}` : ''}`,
       toolName: contract ? 'emit_output' : 'emit_piece',
       toolDescription: contract ? 'Emit the output in the shape the standard requires.' : 'Emit the finished piece.',
       // NOT A CONSTANT — reviewer finding F1, the instrument's own lesson applied to the product.
@@ -325,14 +328,15 @@ export async function spendOneWithResult(
     const res = await client.complete(req);
     return { value: res, cost: res.cost, usage: res };
   }, purpose);
-  const piece = contract
-    ? JSON.stringify(r.json ?? null, null, 2)
-    : asText((r.json as { piece?: unknown } | null)?.piece);
+  // ONLY THE WORK FIELD IS THE WORK (core/loop/work-field.ts): what the writer said around it about the task is set aside
+  // and kept on the record; a reply with no field is the work whole, as before, and the record says so.
+  const field = contract ? null : workField(asText((r.json as { piece?: unknown } | null)?.piece));
+  const piece = contract ? JSON.stringify(r.json ?? null, null, 2) : field?.text ?? '';
   // NO TEXT IS NOT A DRAFT. A reply with no piece in it was once taken as an empty draft: no rule can be broken by
   // nothing, so it was checked clean and delivered, under strict delivery too. It is a failed call, like any other:
   // with several drafts the others stand, and with none there is nothing to deliver.
   if (contract === null && !piece.trim()) throw new Error('the model returned no text for the draft');
-  return { piece, reportedModel: r.modelId || null, schemaSent: schema, servedTask, temperatureSent: r.temperatureSent ?? null };
+  return { piece, reportedModel: r.modelId || null, schemaSent: schema, servedTask, temperatureSent: r.temperatureSent ?? null, work: field ? workRecord(field) : null };
 }
 
 
@@ -441,6 +445,7 @@ export async function runOnce(
   const picked = written.length > 1 && select ? await select.choose(written.map((w) => w.piece), written.map((w) => ({ index: w.index, temperatureSent: w.temperatureSent })))
     : { index: 0, why: spared ? `the first draft held every rule the drafts are chosen by; ${spared} planned draft(s) not written` : n > 1 ? `the only draft of ${n} that came back` : '' };
   let { piece: draft, reportedModel, schemaSent, servedTask } = written[picked.index];
+  const work = written[picked.index].work ?? null;
   let contractRepair: RepairRecord | null = null;
   if (contract !== null && claimGuard) {
     const guard = claimGuard;
@@ -501,6 +506,8 @@ export async function runOnce(
     outputHash: sha(output),
     at, delivery: { ...delivery, outputContract: contractEvidence }, input: task, output,
     ...(refined.repair ? { repair: refined.repair } : {}),
+    // whether the draft came inside its work field, and what the writer said outside it (never delivered, never checked)
+    ...(work ? { work } : {}),
     ...(n > 1 ? { selection: { drafts: n, chosen: picked.index, why: picked.why,
       ...(failures.length ? { written: written.length, failed: failures } : {}), ...(spared ? { written: written.length, spared } : {}),
       ...unchosenFields(written.map((w) => w.piece), picked.index) } } : {}),

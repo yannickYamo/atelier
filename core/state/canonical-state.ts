@@ -742,6 +742,12 @@ export interface InvocationRecord {
    */
   readonly repair?: RepairRecord;
   /**
+   * THE WORK FIELD (core/loop/work-field.ts): whether the delivered draft came inside the `<work>` field the writer is
+   * asked for, and what it said outside it (kept here, never delivered or checked). `delimited: false`: the reply had no
+   * field and was taken whole, as it was before the field existed. Absent for a structured output and older records.
+   */
+  readonly work?: { readonly delimited: boolean; readonly outside?: string };
+  /**
    * When several drafts were written and one delivered: how many, and why that one. `drafts` is how
    * many were asked for; when some calls failed, `written` is how many came back and `chosen` indexes
    * those, and `failed` says why each missing one is missing. `unchosen` is the text of every draft not
