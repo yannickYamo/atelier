@@ -748,6 +748,28 @@ export interface InvocationRecord {
    */
   readonly work?: { readonly delimited: boolean; readonly outside?: string };
   /**
+   * WHAT WAS SETTLED BEFORE THE DRAFT (core/loop/questions.ts, core/loop/piece-plan.ts): the questions asked of the person
+   * for what only they know, their answers (or the defaults, said so), and the plan the draft was written from, never
+   * delivered as the work. Absent where nothing was read before the draft.
+   */
+  readonly prewrite?: {
+    readonly questions: readonly { readonly id: string; readonly ask: string; readonly options: readonly string[]; readonly default: string; readonly last?: string }[];
+    /** the answer each question was written with, and whether the person gave it or it was the default */
+    readonly answers: readonly { readonly id: string; readonly answer: string; readonly by: 'person' | 'default' | 'told' }[];
+    readonly questionsBy: 'code' | 'model' | 'floor';
+    readonly plan: { readonly angle: string; readonly pain: string; readonly turn: string; readonly answer: string; readonly points: readonly { readonly point: string; readonly from: string }[];
+      readonly image: string | null; readonly close: string; readonly leftOut: readonly { readonly what: string; readonly why: string }[] } | null;
+    readonly planBy: 'code' | 'model' | 'floor' | 'off';
+    /** how many times the person changed the plan before it was written from */
+    readonly planChanges?: number;
+  };
+  /**
+   * STRETCHES COPIED FROM MATERIAL WRITTEN AS SENTENCES (core/loop/material-points.ts), read on the delivered work: every
+   * run of 5 words or more it shares with the material, the longest, and the length a run is repaired at. Absent where the
+   * material was not written as sentences.
+   */
+  readonly copied?: { readonly runs: number; readonly longest: number; readonly shown: readonly string[]; readonly repairAt: number };
+  /**
    * When several drafts were written and one delivered: how many, and why that one. `drafts` is how
    * many were asked for; when some calls failed, `written` is how many came back and `chosen` indexes
    * those, and `failed` says why each missing one is missing. `unchosen` is the text of every draft not

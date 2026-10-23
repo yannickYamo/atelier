@@ -8,7 +8,7 @@ import * as store from '../core/state/store.js';
 import { copyGuardPieces } from '../core/compiler/voice.js';
 import * as fstore from '../core/state/fidelity-store.js';
 import { acts, type VerifyReport, type RuleCheck } from '../core/observers/verify.js';
-import { INCONCLUSIVE, UNREAD, CLAIMS_TO_CHECK, PUBLIC_FACTS } from '../core/loop/run-repair.js';
+import { INCONCLUSIVE, UNREAD, CLAIMS_TO_CHECK, PUBLIC_FACTS, COPIED_LINE } from '../core/loop/run-repair.js';
 import { featureOf } from '../core/observers/features.js';
 import { overlapIndex, suppliedWording, formTokensOut, STANDARD_WORDING_PIECES } from '../core/observers/overlap.js';
 import { bandsFor } from '../core/fidelity/profile.js';
@@ -212,7 +212,9 @@ export function buildRunEval(x: RunEvalInput): EvalSummary {
   };
 }
 
-const CLAIM_LINES = [INCONCLUSIVE, UNREAD, CLAIMS_TO_CHECK, PUBLIC_FACTS];
+// A stretch copied from material written as sentences is the repair's to rewrite and the record's to report (its `copied`
+// field), never a rule the work is held on: it is left out of the evaluation with the claim lines.
+const CLAIM_LINES = [INCONCLUSIVE, UNREAD, CLAIMS_TO_CHECK, PUBLIC_FACTS, COPIED_LINE];
 const isClaimLine = (id: string): boolean => id.startsWith('UNSOURCED') || CLAIM_LINES.includes(id);
 
 /**

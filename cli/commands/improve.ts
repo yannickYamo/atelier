@@ -404,6 +404,8 @@ export async function runOnce(
   settings: InvocationSettings | null = null,
   /** how the output was steered toward the author's range, read on the delivered text (cli/fidelity.ts); null elsewhere */
   fidelity: ((output: string) => FidelityRecord) | null = null,
+  /** what was settled before the draft, and what the delivered work copied from its material (cli/commands/invoke.ts); null elsewhere */
+  before: ((output: string) => Pick<InvocationRecord, 'prewrite' | 'copied'>) | null = null,
 ): Promise<InvocationRecord> {
   // PARSED HERE, AND A BROKEN CONTRACT STOPS THE RUN. Falling back to free text on a malformed schema
   // would produce an output nobody constrained, recorded as a normal invocation.
@@ -512,7 +514,8 @@ export async function runOnce(
       ...(failures.length ? { written: written.length, failed: failures } : {}), ...(spared ? { written: written.length, spared } : {}),
       ...unchosenFields(written.map((w) => w.piece), picked.index) } } : {}),
     ...(settings ? { settings } : {}),
-    ...(fidelity ? { fidelity: fidelity(output) } : {}) };
+    ...(fidelity ? { fidelity: fidelity(output) } : {}),
+    ...(before ? before(output) : {}) };
   assertRequestBound(rec.request, task);
   // Persisted through the ONE shared function — the host surface records through the same one, so
   // evidence cannot differ in shape by which surface witnessed it.

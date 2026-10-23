@@ -12,6 +12,7 @@
 // appended (a later rating of the same run supersedes it), and `atelier eval` reports the share of yes per
 // release with its N and interval. Nothing else in Atelier is a measure of satisfaction.
 
+import { planLines } from '../../core/loop/piece-plan.js';
 import { describeController } from '../../core/loop/controller.js';
 import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
@@ -154,6 +155,15 @@ export function traceOf(rec: InvocationRecord): [string, string[]][] {
   const f = rec.fidelity;
   const sel = rec.selection;
   out.push(['request', [`"${rec.input.split('\n')[0].slice(0, 100)}"`, `at ${rec.at} · model ${rec.observedRuntime.resolvedModel ?? rec.runtimeBinding.requestedModel ?? 'unknown'}`]]);
+  // WHAT WAS SETTLED BEFORE THE DRAFT (cli/prewrite.ts): the questions and the answers written with, then the plan
+  const pw = rec.prewrite;
+  if (pw) out.push(['before the draft', [
+    ...pw.questions.map((q) => { const a = pw.answers.find((x) => x.id === q.id); return `asked (${q.id}): ${q.ask} · ${a ? `${a.by === 'person' ? 'you said' : 'default'}: ${a.answer}` : `default: ${q.default}`}`; }),
+    ...pw.answers.filter((a) => a.by === 'told').map((a) => `told before (${a.id}): ${a.answer}`),
+    ...(pw.plan ? planLines(pw.plan).map((l) => `plan · ${l}`) : [`no plan (${pw.planBy === 'off' ? 'not asked for this run' : 'none could be made'})`]),
+    ...(pw.planChanges ? [`the plan was made again ${pw.planChanges} time(s) with your changes`] : [])]]);
+  if (rec.copied) out.push(['copied from the material', [`${rec.copied.runs} stretch(es) of 5 words or more${rec.copied.runs ? `, the longest ${rec.copied.longest} words` : ''}; one of ${rec.copied.repairAt} or more is rewritten`,
+    ...rec.copied.shown.map((x) => `"${x.slice(0, 100)}"`)]]);
   if (f) out.push(['release', [`${f.release ?? 'none (the run overrode its release)'} · profile ${f.profileHash ?? 'none'}`,
     ...(f.settings ? [`ran: ${f.settings.drafts} draft(s), ${f.settings.editBudget} sentence rewrite(s), ${f.settings.retrievalK} passage(s), ${f.settings.notesCap} note(s)${f.settings.diversity ? ', drafts made to differ' : ''}`] : []),
     ...(f.plan ? [`written by section: ${f.plan.join(' / ')}`] : [])]]);

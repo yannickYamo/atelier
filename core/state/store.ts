@@ -351,6 +351,28 @@ export function setComposite(l: StoreLayout, c: CompositeRecord | null): void {
  * about a tweet. Declared by the owner; null when they never said.
  */
 /** The form the work takes, as read at build (core/observers/work-form.ts): a reply in a conversation, or a document. */
+/**
+ * WHAT THE PERSON TOLD THIS SKILL BEFORE A DRAFT (core/loop/questions.ts): each answer they gave to a question, in order.
+ * The last answer of a kind is the default the next time it is asked ("last time you said …"); an answer about what may
+ * be named stands, and that question is not asked again. Only answers the person gave are kept, never a default.
+ */
+export function getTold(l: StoreLayout): { id: string; ask: string; answer: string; at: string }[] {
+  const p = join(dirs(l).base, 'told.json');
+  if (!existsSync(p)) return [];
+  interface Told { id: string; ask: string; answer: string; at: string }
+  // A file that cannot be read is no answer told: the run asks again rather than stopping.
+  try {
+    return readJson<(Partial<Told> | null)[]>(p, { kind: 'array', what: 'the answers told to this skill' }).filter((t): t is Told => typeof t?.id === 'string' && typeof t.answer === 'string');
+  } catch { return []; }
+}
+export function addTold(l: StoreLayout, told: readonly { id: string; ask: string; answer: string; at: string }[]): void {
+  if (!told.length) return;
+  const p = join(dirs(l).base, 'told.json');
+  mkdirSync(dirs(l).base, { recursive: true });
+  // the last 50 answers are kept: what a question's default is read from
+  writeAtomic(p, JSON.stringify([...getTold(l), ...told].slice(-50), null, 1));
+}
+
 export function getWorkForm(l: StoreLayout): 'REPLY' | 'DOCUMENT' | null {
   const p = join(dirs(l).base, 'form.txt');
   const x = existsSync(p) ? readFileSync(p, 'utf8').trim() : '';

@@ -75,10 +75,11 @@ const TOOLS = [
       name: { type: 'string', description: 'the skill\'s name; read from the folder when left out' },
       approve: { type: 'boolean', description: 'true only when the person has seen the screen and said to build it' } },
     required: ['work'], additionalProperties: false } },
-  { name: 'atelier_run', description: 'New work with a skill: written, checked against every rule, repaired where a required rule broke, recorded. Returns the work and its whole record (state VERIFIED, NEEDS REVIEW or BLOCKED, its delivery SHIP, SHIP_LABELLED, PERSON or BLOCK, the rules as they fared, the run id). A run whose delivery is PERSON waits for the person\'s ruling: show it to them. Calls a model.',
+  { name: 'atelier_run', description: 'New work with a skill: written, checked against every rule, repaired where a required rule broke, recorded. Returns the work and its whole record (state VERIFIED, NEEDS REVIEW or BLOCKED, its delivery SHIP, SHIP_LABELLED, PERSON or BLOCK, the rules as they fared, the run id). A run whose delivery is PERSON waits for the person\'s ruling: show it to them. Before writing a piece it may return up to three questions only the person can answer (questions: id, ask, options, default) and the plan it wrote from: the work was written with the defaults; ask the person, and run again with their answers. Calls a model.',
     inputSchema: { type: 'object', properties: { skill: { type: 'string' }, task: { type: 'string', description: 'the request, in the person\'s words' },
       material: { type: 'string', description: 'notes, figures or sources the work must draw on' },
-      files: { type: 'array', items: { type: 'string' }, description: 'paths of material files to bind for this run' } },
+      files: { type: 'array', items: { type: 'string' }, description: 'paths of material files to bind for this run' },
+      answers: { type: 'string', description: 'the person\'s answers to the questions an earlier run returned, as "id=choice,..." (a letter or their own words); never answered on their behalf' } },
     required: ['skill', 'task'], additionalProperties: false } },
   { name: 'atelier_report', description: 'A run\'s record (its evaluation and trace) given its run id, or a skill\'s weights and settled clashes given the skill.',
     inputSchema: { type: 'object', properties: { run: { type: 'string' }, skill: { type: 'string' } }, additionalProperties: false } },
@@ -196,7 +197,8 @@ const call = async (name: string, args: Record<string, unknown>): Promise<{ text
     const withs = files.flatMap((f) => ['--with', f]);
     const material = str(args.material);
     if (material) { const dir = mkdtempSync(join(tmpdir(), 'atelier-mcp-')); const f = join(dir, 'material.md'); writeAtomic(f, material); withs.push('--with', `material=${f}`); }
-    return runCli(['invoke', '--skill', skill, task, '--json', ...withs]);
+    const answers = str(args.answers);
+    return runCli(['invoke', '--skill', skill, task, '--json', ...withs, ...(answers ? ['--answers', answers] : [])]);
   }
   if (name === 'atelier_report') {
     const run = str(args.run);

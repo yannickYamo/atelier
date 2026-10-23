@@ -11,6 +11,8 @@ import type { InferenceClient, Budget } from '../inference/client.js';
 import { spend, processSpendByPurpose, spendBetween, type SpendPurpose, type SpendLine } from '../inference/client.js';
 import type { StandardVersion, RepairRecord, RepairEdits, GradedRecord, ControllerDecisionRecord } from '../state/canonical-state.js';
 import { acts, isOmission, verifyText, type VerifyReport, type RuleCheck } from '../observers/verify.js';
+import { runsToRepair } from './material-points.js';
+import { REPAIR_RUN_WORDS } from '../observers/copied-runs.js';
 import { planFor } from '../plan/execution-plan.js';
 import { unsourcedClaims, wordCountClaims, claimUnitsOf, statedFigureClaims, bracketCitations, type Claim } from './claims.js';
 import { derivedFromKnown } from './derived.js';
@@ -78,6 +80,11 @@ function cutClaim(text: string, start: number, end: number): string {
 export interface Refined { readonly output: string; readonly repair: RepairRecord | null; readonly report: VerifyReport }
 
 export interface CheckOptions {
+  /**
+   * The bound material, where it is written as finished sentences (./material-points.ts): a stretch of the text 8 words or
+   * more long copied from it is a finding the repair rewrites (`COPIED_LINE`). Absent: nothing is read for copying.
+   */
+  readonly copiedFrom?: string;
   /** the request and the named material this output was written from, for the rules that are about them (../observers/registry.ts, `CheckContext`) */
   readonly context?: CheckContext;
   /**
@@ -204,14 +211,23 @@ export function checkDraft(skill: string, v: StandardVersion, text: string, opts
   });
   const report = { ...base, checked: [...base.checked, ...tellLine, ...grammarNotes], failed: base.failed || tellLine.some((c) => acts(c) && c.result.verdict === 'VIOLATED') };
   const fmt = opts.format ? checkFormat(text, opts.format) : null;
-  const fmtLines = opts.format && fmt ? [
+  const fmtLines: RuleCheck[] = opts.format && fmt ? [
     { requirementId: 'FORMAT', statement: `What ${opts.format.label} holds.`, materiality: 'REQUIRED', phase: 'STYLE' as const,
       result: { verdict: fmt.hard.length ? 'VIOLATED' as const : 'MET' as const, spans: fmt.hard, value: fmt.hard.length,
         detail: fmt.hard.length ? fmt.hard.map((h) => h.why).join('; ') : `within what ${opts.format.label} holds` } },
     ...(fmt.soft.length ? [{ requirementId: 'FORMAT·usual', statement: `Where ${opts.format.label} usually sits.`, materiality: 'PREFERRED', phase: 'STYLE' as const,
       result: { verdict: 'VIOLATED' as const, spans: fmt.soft, value: fmt.soft.length, detail: fmt.soft.map((h) => h.why).join('; ') } }] : []),
   ] : [];
-  if (opts.guardClaims === false) return { ...report, checked: [...report.checked, ...fmtLines], failed: report.failed || (fmt?.hard.length ?? 0) > 0 };
+  // MATERIAL WRITTEN AS SENTENCES IS POINTS (./material-points.ts): a stretch of 8 words or more copied from it is a finding
+  // the repair rewrites like any listed one (enforced, so the rewrite is pointed at it); it is no rule of the standard, and
+  // the evaluation never holds the work on it (cli/eval-run.ts): every copied run is reported on the record instead.
+  const copied = opts.copiedFrom ? runsToRepair(text, opts.copiedFrom) : null;
+  if (copied) fmtLines.push({ requirementId: COPIED_LINE, statement: `Never copy a stretch of ${REPAIR_RUN_WORDS} words or more from the material: it is points to write from, in my own sentences.`,
+    materiality: 'PREFERRED', enforced: true, phase: 'STYLE' as const,
+    result: { verdict: copied.length ? 'VIOLATED' as const : 'MET' as const, spans: copied.map((r) => ({ start: r.start, end: r.end, text: r.text, why: `${r.words} words copied from the material: say it in your own words` })),
+      value: copied.length, detail: copied.length ? `${copied.length} stretch(es) of ${REPAIR_RUN_WORDS} words or more copied from the material` : `no stretch of ${REPAIR_RUN_WORDS} words or more copied from the material` } });
+  const copiedFails = (copied?.length ?? 0) > 0;
+  if (opts.guardClaims === false) return { ...report, checked: [...report.checked, ...fmtLines], failed: report.failed || (fmt?.hard.length ?? 0) > 0 || copiedFails };
   const reading = opts.claimSensor?.reading(text);
   // WHICH READING GATES. A reading from an unqualified reader carries the pattern check's as its `gate`
   // (./claim-extract.ts, QUALIFIED_READERS): the pattern's findings are the REQUIRED `UNSOURCED` line,
@@ -332,8 +348,11 @@ export function checkDraft(skill: string, v: StandardVersion, text: string, opts
     statement: 'The qualified claim reader read this text.',
     result: { verdict: 'VIOLATED' as const, spans: [], value: null, detail: 'the claim reader could not run, so this text was checked by the pattern check only: run it again, or check its specifics yourself' } }] : [];
   return { ...report, checked: [...report.checked, line, ...checkLine, ...readerLine, ...pubLine, ...fmtLines, ...unread],
-    failed: report.failed || toCut.length > 0 || blocking.length > 0 || (fmt?.hard.length ?? 0) > 0 || unread.length > 0 };
+    failed: report.failed || toCut.length > 0 || blocking.length > 0 || (fmt?.hard.length ?? 0) > 0 || unread.length > 0 || copiedFails };
 }
+
+/** The line a stretch copied from material written as sentences is reported on (./material-points.ts). */
+export const COPIED_LINE = 'COPIED';
 
 /**
  * THE WHY NEVER SAYS MORE THAN THE TEXT HOLDS. A repair that ended with a rule still broken said "every REQUIRED

@@ -26,6 +26,8 @@ import { MOVE_READER, countOutcomes } from '../../core/taste/move-reader.js';
 const READ_CALLS_DEFAULT = 4;
 import { readContext } from '../../core/inference/reading.js';
 import { needsNote, needsNothing } from '../../core/loop/task-needs.js';
+import { beforeTheDraft, questionsJson } from '../prewrite.js';
+import { writtenAsSentences, copiedRecord, POINTS_LINE, POINTS_NOTE } from '../../core/loop/material-points.js';
 import { refineToStandard, checkDraft, checkDraftAsync, withWaivers, enforceClaims, heavyCut, listedClaims, brokenByCut, gradedRules, PUBLIC_FACTS, INCONCLUSIVE, UNREAD, REPAIR_PASSES, repairVetoes, type CheckOptions } from '../../core/loop/run-repair.js';
 import { signalChecks, displacement, isSignal, ownerWords } from '../../core/loop/graded.js';
 import { steeredShape, steersMiss, shapeLengthAim } from '../../core/loop/shape-steer.js';
@@ -695,7 +697,13 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
     const off = setAsideSteps(brief.value, briefSteps); const open = unresolvedSteps(brief.value, briefSteps);
     if (off.length || open.length || brief.value.unsupported.length || brief.value.contradicted.length) report.say(`For this request: ${off.length ? `${off.length} step(s) of the method set aside (${off.map((s) => s.n).join(', ')})` : 'every step applies'}${open.length ? `; ${open.length} not decided by the request, held as applying (${open.map((s) => s.n).join(', ')})` : ''}${brief.value.unsupported.length ? `; ${brief.value.unsupported.length} decision(s) need a specific not given (said, and decided on what is given)` : ''}${brief.value.contradicted.length ? `; the request asks against ${brief.value.contradicted.length} step(s), which stand` : ''} (${brief.by === 'model' ? 'read' : brief.by === 'code' ? 'nothing to read' : `by default: ${brief.why ?? ''}`}).`);
   }
+  // MATERIAL WRITTEN AS SENTENCES IS POINTS (core/loop/material-points.ts): said once, served to the writer as points, and a
+  // stretch of 8 words or more the work copies from it is a finding the repair rewrites. Not for a structured output.
+  const asPoints = contractFile === null && writtenAsSentences(material);
+  if (asPoints) report.say(POINTS_LINE);
+  const materialOnly = material.map((m) => m.text).join('\n\n');
   const checks = { ...checksFor(L, { material: materialText, task: asked, context: { request: asked, material }, guardClaims: !argv.includes('--allow-unsourced'), placeholders: placeholdersOn, ...(judge ? { judge } : {}), ...(held ? { level: held.level } : {}) }),
+    ...(asPoints ? { copiedFrom: materialOnly } : {}),
     ...(short.format ? { format: short.format } : {}),
     ...(transfer ? { doesNotApply: transfer.doesNotApply } : {}),
     ...(waived.size ? { waived } : {}), ...(graded !== undefined ? { graded, gradedProfile: carried } : {}) };
@@ -749,8 +757,19 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   // piece to write, not someone to answer, and its form is the author's.
   const needs = intent?.document ? undefined : intent?.needs;
   if (needs && !needsNothing(needs)) report.say(`Read before writing: ${[needs.deliver.length ? `${needs.deliver.length} thing(s) asked for` : '', needs.unknowns.length ? `turns on ${needs.unknowns.map((u) => u.what).join('; ')}` : '', needs.actOn ? `could act on "${needs.actOn}"` : '', needs.irreversible ? `cannot be undone: "${needs.irreversible}"` : ''].filter(Boolean).join(' · ')}.`);
+  // WHAT ONLY THE AUTHOR KNOWS, THEN THE PLAN (cli/prewrite.ts): before the first draft of a piece, where a reader is set up.
+  // Not for a structured output, a request that states its own shape, or a skill whose work is a reply; --no-questions and
+  // --no-plan turn either off. The answers and the plan are said to the writer after the skill, never in the work.
+  const piece = contractFile === null && shape !== 'SHAPE' && store.getWorkForm(L) !== 'REPLY';
+  const before = piece && (!argv.includes('--no-questions') || !argv.includes('--no-plan')) ? await beforeTheDraft({ L, request: asked, material, method: briefSteps.map((s) => s.statement),
+    examples: (checks.examples ?? '').split(/\n{3,}|\n-{3,}\n/).map((e) => e.trim()).filter(Boolean).slice(0, 3),
+    questions: !argv.includes('--no-questions'), plan: !argv.includes('--no-plan'), answers: flag('--answers'),
+    interactive: machine === null && process.stdin.isTTY && process.stdout.isTTY,
+    client: contextJudgeModel() ? contextReaderClient() : null, model: contextJudgeModel() }) : null;
+  for (const line of before?.said ?? []) report.say(line);
   // The slot shape is said for the run that wants slots (a document, no material bound), never in the skill (SLOT_NOTE).
-  const requestNotes = forThisRequest(withheld.filter((w) => !needMaterial.includes(w)), briefText, impl.passages, lengthNote, needsNote(needs), placeholdersOn ? SLOT_NOTE : '', held ? latitudeBrief(held.level) : '');
+  const requestNotes = forThisRequest(withheld.filter((w) => !needMaterial.includes(w)), briefText, impl.passages, lengthNote, needsNote(needs), placeholdersOn ? SLOT_NOTE : '', held ? latitudeBrief(held.level) : '',
+    asPoints ? POINTS_NOTE : '', before?.note ?? '');
   const servedBase = examplesFirst ? withoutPersonaBlocks(servedText) : servedText;
   if (examplesFirst) report.say(`Examples first: served without the description of how I sound or my repertoire${servedBase === servedText ? ' (the skill carried none)' : ''}; my moves are read on the work and never served.`);
   const servedForRun = `${needMaterial.length ? withoutRules(servedBase, needMaterial) : servedBase}${impl.notes ? `\n\n${impl.notes}` : ''}${carryBlock}${requestNotes}`;
@@ -837,7 +856,9 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
         note: voiceMode === 'incontext' && !voiceRuns ? (register.status === 'out' ? 'not run out of register: pairs carry the whole voice of the register they were written in'
           : !bank || bank.pairs.length < MIN_PAIRS ? `not run: the pair bank holds fewer than ${MIN_PAIRS} pairs (atelier voice pairs)` : 'not run on this kind of output') : null } : null, local,
       nearness ? { ...nearness, usedFor: [...(impl.retrieved.length || pool.length ? ['passages' as const] : []), ...(fid.typicality?.ids && nearness.pieces.length ? ['typicality' as const] : []),
-        ...(local ? ['range' as const] : []), ...(planState ? ['skeleton' as const] : [])] } : null) : null);
+        ...(local ? ['range' as const] : []), ...(planState ? ['skeleton' as const] : [])] } : null) : null,
+    // what was settled before the draft, and what the delivered work copied from material written as sentences
+    before?.record || asPoints ? (output: string) => ({ ...(before?.record ? { prewrite: before.record } : {}), ...(asPoints ? { copied: copiedRecord(output, materialOnly) } : {}) }) : null);
 
   reportDrift(report, L, sv, rec);
   // Under strict delivery nothing is printed until the verdict is known.
@@ -949,6 +970,11 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
       rulesBroken: rec.repair?.violatedAfter ?? [], cut: rec.repair?.storiesCut ?? [], toCheck: rec.repair?.claimsToCheck ?? [],
       // the record's work field (core/loop/work-field.ts): whether the piece came inside <work>, and what stood outside it
       work: rec.work ?? null,
+      // WHAT WAS SETTLED BEFORE THE DRAFT (cli/prewrite.ts): the questions as structured choices, answered on the next call
+      // with --answers "<id>=<choice>,..."; the answers the draft was written with; the plan it was written from
+      questions: questionsJson(before?.questions ?? []), answers: before?.record?.answers ?? [], plan: before?.plan ?? null,
+      // stretches copied from material written as sentences (core/loop/material-points.ts), read on the delivered work
+      ...(rec.copied ? { copied: rec.copied } : {}),
       ...(rec.repair?.graded ? { graded: rec.repair.graded } : {}),
       // every repair step the controller chose, what it moved and cost, and why it stopped (core/loop/controller.ts)
       ...(rec.repair?.controller ? { controller: rec.repair.controller } : {}),

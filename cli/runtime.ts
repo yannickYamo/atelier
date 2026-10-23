@@ -102,6 +102,8 @@ export const VALUED_OPTIONS: readonly string[] = ['correcting', 'moves',
   'target-price-in', 'target-price-out', 'target-provider', 'target-strict-schema', 'target-structured-output',
   'task', 'material', 'temperature', 'want', 'to', 'token-limit-param', 'verdict', 'try-release', 'promote-release',
   'why', 'work-type', 'override', 'edits', 'contrast-drafts', 'settings', 'contrast-models', 'topics', 'resamples', 'register', 'until-typical', 'shape-rounds', 'calibrate-from', 'until-author', 'select', 'structure', 'read-structure-from', 'context', 'nearness', 'redraws', 'graded', 'limit',
+  // the person's answers to the questions asked before a draft (cli/prewrite.ts)
+  'answers',
 ];
 
 export const BOOLEAN_OPTIONS: readonly string[] = [
@@ -114,6 +116,8 @@ export const BOOLEAN_OPTIONS: readonly string[] = [
   'pending', 'requalify',
   'cut', 'no-cut', 'draft-examples',
   'reflect', 'no-reflect', 'report', 'phrase', 'calibrate', 'placeholders', 'no-placeholders', 'no-unsourced-note', 'no-redraft', 'no-model', 'always', 'evaluation', 'learn', 'include-reserved', 'taste', 'no-taste', 'no-brief', 'examples-first', 'no-infer-method', 'voices', 'setup', 'auto', 'no-fidelity', 'fidelity', 'rollback', 'distill', 'next', 'sections', 'panel', 'quiet', 'label', 'typicality', 'read-subjects', 'strict', 'allow-nonconformant', 'full', 'no-index', 'test-run',
+  // before the draft: no questions, no plan (cli/prewrite.ts)
+  'no-questions', 'no-plan',
 ];
 
 export const argv = process.argv.slice(2);
