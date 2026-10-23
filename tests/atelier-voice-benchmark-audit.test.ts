@@ -8,6 +8,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 const FIX = resolve('bench/voice-benchmark/fixture');
 interface Row { output: string; opens: Record<string, unknown>; tells: Record<string, number>; rhythm: Record<string, { value: number; authorLo?: number; authorHi?: number; inside?: boolean }>;
@@ -24,23 +25,35 @@ describe('the audit of the invented fixture', () => {
   it('an output that came inside its field: the record says so, and the lines set aside are counted', async () => {
     const [o1] = (await audit()).rows;
     expect(o1.output).toBe('o1.md');
-    expect(o1.opens).toEqual({ by: 'record', reasoningDelivered: false, setAside: 4 });
+    // every arm alike: the first paragraph for a person; the record's field beside it, as extra information
+    expect(o1.opens).toEqual({ forAPerson: 'The new ferry timetable starts on Monday. I will be on the quay -- coffee in hand -- for the first crossing at six.', field: 'inside', setAside: 4 });
     expect(o1.tells).toEqual({ EM_DASH: 2 });
     expect(o1.length).toMatchObject({ words: 22, inside: true });
-    expect(o1.copied).toEqual({ runs: 3, shown: ['the new ferry timetable starts', 'new ferry timetable starts on', 'ferry timetable starts on monday'] });
+    // one copied stretch of 7 words, not three overlapping 5-word windows
+    expect(o1.copied).toEqual({ runs: 1, longest: 7, shown: ['The new ferry timetable starts on Monday'] });
     expect(o1.points).toEqual({ given: 3, carried: 1 });
     expect(o1.rhythm.medianSentence).toEqual({ value: 11, authorLo: 6, authorHi: 8.5, inside: false });
     expect(o1.rhythm.iPer1000).toEqual({ value: 45.45, authorLo: 58.82, authorHi: 100, inside: false });
   });
   it('an output with no record: its first paragraph is listed for a person, never judged by a pattern', async () => {
     const o2 = (await audit()).rows[1];
-    expect(o2.opens).toEqual({ by: 'no record', forAPerson: 'Here is a post on the brief.' });
+    expect(o2.opens).toEqual({ forAPerson: 'Here is a post on the brief.', field: 'no record' });
     expect(o2.tells).toEqual({ CONTRAST_VERDICT: 1, SIGNPOST: 1 });
     expect(o2.length).toMatchObject({ words: 21, inside: true });
     expect(o2.points).toEqual({ given: 3, carried: 0 });
     expect(o2.rhythm.paragraphs).toEqual({ value: 2, authorLo: 1, authorHi: 1, inside: false });
   });
   it('the summary line totals the rows', async () => {
-    expect((await audit()).text).toContain('total: tells 4; inside the range 2 of 2; copied runs 3');
+    expect((await audit()).text).toContain('total: tells 4; inside the range 2 of 2; copied runs 1');
+  });
+  it('the screen lists every output\'s opening for a person, whatever the record says', async () => {
+    const t = (await audit()).text;
+    expect(t).toContain('o1.md: opens "The new ferry timetable starts on Monday.');
+    expect(t).toContain('o2.md: opens "Here is a post on the brief."');
+  });
+  it('"I\'m", "I\'ve", "I\'d" and "I\'ll" count as I', async () => {
+    // in its own process, as the script runs: it reads dist/
+    const js = `import(${JSON.stringify(pathToFileURL(resolve('bench/voice-benchmark/audit.mjs')).href)}).then((m) => console.log(m.rhythmOf("I'm here. I've gone. I'd stay. I'll walk. You run.").iPer1000))`;
+    expect(await Promise.resolve(execFileSync('node', ['--input-type=module', '-e', js], { encoding: 'utf8' }).trim())).toBe('400');
   });
 });

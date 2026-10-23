@@ -66,8 +66,9 @@ export function correctMechanicalErrors(text: string, spans: readonly Span[], op
  * its cells. Code is left alone.
  */
 export function replaceEmDashes(text: string): string {
-  // A double hyphen typed for a dash is a dash (core/observers/tells.ts, `DASH`): read as one before it is placed.
-  return mapProse(text, (line) => line.replace(new RegExp(DASH.source, DASH.flags), ' — ').split(/(?<=[.!?]["”’)]?)\s+/).map((sentence) => {
+  // A double hyphen typed for a dash is a dash (core/observers/tells.ts, `DASH`): read as one before it is placed. A range,
+  // a URL, a path or a class name is no dash there, and a quotation keeps its own (`outsideQuotes`).
+  return mapProse(text, (whole) => outsideQuotes(whole, (line) => line.replace(new RegExp(DASH.source, DASH.flags), ' — ').split(/(?<=[.!?]["”’)]?)\s+/).map((sentence) => {
     const parts = sentence.split(/\s*—\s*/);
     if (parts.length === 1) return sentence;
     if (parts.length === 3 && !edged(parts[0], parts[1]) && !edged(parts[1], parts[2])) {
@@ -81,7 +82,18 @@ export function replaceEmDashes(text: string): string {
       const tail = part.trim().split(/\s+/).length;
       return `${acc}${tail <= 4 ? ', ' : ': '}${part}`;
     });
-  }).join(' '), replaceInTableRow);
+  }).join(' ')), replaceInTableRow);
+}
+
+/**
+ * A QUOTATION KEEPS ITS OWN WORDS (a form parser: a pair of straight or curly double quotes on one line). Each quoted span
+ * is set aside behind a placeholder that is itself quoted, so the repair still sees a quotation mark at its edges, and put
+ * back as it was after `f`.
+ */
+function outsideQuotes(line: string, f: (line: string) => string): string {
+  const kept: string[] = [];
+  const masked = line.replace(/"[^"\n]*"|“[^”\n]*”/g, (q) => { kept.push(q); return `"\uE000${kept.length - 1}\uE001"`; });
+  return kept.length ? f(masked).replace(/"\uE000(\d+)\uE001"/g, (_, i: string) => kept[Number(i)]) : f(line);
 }
 
 /** Whether the text left of a dash is empty or ends, or the text right of it begins, with a quotation mark or a colon. */
@@ -102,12 +114,15 @@ export const SIGNPOST_FAMILIES: ReadonlySet<string> = new Set(['CANDOUR', 'REFRA
 
 /**
  * A SIGNPOSTING CLAUSE, CUT WITH ITS OWN PUNCTUATION ("To be clear, the ferry leaves" → "The ferry leaves"). Only on the
- * spans a check reported, and only where the span stands as a clause set off by punctuation, which is form, not meaning:
- *   at a sentence's start, followed by a comma or a colon: cut with it, and the next word takes the capital;
- *   between two commas: cut with both, one space left;
- *   after a comma, before the sentence's stop: cut with the comma.
- * Anywhere else ("Let me explain why …") the signpost carries its sentence and is left for the model repair. Last span
- * first, so earlier offsets stay true; a span that no longer reads as reported is skipped.
+ * spans a check reported, and only where the span is a WHOLE set-off clause, which is form, not meaning:
+ *   between two commas: cut with both, one space left ("The ferry, to be clear, leaves" → "The ferry leaves");
+ *   opening a sentence, followed by a comma or a colon, and with a whole clause after it: cut with its punctuation, and
+ *   the next word takes the capital ("In other words, it fails." → "It fails.").
+ * A WHOLE CLAUSE AFTER IT, by form: the rest of the sentence is two words or more and holds no comma, colon, semicolon or
+ * dash of its own. A noun phrase that is the sentence's subject ("The short answer, though, is no.") leaves behind an
+ * aside and a predicate ("though, is no."), which fails this, so the span is never cut. A span that is not a set-off
+ * clause ("Let me explain why …"), or one that trails before the stop, is left for the model repair. Last span first, so
+ * earlier offsets stay true; a span that no longer reads as reported is skipped.
  */
 export function cutSignposts(text: string, spans: readonly Span[]): { text: string; cut: number } {
   let out = text; let cut = 0;
@@ -118,11 +133,14 @@ export function cutSignposts(text: string, spans: readonly Span[]): { text: stri
     const lead = opens ? /^[ \t]*[,:][ \t]+(\S)/.exec(after) : null;
     if (lead) {
       const rest = after.slice(lead[0].length - 1);
-      out = before + rest.charAt(0).toUpperCase() + rest.slice(1); cut += 1; continue;
+      // the rest of this sentence: up to its stop (and a closing quote), or the end of the line
+      const sentence = /^[^\n]*?(?:[.!?](?=["”’)]?(?:\s|$))|$)/m.exec(rest)?.[0] ?? '';
+      const whole = !/[,:;—–]|\s-\s/.test(sentence) && (sentence.match(/[\p{L}\p{N}][\p{L}\p{N}'’-]*/gu) ?? []).length >= 2;
+      if (whole) { out = before + rest.charAt(0).toUpperCase() + rest.slice(1); cut += 1; }
+      continue;
     }
     const comma = /,[ \t]*$/.exec(before);
-    if (comma && /^[ \t]*,/.test(after)) { out = `${before.slice(0, comma.index)} ${after.replace(/^[ \t]*,[ \t]*/, '')}`; cut += 1; continue; }
-    if (comma && /^[ \t]*[.!?]/.test(after)) { out = before.slice(0, comma.index) + after.replace(/^[ \t]*/, ''); cut += 1; }
+    if (comma && /^[ \t]*,/.test(after)) { out = `${before.slice(0, comma.index)} ${after.replace(/^[ \t]*,[ \t]*/, '')}`; cut += 1; }
   }
   return { text: out, cut };
 }
@@ -255,14 +273,17 @@ function tableRows(lines: readonly string[]): Set<number> {
 }
 
 /**
- * Apply `f` to each prose line outside code fences, leaving inline code as it is; a table row (a line that
- * starts with `|`) goes to `row` instead, whole, so its cells can be kept.
+ * Apply `f` to each prose line outside code fences and front matter, leaving inline code as it is; a table row (a line
+ * that starts with `|`) goes to `row` instead, whole, so its cells can be kept.
  */
 function mapProse(text: string, f: (line: string) => string, row: (line: string) => string): string {
   let fence = false;
   const lines = text.split('\n');
   const rows = tableRows(lines);
+  // FRONT MATTER (a form parser: a first line of `---`, closed by the next `---` or `...` line) is data, not prose.
+  const close = lines[0]?.trim() === '---' ? lines.findIndex((l, i) => i > 0 && /^(?:---|\.\.\.)\s*$/.test(l)) : -1;
   return lines.map((line, i) => {
+    if (i <= close) return line;
     if (/^\s*(```|~~~)/.test(line)) { fence = !fence; return line; }
     if (fence) return line;
     if (rows.has(i)) return /[—–]/.test(line) ? row(line) : line;

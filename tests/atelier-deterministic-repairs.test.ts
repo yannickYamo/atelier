@@ -44,9 +44,9 @@ describe('a signposting clause set off by its own punctuation is cut with it', (
     const t = 'To be clear, the ferry leaves at eleven. Here\'s the thing: the quay floods.';
     expect(cutSignposts(t, [span(t, 'To be clear'), span(t, 'Here\'s the thing')])).toEqual({ text: 'The ferry leaves at eleven. The quay floods.', cut: 2 });
   });
-  it('inside a sentence between two commas, or before its full stop', () => {
+  it('inside a sentence between two commas; one trailing before the stop is left for the model repair', () => {
     const t = 'The ferry, to be clear, leaves at eleven. It is late, in other words.';
-    expect(cutSignposts(t, [span(t, 'to be clear'), span(t, 'in other words')]).text).toBe('The ferry leaves at eleven. It is late.');
+    expect(cutSignposts(t, [span(t, 'to be clear'), span(t, 'in other words')]).text).toBe('The ferry leaves at eleven. It is late, in other words.');
   });
   it('a signpost that carries the sentence is left as it is', () => {
     const t = 'Let me explain why the ferry is late.';

@@ -25,9 +25,14 @@ export interface TellFamily {
 /**
  * A DASH, HOWEVER IT IS TYPED: the em dash, and the double hyphen a writer types for one, between words ("the loop--which
  * runs--works") or spaced between them ("the loop -- which runs -- works"). Form only. A flag ("--help": nothing
- * before it), a rule of three hyphens ("---") and a table's delimiter row are not dashes.
+ * before it), a rule of three hyphens ("---") and a table's delimiter row are not dashes. Nor is a double hyphen with a
+ * digit on both sides: that is a range ("2018--2020", "3 -- 2"), so a letter (or, spaced, punctuation) must stand on one
+ * side. Nor is one inside a token that carries a path, URL or code mark (`/`, `_`, `@`, `=`, `\`, `#`): "a/b--c",
+ * "block__el--mod".
  */
-export const DASH = /—|(?<=[\p{L}\p{N}.,!?;:"'”’)\]]) -- (?=[\p{L}\p{N}"'“‘([])|(?<=[\p{L}\p{N}])--(?=[\p{L}\p{N}])/gu;
+const IN_TOKEN = String.raw`(?<![^\s]*[/_@=\\#][^\s]*)(?![^\s]*[/_@=\\#])`;
+export const DASH = new RegExp(String.raw`—|(?<=[\p{L}.,!?;:"'”’)\]]) -- (?=[\p{L}\p{N}"'“‘([])|(?<=\p{N}) -- (?=[\p{L}"'“‘([])`
+  + String.raw`|${IN_TOKEN}(?:(?<=\p{L})--(?=[\p{L}\p{N}])|(?<=\p{N})--(?=\p{L}))`, 'gu');
 
 export const TELL_FAMILIES: readonly TellFamily[] = [
   { id: 'INSIGHT_CLAIM', label: 'an insight others supposedly miss ("the part people miss", "nobody talks about")',

@@ -851,6 +851,8 @@ async function refineOnLedger(client: InferenceClient, budget: Budget, skill: st
   let stoppedBecause: string | null = null; let handed = false;
   const unreachable = new Set<string>();
   const STEP_PURPOSES: readonly SpendPurpose[] = ['repair', 'graded', 'steering'];
+  /** what one claim read is estimated at (./claim-extract.ts): the span-by-span pass reads a span only where the budget holds one */
+  const SPAN_READ_USD = 0.02;
   // THE RUN'S ONE LEDGER (./controller.ts, rule B): this refinement's steps are entered on it before each runs, and the
   // controller reads the whole run's steps from it. A caller with none to hand gets one of its own here.
   const settings = opts.controller?.settings ?? null;
@@ -1177,14 +1179,22 @@ async function refineOnLedger(client: InferenceClient, budget: Budget, skill: st
       // rule; one harmful span used to cost every other its repair. Each span is put in alone and checked: it is kept when
       // it moves its own rule nearer holding, newly breaks no rule that may refuse a repair (`vetoIds`) and adds no figure
       // nothing given holds; the spans kept are put in together and that text is what the one step judges.
+      // EACH SPAN'S CHECK IS THE STEP'S: it is read with the graded options the whole pass is read with (`acceptance`), and
+      // where the check calls the claim reader its call is the step's spend (the step counts the claim reader's purpose
+      // below), so the span-by-span pass stops where the run's budget could not hold one more read; a span left unread is
+      // discarded, said so.
       if (enforcedStep && applied.length > 1 && !acceptance(x0(after, next)).ok) {
         const keep: number[] = []; const dropped: string[] = [];
+        // The claim reader spends from a budget of its own: what it has spent is taken off what the run has left.
+        const readCosts = sensor !== undefined && sensor !== null && !sensor.degraded && sensor.version !== null;
+        const affordable = (): boolean => { const b = ledger.budget() ?? budgetNow(); return b.usdLeft - (sensor?.spentUsd ?? 0) >= SPAN_READ_USD && (b.callsLeft === null || b.callsLeft > 0); };
         for (const a of applied) {
           const one = applyRepair(text, targets, reps.filter((r) => Number(r.id as unknown) === a.id), [], [], opts.placeholders ?? false);
           if (one === text) continue;
+          if (readCosts && !affordable()) { dropped.push(`"${a.before.slice(0, 60)}" (not checked alone: the step's budget could not hold another read)`); continue; }
           const r1 = await check(one);
           const own = (targets.find((t) => t.id === a.id)?.requirementIds ?? []).filter((id) => enforcedIds.has(id));
-          const judged = own.length ? acceptRepair(atLength(report, from, one), r1, { enforced: enforcedIds, vetoes: vetoIds, paramsOf, ignore: steering(report), targets: own }) : null;
+          const judged = own.length ? acceptRepair(atLength(withGraded(report, gradedIds), from, one), withGraded(r1, gradedIds), { graded: soft, enforced: enforcedIds, vetoes: vetoIds, paramsOf, ignore: steering(report), targets: own }) : null;
           const invented = addedFigures(text, one, ledger.source);
           const why = !judged ? 'it was for no enforced rule' : !judged.ok ? judged.why.replace(/^the rewrite /, 'it ') : invented.length ? `it added ${invented.join(', ')}` : null;
           if (why === null) keep.push(a.id); else dropped.push(`"${a.before.slice(0, 60)}" (${why})`);
@@ -1203,6 +1213,8 @@ async function refineOnLedger(client: InferenceClient, budget: Budget, skill: st
       }
       return { text: next, report: after, targets };
     }, {
+      // the claim reads its checks make, the span-by-span ones included, are this step's spend
+      purposes: [...STEP_PURPOSES, 'claim reader'],
       // A rewrite that adds an invented claim makes UNSOURCED worse, and the acceptance refuses it.
       also: (x) => {
         const verdict = acceptance(x);

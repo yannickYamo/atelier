@@ -947,6 +947,8 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
       // `answer` is what --answer-only prints: the output with its list of specifics not found in the material.
       output: refused ? null : rec.output, answer: refused ? null : shipped, ...(strict ? { delivered: !refused } : {}), invocationId: rec.invocationId, skillVersion: sv.skillVersionHash, costUsd: Number(spent.toFixed(4)),
       rulesBroken: rec.repair?.violatedAfter ?? [], cut: rec.repair?.storiesCut ?? [], toCheck: rec.repair?.claimsToCheck ?? [],
+      // the record's work field (core/loop/work-field.ts): whether the piece came inside <work>, and what stood outside it
+      work: rec.work ?? null,
       ...(rec.repair?.graded ? { graded: rec.repair.graded } : {}),
       // every repair step the controller chose, what it moved and cost, and why it stopped (core/loop/controller.ts)
       ...(rec.repair?.controller ? { controller: rec.repair.controller } : {}),

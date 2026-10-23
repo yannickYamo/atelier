@@ -81,3 +81,21 @@ describe('a grounded skill: the harmful span alone is discarded', () => {
     expect(out.report.checked.find((c) => c.requirementId === 't3')?.result.verdict).toBe('MET');
   });
 });
+
+describe('span by span, each span read is the step\'s (round-1 gap A6)', () => {
+  // A claim reader that costs two cents a read, from its own budget, as the real one does; it finds nothing.
+  const reader = () => { let spent = 0; return { instrument: 'a paid reader', notes: [] as string[], version: 'r1', qualified: false, gate: 'pattern' as const, degraded: false,
+    get spentUsd() { return spent; }, read: async () => { spent += 0.02; }, reading: () => undefined }; };
+  it('with the budget for every read, the harmful span alone is discarded, as before', async () => {
+    const out = await refineToStandard(writer(), { spentUsd: 0, capUsd: 1 }, 'd', std('GROUNDED'), DRAFT, 1,
+      { material: '', level: 'GROUNDED', claimAct: 'review', listsBecause: 'the skill is held grounded', claimSensor: reader() } as never);
+    const step = out.repair?.controller?.decisions.find((x) => x.action === 'rewrite');
+    expect(step?.observed.note ?? '').not.toContain('could not hold another read');
+  });
+  it('where the run cannot pay for another read, a span is not judged alone: it is discarded, said so', async () => {
+    const out = await refineToStandard(writer(), { spentUsd: 0, capUsd: 0.08 }, 'd', std('GROUNDED'), DRAFT, 1,
+      { material: '', level: 'GROUNDED', claimAct: 'review', listsBecause: 'the skill is held grounded', claimSensor: reader() } as never);
+    const notes = (out.repair?.controller?.decisions ?? []).map((x) => x.observed.note ?? '').join(' | ');
+    expect(notes).toContain('not checked alone: the step\'s budget could not hold another read');
+  });
+});

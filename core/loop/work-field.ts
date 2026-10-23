@@ -6,8 +6,10 @@
 // the piece inside one delimited field, `<work>…</work>`, with anything else outside it, the way the self-review arm
 // asks for its check and its answer apart. Only the field is delivered and checked.
 //
-// FORM ONLY. This reads two tags and nothing else: the text between the first `<work>` and the last `</work>`. Where the
-// reply holds no such pair the whole reply is the work, as before, and the record says the field was missing.
+// FORM ONLY. This reads two tags and code fences, nothing else. Each field runs from a `<work>` to the first `</work>` after
+// it; the work is the insides of every field, joined; what stood before, between and after them is `outside`. A tag
+// inside a code fence is shown, not used: it opens no field. Where the reply holds no field the whole reply is the work,
+// as before, and the record says the field was missing.
 
 /** The tags the writer is asked to put the piece between. */
 export const WORK_OPEN = '<work>';
@@ -28,20 +30,46 @@ export interface WorkField {
   readonly outside: string;
 }
 
+/** The character ranges of a reply that sit inside a code fence (``` or ~~~ lines, fence lines included). */
+function fencedRanges(reply: string): { start: number; end: number }[] {
+  const out: { start: number; end: number }[] = [];
+  let at = 0; let open = -1;
+  for (const line of reply.split('\n')) {
+    if (/^\s*(```|~~~)/.test(line)) {
+      if (open === -1) open = at; else { out.push({ start: open, end: at + line.length }); open = -1; }
+    }
+    at += line.length + 1;
+  }
+  if (open !== -1) out.push({ start: open, end: reply.length });
+  return out;
+}
+
 /**
- * THE WORK FIELD OF A REPLY (a form parser: two tags, nothing read for meaning). The text between the first `<work>` and
- * the last `</work>` after it, trimmed; what stood before and after it is `outside`. A reply with no such pair, or with
- * an empty field, is the work whole, with any stray tag taken out, and `delimited` false.
+ * THE WORK FIELD OF A REPLY (a form parser: two tags and code fences, nothing read for meaning). Each field opens at a
+ * `<work>` outside a code fence and closes at the first `</work>` after it outside one; the work is every field's inside,
+ * trimmed, joined by a blank line; what stood around and between the fields is `outside`. A reply with no closed field,
+ * or whose fields are all empty, is the work whole, with any stray tag taken out, and `delimited` false.
  */
 export function workField(reply: string): WorkField {
-  const open = reply.indexOf(WORK_OPEN);
-  const close = open === -1 ? -1 : reply.lastIndexOf(WORK_CLOSE);
-  if (open !== -1 && close > open) {
-    const inside = reply.slice(open + WORK_OPEN.length, close).trim();
-    if (inside) {
-      const outside = [reply.slice(0, open), reply.slice(close + WORK_CLOSE.length)].map((s) => s.trim()).filter(Boolean).join('\n\n');
-      return { text: inside, delimited: true, outside };
-    }
+  const fenced = fencedRanges(reply);
+  const free = (i: number): boolean => !fenced.some((r) => i >= r.start && i < r.end);
+  const next = (tag: string, from: number): number => {
+    for (let i = reply.indexOf(tag, from); i !== -1; i = reply.indexOf(tag, i + 1)) if (free(i)) return i;
+    return -1;
+  };
+  const inside: string[] = []; const around: string[] = [];
+  let from = 0;
+  for (let open = next(WORK_OPEN, 0); open !== -1; open = next(WORK_OPEN, from)) {
+    const close = next(WORK_CLOSE, open + WORK_OPEN.length);
+    if (close === -1) break;
+    around.push(reply.slice(from, open));
+    inside.push(reply.slice(open + WORK_OPEN.length, close).trim());
+    from = close + WORK_CLOSE.length;
+  }
+  const text = inside.filter(Boolean).join('\n\n');
+  if (text) {
+    around.push(reply.slice(from));
+    return { text, delimited: true, outside: around.map((x) => x.trim()).filter(Boolean).join('\n\n') };
   }
   const stray = reply.includes(WORK_OPEN) || reply.includes(WORK_CLOSE);
   return { text: stray ? reply.split(WORK_OPEN).join('').split(WORK_CLOSE).join('').trim() : reply, delimited: false, outside: '' };

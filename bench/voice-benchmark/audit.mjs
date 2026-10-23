@@ -6,21 +6,23 @@
 // outputs were written from, and optionally the length range the requests asked for and the brief's points, it reports
 // per output:
 //
-//   opens         whether the output opens with reasoning about the task. Read from the run's record where there is one
-//                 (`<output>.record.json`, the `work` field: a draft that came inside its <work> field cannot open with
-//                 what was said outside it). Where the record is absent or says the field was missing, nothing is read
-//                 for meaning: the first paragraph is listed for a person to read.
+//   opens         the output's first paragraph, listed for a person to read, for every arm alike: nothing is read for
+//                 meaning, and every arm is measured the same way. Beside it, as extra information, what the run's
+//                 record (`<output>.record.json`, its `work` field) says: the piece came inside its <work> field, the
+//                 field was missing, or there is no record; and how many words were set aside outside it.
 //   tells         the machine-writing moves delivered, counted by Atelier's own features (the machine-tell families,
 //                 the contrastive verdict, signposting, dashes); fragment runs are the STACCATO_RUN family.
-//   rhythm        median sentence length, share of sentences of 5 words or fewer, "I"/"my" per 1,000 words, paragraphs:
+//   rhythm        median sentence length, share of sentences of 5 words or fewer, "I" (with "I'm", "I've", "I'd",
+//                 "I'll") and "my" per 1,000 words, paragraphs:
 //                 each beside the author's own range (lowest and highest piece).
-//   copied        5-word runs the output shares with the material (lower case, words only), with up to three shown.
+//   copied        the stretches the output copies from the material: maximal runs of 5 words or more (overlapping
+//                 5-word windows joined into one stretch, as a person reads it), the longest, and up to three shown.
 //   length        words written, and whether that is inside the range asked (`--range 150-200`).
 //   points        for a brief given as a list of points (`--brief`), how many points the output carries: a point is
 //                 carried where any 5 consecutive words of it appear in the output (the whole point, if shorter).
 //
-// Form only: counts, positions and shared word runs. Nothing here decides what a sentence means. Run `npm run build`
-// first: the counts are Atelier's own, read from dist/.
+// Form only: counts, positions and shared word runs. Nothing here decides what a sentence means. Node 22 or later, run
+// from the repository's root after `npm run build`: the counts are Atelier's own, read from dist/.
 //
 //   node bench/voice-benchmark/audit.mjs --author <dir> --outputs <dir> [--material <dir|file>,...] [--range lo-hi]
 //                                        [--brief <file>] [--json <out.jsonl>]
@@ -34,6 +36,7 @@ const dist = (p) => pathToFileURL(join(ROOT, 'dist', p)).href;
 const { findPattern } = await import(dist('core/observers/style.js'));
 const { sentencesOf, paragraphsOf, wordsOf } = await import(dist('core/observers/text.js'));
 const { wordsWritten } = await import(dist('core/eval/size.js'));
+const { sharedRuns } = await import(dist('core/observers/copied-runs.js'));
 
 const TEXT = new Set(['.md', '.txt', '.markdown']);
 /** The text files of a folder (sorted by name), or the one file named. Records and hidden files are not pieces. */
@@ -59,11 +62,13 @@ export function tellsOf(text) {
 }
 const median = (xs) => { if (!xs.length) return 0; const s = [...xs].sort((a, b) => a - b); const m = Math.floor(s.length / 2); return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
 const r2 = (x) => Math.round(x * 100) / 100;
+/** "I", its contractions ("I'm", "I've", "I'd", "I'll"), and "my". */
+const FIRST_PERSON = /^(?:I(?:['’](?:m|ve|d|ll))?|[Mm]y)$/;
 /** How a text moves: median sentence length, share of sentences of 5 words or fewer, "I"/"my" per 1,000 words, paragraphs. */
 export function rhythmOf(text) {
   const lens = sentencesOf(text).map((s) => s.words);
   const words = wordsOf(text);
-  const firstPerson = words.filter((w) => w === 'I' || w.toLowerCase() === 'my').length;
+  const firstPerson = words.filter((w) => FIRST_PERSON.test(w)).length;
   return { medianSentence: median(lens), shortShare: lens.length ? r2(lens.filter((n) => n <= 5).length / lens.length) : 0,
     iPer1000: words.length ? r2((firstPerson / words.length) * 1000) : 0, paragraphs: paragraphsOf(text).length };
 }
@@ -73,11 +78,9 @@ export function authorRange(pieces) {
   return Object.fromEntries(Object.keys(rs[0] ?? {}).map((k) => { const xs = rs.map((r) => r[k]); return [k, { lo: Math.min(...xs), hi: Math.max(...xs), median: median(xs) }]; }));
 }
 const runsOf = (text, n = 5) => { const w = wordsOf(text).map((x) => x.toLowerCase()); const out = new Set(); for (let i = 0; i + n <= w.length; i++) out.add(w.slice(i, i + n).join(' ')); return out; };
-/** The 5-word runs the output shares with the material, in the order the output has them. */
+/** The stretches the output copies from the material: maximal runs of 5 words or more, as the output has them (Atelier's own count). */
 export function copiedRuns(text, material) {
-  const m = runsOf(material); const w = wordsOf(text).map((x) => x.toLowerCase()); const seen = new Set(); const out = [];
-  for (let i = 0; i + 5 <= w.length; i++) { const r = w.slice(i, i + 5).join(' '); if (m.has(r) && !seen.has(r)) { seen.add(r); out.push(r); } }
-  return out;
+  return sharedRuns(text, material);
 }
 /** A brief's points: its list items (lines opening with "-", "*", "•" or a number), as written. */
 export function pointsOf(brief) {
@@ -99,12 +102,15 @@ export function parseRange(s) {
   if (!m || (!m[1] && !m[2])) throw new Error(`--range takes lo-hi (e.g. 150-200), not "${s}"`);
   return { lo: m[1] ? Number(m[1]) : null, hi: m[2] ? Number(m[2]) : null };
 }
-/** How the output opens: from the record's work field where there is one, else the first paragraph listed for a person. */
+/**
+ * How the output opens: its first paragraph for a person to read, for every arm alike; and, as extra information, what the
+ * record's work field says (inside its field, the field missing, or no record) with the words set aside outside it.
+ */
 export function opensOf(text, record) {
+  const first = (paragraphsOf(text)[0]?.text ?? text.split(/\n\s*\n/)[0] ?? '').trim().slice(0, 400);
   const work = record?.work;
-  if (work?.delimited) return { by: 'record', reasoningDelivered: false, setAside: work.outside ? wordsOf(work.outside).length : 0 };
-  const first = paragraphsOf(text)[0]?.text ?? text.split(/\n\s*\n/)[0] ?? '';
-  return { by: work ? 'record: no field' : 'no record', forAPerson: first.trim().slice(0, 400) };
+  if (!work) return { forAPerson: first, field: 'no record' };
+  return { forAPerson: first, field: work.delimited ? 'inside' : 'missing', ...(work.delimited ? { setAside: work.outside ? wordsOf(work.outside).length : 0 } : {}) };
 }
 
 /** Everything the audit says of one output. */
@@ -118,7 +124,7 @@ export function auditOutput(text, ctx) {
     opens: opensOf(text, ctx.record ?? null),
     tells: tellsOf(text),
     rhythm: Object.fromEntries(Object.entries(rhythm).map(([k, v]) => [k, { value: v, ...(ctx.author?.[k] ? { authorLo: ctx.author[k].lo, authorHi: ctx.author[k].hi, inside: v >= ctx.author[k].lo && v <= ctx.author[k].hi } : {}) }])),
-    copied: { runs: copied.length, shown: copied.slice(0, 3) },
+    copied: { runs: copied.length, longest: copied.reduce((n, r) => Math.max(n, r.words), 0), shown: copied.slice(0, 3).map((r) => r.text) },
     length: { words, ...(range ? { lo: range.lo, hi: range.hi, inside: (range.lo === null || words >= range.lo) && (range.hi === null || words <= range.hi) } : {}) },
     ...(points ? { points: { given: ctx.points.length, carried: points.length } } : {}),
   };
@@ -146,7 +152,9 @@ export function main(args) {
   for (const r of rows) {
     const t = Object.entries(r.tells).map(([k, v]) => `${k} ${v}`).join(', ') || 'none';
     lines.push(`${r.output}: tells ${t}; ${r.length.words} words${r.length.inside === undefined ? '' : r.length.inside ? ' (inside)' : ' (outside)'}; median sentence ${r.rhythm.medianSentence.value}`
-      + `${r.points ? `; points ${r.points.carried}/${r.points.given}` : ''}; copied runs ${r.copied.runs}; opens: ${r.opens.by === 'record' ? 'inside its field' : `read by a person: "${r.opens.forAPerson.slice(0, 80)}"`}`);
+      + `${r.points ? `; points ${r.points.carried}/${r.points.given}` : ''}; copied runs ${r.copied.runs}${r.copied.runs ? ` (longest ${r.copied.longest} words)` : ''}`);
+    // every arm alike: the opening for a person to read; the record's field beside it
+    lines.push(`${r.output}: opens "${r.opens.forAPerson.slice(0, 120)}" (record: ${r.opens.field === 'inside' ? `inside its field, ${r.opens.setAside} word(s) set aside` : r.opens.field === 'missing' ? 'no field' : 'none'})`);
   }
   lines.push(`total: tells ${sum((r) => Object.values(r.tells).reduce((a, b) => a + b, 0))}; inside the range ${rows.filter((r) => r.length.inside).length} of ${ctx.range ? rows.length : 0}; copied runs ${sum((r) => r.copied.runs)}`);
   return { rows, text: lines.join('\n') };

@@ -88,6 +88,13 @@ describe('through the binary: the delivered work and its record', () => {
     expect(rec.output.trim()).toBe(PIECE);
     expect(rec.work).toEqual({ delimited: true, outside: ABOUT });
   });
+  it('--json carries the record\'s field, so a harness can read what was set aside', async () => {
+    await script(`${ABOUT}\n\n<work>${PIECE}</work>`);
+    const { run, be } = setup();
+    const j = JSON.parse(run('invoke', '--skill', 'quay', 'write the post', '--json', ...be)) as { work?: unknown; output: string };
+    expect(j.work).toEqual({ delimited: true, outside: ABOUT });
+    expect(j.output.trim()).toBe(PIECE);
+  });
   it('with no field the reply is delivered whole, as before, and the record says the field was missing', async () => {
     await script(PIECE);
     const { data, run, be } = setup();

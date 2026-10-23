@@ -17,6 +17,8 @@ it must move; a change that does not move it is reverted.
 
 ## The counts (offline, no model call)
 
+Node 22 or later. Run from the repository's root, after `npm run build`: the counts are Atelier's own, read from `dist/`.
+
 ```bash
 npm run build            # the counts are Atelier's own, read from dist/
 node bench/voice-benchmark/audit.mjs --author <pieces> --outputs <arm-folder> \
@@ -27,10 +29,10 @@ Per output it reports:
 
 | measure | how it is read |
 |---|---|
-| opens with reasoning about the task | from the record's `work` field where there is one; otherwise the first paragraph is listed for a person to read. No pattern decides it. |
+| opens with reasoning about the task | the first paragraph of every output is listed for a person to read, for every arm alike; no pattern decides it. Beside it, as extra information, the record's `work` field: inside its field (and the words set aside), no field, or no record |
 | tells delivered | Atelier's own counted features: the machine-tell families (fragment runs are `STACCATO_RUN`), the contrastive verdict, signposting, dashes (an em dash or a typed double hyphen) |
-| rhythm against the author | median sentence length, share of sentences of 5 words or fewer, "I"/"my" per 1,000 words, paragraphs; each beside the lowest and highest of the author's pieces |
-| copied from the material | 5-word runs the output shares with the material, with up to three shown |
+| rhythm against the author | median sentence length, share of sentences of 5 words or fewer, "I" (with "I'm", "I've", "I'd", "I'll") and "my" per 1,000 words, paragraphs; each beside the lowest and highest of the author's pieces |
+| copied from the material | the stretches copied from the material: maximal runs of 5 words or more (overlapping windows joined into one stretch), the longest, and up to three shown |
 | length | words written, and whether that is inside `--range` |
 | points used | for a brief given as a list, the points carried: any 5 consecutive words of a point in the output (the whole point if it is shorter) |
 
