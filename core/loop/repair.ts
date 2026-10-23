@@ -600,6 +600,11 @@ export function addsNoWords(before: string, after: string): boolean {
   return true;
 }
 
+/** Which rules may refuse a step, by id: read by the caller off the consequence table (core/loop/run-repair.ts). */
+export type Vetoes = (id: string) => boolean;
+/** May this rule refuse a step? Every rule may, unless the caller said which may. */
+export const mayRefuse = (id: string, vetoes: Vetoes | undefined): boolean => !vetoes || vetoes(id);
+
 /**
  * Keep a repair only if nothing got worse, and it moved something nearer holding. The owner's enforced rules are read
  * by the one acceptance rule (`enforcedNeverWorse`, on each text as it is); the steering checks by `regressions`, on
@@ -620,13 +625,19 @@ export function acceptRepair(before: VerifyReport, after: VerifyReport,
     /** the rules the standard enforces (read before any copy marks a graded check as acting); absent, every acting check that is not graded */
     enforced?: ReadonlySet<string>;
     /** what says whether a rate is a ceiling or a floor (`distanceOf`) */
-    paramsOf?: ParamsOf } = {}): RegressionVerdict {
+    paramsOf?: ParamsOf;
+    /**
+     * WHICH RULES MAY REFUSE IT (core/eval/consequence.ts, `repairVeto`): a rule this says no to (one whose failure would
+     * only label or list the work at the run's latitude) never makes a repair "worse". Absent, every rule may.
+     */
+    vetoes?: Vetoes } = {}): RegressionVerdict {
   // A rule the rewrite made too short to read stands as it stood: no fewer broken rules for it, and no pass.
   after = asMeasured(before, after);
   const enforced = new Set([...(opts.enforced ?? [...before.checked, ...after.checked].filter((c) => acts(c) && !opts.graded?.has(c.requirementId)).map((c) => c.requirementId))]
     .filter((id) => !opts.ignore?.has(id)));
   const steer = regressions(before, after, { ignore: new Set([...(opts.ignore ?? []), ...enforced]), paramsOf: opts.paramsOf });
-  const worse = [...enforcedNeverWorse(before, after, enforced, opts.paramsOf), ...steer].filter((id) => opts.wordsAdded !== false || !id.startsWith('UNSOURCED'));
+  const worse = [...enforcedNeverWorse(before, after, enforced, opts.paramsOf), ...steer].filter((id) => opts.wordsAdded !== false || !id.startsWith('UNSOURCED'))
+    .filter((id) => mayRefuse(id, opts.vetoes));
   if (worse.length) return { ok: false, why: `the rewrite made ${worse.join(', ')} worse` };
   const closer = opts.targets?.length ? enforcedNearer(before, after, opts.targets, opts.paramsOf) : null;
   if (closer && !closer.length) return { ok: false, why: `the rewrite moved none of ${opts.targets?.join(', ')} nearer holding` };
@@ -689,6 +700,8 @@ export interface StepRule<T extends Proposed> {
   readonly enforced?: ReadonlySet<string>;
   /** which way a rate is out (`ruleParamsOf`) */
   readonly paramsOf?: ParamsOf;
+  /** which rules may refuse the step (`acceptRepair`, `vetoes`); absent, every rule may */
+  readonly vetoes?: Vetoes;
   /** false when the change adds no word: it cannot add an invented specific, so a claim reading is no evidence against it */
   readonly wordsAdded?: (after: T) => boolean;
   /** how a target the before-report does not hold as broken (the request's length, a miss read apart) is read as nearer */
@@ -750,7 +763,7 @@ async function takeStep<T extends Proposed>(ledger: StepLedger, plan: StepPlan, 
   const b = typeof before === 'function' ? before() : before;
   const enforced = rule.enforced ?? new Set([...b.report.checked, ...after.report.checked].filter((c) => acts(c)).map((c) => c.requirementId));
   const quiet = rule.wordsAdded !== undefined && !rule.wordsAdded(after);
-  const worse = enforcedNeverWorse(b.report, after.report, enforced, rule.paramsOf).filter((id) => !quiet || !id.startsWith('UNSOURCED'));
+  const worse = enforcedNeverWorse(b.report, after.report, enforced, rule.paramsOf).filter((id) => (!quiet || !id.startsWith('UNSOURCED')) && mayRefuse(id, rule.vetoes));
   // NO NEW INVENTED SPECIFIC, ON ANY PATH: a figure neither the text before the step, the request nor the material holds.
   const invented = addedFigures(b.text, after.text, ledger.source);
   const forE = plan.forEnforced ?? [];

@@ -81,6 +81,21 @@ export function findingsOf(e: Entry): ConsequenceFinding[] {
 const RANK: Readonly<Record<ConsequenceAction, number>> = { ship: 0, label: 1, person: 2, block: 3 };
 const DECISION: Readonly<Record<ConsequenceAction, DeliveryDecision>> = { ship: 'SHIP', label: 'SHIP_LABELLED', person: 'PERSON', block: 'BLOCK' };
 
+/**
+ * WHO MAY REFUSE A REPAIR (core/loop/run-repair.ts). A rewrite is judged against the rules it could make worse, but only a
+ * rule whose failure could hold the work at this table, sent to a person or blocked, may refuse one: a rule that would only
+ * label the work, or list what it found, never vetoes the repair of a rule that holds it. Read by the class of the check:
+ * a trusted check (counted, or written and qualified), a written check not yet qualified, or the claim check, whose row
+ * follows what an untraced specific meets at this run (core/loop/claim-extract.ts, `claimAction`: a listed one is only
+ * listed). Nothing here reads a rule's meaning.
+ */
+export type RepairClass = 'trusted' | 'untrusted' | 'specifics';
+export function repairVeto(table: ConsequenceTable, cls: RepairClass, claimAct?: 'cut' | 'block' | 'review' | 'list'): boolean {
+  const rows: readonly ConsequenceFinding[] = cls === 'trusted' ? ['trusted-fail'] : cls === 'untrusted' ? ['untrusted-fail']
+    : claimAct === 'list' ? ['listed'] : ['untraced-specific', 'claim-flagged'];
+  return rows.some((f) => RANK[table[f]] >= RANK.person);
+}
+
 /** The delivery of one record under one table: the most severe action among the rows that fired, and those rows. */
 export function deliveryOf(r: Pick<EvaluationRecord, 'entries'>, table: ConsequenceTable): Delivery {
   const by = new Map<ConsequenceFinding, string[]>();

@@ -27,6 +27,7 @@ import { decide, controllerRecord, recordTarget, stepWords, stepLedger, DEFAULT_
 import { applyOperator, operatorsToward, sitesOf, keepsWords } from '../fidelity/operators.js';
 import { SITES_PER_OPERATOR } from '../fidelity/structural.js';
 import { spanIntegrity } from './integrity.js';
+import { addedFigures } from './integrity.js';
 import { planRepair, repairPrompt, applyRepair, acceptRepair, addsNoWords, readAtLength, featureParamsOf, ruleParamsOf, cutSpan, applyStep, lostToLength, tooShort, unmeasuredIn, REPAIR_SYSTEM, REPAIR_SYSTEM_WITH_PLACEHOLDERS, REPAIR_SCHEMA,
   survivalLoss, type Reverted, type Applied, type RepairTarget, type Proposed, type NoChange, type StepPlan, type StepRule, type StepResult } from './repair.js';
 import { keysOf, measurementId } from '../state/rule-key.js';
@@ -36,6 +37,9 @@ import { mechanicalFixes, grammarFixes, correctingCheck } from './mechanical-rep
 import { ensureGrammar, readGrammar, isGrammarNote, grammarFixing, GRAMMAR_NOTE_SUFFIX } from '../observers/grammar.js';
 import type { RepairPair } from '../state/canonical-state.js';
 import { createHash } from 'node:crypto';
+import { repairVeto, tableOf } from '../eval/consequence.js';
+import { qualifiedIn } from '../observers/written.js';
+import type { LatitudeLevel } from '../state/canonical-state.js';
 
 /** Repair pairs kept per invocation: the raw material for "write this, not that" examples, bounded. */
 const MAX_PAIRS_KEPT = 12;
@@ -147,6 +151,8 @@ export interface CheckOptions {
    * check on what code finds missing from the material (a figure, a date, a citation) and never deletes it.
    */
   readonly claimAct?: ClaimAct;
+  /** the level this output is held at (the skill's, or tighter where the run tightened it): which rules may refuse a repair */
+  readonly level?: LatitudeLevel;
   /** what an owner-chosen cut becomes where no qualified reader gates the text (./claim-extract.ts, `claimAction`) */
   readonly cutOtherwise?: { readonly act: ClaimAct; readonly why: string | null };
   /**
@@ -737,6 +743,8 @@ export function withGraded(report: VerifyReport, ids: ReadonlySet<string>): Veri
 }
 
 /** The report with the invented-claim line left out: what a model rewrite may be pointed at. */
+/** The claim check's lines (`UNSOURCED` and every `UNSOURCED·…` beside it): what the consequence table reads as the specifics rows. */
+const isClaimLine = (id: string): boolean => id === 'UNSOURCED' || id.startsWith('UNSOURCED·');
 const withoutClaims = (r: VerifyReport): VerifyReport => ({ ...r, checked: r.checked.filter((c) => c.requirementId !== 'UNSOURCED' && c.requirementId !== INCONCLUSIVE && c.requirementId !== UNREAD) });
 
 /** How many rewrite passes a repair may run on one draft: the one place the count is set, for every door (invoke, verify --repair, fix). */
@@ -776,6 +784,17 @@ async function refineOnLedger(client: InferenceClient, budget: Budget, skill: st
   // rule is never rescaled: it is judged by its value on the text as it is (./controller.ts, the separation principle).
   const paramsOfCheck = featureParamsOf(v);
   let enforcedIds: ReadonlySet<string> = new Set();
+  // WHO MAY REFUSE A REPAIR (core/eval/consequence.ts, `repairVeto`): of the enforced rules, only those whose failure would
+  // hold the work at this run's latitude, sent to a person or blocked. A rule that would only label or list it (every
+  // row of a creative skill, the claim check where it lists) never vetoes the repair of another.
+  const table = tableOf(v, opts.level);
+  const vetoIds = (id: string): boolean => {
+    if (isClaimLine(id)) return repairVeto(table, 'specifics', opts.claimAct);
+    const r = v.requirements.find((x) => x.requirementId === id);
+    // a graded feature or a SIGNAL band no standard rule enforces keeps its own guard (`regressions`): it is no row of the table
+    if (isSignal(id) || (graded.has(id) && !enforcedIds.has(id))) return true;
+    return repairVeto(table, r?.measurement?.observer === 'CHECK' && !qualifiedIn(v, id) ? 'untrusted' : 'trusted');
+  };
   const atLength = (r: VerifyReport, from: string, to: string): VerifyReport => readAtLength(r, from, to, paramsOfCheck, (c) => !enforcedIds.has(c.requirementId));
   // STEERING IS SUBORDINATE TO THE OWNER'S RULES. A step taken for an enforced rule (a rewrite, a mechanical or grammar
   // fix, a draft written again) is never refused for a graded feature or a SIGNAL band it moved: those are read only
@@ -845,7 +864,7 @@ async function refineOnLedger(client: InferenceClient, budget: Budget, skill: st
   };
   /** ONE STEP (./repair.ts, `applyStep`): gated on the ledger, entered before it runs, held to the one acceptance rule with the standard's params */
   const step = <T extends Proposed>(plan: StepPlan, propose: (taken: (movement?: number) => void) => Promise<T | NoChange>, rule: Omit<StepRule<T>, 'enforced' | 'paramsOf' | 'purposes'> & { purposes?: readonly SpendPurpose[] }): Promise<StepResult<T>> =>
-    applyStep(ledger, plan, () => ({ text, report }), propose, { purposes: STEP_PURPOSES, floorWords: askedFloor, ...rule, enforced: enforcedIds, paramsOf });
+    applyStep(ledger, plan, () => ({ text, report }), propose, { purposes: STEP_PURPOSES, floorWords: askedFloor, ...rule, enforced: enforcedIds, vetoes: vetoIds, paramsOf });
   // THE ONE ACCEPTANCE RULE (./controller.ts, rule A) reads which way a rate is out from the standard's own params.
   const paramsOf = ruleParamsOf(v);
   const ledgerFrom = opts.controller?.ledgerFrom ?? ledgerBefore;
@@ -932,7 +951,7 @@ async function refineOnLedger(client: InferenceClient, budget: Budget, skill: st
       expectedGain: e.cut.length, expectedCostUsd: DEFAULT_COST['claim-redraft'] }, { text: t, report: known }, async () => {
       const out = await redraft(t, e.cut, dangling);
       return out === null ? { unchanged: 'the draft written again around the cut came back empty', outcome: 'not kept' as const } : { text: out, report: await check(out) };
-    }, { enforced: enforcedIds, paramsOf, purposes: ['repair'],
+    }, { enforced: enforcedIds, vetoes: vetoIds, paramsOf, purposes: ['repair'],
       also: (x) => (flaggedClaims(x.report).length ? 'it still holds a flagged claim' : brokenByCut(t, x.text, { structureOnly: true }) ? 'it left a fragment'
         : !redraftPreserves(t, x.text, [...e.cut, ...dangling]) ? 'it dropped what it was not asked to change' : null),
       movement: (_x, kept) => (kept ? e.cut.length : 0) });
@@ -1014,7 +1033,7 @@ async function refineOnLedger(client: InferenceClient, budget: Budget, skill: st
         wordsAdded: () => !addsNoWords(from, m.text),
         // A FIX THAT NEEDS NO MODEL IS NEVER DROPPED IN SILENCE. When it cannot be kept (it would break another rule),
         // the record says which fix and why, so a refusal names the real conflict and not the rule the fix was for.
-        also: (x) => { const a = acceptRepair(atLength(report, from, m.text), x.report, { wordsAdded: !addsNoWords(from, m.text), ignore: steering(report), targets: changed, enforced: enforcedIds, paramsOf }); return a.ok ? null : a.why; },
+        also: (x) => { const a = acceptRepair(atLength(report, from, m.text), x.report, { wordsAdded: !addsNoWords(from, m.text), ignore: steering(report), targets: changed, enforced: enforcedIds, vetoes: vetoIds, paramsOf }); return a.ok ? null : a.why; },
         note: (_x, kept, why, x) => (kept ? undefined : x.own ?? why ?? undefined),
         movement: (x, kept) => (kept ? ENFORCED_WEIGHT * (broken(held).length - broken(x.report).length) : 0) });
     if (s.kind !== 'judged') return;
@@ -1086,9 +1105,13 @@ async function refineOnLedger(client: InferenceClient, budget: Budget, skill: st
     // and its rewrites make no contrast pair below. An enforced rule that is also graded keeps the enforced rule's terms.
     const soft = new Set([...gradedIds].filter((id) => !report.checked.some((c) => c.requirementId === id && acts(c))));
     let targets: RepairTarget[] = []; let gradedPass = false; let applied: Applied[] = []; let reverted: Reverted[] = []; let called = false;
-    let observedNote: string | undefined; let acceptedWhy = '';
+    let observedNote: string | undefined; let acceptedWhy = ''; let spanNote: string | undefined;
     const from = text;
     type Rewritten = Proposed & { readonly targets: readonly RepairTarget[] };
+    // THE ACCEPTANCE OF A REWRITE (./repair.ts, `acceptRepair`), read on the whole pass and again on the spans kept
+    const acceptance = (x: Proposed) => acceptRepair(atLength(withGraded(report, gradedIds), from, x.text), withGraded(x.report, gradedIds), { graded: soft, enforced: enforcedIds, vetoes: vetoIds, paramsOf,
+      ...(enforcedStep ? { ignore: steering(report), targets: d.targets } : {}) });
+    const x0 = (r: VerifyReport, t: string): Proposed => ({ text: t, report: r });
     const s = await step<Rewritten>({ ...d, forEnforced: enforcedStep ? d.targets : [] }, async () => {
       const plannable = focus(withGraded(withoutClaims(report), gradedIds), ids);
       // The documents of the bound material: a rewrite may cite one in brackets (./repair.ts, `cites`).
@@ -1141,12 +1164,39 @@ async function refineOnLedger(client: InferenceClient, budget: Budget, skill: st
       if (next === text) return { unchanged: reverted.length ? `every rewrite was refused (${reverted.map((r) => r.lost[0]).slice(0, 2).join('; ')})` : 'the rewrite returned nothing usable', outcome: 'not kept' as const };
       const after = await check(next);
       sameInstrument();
+      // SPAN BY SPAN, WHERE THE WHOLE PASS WOULD BE REFUSED. A rewrite for enforced rules is many spans, each for its own
+      // rule; one harmful span used to cost every other its repair. Each span is put in alone and checked: it is kept when
+      // it moves its own rule nearer holding, newly breaks no rule that may refuse a repair (`vetoIds`) and adds no figure
+      // nothing given holds; the spans kept are put in together and that text is what the one step judges.
+      if (enforcedStep && applied.length > 1 && !acceptance(x0(after, next)).ok) {
+        const keep: number[] = []; const dropped: string[] = [];
+        for (const a of applied) {
+          const one = applyRepair(text, targets, reps.filter((r) => Number(r.id as unknown) === a.id), [], [], opts.placeholders ?? false);
+          if (one === text) continue;
+          const r1 = await check(one);
+          const own = (targets.find((t) => t.id === a.id)?.requirementIds ?? []).filter((id) => enforcedIds.has(id));
+          const judged = own.length ? acceptRepair(atLength(report, from, one), r1, { enforced: enforcedIds, vetoes: vetoIds, paramsOf, ignore: steering(report), targets: own }) : null;
+          const invented = addedFigures(text, one, ledger.source);
+          const why = !judged ? 'it was for no enforced rule' : !judged.ok ? judged.why.replace(/^the rewrite /, 'it ') : invented.length ? `it added ${invented.join(', ')}` : null;
+          if (why === null) keep.push(a.id); else dropped.push(`"${a.before.slice(0, 60)}" (${why})`);
+        }
+        sameInstrument();
+        if (keep.length && keep.length < applied.length) {
+          const kept2: Applied[] = []; const reverted2: Reverted[] = [];
+          const combined = applyRepair(text, targets, reps.filter((r) => keep.includes(Number(r.id as unknown))), reverted2, kept2, opts.placeholders ?? false);
+          for (const e of tallyOf(gradedPass)) { e.rejected += applied.length - kept2.length; e.reasons.push(`span discarded: ${dropped.join('; ')}`); }
+          applied = kept2;
+          spanNote = `${dropped.length} rewritten span(s) discarded and ${kept2.length} kept: ${dropped.join('; ')}`;
+          const afterKept = await check(combined);
+          sameInstrument();
+          return { text: combined, report: afterKept, targets };
+        }
+      }
       return { text: next, report: after, targets };
     }, {
       // A rewrite that adds an invented claim makes UNSOURCED worse, and the acceptance refuses it.
       also: (x) => {
-        const verdict = acceptRepair(atLength(withGraded(report, gradedIds), from, x.text), withGraded(x.report, gradedIds), { graded: soft, enforced: enforcedIds, paramsOf,
-          ...(enforcedStep ? { ignore: steering(report), targets: d.targets } : {}) });
+        const verdict = acceptance(x);
         if (!verdict.ok) return verdict.why;
         acceptedWhy = verdict.why;
         // THE DISPLACEMENT GUARD (./graded.ts): a steering rewrite that puts more of the author's features outside their
@@ -1158,7 +1208,7 @@ async function refineOnLedger(client: InferenceClient, budget: Budget, skill: st
         if (disp?.refusedFor.length) observedNote = `displacement observed: ${disp.refusedFor.join('; ')}`;
         return null;
       },
-      note: (_x, kept, why, v) => (kept ? [observedNote, unread].filter(Boolean).join('; ') || undefined : v.own ?? why ?? undefined),
+      note: (_x, kept, why, v) => (kept ? [spanNote, observedNote, unread].filter(Boolean).join('; ') || undefined : v.own ?? why ?? undefined),
       movement: (x, kept) => (kept ? movedBy(d.targets, atLength(withGraded(report, gradedIds), from, x.text), x.report, enforcedStep) : 0) });
     if (s.kind === 'refused') return { stop: s.why };
     if (s.kind === 'failed') {
@@ -1215,7 +1265,7 @@ async function refineOnLedger(client: InferenceClient, budget: Budget, skill: st
             if (next === null || next === text) continue;
             if (!keepsWords(text, next) || !spanIntegrity(text, next, new Set(['and']), false).ok) continue;
             const after = read(next);
-            if (!acceptRepair(atLength(withGraded(before, idSet), text, next), withGraded(after, idSet), { graded: soft, enforced: enforcedIds, paramsOf }).ok) continue;
+            if (!acceptRepair(atLength(withGraded(before, idSet), text, next), withGraded(after, idSet), { graded: soft, enforced: enforcedIds, vetoes: vetoIds, paramsOf }).ok) continue;
             const disp = displacement(text, next, profile, features);
             if (disp?.refusedFor.length) { displaced.push(...disp.refusedFor); continue; }
             const movement = movedBy(ids, atLength(withGraded(before, idSet), text, next), after, false);
@@ -1262,7 +1312,7 @@ async function refineOnLedger(client: InferenceClient, budget: Budget, skill: st
         sameInstrument();
         return { text: g.text, report: after };
       }, { wordsAdded: () => !addsNoWords(from, g.text),
-        also: (x) => { const a = acceptRepair(atLength(report, from, g.text), x.report, { wordsAdded: !addsNoWords(from, g.text), ignore: steering(report), targets: d.targets, enforced: enforcedIds, paramsOf }); return a.ok ? null : a.why; },
+        also: (x) => { const a = acceptRepair(atLength(report, from, g.text), x.report, { wordsAdded: !addsNoWords(from, g.text), ignore: steering(report), targets: d.targets, enforced: enforcedIds, vetoes: vetoIds, paramsOf }); return a.ok ? null : a.why; },
         movement: (x, kept) => (kept ? movedBy(d.targets, report, x.report, true) : 0), note: (_x, kept, why, v) => (kept ? g.fixed.join('; ') : v.own ?? why ?? undefined) });
       if (s.kind === 'judged' && s.kept) { text = s.after.text; report = s.after.report; mechanical.push(...g.fixed); continue; }
       for (const id of d.targets) unreachable.add(id);
