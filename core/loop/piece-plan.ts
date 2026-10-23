@@ -131,7 +131,8 @@ export function planLines(p: PiecePlan): string[] {
 
 /** What the writer is told of the plan, after the skill: write from it, and never write it out. */
 export function planNote(p: PiecePlan): string {
-  return `The plan for this piece (write the piece from it; the plan is not part of the piece, so never write it out):\n\n${planLines(p).map((l) => `- ${l}`).join('\n')}${p.points.length ? '\n\nUse these points from the material and no others; what is left out stays out.' : ''}`;
+  // What the plan left out is the person's to see, never the writer's: named to the writer, it was written back in.
+  return `The plan for this piece (write the piece from it; the plan is not part of the piece, so never write it out):\n\n${planLines({ ...p, leftOut: [] }).map((l) => `- ${l}`).join('\n')}${p.points.length ? '\n\nThese points are the material for this piece: write them in your own words, and nothing else from the notes.' : ''}`;
 }
 
 /**

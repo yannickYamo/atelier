@@ -805,14 +805,20 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const ratesNote = graded !== undefined && !transfer && contractFile === null ? authorRatesNote(carried, ruledFeatures(std)) : '';
   if (ratesNote) report.detail(ratesNote);
   // The slot shape is said for the run that wants slots (a document, no material bound), never in the skill (SLOT_NOTE).
+  // THE WRITER IS SERVED THE PLAN'S POINTS, NOT THE NOTES (core/loop/piece-plan.ts): where a plan chose points from the
+  // material, the request goes to the writer without the material, and the plan's points, in the plan's words, are what it
+  // writes from; what the plan left out is not served. The checks still read the material as given. Not for a skill that
+  // cites lines, which needs the numbered lines.
+  const planServes = Boolean(before?.plan?.points.length) && material.length > 0 && !lineCiting;
+  if (planServes) report.detail('Served to the writer: the plan\'s points, in the plan\'s words; the notes themselves are read by the checks, not served.');
   const requestNotes = forThisRequest(withheld.filter((w) => !needMaterial.includes(w)), briefText, impl.passages, lengthNote, needsNote(needs), placeholdersOn ? SLOT_NOTE : '', held ? latitudeBrief(held.level) : '',
-    asPoints ? POINTS_NOTE : '', before?.note ?? '', ratesNote);
+    asPoints && !planServes ? POINTS_NOTE : '', before?.note ?? '', ratesNote);
   const servedBase = examplesFirst ? withoutPersonaBlocks(servedText) : servedText;
   if (examplesFirst) report.say(`Examples first: served without the description of how I sound or my repertoire${servedBase === servedText ? ' (the skill carried none)' : ''}; my moves are read on the work and never served.`);
   const servedForRun = `${needMaterial.length ? withoutRules(servedBase, needMaterial) : servedBase}${impl.notes ? `\n\n${impl.notes}` : ''}${carryBlock}${requestNotes}`;
   const deliveryForRun = withheld.length ? { ...delivery, withheldRules: withheld } : delivery;
   // What the person said was wrong with an earlier version (`atelier fix`) goes to the writer whatever shape was asked for.
-  const corrected = `${task}${correctionFor(flag('--correcting'))}${transfer?.note ?? ''}`;
+  const corrected = `${planServes ? asked : task}${correctionFor(flag('--correcting'))}${transfer?.note ?? ''}`;
   const taskForRun = shape === 'SHAPE' ? `${corrected}\n\n(The request's own format instruction overrides any presentation rule in the skill: follow the request exactly.)`
     : shape === 'BARE' ? `${corrected}\n\n(Deliver only the piece itself: no preamble, no note about it, no commentary after it.)` : corrected;
   // LONG FORM BY SECTION (core/fidelity/sections.ts), behind --sections: planned once, each section written with

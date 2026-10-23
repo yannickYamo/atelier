@@ -105,6 +105,15 @@ const server = createServer((req, res) => {
       const pairs = answer.rewriteSpans;
       answer = { replacements: [...text.matchAll(/SPAN (\d+)\n"""([\s\S]*?)"""/g)].map(([, id, t]) => ({ id: Number(id), text: pairs.reduce((s, [from, to]) => s.split(from).join(to), t) })) };
     }
+    // A WRITER THAT USES WHAT IT IS SERVED: `{ servedPiece: true }` answers with a piece made of every line of the request's
+    // <material> blocks and every planned point ("- Point n: …"), each a sentence of its own, inside a work field.
+    if (answer && answer.servedPiece === true) {
+      const text = (JSON.parse(body || '{}')?.messages ?? []).map((m) => (typeof m.content === 'string' ? m.content : '')).join('\n');
+      const lines = [...text.matchAll(/<material name="[^"]*">\n([\s\S]*?)\n<\/material>/g)].flatMap((m) => m[1].split('\n'))
+        .concat([...text.matchAll(/^- Point \d+: (.+)$/gm)].map((m) => m[1]))
+        .map((l) => l.replace(/^\s*[-*]\s*/, '').trim()).filter(Boolean).map((l) => (/[.!?]$/.test(l) ? l : `${l}.`));
+      answer = { piece: `<work>${lines.join(' ')}</work>` };
+    }
     res.end(JSON.stringify({
       choices: [{ finish_reason: 'stop', message: { ...extra, tool_calls: [{ function: { arguments: JSON.stringify(answer) } }] } }],
       usage,
