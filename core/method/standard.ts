@@ -383,7 +383,7 @@ export function sectionLengthsFromExamples(cases: readonly (Pick<GoldenCase, 're
  * (../observers/contrast.ts, `machineTellRule`), worked out from the examples, and required: the moves the author never
  * makes are banned, an em dash only where no example holds one, and one they do write is held to their own rate.
  */
-export function tellOffers(cases: readonly (Pick<GoldenCase, 'reference'> & { readonly id: string })[], note = ''): MethodProposal[] {
+export function tellOffers(cases: readonly (Pick<GoldenCase, 'reference'> & { readonly id: string })[], note = '', stated: readonly MethodProposal[] = []): MethodProposal[] {
   const pieces = cases.map((c) => c.reference).filter((t) => t.trim());
   // THE NOTE ALLOWS A MOVE ONLY IN SO MANY WORDS, never by its own style: a note is written as instructions, and pooled
   // with the examples a terse one read as a habit of short sentences. "Use em dashes for asides" allows the dash;
@@ -397,7 +397,12 @@ export function tellOffers(cases: readonly (Pick<GoldenCase, 'reference'> & { re
   const of = (m: Measurement): string => `${pieces.filter((p) => measure(p, m).verdict !== 'VIOLATED').length} of ${pieces.length} example(s) hold it`;
   const tell: Measurement = { observer: 'PATTERN_RATE', params: { pattern: ['MACHINE_TELL'], maxPer1000: t.cap, never: t.never, role: ['machine-tell'] } };
   const out: MethodProposal[] = held(tell) ? [{ statement: t.statement, origin: 'SHOWN_BY_EXAMPLE', obligation: 'DELIVERABLE', measurement: tell, onExample: of(tell), conflict: null, counted: true, required: true }] : [];
-  if (t.dashCap !== null) {
+  // THE OWNER'S BAN BEATS THE EXAMPLES' RATE. Where a step of theirs is counted as no em dash at all, the examples' own
+  // dashes (a typed double hyphen is one) are no allowance: a cap at their rate, told to the writer beside the ban, read
+  // as leave to use them. The ban is read from the step's measurement, never its words.
+  const ownerBansDash = stated.some((p) => p.origin === 'STATED' && p.measurement?.observer === 'PATTERN_RATE' && p.measurement.params.maxPer1000 === 0
+    && (p.measurement.params.pattern as readonly string[] | undefined)?.length === 1 && (p.measurement.params.pattern as readonly string[])[0] === 'EM_DASH');
+  if (t.dashCap !== null && !ownerBansDash) {
     const dash: Measurement = { observer: 'PATTERN_RATE', params: { pattern: ['EM_DASH'], maxPer1000: t.dashCap } };
     if (held(dash)) out.push({ statement: `Keep ${PATTERN_LABEL.EM_DASH} to at most ${t.dashCap} per 1,000 words, as the examples do.`, origin: 'SHOWN_BY_EXAMPLE', obligation: 'DELIVERABLE', measurement: dash, onExample: of(dash), conflict: null, counted: true, required: true });
   }

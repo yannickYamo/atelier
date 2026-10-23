@@ -98,6 +98,13 @@ const server = createServer((req, res) => {
       const n = Math.max(0, ...[...body.matchAll(/\[(\d+)\] /g)].map((m) => Number(m[1])));
       answer = { labels: Array.from({ length: n }, (_, i) => ({ n: i + 1, move: answer.labelAll[i % answer.labelAll.length] })) };
     }
+    // A REWRITER THAT DOES WHAT IT IS ASKED (core/loop/repair.ts): `{ rewriteSpans: [[from, to], ...] }` answers every
+    // "SPAN n" the request carries with that span's text, each `from` replaced by its `to` (a span with none is kept).
+    if (answer && Array.isArray(answer.rewriteSpans)) {
+      const text = (JSON.parse(body || '{}')?.messages ?? []).map((m) => (typeof m.content === 'string' ? m.content : '')).join('\n');
+      const pairs = answer.rewriteSpans;
+      answer = { replacements: [...text.matchAll(/SPAN (\d+)\n"""([\s\S]*?)"""/g)].map(([, id, t]) => ({ id: Number(id), text: pairs.reduce((s, [from, to]) => s.split(from).join(to), t) })) };
+    }
     res.end(JSON.stringify({
       choices: [{ finish_reason: 'stop', message: { ...extra, tool_calls: [{ function: { arguments: JSON.stringify(answer) } }] } }],
       usage,

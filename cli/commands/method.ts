@@ -306,7 +306,7 @@ export async function method(): Promise<void> {
   const shortForm = shortFormFlags(flag('--class'));
   const short = shortFormOffers(cases, shortForm);
   const counted = countedOffers(read.proposals, cases, shortForm);
-  const proposals = [...likeThese, ...read.proposals, ...counted, ...tellOffers(cases, note), ...grammarOffer(cases, [...read.proposals, ...counted])];
+  const proposals = [...likeThese, ...read.proposals, ...counted, ...tellOffers(cases, note, read.proposals), ...grammarOffer(cases, [...read.proposals, ...counted])];
   const example = cases[lead];
   const whole = argv.includes('--report');
   console.log(`${notePath === null ? 'No method note: built from your examples' : `Method: ${basename(notePath)}`}  ·  ${cases.length === 1 ? `example: ${example.id}` : `${cases.length} examples from ${basename(goldenPath)}`}${whole && cases.length > 1 ? `; checks read from ${example.id}, then held against the rest` : ''}${whole && example.material.length ? ` with ${example.material.length} file(s) of material` : ''}\n`);

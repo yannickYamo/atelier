@@ -1,0 +1,1 @@
+The canal trust has closed locks four and five for repairs until the end of the month. That means road transport for about a week, which nobody here enjoys. We have booked two local hauliers who drive slowly and stack the crates the way we ask. I would rather lose a week of water than a week of fruit. Back on the canal by the first of November.

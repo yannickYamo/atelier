@@ -74,7 +74,7 @@ Answer one of three ways for each step:
 - near: true when the measurement you name reads something NEAR the step and not the step itself ("name the source the first time I cite a figure" is near CITED, which only looks figures up in the material): such a check is shown beside the step and never blocks.
 - how "judgement": the step asks for a decision no code can make on the text alone (weigh the risks, keep the tone warm, name the real cause). Most steps about why, when or how well are judgement. A step that FORBIDS a section ("Do not end with a Sources section unless asked"), asks for one only under a condition ("Add a Risks section only when the change touches billing"), or names a section in passing ("Give the Risks section a second read") is judgement, never PRESENCE: PRESENCE would require the very section the step forbids or conditions.
 
-A step that says every figure must come from, be sourced from or be found in the material or the request is CITED:allow=0: code looks each figure up there, which is exactly what the step asks. Place matters: "Never open with X" is OPENING:avoid=X (the first paragraph), not LEXICON (which bans X everywhere); "never end with X" is CLOSING:avoid=X; "never use X" anywhere is LEXICON.
+A step that says every figure must come from, be sourced from or be found in the material or the request is CITED:allow=0: code looks each figure up there, which is exactly what the step asks. A step that bans a construction a listed measurement names (em dashes, "not X, it's Y" constructions, semicolons, rhetorical questions) is that measurement at zero, PATTERN_RATE:pattern=EM_DASH,maxPer1000=0 for "No em dashes": never judgement and never a written check, since a count holds a ban exactly and code repairs what it finds. Place matters: "Never open with X" is OPENING:avoid=X (the first paragraph), not LEXICON (which bans X everywhere); "never end with X" is CLOSING:avoid=X; "never use X" anywhere is LEXICON.
 
 A step with a decidable part and a judgement part ("a Coverage analysis section; the conclusion cites the clause it rests on, and every exclusion that could apply is addressed") gets the check for its decidable part, written or listed; the rest is left to the person and said in means. Never give a step a check its words do not ask for: a section named in passing, a thing the step says to leave out, a step about when. A wrong check is enforced on every output from then on; "judgement" costs nothing. For every step, quote: a short phrase copied exactly from the step that your reading stands on; means: what the check reads, in plain words.
 
@@ -111,7 +111,7 @@ const inStep = (quote: string, step: StepToCheck): boolean => {
 export const judgement = (step: StepToCheck, by: 'model' | 'floor', means = 'yours to judge'): StepCheck => ({ how: 'judgement', measurement: null, quote: step.text.slice(0, 120), means, by });
 
 export const STEP_CHECK: Reading<StepCheckInput, StepCheckOutput> = {
-  id: 'step-check', version: '6',
+  id: 'step-check', version: '7',
   system: STEP_CHECK_SYSTEM, schema: STEP_CHECK_SCHEMA,
   toolName: 'emit_step_checks', toolDescription: 'For every numbered step: how code checks it (a listed measurement, a written check, or judgement), with a quote from the step and what the check reads.',
   maxTokens: 8000, estimateUsd: 0.04,

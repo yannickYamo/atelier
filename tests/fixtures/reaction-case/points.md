@@ -1,0 +1,10 @@
+- The regional council voted this week to close the old cargo wharf at Stannard Lock to commercial boats from next spring.
+- The co-op ships about 900 tonnes of fruit a season by canal.
+- Moving that fruit by road would mean roughly 60 extra lorry trips through the valley lanes.
+- Bruising losses on the barges run at about 2 percent against about 9 percent by road.
+- The wharf closure was decided without a consultation with the growers.
+- There is a second wharf 400 metres upstream that could take the barges with a small loading ramp.
+- The ramp would cost about 18,000 in materials and two weeks of members' labour.
+- Nineteen orchards are members, each with an equal share and one vote.
+- The co-op's electric tug runs on panels at the old lock keeper's cottage.
+- The growers meet on the first Thursday of next month to decide what to do.

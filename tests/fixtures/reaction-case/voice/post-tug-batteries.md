@@ -1,0 +1,1 @@
+Our tug got new batteries this week, paid for out of last season's surplus. The old set lasted seven years, which is longer than the seller promised. The new one should let us run a full round trip on a single charge -- no stop at the halfway lock. The growers deserve to know where their surplus goes, so the receipt is pinned up at the cottage for anyone who wants to look.

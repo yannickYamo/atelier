@@ -107,8 +107,9 @@ const REGEX: Partial<Record<PatternId, RegExp>> = {
   AMERICAN_SPELLING: AMERICAN,
   SPACED_HYPHEN: /(?<!\d)\s-\s(?!\d)/g,
   SEMICOLON: /(?<!&[a-z]{1,8});/g,
-  // "not X, it's Y", "isn't X. It's Y", "not X — it's Y". Not "not X, but Y": that is an ordinary concession.
-  NOT_X_ITS_Y: /\b(?:not|isn'?t|aren'?t|wasn'?t|is not|are not) [^.;!?—]{1,60}?(?:[,;.]|—|\s-\s)\s?(?:it'?s|it is|that'?s|they'?re|they are)\b/gi,
+  // "not X, it's Y", "isn't X. It's Y", "not X — it's Y". Not "not X, but Y": that is an ordinary concession. The
+  // apostrophe as a model types it too ("isn’t …, it’s …"): read only straight, a contrast typed curly was never counted.
+  NOT_X_ITS_Y: /\b(?:not|isn['’]?t|aren['’]?t|wasn['’]?t|is not|are not) [^.;!?—]{1,60}?(?:[,;.]|—|\s-\s)\s?(?:it['’]?s|it is|that['’]?s|they['’]?re|they are)\b/gi,
   SIGNPOST: /\b(?:let me (?:be|explain|walk|start|offer|put|say|give)|I want to (?:spend|talk|be|start|make|offer)|in other words|to be clear|the (?:short|long|honest) answer|let'?s be (?:clear|honest)|here'?s the thing)\b/gi,
   INTENSIFIER: /\b(?:quietly|genuinely|deeply|truly|fundamentally|incredibly|remarkably|profoundly)\b/gi,
   BOLD_SPAN: /\*\*[^*\n]+\*\*/g,
