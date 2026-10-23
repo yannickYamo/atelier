@@ -13,7 +13,8 @@ import * as store from '../core/state/store.js';
 import { piece, WORDS } from './fixtures/author-rates-corpus.js';
 
 const CLI = resolve('dist/cli/atelier.mjs');
-const OFF = Array.from({ length: 10 }, (_, p) => Array.from({ length: 6 }, (_, j) => `${Array.from({ length: [7, 8, 4, 7, 9, 3][j] }, (_, k) => WORDS[(p + j + k) % 10]).join(' ').replace(/^./, (c) => c.toUpperCase())}.`).join(' ')).join('\n\n');
+// 1,140 words: the first person is read at the draft's length, and none is out at it (5.2 expected at the author's rate)
+const OFF = Array.from({ length: 30 }, (_, p) => Array.from({ length: 6 }, (_, j) => `${Array.from({ length: [7, 8, 4, 7, 9, 3][j] }, (_, k) => WORDS[(p + j + k) % 10]).join(' ').replace(/^./, (c) => c.toUpperCase())}.`).join(' ')).join('\n\n');
 
 describe('the author\'s rates on a run', () => {
   let backend: ChildProcess; let port = 0;
@@ -37,7 +38,8 @@ describe('the author\'s rates on a run', () => {
     expect(writer).toContain('How I write, counted over my own pieces: about 4 to 5 \\"I\\" per 1,000 words; sentences around 15 words; about 1 in 8 under 6 words. Write at these rates.');
     const [rec] = store.listInvocations({ root: data, skillName: 'tides' });
     const g = rec.repair?.graded;
-    expect(g?.values.firstSingular).toMatchObject({ before: 0, lo: 1, hi: 9, source: 'profile' });
+    // at 1,140 words, 5.229 expected: 1 to 10 "I" are within, 0.877 to 8.772 per 1,000
+    expect(g?.values.firstSingular).toMatchObject({ before: 0, lo: 0.877, hi: 8.772, source: 'profile' });
     expect(g?.values.sentenceP50).toMatchObject({ before: 7, lo: 13.5, hi: 16.5, source: 'profile' });
     expect(g?.values.shortSentence).toMatchObject({ before: 0.333, lo: 0.068, hi: 0.158, source: 'profile' });
     // the graded repair hands all three to one draft written again, told each one's direction and distance

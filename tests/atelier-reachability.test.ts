@@ -454,7 +454,9 @@ describe('automated delivery is on the path every door takes', () => {
     expect(cli).toMatch(/tableOf\(x\.std, level\)/);
   });
   it('invoke, run, verify and the hook act on the delivery', () => {
-    expect(cli).toMatch(/decided\?\.decision === 'BLOCK'\) process\.exitCode = 1/);
+    // a run and a fix in place take one decision (core/eval/consequence.ts, `deliveryOutcome`): a BLOCK exits 1
+    expect(cli).toMatch(/const \{ refused, exit, head \} = deliveryOutcome\(/);
+    expect(readFileSync('core/eval/consequence.ts', 'utf8')).toMatch(/decided\?\.decision === 'BLOCK' \? 1 : 0/);
     expect(cli).toMatch(/record\.delivery\?\.decision === 'BLOCK'\) process\.exitCode = 1/);
     expect(cli).toMatch(/e\.record\.delivery \? e\.record\.delivery\.decision === 'BLOCK'/);
     expect(cli).toMatch(/decided\?\.decision === 'BLOCK' \? decided\.why/);
@@ -481,10 +483,19 @@ describe('a fix changes the piece in place, and what it took out stays out', () 
   it('fix hands the run the piece to change; the run changes it in place; the whole-piece run reads what was taken out', () => {
     expect(cli).toMatch(/\.\.\.fixInPlaceArgs\(last, inv\.invocationId, complaint\)/);
     expect(cli).toMatch(/const fixed = await fixInPlace\(\{/);
-    expect(cli).toMatch(/fixSpans\(c\.writer\(\), budget, piece, ids, instruction, removed\)/);
+    expect(cli).toMatch(/fixSpans\(c\.writer\(\), budget, piece, ids, instruction, removed, \{ material: c\.materialText, own \}\)/);
     expect(cli).toMatch(/readContext\(FIX_SCOPE, \{ instruction, sentences \}/);
     expect(cli).toMatch(/removedOfPiece\(L, correctionsOf\)/);
     expect(cli).toMatch(/\.\.\.\(removed \? \{ removed \} : \{\}\)/);
     expect(cli).toMatch(/for \(const l of result\.fix\?\.lines \?\? \[\]\) console\.log\(l\)/);
+  });
+  it('a fix is delivered as a run is, falls back whole on an error, and never bans the owner\'s own words', () => {
+    expect(cli).toMatch(/const o = deliveryOutcome\(strictFix, fixed\.record\?\.delivery, fixed\.conformant, argv\.includes\('--allow-nonconformant'\)\)/);
+    expect(cli).toMatch(/deliveryOutcome\(strict, decided, evaluation\?\.result\.conformant \?\? false/);
+    expect(cli).toMatch(/if \(r\.error\) \{ c\.say\(/);
+    expect(cli).toMatch(/own: ownWordsOf\(L, std\)/);
+    expect(cli).toMatch(/reintroducedRuns\(r\.text, removed, piece, own\)/);
+    expect(cli).toMatch(/authorRatesNote\(carried, ruledFeatures\(std\)\)/);
+    expect(cli).toMatch(/signalChecks\(d\.output, profile, ruledFeatures\(std\)\)/);
   });
 });

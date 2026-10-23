@@ -23,7 +23,7 @@ import type { ClaimSensor, ClaimAct } from './claim-extract.js';
 import { NO_MATERIAL } from './claim-extract.js';
 import { checkFormat, type FormatProfile } from '../observers/formats.js';
 import { findTerms } from '../observers/text.js';
-import { signalRules, signalChecks, isSignal, displacement, ownerWords, type Displacement } from './graded.js';
+import { signalRules, signalChecks, ruledFeatures, isSignal, displacement, ownerWords, type Displacement } from './graded.js';
 import { reintroducedRuns } from './corrections.js';
 import type { FidelityProfile, ControllerSettings } from '../fidelity/types.js';
 import { decide, controllerRecord, recordTarget, stepWords, stepLedger, DEFAULT_COST, ENFORCED_WEIGHT, SETTLED_ERROR, type ControllerInput, type Decision, type EnforcedMiss, type GradedMiss, type PlannedStep, type StepLedger } from './controller.js';
@@ -93,7 +93,7 @@ export interface CheckOptions {
    * from. A removed stretch of 5 words or more brought back is a finding the repair rewrites (`REMOVED_LINE`); wording the
    * piece still carried is never one. Absent: nothing is read for it.
    */
-  readonly removed?: { readonly phrases: readonly string[]; readonly previous: string };
+  readonly removed?: { readonly phrases: readonly string[]; readonly previous: string; /** the owner's own words: never banned (./corrections.ts) */ readonly own?: string };
   /** the request and the named material this output was written from, for the rules that are about them (../observers/registry.ts, `CheckContext`) */
   readonly context?: CheckContext;
   /**
@@ -237,7 +237,7 @@ export function checkDraft(skill: string, v: StandardVersion, text: string, opts
       value: copied.length, detail: copied.length ? `${copied.length} stretch(es) of ${REPAIR_RUN_WORDS} words or more copied from the material` : `no stretch of ${REPAIR_RUN_WORDS} words or more copied from the material` } });
   // WHAT A FIX OF THIS PIECE TOOK OUT STAYS OUT (./corrections.ts): brought back, it is a finding the repair rewrites, like a
   // copied stretch; no rule of the standard, and never what the work is held on (cli/eval-run.ts).
-  const back = opts.removed?.phrases.length ? reintroducedRuns(text, opts.removed.phrases, opts.removed.previous) : null;
+  const back = opts.removed?.phrases.length ? reintroducedRuns(text, opts.removed.phrases, opts.removed.previous, opts.removed.own) : null;
   if (back) fmtLines.push({ requirementId: REMOVED_LINE, statement: 'Never bring back wording an earlier fix of this piece took out.',
     materiality: 'PREFERRED', enforced: true, phase: 'STYLE' as const,
     result: { verdict: back.length ? 'VIOLATED' as const : 'MET' as const, spans: back.map((r) => ({ start: r.start, end: r.end, text: r.text, why: 'wording an earlier fix of this piece took out: say it another way' })),
@@ -770,7 +770,8 @@ export function gradedRules(v: Pick<StandardVersion, 'requirements'>, graded: Ch
     const f = (r.measurement.params.feature as readonly string[] | undefined)?.[0];
     if (f && (graded === 'all' || graded.includes(f))) out.set(r.requirementId, f);
   }
-  for (const [id, f] of signalRules(profile)) if (graded === 'all' || graded.includes(f)) out.set(id, f);
+  // a feature the standard rules is the rule's: its learned rate is not steered beside it (./graded.ts, `ruledFeatures`)
+  for (const [id, f] of signalRules(profile, ruledFeatures(v))) if (graded === 'all' || graded.includes(f)) out.set(id, f);
   return out;
 }
 
@@ -827,7 +828,8 @@ async function refineOnLedger(client: InferenceClient, budget: Budget, skill: st
   const shapeOf = new Map([...graded.keys()].flatMap((id) => { const sh = steeredShape(v.requirements.find((r) => r.requirementId === id)?.measurement); return sh ? [[id, sh] as const] : []; }));
   const lengthShapes = new Set([...shapeOf].filter(([, sh]) => sh.how === 'length').map(([id]) => id));
 
-  const withSignals = (t: string, r: VerifyReport): VerifyReport => (profile ? { ...r, checked: [...r.checked, ...signalChecks(t, profile)] } : r);
+  const ruled = ruledFeatures(v);
+  const withSignals = (t: string, r: VerifyReport): VerifyReport => (profile ? { ...r, checked: [...r.checked, ...signalChecks(t, profile, ruled)] } : r);
   const recorded = (r: VerifyReport): VerifyReport => (profile ? { ...r, checked: r.checked.filter((c) => !isSignal(c.requirementId)) } : r);
   const check = async (t: string): Promise<VerifyReport> => withSignals(t, memory.apply(t, await checkDraftAsync(skill, v, t, opts)));
   // LENGTH DRIFT, for a STEERING FEATURE check's distance. A rate per 1,000 words rises when a rewrite shortens the text

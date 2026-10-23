@@ -66,16 +66,24 @@ export const FIX_SCOPE: Reading<FixScopeInput, FixScope> = {
   floor() { return { kind: 'WHOLE' }; },
 };
 
-/** The spans the named sentences make: consecutive sentences join into one span, so a paragraph is rewritten as one. */
+/**
+ * The spans the named sentences make: consecutive sentences on one line join into one span, so a paragraph is rewritten as
+ * one. Never across a line break: two list items, or the end of a paragraph and the start of the next, stay two spans, so
+ * the breaks between them are never written again. `traced` is what a new figure or name may come from (./repair.ts).
+ */
 export type FixTarget = RepairTarget & { readonly sentenceIds: readonly number[] };
-export function fixTargets(text: string, ids: readonly number[], instruction: string): FixTarget[] {
+export function fixTargets(text: string, ids: readonly number[], instruction: string, traced = ''): FixTarget[] {
   const ss = sentencesOf(text);
   const wanted = [...new Set(ids)].filter((i) => i >= 1 && i <= ss.length).sort((a, b) => a - b);
   const groups: number[][] = [];
-  for (const i of wanted) { const g = groups.at(-1); if (g?.at(-1) === i - 1) g.push(i); else groups.push([i]); }
+  for (const i of wanted) {
+    const g = groups.at(-1);
+    if (g?.at(-1) === i - 1 && !text.slice(ss[i - 2].end, ss[i - 1].start).includes('\n')) g.push(i); else groups.push([i]);
+  }
   return groups.map((g, n) => {
     const start = ss[g[0] - 1].start; const end = ss[g[g.length - 1] - 1].end;
-    return { id: n + 1, start, end, text: text.slice(start, end), reasons: [instruction], requirementIds: ['FIX'], drops: [], specifics: false, asked: true, sentenceIds: g };
+    return { id: n + 1, start, end, text: text.slice(start, end), reasons: [instruction], requirementIds: ['FIX'], drops: [], specifics: false, asked: true,
+      traced: [instruction, traced, text].filter(Boolean).join('\n'), sentenceIds: g };
   });
 }
 
@@ -93,15 +101,18 @@ export function fixWriterPrompt(text: string, t: Pick<RepairTarget, 'text'>, ins
     'Return the passage as it should now read, inside the work field.'].filter(Boolean).join('\n\n');
 }
 
-/** One span written again by the writer: its work field, read by form. */
-export async function writeSpan(client: InferenceClient, budget: Budget, text: string, t: RepairTarget, instruction: string, keepOut: readonly string[]): Promise<WorkField> {
+/**
+ * One span written again by the writer: its work field, read by form. A reply that is not a non-empty string (none, or
+ * empty) is no answer: `missing`, and its span is kept as it was. An empty work field in a reply is the writer's cut.
+ */
+export async function writeSpan(client: InferenceClient, budget: Budget, text: string, t: RepairTarget, instruction: string, keepOut: readonly string[]): Promise<WorkField & { readonly missing?: true }> {
   const reply = await spend(budget, 0.05, async () => {
     const x = await client.complete({ stableBlock: FIX_WRITER_SYSTEM, variableBlock: '', userMessage: fixWriterPrompt(text, t, instruction, keepOut),
       toolName: 'emit_fix', toolDescription: 'The passage as it should now read, inside <work></work>.', schema: FIX_WRITER_SCHEMA, maxTokens: 1500 });
     const j = x.json as { reply?: unknown } | null;
     return { value: typeof j?.reply === 'string' ? j.reply : '', cost: x.cost };
   }, 'repair');
-  return workField(reply);
+  return reply.trim() ? workField(reply) : { ...workField(''), missing: true };
 }
 
 /** What a sentence diff counts: the sentences of the piece before, how many of them are gone, and how many of those were outside the spans named. */
@@ -115,11 +126,14 @@ export function sentenceDiff(before: string, after: string, named: readonly numb
   const b = sentencesOf(before).map((s) => s.text.trim()); const left = new Map<string, number>();
   for (const s of sentencesOf(after)) left.set(s.text.trim(), (left.get(s.text.trim()) ?? 0) + 1);
   const keep = new Set(named); let changed = 0; let outside = 0;
-  b.forEach((s, i) => {
-    const n = left.get(s) ?? 0;
-    if (n > 0) { left.set(s, n - 1); return; }
+  // The sentences not named are matched first: a named sentence the piece also carries elsewhere, word for word, is the
+  // one that changed, never the unnamed copy.
+  const order = [...b.keys()].sort((i, j) => Number(keep.has(i + 1)) - Number(keep.has(j + 1)));
+  for (const i of order) {
+    const n = left.get(b[i]) ?? 0;
+    if (n > 0) { left.set(b[i], n - 1); continue; }
     changed += 1; if (!keep.has(i + 1)) outside += 1;
-  });
+  }
   return { total: b.length, changed, outside };
 }
 
@@ -132,6 +146,8 @@ export interface SurgicalResult {
   readonly work: readonly { readonly delimited: boolean; readonly outside?: string }[];
   /** removed wording a replacement brought back: found, written again for, and still there (kept as it was) */
   readonly reintroduced: { readonly found: readonly string[]; readonly rewritten: number; readonly keptAsItWas: number };
+  /** why the spans could not be written (the provider or the budget refused a call): the piece is then written again whole */
+  readonly error?: string;
 }
 
 /**
@@ -139,23 +155,33 @@ export interface SurgicalResult {
  * replacement that brings back removed wording written once more without it; one that brings it back again is not
  * spliced (its span stays as it was, said).
  */
-export async function fixSpans(client: InferenceClient, budget: Budget, text: string, ids: readonly number[], instruction: string, removed: readonly string[]): Promise<SurgicalResult> {
-  const targets = fixTargets(text, ids, instruction);
+export async function fixSpans(client: InferenceClient, budget: Budget, text: string, ids: readonly number[], instruction: string, removed: readonly string[],
+  /** the person's material and own words: a new figure or name may come from it (./repair.ts); wording found in `own` is never "removed" */
+  given: { readonly material?: string; readonly own?: string } = {}): Promise<SurgicalResult> {
+  const targets = fixTargets(text, ids, instruction, given.material ?? '');
   const replies: { id: number; text: string }[] = []; const work: { delimited: boolean; outside?: string }[] = [];
   const found: string[] = []; let rewritten = 0; let keptAsItWas = 0;
-  for (const t of targets) {
-    let f = await writeSpan(client, budget, text, t, instruction, removed);
-    work.push({ delimited: f.delimited, ...(f.outside ? { outside: f.outside } : {}) });
-    let back = reintroducedRuns(f.text, removed, text);
-    if (back.length) {
-      found.push(...back.map((r) => r.text)); rewritten += 1;
-      f = await writeSpan(client, budget, text, t, `${instruction} (and do not bring back: ${back.map((r) => `"${r.text}"`).join(', ')})`, removed);
-      back = reintroducedRuns(f.text, removed, text);
-      if (back.length) { keptAsItWas += 1; continue; }
-    }
-    replies.push({ id: t.id, text: f.text });
-  }
   const applied: Applied[] = []; const reverted: Reverted[] = [];
+  try {
+    for (const t of targets) {
+      let f = await writeSpan(client, budget, text, t, instruction, removed);
+      work.push({ delimited: f.delimited, ...(f.outside ? { outside: f.outside } : {}) });
+      // NO ANSWER IS NO CUT: the span stays as it was, and the record says so.
+      if (f.missing) { reverted.push({ id: t.id, kind: 'CUT', lost: ['nothing: the writer returned no text for it'] }); continue; }
+      let back = reintroducedRuns(f.text, removed, text, given.own);
+      if (back.length) {
+        found.push(...back.map((r) => r.text)); rewritten += 1;
+        f = await writeSpan(client, budget, text, t, `${instruction} (and do not bring back: ${back.map((r) => `"${r.text}"`).join(', ')})`, removed);
+        if (f.missing) { reverted.push({ id: t.id, kind: 'CUT', lost: ['nothing: the writer returned no text for it'] }); continue; }
+        back = reintroducedRuns(f.text, removed, text, given.own);
+        if (back.length) { keptAsItWas += 1; continue; }
+      }
+      replies.push({ id: t.id, text: f.text });
+    }
+  } catch (e) {
+    // A PROVIDER OR BUDGET ERROR stops nothing: nothing is spliced, and the caller writes the piece again whole.
+    return { text, applied: [], reverted: [], targets, work, reintroduced: { found: [], rewritten: 0, keptAsItWas: 0 }, error: (e as Error).message.split('\n')[0] };
+  }
   const out = applyRepair(text, targets, replies, reverted, applied);
   return { text: out, applied, reverted, targets, work, reintroduced: { found: [...new Set(found)], rewritten, keptAsItWas } };
 }

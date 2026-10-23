@@ -15,8 +15,12 @@ import { piece, WORDS } from './fixtures/author-rates-corpus.js';
 
 // 1,120 + 172 + 192 + 224 + 254 = 1,962 words; "I" 5 + 1 + 1 + 1 + 1 = 9: 4.587 per 1,000.
 const AUTHOR = [piece(80), piece(12), piece(14), piece(16), piece(18)];
-/** A draft off all three: no first person, sentences of 3 to 9 words, a third of them five words or fewer. */
-const OFF = Array.from({ length: 10 }, (_, p) => Array.from({ length: 6 }, (_, j) => `${Array.from({ length: [7, 8, 4, 7, 9, 3][j] }, (_, k) => WORDS[(p + j + k) % 10]).join(' ').replace(/^./, (c) => c.toUpperCase())}.`).join(' ')).join('\n\n');
+/**
+ * A draft off all three: no first person, sentences of 3 to 9 words, a third of them five words or fewer. 1,140 words: the
+ * first person is read at the draft's length (../core/loop/graded.ts, `bandAt`), and at 4.587 per 1,000 a 1,140-word draft
+ * expects 5.2, so none is out (P(X = 0) = 0.005); a draft a third as long expects 1.7 and none would be inside.
+ */
+const OFF = Array.from({ length: 30 }, (_, p) => Array.from({ length: 6 }, (_, j) => `${Array.from({ length: [7, 8, 4, 7, 9, 3][j] }, (_, k) => WORDS[(p + j + k) % 10]).join(' ').replace(/^./, (c) => c.toUpperCase())}.`).join(' ')).join('\n\n');
 const MODEL = Array.from({ length: 8 }, () => OFF);
 
 const RATES = [
@@ -46,7 +50,7 @@ describe('steered on any miss, and told to the writer', () => {
   const p = buildProfile({ read: AUTHOR.map((text, i) => ({ id: `p${i}`, text })), held: [], model: [], corpusHash: 'c' });
   it('a draft off them is a graded target on each, at a distance a far-only signal would not steer', () => {
     const off = signalChecks(OFF, p).filter((c) => c.result.verdict === 'VIOLATED').map((c) => [c.requirementId, c.result.value]);
-    // no "I"; the median of 3, 4, 7, 7, 8, 9 is 7; 20 of 60 sentences are five words or fewer
+    // no "I"; the median of 3, 4, 7, 7, 8, 9 is 7; 60 of 180 sentences are five words or fewer
     expect(off).toEqual([['signal·sentenceP50', 7], ['signal·shortSentence', 0.333], ['signal·firstSingular', 0]]);
     expect([...gradedRules({ requirements: [] }, 'all', p).keys()].filter((k) => /firstSingular|sentenceP50|shortSentence/.test(k)).sort())
       .toEqual(['signal·firstSingular', 'signal·sentenceP50', 'signal·shortSentence']);

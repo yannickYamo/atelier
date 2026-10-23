@@ -112,6 +112,23 @@ export const withDelivery = (r: EvaluationRecord, table: ConsequenceTable): Eval
 /** Did delivery let the output go out: shipped, plainly or labelled. */
 export const shipped = (d: Delivery | null | undefined): boolean => d?.decision === 'SHIP' || d?.decision === 'SHIP_LABELLED';
 
+/** The exit code of a strict run whose output did not conform, delivered or not. */
+export const STRICT_EXIT = 3;
+
+/**
+ * WHAT A RUN DOES WITH ITS WORK, one decision for every door that delivers it (a run, and a fix in place): under strict
+ * delivery an output that did not ship (or, with no record, did not conform) is not conformant and is refused unless
+ * `--allow-nonconformant`; the exit is STRICT_EXIT for that, 1 for a BLOCK, 0 otherwise; and the line printed above it.
+ */
+export function deliveryOutcome(strict: boolean, decided: Delivery | null | undefined, conformant: boolean, allowed: boolean): { nonconformant: boolean; refused: boolean; exit: number; head: string } {
+  const nonconformant = strict && (decided ? !shipped(decided) : !conformant);
+  const refused = nonconformant && !allowed;
+  const exit = nonconformant ? STRICT_EXIT : decided?.decision === 'BLOCK' ? 1 : 0;
+  const head = nonconformant ? 'NOT CONFORMANT, delivered because --allow-nonconformant was given:\n\n'
+    : decided?.decision === 'PERSON' ? 'FOR YOUR REVIEW (sent to a person, not shipped as checked):\n\n' : decided?.decision === 'BLOCK' ? 'BLOCKED (not for use as it is):\n\n' : '';
+  return { nonconformant, refused, exit, head };
+}
+
 /**
  * THE OWNER'S ROWS, AS THEY TYPE THEM (`--consequence untrusted-fail=block,judgement-unread=person`): a form parser of
  * `<finding>=<action>` pairs, nothing more. `default` takes a row back to its latitude's default. What is no finding or no

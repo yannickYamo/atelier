@@ -41,11 +41,13 @@ export function removedStretches(changed: readonly Changed[], fixed: string): st
 
 /**
  * WHAT A NEW TEXT BRINGS BACK of what was removed: every maximal stretch of `text` whose 5-word windows are windows of a
- * removed stretch and are not in `previous` (the text it was made from), in text order.
+ * removed stretch and are not in `previous` (the text it was made from), in text order. A window the owner's own words
+ * carry (`own`: their method, their standard's statements, their examples) is theirs to use, never banned for having
+ * once been taken out of one piece.
  */
-export function reintroducedRuns(text: string, removed: readonly string[], previous: string): SharedRun[] {
+export function reintroducedRuns(text: string, removed: readonly string[], previous: string, own = ''): SharedRun[] {
   if (!removed.length) return [];
-  const had = new Set(windows(words(previous)));
+  const had = new Set([...windows(words(previous)), ...windows(words(own))]);
   const gone = new Set(removed.flatMap((r) => windows(words(r))).filter((w) => !had.has(w)));
   if (!gone.size) return [];
   const t = words(text); const out: SharedRun[] = [];

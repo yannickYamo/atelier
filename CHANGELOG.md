@@ -37,6 +37,19 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
   the blog example (six pieces, one reserved) three bands now steer where none did. Metric: on the offline end-to-end
   run, a scripted draft off all three has them handed to one draft written again with each one's direction and
   distance (before: the first person was never targeted, and the hand-off reached no draft).
+- **A fix is held as a run is, and keeps what it was not asked to change.** A writer that answers nothing keeps the
+  sentence as it was and says so (before, the sentence was cut). A named span may change its wording and the claims the person
+  asked for, never add a figure or a name found neither in the sentence nor in their words, their material or the piece.
+  The fixed piece is delivered by the same decision as a run: under `--strict` (or a strict release) a piece that does not
+  conform is not printed and exits 3, a blocked one is printed as blocked and exits 1. Spans never join across a line
+  break, so a list stays a list. A sentence named that also stands unnamed elsewhere is counted as the one that changed.
+  Wording the owner's method, statements or examples carry is never banned for having been taken out of one piece. A
+  provider or budget error while writing the spans writes the piece again whole, said, where `atelier fix` stopped.
+- **The owner's rule beats the author's rate.** Where the standard rules a feature ("never use I"), the corpus's rate
+  for it is neither told to the writer nor steered, even on a profile made before the rule; a sentence-length proposal
+  the owner did not adopt stays monitored. The first person is read at the output's own length (the counts a text of
+  that many words at the author's rate may carry), so a 300-word reply at the author's own rate is inside; under 150
+  words it is not read.
 
 ### What only the author knows is asked before the draft, the draft is planned, and notes are points
 

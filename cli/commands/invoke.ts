@@ -15,7 +15,7 @@ import { answerSentences, judgedSituations } from '../../core/loop/answer-claims
 import { groundCarried } from '../../core/loop/grounding.js';
 import { withoutServedNotes } from '../../core/loop/echo.js';
 import { certificateFor, claimStandingOf, recordHead, RECORD_SCHEMA } from '../../core/eval/certificate.js';
-import { shipped as shippedDecision, deliveryLine } from '../../core/eval/consequence.js';
+import { deliveryLine, deliveryOutcome, STRICT_EXIT } from '../../core/eval/consequence.js';
 import { runLatitude, type RunLatitude } from '../latitude.js';
 import { latitudeBrief } from '../../core/observers/latitude.js';
 import { SLOT_NOTE } from '../../renderers/agent-skill/render.js';
@@ -30,7 +30,7 @@ import { beforeTheDraft, questionsJson } from '../prewrite.js';
 import { withoutPlanLines, type PiecePlan } from '../../core/loop/piece-plan.js';
 import { writtenAsSentences, copiedRecord, POINTS_LINE, POINTS_NOTE } from '../../core/loop/material-points.js';
 import { refineToStandard, checkDraft, checkDraftAsync, withWaivers, enforceClaims, heavyCut, listedClaims, brokenByCut, gradedRules, PUBLIC_FACTS, INCONCLUSIVE, UNREAD, REPAIR_PASSES, repairVetoes, type CheckOptions } from '../../core/loop/run-repair.js';
-import { signalChecks, displacement, isSignal, ownerWords, authorRatesNote } from '../../core/loop/graded.js';
+import { signalChecks, displacement, isSignal, ownerWords, authorRatesNote, ruledFeatures } from '../../core/loop/graded.js';
 import { steeredShape, steersMiss, shapeLengthAim } from '../../core/loop/shape-steer.js';
 import { signalDistance } from '../../core/observers/selection.js';
 import { featureOf, featureMove } from '../../core/observers/features.js';
@@ -45,7 +45,7 @@ import type { RepairRecord, RepairEdits, GradedRecord, Requirement, ControllerRe
 import { askedForRedraft, redraftHandOff, controllerRecord, recordTarget, stepLedger, stepsTaken, type StepLedger, DEFAULT_COST, DEFAULT_EFFECT, ENFORCED_WEIGHT, SETTLED_ERROR, TARGETS_PER_STEP } from '../../core/loop/controller.js';
 import { releaseFor, implementationBlock } from '../fidelity.js';
 import { buildRunEval, copyLimit } from '../eval-run.js';
-import { fixInPlace, removedOfPiece } from '../fix-in-place.js';
+import { fixInPlace, removedOfPiece, ownWordsOf } from '../fix-in-place.js';
 import { reintroducedRuns } from '../../core/loop/corrections.js';
 import { needsReview } from '../../core/eval/record.js';
 import { renderPanel, type EvalSummary } from '../../core/eval/summary.js';
@@ -387,10 +387,16 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   if (fixOf && std) {
     const fixed = await fixInPlace({ L, sv, std, name, asked, fixOf, material, materialText, say: (l) => { report.say(l); }, settings: settingsOfRun(), writer: () => checkedBinding(L, sv).client });
     if (fixed) {
-      if (machine === 'json') { jsonWritten = true; process.stdout.write(`${JSON.stringify(fixed.json, null, 1)}\n`); }
-      else if (machine === 'answer') process.stdout.write(`${fixed.output}\n`);
-      else console.log(`\n${fixed.output}\n`);
-      process.exitCode = fixed.exit;
+      // DELIVERED AS A RUN IS: the same decision, refusal and strict branch (core/eval/consequence.ts, `deliveryOutcome`).
+      const strictFix = argv.includes('--strict') || (!argv.includes('--no-fidelity') && fstore.getActiveRelease(L)?.release.settings.delivery === 'strict');
+      const o = deliveryOutcome(strictFix, fixed.record?.delivery, fixed.conformant, argv.includes('--allow-nonconformant'));
+      if (o.exit) process.exitCode = o.exit;
+      if (machine === 'json') {
+        jsonWritten = true;
+        process.stdout.write(`${JSON.stringify({ ...fixed.json, output: o.refused ? null : fixed.output, answer: o.refused ? null : fixed.output, ...(strictFix ? { delivered: !o.refused } : {}) }, null, 1)}\n`);
+      } else if (machine === 'answer') { if (!o.refused) process.stdout.write(`${fixed.output}\n`); }
+      else if (!o.refused) console.log(`\n${o.head}${fixed.output}\n`);
+      if (o.refused) console.error(`atelier: not delivered (strict delivery): ${fixed.record?.delivery ? deliveryLine(fixed.record.delivery) : 'the fixed piece could not be evaluated'}. The text is kept with the record: atelier report ${String(fixed.json.invocationId)}. To deliver it anyway, marked: --allow-nonconformant.`);
       return;
     }
   }
@@ -723,7 +729,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   // read for it, and a stretch brought back is a finding the repair rewrites. Only on a run `atelier fix` makes.
   const correctionsOf = flag('--corrections-of');
   const removedPhrases = correctionsOf ? removedOfPiece(L, correctionsOf) : [];
-  const removed = correctionsOf && removedPhrases.length ? { phrases: removedPhrases, previous: store.getInvocation(L, fixOf ?? correctionsOf)?.output ?? '' } : null;
+  const removed = correctionsOf && removedPhrases.length ? { phrases: removedPhrases, previous: store.getInvocation(L, fixOf ?? correctionsOf)?.output ?? '', own: ownWordsOf(L, std) } : null;
   if (removed) report.say(`Earlier fixes of this piece took out ${removed.phrases.length} stretch(es) of wording: brought back, one is written again.`);
   // the owner's own words (the method's steps, the standard's statements): a stretch of them is never a copy from the notes
   const ownWords = [...briefSteps.map((s) => s.statement), ...(std?.requirements.map((q) => q.statement) ?? [])].join('\n');
@@ -796,7 +802,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   // THE AUTHOR'S RATES (core/loop/graded.ts, `authorRatesNote`): where the counted features steer this run, the writer is told
   // the author's own first person, sentence length and short sentences as rates, before the draft that is then held to them.
   // Not where a short form sets the counted bands aside.
-  const ratesNote = graded !== undefined && !transfer && contractFile === null ? authorRatesNote(carried) : '';
+  const ratesNote = graded !== undefined && !transfer && contractFile === null ? authorRatesNote(carried, ruledFeatures(std)) : '';
   if (ratesNote) report.detail(ratesNote);
   // The slot shape is said for the run that wants slots (a document, no material bound), never in the skill (SLOT_NOTE).
   const requestNotes = forThisRequest(withheld.filter((w) => !needMaterial.includes(w)), briefText, impl.passages, lengthNote, needsNote(needs), placeholdersOn ? SLOT_NOTE : '', held ? latitudeBrief(held.level) : '',
@@ -890,7 +896,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
         ...(local ? ['range' as const] : []), ...(planState ? ['skeleton' as const] : [])] } : null) : null,
     // what was settled before the draft, and what the delivered work copied from material written as sentences
     before?.record || asPoints || removed ? (output: string) => ({ ...(before?.record ? { prewrite: before.record } : {}), ...(asPoints ? { copied: copiedRecord(output, materialOnly, ownWords) } : {}),
-      ...(removed ? { corrections: { removed: removed.phrases.length, reintroduced: reintroducedRuns(output, removed.phrases, removed.previous).map((r) => r.text) } } : {}) }) : null);
+      ...(removed ? { corrections: { removed: removed.phrases.length, reintroduced: reintroducedRuns(output, removed.phrases, removed.previous, removed.own).map((r) => r.text) } } : {}) }) : null);
 
   reportDrift(report, L, sv, rec);
   // Under strict delivery nothing is printed until the verdict is known.
@@ -966,17 +972,11 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   // goes out marked for the owner's review and waits in `atelier report --pending`, BLOCK exits 1. Under --strict only what
   // shipped is delivered. A run with no record (a structured output held by its contract) keeps its contract's verdict.
   const decided = evaluation?.record?.delivery ?? null;
-  const nonconformant = strict && (decided ? !shippedDecision(decided) : !evaluation?.result.conformant);
-  const refused = nonconformant && !argv.includes('--allow-nonconformant');
-  if (nonconformant) process.exitCode = STRICT_EXIT;
   // ONE RUN, ONE EXIT CODE, the same however it was asked for (run.ts, `exitFor`): a blocked run exits 1, so a script that
   // reads only the code never takes it for a usable one; a run sent to a person exits 0, and says so.
-  else if (decided?.decision === 'BLOCK') process.exitCode = 1;
-  if (!machine && !refused) {
-    const head = nonconformant ? 'NOT CONFORMANT, delivered because --allow-nonconformant was given:\n\n'
-      : decided?.decision === 'PERSON' ? 'FOR YOUR REVIEW (sent to a person, not shipped as checked):\n\n' : decided?.decision === 'BLOCK' ? 'BLOCKED (not for use as it is):\n\n' : '';
-    console.log(`\n${head}${strict ? rec.output : shipped}\n`);
-  }
+  const { refused, exit, head } = deliveryOutcome(strict, decided, evaluation?.result.conformant ?? false, argv.includes('--allow-nonconformant'));
+  if (exit) process.exitCode = exit;
+  if (!machine && !refused) console.log(`\n${head}${strict ? rec.output : shipped}\n`);
   if (decided && !machine) console.error(`atelier: ${deliveryLine(decided)}.`);
   if (decided?.decision === 'PERSON' && !refused) {
     const toRead = decided.why.filter((w) => w.action === 'person').flatMap((w) => w.entries);
@@ -1506,8 +1506,7 @@ export function withVoice(refine: Refine,
 /** One shape round: its delivered text, its draft, its readings, and the trace it alone produced. */
 interface ShapeRound { d: Delivered; draft: string; p: number; author: number | null; broken: number; edits: FidelityTrace['edits']; voice: FidelityTrace['voice']; taken: readonly TasteReading[] | null; notes: string[] }
 
-/** The exit code of a strict run whose output did not conform, delivered or not. */
-export const STRICT_EXIT = 3;
+export { STRICT_EXIT };
 
 /**
  * GIVE WHAT WAS ASKED, ONCE MORE (strict delivery). The checked output is read against the request
@@ -1616,7 +1615,7 @@ export function unmetReader(std: Standard, asked: StatedLength | null = null,
         // a learned shape band is told only past its ceiling (core/loop/shape-steer.ts, `steersMiss`)
         && (steeredShape(params.get(x.requirementId)) === null || steersMiss(params.get(x.requirementId), x.result.error, x.result.value))).map((x) => gradedMiss(x)),
       // the profile's far-out SIGNAL features, read on the text itself: they are no line of the recorded report
-      ...(gradedOf.size ? signalChecks(d.output, profile).filter((x) => x.result.verdict === 'VIOLATED' && gradedOf.has(x.requirementId)).map((x) => gradedMiss(x, x.params)) : [])]);
+      ...(gradedOf.size ? signalChecks(d.output, profile, ruledFeatures(std)).filter((x) => x.result.verdict === 'VIOLATED' && gradedOf.has(x.requirementId)).map((x) => gradedMiss(x, x.params)) : [])]);
     // THE SHAPE THE REQUEST ASKS FOR, where code can read it: "one line" is one line, "one sentence" one sentence. It
     // reached the prompt and nothing after it: "one line, please" came back as a paragraph.
     const shapeMiss = shape ? shapeOff(d.output, shape) : null;

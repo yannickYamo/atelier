@@ -132,7 +132,9 @@ export function withAuthorRates(bands: readonly FeatureBand[], texts: readonly s
     } else { band = bandOf(measured); median = r3(quantile(measured, 0.5)); }
     if (!band) continue;
     const was = out.findIndex((b) => b.id === id && b.cls === 'all');
-    const rate: FeatureBand = { id, cls: 'all', band, median, spread: r3(sd(measured)), n: measured.length, role: ruled?.has(id) ? 'RULE' : 'SIGNAL', auc: was === -1 ? null : out[was].auc, rate: true };
+    const rate: FeatureBand = { id, cls: 'all', band, median, spread: r3(sd(measured)), n: measured.length, role: ruled?.has(id) ? 'RULE' : 'SIGNAL', auc: was === -1 ? null : out[was].auc, rate: true,
+      // a band the owner was asked about keeps being theirs to adopt: one they did not adopt is monitored, never steered
+      ...(was !== -1 && out[was].proposable ? { proposable: out[was].proposable } : {}) };
     if (was === -1) out.push(rate); else out[was] = rate;
   }
   return out;

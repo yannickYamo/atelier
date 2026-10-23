@@ -87,9 +87,12 @@ export interface RepairTarget {
   readonly cites?: readonly string[];
   /**
    * A SPAN THE PERSON NAMED (`atelier fix`, ./surgical-fix.ts): their instruction is what licenses the change, so the
-   * meaning guard and the cut guard do not hold it to its claims; the seam, the move and the slot guards still apply.
+   * meaning guard and the cut guard do not hold it to its claims; the seam, the move and the slot guards still apply. It
+   * may change what the span claims, never add a figure or a name found neither in the span nor in `traced`.
    */
   readonly asked?: boolean;
+  /** what an asked span's new figures and names may come from: the person's words, the bound material, the piece */
+  readonly traced?: string;
 }
 
 /**
@@ -311,6 +314,13 @@ export function applyRepair(text: string, targets: readonly RepairTarget[], repl
     const integrity = t.asked ? { ok: true as const, lost: [] } : spanIntegrity(withoutGoneClauses(t.text, t.clauses ?? [], rep), rep, new Set(t.drops ?? []), (t.specifics ?? false) && !t.mixed, new Set(t.swaps ?? []), t.recase ?? false,
       t.mixed ? t.claims ?? [] : []);
     if (!integrity.ok) { reverted.push({ id: t.id, kind: 'MEANING', lost: integrity.lost }); continue; }
+    // AN ASKED SPAN MAY CHANGE WHAT IT CLAIMS, NEVER INVENT. A figure or a name the replacement adds that neither the span
+    // nor what the person gave (their words, the material, the piece) carries is refused: the span stays as it was.
+    if (t.asked) {
+      const src = `${t.text}\n${t.traced ?? ''}`; const had = new Set(namesIn(src));
+      const added = [...addedFigures(t.text, rep, t.traced ?? ''), ...namesIn(rep).filter((n) => !had.has(n) && !src.includes(n))];
+      if (added.length) { reverted.push({ id: t.id, kind: 'MEANING', lost: [`nothing: it added ${added.map((a) => `"${a}"`).join(', ')}, which neither the sentence nor what you gave carries`] }); continue; }
+    }
     // A banned move may not move: a replacement that lowers one spelling of a move and raises another
     // ("not X, it's Y" rewritten as "X rather than Y") is refused, this span only; the rest of the pass
     // stands. Counted inside the span, so nothing elsewhere in the text can veto it.

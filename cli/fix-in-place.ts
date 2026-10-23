@@ -25,11 +25,21 @@ import { readFidelity } from '../core/fidelity/profile.js';
 import { recordHead } from '../core/eval/certificate.js';
 import { deliveryLine } from '../core/eval/consequence.js';
 import { stateLine } from '../core/eval/run-card.js';
-import { checksFor, contextJudgeModel } from './checks.js';
+import { checksFor, contextJudgeModel, servedExamples } from './checks.js';
+import type { EvaluationRecord } from '../core/eval/record.js';
 import { buildRunEval } from './eval-run.js';
 import { sha, argv, flag, numericFlag, runFile, contextReaderClient, boundMaterial } from './runtime.js';
 import { writeAtomic } from '../core/state/fs-atomic.js';
 import { resolve as resolvePath } from 'node:path';
+
+/**
+ * THE OWNER'S OWN WORDS: their method, their standard's statements, and the examples the skill is served. A stretch of them
+ * is never a copy and never "removed" wording (core/loop/corrections.ts): it is theirs to use in any piece.
+ */
+export function ownWordsOf(L: store.StoreLayout, std: Pick<StandardVersion, 'requirements'> | null): string {
+  return [store.getMethod(L)?.text ?? '', ...(store.getInferredMethod(L)?.steps ?? []).map((st) => st.text), ...(std?.requirements.map((q) => q.statement) ?? []), servedExamples(L)]
+    .filter((t) => t.trim()).join('\n\n');
+}
 
 /** Every stretch the fixes of piece `of` have taken out of it so far, oldest first. */
 export function removedOfPiece(L: store.StoreLayout, of: string): string[] {
@@ -57,7 +67,7 @@ const shown = (s: string): string => { const one = s.replace(/\s+/g, ' ').trim()
  * piece, no model could read them, or the version to fix is not on record); otherwise the piece as changed, the JSON a
  * machine reads, and the run's exit code.
  */
-export async function fixInPlace(c: FixInPlace): Promise<{ output: string; json: Record<string, unknown>; exit: number } | null> {
+export async function fixInPlace(c: FixInPlace): Promise<{ output: string; json: Record<string, unknown>; record: EvaluationRecord | null; conformant: boolean } | null> {
   const started = Date.now(); const spentBefore = processSpentUsd();
   const prev: InvocationRecord | null = store.getInvocation(c.L, c.fixOf);
   if (!prev?.output.trim()) { c.say('(The version of the piece to change is not on record, so it is written again whole.)'); return null; }
@@ -75,7 +85,10 @@ export async function fixInPlace(c: FixInPlace): Promise<{ output: string; json:
   const ids = scope.value.ids;
   const removed = removedOfPiece(c.L, of);
   const budget = { spentUsd: 0, capUsd: numericFlag('--cap', 1), maxCalls: numericFlag('--max-calls', 2 * ids.length + 2) };
-  const r = await fixSpans(c.writer(), budget, piece, ids, instruction, removed);
+  const own = ownWordsOf(c.L, c.std);
+  const r = await fixSpans(c.writer(), budget, piece, ids, instruction, removed, { material: c.materialText, own });
+  // A PROVIDER OR BUDGET ERROR on the spans: nothing was spliced, and the piece is written again whole, said.
+  if (r.error) { c.say(`The sentences you named could not be written (${r.error}), so the piece is written again whole.`); return null; }
   const diff = sentenceDiff(piece, r.text, ids);
   const spans = r.applied.map((a) => ({ before: a.before, after: a.after })).reverse();
   const removedNow = removedStretches(spans, r.text);
@@ -87,7 +100,7 @@ export async function fixInPlace(c: FixInPlace): Promise<{ output: string; json:
   if (r.work.some((w) => w.outside)) lines.push('(What the writer said outside its work field is kept on the record, never in the piece.)');
   // THE WHOLE PIECE, CHECKED AGAIN: the standard, and the author's range where the skill has one.
   const checks = { ...checksFor(c.L, { material: c.materialText, task: c.asked, context: { request: c.asked, material: c.material }, guardClaims: !argv.includes('--allow-unsourced') }),
-    ...(removed.length ? { removed: { phrases: removed, previous: piece } } : {}) };
+    ...(removed.length ? { removed: { phrases: removed, previous: piece, own } } : {}) };
   const report = await checkDraftAsync(c.name, c.std, r.text, checks).catch(() => null);
   const profile = fstore.getProfile(c.L);
   if (profile) {
@@ -95,7 +108,7 @@ export async function fixInPlace(c: FixInPlace): Promise<{ output: string; json:
     lines.push(b.measured ? `Your range: ${b.inBand} of ${b.measured} of your counted features inside it (before the fix: ${a.inBand} of ${a.measured}).` : 'Your range: none of your counted features steer on this skill yet.');
   }
   const at = new Date().toISOString();
-  const back = removed.length ? reintroducedRuns(r.text, removed, piece).map((x) => x.text) : [];
+  const back = removed.length ? reintroducedRuns(r.text, removed, piece, own).map((x) => x.text) : [];
   const rec: InvocationRecord = { ...prev, invocationId: `i${sha(`${c.sv.skillVersionHash}|fix|${prev.invocationId}|${instruction}|${at}`).slice(0, 10)}`, at,
     provenance: 'FIX_EVALUATION', outputHash: sha(r.text), output: r.text, repair: undefined, selection: undefined,
     work: r.work.every((w) => w.delimited) ? { delimited: true, ...(r.work.some((w) => w.outside) ? { outside: r.work.map((w) => w.outside ?? '').filter(Boolean).join('\n\n').slice(0, 2000) } : {}) } : { delimited: false },
@@ -116,9 +129,8 @@ export async function fixInPlace(c: FixInPlace): Promise<{ output: string; json:
   // What `atelier fix` needs to change this piece again: this version, what was asked, and the files given with it.
   writeAtomic(runFile('last-invocation.json'), JSON.stringify({ invocationId: rec.invocationId, skillName: c.name, input: rec.input, at, asked: c.asked,
     with: boundMaterial().filter((m) => m.path).map((m) => ({ name: m.name, path: resolvePath(m.path) })), settings: c.settings, skillVersion: c.sv.skillVersionHash }, null, 1));
-  const exit = record?.delivery?.decision === 'BLOCK' ? 1 : 0;
   const json = { ...recordHead({ state: record?.state ?? null, standardVersionHash: c.sv.standardVersionHash, skillVersion: c.sv.skillVersionHash, certificate: rec.settings?.certificate ?? null, record }),
     output: r.text, answer: r.text, invocationId: rec.invocationId, skillVersion: c.sv.skillVersionHash, costUsd: Number(spent.toFixed(4)),
     rulesBroken: [], cut: [], toCheck: [], work: rec.work ?? null, report: lines, eval: evaluation, fix: { ...rec.fix, lines } };
-  return { output: r.text, json, exit };
+  return { output: r.text, json, record, conformant: evaluation?.result.conformant ?? false };
 }

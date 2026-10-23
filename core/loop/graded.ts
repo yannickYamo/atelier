@@ -13,6 +13,8 @@ import { distanceFromBand, openEdge } from '../observers/selection.js';
 import { bandsFor } from '../fidelity/profile.js';
 import { contextClassOf, type FeatureBand, type FidelityProfile } from '../fidelity/types.js';
 import type { RuleCheck } from '../observers/verify.js';
+import type { StandardVersion } from '../state/canonical-state.js';
+import { expectedBand } from '../observers/pooled.js';
 
 /** A SIGNAL feature's check is named after the feature, under this prefix: no rule of the standard has such an id. */
 export const SIGNAL_PREFIX = 'signal·';
@@ -29,11 +31,45 @@ export function steeringBands(text: string, profile: FidelityProfile): FeatureBa
   return bandsFor(profile, contextClassOf(featureWordCount(text))).bands.filter((b) => b.role !== 'MONITOR' && featureOf(b.id) !== null);
 }
 
-/** Every SIGNAL feature the profile holds in any class, as a graded rule id → feature id (`gradedRules`). */
-export function signalRules(profile: FidelityProfile | null | undefined): Map<string, string> {
-  const out = new Map<string, string>();
-  for (const b of profile?.bands ?? []) if (b.role === 'SIGNAL' && featureOf(b.id)) out.set(`${SIGNAL_PREFIX}${b.id}`, b.id);
+/**
+ * THE FEATURES THE OWNER'S STANDARD RULES: every FEATURE measurement of a requirement they have not rejected, by feature id
+ * (as ../../cli/fidelity.ts, `ratifiedProfile`, reads them). An enforced rule beats a learned rate: a SIGNAL band on one of
+ * these is neither told to the writer nor steered, even where the profile was made before the rule.
+ */
+export function ruledFeatures(v: Pick<StandardVersion, 'requirements'> | null | undefined): Set<string> {
+  const out = new Set<string>();
+  for (const q of v?.requirements ?? []) {
+    if (q.authority === 'EXPERT_REJECTED' || q.measurement?.observer !== 'FEATURE') continue;
+    const id = (q.measurement.params.feature as readonly string[] | undefined)?.[0];
+    if (id) out.add(id);
+  }
   return out;
+}
+
+/** Every SIGNAL feature the profile holds in any class, as a graded rule id → feature id (`gradedRules`); none the standard rules. */
+export function signalRules(profile: FidelityProfile | null | undefined, ruled: ReadonlySet<string> = new Set()): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const b of profile?.bands ?? []) if (b.role === 'SIGNAL' && featureOf(b.id) && !ruled.has(b.id)) out.set(`${SIGNAL_PREFIX}${b.id}`, b.id);
+  return out;
+}
+
+/** Below this many prose words a rate per 1,000 is not read (the features' own minimum): an author's rate is not steered there. */
+export const RATE_MIN_WORDS = 150;
+const r3 = (x: number): number => Math.round(x * 1000) / 1000;
+
+/**
+ * THE BAND A TEXT IS READ AGAINST, AT ITS LENGTH. One of the author's rates that is a count per 1,000 words (the first
+ * person) carries the counts a 1,000-word text at their rate may hold; a text of n words is held to the counts one of n
+ * words at that rate may hold (../observers/pooled.ts, `expectedBand`), said per 1,000 words, so a 300-word text at the
+ * author's own rate is inside. Null under RATE_MIN_WORDS, where the rate is not read. Every other band is as it is.
+ */
+export function bandAt(b: FeatureBand, text: string): readonly [number, number] | null {
+  const f = featureOf(b.id);
+  if (!b.rate || !f?.count || f.unit !== 'per1000') return b.band;
+  const n = featureWordCount(text);
+  if (n < RATE_MIN_WORDS) return null;
+  const [lo, hi] = expectedBand((b.median * n) / 1000);
+  return [r3((lo * 1000) / n), r3((hi * 1000) / n)];
 }
 
 const fmt = (unit: string, x: number): string => (unit === 'share' ? `${Math.round(x * 100)}%` : `${x}`);
@@ -43,18 +79,20 @@ const fmt = (unit: string, x: number): string => (unit === 'share' ? `${Math.rou
  * SIGNAL_FAR widths outside the band (one of the author's rates: outside it at all); MET otherwise (the value and distance kept, so a comparison still reads them).
  * A specifics feature below its band is never a miss: asking for more specifics asks for invention.
  */
-export function signalChecks(text: string, profile: FidelityProfile | null | undefined): SignalCheck[] {
+export function signalChecks(text: string, profile: FidelityProfile | null | undefined, ruled: ReadonlySet<string> = new Set()): SignalCheck[] {
   if (!profile) return [];
-  return steeringBands(text, profile).filter((b) => b.role === 'SIGNAL').flatMap((b) => {
+  return steeringBands(text, profile).filter((b) => b.role === 'SIGNAL' && !ruled.has(b.id)).flatMap((b) => {
     const f = featureOf(b.id);
-    if (!f) return [];
-    const params = { feature: [b.id] as const, minValue: b.band[0], maxValue: b.band[1] };
+    const band = bandAt(b, text);
+    if (!f || !band) return [];
+    const params = { feature: [b.id] as const, minValue: band[0], maxValue: band[1] };
     const r = FEATURE.observe(text, params);
     // One of the author's rates (../fidelity/profile.ts, `AUTHOR_RATES`) is steered on any miss; any other signal only far out.
     const far = r.verdict === 'VIOLATED' && (b.rate === true || Math.abs(r.error ?? 0) > SIGNAL_FAR) && !(f.specifics && (r.error ?? 0) < 0);
     const result = far || r.verdict !== 'VIOLATED' ? r : { ...r, verdict: 'MET' as const, spans: [] };
     const unit = f.unit === 'per1000' ? ' per 1,000 words' : '';
-    return [{ requirementId: `${SIGNAL_PREFIX}${b.id}`, statement: `Keep ${f.label} where your pieces hold it (${openEdge(b.band[0]) ? `at most ${fmt(f.unit, b.band[1])}` : openEdge(b.band[1]) ? `at least ${fmt(f.unit, b.band[0])}` : `${fmt(f.unit, b.band[0])} to ${fmt(f.unit, b.band[1])}`}${unit}).`,
+    const scaled = band !== b.band ? `, at this length; not read under ${RATE_MIN_WORDS} words` : '';
+    return [{ requirementId: `${SIGNAL_PREFIX}${b.id}`, statement: `Keep ${f.label} where your pieces hold it (${openEdge(band[0]) ? `at most ${fmt(f.unit, band[1])}` : openEdge(band[1]) ? `at least ${fmt(f.unit, band[0])}` : `${fmt(f.unit, band[0])} to ${fmt(f.unit, band[1])}`}${unit}${scaled}).`,
       materiality: null, enforced: false, observer: 'FEATURE', result, feature: b.id, params, ...(b.rate ? { rate: true as const } : {}) }];
   });
 }
@@ -89,18 +127,18 @@ export function displacement(before: string, after: string, profile: FidelityPro
   const ratio = wb > 0 && wa > 0 && Math.abs(wb / wa - 1) > LENGTH_DRIFT ? wb / wa : 1;
   let nb = 0; let na = 0; const newlyOut: string[] = []; const pushed: string[] = [];
   for (const b of steeringBands(after, profile)) {
-    const f = featureOf(b.id);
-    if (!f) continue;
+    const f = featureOf(b.id); const band = bandAt(b, after);
+    if (!f || !band) continue;
     const vb0 = f.measure(before); const va = f.measure(after);
     if (vb0 === null || va === null) continue;
     const vb = f.unit === 'per1000' ? vb0 * ratio : vb0;
-    const out = (v: number): boolean => (v < b.band[0] && !f.specifics) || v > b.band[1];
+    const out = (v: number): boolean => (v < band[0] && !f.specifics) || v > band[1];
     const ob = out(vb); const oa = out(va);
     if (ob) nb += 1;
     if (oa) na += 1;
     if (!ob && oa) {
       newlyOut.push(f.label);
-      const d = distanceFromBand(va, b.band);
+      const d = distanceFromBand(va, band);
       if (!targeted.has(b.id) && d > SIGNAL_FAR) pushed.push(`${f.label} moved from inside your range to ${d} widths outside it`);
     }
   }
@@ -111,10 +149,12 @@ export function displacement(before: string, after: string, profile: FidelityPro
 /**
  * THE AUTHOR'S RATES, SAID TO THE WRITER as their rates (../fidelity/profile.ts, `AUTHOR_RATES`): about how many "I" per
  * 1,000 words, how long a sentence runs, and how many run under six words. Told before the draft; the same bands are
- * graded targets after it. Empty where the profile holds none of them.
+ * graded targets after it. Only a rate that steers as a SIGNAL is said: where the owner's standard rules the feature (a
+ * RULE band, or `ruled`), their rule is what holds, and the corpus's rate is neither said nor steered. Empty where the
+ * profile holds none of them.
  */
-export function authorRatesNote(profile: FidelityProfile | null | undefined): string {
-  const m = (id: string): number | null => profile?.bands.find((b) => b.id === id && b.cls === 'all' && b.rate)?.median ?? null;
+export function authorRatesNote(profile: FidelityProfile | null | undefined, ruled: ReadonlySet<string> = new Set()): string {
+  const m = (id: string): number | null => (ruled.has(id) ? null : profile?.bands.find((b) => b.id === id && b.cls === 'all' && b.rate && b.role === 'SIGNAL')?.median ?? null);
   const fp = m('firstSingular'); const p50 = m('sentenceP50'); const short = m('shortSentence');
   const parts = [
     fp !== null ? (Math.floor(fp) === Math.ceil(fp) ? `about ${fp} "I" per 1,000 words` : `about ${Math.floor(fp)} to ${Math.ceil(fp)} "I" per 1,000 words`) : '',
