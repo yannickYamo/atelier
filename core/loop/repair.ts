@@ -18,7 +18,7 @@
 
 import { sentencesOf, paragraphsOf } from '../observers/registry.js';
 import { acts, isOmission, type RuleCheck, type VerifyReport } from '../observers/verify.js';
-import { errorAtLength, featureWordCount } from '../observers/features.js';
+import { errorAtLength, featureWordCount, LENGTH_DRIFT } from '../observers/features.js';
 import type { StandardVersion } from '../state/canonical-state.js';
 import { displacedFamilies } from '../observers/style.js';
 import { spanIntegrity, namesIn, numbersIn, addedFigures, workLost, hedgesIn } from './integrity.js';
@@ -384,7 +384,11 @@ export function seamFragment(before: string, replacement: string, after: string,
     return [...joinWords(replacement).slice(-2), ...joinWords(after.split('\n')[0]).slice(0, 2)].join(' ');
   }
   const line = before.split('\n').pop() ?? '';
-  if (/\p{Ll}$/u.test(line) && /^\p{Lu}/u.test(replacement) && /^\p{Ll}/u.test(original.trim())) {
+  // THE JOINED CAPITAL ONLY: the replacement opens on the original's own first word, capitalised. A replacement that opens
+  // on another word ("I left early." for "we left early.", a name) is a sentence the repair chose, not one left open.
+  const first = (t: string): string => joinWords(t)[0] ?? '';
+  if (/\p{Ll}$/u.test(line) && /^\p{Lu}/u.test(replacement) && /^\p{Ll}/u.test(original.trim())
+    && first(replacement) !== 'I' && first(replacement).toLowerCase() === first(original).toLowerCase()) {
     return [...joinWords(line).slice(-2), ...joinWords(replacement).slice(0, 2)].join(' ');
   }
   return null;
@@ -412,7 +416,8 @@ export function survivalLoss(before: string, after: string, lengthCut = false): 
 export function belowAsked(before: string, after: string, floor: number | null): string | null {
   if (!floor) return null;
   const was = proseWordsOf(before); const now = proseWordsOf(after);
-  return now < floor && now < was ? `it would take the text to ${now} words, below the ${floor} the request asks for` : null;
+  // Already short of it, a pass may shorten the text by no more than a length drift (../observers/features.ts).
+  return (was >= floor ? now < floor : now < was * (1 - LENGTH_DRIFT)) ? `it would take the text to ${now} words, below the ${floor} the request asks for` : null;
 }
 
 export function cutSpan(text: string, start: number, end: number): string {

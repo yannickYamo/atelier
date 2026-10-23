@@ -126,7 +126,7 @@ export async function beforeTheDraft(o: PrewriteInput): Promise<Prewrite> {
     }
     if (plan) said.push(`Planned before writing: ${plan.points.length} point(s) from the material${plan.leftOut.length ? `, ${plan.leftOut.length} left out` : ''}; the plan is on the record, never in the work (atelier report <run>).`);
   }
-  const note = [answerText, plan ? planNote(plan) : ''].filter(Boolean).join('\n\n');
+  const note = [answerText, plan ? planNote(plan, o.material) : ''].filter(Boolean).join('\n\n');
   const record = questions.length || answers.length || plan || noPlan ? { questions, answers, questionsBy: q?.by ?? 'floor', plan, planBy, ...(typedChanges.length ? { planChanges: typedChanges.length } : {}), ...(noPlan ? { noPlan } : {}) } : null;
   return { note, said, questions, plan, record };
 }

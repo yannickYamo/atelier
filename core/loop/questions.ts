@@ -99,6 +99,8 @@ export const QUESTIONS_SCHEMA: Record<string, unknown> = {
 };
 
 const clip = (s: string, n: number): string => s.replace(/\s+/g, ' ').trim().slice(0, n);
+/** Curly and straight apostrophes and quotation marks read as one (a form parser). */
+const straight = (s: string): string => s.replace(/[‘’]/g, "'").replace(/[“”]/g, '"');
 const same = (a: string, b: string): boolean => clip(a, 400).toLowerCase() === clip(b, 400).toLowerCase();
 
 /** The score a decision is asked by: only an unknown whose answers give different drafts is above the line. */
@@ -108,10 +110,10 @@ export const ASK_THRESHOLD = 2;
 
 /** Whether a quote of five or more characters is in the source the reader named (a form check: the words are there or not). */
 function statedWhere(where: string, quote: string, input: QuestionsInput): boolean {
-  const q = clip(quote, 400).toLowerCase();
+  const q = straight(clip(quote, 400)).toLowerCase();
   if (q.length < 5) return false;
   const source = where === 'request' ? input.request : where === 'material' ? input.material.map((m) => m.head).join('\n') : where === 'told' ? input.told.map((t) => t.answer).join('\n') : '';
-  return clip(source, 100000).toLowerCase().includes(q);
+  return straight(clip(source, 100000)).toLowerCase().includes(q);
 }
 
 export const QUESTIONS: Reading<QuestionsInput, QuestionsReading> = {

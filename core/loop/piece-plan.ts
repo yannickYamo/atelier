@@ -18,6 +18,7 @@
 // kind of work.
 
 import { normalLine } from './echo.js';
+import { figuresOf } from '../observers/obligations.js';
 
 import type { Reading } from '../inference/reading.js';
 
@@ -129,10 +130,33 @@ export function planLines(p: PiecePlan): string[] {
     ...(p.leftOut.length ? [`Left out (${p.leftOut.length}): ${p.leftOut.map((x) => `"${x.what.slice(0, 60)}" (${x.why})`).join('; ')}`] : [])];
 }
 
-/** What the writer is told of the plan, after the skill: write from it, and never write it out. */
-export function planNote(p: PiecePlan): string {
+/**
+ * What the writer is told of the plan, after the skill: write from it, and never write it out. Each point is served with
+ * the words of the material it comes from and the name of the file that holds them, so its figures and names reach the
+ * writer as the material gives them; what the plan left out is not served.
+ */
+export function planNote(p: PiecePlan, material: readonly { readonly name: string; readonly text: string }[] = []): string {
   // What the plan left out is the person's to see, never the writer's: named to the writer, it was written back in.
-  return `The plan for this piece (write the piece from it; the plan is not part of the piece, so never write it out):\n\n${planLines({ ...p, leftOut: [] }).map((l) => `- ${l}`).join('\n')}${p.points.length ? '\n\nThese points are the material for this piece: write them in your own words, and nothing else from the notes.' : ''}`;
+  const fromLine = (x: PlanPoint): string => {
+    const file = material.find((m) => flat(m.text).includes(flat(x.from)))?.name;
+    return `\n  from ${file ? `"${file}"` : 'the material'}, in its words: "${x.from}"`;
+  };
+  const lines = planLines({ ...p, leftOut: [] }).map((l) => {
+    const i = p.points.findIndex((x, k) => l === `Point ${k + 1}: ${x.point}`);
+    return `- ${l}${i === -1 ? '' : fromLine(p.points[i])}`;
+  });
+  return `The plan for this piece (write the piece from it; the plan is not part of the piece, so never write it out):\n\n${lines.join('\n')}${p.points.length ? '\n\nThese points are the material for this piece: write them in your own words, with each figure and name as the material gives it, and nothing else from the notes.' : ''}`;
+}
+
+/**
+ * THE FIGURES AND NAMES OF THE MATERIAL, as it writes them (form parsers: digit-bearing figures, capitalised tokens other
+ * than a sentence's first word). Served beside a plan where a rule of the standard reads the work against the material:
+ * the plan serves its points only, and such a rule checks every figure (and, for a written check, every name) against the
+ * whole of it.
+ */
+export function figuresAndNames(material: readonly { readonly text: string }[], withNames: boolean): { readonly figures: readonly string[]; readonly names: readonly string[] } {
+  const text = material.map((m) => m.text).join('\n');
+  return { figures: [...new Set(figuresOf(text).filter((f) => !f.key.startsWith('pair:')).map((f) => f.raw))], names: withNames ? [...new Set(namesIn(text))] : [] };
 }
 
 /**

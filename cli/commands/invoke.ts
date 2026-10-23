@@ -27,7 +27,8 @@ const READ_CALLS_DEFAULT = 4;
 import { readContext } from '../../core/inference/reading.js';
 import { needsNote, needsNothing } from '../../core/loop/task-needs.js';
 import { beforeTheDraft, questionsJson } from '../prewrite.js';
-import { withoutPlanLines, type PiecePlan } from '../../core/loop/piece-plan.js';
+import { withoutPlanLines, figuresAndNames, type PiecePlan } from '../../core/loop/piece-plan.js';
+import { checkReadsMaterial } from '../../core/observers/written.js';
 import { writtenAsSentences, copiedRecord, POINTS_LINE, POINTS_NOTE } from '../../core/loop/material-points.js';
 import { refineToStandard, checkDraft, checkDraftAsync, withWaivers, enforceClaims, heavyCut, listedClaims, brokenByCut, gradedRules, PUBLIC_FACTS, INCONCLUSIVE, UNREAD, REPAIR_PASSES, repairVetoes, type CheckOptions } from '../../core/loop/run-repair.js';
 import { signalChecks, displacement, isSignal, ownerWords, authorRatesNote, ruledFeatures } from '../../core/loop/graded.js';
@@ -814,15 +815,24 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   // writes from; what the plan left out is not served. The checks still read the material as given. Not for a skill that
   // cites lines, which needs the numbered lines.
   const planServes = Boolean(before?.plan?.points.length) && material.length > 0 && !lineCiting;
-  if (planServes) report.detail('Served to the writer: the plan\'s points, in the plan\'s words; the notes themselves are read by the checks, not served.');
+  if (planServes) report.detail('Served to the writer: the plan\'s points, each with the material\'s words it comes from; the notes themselves are read by the checks, not served.');
+  // WHAT THE RULES THAT READ THE MATERIAL CHECK STAYS SERVED. A rule held against the whole material (every figure looked up
+  // in it; a written check that reads it) stays required with a plan, and a plan serves only its points: the figures (and,
+  // for a written check, the names) of the material are served beside the plan, as the material writes them.
+  const readers = planServes && std ? planFor(std).rules.filter((r) => r.role !== 'HABIT' && r.check && !withheld.includes(r.statement)
+    && (r.check.reads === 'BOUND_MATERIAL' || (r.check.observer === 'CHECK' && checkReadsMaterial(((std.requirements.find((q) => q.requirementId === r.id)?.measurement?.params.source as readonly string[] | undefined) ?? []).join('\n'))))) : [];
+  const inMaterial = readers.length ? figuresAndNames(material, readers.some((r) => r.check?.observer === 'CHECK')) : null;
+  const inMaterialNote = inMaterial && (inMaterial.figures.length || inMaterial.names.length)
+    ? `A rule of this skill reads the work against the whole of the material. Where the piece gives a figure or a name, give it exactly as the material writes it:${inMaterial.figures.length ? `\n- figures: ${inMaterial.figures.slice(0, 60).join('; ')}` : ''}${inMaterial.names.length ? `\n- names: ${inMaterial.names.slice(0, 60).join('; ')}` : ''}` : '';
   const requestNotes = forThisRequest(withheld.filter((w) => !needMaterial.includes(w)), briefText, impl.passages, lengthNote, needsNote(needs), placeholdersOn ? SLOT_NOTE : '', held ? latitudeBrief(held.level) : '',
-    asPoints && !planServes ? POINTS_NOTE : '', before?.note ?? '', ratesNote);
+    asPoints && !planServes ? POINTS_NOTE : '', before?.note ?? '', inMaterialNote, ratesNote);
   const servedBase = examplesFirst ? withoutPersonaBlocks(servedText) : servedText;
   if (examplesFirst) report.say(`Examples first: served without the description of how I sound or my repertoire${servedBase === servedText ? ' (the skill carried none)' : ''}; my moves are read on the work and never served.`);
   const servedForRun = `${needMaterial.length ? withoutRules(servedBase, needMaterial) : servedBase}${impl.notes ? `\n\n${impl.notes}` : ''}${carryBlock}${requestNotes}`;
   const deliveryForRun = withheld.length ? { ...delivery, withheldRules: withheld } : delivery;
   // What the person said was wrong with an earlier version (`atelier fix`) goes to the writer whatever shape was asked for.
-  const corrected = `${planServes ? asked : task}${correctionFor(flag('--correcting'))}${transfer?.note ?? ''}`;
+  // The material is not in the request a plan serves; the writer is still told it holds every specific (`NO_SLOTS`).
+  const corrected = `${planServes ? `${asked}${argv.includes('--placeholders') ? '' : NO_SLOTS}` : task}${correctionFor(flag('--correcting'))}${transfer?.note ?? ''}`;
   const taskForRun = shape === 'SHAPE' ? `${corrected}\n\n(The request's own format instruction overrides any presentation rule in the skill: follow the request exactly.)`
     : shape === 'BARE' ? `${corrected}\n\n(Deliver only the piece itself: no preamble, no note about it, no commentary after it.)` : corrected;
   // LONG FORM BY SECTION (core/fidelity/sections.ts), behind --sections: planned once, each section written with
@@ -1040,6 +1050,9 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   }
 }
 
+/** Said to the writer wherever material is bound: nothing is missing, so no slot is left for the person to fill. */
+export const NO_SLOTS = '\n\n(The material holds every specific this piece names. Leave no bracketed slot for me to fill: what the material does not give, the piece does without.)';
+
 /**
  * The task as served: what was asked, plus the person's standing material for this skill (`atelier
  * material`) and anything bound for this task (`--with`), the only places a first-person story or a cited
@@ -1053,7 +1066,7 @@ export function taskWithMaterial(L: store.StoreLayout, asked: string, lineCiting
   // each line's number, so a citation is read off the page and never counted. The skill's own text shows the
   // writer how to leave a slot ([link: …]) for a specific no one gave; with material bound, nothing is missing,
   // and a code review once named "[person: who owns the shipping policy]" as a Must fix. So the writer is told.
-  const noSlots = slots ? '' : '\n\n(The material holds every specific this piece names. Leave no bracketed slot for me to fill: what the material does not give, the piece does without.)';
+  const noSlots = slots ? '' : NO_SLOTS;
   const task = !material.length ? asked
     : lineCiting ? `${asked}\n\n${material.map((m) => `<material name="${m.name}" lines="numbered">\n${numbered(m.name, m.text)}\n</material>`).join('\n\n')}\n\n`
       + '(Each line of the material is shown with its line number in front of it. When you cite a line, use that number; do not count.)' + noSlots

@@ -7,6 +7,23 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+### A review of round 4: the dash held on the default path, the plan serves what the rules read, good repairs kept
+
+- **A disputed ban keeps the examples' dash cap.** Built without `--yes`, an owner's "No em dashes." that their own
+  examples dispute is shown on every run and blocks nothing until confirmed, and the examples' own dash cap was dropped
+  beside it all the same: nothing held the dash. The cap is now dropped only where the ban will hold (not disputed, or
+  confirmed with `--yes`), and for any ban whose patterns include the em dash, not only a ban on the dash alone.
+- **With a plan, each point is served with the material's words it comes from and the name of its file**, the note that
+  the material holds every specific (no bracketed slot) is kept, and where a rule reads the work against the whole
+  material (every figure looked up in it, or a written check that reads it), the material's figures (and, for a written
+  check, its names) are served as it writes them. The points the plan left out stay unserved.
+- **The seam check keeps good repairs.** A replacement that opens on "I" or on a name ("I left early." for "we left
+  early.") is a sentence of its own; only the original's own first word, capitalised after an open clause, is flagged.
+- **A short draft may be shortened a little.** A pass that takes a draft already under the length asked a little shorter
+  (within the length drift) is no longer refused; one that cuts it further, or through the length asked, still is.
+- **A stated angle is found however its quotes are typed.** Curly and straight apostrophes and quotation marks read as
+  one when a quote is looked up in the request, the material or what was told.
+
 ### The owner's ban holds against the examples, posts are documents, the unstated angle is asked, and the plan is what the writer gets
 
 - **The owner's ban beats the examples' rate.** Found by building one case-shaped invented fixture (one essay and four
