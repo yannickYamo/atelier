@@ -10,7 +10,7 @@ import { describe, it, expect } from 'vitest';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { QUESTIONS, parseAnswers, type QuestionsInput } from '../core/loop/questions.js';
+import { QUESTIONS, readAnswers, type QuestionsInput } from '../core/loop/questions.js';
 import { readContext } from '../core/inference/reading.js';
 import { beforeTheDraft } from '../cli/prewrite.js';
 import type { InferenceClient } from '../core/inference/client.js';
@@ -18,7 +18,7 @@ import * as store from '../core/state/store.js';
 import { anInferenceResult } from './fixtures.js';
 
 const INPUT: QuestionsInput = { request: 'Write a post reacting to the harbour reopening.', material: [{ name: 'notes', head: 'The harbour reopened on Tuesday.' }], method: [], examples: [], told: [] };
-const d = (kind: string, status: string, spread: string, extra: Record<string, unknown> = {}) => ({ kind, status, spread, what: `${kind.toLowerCase()} of the post`, ask: null, options: [], default: null, ...extra });
+const d = (kind: string, status: string, spread: string, extra: Record<string, unknown> = {}) => ({ kind, status, spread, settledBy: 'author-only', what: `${kind.toLowerCase()} of the post`, ask: null, options: [], default: null, ...extra });
 const ANGLE = d('ANGLE', 'UNKNOWN', 'DIFFERENT', { ask: 'Why does this matter to you now?', options: ['The ferry I take', 'The town\'s jobs', 'The old quay'], default: 'The town\'s jobs' });
 
 describe('the reading, grounded: only what only the author knows, and only where it changes the draft', () => {
@@ -60,8 +60,47 @@ describe('the reading, grounded: only what only the author knows, and only where
 
 describe('answers as typed', () => {
   const qs = [{ id: 'angle', ask: 'Why now?', options: ['a', 'b', 'c'].map((x) => `option ${x}`), default: 'option a' }];
-  it('a letter names an option; anything else is the person\'s own words; a malformed part is skipped', () => {
-    expect([...parseAnswers('angle=b, news=we opened a second berth, junk, =x', qs)]).toEqual([['angle', 'option b'], ['news', 'we opened a second berth']]);
+  it('a letter names an option; anything else is the person\'s own words; a part with no id is skipped', () => {
+    expect([...readAnswers('angle=b, news=we opened a second berth, =x', qs).answers]).toEqual([['angle', 'option b'], ['news', 'we opened a second berth, =x']]);
+  });
+  it('an answer may hold commas: pairs split only where a comma is followed by an id and "="', () => {
+    expect([...readAnswers('angle=the cost, not the speed, of it,emphasis = jobs', qs).answers]).toEqual([['angle', 'the cost, not the speed, of it'], ['emphasis', 'jobs']]);
+  });
+  it('a letter past the options takes the default and says so; it is no answer', () => {
+    const r = readAnswers('angle=d', qs);
+    expect([...r.answers]).toEqual([]);
+    expect(r.said).toEqual(['angle=d: the question has no option d; written with the default (option a).']);
+  });
+  it('an id that is no question kind is said in one line and ignored', () => {
+    const r = readAnswers('tone=casual,angle=b', qs);
+    expect([...r.answers]).toEqual([['angle', 'option b']]);
+    expect(r.said).toEqual(['tone matched no question; ignored.']);
+  });
+  it('a known kind this run did not ask is kept as the person\'s words', () => {
+    expect([...readAnswers('naming=only the product', qs).answers]).toEqual([['naming', 'only the product']]);
+  });
+});
+
+describe('what code asks, by form (fault-checked)', () => {
+  const four = [
+    d('EMPHASIS', 'UNKNOWN', 'DIFFERENT', { ask: 'Stress what?', options: ['jobs', 'ferries'], default: 'jobs' }),
+    d('NEWS', 'UNKNOWN', 'DIFFERENT', { ask: 'Any news of yours?', options: ['a new berth', 'none'], default: 'none' }),
+    d('NAMING', 'UNKNOWN', 'DIFFERENT', { ask: 'Name the operator?', options: ['yes', 'no'], default: 'no' }),
+    ANGLE];
+  it('four valid unknown decisions: exactly three asked, angle, naming, news', () => {
+    expect(QUESTIONS.ground({ decisions: four }, INPUT)?.questions.map((x) => x.id)).toEqual(['angle', 'naming', 'news']);
+  });
+  it('an unknown angle with five options is not asked; with four it is', () => {
+    const opts = ['one', 'two', 'three', 'four', 'five'];
+    expect(QUESTIONS.ground({ decisions: [{ ...ANGLE, options: opts, default: 'one' }] }, INPUT)?.questions).toEqual([]);
+    expect(QUESTIONS.ground({ decisions: [{ ...ANGLE, options: opts.slice(0, 4), default: 'one' }] }, INPUT)?.questions.map((x) => x.options)).toEqual([opts.slice(0, 4)]);
+  });
+  it('only a decision the reader says the author alone settles is asked: a voice question labelled ANGLE but settled by the examples is not', () => {
+    const tone = d('ANGLE', 'UNKNOWN', 'DIFFERENT', { settledBy: 'examples', ask: 'Should the tone be casual or formal?', options: ['casual', 'formal'], default: 'casual' });
+    expect(QUESTIONS.ground({ decisions: [tone] }, INPUT)?.questions).toEqual([]);
+    const { settledBy: _, ...unsaid } = ANGLE;
+    expect(QUESTIONS.ground({ decisions: [unsaid] }, INPUT)?.questions).toEqual([]);
+    expect(QUESTIONS.ground({ decisions: [ANGLE] }, INPUT)?.questions).toHaveLength(1);
   });
 });
 
@@ -86,6 +125,23 @@ describe('before the draft, outside a terminal: returned as choices, written wit
     const next = await beforeTheDraft({ ...base, L: l, answers: undefined, client: reader() });
     expect(next.questions[0]).toMatchObject({ default: 'The old quay', last: 'The old quay' });
   });
+  it('a letter past the options: the default, said, and nothing remembered', async () => {
+    const l = L();
+    const p = await beforeTheDraft({ ...base, L: l, answers: 'angle=d', client: reader() });
+    expect(p.record?.answers).toEqual([{ id: 'angle', answer: 'The town\'s jobs', by: 'default' }]);
+    expect(p.said).toContain('angle=d: the question has no option d; written with the default (The town\'s jobs).');
+    expect(store.getTold(l)).toEqual([]);
+  });
+  it('an id no question carries is said and ignored; a kind not asked this run is applied and replaces what the skill was told', async () => {
+    const l = L();
+    store.addTold(l, [{ id: 'naming', ask: 'Name the operator?', answer: 'never the operator', at: 't' }]);
+    const p = await beforeTheDraft({ ...base, L: l, answers: 'tone=casual,naming=only the product', client: reader() });
+    expect(p.said).toContain('tone matched no question; ignored.');
+    expect(p.record?.answers).toEqual([{ id: 'angle', answer: 'The town\'s jobs', by: 'default' }, { id: 'naming', answer: 'only the product', by: 'person' }]);
+    expect(p.note).toContain('- Name the operator? only the product');
+    expect(p.note).not.toContain('never the operator');
+    expect(store.getTold(l).map((t) => [t.id, t.answer]).pop()).toEqual(['naming', 'only the product']);
+  });
   it('with no reader set up, nothing is asked and nothing is said', async () => {
     const p = await beforeTheDraft({ ...base, L: L(), answers: undefined, client: null, model: null });
     expect([p.questions, p.said, p.note, p.record]).toEqual([[], [], '', null]);
@@ -104,6 +160,6 @@ describe('at a terminal: asked, a letter or the person\'s own words; "just write
   });
   it('"just write it" stops asking: the rest is written with the defaults', async () => {
     const p = await beforeTheDraft({ ...base, L: L(), client: reader(), read: async () => 'just write it' });
-    expect(p.record?.answers).toEqual([{ id: 'angle', answer: 'The town\'s jobs', by: 'default' }, { id: 'emphasis', answer: 'jobs', by: 'default' }]);
+    expect(p.record?.answers).toEqual([{ id: 'angle', answer: 'The town\'s jobs', by: 'default' }, { id: 'emphasis', answer: 'jobs', by: 'default' }]);    expect(p.said).toEqual(['Asked before writing: 2 question(s); 0 answered by you, 2 with the default (angle: The town\'s jobs; emphasis: jobs).']);
   });
 });

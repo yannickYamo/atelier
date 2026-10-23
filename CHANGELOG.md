@@ -27,6 +27,15 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 - **Material written as finished sentences is points to write from.** Said once, served as points, and the delivered work
   is read for the stretches it copies from it: every maximal run of 5 words or more is on the record (`copied`), and one
   of 8 words or more is rewritten like any listed finding; it never holds the work. Metric: copied runs = 0.
+- **Second-round gaps closed.** A question is asked only where the reader marks it settled by the author alone (a closed
+  `settledBy` field), so a tone question under another kind's label is not asked. `--answers` splits only at a comma
+  followed by `<id>=`, so an answer may hold commas; a letter past a question's options takes the default and says so
+  (never remembered); an answer for a kind this run did not ask applies and replaces what the skill was told; an id that
+  is no question is said in one line and ignored. "Just write it" says which defaults were used. A plan point needs 5
+  words or more of the material, and its figures and names must be in them or in the material (the image too); with
+  material bound and no point traced there is no plan. A second typed change to the plan keeps the first. A plan line
+  printed into the work is dropped and said. A quotation inside its quote marks, and a phrase the method or the
+  standard states, is not a copied stretch.
 
 ### Round-1 gaps closed
 

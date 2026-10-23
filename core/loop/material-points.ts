@@ -7,10 +7,14 @@
 // (./../observers/copied-runs.ts): every run of 5 words or more is reported on the record, and a run of 8 words or more
 // is a finding the repair rewrites like any other listed finding (core/loop/run-repair.ts, `COPIED_LINE`).
 //
+// Not copying: a quotation the work makes inside its quote pair (a quotation keeps its own words), and a phrase the
+// owner's method or standard itself states (their words, not the notes').
+//
 // FORM ONLY: a finished sentence is one of 8 words or more that ends with its own stop; two make notes "finished".
 
 import { sentencesOf } from '../observers/text.js';
-import { sharedRuns, RUN_WORDS, REPAIR_RUN_WORDS, type SharedRun } from '../observers/copied-runs.js';
+import { sharedRuns, containedIn, RUN_WORDS, REPAIR_RUN_WORDS, type SharedRun } from '../observers/copied-runs.js';
+import { maskQuotes } from './mechanical-repair.js';
 
 /** The fewest words a finished sentence has. */
 const SENTENCE_WORDS = 8;
@@ -34,10 +38,20 @@ export const POINTS_NOTE = 'The material above is notes to write from, not text 
 
 /** What the record keeps: every copied run of 5 words or more, the longest, and the threshold the repair acts at. */
 export interface CopiedRecord { readonly runs: number; readonly longest: number; readonly shown: readonly string[]; readonly repairAt: number }
-export function copiedRecord(output: string, material: string): CopiedRecord {
-  const runs = sharedRuns(output, material, RUN_WORDS);
+export function copiedRecord(output: string, material: string, own = ''): CopiedRecord {
+  const runs = copiedRuns(output, material, own);
   return { runs: runs.length, longest: runs.reduce((n, r) => Math.max(n, r.words), 0), shown: runs.slice(0, 5).map((r) => r.text.slice(0, 200)), repairAt: REPAIR_RUN_WORDS };
 }
 
+/**
+ * THE STRETCHES OF 5 WORDS OR MORE THE WORK COPIED FROM THE MATERIAL, outside its quotations (a quote pair keeps its own
+ * words: blanked before the runs are read, so positions stand) and not a phrase `own` states (the method's steps and the
+ * standard's statements: the owner's words). Text as the work has it.
+ */
+export function copiedRuns(output: string, material: string, own = ''): SharedRun[] {
+  return sharedRuns(maskQuotes(output), material, RUN_WORDS).filter((r) => !(own && containedIn(r.text, own)))
+    .map((r) => ({ ...r, text: output.slice(r.start, r.end) }));
+}
+
 /** The runs long enough to be repaired. */
-export const runsToRepair = (output: string, material: string): SharedRun[] => sharedRuns(output, material, RUN_WORDS).filter((r) => r.words >= REPAIR_RUN_WORDS);
+export const runsToRepair = (output: string, material: string, own = ''): SharedRun[] => copiedRuns(output, material, own).filter((r) => r.words >= REPAIR_RUN_WORDS);

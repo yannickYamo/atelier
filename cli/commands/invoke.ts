@@ -27,6 +27,7 @@ const READ_CALLS_DEFAULT = 4;
 import { readContext } from '../../core/inference/reading.js';
 import { needsNote, needsNothing } from '../../core/loop/task-needs.js';
 import { beforeTheDraft, questionsJson } from '../prewrite.js';
+import { withoutPlanLines, type PiecePlan } from '../../core/loop/piece-plan.js';
 import { writtenAsSentences, copiedRecord, POINTS_LINE, POINTS_NOTE } from '../../core/loop/material-points.js';
 import { refineToStandard, checkDraft, checkDraftAsync, withWaivers, enforceClaims, heavyCut, listedClaims, brokenByCut, gradedRules, PUBLIC_FACTS, INCONCLUSIVE, UNREAD, REPAIR_PASSES, repairVetoes, type CheckOptions } from '../../core/loop/run-repair.js';
 import { signalChecks, displacement, isSignal, ownerWords } from '../../core/loop/graded.js';
@@ -702,8 +703,10 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const asPoints = contractFile === null && writtenAsSentences(material);
   if (asPoints) report.say(POINTS_LINE);
   const materialOnly = material.map((m) => m.text).join('\n\n');
+  // the owner's own words (the method's steps, the standard's statements): a stretch of them is never a copy from the notes
+  const ownWords = [...briefSteps.map((s) => s.statement), ...(std?.requirements.map((q) => q.statement) ?? [])].join('\n');
   const checks = { ...checksFor(L, { material: materialText, task: asked, context: { request: asked, material }, guardClaims: !argv.includes('--allow-unsourced'), placeholders: placeholdersOn, ...(judge ? { judge } : {}), ...(held ? { level: held.level } : {}) }),
-    ...(asPoints ? { copiedFrom: materialOnly } : {}),
+    ...(asPoints ? { copiedFrom: materialOnly, copiedOwn: ownWords } : {}),
     ...(short.format ? { format: short.format } : {}),
     ...(transfer ? { doesNotApply: transfer.doesNotApply } : {}),
     ...(waived.size ? { waived } : {}), ...(graded !== undefined ? { graded, gradedProfile: carried } : {}) };
@@ -832,7 +835,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
         ...(checks.guardClaims !== false ? { readsWith: { material: checks.evidence ?? '' } } : {}) } : null,
       shapeRounds > 0 ? { client, budget, std, round: shapeRoundNow, graded, gradedProfile: graded !== undefined ? carried : null, gradedTrace, calibration: fid?.typicality ?? null, detector: fid?.profile.detector ?? null, target: shapeTarget, authorTarget, rounds: shapeRounds, servedText: servedForRun, task: taskForRun, trace, taste, notes: completions,
         fresh: planState ? (round: number) => freshPlannedDraft(client, budget, servedForRun, taskForRun, planState, round) : null } : null,
-      runSteps), requestNotes, completions),
+      runSteps), requestNotes, completions, before?.plan ?? null),
       planState ? { budget, trace, state: planState } : null), gradedTrace, ledgerBefore),
       checks.guardClaims !== false && checks.examples ? { client, budget, request: asked, evidence: `${checks.evidence ?? ''}\n${checks.approved ?? ''}`, examples: checks.examples, notes: completions,
         recheck: (text: string) => checkDraftAsync(name, std, text, checks) } : null),
@@ -858,7 +861,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
       nearness ? { ...nearness, usedFor: [...(impl.retrieved.length || pool.length ? ['passages' as const] : []), ...(fid.typicality?.ids && nearness.pieces.length ? ['typicality' as const] : []),
         ...(local ? ['range' as const] : []), ...(planState ? ['skeleton' as const] : [])] } : null) : null,
     // what was settled before the draft, and what the delivered work copied from material written as sentences
-    before?.record || asPoints ? (output: string) => ({ ...(before?.record ? { prewrite: before.record } : {}), ...(asPoints ? { copied: copiedRecord(output, materialOnly) } : {}) }) : null);
+    before?.record || asPoints ? (output: string) => ({ ...(before?.record ? { prewrite: before.record } : {}), ...(asPoints ? { copied: copiedRecord(output, materialOnly, ownWords) } : {}) }) : null);
 
   reportDrift(report, L, sv, rec);
   // Under strict delivery nothing is printed until the verdict is known.
@@ -2157,10 +2160,13 @@ export function withSituations(refine: (draft: string) => Promise<Delivered>, c:
  * THE NOTES ARE NEVER PART OF THE WORK (core/loop/echo.ts). A line of this request's notes (the brief, the rules set
  * aside, the slot shape) that the writer printed into the draft is removed by code before any check reads it, and said.
  */
-export function withoutEcho(refine: (draft: string) => Promise<Delivered>, notes: string, say: string[]): (draft: string) => Promise<Delivered> {
-  if (!notes.trim()) return refine;
+export function withoutEcho(refine: (draft: string) => Promise<Delivered>, notes: string, say: string[], plan: PiecePlan | null = null): (draft: string) => Promise<Delivered> {
+  if (!notes.trim() && !plan) return refine;
   return async (draft: string) => {
-    const r = withoutServedNotes(draft, notes);
+    // A LINE OF THE SHOWN PLAN in the work (core/loop/piece-plan.ts): dropped whatever its length, and said.
+    const p = plan ? withoutPlanLines(draft, plan) : { text: draft, removed: 0 };
+    if (p.removed) say.push(`Removed from the work: ${p.removed} line(s) of the plan the writer printed into it (the plan is never part of the piece).`);
+    const r = withoutServedNotes(p.text, notes);
     if (r.removed.length) say.push(`Removed from the work: ${r.removed.length} line(s) of the brief the writer printed into it (an instruction to the writer, never part of the piece).`);
     return refine(r.text);
   };

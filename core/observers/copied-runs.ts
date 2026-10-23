@@ -37,3 +37,9 @@ export function sharedRuns(text: string, material: string, n: number = RUN_WORDS
   close();
   return out;
 }
+
+/** Whether the words of `run`, in order, stand as one stretch in `text` (words lower-cased, compared as strings). */
+export function containedIn(run: string, text: string): boolean {
+  const r = words(run).map((x) => x.w).join(' ');
+  return r.length > 0 && ` ${words(text).map((x) => x.w).join(' ')} `.includes(` ${r} `);
+}

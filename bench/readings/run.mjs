@@ -26,6 +26,8 @@ import { STEP_CHECK, stepCheckInput, heldByPolarity } from '../../dist/core/meth
 import { outlineOf } from '../../dist/core/method/standard.js';
 import { countWords } from '../../dist/core/eval/size.js';
 import { MOVE_READER } from '../../dist/core/taste/move-reader.js';
+import { QUESTIONS } from '../../dist/core/loop/questions.js';
+import { PIECE_PLAN } from '../../dist/core/loop/piece-plan.js';
 import { AnthropicInferenceClient } from '../../dist/providers/anthropic.js';
 import { OpenAICompatibleInferenceClient } from '../../dist/providers/openai-compatible.js';
 
@@ -75,6 +77,12 @@ const READINGS = {
     // held against the rule-polarity reading as the build holds it: a prohibition keeps no check that requires what it forbids
     after: async (v, c, input) => { const k = await readContext(RULE_POLARITY, { statements: [{ id: 'r1', text: c.step }] }, client, model, budget); return { '1': heldByPolarity(v['1'], input.steps[0], k.value.r1) }; },
     answer: (v) => (v['1'] ? (v['1'].how === 'measure' ? `measure:${v['1'].measurement.observer}` : v['1'].how) : null) },
+  // the questions asked before a draft: the label is the asked ids in their fixed order joined by +, or none
+  'questions': { reading: QUESTIONS, input: (c) => ({ request: c.request, material: c.material ? [{ name: 'notes', head: c.material }] : [], method: c.method ?? [], examples: c.examples ?? [], told: c.told ?? [] }),
+    answer: (v) => v.questions.map((q) => q.id).join('+') || 'none' },
+  // the plan before a draft: none (the floor), missed (a note the case says it must use is not a point's source), excluded (a note the request rules out is), or plan
+  'piece-plan': { reading: PIECE_PLAN, input: (c) => ({ request: c.request, answers: c.answers ?? [], method: c.method ?? [], examples: c.examples ?? [], material: c.material ? [{ name: 'notes', text: c.material }] : [], ...(c.change ? { change: c.change } : {}) }),
+    answer: (v) => { const c = current; if (!v) return 'none'; const from = v.points.map((p) => p.from).join('\n'); return c.must && !from.includes(c.must) ? 'missed' : c.mustNot && from.includes(c.mustNot) ? 'excluded' : 'plan'; } },
   'method-units': { reading: METHOD_UNITS, input: (c) => ({ steps: [{ id: '1', text: c.step, under: c.under ?? null }] }), answer: (v) => (v['1'] ? `${v['1'].kind}|${v['1'].condition ? 'conditional' : 'always'}` : null) },
 };
 const args = process.argv.slice(2);

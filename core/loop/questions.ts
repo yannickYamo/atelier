@@ -8,9 +8,11 @@
 //
 // THE READING (house pattern, ../inference/reading.ts). The reader lists the decisions the piece needs and, for each, a
 // closed choice of KIND (what the decision is about: ANGLE, NAMING, NEWS, EMPHASIS, or OTHER for anything else, voice and
-// form included), STATUS (KNOWN from what was given, INFERABLE from it, or UNKNOWN), and SPREAD (would its likely answers
-// give the SAME draft, SOME difference, or DIFFERENT drafts). Code grounds it: a decision of kind OTHER is never asked (the
-// examples, method, request and material settle voice and form); only an UNKNOWN whose answers give DIFFERENT drafts is
+// form included), STATUS (KNOWN from what was given, INFERABLE from it, or UNKNOWN), SPREAD (would its likely answers
+// give the SAME draft, SOME difference, or DIFFERENT drafts), and SETTLED BY (what settles it: the examples, the request,
+// the material, the method, or the author only). Code grounds it: a decision of kind OTHER, or one settled by anything but
+// the author, is never asked (the examples, method, request and material settle voice and form: a tone question labelled
+// ANGLE is still settled by the examples); only an UNKNOWN whose answers give DIFFERENT drafts is
 // above the line; it needs 2 to 4 options and a default among them; one question per kind, at most three, in a fixed order.
 // With no model, or nothing grounded, the floor asks nothing.
 //
@@ -27,6 +29,10 @@ export type QuestionKind = typeof QUESTION_KINDS[number];
 export const STANDING_KINDS: ReadonlySet<QuestionKind> = new Set(['NAMING']);
 /** The most questions a run asks. */
 export const MAX_QUESTIONS = 3;
+/** What settles a decision, a closed field the reader fills: only `author-only` is asked. */
+export const SETTLED_BY = ['examples', 'request', 'material', 'method', 'author-only'] as const;
+/** What the writer is told a kind's answer is about, where it was given for a kind this run did not ask. */
+export const KIND_ASK: Readonly<Record<QuestionKind, string>> = { ANGLE: 'The angle, and why now:', NAMING: 'What the piece may name:', NEWS: 'News of my own work it may carry:', EMPHASIS: 'What to stress:' };
 
 /** One question as the person sees it, and as `--json` and the MCP return it. */
 export interface Question {
@@ -53,7 +59,7 @@ export interface QuestionsInput {
   readonly told: readonly ToldAnswer[];
 }
 /** One decision the piece needs, as read and grounded. */
-export interface Decided { readonly kind: QuestionKind | 'OTHER'; readonly status: 'KNOWN' | 'INFERABLE' | 'UNKNOWN'; readonly spread: 'SAME' | 'SOME' | 'DIFFERENT'; readonly what: string }
+export interface Decided { readonly kind: QuestionKind | 'OTHER'; readonly status: 'KNOWN' | 'INFERABLE' | 'UNKNOWN'; readonly spread: 'SAME' | 'SOME' | 'DIFFERENT'; readonly settledBy: typeof SETTLED_BY[number] | null; readonly what: string }
 export interface QuestionsReading { readonly decisions: readonly Decided[]; readonly questions: readonly Question[] }
 
 export const QUESTIONS_SYSTEM = `You prepare a writer to write one piece in a person's own voice. You are shown the person's request, the material that came with it, their method, the heads of a few of their finished pieces, and what they told this skill before.
@@ -62,6 +68,7 @@ List the decisions this piece needs (at most six). For each:
 - kind: ANGLE (the angle of the piece, or why it is worth saying now), NAMING (what or whom the piece may name), NEWS (news about the person's own company or work that the piece could carry), EMPHASIS (which part to stress), or OTHER (anything else: voice, tone, length, form, structure, wording; the examples and the method settle those).
 - status: KNOWN (the request, material, method, examples or what they told before already says it), INFERABLE (a careful reader of those could settle it), or UNKNOWN (only the person can say).
 - spread: would the person's likely answers produce the SAME draft, SOME difference, or DIFFERENT drafts.
+- settledBy: what settles it: "examples" (their finished pieces show it: voice, tone, form, length), "request", "material", "method", or "author-only" (none of those can; only the person knows it).
 - what: the decision in a few words.
 For an UNKNOWN decision only, also write the question to the person (one short sentence, in plain words), two to four short options they could pick, and the default: the option you would write with if they say nothing.
 
@@ -74,11 +81,12 @@ export const QUESTIONS_SCHEMA: Record<string, unknown> = {
       kind: { type: 'string', enum: [...QUESTION_KINDS, 'OTHER'] },
       status: { type: 'string', enum: ['KNOWN', 'INFERABLE', 'UNKNOWN'] },
       spread: { type: 'string', enum: ['SAME', 'SOME', 'DIFFERENT'] },
+      settledBy: { type: 'string', enum: [...SETTLED_BY] },
       what: { type: 'string' },
       ask: { type: ['string', 'null'] },
       options: { type: 'array', items: { type: 'string' } },
       default: { type: ['string', 'null'] },
-    }, required: ['kind', 'status', 'spread', 'what', 'ask', 'options', 'default'], additionalProperties: false } },
+    }, required: ['kind', 'status', 'spread', 'settledBy', 'what', 'ask', 'options', 'default'], additionalProperties: false } },
   },
   required: ['decisions'], additionalProperties: false,
 };
@@ -114,10 +122,12 @@ export const QUESTIONS: Reading<QuestionsInput, QuestionsReading> = {
       const status = x?.status === 'KNOWN' || x?.status === 'INFERABLE' || x?.status === 'UNKNOWN' ? x.status : null;
       const spread = x?.spread === 'SAME' || x?.spread === 'SOME' || x?.spread === 'DIFFERENT' ? x.spread : null;
       const what = typeof x?.what === 'string' ? clip(x.what, 120) : '';
+      const settledBy = (SETTLED_BY as readonly string[]).includes(String(x?.settledBy)) ? x.settledBy as typeof SETTLED_BY[number] : null;
       if (!kind || !status || !spread || !what) continue;
-      decisions.push({ kind, status, spread, what });
-      // ABOVE THE LINE: the author's own content, unknown, and answers that give different drafts.
-      if (kind === 'OTHER' || spreadScore({ status, spread }) < ASK_THRESHOLD || asked.has(kind)) continue;
+      decisions.push({ kind, status, spread, settledBy, what });
+      // ABOVE THE LINE: the author's own content (settled by the author alone, by the reader's closed field), unknown, and
+      // answers that give different drafts.
+      if (kind === 'OTHER' || settledBy !== 'author-only' || spreadScore({ status, spread }) < ASK_THRESHOLD || asked.has(kind)) continue;
       const told = [...input.told].reverse().find((t) => t.id === kind.toLowerCase());
       // What may be named, once told, stands: never asked again.
       if (told && STANDING_KINDS.has(kind)) continue;
@@ -139,23 +149,33 @@ export const QUESTIONS: Reading<QuestionsInput, QuestionsReading> = {
 /** A letter for an option: a, b, c, d. */
 export const letter = (i: number): string => String.fromCharCode(97 + i);
 
+/** Where one `id=choice` pair ends and the next begins (a form parser): a comma followed by an id and "=". */
+const PAIR_BREAK = /,(?=\s*[a-z][a-z0-9_-]*\s*=)/i;
+
 /**
- * THE ANSWERS GIVEN AS `--answers "angle=b,naming=only the product"` (a form parser: comma-separated `id=choice`). A
- * choice that is a single letter names that option of the question; anything else is the person's own answer, kept as
- * written. An id no question carries is kept too: it answers that kind if a later run asks it. Never fails.
+ * THE ANSWERS GIVEN AS `--answers "angle=b,naming=only the product, never the operator"` (a form parser: `id=choice`
+ * pairs, split only where a comma is followed by `<id>=`, so an answer may hold commas). A single letter names that
+ * option of the question; a letter past its options is no answer: the default stands, and that is said. Anything else
+ * is the person's own answer, kept as written. An id that is a question kind answers that kind, asked this run or not;
+ * one that is no kind is said in one line and ignored. Never fails.
  */
-export function parseAnswers(s: string | undefined, questions: readonly Question[]): Map<string, string> {
-  const out = new Map<string, string>();
-  for (const part of (s ?? '').split(',')) {
+export function readAnswers(s: string | undefined, questions: readonly Question[]): { readonly answers: Map<string, string>; readonly said: string[] } {
+  const answers = new Map<string, string>(); const said: string[] = [];
+  const kinds = QUESTION_KINDS.map((k) => k.toLowerCase());
+  for (const part of (s ?? '').split(PAIR_BREAK)) {
     const eq = part.indexOf('=');
     if (eq <= 0) continue;
     const id = part.slice(0, eq).trim().toLowerCase(); const choice = part.slice(eq + 1).trim();
     if (!id || !choice) continue;
+    if (!kinds.includes(id)) { said.push(`${id} matched no question; ignored.`); continue; }
     const q = questions.find((x) => x.id === id);
     const i = /^[a-d]$/i.test(choice) ? choice.toLowerCase().charCodeAt(0) - 97 : -1;
-    out.set(id, q && i >= 0 && i < q.options.length ? q.options[i] : choice);
+    if (i < 0) { answers.set(id, choice); continue; }
+    if (q && i < q.options.length) { answers.set(id, q.options[i]); continue; }
+    said.push(q ? `${id}=${choice}: the question has no option ${choice.toLowerCase()}; written with the default (${q.default}).`
+      : `${id}=${choice}: no ${id} question was asked this run to pick ${choice.toLowerCase()} from; ignored.`);
   }
-  return out;
+  return { answers, said };
 }
 
 /** The questions as a person reads them in a terminal: each with its lettered options and its default. */

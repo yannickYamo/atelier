@@ -15,7 +15,7 @@
 import { createInterface } from 'node:readline/promises';
 import { readContext, type DecidedBy } from '../core/inference/reading.js';
 import type { InferenceClient } from '../core/inference/client.js';
-import { QUESTIONS, parseAnswers, questionLines, defaultsLine, answersNote, STANDING_KINDS, QUESTION_KINDS, type Question, type QuestionKind } from '../core/loop/questions.js';
+import { QUESTIONS, readAnswers, questionLines, defaultsLine, answersNote, STANDING_KINDS, QUESTION_KINDS, KIND_ASK, type Question, type QuestionKind } from '../core/loop/questions.js';
 import { PIECE_PLAN, planLines, planNote, type PiecePlan, type PlanInput } from '../core/loop/piece-plan.js';
 import * as store from '../core/state/store.js';
 import type { InvocationRecord } from '../core/state/canonical-state.js';
@@ -74,7 +74,8 @@ export async function beforeTheDraft(o: PrewriteInput): Promise<Prewrite> {
   const q = o.questions ? await readContext(QUESTIONS, { request: o.request, material: o.material.map((m) => ({ name: m.name, head: m.text.slice(0, 600) })), method: o.method, examples: o.examples, told },
     o.client, o.model, tiny(), 'context judge') : null;
   const questions = q?.value.questions ?? [];
-  const given = parseAnswers(o.answers, questions);
+  const { answers: given, said: answersSaid } = readAnswers(o.answers, questions);
+  said.push(...answersSaid);
   const answers: { id: string; answer: string; by: 'person' | 'default' | 'told' }[] = [];
   let rest = false;
   for (const x of questions) {
@@ -87,39 +88,43 @@ export async function beforeTheDraft(o: PrewriteInput): Promise<Prewrite> {
     }
     answers.push({ id: x.id, answer: x.default, by: 'default' });
   }
+  // AN ANSWER FOR A KIND THIS RUN DID NOT ASK applies all the same, and replaces what the skill was told of it.
+  const askOf = (id: string): string => [...told].reverse().find((t) => t.id === id)?.ask ?? KIND_ASK[id.toUpperCase() as QuestionKind];
+  for (const [id, answer] of given) if (!questions.some((x) => x.id === id)) answers.push({ id, answer, by: 'person' });
   // What may be named, once told, stands: said to the writer on every run, never asked again.
   for (const k of QUESTION_KINDS.filter((kk: QuestionKind) => STANDING_KINDS.has(kk))) {
     const t = [...told].reverse().find((x) => x.id === k.toLowerCase());
-    if (t && !questions.some((x) => x.id === t.id)) answers.push({ id: t.id, answer: t.answer, by: 'told' });
+    if (t && !questions.some((x) => x.id === t.id) && !answers.some((a) => a.id === t.id)) answers.push({ id: t.id, answer: t.answer, by: 'told' });
   }
   const unanswered = questions.filter((x) => answers.find((a) => a.id === x.id)?.by === 'default');
   if (unanswered.length && !o.interactive) said.push(defaultsLine(unanswered));
-  else if (questions.length) said.push(`Asked before writing: ${questions.length} question(s); ${questions.length - unanswered.length} answered by you, ${unanswered.length} with the default.`);
+  else if (questions.length) said.push(`Asked before writing: ${questions.length} question(s); ${questions.length - unanswered.length} answered by you, ${unanswered.length} with the default${unanswered.length ? ` (${unanswered.map((x) => `${x.id}: ${x.default}`).join('; ')})` : ''}.`);
   const at = new Date().toISOString();
-  store.addTold(o.L, answers.filter((a) => a.by === 'person').map((a) => ({ id: a.id, ask: questions.find((x) => x.id === a.id)?.ask ?? a.id, answer: a.answer, at })));
-  const asked = [...questions.map((x) => ({ ask: x.ask, answer: answers.find((a) => a.id === x.id)?.answer ?? x.default })),
-    ...answers.filter((a) => a.by === 'told').map((a) => ({ ask: told.find((t) => t.id === a.id)?.ask ?? a.id, answer: a.answer }))];
-  const answerText = answersNote([...questions, ...answers.filter((a) => a.by === 'told').map((a) => ({ id: a.id, ask: told.find((t) => t.id === a.id)?.ask ?? a.id, options: [], default: a.answer }))],
-    new Map(answers.map((a) => [a.id, a.answer])));
+  store.addTold(o.L, answers.filter((a) => a.by === 'person').map((a) => ({ id: a.id, ask: questions.find((x) => x.id === a.id)?.ask ?? askOf(a.id), answer: a.answer, at })));
+  // what was settled beyond this run's questions: a kind answered without being asked, or what may be named, told before
+  const beyond = answers.filter((a) => !questions.some((x) => x.id === a.id)).map((a) => ({ id: a.id, ask: askOf(a.id), options: [] as string[], default: a.answer }));
+  const asked = [...questions.map((x) => ({ ask: x.ask, answer: answers.find((a) => a.id === x.id)?.answer ?? x.default })), ...beyond.map((b) => ({ ask: b.ask, answer: b.default }))];
+  const answerText = answersNote([...questions, ...beyond], new Map(answers.map((a) => [a.id, a.answer])));
   // ── THE PLAN ───────────────────────────────────────────────────────────────────────────────
-  let plan: PiecePlan | null = null; let planBy: DecidedBy | 'off' = 'off'; let changes = 0;
+  let plan: PiecePlan | null = null; let planBy: DecidedBy | 'off' = 'off'; const typedChanges: string[] = [];
   if (o.plan) {
     const input: PlanInput = { request: o.request, answers: asked, method: o.method, examples: o.examples, material: o.material };
     let p = await readContext(PIECE_PLAN, input, o.client, o.model, tiny(0.05), 'context judge');
     plan = p.value; planBy = p.by;
     // A CHANGE TYPED TO THE PLAN MAKES IT AGAIN, from scratch with the change; at most three.
-    while (plan && o.interactive && changes < 3) {
+    // A second change keeps the first: the plan is made again from the request and every change typed so far, in order.
+    while (plan && o.interactive && typedChanges.length < 3) {
       process.stderr.write(`\nThe plan:\n${planLines(plan).map((l) => `  ${l}`).join('\n')}\n`);
       const typed = await read('Enter to write, or type a change: ');
       if (!typed) break;
-      changes += 1;
-      p = await readContext(PIECE_PLAN, { ...input, change: typed }, o.client, o.model, tiny(0.05), 'context judge');
+      typedChanges.push(typed);
+      p = await readContext(PIECE_PLAN, { ...input, change: typedChanges.map((c, i) => `${i + 1}. ${c}`).join('\n') }, o.client, o.model, tiny(0.05), 'context judge');
       if (p.value) { plan = p.value; planBy = p.by; } else said.push(`The plan could not be made again with "${typed.slice(0, 80)}": written from the plan as it was.`);
     }
     if (plan) said.push(`Planned before writing: ${plan.points.length} point(s) from the material${plan.leftOut.length ? `, ${plan.leftOut.length} left out` : ''}; the plan is on the record, never in the work (atelier report <run>).`);
   }
   const note = [answerText, plan ? planNote(plan) : ''].filter(Boolean).join('\n\n');
-  const record = questions.length || answers.length || plan ? { questions, answers, questionsBy: q?.by ?? 'floor', plan, planBy, ...(changes ? { planChanges: changes } : {}) } : null;
+  const record = questions.length || answers.length || plan ? { questions, answers, questionsBy: q?.by ?? 'floor', plan, planBy, ...(typedChanges.length ? { planChanges: typedChanges.length } : {}) } : null;
   return { note, said, questions, plan, record };
 }
 

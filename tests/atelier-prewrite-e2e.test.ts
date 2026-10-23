@@ -15,7 +15,7 @@ import * as store from '../core/state/store.js';
 const CLI = resolve('dist/cli/atelier.mjs');
 const NOTES = 'The new terminal opens in March and doubles the number of berths. Ferries to the islands will leave every hour from the first week.';
 const PIECE = 'March brings the new terminal and twice the berths. I will take the first hourly ferry to the islands.';
-const QUESTIONS = { decisions: [{ kind: 'ANGLE', status: 'UNKNOWN', spread: 'DIFFERENT', what: 'why it matters now', ask: 'Why does the terminal matter to you now?',
+const QUESTIONS = { decisions: [{ kind: 'ANGLE', status: 'UNKNOWN', spread: 'DIFFERENT', settledBy: 'author-only', what: 'why it matters now', ask: 'Why does the terminal matter to you now?',
   options: ['My daily crossing', 'The island shops', 'The old pier'], default: 'My daily crossing' }] };
 const PLAN = { angle: 'The terminal gives the islands back their hour.', pain: 'Waiting half a day for a boat.', turn: 'Hourly ferries change the trip.', answer: 'Go and use it.',
   points: [{ point: 'hourly island ferries', from: 'Ferries to the islands will leave every hour' }], image: null, close: 'See you on the first boat.', left_out: [] };
@@ -70,6 +70,16 @@ describe('before the draft, through the binary', () => {
     const j = JSON.parse(run('invoke', '--skill', 'quay', 'Write a post on the new terminal.', '--json', '--answers', 'angle=b', ...be)) as Record<string, unknown>;
     expect(j.answers).toEqual([{ id: 'angle', answer: 'The island shops', by: 'person' }]);
     expect(store.getTold({ root: data, skillName: 'quay' }).map((t) => t.answer)).toEqual(['The island shops']);
+  });
+  it('a plan line the writer printed into the work is dropped and said; an answer holding commas and an id no question carries', async () => {
+    await fetch(`http://127.0.0.1:${port}/__set`, { method: 'POST', body: JSON.stringify({ byTool: { emit_piece: { piece: `<work>Angle: ${PLAN.angle}\n\n${PIECE}</work>` }, emit_questions: QUESTIONS, emit_plan: PLAN } }) });
+    const { run, be } = setup();
+    const j = JSON.parse(run('invoke', '--skill', 'quay', 'Write a post on the new terminal.', '--json', '--answers', 'angle=the shops, not the pier,tone=dry', ...be)) as Record<string, unknown>;
+    expect(String(j.output)).not.toContain('Angle:');
+    expect(j.answers).toEqual([{ id: 'angle', answer: 'the shops, not the pier', by: 'person' }]);
+    const report = (j.report as string[]).join('\n');
+    expect(report).toContain('Removed from the work: 1 line(s) of the plan the writer printed into it');
+    expect(report).toContain('tone matched no question; ignored.');
   });
   it('--no-questions --no-plan: nothing is read before the draft', async () => {
     await script();

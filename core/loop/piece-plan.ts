@@ -5,13 +5,19 @@
 // before the draft one reading makes that plan: the angle, the pain the reader has, the turn, the answer, at most three
 // points chosen from the material (each tied to the words it comes from), one image if any, the close, and the material
 // left out with why. The draft is written from the plan; the plan itself is never the work (it stands outside the
-// `<work>` field and is kept in the record for `atelier report`). A change the person types rebuilds the plan from
-// scratch with their change, never a patch of the last one.
+// `<work>` field and is kept in the record for `atelier report`; a line of it the writer prints into the work is dropped,
+// and said). A change the person types rebuilds the plan from scratch with every change typed so far, in order, never a
+// patch of the last one.
 //
-// THE READING (house pattern, ../inference/reading.ts). Code grounds it: a point is kept only where the words it says it
-// comes from are in the material (at most three kept); a left-out entry only where its words are in the material; the
-// angle and the answer must be there. With no model, or nothing grounded, the floor is no plan: the draft is written as
-// it was before. Nothing here names a kind of work.
+// THE READING (house pattern, ../inference/reading.ts). Code grounds it, by form: a point is kept only where the words it
+// says it comes from are 5 or more and stand in the material, and every figure (digit sequence) and every capitalised
+// name in the point is in those words or the material (at most three kept); the image only where its figures and names
+// are in the material; a left-out entry only where its words are in the material; the angle and the answer must be
+// there. With material bound and no point traced, the plan would tell the writer to use none of it: there is no plan.
+// With no model, or nothing grounded, the floor is no plan: the draft is written as it was before. Nothing here names a
+// kind of work.
+
+import { normalLine } from './echo.js';
 
 import type { Reading } from '../inference/reading.js';
 
@@ -33,7 +39,7 @@ export interface PlanInput {
   readonly method: readonly string[];
   readonly examples: readonly string[];
   readonly material: readonly { readonly name: string; readonly text: string }[];
-  /** a change the person typed to the last plan: the plan is made again with it, from scratch */
+  /** the changes the person typed to the plan, in order: the plan is made again with all of them, from scratch */
   readonly change?: string;
 }
 
@@ -64,6 +70,18 @@ export const PLAN_SCHEMA: Record<string, unknown> = {
 
 const clip = (s: unknown, n: number): string => (typeof s === 'string' ? s.replace(/\s+/g, ' ').trim().slice(0, n) : '');
 const flat = (s: string): string => s.replace(/[‘’]/g, "'").replace(/[“”]/g, '"').replace(/\s+/g, ' ').trim().toLowerCase();
+/** The fewest words the material a point comes from must be. */
+export const FROM_WORDS = 5;
+// FORM PARSERS, named: words; digit sequences; capitalised tokens other than a sentence's first word.
+const WORD = /[\p{L}\p{N}][\p{L}\p{N}'’-]*/gu;
+const wordsIn = (t: string): string[] => t.match(WORD) ?? [];
+const digitsIn = (t: string): string[] => t.match(/\d+/g) ?? [];
+const namesIn = (t: string): string[] => t.split(/(?<=[.!?:;])\s+/).flatMap((sentence) => wordsIn(sentence).slice(1).filter((w) => /^\p{Lu}/u.test(w)));
+/** Whether every figure and every capitalised name of `t` stands in `source` (its digit sequences, its words). */
+const heldBy = (t: string, source: string): boolean => {
+  const digits = new Set(digitsIn(source)); const words = new Set(wordsIn(source).map((w) => w.toLowerCase()));
+  return digitsIn(t).every((d) => digits.has(d)) && namesIn(t).every((n) => words.has(n.toLowerCase()));
+};
 
 export const PIECE_PLAN: Reading<PlanInput, PiecePlan | null> = {
   id: 'piece-plan', version: '1',
@@ -76,7 +94,7 @@ export const PIECE_PLAN: Reading<PlanInput, PiecePlan | null> = {
       input.method.length ? `The method:\n${input.method.map((s, i) => `${i + 1}. ${s}`).join('\n')}` : '',
       ...input.examples.slice(0, 3).map((e, i) => `Piece ${i + 1} (head):\n${e.slice(0, 800)}`),
       input.material.length ? `The material:\n${input.material.map((m) => `[${m.name}]\n${m.text.slice(0, 6000)}`).join('\n\n')}` : 'No material came with it.',
-      input.change ? `The person asked for this change to the plan; make the plan again with it:\n${input.change.slice(0, 1000)}` : ''].filter(Boolean).join('\n\n');
+      input.change ? `The person asked for these changes to the plan, in order; make the plan again with all of them:\n${input.change.slice(0, 2000)}` : ''].filter(Boolean).join('\n\n');
   },
   // Always read: a plan is the reader's to make, or no plan at all (the floor).
   decide() { return null; },
@@ -85,14 +103,20 @@ export const PIECE_PLAN: Reading<PlanInput, PiecePlan | null> = {
     if (!r) return null;
     const angle = clip(r.angle, 300); const answer = clip(r.answer, 300);
     if (!angle || !answer) return null;
-    const source = flat(input.material.map((m) => m.text).join('\n'));
+    const given = input.material.map((m) => m.text).join('\n');
+    const source = flat(given);
     const traced = (q: string): boolean => q.length >= 3 && source.includes(flat(q));
-    // A point stands on words the material holds; at most three.
+    // A point stands on 5 words or more the material holds, and says no figure or name that neither those words nor the
+    // material hold; at most three.
     const points = (Array.isArray(r.points) ? r.points as Record<string, unknown>[] : [])
-      .map((p) => ({ point: clip(p?.point, 240), from: clip(p?.from, 400) })).filter((p) => p.point && traced(p.from)).slice(0, MAX_POINTS);
+      .map((p) => ({ point: clip(p?.point, 240), from: clip(p?.from, 400) }))
+      .filter((p) => p.point && wordsIn(p.from).length >= FROM_WORDS && traced(p.from) && heldBy(p.point, `${p.from}\n${given}`)).slice(0, MAX_POINTS);
+    // Material bound and no point traced: a plan would tell the writer to use none of it. No plan; the draft is written as before.
+    if (input.material.some((m) => m.text.trim()) && !points.length) return null;
     const leftOut = (Array.isArray(r.left_out) ? r.left_out as Record<string, unknown>[] : [])
       .map((x) => ({ what: clip(x?.what, 240), why: clip(x?.why, 160) })).filter((x) => x.why && traced(x.what)).slice(0, 12);
-    return { angle, pain: clip(r.pain, 300), turn: clip(r.turn, 300), answer, points, image: clip(r.image, 240) || null, close: clip(r.close, 300), leftOut };
+    const image = clip(r.image, 240);
+    return { angle, pain: clip(r.pain, 300), turn: clip(r.turn, 300), answer, points, image: image && heldBy(image, given) ? image : null, close: clip(r.close, 300), leftOut };
   },
   // No model, or nothing grounded: no plan, the draft is written as it was.
   floor() { return null; },
@@ -107,5 +131,16 @@ export function planLines(p: PiecePlan): string[] {
 
 /** What the writer is told of the plan, after the skill: write from it, and never write it out. */
 export function planNote(p: PiecePlan): string {
-  return `The plan for this piece (write the piece from it; the plan is not part of the piece, so never write it out):\n\n${planLines(p).map((l) => `- ${l}`).join('\n')}\n\nUse these points from the material and no others; what is left out stays out.`;
+  return `The plan for this piece (write the piece from it; the plan is not part of the piece, so never write it out):\n\n${planLines(p).map((l) => `- ${l}`).join('\n')}${p.points.length ? '\n\nUse these points from the material and no others; what is left out stays out.' : ''}`;
+}
+
+/**
+ * A LINE OF THE SHOWN PLAN PRINTED INTO THE WORK is dropped (a form check: the work line, read without its list marker,
+ * case and spacing, is a line of the plan as shown). The text without them, and how many were dropped.
+ */
+export function withoutPlanLines(text: string, p: PiecePlan): { readonly text: string; readonly removed: number } {
+  const shown = new Set(planLines(p).map(normalLine));
+  const lines = text.split('\n'); const kept = lines.filter((l) => !(l.trim() && shown.has(normalLine(l))));
+  const removed = lines.length - kept.length;
+  return removed ? { text: kept.join('\n').replace(/\n{3,}/g, '\n\n').replace(/^\n+/, ''), removed } : { text, removed: 0 };
 }

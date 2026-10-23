@@ -136,11 +136,12 @@ never what the request, material, method or examples settle, at most three, each
 default, and none when the request carries it. At a terminal you answer with a letter, your own words, or "just write
 it". Elsewhere (`--json`, a pipe, the MCP server, an agent) nothing waits: the questions come back as
 `questions: [{id, ask, options, default}]`, the work is written with the defaults, said in one line, and
-`--answers "angle=b,naming=only the product"` answers them on the next call. Your answers are the next run's defaults
-("last time you said …"); what may be named, once said, is not asked again. Then the run makes a plan: the angle, the
+`--answers "angle=b,naming=only the product, never its staff"` answers them on the next call (an answer may hold
+commas; a kind not asked this run, `naming=...` say, still applies and replaces what you said before). Your answers are
+the next run's defaults ("last time you said …"); what may be named, once said, is not asked again. Then the run makes a plan: the angle, the
 pain, the turn, the answer, at most three points chosen from your material (each tied to its words), one image, the
 close, and what was left out and why. At a terminal it is shown before writing (enter writes; anything you type makes
-the plan again from scratch with your change); with `--json` it is returned as `plan`. The draft is written from it; the
+the plan again from scratch with every change you typed); with `--json` it is returned as `plan`. The draft is written from it; the
 plan is never part of the work and stays on the record (`atelier report <run>`). `--no-questions` and `--no-plan` turn
 either off; with no reader set up nothing is asked and there is no plan.
 

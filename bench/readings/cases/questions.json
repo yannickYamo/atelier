@@ -1,0 +1,109 @@
+{
+  "reading": "questions",
+  "pass": {
+    "runs": 5,
+    "perCaseAtLeast": 4,
+    "codeDecidedExact": true,
+    "line": "At least 9 of 11 hard cases agree with their label in 4 of 5 runs, and no case labelled none is asked a question in more than 1 run of 5 (asking what was given or what the examples settle is the harmful error)."
+  },
+  "cases": [
+    {
+      "id": "empty-request",
+      "label": "none",
+      "request": "   "
+    },
+    {
+      "id": "all-given",
+      "label": "none",
+      "request": "Write a post on the harbour reopening. My angle: the hourly crossings give the islands back their day. Name the ferry operator, Tidewater Lines. No news of my own. Stress the timetable.",
+      "material": "The harbour reopened on Tuesday after fourteen months of works.\nThe new berth takes two ferries at once.\nCrossings to the islands now leave every hour.\nFares stay the same this year.\nThe café on the pier reopens in May."
+    },
+    {
+      "id": "tone-only-gap",
+      "label": "none",
+      "request": "Write a post on the harbour reopening, arguing that the hourly crossings change island life. Do not name anyone. Should it be funny or serious? Use my usual voice.",
+      "material": "The harbour reopened on Tuesday after fourteen months of works.\nThe new berth takes two ferries at once.\nCrossings to the islands now leave every hour.\nFares stay the same this year.\nThe café on the pier reopens in May.",
+      "examples": [
+        "I took the 7:10 crossing for eleven years. Then the quay closed, and the islands went quiet."
+      ]
+    },
+    {
+      "id": "bare-reaction",
+      "label": "angle",
+      "request": "Write a post reacting to the harbour reopening.",
+      "material": "The harbour reopened on Tuesday after fourteen months of works.\nThe new berth takes two ferries at once.\nCrossings to the islands now leave every hour.\nFares stay the same this year.\nThe café on the pier reopens in May."
+    },
+    {
+      "id": "angle-told-last-time-still-asked",
+      "label": "angle",
+      "request": "Write a post reacting to the harbour reopening.",
+      "material": "The harbour reopened on Tuesday after fourteen months of works.\nThe new berth takes two ferries at once.\nCrossings to the islands now leave every hour.\nFares stay the same this year.\nThe café on the pier reopens in May.",
+      "told": [
+        {
+          "id": "angle",
+          "ask": "Why does this matter to you now?",
+          "answer": "The ferry I take",
+          "at": "2026-10-01"
+        }
+      ]
+    },
+    {
+      "id": "naming-told-not-asked",
+      "label": "angle",
+      "request": "Write a post reacting to the harbour reopening; it can mention the operator.",
+      "material": "The harbour reopened on Tuesday after fourteen months of works.\nThe new berth takes two ferries at once.\nCrossings to the islands now leave every hour.\nFares stay the same this year.\nThe café on the pier reopens in May.",
+      "told": [
+        {
+          "id": "naming",
+          "ask": "May the piece name the operator?",
+          "answer": "Name the operator, never its staff",
+          "at": "2026-10-01"
+        }
+      ],
+      "soft": true
+    },
+    {
+      "id": "own-news-unknown",
+      "label": "angle+news",
+      "request": "Write a post reacting to the harbour reopening for my company's page; we run the café on the pier, and I may have something of ours to announce with it.",
+      "material": "The harbour reopened on Tuesday after fourteen months of works.\nThe new berth takes two ferries at once.\nCrossings to the islands now leave every hour.\nFares stay the same this year.\nThe café on the pier reopens in May.",
+      "soft": true
+    },
+    {
+      "id": "client-naming-open",
+      "label": "naming",
+      "request": "Write a post arguing that the hourly crossings will bring visitors back to the islands. We advised a client on the new berth; I am not sure we can say who.",
+      "material": "The harbour reopened on Tuesday after fourteen months of works.\nThe new berth takes two ferries at once.\nCrossings to the islands now leave every hour.\nFares stay the same this year.\nThe café on the pier reopens in May."
+    },
+    {
+      "id": "emphasis-open-two-threads",
+      "label": "emphasis",
+      "request": "Write a post on the harbour reopening that argues it is good for the islands. I care about both the café and the crossings and have not decided which to stress.",
+      "material": "The harbour reopened on Tuesday after fourteen months of works.\nThe new berth takes two ferries at once.\nCrossings to the islands now leave every hour.\nFares stay the same this year.\nThe café on the pier reopens in May.",
+      "soft": true
+    },
+    {
+      "id": "method-settles-form",
+      "label": "none",
+      "request": "Write a post arguing the hourly crossings give the islands back their day. Name nobody.",
+      "material": "The harbour reopened on Tuesday after fourteen months of works.\nThe new berth takes two ferries at once.\nCrossings to the islands now leave every hour.\nFares stay the same this year.\nThe café on the pier reopens in May.",
+      "method": [
+        "Open on a scene from my own day.",
+        "End with one question to the reader.",
+        "Keep it under 300 words."
+      ]
+    },
+    {
+      "id": "request-is-a-rewrite",
+      "label": "none",
+      "request": "Rewrite this paragraph in my voice, same meaning: The harbour reopened on Tuesday and crossings now leave every hour.",
+      "soft": false
+    },
+    {
+      "id": "material-states-angle",
+      "label": "none",
+      "request": "Write the post from my notes below.",
+      "material": "Angle: the islands get their day back.\nName: nobody.\nNews of ours: none.\nStress: the hourly crossings.\nThe harbour reopened on Tuesday after fourteen months of works.\nThe new berth takes two ferries at once.\nCrossings to the islands now leave every hour.\nFares stay the same this year.\nThe café on the pier reopens in May."
+    }
+  ]
+}

@@ -85,6 +85,12 @@ export function replaceEmDashes(text: string): string {
   }).join(' ')), replaceInTableRow);
 }
 
+/** A quotation, by form: a pair of straight or curly double quotes on one line. */
+const QUOTE_PAIR = /"[^"\n]*"|“[^”\n]*”/g;
+
+/** The text with every quotation's inside blanked to spaces, the same length (`QUOTE_PAIR`): what stands outside quotes, where it stands. */
+export const maskQuotes = (text: string): string => text.replace(QUOTE_PAIR, (q) => `${q[0]}${' '.repeat(q.length - 2)}${q[q.length - 1]}`);
+
 /**
  * A QUOTATION KEEPS ITS OWN WORDS (a form parser: a pair of straight or curly double quotes on one line). Each quoted span
  * is set aside behind a placeholder that is itself quoted, so the repair still sees a quotation mark at its edges, and put
@@ -92,7 +98,7 @@ export function replaceEmDashes(text: string): string {
  */
 function outsideQuotes(line: string, f: (line: string) => string): string {
   const kept: string[] = [];
-  const masked = line.replace(/"[^"\n]*"|“[^”\n]*”/g, (q) => { kept.push(q); return `"\uE000${kept.length - 1}\uE001"`; });
+  const masked = line.replace(QUOTE_PAIR, (q) => { kept.push(q); return `"\uE000${kept.length - 1}\uE001"`; });
   return kept.length ? f(masked).replace(/"\uE000(\d+)\uE001"/g, (_, i: string) => kept[Number(i)]) : f(line);
 }
 

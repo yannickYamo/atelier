@@ -466,3 +466,13 @@ describe('automated delivery is on the path every door takes', () => {
     expect((cli.match(/requalifySkill\(/g) ?? []).length).toBeGreaterThanOrEqual(3);   // report --requalify, rate, build
   });
 });
+
+describe('what is settled before the draft is on the run path', () => {
+  it('the answers, the plan echo, and the owner\'s own words beside the copied-stretch check are called by the CLI', () => {
+    expect(cli).toMatch(/readAnswers\(o\.answers, questions\)/);
+    expect(cli).toMatch(/withoutPlanLines\(draft, plan\)/);
+    expect(cli).toMatch(/requestNotes, completions, before\?\.plan \?\? null\)/);
+    expect(cli).toMatch(/copiedOwn: ownWords/);
+    expect(cli).toMatch(/copiedRecord\(output, materialOnly, ownWords\)/);
+  });
+});

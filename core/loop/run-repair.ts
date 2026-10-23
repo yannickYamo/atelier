@@ -85,6 +85,8 @@ export interface CheckOptions {
    * more long copied from it is a finding the repair rewrites (`COPIED_LINE`). Absent: nothing is read for copying.
    */
   readonly copiedFrom?: string;
+  /** what the owner's method and standard state: a stretch of it is their own words, never a copy from the material */
+  readonly copiedOwn?: string;
   /** the request and the named material this output was written from, for the rules that are about them (../observers/registry.ts, `CheckContext`) */
   readonly context?: CheckContext;
   /**
@@ -221,7 +223,7 @@ export function checkDraft(skill: string, v: StandardVersion, text: string, opts
   // MATERIAL WRITTEN AS SENTENCES IS POINTS (./material-points.ts): a stretch of 8 words or more copied from it is a finding
   // the repair rewrites like any listed one (enforced, so the rewrite is pointed at it); it is no rule of the standard, and
   // the evaluation never holds the work on it (cli/eval-run.ts): every copied run is reported on the record instead.
-  const copied = opts.copiedFrom ? runsToRepair(text, opts.copiedFrom) : null;
+  const copied = opts.copiedFrom ? runsToRepair(text, opts.copiedFrom, opts.copiedOwn) : null;
   if (copied) fmtLines.push({ requirementId: COPIED_LINE, statement: `Never copy a stretch of ${REPAIR_RUN_WORDS} words or more from the material: it is points to write from, in my own sentences.`,
     materiality: 'PREFERRED', enforced: true, phase: 'STYLE' as const,
     result: { verdict: copied.length ? 'VIOLATED' as const : 'MET' as const, spans: copied.map((r) => ({ start: r.start, end: r.end, text: r.text, why: `${r.words} words copied from the material: say it in your own words` })),

@@ -34,6 +34,11 @@ describe('notes written as sentences, by form', () => {
     expect(writtenAsSentences([{ text: NOTES }])).toBe(true);
     expect(writtenAsSentences([{ text: '- terminal opens March\n- doubles berths\n- hourly island ferries' }])).toBe(false);
   });
+  it('two 7-word sentences with their own stop are not finished sentences (fault-checked at 8)', () => {
+    const seven = 'The terminal opens in March next year. Ferries leave every hour from the quay.';
+    expect(finishedSentences(seven)).toBe(0);
+    expect(writtenAsSentences([{ text: seven }])).toBe(false);
+  });
 });
 
 describe('a stretch of 8 words or more is a finding the repair rewrites; it never holds the work', () => {
@@ -43,6 +48,24 @@ describe('a stretch of 8 words or more is a finding the repair rewrites; it neve
     expect(line(DRAFT)).toBeUndefined();
     expect(line(DRAFT, NOTES)?.result).toMatchObject({ verdict: 'VIOLATED', value: 1 });
     expect(line(`The new terminal opens in March, I hear. ${PLAIN}`, NOTES)?.result.verdict).toBe('MET');
+  });
+  const line = (t: string, from: string, own?: string) => checkDraft('d', std, t, { guardClaims: false, copiedFrom: from, ...(own ? { copiedOwn: own } : {}) }).checked.find((c) => c.requirementId === COPIED_LINE);
+  it('a 7-word copied run is met; an 8-word run is violated (fault-checked at 8)', () => {
+    expect(line(`The new terminal opens in March and, they say, ${PLAIN}`, NOTES)?.result.verdict).toBe('MET');
+    expect(line(`The new terminal opens in March and doubles, they say. ${PLAIN}`, NOTES)?.result.verdict).toBe('VIOLATED');
+  });
+  it('a quotation from the notes, inside its quote pair, is no copied run: neither repaired nor on the record', () => {
+    const quoted = `Our customer said: "We cut our onboarding time from six weeks to nine days with this tool." The tool ships in March.`;
+    const work = `As one customer put it, "We cut our onboarding time from six weeks to nine days with this tool." ${PLAIN}`;
+    expect(line(work, quoted)?.result.verdict).toBe('MET');
+    expect(copiedRecord(work, quoted).runs).toBe(0);
+    expect(line(`As one customer put it, we cut our onboarding time from six weeks to nine days with this tool. ${PLAIN}`, quoted)?.result.verdict).toBe('VIOLATED');
+  });
+  it('a phrase the method itself states is no copied run', () => {
+    const notes = 'Every post should end with a question the reader can answer in one line. The terminal opens in March next year.';
+    const work = `I will end with a question the reader can answer in one line. ${PLAIN}`;
+    expect(line(work, notes)?.result.verdict).toBe('VIOLATED');
+    expect(line(work, notes, 'End with a question the reader can answer in one line.')?.result.verdict).toBe('MET');
   });
   it('the repair rewrites the copied stretch in its own words: no copied run is left', async () => {
     const writer = { complete: async (req: InferenceRequest) => {

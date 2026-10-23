@@ -1,0 +1,104 @@
+{
+  "reading": "piece-plan",
+  "pass": {
+    "runs": 5,
+    "perCaseAtLeast": 4,
+    "codeDecidedExact": true,
+    "line": "At least 9 of 11 hard cases agree with their label in 4 of 5 runs. A label of plan means a grounded plan exists, uses the note the case says it must (must) and none the request rules out (mustNot); none means the floor (no plan). A plan that uses a note the request ruled out is the harmful error."
+  },
+  "cases": [
+    {
+      "id": "nine-notes-plan",
+      "label": "plan",
+      "request": "A post on the harbour reopening.",
+      "material": "The harbour reopened on Tuesday after fourteen months of works.\nThe new berth takes two ferries at once.\nCrossings to the islands now leave every hour.\nFares stay the same this year.\nThe café on the pier reopens in May.\nNight crossings return in summer.\nThe old crane stays as a landmark.\nParking moved behind the station.\nThe quay was rebuilt in stone."
+    },
+    {
+      "id": "lead-with-cafe",
+      "label": "plan",
+      "request": "A post on the harbour reopening; lead with the café.",
+      "material": "The harbour reopened on Tuesday after fourteen months of works.\nThe new berth takes two ferries at once.\nCrossings to the islands now leave every hour.\nFares stay the same this year.\nThe café on the pier reopens in May.\nNight crossings return in summer.\nThe old crane stays as a landmark.\nParking moved behind the station.\nThe quay was rebuilt in stone.",
+      "must": "The café on the pier reopens in May"
+    },
+    {
+      "id": "leave-out-fares",
+      "label": "plan",
+      "request": "A post on the harbour reopening. Do not mention fares.",
+      "material": "The harbour reopened on Tuesday after fourteen months of works.\nThe new berth takes two ferries at once.\nCrossings to the islands now leave every hour.\nFares stay the same this year.\nThe café on the pier reopens in May.\nNight crossings return in summer.\nThe old crane stays as a landmark.\nParking moved behind the station.\nThe quay was rebuilt in stone.",
+      "mustNot": "Fares stay the same"
+    },
+    {
+      "id": "crossings-angle",
+      "label": "plan",
+      "request": "A post arguing the hourly crossings give the islands their day back.",
+      "material": "The harbour reopened on Tuesday after fourteen months of works.\nThe new berth takes two ferries at once.\nCrossings to the islands now leave every hour.\nFares stay the same this year.\nThe café on the pier reopens in May.\nNight crossings return in summer.\nThe old crane stays as a landmark.\nParking moved behind the station.\nThe quay was rebuilt in stone.",
+      "must": "Crossings to the islands now leave every hour"
+    },
+    {
+      "id": "no-material",
+      "label": "plan",
+      "request": "A short post on why I still take the ferry."
+    },
+    {
+      "id": "fragments-only",
+      "label": "none",
+      "request": "A post on the harbour reopening.",
+      "material": "- reopened Tue\n- 2 ferries\n- hourly\n- fares same\n- café May",
+      "soft": true
+    },
+    {
+      "id": "answer-steers",
+      "label": "plan",
+      "request": "A post on the harbour reopening.",
+      "material": "The harbour reopened on Tuesday after fourteen months of works.\nThe new berth takes two ferries at once.\nCrossings to the islands now leave every hour.\nFares stay the same this year.\nThe café on the pier reopens in May.\nNight crossings return in summer.\nThe old crane stays as a landmark.\nParking moved behind the station.\nThe quay was rebuilt in stone.",
+      "answers": [
+        {
+          "ask": "What to stress?",
+          "answer": "the night crossings"
+        }
+      ],
+      "must": "Night crossings return in summer"
+    },
+    {
+      "id": "change-applied",
+      "label": "plan",
+      "request": "A post on the harbour reopening.",
+      "material": "The harbour reopened on Tuesday after fourteen months of works.\nThe new berth takes two ferries at once.\nCrossings to the islands now leave every hour.\nFares stay the same this year.\nThe café on the pier reopens in May.\nNight crossings return in summer.\nThe old crane stays as a landmark.\nParking moved behind the station.\nThe quay was rebuilt in stone.",
+      "change": "1. end on the old crane",
+      "must": "The old crane stays as a landmark"
+    },
+    {
+      "id": "two-changes-in-order",
+      "label": "plan",
+      "request": "A post on the harbour reopening.",
+      "material": "The harbour reopened on Tuesday after fourteen months of works.\nThe new berth takes two ferries at once.\nCrossings to the islands now leave every hour.\nFares stay the same this year.\nThe café on the pier reopens in May.\nNight crossings return in summer.\nThe old crane stays as a landmark.\nParking moved behind the station.\nThe quay was rebuilt in stone.",
+      "change": "1. leave out the parking\n2. lead with the stone quay",
+      "must": "The quay was rebuilt in stone",
+      "mustNot": "Parking moved behind the station",
+      "soft": true
+    },
+    {
+      "id": "method-scene-first",
+      "label": "plan",
+      "request": "A post on the harbour reopening.",
+      "material": "The harbour reopened on Tuesday after fourteen months of works.\nThe new berth takes two ferries at once.\nCrossings to the islands now leave every hour.\nFares stay the same this year.\nThe café on the pier reopens in May.\nNight crossings return in summer.\nThe old crane stays as a landmark.\nParking moved behind the station.\nThe quay was rebuilt in stone.",
+      "method": [
+        "Open on a scene from my own day.",
+        "Use at most two facts from my notes."
+      ]
+    },
+    {
+      "id": "single-note",
+      "label": "plan",
+      "request": "A post on the new berth.",
+      "material": "The new berth takes two ferries at once, which halves the wait at the quay.",
+      "must": "The new berth takes two ferries at once"
+    },
+    {
+      "id": "empty-material-file",
+      "label": "plan",
+      "request": "A post on why the harbour matters to me.",
+      "material": "   "
+    }
+  ]
+}
