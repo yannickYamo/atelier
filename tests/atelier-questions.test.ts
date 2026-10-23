@@ -163,3 +163,32 @@ describe('at a terminal: asked, a letter or the person\'s own words; "just write
     expect(p.record?.answers).toEqual([{ id: 'angle', answer: 'The town\'s jobs', by: 'default' }, { id: 'emphasis', answer: 'jobs', by: 'default' }]);    expect(p.said).toEqual(['Asked before writing: 2 question(s); 0 answered by you, 2 with the default (angle: The town\'s jobs; emphasis: jobs).']);
   });
 });
+
+describe('the angle and the news are the author\'s where nothing given states them (round 4, item 3)', () => {
+  // A reaction post with no stated angle: the reader marked every decision known or inferable, and nothing was asked. The
+  // angle (why now) and news of the author's own work are now asked by where they are stated, a closed field the reader
+  // fills with a quote code finds there: the request, the material, what the skill was told, or NONE. Unstated, they are
+  // the author's, whatever status the reader gave them; stated, they are never asked.
+  const REACT: QuestionsInput = { request: 'Write a long post on X reacting to this week\'s news about the wharf, about 450 to 700 words.',
+    material: [{ name: 'points', head: '- The regional council voted this week to close the old cargo wharf at Stannard Lock to commercial boats from next spring.' }], method: [], examples: [], told: [] };
+  const angle = (extra: Record<string, unknown>) => d('ANGLE', 'INFERABLE', 'SOME', { settledBy: 'material', ask: 'Why does the wharf vote matter to you now?', options: ['The growers lose their wharf', 'The lanes fill with lorries', 'Nobody asked the growers'], default: 'The growers lose their wharf', ...extra });
+  it('no stated angle: asked, though the reader called it inferable from the material', () => {
+    expect(QUESTIONS.ground({ decisions: [angle({ statedIn: 'NONE', quote: null })] }, REACT)?.questions.map((q) => q.id)).toEqual(['angle']);
+  });
+  it('an angle said to be stated with a quote that is not there is not stated: asked', () => {
+    expect(QUESTIONS.ground({ decisions: [angle({ statedIn: 'request', quote: 'arguing for the ramp' })] }, REACT)?.questions.map((q) => q.id)).toEqual(['angle']);
+  });
+  it('the request states the angle: nothing is asked, whatever else the reader said', () => {
+    const stated = { ...REACT, request: 'Write a long post on X arguing that the council should give the co-op one season to build the ramp.' };
+    expect(QUESTIONS.ground({ decisions: [angle({ status: 'UNKNOWN', spread: 'DIFFERENT', settledBy: 'author-only', statedIn: 'request', quote: 'give the co-op one season to build the ramp' })] }, stated)?.questions).toEqual([]);
+  });
+  it('news of their own work stated in the material is not asked; unstated, it is', () => {
+    const news = (extra: Record<string, unknown>) => d('NEWS', 'KNOWN', 'SAME', { settledBy: 'material', ask: 'Any news of the co-op the post may carry?', options: ['None', 'A new orchard joined'], default: 'None', ...extra });
+    expect(QUESTIONS.ground({ decisions: [news({ statedIn: 'material', quote: 'close the old cargo wharf at Stannard Lock' })] }, REACT)?.questions).toEqual([]);
+    expect(QUESTIONS.ground({ decisions: [news({ statedIn: 'NONE', quote: null })] }, REACT)?.questions.map((q) => q.id)).toEqual(['news']);
+  });
+  it('the reader is offered where each is stated, NONE among the choices', () => {
+    expect(JSON.stringify(QUESTIONS.schema)).toContain('"statedIn"');
+    expect(JSON.stringify(QUESTIONS.schema)).toContain('"NONE"');
+  });
+});

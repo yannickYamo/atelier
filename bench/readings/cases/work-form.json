@@ -71,6 +71,13 @@
       "files": [],
       "note": "no examples: description alone",
       "soft": true
+    },
+    {
+      "id": "posts-to-followers",
+      "label": "DOCUMENT",
+      "workType": "long posts on X",
+      "folder": "tests/fixtures/reaction-case/voice",
+      "note": "one essay and four short posts by an invented author: posts to followers answer nobody in particular (round 4, item 2)"
     }
   ]
 }

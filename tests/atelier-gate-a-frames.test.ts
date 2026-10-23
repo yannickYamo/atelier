@@ -67,7 +67,7 @@ const PERSONA = { points: [
   { aspect: 'open', description: 'Names the cause before the fix.', frequency: 'ALWAYS', quote: QUOTE_A },
   { aspect: 'close', description: 'Closes on a short plain line.', frequency: 'OFTEN', quote: QUOTE_B },
 ] };
-const REPLY_FORM = { examples: [1, 2, 3].map((n) => ({ example: n, form: 'REPLY', quote: QUOTE_A })), form: 'REPLY' };
+const REPLY_FORM = { examples: [1, 2, 3].map((n) => ({ example: n, answers: 'PERSON_WHO_ASKED', quote: QUOTE_A })), form: 'REPLY' };
 const SCOPE = { examples: [1, 2, 3].map((n) => ({ example: n, asked: 'NEITHER', kind: 'how-to', beyond: [] })) };
 // What a writer that took the PDF for this person's case writes, and the rewrite that keeps the sentence's work without it.
 const CARRIED = 'Glad it worked. If the PDF import stalls again on a scanned file, run the import once more from the same screen. That is all it needs.';

@@ -31,6 +31,10 @@ export const STANDING_KINDS: ReadonlySet<QuestionKind> = new Set(['NAMING']);
 export const MAX_QUESTIONS = 3;
 /** What settles a decision, a closed field the reader fills: only `author-only` is asked. */
 export const SETTLED_BY = ['examples', 'request', 'material', 'method', 'author-only'] as const;
+/** Where an angle or news is stated, a closed field the reader fills with a quote code finds there; NONE where nothing states it. */
+export const STATED_IN = ['request', 'material', 'told', 'NONE'] as const;
+/** The kinds asked by where they are stated, not by the reader's status: what the piece argues now, and news of the author's own work. */
+export const STATED_KINDS: ReadonlySet<QuestionKind> = new Set(['ANGLE', 'NEWS']);
 /** What the writer is told a kind's answer is about, where it was given for a kind this run did not ask. */
 export const KIND_ASK: Readonly<Record<QuestionKind, string>> = { ANGLE: 'The angle, and why now:', NAMING: 'What the piece may name:', NEWS: 'News of my own work it may carry:', EMPHASIS: 'What to stress:' };
 
@@ -70,7 +74,8 @@ List the decisions this piece needs (at most six). For each:
 - spread: would the person's likely answers produce the SAME draft, SOME difference, or DIFFERENT drafts.
 - settledBy: what settles it: "examples" (their finished pieces show it: voice, tone, form, length), "request", "material", "method", or "author-only" (none of those can; only the person knows it).
 - what: the decision in a few words.
-For an UNKNOWN decision only, also write the question to the person (one short sentence, in plain words), two to four short options they could pick, and the default: the option you would write with if they say nothing.
+- statedIn and quote, for ANGLE and NEWS: where the angle (or why now), or the news of the person's own work, is stated in so many words: "request", "material" or "told" (what they told this skill before), with a short quote copied exactly from there; or "NONE" with no quote where nothing given states it. A point you could argue from the material is not a stated angle: answer NONE. For other kinds, NONE.
+For an UNKNOWN decision, and for an ANGLE or NEWS stated NONE, also write the question to the person (one short sentence, in plain words), two to four short options they could pick, and the default: the option you would write with if they say nothing.
 
 Never ask about voice, tone, length or form. Never ask what was already given or what they told before. Most requests carry what they need: then every decision is KNOWN or INFERABLE.`;
 
@@ -86,7 +91,9 @@ export const QUESTIONS_SCHEMA: Record<string, unknown> = {
       ask: { type: ['string', 'null'] },
       options: { type: 'array', items: { type: 'string' } },
       default: { type: ['string', 'null'] },
-    }, required: ['kind', 'status', 'spread', 'settledBy', 'what', 'ask', 'options', 'default'], additionalProperties: false } },
+      statedIn: { type: 'string', enum: [...STATED_IN] },
+      quote: { type: ['string', 'null'] },
+    }, required: ['kind', 'status', 'spread', 'settledBy', 'what', 'ask', 'options', 'default', 'statedIn', 'quote'], additionalProperties: false } },
   },
   required: ['decisions'], additionalProperties: false,
 };
@@ -99,8 +106,16 @@ export const spreadScore = (d: Pick<Decided, 'status' | 'spread'>): number => (d
 /** The line a decision must reach to be asked. */
 export const ASK_THRESHOLD = 2;
 
+/** Whether a quote of five or more characters is in the source the reader named (a form check: the words are there or not). */
+function statedWhere(where: string, quote: string, input: QuestionsInput): boolean {
+  const q = clip(quote, 400).toLowerCase();
+  if (q.length < 5) return false;
+  const source = where === 'request' ? input.request : where === 'material' ? input.material.map((m) => m.head).join('\n') : where === 'told' ? input.told.map((t) => t.answer).join('\n') : '';
+  return clip(source, 100000).toLowerCase().includes(q);
+}
+
 export const QUESTIONS: Reading<QuestionsInput, QuestionsReading> = {
-  id: 'questions', version: '1',
+  id: 'questions', version: '2',
   system: QUESTIONS_SYSTEM, schema: QUESTIONS_SCHEMA,
   toolName: 'emit_questions', toolDescription: 'The decisions the piece needs, each with its kind, status and spread; a question with options and a default for an unknown one.',
   maxTokens: 1200, estimateUsd: 0.01,
@@ -127,7 +142,12 @@ export const QUESTIONS: Reading<QuestionsInput, QuestionsReading> = {
       decisions.push({ kind, status, spread, settledBy, what });
       // ABOVE THE LINE: the author's own content (settled by the author alone, by the reader's closed field), unknown, and
       // answers that give different drafts.
-      if (kind === 'OTHER' || settledBy !== 'author-only' || spreadScore({ status, spread }) < ASK_THRESHOLD || asked.has(kind)) continue;
+      // THE ANGLE AND THE NEWS ARE THE AUTHOR'S WHERE NOTHING GIVEN STATES THEM. Read by where they are stated (a closed field
+      // with NONE allowed) and grounded by code: a quote not found where the reader says is no statement. A reader that
+      // called an unstated angle inferable from the material had the writer guess it; stated, it is never asked.
+      const byStatement = kind !== 'OTHER' && STATED_KINDS.has(kind) && (STATED_IN as readonly string[]).includes(String(x?.statedIn));
+      const stated = byStatement && statedWhere(String(x.statedIn), typeof x.quote === 'string' ? x.quote : '', input);
+      if (kind === 'OTHER' || asked.has(kind) || (byStatement ? stated : (settledBy !== 'author-only' || spreadScore({ status, spread }) < ASK_THRESHOLD))) continue;
       const told = [...input.told].reverse().find((t) => t.id === kind.toLowerCase());
       // What may be named, once told, stands: never asked again.
       if (told && STANDING_KINDS.has(kind)) continue;

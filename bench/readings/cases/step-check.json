@@ -4,7 +4,7 @@
     "runs": 5,
     "perCaseAtLeast": 4,
     "codeDecidedExact": true,
-    "line": "At least 14 of 16 cases agree with their label in 4 of 5 runs, and no case labelled judgement is given a check in any run (a false check is the harmful error)."
+    "line": "At least 16 of 18 cases agree with their label in 4 of 5 runs, and no case labelled judgement is given a check in any run (a false check is the harmful error)."
   },
   "example": {
     "reference": "## Verdict\n\nBorealis wins for a small team, and Acme wins once the team is large enough to clear its minimum.\n\n## The comparison\n\n| Vendor | Price per seat | Minimum |\n|---|---|---|\n| Acme | 12 dollars | 50 seats |\n| Borealis | 15 dollars | none |\n\nAcme is cheaper a seat and dearer in total below its minimum. The migration takes 3 days.\n\n## Risks\n\nEither vendor can change its list price, and switching later means moving every payee again.\n",
@@ -92,6 +92,18 @@
       "id": "named-in-passing",
       "label": "judgement",
       "step": "Give the Risks section a second read before sending."
+    },
+    {
+      "id": "bans-em-dash",
+      "label": "measure:PATTERN_RATE",
+      "step": "No em dashes.",
+      "note": "a ban on a construction the list names is that count at zero (round 4, item 1)"
+    },
+    {
+      "id": "bans-not-x-its-y",
+      "label": "measure:PATTERN_RATE",
+      "step": "No \"not X, it's Y\".",
+      "note": "a ban on a construction the list names is that count at zero (round 4, item 1)"
     }
   ]
 }

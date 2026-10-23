@@ -28,7 +28,7 @@ const PERSONA = { points: [
 const SCOPE = (n: number) => ({ examples: Array.from({ length: n }, (_, i) => ({ example: i + 1, asked: 'NEITHER', kind: 'status', beyond: [] })) });
 // Replies: short answers to a request, no sections. The work-form reader is scripted to read them as replies, with real quotes.
 const reply = (n: number): string => `---\nrequest: Why does the deploy hang on step ${n}?\n---\nI would start with the riskiest line. Step ${n} waits on a lock that the previous job never released; clear it and run the step again. Tests first, then the rest.\n`;
-const REPLY_FORM = { examples: [1, 2, 3, 4].map((n) => ({ example: n, form: 'REPLY', quote: 'clear it and run the step again' })), form: 'REPLY' };
+const REPLY_FORM = { examples: [1, 2, 3, 4].map((n) => ({ example: n, answers: 'PERSON_WHO_ASKED', quote: 'clear it and run the step again' })), form: 'REPLY' };
 
 let backend: ChildProcess; let port = 0;
 const url = (): string => `http://127.0.0.1:${port}`;

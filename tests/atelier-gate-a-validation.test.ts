@@ -91,7 +91,7 @@ const REPLY_PERSONA = { points: [
   { aspect: 'open', description: 'Names the cause before the fix.', frequency: 'ALWAYS', quote: RA },
   { aspect: 'close', description: 'Closes on a short plain line.', frequency: 'OFTEN', quote: RB },
 ] };
-const REPLY_FORM = { examples: [1, 2, 3].map((n) => ({ example: n, form: 'REPLY', quote: RA })), form: 'REPLY' };
+const REPLY_FORM = { examples: [1, 2, 3].map((n) => ({ example: n, answers: 'PERSON_WHO_ASKED', quote: RA })), form: 'REPLY' };
 const SCOPE = { examples: [1, 2, 3].map((n) => ({ example: n, asked: 'NEITHER', kind: 'how-to', beyond: [] })) };
 // Only terms the request names (PDF, scanned): an answer that explained the stall as the goldens' "OCR pass" would carry a
 // term the request never gave, and the signal would read it as borrowed even where it is the right explanation (a limit

@@ -19,7 +19,7 @@ const RA = 'run the import once more'; const RB = 'That is all it needs.';
 const golden = (n: number): string => `---\nrequest: The PDF import stalls at ${n}0% on a scanned file. What do I do?\n---\nThat stall is the OCR pass on the scanned PDF: it reads every page before the import can move. ${'The bigger the scan, the longer that pass takes. '.repeat(n - 1)}Leave it for a minute, then ${RA} from the same screen; the second pass skips what it has read. ${RB}\n`;
 const METHOD = 'How I answer importer questions\n\n1. Name the cause first: a stall on a scan is the OCR pass reading every page.\n2. Then the one thing to do.\n3. End on a short plain line.\n';
 const PERSONA = { points: [{ aspect: 'open', description: 'Names the cause before the fix.', frequency: 'ALWAYS', quote: RA }, { aspect: 'close', description: 'Closes on a short plain line.', frequency: 'OFTEN', quote: RB }] };
-const REPLY_FORM = { examples: [1, 2, 3].map((n) => ({ example: n, form: 'REPLY', quote: RA })), form: 'REPLY' };
+const REPLY_FORM = { examples: [1, 2, 3].map((n) => ({ example: n, answers: 'PERSON_WHO_ASKED', quote: RA })), form: 'REPLY' };
 const SCOPE = { examples: [1, 2, 3].map((n) => ({ example: n, asked: 'NEITHER', kind: 'how-to', beyond: [] })) };
 const REPLY = 'That stall is the OCR pass reading every page of the scan before the import can move. Leave it for a minute, then run the import once more from the same screen. That is all it needs.';
 const REWRITES = { rewrites: [{ id: 1, text: 'That stall is the first pass reading every page of the scan before the import can move.' }] };

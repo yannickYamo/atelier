@@ -4,7 +4,7 @@
     "runs": 5,
     "perCaseAtLeast": 4,
     "codeDecidedExact": true,
-    "line": "At least 9 of 11 hard cases agree with their label in 4 of 5 runs, and no case labelled none is asked a question in more than 1 run of 5 (asking what was given or what the examples settle is the harmful error)."
+    "line": "At least 10 of 12 hard cases agree with their label in 4 of 5 runs, and no case labelled none is asked a question in more than 1 run of 5 (asking what was given or what the examples settle is the harmful error)."
   },
   "cases": [
     {
@@ -104,6 +104,13 @@
       "label": "none",
       "request": "Write the post from my notes below.",
       "material": "Angle: the islands get their day back.\nName: nobody.\nNews of ours: none.\nStress: the hourly crossings.\nThe harbour reopened on Tuesday after fourteen months of works.\nThe new berth takes two ferries at once.\nCrossings to the islands now leave every hour.\nFares stay the same this year.\nThe café on the pier reopens in May."
+    },
+    {
+      "id": "reaction-points-no-angle",
+      "label": "angle",
+      "request": "Write a long post on X reacting to this week's news about the wharf, about 450 to 700 words.",
+      "material": "- The regional council voted this week to close the old cargo wharf at Stannard Lock to commercial boats from next spring.\n- The co-op ships about 900 tonnes of fruit a season by canal.\n- Moving that fruit by road would mean roughly 60 extra lorry trips through the valley lanes.\n- Bruising losses on the barges run at about 2 percent against about 9 percent by road.\n- The wharf closure was decided without a consultation with the growers.\n- There is a second wharf 400 metres upstream that could take the barges with a small loading ramp.\n- The ramp would cost about 18,000 in materials and two weeks of members' labour.\n- Nineteen orchards are members, each with an equal share and one vote.\n- The co-op's electric tug runs on panels at the old lock keeper's cottage.\n- The growers meet on the first Thursday of next month to decide what to do.",
+      "note": "ten points and no stated angle: why now is the author's (round 4, item 3); the points state the co-op's own facts"
     }
   ]
 }

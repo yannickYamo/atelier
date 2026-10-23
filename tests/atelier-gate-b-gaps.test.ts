@@ -15,7 +15,7 @@ const RA = 'run the import once more'; const RB = 'That is all it needs.';
 const same = (n: number): string => `---\nrequest: The PDF import stalls at ${n}0% on a scanned file. What do I do?\n---\nThat stall is the OCR pass on the scanned PDF: it reads every page before the import can move. Leave it for a minute, then ${RA} from the same screen; the second pass skips what it has read. ${RB}\n`;
 const METHOD = 'How I answer importer questions\n\n1. Name the cause first: a stall on a scan is the OCR pass reading every page.\n2. Then the one thing to do.\n3. End on a short plain line.\n';
 const PERSONA = { points: [{ aspect: 'open', description: 'Names the cause before the fix.', frequency: 'ALWAYS', quote: RA }, { aspect: 'close', description: 'Closes on a short plain line.', frequency: 'OFTEN', quote: RB }] };
-const REPLY_FORM = { examples: [1, 2, 3].map((n) => ({ example: n, form: 'REPLY', quote: RA })), form: 'REPLY' };
+const REPLY_FORM = { examples: [1, 2, 3].map((n) => ({ example: n, answers: 'PERSON_WHO_ASKED', quote: RA })), form: 'REPLY' };
 const SCOPE = { examples: [1, 2, 3].map((n) => ({ example: n, asked: 'NEITHER', kind: 'how-to', beyond: [] })) };
 const UNITS = { units: [
   { id: '1', kind: 'instruction', decision: 'the cause of the stall', inputs: ['what the person reports'], condition: null, output: 'the cause, first', exception: null, dependsOn: [], quote: 'Name the cause first' },

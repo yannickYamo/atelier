@@ -45,29 +45,33 @@ export function headingCount(text: string): number {
 /** How many examples are shown to the reader, and how much of each: enough to see the form, never the whole corpus. */
 const SHOWN = 8; const CHARS = 1800;
 
-export const WORK_FORM_SYSTEM = `You read examples of one person's work and say what form it takes.
+export const WORK_FORM_SYSTEM = `You read examples of one person's work and say, for each, whether it answers a particular person who wrote to its author first.
 
-A REPLY is a turn in a conversation: an answer to someone who asked, read once in the flow of a chat, a support thread, a code-review comment thread or a ticket. It speaks to that person, it is shaped by their question, and it ends when the question is answered.
+A REPLY answers someone: a turn in a conversation, written back to a person who asked or wrote first, in a chat, a support thread, a code-review comment thread or a ticket. It speaks to that person and is shaped by what they said.
 
-A DOCUMENT is a self-standing piece: an article, an essay, a post, an explainer, a report, a review written up under its own sections, a contract, a memo, a plan. It has a shape of its own (a title, sections, a template, a closing part) that does not come from a question, and it is read apart from any conversation. A piece written to a request is still a document when it addresses no particular person and would read the same published on its own: an explainer commissioned by a request is a document; a message back to the person who asked is a reply.
+Anything else is not a reply: an article, an essay, a post to followers, an announcement, an explainer, a report, a memo, a plan. A post on a social network written to whoever reads it answers nobody in particular, however short or conversational it is. A piece written to a request is still not a reply when it addresses no particular person and would read the same published on its own.
 
-For each example, say its form and copy a short quote (under 25 words, exactly as written) that shows it: a greeting or an address to the person, a reference to their question, a section heading, a title, a closing formula. Then give the form of the work as a whole. Judge the pieces, not the name of the work.`;
+For each example answer one of two:
+- "PERSON_WHO_ASKED": it answers a particular person who wrote first. Copy a short quote (under 25 words, exactly as written) that shows it: an address to that person, or a reference to what they asked or said.
+- "NONE": nobody in particular asked; it stands on its own. No quote is needed.
+
+When unsure, answer NONE. Judge the pieces, not the name of the work. With no examples, answer from the description in "form".`;
 
 export const WORK_FORM_SCHEMA: Record<string, unknown> = {
   type: 'object',
   properties: {
     examples: { type: 'array', items: { type: 'object', properties: {
-      example: { type: 'number' }, form: { type: 'string', enum: ['REPLY', 'DOCUMENT'] }, quote: { type: 'string' } },
-      required: ['example', 'form', 'quote'], additionalProperties: false } },
-    form: { type: 'string', enum: ['REPLY', 'DOCUMENT'] },
+      example: { type: 'number' }, answers: { type: 'string', enum: ['PERSON_WHO_ASKED', 'NONE'] }, quote: { type: ['string', 'null'] } },
+      required: ['example', 'answers', 'quote'], additionalProperties: false } },
+    form: { type: 'string', enum: ['REPLY', 'DOCUMENT', 'NONE'] },
   },
   required: ['examples', 'form'], additionalProperties: false,
 };
 
 export const WORK_FORM: Reading<WorkFormInput, WorkForm> = {
-  id: 'work-form', version: '2',
+  id: 'work-form', version: '3',
   system: WORK_FORM_SYSTEM, schema: WORK_FORM_SCHEMA,
-  toolName: 'emit_work_form', toolDescription: 'The form of each example and of the work as a whole, each with a quote that shows it.',
+  toolName: 'emit_work_form', toolDescription: 'For each example, whether it answers a particular person who wrote first (with a quote that shows it), or NONE.',
   maxTokens: 1200, estimateUsd: 0.02,
   prompt(input) {
     const shown = input.examples.slice(0, SHOWN);
@@ -87,17 +91,20 @@ export const WORK_FORM: Reading<WorkFormInput, WorkForm> = {
     const shown = input.examples.slice(0, SHOWN);
     const forms: WorkForm[] = [];
     const seen = new Set<number>();
-    for (const x of Array.isArray(r.examples) ? r.examples as { example?: unknown; form?: unknown; quote?: unknown }[] : []) {
+    // A CLOSED CHOICE WITH NONE ALLOWED. A piece is a reply only where the reader names the person it answers, by a quote
+    // that is in the piece (or its request); NONE needs no quote and reads as a piece that stands on its own. A reply
+    // claimed with no grounded quote is no finding: a post to followers was read as a turn in a conversation.
+    for (const x of Array.isArray(r.examples) ? r.examples as { example?: unknown; answers?: unknown; quote?: unknown }[] : []) {
       const i = typeof x.example === 'number' && Number.isInteger(x.example) ? x.example - 1 : -1;
       if (i < 0 || i >= shown.length || seen.has(i)) continue;
-      if (x.form !== 'REPLY' && x.form !== 'DOCUMENT') continue;
-      // A quote must be in the piece (or its request): a finding about a piece the reader did not read is no finding.
+      if (x.answers === 'NONE') { seen.add(i); forms.push('DOCUMENT'); continue; }
+      if (x.answers !== 'PERSON_WHO_ASKED') continue;
       const where = `${shown[i].request ?? ''}\n${shown[i].text}`;
       if (typeof x.quote !== 'string' || !quoteIsReal(x.quote, where)) continue;
-      seen.add(i); forms.push(x.form);
+      seen.add(i); forms.push('REPLY');
     }
     if (shown.length) {
-      // Grounded on more than half the examples, the majority decides; a tie or too few grounded is no reading.
+      // Read on more than half the examples, a majority of replies decides; a tie or too few read is no reading.
       if (forms.length * 2 <= shown.length) return null;
       const replies = forms.filter((f) => f === 'REPLY').length;
       if (replies * 2 === forms.length) return null;
