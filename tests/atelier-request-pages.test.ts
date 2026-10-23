@@ -71,7 +71,7 @@ describe('the length asked is counted in words, never in the marks that draw a t
   it('and the request\'s length is held on that count', async () => {
     const { requestLength, unmetReader } = await import('../cli/commands/invoke.js');
     const asked = statedLength('Write it in 7 words.')!;
-    expect(requestLength(table, asked)).toMatchObject({ met: true, detail: '7 words written' });
+    expect(requestLength(table, asked)).toMatchObject({ met: true, detail: '7 words written, within the 6 to 8 it allows' });
     expect(unmetReader({ requirements: [] } as never, asked)?.({ output: table, report: { checked: [], unchecked: [], failed: false } as never })).toEqual([]);
   });
 });

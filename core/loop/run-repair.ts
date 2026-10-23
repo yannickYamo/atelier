@@ -29,7 +29,7 @@ import { SITES_PER_OPERATOR } from '../fidelity/structural.js';
 import { spanIntegrity } from './integrity.js';
 import { addedFigures } from './integrity.js';
 import { planRepair, repairPrompt, applyRepair, acceptRepair, addsNoWords, readAtLength, featureParamsOf, ruleParamsOf, cutSpan, applyStep, lostToLength, tooShort, unmeasuredIn, REPAIR_SYSTEM, REPAIR_SYSTEM_WITH_PLACEHOLDERS, REPAIR_SCHEMA,
-  survivalLoss, type Reverted, type Applied, type RepairTarget, type Proposed, type NoChange, type StepPlan, type StepRule, type StepResult } from './repair.js';
+  survivalLoss, type Vetoes, type Reverted, type Applied, type RepairTarget, type Proposed, type NoChange, type StepPlan, type StepRule, type StepResult } from './repair.js';
 import { keysOf, measurementId } from '../state/rule-key.js';
 import { learnedShape, steeredShape, steersMiss, removeShapeExtras } from './shape-steer.js';
 import { carryOverClaims } from './carry-over.js';
@@ -743,6 +743,21 @@ export function withGraded(report: VerifyReport, ids: ReadonlySet<string>): Veri
 }
 
 /** The report with the invented-claim line left out: what a model rewrite may be pointed at. */
+/**
+ * WHICH RULES MAY REFUSE A REPAIR ON THIS RUN (core/eval/consequence.ts, `repairVeto`), by id: a claim line by what an
+ * untraced specific meets here, a written check not yet qualified by the untrusted row, every other check by the trusted
+ * row, each at the run's level. `steering` names what keeps its own guard and is no row of the table.
+ */
+export function repairVetoes(v: StandardVersion, opts: Pick<CheckOptions, 'level' | 'claimAct'>, steering: (id: string) => boolean = () => false): Vetoes {
+  const table = tableOf(v, opts.level);
+  return (id) => {
+    if (isClaimLine(id)) return repairVeto(table, 'specifics', opts.claimAct);
+    if (steering(id)) return true;
+    const r = v.requirements.find((x) => x.requirementId === id);
+    return repairVeto(table, r?.measurement?.observer === 'CHECK' && !qualifiedIn(v, id) ? 'untrusted' : 'trusted');
+  };
+}
+
 /** The claim check's lines (`UNSOURCED` and every `UNSOURCED·…` beside it): what the consequence table reads as the specifics rows. */
 const isClaimLine = (id: string): boolean => id === 'UNSOURCED' || id.startsWith('UNSOURCED·');
 const withoutClaims = (r: VerifyReport): VerifyReport => ({ ...r, checked: r.checked.filter((c) => c.requirementId !== 'UNSOURCED' && c.requirementId !== INCONCLUSIVE && c.requirementId !== UNREAD) });
@@ -787,14 +802,8 @@ async function refineOnLedger(client: InferenceClient, budget: Budget, skill: st
   // WHO MAY REFUSE A REPAIR (core/eval/consequence.ts, `repairVeto`): of the enforced rules, only those whose failure would
   // hold the work at this run's latitude, sent to a person or blocked. A rule that would only label or list it (every
   // row of a creative skill, the claim check where it lists) never vetoes the repair of another.
-  const table = tableOf(v, opts.level);
-  const vetoIds = (id: string): boolean => {
-    if (isClaimLine(id)) return repairVeto(table, 'specifics', opts.claimAct);
-    const r = v.requirements.find((x) => x.requirementId === id);
-    // a graded feature or a SIGNAL band no standard rule enforces keeps its own guard (`regressions`): it is no row of the table
-    if (isSignal(id) || (graded.has(id) && !enforcedIds.has(id))) return true;
-    return repairVeto(table, r?.measurement?.observer === 'CHECK' && !qualifiedIn(v, id) ? 'untrusted' : 'trusted');
-  };
+  // a graded feature or a SIGNAL band no standard rule enforces keeps its own guard (`regressions`): it is no row of the table
+  const vetoIds = repairVetoes(v, opts, (id) => isSignal(id) || (graded.has(id) && !enforcedIds.has(id)));
   const atLength = (r: VerifyReport, from: string, to: string): VerifyReport => readAtLength(r, from, to, paramsOfCheck, (c) => !enforcedIds.has(c.requirementId));
   // STEERING IS SUBORDINATE TO THE OWNER'S RULES. A step taken for an enforced rule (a rewrite, a mechanical or grammar
   // fix, a draft written again) is never refused for a graded feature or a SIGNAL band it moved: those are read only

@@ -10,7 +10,7 @@ import { existsSync, readFileSync, writeSync } from 'node:fs';
 import { methodReading, methodLine } from '../../core/eval/obligations.js';
 import type { CheckContext } from '../../core/observers/registry.js';
 import { checksFor, claimInstrumentOf, contextJudgeFor, contextJudgeModel, smallReaderFor, CLAIMS_MODEL_DEFAULT, shortFormRequest } from '../checks.js';
-import { regressions, readAtLength, featureParamsOf, ruleParamsOf, enforcedNeverWorse, applyStep, unmeasuredIn, type ParamsOf, type Proposed } from '../../core/loop/repair.js';
+import { regressions, readAtLength, featureParamsOf, ruleParamsOf, enforcedNeverWorse, applyStep, unmeasuredIn, type ParamsOf, type Proposed, type Vetoes } from '../../core/loop/repair.js';
 import { answerSentences, judgedSituations } from '../../core/loop/answer-claims.js';
 import { groundCarried } from '../../core/loop/grounding.js';
 import { withoutServedNotes } from '../../core/loop/echo.js';
@@ -26,7 +26,7 @@ import { MOVE_READER, countOutcomes } from '../../core/taste/move-reader.js';
 const READ_CALLS_DEFAULT = 4;
 import { readContext } from '../../core/inference/reading.js';
 import { needsNote, needsNothing } from '../../core/loop/task-needs.js';
-import { refineToStandard, checkDraft, checkDraftAsync, withWaivers, enforceClaims, heavyCut, listedClaims, brokenByCut, gradedRules, PUBLIC_FACTS, INCONCLUSIVE, UNREAD, REPAIR_PASSES, type CheckOptions } from '../../core/loop/run-repair.js';
+import { refineToStandard, checkDraft, checkDraftAsync, withWaivers, enforceClaims, heavyCut, listedClaims, brokenByCut, gradedRules, PUBLIC_FACTS, INCONCLUSIVE, UNREAD, REPAIR_PASSES, repairVetoes, type CheckOptions } from '../../core/loop/run-repair.js';
 import { signalChecks, displacement, isSignal, ownerWords } from '../../core/loop/graded.js';
 import { steeredShape, steersMiss, shapeLengthAim } from '../../core/loop/shape-steer.js';
 import { signalDistance } from '../../core/observers/selection.js';
@@ -264,7 +264,8 @@ export function requestLength(output: string, asked: StatedLength): { asked: str
   const written = wordsWritten(output); const how = againstStated(written, asked);
   const [lo, hi] = statedBounds(asked); const n = (x: number): string => Math.round(x).toLocaleString('en-US');
   const allows = lo !== null && hi !== null ? (lo === hi ? `exactly ${n(lo)}` : `${n(lo)} to ${n(hi)}`) : lo !== null ? `${n(lo)} or more` : hi !== null ? `${n(hi)} or fewer` : '';
-  return { asked: asked.raw, met: how === 'met', detail: `${written.toLocaleString('en-US')} words written${how === 'met' ? '' : `: too ${how}, it allows ${allows}${asked.read ? ` (${asked.read})` : ''}`}` };
+  // THE LENGTH AND THE RANGE, EITHER WAY: inside, the record says what the request allows beside what was written.
+  return { asked: asked.raw, met: how === 'met', detail: `${written.toLocaleString('en-US')} words written${how === 'met' ? (allows ? `, within the ${allows} it allows` : '') : `: too ${how}, it allows ${allows}`}${asked.read ? ` (${asked.read})` : ''}` };
 }
 
 /** Each rule as it fared on the delivered text, and the rules no check reads: the evaluation, rule by rule. */
@@ -803,7 +804,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
     resolveProvenance(flag('--provenance'), process.env), contractFile,
     flag('--task') ? 'FLAG' : 'POSITIONAL',
     std && !argv.includes('--no-repair') ? keepDelivered(withSituations(withGrounding(withGradedRecord(withStructureRead(withoutEcho(repairChain(refineFor(),
-      unmet ? { unmet, notes: completions, resume: refineFor(), paramsOf: ruleParamsOf(std), round: shapeRoundNow, protect: store.getVoice(L)?.standardWording ?? [], check: (text: string) => checkDraft(name, std, text, { ...checks, claimSensor: undefined }), redraft: async (note, purpose) => (await spendOneWithResult(client, budget, servedForRun, taskForRun, null, note, {}, purpose)).piece, graded: gradedTrace,
+      unmet ? { unmet, notes: completions, resume: refineFor(), paramsOf: ruleParamsOf(std), vetoes: repairVetoes(std, checks), round: shapeRoundNow, protect: store.getVoice(L)?.standardWording ?? [], check: (text: string) => checkDraft(name, std, text, { ...checks, claimSensor: undefined }), redraft: async (note, purpose) => (await spendOneWithResult(client, budget, servedForRun, taskForRun, null, note, {}, purpose)).piece, graded: gradedTrace,
         steps: { usdPerCall: () => { const ls = spendBetween(ledgerBefore, processSpendByPurpose()).filter((l) => l.purpose === 'writing' || l.purpose === 'graded'); const n = ls.reduce((k, l) => k + l.calls, 0); return n ? ls.reduce((k, l) => k + l.usd, 0) / n : undefined; } },
         displaced: (from: string, to: string) => displacement(from, to, graded !== undefined ? carried : null, new Set())?.refusedFor ?? [] } : null,
       fid && (editBudget > 0 || argv.includes('--fidelity')) ? { client, budget, name, std, checks, profile: editProfile ?? fid.profile, editBudget, trace, taste } : null,
@@ -1640,6 +1641,8 @@ export function shapeNote(unmet: readonly Unmet[]): string {
 }
 
 /** Is everything a draft still misses that it runs too long? Then it is trimmed, not written again. */
+/** Is everything unmet the length (or shape) the request itself asks for? */
+const requestLengthOnly = (unmet: readonly Unmet[]): boolean => unmet.length > 0 && unmet.every((u) => u.id === LENGTH_ID && u.of === 'request');
 const onlyTooLong = (unmet: readonly Unmet[]): boolean => unmet.length > 0 && unmet.every((u) => u.whole && u.aim?.endsWith('or fewer'));
 
 /**
@@ -1784,7 +1787,7 @@ function redraftOutcome(before: readonly Unmet[], after: readonly Unmet[], kept:
     const now = after.find((u) => u.id === LENGTH_ID); const what = before[0].of === 'request' ? 'what the request asks for' : 'what your pieces span';
     const why = before[0].statement.startsWith('Answer in the shape') ? 'in the shape the request asks for' : 'for length';
     return kept ? `Written again ${why}: the first draft ran ${before[0].detail}, outside ${what}; ${now ? `it now runs ${now.detail}, nearer and still outside` : 'it is now inside it'}.`
-      : `The draft runs ${before[0].detail}, outside ${what}; one more draft did not do better, so the first is kept.`;
+      : `The draft runs ${before[0].detail}, outside ${what}; one more draft ${now && (now.off ?? 0) < (before[0].off ?? 0) ? `came nearer (${now.detail}) and still did not land inside it` : 'did not do better'}, so the first is kept.`;
   }
   // A graded miss is a feature off the author's range (too many asides as often as too few): missed, never "left out".
   const [now, past] = before.every((u) => u.graded) ? ['misses', 'missed'] : ['leaves out', 'left out'];
@@ -1824,6 +1827,8 @@ export function withRedraft(refine: Refine,
     steps?: { usdPerCall?: () => number | undefined };
     /** which way a rule's rate is out (core/loop/repair.ts, `ruleParamsOf`): read by the one acceptance rule */
     paramsOf?: ParamsOf;
+    /** which rules may refuse a draft written again (core/loop/run-repair.ts, `repairVetoes`): those that could hold the work */
+    vetoes?: Vetoes;
     /** under `--until-typical`, the shape round being written: every line said here names it */
     round?: { readonly current: number | null } } | null) {
   if (!c) return refine;
@@ -1890,7 +1895,8 @@ export function withRedraft(refine: Refine,
     // the count a cut stops on is the count of the rule it serves: the request's length counts every word, the
     // method's own limit and the span of the author's pieces count the words of the prose
     const countFor = (us: readonly Unmet[]): ((t: string) => number) => ([...us].sort((a, b) => (b.off ?? 0) - (a.off ?? 0))[0]?.of === 'request' ? wordsWritten : proseWords);
-    const another = (): boolean => (onlyTooLong(missing) ? trims < TRIMS : redrafts < REDRAFTS && (redrafts === 0 || missing.every((u) => u.aim)));
+    // THE REQUEST'S LENGTH IS A RULE OF THE RUN: one draft written again toward its range, never a second (`lengthOnly`).
+    const another = (): boolean => (onlyTooLong(missing) ? trims < TRIMS : redrafts < (requestLengthOnly(missing) ? 1 : REDRAFTS) && (redrafts === 0 || missing.every((u) => u.aim)));
     while (missing.length && another()) {
       // A DRAFT WRITTEN AGAIN FOR GRADED MISSES ALONE is the controller's call (core/loop/controller.ts): only where it
       // handed the draft over, a miss far enough out to pay for a whole draft. A nearer one is left as it is, or was
@@ -1905,6 +1911,9 @@ export function withRedraft(refine: Refine,
       const aimedIds = aimed.map((u) => recordTarget(u.id));
       const only = (us: readonly Unmet[]): Unmet[] => us.filter((u) => aimedIds.includes(recordTarget(u.id)));
       const trimming = onlyTooLong(aimed);
+      // A DRAFT WRITTEN AGAIN FOR THE REQUEST'S LENGTH ALONE is kept only where it lands inside the range: nearer and still
+      // outside is the request missed all the same.
+      const lengthOnly = !trimming && requestLengthOnly(aimed);
       // ONE COUNTER FOR THE RUN. A trim or a draft written again is a step like the controller's own, taken through the one
       // step (`applyStep`): only while the step limit and the budget hold it, read off the ledger.
       const action = trimming ? 'trim' as const : 'redraft' as const;
@@ -1969,9 +1978,10 @@ export function withRedraft(refine: Refine,
       }, {
         // THE ONE ACCEPTANCE RULE (rule A), with which way each rule's rate is out; a length or a rule the report does not
         // hold as broken is nearer when its own distance fell.
-        paramsOf: c.paramsOf, purposes: ['writing', 'graded'],
+        paramsOf: c.paramsOf, purposes: ['writing', 'graded'], ...(c.vetoes ? { vetoes: c.vetoes } : {}),
         nearerOther: (id, x) => { const u = aimed.find((y) => y.id === id); const now = x.after.find((y) => y.id === id); return !now || (now.off ?? 0) < (u?.off ?? 0); },
-        also: (x) => (!nearer(x.after, aimed) ? 'it is no nearer what it was written for' : x.displaced.length ? 'it displaced what your pieces hold' : null),
+        also: (x) => (!nearer(x.after, aimed) ? 'it is no nearer what it was written for' : lengthOnly && x.after.some((u) => u.id === LENGTH_ID) ? 'it did not land inside the length the request asks for'
+          : x.displaced.length ? 'it displaced what your pieces hold' : null),
         movement: (x) => redraftMoved(aimed, raw ?? x.after),
         note: (x, kept, _why, v) => outcomeOf(x, kept, v) });
       const stopOf = (x: Delivered): string => x.repair?.controller?.stoppedBecause ?? planned.why;
