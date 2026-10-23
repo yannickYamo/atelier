@@ -7,6 +7,37 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+### A fix changes what was named, what it took out stays out, and the author's own rates steer
+
+- **`atelier fix` is surgical.** A reading on the house pattern locates the sentences the person's words are about (a
+  closed answer: sentence numbers of the current piece, or the whole piece); only those are written again, one span at
+  a time inside the `<work>` field, and spliced back by the repair loop's deterministic splice, so nothing outside a span
+  can change. A span the person named may change what it claims (their words are the licence); a stutter at a seam is
+  still refused. The whole piece is checked again against the standard and read against the author's range; the
+  terminal and the record (`fix`, and `atelier report <run>`) show "changed N of M sentences" with every span's before
+  and after. Where the words are about the whole piece, or no model can read them, the piece is written again whole, as
+  before. Metric: sentences changed outside the named spans per fix round = 0; on an invented 30-sentence piece with two
+  sentences named, exactly those two change and the writer's planning notes stay outside the piece.
+- **Corrections stick for the piece.** Each fix records the stretches of 5 words or more it took out (wording the piece
+  still carries elsewhere is not counted). A later fix whose writer brings one back is written once more without it, and
+  kept as it was if it brings it back again; a run that writes the piece again whole reads it as a finding the repair
+  rewrites (`REMOVED`, never a rule the work is held on), and records `corrections`. No rule is added to the standard.
+  Metric: removed phrases reintroduced = 0.
+- **The author's rates steer.** Read in code on an invented corpus shaped like five pieces (one long, four short): a
+  discovery reads three and holds two back, a counted band needs four read pieces, so the profile held no band at all;
+  the first person singular was no counted feature (only a style pattern, whose floor no span can repair and which
+  steering never grades); the median sentence and the share of very short sentences were no features; and a draft
+  handed over for a profile signal never reached the redraft, which looked the signal up by its feature name. Now `"I",
+  "my" and "me"` (per 1,000 words), the typical sentence (median) and sentences of five words or fewer are counted
+  features; they are read over every piece the skill is built from (read and held back, never the reserved: the first
+  person as the counts a 1,000-word text at the author's pooled rate may carry, the other two as the pieces' band),
+  steer as signals wherever the owner has not ruled them, and are graded targets on any miss, not only far ones. The
+  writer is told them before the draft ("about 4 to 5 "I" per 1,000 words; sentences around 15 words; about 1 in 8
+  under 6 words"). The build screen and `atelier report --skill` list each as "your own rate, steered on any miss"; on
+  the blog example (six pieces, one reserved) three bands now steer where none did. Metric: on the offline end-to-end
+  run, a scripted draft off all three has them handed to one draft written again with each one's direction and
+  distance (before: the first person was never targeted, and the hand-off reached no draft).
+
 ### What only the author knows is asked before the draft, the draft is planned, and notes are points
 
 - **Up to three questions before a piece is drafted, only for what only the author knows** (the angle or why now, what may

@@ -274,12 +274,25 @@ account; an event that is not a JSON object exits 2, so a guard wired wrong is s
 
 `atelier fix "<what was wrong>"` goes one of three ways, and you choose by saying so:
 
-- **This piece** (the default). It is written again with what you said put right, and your skill is not changed:
-  one complaint about one piece is not a rule. It is also recorded as a piece you would not have used, with why.
+- **This piece** (the default). Only what you named changes, and your skill is not changed: one complaint about one
+  piece is not a rule. A small reading finds the sentences your words are about (a closed answer: their numbers in
+  the piece, or "the whole piece"); only those are written again, and code puts them back, so every other sentence
+  stays word for word. You see the piece, "Changed 2 of 30 sentences", and each changed passage before and after;
+  the whole piece is checked again against your rules and read against your range, and `atelier report <run>` keeps
+  the same diff. Where your words are about the whole piece, or no model can read them, it is written again whole.
+  What a fix took out of the piece stays out of it: a later fix, or the piece written again, that brings back 5 words
+  or more of it has that passage written again, and the record says so. It is also recorded as a piece you would not
+  have used, with why.
 - **Every run** (`--always`). Where your rules already cover it, Atelier tries another way to carry them and shows
   you both results. Where they do not, it asks whether this should be a rule; nothing becomes one without your yes.
 - **The evaluation** (`--evaluation`). It blocked what was right, or passed what was not. It is recorded with what the
   evaluation said, and nothing is changed: a check reads one of your rules, and is put right through the rule.
+
+Your own rates steer every run of a skill built from four pieces or more: how often you say "I" (per 1,000 words),
+how long your typical sentence runs, and how many of your sentences are five words or fewer, each read over all your
+pieces. The writer is told them before the draft ("about 4 to 5 "I" per 1,000 words; sentences around 15 words; about
+1 in 8 under 6 words"), and a draft off any of them is written again or rewritten toward it, never failed for it
+(`--graded none` turns the steering off for a run).
 
 `--report` on either command adds the engine's whole account. `atelier rate <run> yes|no "why"` records whether you
 would use the work as it is, and `atelier lab eval` shows that and every check over all your runs. Every

@@ -55,6 +55,18 @@ points used is `points` of `--brief` (the plan's metric: at most 4 of 9), copied
 metric: 0). The questions' metric (rounds of editing to an accepted post, the thesis judged the author's own) is read
 by the judge and the owner below, not by a count. `--no-questions --no-plan` gives the round-1 arm on the same commit.
 
+## Fix rounds on the benchmark (round 3)
+
+For a fix round, run `atelier fix "<what to change>" --json`-free at a terminal (or through the MCP's `atelier_fix`) on
+the arm's last run, then read the record of the new run (`atelier report <run>`, or `fix` in its stored record):
+
+| measure | how it is read |
+|---|---|
+| sentences changed outside the named spans, per fix round | `fix.diff.outside`: sentences of the piece before that no longer stand word for word, outside the sentences the reading named (0 is the bar); beside it `fix.diff.changed` of `fix.diff.total` |
+| removed phrases reintroduced | on a later fix, `fix.reintroduced.found` (brought back by the writer and written again) and `corrections.reintroduced` on a run that wrote the piece again whole: what is still in the delivered work (0 is the bar) |
+
+A fix the reading places on the whole piece writes it again whole: its record has no `fix`, only `corrections`.
+
 ## The judge (run elsewhere, with approval for the spend)
 
 - **Blind**: the judge sees two outputs for the same task as A and B, never an arm's name, a file name or a record.
