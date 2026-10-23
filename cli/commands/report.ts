@@ -160,7 +160,7 @@ export function traceOf(rec: InvocationRecord): [string, string[]][] {
   if (pw) out.push(['before the draft', [
     ...pw.questions.map((q) => { const a = pw.answers.find((x) => x.id === q.id); return `asked (${q.id}): ${q.ask} · ${a ? `${a.by === 'person' ? 'you said' : 'default'}: ${a.answer}` : `default: ${q.default}`}`; }),
     ...pw.answers.filter((a) => a.by === 'told').map((a) => `told before (${a.id}): ${a.answer}`),
-    ...(pw.plan ? planLines(pw.plan).map((l) => `plan · ${l}`) : [`no plan (${pw.planBy === 'off' ? 'not asked for this run' : 'none could be made'})`]),
+    ...(pw.plan ? planLines(pw.plan).map((l) => `plan · ${l}`) : [pw.noPlan ?? `no plan (${pw.planBy === 'off' ? 'not asked for this run' : 'none could be made'})`]),
     ...(pw.planChanges ? [`the plan was made again ${pw.planChanges} time(s) with your changes`] : [])]]);
   if (rec.copied) out.push(['copied from the material', [`${rec.copied.runs} stretch(es) of 5 words or more${rec.copied.runs ? `, the longest ${rec.copied.longest} words` : ''}; one of ${rec.copied.repairAt} or more is rewritten`,
     ...rec.copied.shown.map((x) => `"${x.slice(0, 100)}"`)]]);

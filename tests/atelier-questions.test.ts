@@ -142,9 +142,10 @@ describe('before the draft, outside a terminal: returned as choices, written wit
     expect(p.note).not.toContain('never the operator');
     expect(store.getTold(l).map((t) => [t.id, t.answer]).pop()).toEqual(['naming', 'only the product']);
   });
-  it('with no reader set up, nothing is asked and nothing is said', async () => {
+  it('with no reader set up, nothing is asked and nothing is said; the record keeps only why there is no plan', async () => {
     const p = await beforeTheDraft({ ...base, L: L(), answers: undefined, client: null, model: null });
-    expect([p.questions, p.said, p.note, p.record]).toEqual([[], [], '', null]);
+    expect([p.questions, p.said, p.note]).toEqual([[], [], '']);
+    expect(p.record).toEqual({ questions: [], answers: [], questionsBy: 'floor', plan: null, planBy: 'off', noPlan: 'no plan: --no-plan was given' });
   });
 });
 

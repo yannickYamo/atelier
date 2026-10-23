@@ -107,10 +107,13 @@ export async function beforeTheDraft(o: PrewriteInput): Promise<Prewrite> {
   const answerText = answersNote([...questions, ...beyond], new Map(answers.map((a) => [a.id, a.answer])));
   // ── THE PLAN ───────────────────────────────────────────────────────────────────────────────
   let plan: PiecePlan | null = null; let planBy: DecidedBy | 'off' = 'off'; const typedChanges: string[] = [];
+  // WHY THERE IS NO PLAN, where there is none: said on the record, so a draft written from the notes is never unexplained.
+  let noPlan: string | undefined = o.plan ? undefined : 'no plan: --no-plan was given';
   if (o.plan) {
     const input: PlanInput = { request: o.request, answers: asked, method: o.method, examples: o.examples, material: o.material };
     let p = await readContext(PIECE_PLAN, input, o.client, o.model, tiny(0.05), 'context judge');
     plan = p.value; planBy = p.by;
+    if (!plan) noPlan = `no plan: ${p.why ?? 'the reading made none'}`;
     // A CHANGE TYPED TO THE PLAN MAKES IT AGAIN, from scratch with the change; at most three.
     // A second change keeps the first: the plan is made again from the request and every change typed so far, in order.
     while (plan && o.interactive && typedChanges.length < 3) {
@@ -124,7 +127,7 @@ export async function beforeTheDraft(o: PrewriteInput): Promise<Prewrite> {
     if (plan) said.push(`Planned before writing: ${plan.points.length} point(s) from the material${plan.leftOut.length ? `, ${plan.leftOut.length} left out` : ''}; the plan is on the record, never in the work (atelier report <run>).`);
   }
   const note = [answerText, plan ? planNote(plan) : ''].filter(Boolean).join('\n\n');
-  const record = questions.length || answers.length || plan ? { questions, answers, questionsBy: q?.by ?? 'floor', plan, planBy, ...(typedChanges.length ? { planChanges: typedChanges.length } : {}) } : null;
+  const record = questions.length || answers.length || plan || noPlan ? { questions, answers, questionsBy: q?.by ?? 'floor', plan, planBy, ...(typedChanges.length ? { planChanges: typedChanges.length } : {}), ...(noPlan ? { noPlan } : {}) } : null;
   return { note, said, questions, plan, record };
 }
 

@@ -136,10 +136,12 @@ describe('through the binary: the build screen lists what it steers', () => {
 
   it('the blog example\'s six pieces read no band that tells them from the model: only the author\'s own rates steer, said as theirs', () => {
     const out = runIn(blogProj, 'new', join(blogProj, 'posts'), 'write a post like these', '--name', 'blog', '--accept', '--no-ai-assist');
-    // one piece is reserved: the three rates are read over the five left (core/fidelity/profile.ts, `AUTHOR_RATES`)
-    expect(out).toMatch(/features\s+3 measured on your pieces, 3 steer drafts/);
+    // one piece is reserved: the three rates are read over the five left (core/fidelity/profile.ts, `AUTHOR_RATES`); the
+    // first person is measured and never steered (round 4, item 5)
+    expect(out).toMatch(/features\s+3 measured on your pieces, 2 steer drafts/);
     expect(out).toContain('bands read from your 5 pieces; each is your own rate, read over all your pieces');
-    for (const label of ['"I", "my" and "me"', 'the length of your typical sentence (median, words)', 'sentences of five words or fewer']) expect(out).toMatch(new RegExp(`${label.replace(/[()]/g, '\\$&').replace(/"/g, '\\\\?"')} · .* · your own rate, steered on any miss`));
+    for (const label of ['the length of your typical sentence (median, words)', 'sentences of five words or fewer']) expect(out).toMatch(new RegExp(`${label.replace(/[()]/g, '\\$&')} · .* · your own rate, steered on any miss`));
+    expect(out).not.toMatch(/"I", "my" and "me" · .* · your own rate, steered on any miss/);
     expect(out).not.toContain('tells your pieces from the model');
   }, 180_000);
 });

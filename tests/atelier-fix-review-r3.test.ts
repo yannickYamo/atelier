@@ -9,12 +9,11 @@ import { describe, it, expect } from 'vitest';
 import { fixSpans, fixTargets, sentenceDiff } from '../core/loop/surgical-fix.js';
 import { applyRepair, type Applied, type Reverted } from '../core/loop/repair.js';
 import { reintroducedRuns } from '../core/loop/corrections.js';
-import { authorRatesNote, signalChecks, ruledFeatures, bandAt, RATE_MIN_WORDS } from '../core/loop/graded.js';
+import { authorRatesNote, signalChecks, ruledFeatures } from '../core/loop/graded.js';
 import { gradedRules } from '../core/loop/run-repair.js';
 import { withAuthorRates } from '../core/fidelity/profile.js';
 import { ratifiedProfile } from '../cli/fidelity.js';
 import { deliveryOutcome, STRICT_EXIT } from '../core/eval/consequence.js';
-import { featureWordCount } from '../core/observers/features.js';
 import type { InferenceClient } from '../core/inference/client.js';
 import type { FeatureBand, FidelityProfile } from '../core/fidelity/types.js';
 import type { StandardVersion } from '../core/state/canonical-state.js';
@@ -41,25 +40,30 @@ describe('1. a writer that answers nothing keeps the sentence', () => {
   });
 });
 
-const rateBand = (role: FeatureBand['role'] = 'SIGNAL'): FeatureBand => ({ id: 'firstSingular', cls: 'all', band: [1, 9], median: 4.587, spread: 1, n: 5, role, auc: null, rate: true });
+const rateBand = (role: FeatureBand['role'] = 'SIGNAL'): FeatureBand => ({ id: 'sentenceP50', cls: 'all', band: [13.5, 16.5], median: 15, spread: 1, n: 5, role, auc: null, rate: true });
 const profileOf = (bands: FeatureBand[]): FidelityProfile => ({ version: 1, corpusHash: 'c', detector: null, hash: '', bands });
-const neverI = { requirements: [{ requirementId: 'r1', statement: 'Never use I.', authority: 'EXPERT_CONFIRMED', measurement: { observer: 'FEATURE', params: { feature: ['firstSingular'], minValue: 0, maxValue: 0 } } }] } as unknown as StandardVersion;
+const shortOnly = { requirements: [{ requirementId: 'r1', statement: 'Keep sentences under ten words.', authority: 'EXPERT_CONFIRMED', measurement: { observer: 'FEATURE', params: { feature: ['sentenceP50'], minValue: 0, maxValue: 10 } } }] } as unknown as StandardVersion;
 
 describe('2. the owner\'s rule beats a learned rate', () => {
-  it('a ratified rule on the first person: the rate is not said', () => {
-    const p = ratifiedProfile(profileOf([rateBand()]), neverI);
-    expect([p.bands[0].role, p.bands[0].band]).toEqual(['RULE', [0, 0]]);
+  it('a ratified rule on the typical sentence: the rate is not said', () => {
+    const p = ratifiedProfile(profileOf([rateBand()]), shortOnly);
+    expect([p.bands[0].role, p.bands[0].band]).toEqual(['RULE', [0, 10]]);
     expect(authorRatesNote(p)).toBe('');
   });
   it('a profile made before the rule: neither said nor steered while the standard rules the feature', () => {
     const p = profileOf([rateBand()]);
-    const ruled = ruledFeatures(neverI);
-    expect([...ruled]).toEqual(['firstSingular']);
+    const ruled = ruledFeatures(shortOnly);
+    expect([...ruled]).toEqual(['sentenceP50']);
     expect(authorRatesNote(p, ruled)).toBe('');
-    expect(authorRatesNote(p)).toBe('How I write, counted over my own pieces: about 4 to 5 "I" per 1,000 words. Write at these rates.');
+    expect(authorRatesNote(p)).toBe('How I write, counted over my own pieces: sentences around 15 words. Write at these rates.');
     expect(signalChecks(piece(80), p, ruled)).toEqual([]);
-    expect([...gradedRules(neverI, 'all', p).keys()].filter((k) => k.startsWith('signal·'))).toEqual([]);
-    expect([...gradedRules({ requirements: [] }, 'all', p).keys()]).toEqual(['signal·firstSingular']);
+    expect([...gradedRules(shortOnly, 'all', p).keys()].filter((k) => k.startsWith('signal·'))).toEqual([]);
+    expect([...gradedRules({ requirements: [] }, 'all', p).keys()]).toEqual(['signal·sentenceP50']);
+  });
+  it('round 4, item 5: a first-person rate a profile made before kept as a signal is measured, never said or steered', () => {
+    const p = profileOf([{ id: 'firstSingular', cls: 'all', band: [1, 9], median: 4.587, spread: 1, n: 5, role: 'SIGNAL', auc: null, rate: true }]);
+    expect(authorRatesNote(p)).toBe('');
+    expect([...gradedRules({ requirements: [] }, 'all', p).keys()]).toEqual([]);
   });
 });
 
@@ -133,30 +137,5 @@ describe('8. a provider or budget error writes the piece again whole', () => {
     const broke = await fixSpans(answering('<work>x</work>'), { spentUsd: 0, capUsd: 0.01 }, MD, [2], 'make it warmer', []);
     expect(broke.text).toBe(MD);
     expect(broke.error).toBeTruthy();
-  });
-});
-
-describe('9. the first person is read at the output\'s length', () => {
-  // 30 sentences of 10 words: 300 prose words. At 4.587 per 1,000, a 300-word text expects 1.376 "I": P(X = 0) = 0.253 and
-  // P(X >= 5) = 0.013 < 0.025 while P(X >= 4) = 0.051, so 0 to 4 are within: 0 to 13.333 per 1,000.
-  const line = 'Ships move slowly along the grey river past old docks.';
-  const withI = 'I watched ships move along the grey river past docks.';
-  const text = (n: number, i: number): string => Array.from({ length: n }, (_, k) => (k < i ? withI : line)).join(' ');
-  const p = profileOf([rateBand()]);
-  it('the band at 300 words is 0 to 13.333 per 1,000', () => {
-    expect(featureWordCount(text(30, 0))).toBe(300);
-    expect(bandAt(rateBand(), text(30, 0))).toEqual([0, 13.333]);
-  });
-  it('a 300-word text at the author\'s own rate is inside, and so are none and three; five is out', () => {
-    for (const i of [0, 1, 3]) expect(signalChecks(text(30, i), p)[0].result.verdict).toBe('MET');
-    expect(signalChecks(text(30, 5), p)[0].result.verdict).toBe('VIOLATED');
-  });
-  it('a 1,200-word text with none is out: 5.504 expected, P(X = 0) = 0.004', () => {
-    expect(signalChecks(text(120, 0), p)[0].result.verdict).toBe('VIOLATED');
-  });
-  it('under the minimum the rate is not read and not steered', () => {
-    expect(RATE_MIN_WORDS).toBe(150);
-    expect(signalChecks(text(14, 0), p)).toEqual([]);
-    expect(bandAt(rateBand(), text(14, 0))).toBeNull();
   });
 });

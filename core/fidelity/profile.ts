@@ -110,12 +110,18 @@ export function buildProfile(input: ProfileInput): FidelityProfile {
  * a skill built from them steered none of these, and its outputs ran at no first person, half the author's sentence
  * length and twice their short sentences on every round. These three are the author's own measured habits, not a
  * separation from the model to be validated, so each is read over every piece the profile is built from (read and held
- * back, never the reserved), steers as a SIGNAL wherever the owner has not ruled it, and is a graded target on any miss,
- * not only a far one (`rate`, ../loop/graded.ts). The first person is a count: its band is the counts a 1,000-word text
+ * back, never the reserved), steers as a SIGNAL wherever the owner has not ruled it (the first person is only measured:
+ * `MEASURED_RATES`), and is a graded target on any miss, not only a far one (`rate`, ../loop/graded.ts). The first person is a count: its band is the counts a 1,000-word text
  * at the author's pooled rate may carry (../observers/pooled.ts, `expectedBand`), since a per-piece band over short posts
  * holding a few "I" each spanned zero. The other two are the band of the pieces' own values (`bandOf`).
  */
 export const AUTHOR_RATES = ['firstSingular', 'sentenceP50', 'shortSentence'] as const;
+/**
+ * MEASURED, NEVER STEERED: the first person. A draft short of the author's "I" could only reach it by the writer inventing
+ * first-person opinion the author never gave, so its band is a MONITOR: read on every output and kept on the record, never
+ * told to the writer and never a graded target. A rule the owner states on it still holds as theirs.
+ */
+export const MEASURED_RATES: ReadonlySet<string> = new Set(['firstSingular']);
 export function withAuthorRates(bands: readonly FeatureBand[], texts: readonly string[], ruled?: ReadonlySet<string>): FeatureBand[] {
   const out = [...bands];
   for (const id of AUTHOR_RATES) {
@@ -132,7 +138,7 @@ export function withAuthorRates(bands: readonly FeatureBand[], texts: readonly s
     } else { band = bandOf(measured); median = r3(quantile(measured, 0.5)); }
     if (!band) continue;
     const was = out.findIndex((b) => b.id === id && b.cls === 'all');
-    const rate: FeatureBand = { id, cls: 'all', band, median, spread: r3(sd(measured)), n: measured.length, role: ruled?.has(id) ? 'RULE' : 'SIGNAL', auc: was === -1 ? null : out[was].auc, rate: true,
+    const rate: FeatureBand = { id, cls: 'all', band, median, spread: r3(sd(measured)), n: measured.length, role: ruled?.has(id) ? 'RULE' : MEASURED_RATES.has(id) ? 'MONITOR' : 'SIGNAL', auc: was === -1 ? null : out[was].auc, rate: true,
       // a band the owner was asked about keeps being theirs to adopt: one they did not adopt is monitored, never steered
       ...(was !== -1 && out[was].proposable ? { proposable: out[was].proposable } : {}) };
     if (was === -1) out.push(rate); else out[was] = rate;

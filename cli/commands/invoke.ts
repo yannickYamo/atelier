@@ -799,6 +799,10 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
     interactive: machine === null && process.stdin.isTTY && process.stdout.isTTY,
     client: contextJudgeModel() ? contextReaderClient() : null, model: contextJudgeModel() }) : null;
   for (const line of before?.said ?? []) report.say(line);
+  // WHY THERE IS NO PLAN where nothing was read before the draft: on the record, as the reading says it where it ran.
+  const noPlan = before ? null : contractFile !== null ? 'no plan: the output is structured' : shape === 'SHAPE' ? 'no plan: the request states its own shape'
+    : !piece ? 'no plan: the skill\'s work is a reply in a conversation' : 'no plan: --no-plan was given';
+  const prewriteRecord = before?.record ?? (noPlan ? { questions: [], answers: [], questionsBy: 'floor' as const, plan: null, planBy: 'off' as const, noPlan } : null);
   // THE AUTHOR'S RATES (core/loop/graded.ts, `authorRatesNote`): where the counted features steer this run, the writer is told
   // the author's own first person, sentence length and short sentences as rates, before the draft that is then held to them.
   // Not where a short form sets the counted bands aside.
@@ -901,7 +905,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
       nearness ? { ...nearness, usedFor: [...(impl.retrieved.length || pool.length ? ['passages' as const] : []), ...(fid.typicality?.ids && nearness.pieces.length ? ['typicality' as const] : []),
         ...(local ? ['range' as const] : []), ...(planState ? ['skeleton' as const] : [])] } : null) : null,
     // what was settled before the draft, and what the delivered work copied from material written as sentences
-    before?.record || asPoints || removed ? (output: string) => ({ ...(before?.record ? { prewrite: before.record } : {}), ...(asPoints ? { copied: copiedRecord(output, materialOnly, ownWords) } : {}),
+    prewriteRecord || asPoints || removed ? (output: string) => ({ ...(prewriteRecord ? { prewrite: prewriteRecord } : {}), ...(asPoints ? { copied: copiedRecord(output, materialOnly, ownWords) } : {}),
       ...(removed ? { corrections: { removed: removed.phrases.length, reintroduced: reintroducedRuns(output, removed.phrases, removed.previous, removed.own).map((r) => r.text) } } : {}) }) : null);
 
   reportDrift(report, L, sv, rec);

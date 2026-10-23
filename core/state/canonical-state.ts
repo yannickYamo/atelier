@@ -762,6 +762,8 @@ export interface InvocationRecord {
     readonly planBy: 'code' | 'model' | 'floor' | 'off';
     /** how many times the person changed the plan before it was written from */
     readonly planChanges?: number;
+    /** why the piece was written with no plan, where it was: "no plan: <why>" */
+    readonly noPlan?: string;
   };
   /**
    * STRETCHES COPIED FROM MATERIAL WRITTEN AS SENTENCES (core/loop/material-points.ts), read on the delivered work: every

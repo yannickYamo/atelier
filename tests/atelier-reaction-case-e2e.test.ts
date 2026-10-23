@@ -8,7 +8,8 @@
 //   item 3: the angle is asked where nothing given states it, and not where the request states it;
 //   item 4: with a plan, the writer is served the plan's points in the plan's words, never the raw notes or what the plan
 //           left out (a scripted writer that writes from what it is served: points used and copied runs read as the
-//           benchmark reads them, bench/voice-benchmark/audit.mjs).
+//           benchmark reads them, bench/voice-benchmark/audit.mjs);
+//   item 6: a run with no plan says why on the record.
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { mkdtempSync, existsSync, readFileSync } from 'node:fs';
@@ -89,5 +90,17 @@ describe('the case-shaped fixture, through the binary', () => {
     const raw = String(setup().invoke(REQUEST, '--no-questions', '--no-plan').output);
     expect(carried(raw)).toBe(10);
     expect(sharedRuns(raw, NOTES, 5).length).toBeGreaterThan(0);
+  });
+  it('item 6: a run with no plan says why on the record', async () => {
+    // a plan whose points trace to nothing in the notes is no plan
+    await set({ emit_questions: { decisions: [] }, emit_plan: { ...PLAN, points: [{ point: 'a ferry to the islands', from: 'The ferry leaves the pier at eleven every night.' }] } });
+    const { data, invoke } = setup();
+    invoke(REQUEST, '--no-questions');
+    invoke(REQUEST, '--no-questions', '--no-plan');
+    const recs = store.listInvocations({ root: data, skillName: 'post-voice' });
+    expect(recs.map((r) => r.prewrite?.noPlan).sort()).toEqual(['no plan: --no-plan was given', 'no plan: the reading could not be grounded in the material']);
+    // and `atelier report <run>` says it where the plan would be
+    const shown = execFileSync('node', [CLI, 'report', recs[0].invocationId, '--skill', 'post-voice'], { encoding: 'utf8', env: { ...process.env, ATELIER_DATA: data } });
+    expect(shown).toContain(recs[0].prewrite?.noPlan ?? 'x');
   });
 });
