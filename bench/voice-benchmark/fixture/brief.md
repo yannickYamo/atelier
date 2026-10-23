@@ -1,0 +1,3 @@
+- the new ferry timetable starts on Monday
+- a first crossing at six
+- the quay floods in spring
