@@ -129,7 +129,7 @@ export const QUESTIONS: Reading<QuestionsInput, QuestionsReading> = {
     }
     if (!decisions.length) return null;
     // At most three, in the kinds' fixed order: the angle first.
-    const questions = QUESTION_KINDS.flatMap((k) => (asked.has(k) ? [asked.get(k)!.q] : [])).slice(0, MAX_QUESTIONS);
+    const questions = QUESTION_KINDS.flatMap((k) => { const a = asked.get(k); return a ? [a.q] : []; }).slice(0, MAX_QUESTIONS);
     return { decisions, questions };
   },
   // No model, or nothing grounded: ask nothing.
