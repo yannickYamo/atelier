@@ -32,7 +32,7 @@ import { proseWords } from '../observers/style.js';
 import { ownLengthBand } from '../intake/length.js';
 import { PER_ROLE_LIMIT } from '../observers/selection.js';
 import { tablesOf, figuresOf, targetOf } from '../observers/obligations.js';
-import { deriveMeasuredRules, piecesBreaking } from '../observers/derive.js';
+import { deriveMeasuredRules, piecesBreaking, ruleAgainstExamples } from '../observers/derive.js';
 import { isShortForm, shapeBandRules, pooledRateRules, shortFormLimits, shortFormBrief, type ShapeBandRule, type PooledRateRule, type ShortFormOptions } from '../observers/short-form.js';
 import { allowed, CORPUS_RULE_SHARE } from '../ratification/suggest.js';
 import { machineTellRule } from '../observers/contrast.js';
@@ -328,7 +328,13 @@ export function proposalsAcross(note: string, cases: readonly (Pick<GoldenCase, 
     const held = proposals.filter((p) => p.origin === 'STATED' && p.measurement).length * 1000 - own.filter((p) => p.conflict).length * 10 - proposals.filter((p) => p.conflict).length;
     if (held > best.held) best = { lead: i, proposals, held };
   });
-  return { lead: best.lead, proposals: best.proposals };
+  // A STEP AGAINST WHAT THE EXAMPLES DO IS SAID AS THE AMEND SAYS IT (../observers/derive.ts, `ruleAgainstExamples`): a ban
+  // on a counted pattern by the pieces that use it at all, short ones too, with the dash counter's typed double hyphen.
+  const pieces = cases.map((c) => c.reference);
+  return { lead: best.lead, proposals: best.proposals.map((p) => {
+    const said = p.origin === 'STATED' && p.measurement?.observer === 'PATTERN_RATE' ? ruleAgainstExamples(p.measurement, pieces) : null;
+    return said ? { ...p, conflict: said } : p;
+  }) };
 }
 
 /**

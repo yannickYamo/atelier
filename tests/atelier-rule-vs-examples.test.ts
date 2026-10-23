@@ -14,6 +14,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, existsSync, readdirSync, readFil
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { ruleAgainstExamples } from '../core/observers/derive.js';
+import { proposalsAcross } from '../core/method/standard.js';
 import type { Measurement } from '../core/state/canonical-state.js';
 
 const PLAIN = 'The ferry leaves the pier at eleven and the crossing is calm on most nights of the year.';
@@ -63,3 +64,23 @@ describe('through the binary: an amended rule against the pieces the skill was b
     expect(out.match(/your rule bans it/g)).toHaveLength(1);
   });
 });
+
+describe('round 4, item 8: the method build counts the examples the same way', () => {
+  // The case-shaped fixture: one essay and four short posts, a typed double hyphen in four of them; the owner's step "No em
+  // dashes." read as a ban. The method build named only the essay ("1 of your examples does not do this"), since a rate is
+  // not read on a post under 150 words. It now says what the examples do, counted by the dash counter, as the amend does.
+  const FX = resolve('tests/fixtures/reaction-case/voice');
+  const cases = readdirSync(FX).sort().map((f) => ({ id: f, task: null, material: [], reference: readFileSync(join(FX, f), 'utf8') }));
+  const ban: Measurement = { observer: 'PATTERN_RATE', params: { pattern: ['EM_DASH'], maxPer1000: 0 } };
+  it('the ban is counted on every piece that types a dash, short ones too', () => {
+    expect(ruleAgainstExamples(ban, cases.map((c) => c.reference))).toBe('your examples use em dashes (—) in 4 of 5 pieces; your rule bans it; kept as you wrote it');
+    // the four posts alone: no rate is read on any of them, and three type a dash
+    expect(ruleAgainstExamples(ban, cases.filter((c) => c.id.startsWith('post-')).map((c) => c.reference))).toBe('your examples use em dashes (—) in 3 of 4 pieces; your rule bans it; kept as you wrote it');
+  });
+  it('the step the owner stated carries that count as its conflict', () => {
+    const plan = new Map([['No em dashes.', { how: 'measure' as const, measurement: ban, quote: 'No em dashes', means: 'no em dash', by: 'model' as const }]]);
+    const p = proposalsAcross('No em dashes.', cases, plan).proposals.find((x) => x.statement === 'No em dashes.');
+    expect(p?.conflict).toBe('your examples use em dashes (—) in 4 of 5 pieces; your rule bans it; kept as you wrote it');
+  });
+});
+

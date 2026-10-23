@@ -83,15 +83,17 @@ export function piecesBreaking(pieces: readonly string[], m: Measurement): numbe
  */
 export function ruleAgainstExamples(m: Measurement, pieces: readonly string[]): string | null {
   if (!pieces.length) return null;
-  const breaking = piecesBreaking(pieces, m).length;
-  if (!breaking) return null;
   const p = m.params as { pattern?: readonly string[]; maxPer1000?: number };
   const one = m.observer === 'PATTERN_RATE' && p.pattern?.length === 1 && typeof p.maxPer1000 === 'number' ? p.pattern[0] as PatternId : null;
   const label = one ? PATTERN_LABEL[one] : null;
+  // A BAN IS COUNTED ON EVERY PIECE THAT USES IT AT ALL, a short one too: no rate is read under 150 words, and four posts
+  // that type a dash said nothing.
   if (one && label && p.maxPer1000 === 0) {
     const using = pieces.filter((t) => findPattern(t, one).length > 0).length;
-    return `your examples use ${label} in ${using} of ${pieces.length} pieces; your rule bans it; kept as you wrote it`;
+    return using ? `your examples use ${label} in ${using} of ${pieces.length} pieces; your rule bans it; kept as you wrote it` : null;
   }
+  const breaking = piecesBreaking(pieces, m).length;
+  if (!breaking) return null;
   if (one && label) return `your examples go past it on ${label} in ${breaking} of ${pieces.length} pieces; your rule caps it; kept as you wrote it`;
   return `${breaking} of your ${pieces.length} examples do not hold it; kept as you wrote it`;
 }

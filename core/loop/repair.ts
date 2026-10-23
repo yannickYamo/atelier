@@ -334,6 +334,8 @@ export function applyRepair(text: string, targets: readonly RepairTarget[], repl
     // The seams: a replacement that repeats the words just after it (or just before it) left a stutter.
     const seam = seamRepeat(out.slice(0, t.start), rep.trim(), out.slice(t.end), t.text);
     if (seam) { reverted.push({ id: t.id, kind: 'SEAM', lost: [`a repeated "${seam}" at the join`] }); continue; }
+    const fragment = seamFragment(out.slice(0, t.start), rep.trim(), out.slice(t.end), t.text);
+    if (fragment) { reverted.push({ id: t.id, kind: 'SEAM', lost: [`a sentence left unfinished at the join ("${fragment}")`] }); continue; }
     out = out.slice(0, t.start) + rep.trim() + out.slice(t.end);
     applied.push({ id: t.id, before: t.text, after: rep.trim() });
   }
@@ -364,6 +366,26 @@ export function seamRepeat(before: string, replacement: string, after: string, o
   if (original && !/[.!?]["'”’)*_]*\s*$/.test(original)) {
     const had = new Set(seamWords(original)); const next = a[0];
     if (next && next.length >= 4 && r.includes(next) && !had.has(next)) return next;
+  }
+  return null;
+}
+
+const SENTENCE_END = /[.!?:;…]["'”’)\]*_]*$/;
+const joinWords = (s: string): string[] => s.match(/[\p{L}\p{N}'’]+/gu) ?? [];
+/**
+ * A SENTENCE LEFT UNFINISHED AT A JOIN, by form, or null: the replacement stops on a word with no punctuation where the
+ * span it replaced had ended its sentence, and what follows on the line opens with a capital ("The good news is that" +
+ * " The remedy …"); or the text before stops on a word with no punctuation and the replacement opens with a capital the
+ * span did not ("We know that" + "The remedy …" for "the remedy …"). Returned as the words either side of the join.
+ */
+export function seamFragment(before: string, replacement: string, after: string, original = ''): string | null {
+  const next = /^[ \t]*(\p{Lu})/u.exec(after);
+  if (next && SENTENCE_END.test(original.trim()) && !SENTENCE_END.test(replacement) && /\p{L}$/u.test(replacement)) {
+    return [...joinWords(replacement).slice(-2), ...joinWords(after.split('\n')[0]).slice(0, 2)].join(' ');
+  }
+  const line = before.split('\n').pop() ?? '';
+  if (/\p{Ll}$/u.test(line) && /^\p{Lu}/u.test(replacement) && /^\p{Ll}/u.test(original.trim())) {
+    return [...joinWords(line).slice(-2), ...joinWords(replacement).slice(0, 2)].join(' ');
   }
   return null;
 }
