@@ -12,7 +12,7 @@
 // named, deterministic construction; none of them judges whether a sentence is good.
 
 import type { Span } from './registry.js';
-import { findTells, CONTRAST_VERDICT, TELL_FAMILIES } from './tells.js';
+import { findTells, CONTRAST_VERDICT, TELL_FAMILIES, DASH } from './tells.js';
 import { proseBlocks, sentencesOf, paragraphsOf, proseRegions, wordsOf, quantile } from './text.js';
 
 export type PatternId =
@@ -91,7 +91,8 @@ const BRITISH = new RegExp(`\\b(?:(?:${IZE})s(?:e|es|ed|ing|ation|ations|er|ers)
 const AMERICAN = new RegExp(`\\b(?:(?:${IZE})z(?:e|es|ed|ing|ation|ations|er|ers)|(?:behavi|col|fav|hon|lab|neighb|harb|rum|hum|vap|endeav)or(?:s|ed|ing|ite|ites|able|al|ally)?|(?:cent|theat|fib)er(?:s|ed)?|catalog(?:s|ed)?|defense|offense|pretense|(?:travel|label|model|cancel|signal|channel|fuel|level|counsel|marshal)(?:ed|ing|er|ers)|judgment(?:s)?|analyz(?:e|es|ed|ing)|paralyz(?:e|ed|ing)|aging|gray)\\b`, 'gi');
 
 const REGEX: Partial<Record<PatternId, RegExp>> = {
-  EM_DASH: /—/g,
+  // the em dash and the double hyphen typed for one (./tells.ts, `DASH`)
+  EM_DASH: new RegExp(DASH.source, DASH.flags),
   CONTRAST_VERDICT,
   CONTRACTION: /\b(?:\w+n['’]t|(?:it|that|there|here|what|who|he|she|let)['’]s|\w+['’](?:re|ve|ll|d|m))\b/gi,
   // Only forms a speaker who contracts WOULD contract: "that is" in "the code that is failing" and

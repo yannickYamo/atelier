@@ -22,6 +22,13 @@ export interface TellFamily {
   readonly positional?: true;
 }
 
+/**
+ * A DASH, HOWEVER IT IS TYPED: the em dash, and the double hyphen a writer types for one, between words ("the loop--which
+ * runs--works") or spaced between them ("the loop -- which runs -- works"). Form only. A flag ("--help": nothing
+ * before it), a rule of three hyphens ("---") and a table's delimiter row are not dashes.
+ */
+export const DASH = /—|(?<=[\p{L}\p{N}.,!?;:"'”’)\]]) -- (?=[\p{L}\p{N}"'“‘([])|(?<=[\p{L}\p{N}])--(?=[\p{L}\p{N}])/gu;
+
 export const TELL_FAMILIES: readonly TellFamily[] = [
   { id: 'INSIGHT_CLAIM', label: 'an insight others supposedly miss ("the part people miss", "nobody talks about")',
     re: /\b(?:the (?:part|thing|connection|mistake|point|bit|piece)(?: that)? (?:people|most people|teams|most teams|everyone|nobody|almost everyone|leaders|engineers) (?:\w+ )?(?:miss|misses|get wrong|gets wrong|skip|skips|forget|overlook|underestimate)|(?:people|teams|most people|most teams|everyone) (?:consistently |usually |often |always )?(?:miss|get wrong|overlook|underestimate) (?:this|that|it)|nobody (?:talks|wants to talk|tells you) about|what (?:nobody|no one) tells you)\b/gi },
@@ -53,7 +60,7 @@ export const TELL_FAMILIES: readonly TellFamily[] = [
   // and runs of three or more very short sentences from 2 to 4 ("The bots run on time. The plan gets
   // made. The drafts arrive."), where the author had one in 9,944 words. Neither separated the author
   // from a plain model at discovery, so nothing learned held them: the catalogue holds them for everyone.
-  { id: 'EM_DASH', label: 'an em dash', re: /—/g },
+  { id: 'EM_DASH', label: 'an em dash', re: DASH },
   { id: 'STACCATO_RUN', label: 'a run of three or more very short sentences ("The plan gets made. The drafts arrive.")',
     // Whole sentences only: a run starts where the text, a line or a sentence starts. Read from any word, the tail of
     // a long sentence ("...was a shell script. It ran for eleven months. Nobody needed...") counted as a short one,

@@ -14,6 +14,7 @@ import { protectedRanges, grammarFixing } from '../observers/grammar.js';
 import { numbersIn, namesIn } from './integrity.js';
 import type { Span } from '../observers/registry.js';
 import { qualifiedIn } from '../observers/written.js';
+import { DASH } from '../observers/tells.js';
 
 /**
  * MECHANICAL ERRORS, CORRECTED IN PLACE. Each span the grammar rule flagged with a correction (core/observers/grammar.ts)
@@ -65,7 +66,8 @@ export function correctMechanicalErrors(text: string, spans: readonly Span[], op
  * its cells. Code is left alone.
  */
 export function replaceEmDashes(text: string): string {
-  return mapProse(text, (line) => line.split(/(?<=[.!?]["”’)]?)\s+/).map((sentence) => {
+  // A double hyphen typed for a dash is a dash (core/observers/tells.ts, `DASH`): read as one before it is placed.
+  return mapProse(text, (line) => line.replace(new RegExp(DASH.source, DASH.flags), ' — ').split(/(?<=[.!?]["”’)]?)\s+/).map((sentence) => {
     const parts = sentence.split(/\s*—\s*/);
     if (parts.length === 1) return sentence;
     if (parts.length === 3 && !edged(parts[0], parts[1]) && !edged(parts[1], parts[2])) {
@@ -73,6 +75,8 @@ export function replaceEmDashes(text: string): string {
     }
     return parts.reduce((acc, part, i) => {
       if (!acc.trim()) return `- ${part}`;
+      // NOTHING AFTER IT: the dash ended the sentence, and a full stop ends it instead (a stop already there is kept).
+      if (i === parts.length - 1 && !part.trim()) return /[.!?:;,]["”’)]?$/.test(acc.trim()) ? acc.trimEnd() : `${acc.trimEnd()}.`;
       if (edged(parts[i - 1], part)) return `${acc} - ${part}`;
       const tail = part.trim().split(/\s+/).length;
       return `${acc}${tail <= 4 ? ', ' : ': '}${part}`;
@@ -91,6 +95,36 @@ function replaceInTableRow(line: string): string {
     if (/^[—–]$/.test(cell.trim())) return cell.replace(/[—–]/, '-');
     return cell.split(/(`[^`]*`)/).map((part, i) => (i % 2 ? part : part.replace(/\s*—\s*/g, ' - '))).join('');
   }).join('|');
+}
+
+/** The machine-tell families that are signposting (core/observers/tells.ts): announced candour, an announced reframe. */
+export const SIGNPOST_FAMILIES: ReadonlySet<string> = new Set(['CANDOUR', 'REFRAME_ANNOUNCE']);
+
+/**
+ * A SIGNPOSTING CLAUSE, CUT WITH ITS OWN PUNCTUATION ("To be clear, the ferry leaves" → "The ferry leaves"). Only on the
+ * spans a check reported, and only where the span stands as a clause set off by punctuation, which is form, not meaning:
+ *   at a sentence's start, followed by a comma or a colon: cut with it, and the next word takes the capital;
+ *   between two commas: cut with both, one space left;
+ *   after a comma, before the sentence's stop: cut with the comma.
+ * Anywhere else ("Let me explain why …") the signpost carries its sentence and is left for the model repair. Last span
+ * first, so earlier offsets stay true; a span that no longer reads as reported is skipped.
+ */
+export function cutSignposts(text: string, spans: readonly Span[]): { text: string; cut: number } {
+  let out = text; let cut = 0;
+  for (const s of [...spans].sort((a, b) => b.start - a.start)) {
+    if (s.end <= s.start || out.slice(s.start, s.end) !== s.text) continue;
+    const before = out.slice(0, s.start); const after = out.slice(s.end);
+    const opens = /(?:^|\n)[ \t]*$|[.!?]["”’)]?[ \t]+$/.test(before);
+    const lead = opens ? /^[ \t]*[,:][ \t]+(\S)/.exec(after) : null;
+    if (lead) {
+      const rest = after.slice(lead[0].length - 1);
+      out = before + rest.charAt(0).toUpperCase() + rest.slice(1); cut += 1; continue;
+    }
+    const comma = /,[ \t]*$/.exec(before);
+    if (comma && /^[ \t]*,/.test(after)) { out = `${before.slice(0, comma.index)} ${after.replace(/^[ \t]*,[ \t]*/, '')}`; cut += 1; continue; }
+    if (comma && /^[ \t]*[.!?]/.test(after)) { out = before.slice(0, comma.index) + after.replace(/^[ \t]*/, ''); cut += 1; }
+  }
+  return { text: out, cut };
 }
 
 /**
@@ -171,11 +205,27 @@ export function mechanicalFixes(v: StandardVersion, report: VerifyReport, text: 
   // Left out where the controller corrects them as a step of its own (`grammar: false`).
   const g = opts.grammar === false ? { text, fixed: [] } : grammarFixes(v, report, text);
   let out = g.text; const fixed: string[] = [...g.fixed];
+  // A SIGNPOSTING CLAUSE, cut on the spans the rule's own check reported. They index the text the report was read on, so
+  // only while no fix above has moved it; a later pass reads them again.
+  if (out === text) {
+    for (const r of v.requirements) {
+      if (!broken.has(r.requirementId) || r.measurement?.observer !== 'PATTERN_RATE') continue;
+      const p = r.measurement.params as { pattern?: readonly string[] };
+      const spans = report.checked.find((c) => c.requirementId === r.requirementId)?.result.spans ?? [];
+      const signs = p.pattern?.includes('SIGNPOST') ? spans : p.pattern?.includes('MACHINE_TELL') ? spans.filter((sp) => sp.family !== undefined && SIGNPOST_FAMILIES.has(sp.family)) : [];
+      if (!signs.length) continue;
+      const c = cutSignposts(out, signs);
+      if (c.cut) { out = c.text; fixed.push(`${r.requirementId}: ${c.cut} signposting clause(s) cut`); break; }
+    }
+  }
   for (const r of v.requirements) {
     if (!broken.has(r.requirementId) || !r.measurement) continue;
-    const p = r.measurement.params as { pattern?: readonly string[]; never?: readonly string[]; maxSentences?: number };
-    if (r.measurement.observer === 'PATTERN_RATE' && p.pattern?.includes('MACHINE_TELL') && p.never?.includes('EM_DASH') && out.includes('—')) {
-      out = replaceEmDashes(out); fixed.push(`${r.requirementId}: em dashes replaced`);
+    const p = r.measurement.params as { pattern?: readonly string[]; never?: readonly string[]; maxSentences?: number; maxPer1000?: number };
+    // A DASH IS REPLACED ONLY WHERE A RULE BANS IT: the machine-tell rule that never allows one, or a cap of none.
+    const bansDash = r.measurement.observer === 'PATTERN_RATE' && ((p.pattern?.includes('MACHINE_TELL') === true && p.never?.includes('EM_DASH') === true) || (p.pattern?.length === 1 && p.pattern[0] === 'EM_DASH' && p.maxPer1000 === 0));
+    if (bansDash && (out.includes('—') || new RegExp(DASH.source, DASH.flags).test(out))) {
+      const next = replaceEmDashes(out);
+      if (next !== out) { out = next; fixed.push(`${r.requirementId}: em dashes replaced`); }
     }
     if (r.measurement.observer === 'PARAGRAPH_LENGTH' && typeof p.maxSentences === 'number') {
       const next = splitLongParagraphs(out, p.maxSentences);
@@ -216,7 +266,7 @@ function mapProse(text: string, f: (line: string) => string, row: (line: string)
     if (/^\s*(```|~~~)/.test(line)) { fence = !fence; return line; }
     if (fence) return line;
     if (rows.has(i)) return /[—–]/.test(line) ? row(line) : line;
-    if (!line.includes('—')) return line;
+    if (!line.includes('—') && !new RegExp(DASH.source, DASH.flags).test(line)) return line;
     // Inline code keeps its dashes: split around backticks and treat only the parts outside them.
     return line.split(/(`[^`]*`)/).map((part, i) => (i % 2 ? part : f(part))).join('');
   }).join('\n');
