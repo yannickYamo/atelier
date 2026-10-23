@@ -117,12 +117,37 @@ and breaks nothing that could hold the work is kept, and only a harmful span is 
 
 **What the writer delivers is what it puts inside its field.** The writer is asked for the piece between `<work>` and
 `</work>`; anything it says about the task outside the field is set aside, kept on the record (`work.outside`), and never
-delivered or checked. A reply with no field is taken whole, and the record says so (`work.delimited: false`).
+delivered or checked. Each field closes at its own first `</work>`: two fields deliver their insides, and what stood
+between them is outside; a field shown inside a code fence is no field. A reply with no field is taken whole, and the
+record says so (`work.delimited: false`). `invoke --json` carries the field as `work`.
 
 **Fixed in code where meaning cannot change.** Where a rule bans dashes, each one (an em dash, or a double hyphen typed for
 one) is replaced by position: a pair around an aside by commas, a short tail by a comma, a long one by a colon, a dash
-with nothing after it by a full stop. A signposting clause set off by its own punctuation ("To be clear,") is cut with
-it. Anything else goes to the model's rewrite.
+with nothing after it by a full stop. A double hyphen with a digit on both sides is a range ("2018--2020"), not a dash;
+one inside a URL, a path or a class name is a token; front matter and quotations are left as written. A signposting
+clause is cut only as a whole set-off clause: between two commas, or opening the sentence with a whole clause after it
+("To be clear, the ferry leaves" becomes "The ferry leaves"); a phrase that is the sentence's subject ("The short answer,
+though, is no.") goes to the model's rewrite, as does anything else.
+
+**What only you know is asked before the draft, and the draft is planned.** Where a small reader is set up, before a
+piece is drafted the run lists the decisions it needs and asks you only those whose answer is yours alone and would
+change the draft: the angle or why now, what may be named, news about your own work, what to stress. Never voice or form,
+never what the request, material, method or examples settle, at most three, each with two to four options and a
+default, and none when the request carries it. At a terminal you answer with a letter, your own words, or "just write
+it". Elsewhere (`--json`, a pipe, the MCP server, an agent) nothing waits: the questions come back as
+`questions: [{id, ask, options, default}]`, the work is written with the defaults, said in one line, and
+`--answers "angle=b,naming=only the product"` answers them on the next call. Your answers are the next run's defaults
+("last time you said …"); what may be named, once said, is not asked again. Then the run makes a plan: the angle, the
+pain, the turn, the answer, at most three points chosen from your material (each tied to its words), one image, the
+close, and what was left out and why. At a terminal it is shown before writing (enter writes; anything you type makes
+the plan again from scratch with your change); with `--json` it is returned as `plan`. The draft is written from it; the
+plan is never part of the work and stays on the record (`atelier report <run>`). `--no-questions` and `--no-plan` turn
+either off; with no reader set up nothing is asked and there is no plan.
+
+**Notes written as sentences are points.** Where your bound material holds finished sentences, the run says so once and
+serves it to the writer as points to write from. The work is read for the stretches it copies from the material: every
+run of 5 words or more is on the record (`copied`), and one of 8 words or more is rewritten in the writer's own words
+like any listed finding. It never blocks the work.
 
 **The length the request asks for is a rule of the run.** Outside its range after repair, the piece is written again once
 toward it, and that draft is kept only if it lands inside and breaks nothing that could hold the work. The record says the

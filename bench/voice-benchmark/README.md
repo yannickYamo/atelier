@@ -39,6 +39,22 @@ Per output it reports:
 `--json` writes one line per output; the screen shows one line per output and the totals. The test
 (`tests/atelier-voice-benchmark-audit.test.ts`) runs it on the invented fixture in `fixture/`.
 
+## The questions and the plan on the benchmark (round 2)
+
+An Atelier arm run with `--json` writes with the defaults of any questions it asks, and returns them with the plan:
+
+```bash
+atelier invoke --skill <name> "<task>" --with notes=<notes.md> --json > <arm>/<task>.record.json
+```
+
+Save the work (`output`) as `<arm>/<task>.md` beside its record. The record carries `questions` (and `answers`, each
+`by: 'default'` on this first call), `plan` (its `points` are the material it chose; `leftOut` the rest) and `copied`.
+For the arm with the author's answers, run each task again with the author's own choices:
+`--answers "angle=<letter or their words>,..."` (never answered by anyone but the author). Read with the audit:
+points used is `points` of `--brief` (the plan's metric: at most 4 of 9), copied runs is `copied` (the material
+metric: 0). The questions' metric (rounds of editing to an accepted post, the thesis judged the author's own) is read
+by the judge and the owner below, not by a count. `--no-questions --no-plan` gives the round-1 arm on the same commit.
+
 ## The judge (run elsewhere, with approval for the spend)
 
 - **Blind**: the judge sees two outputs for the same task as A and B, never an arm's name, a file name or a record.

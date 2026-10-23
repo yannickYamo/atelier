@@ -7,6 +7,44 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+### What only the author knows is asked before the draft, the draft is planned, and notes are points
+
+- **Up to three questions before a piece is drafted, only for what only the author knows** (the angle or why now, what may
+  be named, news about their own work, what to stress). One reading lists the decisions the piece needs, each a closed
+  choice of kind, status (known, inferable, unknown) and spread (would the answers give the same, somewhat or different
+  drafts); code asks only an unknown author-only decision whose answers give different drafts, at most three, each with
+  two to four options and a default. Never voice or form; none when the request carries it; nothing with no reader set up.
+  At a terminal a letter, the person's own words or "just write it" answers; elsewhere (`--json`, a pipe, the MCP server)
+  the questions come back as `questions: [{id, ask, options, default}]`, the work is written with the defaults, said in
+  one line, and `--answers "<id>=<choice>,..."` (the MCP tool's `answers`) answers them on the next call. Answers are the
+  skill's next defaults ("last time you said …"); what may be named, once said, is not asked again. Metric: rounds of
+  editing to an accepted post, and the thesis judged the author's own (to be read on the benchmark).
+- **A plan before the draft.** One reading makes the angle, the pain, the turn, the answer, at most three points chosen
+  from the material (each kept only where its words are in the material), one image, the close, and what was left out
+  and why, from the request, the answers, the method, the examples and the material. Shown at a terminal (enter writes;
+  a typed change makes the plan again from scratch), returned as `plan` with `--json`, served to the writer after the
+  skill, never delivered as the work, and kept on the record for `atelier report`. Metric: points used at most 4 of 9.
+- **Material written as finished sentences is points to write from.** Said once, served as points, and the delivered work
+  is read for the stretches it copies from it: every maximal run of 5 words or more is on the record (`copied`), and one
+  of 8 words or more is rewritten like any listed finding; it never holds the work. Metric: copied runs = 0.
+
+### Round-1 gaps closed
+
+- **A range is not a dash.** A double hyphen needs a letter on one side to be a dash: "2018--2020", "3 -- 2" and
+  "1.2--1.4" are neither counted nor replaced, and the rule-against-the-examples count no longer counts them. A double
+  hyphen inside a URL, a path or a class name is a token; the dash repair leaves front matter and quotations as written.
+- **A signpost cut never takes a subject.** Only a whole set-off clause is cut: between two commas, or opening the
+  sentence with a whole clause after it (by form: two words or more, no comma, colon, semicolon or dash of its own). "The
+  short answer, though, is no." is left for the model repair; so is a clause trailing before the stop.
+- **Each work field closes at its own tag.** Two fields deliver their insides joined, with the reasoning between them
+  outside; a field shown inside a code fence is no field. `invoke --json` carries the record's `work`.
+- **Span-by-span acceptance is the step's.** Each span is judged with the graded options the whole pass is judged with,
+  and its claim reads are the step's spend: a span the run cannot pay to read is discarded, said so.
+- **The voice benchmark reads every arm the same way.** Each output's first paragraph is listed for a person, whatever
+  the arm, with the record's field beside it as extra information; "I'm", "I've", "I'd" and "I'll" count as I; copied
+  stretches are maximal runs, not overlapping 5-word counts; the README states Node 22 and running from the root after
+  `npm run build`.
+
 ### The work is what the writer puts in its field, repair answers to the table, and the request's length is a rule
 
 - **Only the work field is delivered.** The writer is asked to put the piece between `<work>` and `</work>`, with anything
