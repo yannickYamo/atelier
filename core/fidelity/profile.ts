@@ -24,7 +24,8 @@
 
 import { createHash } from 'node:crypto';
 import { FEATURES, featureOf } from '../observers/features.js';
-import { judgeFeature, bandOf, distanceFromBand } from '../observers/selection.js';
+import { judgeFeature, bandOf, distanceFromBand, SELECTION } from '../observers/selection.js';
+import { pooledRateOf, expectedBand } from '../observers/pooled.js';
 import { quantile, wordsOf, proseRegions } from '../observers/text.js';
 import { trainDetector, scoreDetector } from './stylometry.js';
 import { authorFactDensity } from '../loop/fact-ledger.js';
@@ -86,6 +87,7 @@ export function buildProfile(input: ProfileInput): FidelityProfile {
       bands.push({ id: f.id, cls, band: b, median: r3(quantile(inClass, 0.5)), spread: r3(sd(inClass)), n: inClass.length, role: clsRole, auc: own.auc, ...proposable });
     }
   }
+  bands.splice(0, bands.length, ...withAuthorRates(bands, [...readTexts, ...heldTexts], input.ruled));
   const trained = detectorFor(input.read, input.model);
   const families = [...new Set(input.modelFamilies ?? [])].filter(Boolean).sort();
   const detector = trained && families.length ? { ...trained, families } : trained;
@@ -100,6 +102,40 @@ export function buildProfile(input: ProfileInput): FidelityProfile {
   const body = { version: 1 as const, corpusHash: input.corpusHash, bands, detector, factDensity: authorFactDensity(readTexts),
     ...(effects ? { effects } : {}), ...(unseen.length ? { unseen } : {}), ...(baseline ? { baseline } : {}) };
   return { ...body, hash: sha(JSON.stringify(body)) };
+}
+
+/**
+ * THE AUTHOR'S RATES: how often they say "I", how long their typical sentence runs, and how many of their sentences are
+ * very short. Five pieces were read three and held two at discovery, a band needs four read pieces, and no band formed:
+ * a skill built from them steered none of these, and its outputs ran at no first person, half the author's sentence
+ * length and twice their short sentences on every round. These three are the author's own measured habits, not a
+ * separation from the model to be validated, so each is read over every piece the profile is built from (read and held
+ * back, never the reserved), steers as a SIGNAL wherever the owner has not ruled it, and is a graded target on any miss,
+ * not only a far one (`rate`, ../loop/graded.ts). The first person is a count: its band is the counts a 1,000-word text
+ * at the author's pooled rate may carry (../observers/pooled.ts, `expectedBand`), since a per-piece band over short posts
+ * holding a few "I" each spanned zero. The other two are the band of the pieces' own values (`bandOf`).
+ */
+export const AUTHOR_RATES = ['firstSingular', 'sentenceP50', 'shortSentence'] as const;
+export function withAuthorRates(bands: readonly FeatureBand[], texts: readonly string[], ruled?: ReadonlySet<string>): FeatureBand[] {
+  const out = [...bands];
+  for (const id of AUTHOR_RATES) {
+    const f = featureOf(id);
+    if (!f) continue;
+    const measured = vals(texts.map((t) => f.measure(t)));
+    if (measured.length < SELECTION.minRead) continue;
+    let band: readonly [number, number] | null; let median: number;
+    if (f.count) {
+      const pooled = pooledRateOf(texts, f.count.bind(f));
+      if (!pooled.words) continue;
+      const per1000 = pooled.perWord * 1000;
+      band = expectedBand(per1000); median = r3(per1000);
+    } else { band = bandOf(measured); median = r3(quantile(measured, 0.5)); }
+    if (!band) continue;
+    const was = out.findIndex((b) => b.id === id && b.cls === 'all');
+    const rate: FeatureBand = { id, cls: 'all', band, median, spread: r3(sd(measured)), n: measured.length, role: ruled?.has(id) ? 'RULE' : 'SIGNAL', auc: was === -1 ? null : out[was].auc, rate: true };
+    if (was === -1) out.push(rate); else out[was] = rate;
+  }
+  return out;
 }
 
 /**

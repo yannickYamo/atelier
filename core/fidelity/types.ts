@@ -59,6 +59,11 @@ export interface FeatureBand {
    * owner ratified it (then as RULE, with the ratified band); rejected or not adopted, it is only monitored.
    */
   readonly proposable?: true;
+  /**
+   * One of the author's rates (./profile.ts, `AUTHOR_RATES`): read over every piece, and a graded target on any miss,
+   * not only one more than a band width out.
+   */
+  readonly rate?: true;
 }
 
 /**

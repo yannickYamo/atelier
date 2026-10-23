@@ -111,14 +111,14 @@ describe('through the binary: the build screen lists what it steers', () => {
     encoding: 'utf8', cwd: dir, env: { ...process.env, ANTHROPIC_API_KEY: '', ATELIER_DATA: data, ATELIER_PROJECT_DIR: dir, ATELIER_PRICE_IN: '1', ATELIER_PRICE_OUT: '1', ATELIER_CLAIMS: 'pattern' } });
   /** The card's lines, a wrapped line read whole. */
   const linesOf = (out: string): string[] => out.replace(/\n {22}/g, ' · ').split('\n');
-  const LINE = /^ {4}\S.* · [-0-9.%]+ to [-0-9.%]+(?: per 1,000 words)? · (?:more|fewer|higher|lower) than the model's drafts \(\d+ of 100 pairs\)(?: · read from (?:\d+ of )?your \d+ pieces?)?$/;
+  const LINE = /^ {4}\S.* · [-0-9.%]+ to [-0-9.%]+(?: per 1,000 words)? · (?:(?:more|fewer|higher|lower) than the model's drafts \(\d+ of 100 pairs\)|your own rate, steered on any miss)(?: · read from (?:\d+ of )?your \d+ pieces?)?$/;
 
   it('a single author\'s 24 pieces: the strongest steered features, with bands, where they came from and why', () => {
     const out = run('new', join(proj, 'notes'), 'write a note like these', '--name', 'notes', '--accept', '--no-ai-assist');
     const lines = linesOf(out);
     const at = lines.findIndex((l) => l === '  STEERED TOWARD YOUR RANGE ON EVERY DRAFT, NEVER REQUIRED');
     expect(at).toBeGreaterThan(-1);
-    expect(lines[at + 1]).toMatch(/^ {4}bands read from (?:\d+ of )?your \d+ pieces; each acts because it tells your pieces from the model's drafts$/);
+    expect(lines[at + 1]).toMatch(/^ {4}bands read from (?:\d+ of )?your \d+ pieces; (?:each acts because it tells your pieces from the model's drafts|each acts for the reason its line gives)$/);
     const section: string[] = [];
     for (let k = at; k < lines.length && lines[k].trim(); k++) section.push(lines[k]);
     const listed = section.filter((l) => LINE.test(l));
@@ -134,9 +134,12 @@ describe('through the binary: the build screen lists what it steers', () => {
     expect(report.join('\n')).not.toMatch(/more: atelier report --skill notes/);
   }, 180_000);
 
-  it('the blog example\'s six pieces are too few to read a band from: nothing is claimed to steer', () => {
+  it('the blog example\'s six pieces read no band that tells them from the model: only the author\'s own rates steer, said as theirs', () => {
     const out = runIn(blogProj, 'new', join(blogProj, 'posts'), 'write a post like these', '--name', 'blog', '--accept', '--no-ai-assist');
-    expect(out).toMatch(/features\s+0 measured on your pieces, 0 steer drafts/);
-    expect(out).not.toContain('STEERED TOWARD');
+    // one piece is reserved: the three rates are read over the five left (core/fidelity/profile.ts, `AUTHOR_RATES`)
+    expect(out).toMatch(/features\s+3 measured on your pieces, 3 steer drafts/);
+    expect(out).toContain('bands read from your 5 pieces; each is your own rate, read over all your pieces');
+    for (const label of ['"I", "my" and "me"', 'the length of your typical sentence (median, words)', 'sentences of five words or fewer']) expect(out).toMatch(new RegExp(`${label.replace(/[()]/g, '\\$&').replace(/"/g, '\\\\?"')} · .* · your own rate, steered on any miss`));
+    expect(out).not.toContain('tells your pieces from the model');
   }, 180_000);
 });

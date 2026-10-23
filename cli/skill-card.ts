@@ -91,7 +91,7 @@ export function skillCardFor(L: store.StoreLayout, opts: { heldBack?: number; sk
       // WHAT STEERS EVERY DRAFT AND IS NEVER REQUIRED, by name: the features selection kept on the author's pieces.
       steered: pooled.filter((b) => b.role === 'SIGNAL').flatMap((b) => {
         const f = featureOf(b.id);
-        return f ? [{ id: b.id, label: f.label, unit: f.unit, band: b.band, n: b.n, auc: b.auc }] : [];
+        return f ? [{ id: b.id, label: f.label, unit: f.unit, band: b.band, n: b.n, auc: b.auc, ...(b.rate ? { rate: true as const } : {}) }] : [];
       }),
       ruled: pooled.filter((b) => b.role === 'RULE').length,
     } : null,

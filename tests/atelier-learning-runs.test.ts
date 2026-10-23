@@ -19,6 +19,7 @@ const HISTORY: Readonly<Record<string, string>> = {
   'cli/commands/fix.ts': 'looks one named run up',
   'cli/commands/promote.ts': 'reads the runs of a candidate the owner named for a comparison',
   'cli/commands/eval.ts': 'names the test runs so that they can be left out of its counts',
+  'cli/fix-in-place.ts': 'reads the fixes of one piece, by the run first fixed: what they took out stays out of it',
 };
 
 describe('every reader of a skill\'s runs says whether it reads the history or what may be learned from', () => {

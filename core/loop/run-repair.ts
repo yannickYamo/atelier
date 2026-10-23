@@ -24,6 +24,7 @@ import { NO_MATERIAL } from './claim-extract.js';
 import { checkFormat, type FormatProfile } from '../observers/formats.js';
 import { findTerms } from '../observers/text.js';
 import { signalRules, signalChecks, isSignal, displacement, ownerWords, type Displacement } from './graded.js';
+import { reintroducedRuns } from './corrections.js';
 import type { FidelityProfile, ControllerSettings } from '../fidelity/types.js';
 import { decide, controllerRecord, recordTarget, stepWords, stepLedger, DEFAULT_COST, ENFORCED_WEIGHT, SETTLED_ERROR, type ControllerInput, type Decision, type EnforcedMiss, type GradedMiss, type PlannedStep, type StepLedger } from './controller.js';
 import { applyOperator, operatorsToward, sitesOf, keepsWords } from '../fidelity/operators.js';
@@ -87,6 +88,12 @@ export interface CheckOptions {
   readonly copiedFrom?: string;
   /** what the owner's method and standard state: a stretch of it is their own words, never a copy from the material */
   readonly copiedOwn?: string;
+  /**
+   * WHAT EARLIER FIXES OF THIS PIECE TOOK OUT (./corrections.ts): the removed stretches, and the piece this text was made
+   * from. A removed stretch of 5 words or more brought back is a finding the repair rewrites (`REMOVED_LINE`); wording the
+   * piece still carried is never one. Absent: nothing is read for it.
+   */
+  readonly removed?: { readonly phrases: readonly string[]; readonly previous: string };
   /** the request and the named material this output was written from, for the rules that are about them (../observers/registry.ts, `CheckContext`) */
   readonly context?: CheckContext;
   /**
@@ -228,7 +235,14 @@ export function checkDraft(skill: string, v: StandardVersion, text: string, opts
     materiality: 'PREFERRED', enforced: true, phase: 'STYLE' as const,
     result: { verdict: copied.length ? 'VIOLATED' as const : 'MET' as const, spans: copied.map((r) => ({ start: r.start, end: r.end, text: r.text, why: `${r.words} words copied from the material: say it in your own words` })),
       value: copied.length, detail: copied.length ? `${copied.length} stretch(es) of ${REPAIR_RUN_WORDS} words or more copied from the material` : `no stretch of ${REPAIR_RUN_WORDS} words or more copied from the material` } });
-  const copiedFails = (copied?.length ?? 0) > 0;
+  // WHAT A FIX OF THIS PIECE TOOK OUT STAYS OUT (./corrections.ts): brought back, it is a finding the repair rewrites, like a
+  // copied stretch; no rule of the standard, and never what the work is held on (cli/eval-run.ts).
+  const back = opts.removed?.phrases.length ? reintroducedRuns(text, opts.removed.phrases, opts.removed.previous) : null;
+  if (back) fmtLines.push({ requirementId: REMOVED_LINE, statement: 'Never bring back wording an earlier fix of this piece took out.',
+    materiality: 'PREFERRED', enforced: true, phase: 'STYLE' as const,
+    result: { verdict: back.length ? 'VIOLATED' as const : 'MET' as const, spans: back.map((r) => ({ start: r.start, end: r.end, text: r.text, why: 'wording an earlier fix of this piece took out: say it another way' })),
+      value: back.length, detail: back.length ? `${back.length} stretch(es) an earlier fix took out, brought back` : 'nothing an earlier fix took out brought back' } });
+  const copiedFails = (copied?.length ?? 0) > 0 || (back?.length ?? 0) > 0;
   if (opts.guardClaims === false) return { ...report, checked: [...report.checked, ...fmtLines], failed: report.failed || (fmt?.hard.length ?? 0) > 0 || copiedFails };
   const reading = opts.claimSensor?.reading(text);
   // WHICH READING GATES. A reading from an unqualified reader carries the pattern check's as its `gate`
@@ -355,6 +369,8 @@ export function checkDraft(skill: string, v: StandardVersion, text: string, opts
 
 /** The line a stretch copied from material written as sentences is reported on (./material-points.ts). */
 export const COPIED_LINE = 'COPIED';
+/** The finding for wording an earlier fix of the piece took out, brought back (./corrections.ts). */
+export const REMOVED_LINE = 'REMOVED';
 
 /**
  * THE WHY NEVER SAYS MORE THAN THE TEXT HOLDS. A repair that ended with a rule still broken said "every REQUIRED
@@ -838,7 +854,9 @@ async function refineOnLedger(client: InferenceClient, budget: Budget, skill: st
   // A learned shape band is acted on only past its ceiling (./shape-steer.ts, `steersMiss`): never a pull toward padding.
   const gradedOff = (r: VerifyReport): RuleCheck[] => r.checked.filter((c) => graded.has(c.requirementId) && !acts(c) && c.result.verdict === 'VIOLATED'
     && (!shapeOf.has(c.requirementId) || steersMiss(v.requirements.find((r) => r.requirementId === c.requirementId)?.measurement, c.result.error, c.result.value)));
-  const pending = (r: VerifyReport): boolean => r.failed || gradedOff(r).some((c) => Math.abs(c.result.error ?? 0) > SETTLED_ERROR);
+  // One of the author's rates (./graded.ts, `SignalCheck.rate`) keeps the loop going at any distance.
+  const isRate = (c: RuleCheck): boolean => (c as { rate?: true }).rate === true;
+  const pending = (r: VerifyReport): boolean => r.failed || gradedOff(r).some((c) => isRate(c) || Math.abs(c.result.error ?? 0) > SETTLED_ERROR);
   const gradedTargeted = new Set<string>(); const gradedRepaired = new Set<string>();
   // EVERY EDIT, COUNTED: span rewrites kept, and those refused by a guard or discarded with their pass, with the reasons.
   // The passes the flag alone caused (every span of them for a graded rule the standard does not enforce) are counted
@@ -932,7 +950,7 @@ async function refineOnLedger(client: InferenceClient, budget: Budget, skill: st
     const byFeature = new Map<string, GradedMiss>();
     for (const c of gradedOff(r)) {
       const f = graded.get(c.requirementId) ?? c.requirementId; const e = c.result.error ?? 0; const was = byFeature.get(f);
-      if (!was || Math.abs(e) > Math.abs(was.error)) byFeature.set(f, { id: c.requirementId, error: e, operatorEffect: operatorEffect(t, c), ...(lengthShapes.has(c.requirementId) ? { length: true as const } : {}) });
+      if (!was || Math.abs(e) > Math.abs(was.error)) byFeature.set(f, { id: c.requirementId, error: e, operatorEffect: operatorEffect(t, c), ...(lengthShapes.has(c.requirementId) ? { length: true as const } : {}), ...(isRate(c) ? { rate: true as const } : {}) });
     }
     const rewriteUsd = perCall(['repair', 'graded']); const draftUsd = perCall(['writing']);
     return { enforced, claims: flaggedClaims(r).length, length: null, graded: [...byFeature.values()], grammar,

@@ -770,6 +770,18 @@ export interface InvocationRecord {
    */
   readonly copied?: { readonly runs: number; readonly longest: number; readonly shown: readonly string[]; readonly repairAt: number };
   /**
+   * A FIX OF A PIECE MADE IN PLACE (core/loop/surgical-fix.ts): the person's words, the run first fixed (`of`) and the
+   * version of the piece this one was made from (`from`), the sentences named, the diff (sentences changed of total, and
+   * how many outside the spans named: 0 by construction, measured), every span's before and after, what that removed
+   * (core/loop/corrections.ts), and removed wording a replacement brought back. Absent from every other run.
+   */
+  readonly fix?: { readonly of: string; readonly from: string; readonly instruction: string; readonly by: 'code' | 'model' | 'floor'; readonly sentences: readonly number[];
+    readonly diff: { readonly total: number; readonly changed: number; readonly outside: number };
+    readonly spans: readonly { readonly before: string; readonly after: string }[]; readonly removed: readonly string[];
+    readonly reintroduced: { readonly found: readonly string[]; readonly rewritten: number; readonly keptAsItWas: number } };
+  /** WHAT EARLIER FIXES OF THIS PIECE TOOK OUT, read on a run that wrote it again whole: how many stretches, and which came back (core/loop/corrections.ts). */
+  readonly corrections?: { readonly removed: number; readonly reintroduced: readonly string[] };
+  /**
    * When several drafts were written and one delivered: how many, and why that one. `drafts` is how
    * many were asked for; when some calls failed, `written` is how many came back and `chosen` indexes
    * those, and `failed` says why each missing one is missing. `unchosen` is the text of every draft not

@@ -164,6 +164,13 @@ export function traceOf(rec: InvocationRecord): [string, string[]][] {
     ...(pw.planChanges ? [`the plan was made again ${pw.planChanges} time(s) with your changes`] : [])]]);
   if (rec.copied) out.push(['copied from the material', [`${rec.copied.runs} stretch(es) of 5 words or more${rec.copied.runs ? `, the longest ${rec.copied.longest} words` : ''}; one of ${rec.copied.repairAt} or more is rewritten`,
     ...rec.copied.shown.map((x) => `"${x.slice(0, 100)}"`)]]);
+  // A FIX MADE IN PLACE (cli/fix-in-place.ts): what was asked, the sentences named, the diff, and every span before and after
+  if (rec.fix) out.push(['fixed in place', [`"${rec.fix.instruction.slice(0, 100)}" · sentences ${rec.fix.sentences.join(', ')} (${rec.fix.by === 'model' ? 'read' : rec.fix.by})`,
+    `changed ${rec.fix.diff.changed} of ${rec.fix.diff.total} sentences; ${rec.fix.diff.outside} outside the sentences named`,
+    ...rec.fix.spans.flatMap((x) => [`- ${x.before.replace(/\s+/g, ' ').slice(0, 100)}`, `+ ${x.after.replace(/\s+/g, ' ').slice(0, 100) || '(cut)'}`]),
+    ...(rec.fix.removed.length ? [`took out: ${rec.fix.removed.map((x) => `"${x.slice(0, 60)}"`).join(', ')}`] : []),
+    ...(rec.fix.reintroduced.found.length ? [`brought back what an earlier fix took out, and written again: ${rec.fix.reintroduced.found.map((x) => `"${x.slice(0, 60)}"`).join(', ')}`] : [])]]);
+  if (rec.corrections) out.push(['what earlier fixes took out', [`${rec.corrections.removed} stretch(es) kept out; brought back: ${rec.corrections.reintroduced.length ? rec.corrections.reintroduced.map((x) => `"${x.slice(0, 60)}"`).join(', ') : 'none'}`]]);
   if (f) out.push(['release', [`${f.release ?? 'none (the run overrode its release)'} · profile ${f.profileHash ?? 'none'}`,
     ...(f.settings ? [`ran: ${f.settings.drafts} draft(s), ${f.settings.editBudget} sentence rewrite(s), ${f.settings.retrievalK} passage(s), ${f.settings.notesCap} note(s)${f.settings.diversity ? ', drafts made to differ' : ''}`] : []),
     ...(f.plan ? [`written by section: ${f.plan.join(' / ')}`] : [])]]);

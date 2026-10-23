@@ -85,6 +85,11 @@ export interface RepairTarget {
   readonly clauses?: readonly Clause[];
   /** the documents of the bound material, by file name: a bracketed citation naming one is no slot left to fill */
   readonly cites?: readonly string[];
+  /**
+   * A SPAN THE PERSON NAMED (`atelier fix`, ./surgical-fix.ts): their instruction is what licenses the change, so the
+   * meaning guard and the cut guard do not hold it to its claims; the seam, the move and the slot guards still apply.
+   */
+  readonly asked?: boolean;
 }
 
 /**
@@ -293,7 +298,7 @@ export function applyRepair(text: string, targets: readonly RepairTarget[], repl
       // CUTTING A SENTENCE THAT IS ONLY A MOVE. "I want to be careful not to be cynical about this" has a
       // "not" the meaning guard protects, but no claim a reader loses when it goes. A cut is allowed for a
       // machine-writing move whose sentence carries no figure and no name; anything else keeps its words.
-      if (!t.cuttable || numbersIn(t.text).length || namesIn(t.text).length) { reverted.push({ id: t.id, kind: 'CUT', lost: ['the sentence: only a sentence that is nothing but the move, with no figure or name in it, may be cut'] }); continue; }
+      if (!t.asked && (!t.cuttable || numbersIn(t.text).length || namesIn(t.text).length)) { reverted.push({ id: t.id, kind: 'CUT', lost: ['the sentence: only a sentence that is nothing but the move, with no figure or name in it, may be cut'] }); continue; }
       const cutTo = cutSpan(out, t.start, t.end);
       // A cut that would leave no text at all is not a repair: the sentence stays, and its move is still reported.
       if (proseWordsOf(text) > 0 && proseWordsOf(cutTo) === 0) { reverted.push({ id: t.id, kind: 'CUT', lost: ['the whole text: cutting this sentence would leave nothing'] }); continue; }
@@ -303,7 +308,7 @@ export function applyRepair(text: string, targets: readonly RepairTarget[], repl
     }
     // Only a span that is purely an unsourced claim skips the meaning check; a merged one is checked on
     // everything outside its claims.
-    const integrity = spanIntegrity(withoutGoneClauses(t.text, t.clauses ?? [], rep), rep, new Set(t.drops ?? []), (t.specifics ?? false) && !t.mixed, new Set(t.swaps ?? []), t.recase ?? false,
+    const integrity = t.asked ? { ok: true as const, lost: [] } : spanIntegrity(withoutGoneClauses(t.text, t.clauses ?? [], rep), rep, new Set(t.drops ?? []), (t.specifics ?? false) && !t.mixed, new Set(t.swaps ?? []), t.recase ?? false,
       t.mixed ? t.claims ?? [] : []);
     if (!integrity.ok) { reverted.push({ id: t.id, kind: 'MEANING', lost: integrity.lost }); continue; }
     // A banned move may not move: a replacement that lowers one spelling of a move and raises another

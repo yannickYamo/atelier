@@ -22,7 +22,9 @@ export interface EngineRun { readonly output: string | null; readonly invocation
   readonly report: readonly string[]; readonly eval: EvalSummary | null;
   /** every rule as it fared on the delivered text (cli/commands/invoke.ts, `rulesFared`); absent from a run that was not checked */
   readonly rules?: { readonly checked: readonly { readonly id: string; readonly statement: string; readonly materiality: string | null; readonly verdict: string; readonly detail: string }[];
-    readonly unchecked: readonly { readonly id: string; readonly statement: string }[] } | null }
+    readonly unchecked: readonly { readonly id: string; readonly statement: string }[] } | null;
+  /** a fix made in place (cli/fix-in-place.ts): what changed, said as the terminal shows it */
+  readonly fix?: { readonly lines: readonly string[] } }
 
 /**
  * WHAT THE PERSON TYPED, SORTED BY WHERE IT STANDS, never by what it says: the task is the first word that is no
@@ -132,6 +134,9 @@ export async function run(): Promise<void> {
   if (!result || work === null) { process.stderr.write(engine.err); process.exitCode = engine.code || 1; return; }
   const goes = result.eval?.record?.delivery?.decision;
   console.log(`${goes === 'PERSON' ? 'FOR YOUR REVIEW (sent to a person, not shipped as checked):\n\n' : goes === 'BLOCK' ? 'BLOCKED (not for use as it is):\n\n' : ''}${work.trimEnd()}\n`);
+  // A FIX MADE IN PLACE SAYS WHAT CHANGED: sentences changed of total, and each span before and after.
+  for (const l of result.fix?.lines ?? []) console.log(l);
+  if (result.fix) console.log('');
   // THE EVALUATION IS PART OF WHAT A RUN RETURNS, not a report behind a flag: every rule, as it fared.
   const card = cardFor(result);
   const without = result.eval ? `  A structured output, held by its contract: ${result.eval.result.conformant ? 'it conforms' : `it does not conform (${result.eval.result.reasons.join('; ')})`}.` : '  This run was not evaluated: nothing is known about whether it holds your rules. See why: add --report';

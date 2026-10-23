@@ -30,7 +30,7 @@ import { beforeTheDraft, questionsJson } from '../prewrite.js';
 import { withoutPlanLines, type PiecePlan } from '../../core/loop/piece-plan.js';
 import { writtenAsSentences, copiedRecord, POINTS_LINE, POINTS_NOTE } from '../../core/loop/material-points.js';
 import { refineToStandard, checkDraft, checkDraftAsync, withWaivers, enforceClaims, heavyCut, listedClaims, brokenByCut, gradedRules, PUBLIC_FACTS, INCONCLUSIVE, UNREAD, REPAIR_PASSES, repairVetoes, type CheckOptions } from '../../core/loop/run-repair.js';
-import { signalChecks, displacement, isSignal, ownerWords } from '../../core/loop/graded.js';
+import { signalChecks, displacement, isSignal, ownerWords, authorRatesNote } from '../../core/loop/graded.js';
 import { steeredShape, steersMiss, shapeLengthAim } from '../../core/loop/shape-steer.js';
 import { signalDistance } from '../../core/observers/selection.js';
 import { featureOf, featureMove } from '../../core/observers/features.js';
@@ -45,6 +45,8 @@ import type { RepairRecord, RepairEdits, GradedRecord, Requirement, ControllerRe
 import { askedForRedraft, redraftHandOff, controllerRecord, recordTarget, stepLedger, stepsTaken, type StepLedger, DEFAULT_COST, DEFAULT_EFFECT, ENFORCED_WEIGHT, SETTLED_ERROR, TARGETS_PER_STEP } from '../../core/loop/controller.js';
 import { releaseFor, implementationBlock } from '../fidelity.js';
 import { buildRunEval, copyLimit } from '../eval-run.js';
+import { fixInPlace, removedOfPiece } from '../fix-in-place.js';
+import { reintroducedRuns } from '../../core/loop/corrections.js';
 import { needsReview } from '../../core/eval/record.js';
 import { renderPanel, type EvalSummary } from '../../core/eval/summary.js';
 import { putEval } from '../../core/state/eval-store.js';
@@ -378,6 +380,20 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   // Rules that cannot fire without material the person has not bound: said once, near the top, and read
   // by the taste reader as waiting rather than missed.
   const waiting = waitingForMaterial(satisfiable);
+  // A FIX IN PLACE (`atelier fix`, cli/fix-in-place.ts): the sentences the person's words are about are written again and
+  // spliced in, and nothing else of the piece changes. Where the words are about the whole piece, the run goes on below
+  // and writes it again whole, as it always did.
+  const fixOf = flag('--fix-of');
+  if (fixOf && std) {
+    const fixed = await fixInPlace({ L, sv, std, name, asked, fixOf, material, materialText, say: (l) => { report.say(l); }, settings: settingsOfRun(), writer: () => checkedBinding(L, sv).client });
+    if (fixed) {
+      if (machine === 'json') { jsonWritten = true; process.stdout.write(`${JSON.stringify(fixed.json, null, 1)}\n`); }
+      else if (machine === 'answer') process.stdout.write(`${fixed.output}\n`);
+      else console.log(`\n${fixed.output}\n`);
+      process.exitCode = fixed.exit;
+      return;
+    }
+  }
 
   // A skill built from someone's corpus writes TWO drafts by default and keeps the better one: the
   // author's habits and the machine-writing count choose between drafts and nothing else can use them.
@@ -703,10 +719,17 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const asPoints = contractFile === null && writtenAsSentences(material);
   if (asPoints) report.say(POINTS_LINE);
   const materialOnly = material.map((m) => m.text).join('\n\n');
+  // WHAT EARLIER FIXES OF THIS PIECE TOOK OUT STAYS OUT (core/loop/corrections.ts): a piece written again whole for a fix is
+  // read for it, and a stretch brought back is a finding the repair rewrites. Only on a run `atelier fix` makes.
+  const correctionsOf = flag('--corrections-of');
+  const removedPhrases = correctionsOf ? removedOfPiece(L, correctionsOf) : [];
+  const removed = correctionsOf && removedPhrases.length ? { phrases: removedPhrases, previous: store.getInvocation(L, fixOf ?? correctionsOf)?.output ?? '' } : null;
+  if (removed) report.say(`Earlier fixes of this piece took out ${removed.phrases.length} stretch(es) of wording: brought back, one is written again.`);
   // the owner's own words (the method's steps, the standard's statements): a stretch of them is never a copy from the notes
   const ownWords = [...briefSteps.map((s) => s.statement), ...(std?.requirements.map((q) => q.statement) ?? [])].join('\n');
   const checks = { ...checksFor(L, { material: materialText, task: asked, context: { request: asked, material }, guardClaims: !argv.includes('--allow-unsourced'), placeholders: placeholdersOn, ...(judge ? { judge } : {}), ...(held ? { level: held.level } : {}) }),
     ...(asPoints ? { copiedFrom: materialOnly, copiedOwn: ownWords } : {}),
+    ...(removed ? { removed } : {}),
     ...(short.format ? { format: short.format } : {}),
     ...(transfer ? { doesNotApply: transfer.doesNotApply } : {}),
     ...(waived.size ? { waived } : {}), ...(graded !== undefined ? { graded, gradedProfile: carried } : {}) };
@@ -770,9 +793,14 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
     interactive: machine === null && process.stdin.isTTY && process.stdout.isTTY,
     client: contextJudgeModel() ? contextReaderClient() : null, model: contextJudgeModel() }) : null;
   for (const line of before?.said ?? []) report.say(line);
+  // THE AUTHOR'S RATES (core/loop/graded.ts, `authorRatesNote`): where the counted features steer this run, the writer is told
+  // the author's own first person, sentence length and short sentences as rates, before the draft that is then held to them.
+  // Not where a short form sets the counted bands aside.
+  const ratesNote = graded !== undefined && !transfer && contractFile === null ? authorRatesNote(carried) : '';
+  if (ratesNote) report.detail(ratesNote);
   // The slot shape is said for the run that wants slots (a document, no material bound), never in the skill (SLOT_NOTE).
   const requestNotes = forThisRequest(withheld.filter((w) => !needMaterial.includes(w)), briefText, impl.passages, lengthNote, needsNote(needs), placeholdersOn ? SLOT_NOTE : '', held ? latitudeBrief(held.level) : '',
-    asPoints ? POINTS_NOTE : '', before?.note ?? '');
+    asPoints ? POINTS_NOTE : '', before?.note ?? '', ratesNote);
   const servedBase = examplesFirst ? withoutPersonaBlocks(servedText) : servedText;
   if (examplesFirst) report.say(`Examples first: served without the description of how I sound or my repertoire${servedBase === servedText ? ' (the skill carried none)' : ''}; my moves are read on the work and never served.`);
   const servedForRun = `${needMaterial.length ? withoutRules(servedBase, needMaterial) : servedBase}${impl.notes ? `\n\n${impl.notes}` : ''}${carryBlock}${requestNotes}`;
@@ -861,7 +889,8 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
       nearness ? { ...nearness, usedFor: [...(impl.retrieved.length || pool.length ? ['passages' as const] : []), ...(fid.typicality?.ids && nearness.pieces.length ? ['typicality' as const] : []),
         ...(local ? ['range' as const] : []), ...(planState ? ['skeleton' as const] : [])] } : null) : null,
     // what was settled before the draft, and what the delivered work copied from material written as sentences
-    before?.record || asPoints ? (output: string) => ({ ...(before?.record ? { prewrite: before.record } : {}), ...(asPoints ? { copied: copiedRecord(output, materialOnly, ownWords) } : {}) }) : null);
+    before?.record || asPoints || removed ? (output: string) => ({ ...(before?.record ? { prewrite: before.record } : {}), ...(asPoints ? { copied: copiedRecord(output, materialOnly, ownWords) } : {}),
+      ...(removed ? { corrections: { removed: removed.phrases.length, reintroduced: reintroducedRuns(output, removed.phrases, removed.previous).map((r) => r.text) } } : {}) }) : null);
 
   reportDrift(report, L, sv, rec);
   // Under strict delivery nothing is printed until the verdict is known.
@@ -1937,7 +1966,9 @@ export function withRedraft(refine: Refine,
       // THE HAND-OFF CONTRACT (rule C): a draft the controller handed over is told exactly the targets it was handed, an
       // enforced rule no sentence carries among them, and nothing else. With none of them nameable, no draft is sent: the
       // hand-off is answered on the record (`settle`).
-      const aimed = asked ? asked.targets.map((t) => missing.find((u) => recordTarget(u.id) === t)).filter((u): u is Unmet => u !== undefined) : missing;
+      // Matched by the target's key on both sides: a hand-off names a profile's signal by its check id (`signal·<feature>`),
+      // and matched against the feature's name alone it found nothing, so no draft was ever written for a signal.
+      const aimed = asked ? asked.targets.map((t) => missing.find((u) => recordTarget(u.id) === recordTarget(t))).filter((u): u is Unmet => u !== undefined) : missing;
       if (!aimed.length) break;
       const aimedIds = aimed.map((u) => recordTarget(u.id));
       const only = (us: readonly Unmet[]): Unmet[] => us.filter((u) => aimedIds.includes(recordTarget(u.id)));
@@ -2686,7 +2717,7 @@ function settingsFor(checks: Checks, taste: TasteSession | null, nDrafts: number
  * skill, not the files given (kept apart, by path), not a complaint it was answering, not a machine's format.
  */
 export function settingsOfRun(tokens: readonly string[] = argv.slice(1)): string[] {
-  const NOT = ['skill', 'task', 'with', 'correcting', 'provenance', 'json', 'answer-only', 'quiet', 'panel', 'report', 'test-run'];
+  const NOT = ['skill', 'task', 'with', 'correcting', 'complaint', 'fix-of', 'corrections-of', 'provenance', 'json', 'answer-only', 'quiet', 'panel', 'report', 'test-run'];
   const out: string[] = [];
   for (let i = 0; i < tokens.length; i += 1) {
     const t = tokens[i];

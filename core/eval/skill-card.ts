@@ -72,6 +72,8 @@ export interface SteeredFeature {
   readonly band: readonly [number, number];
   readonly n: number;
   readonly auc: number | null;
+  /** one of the author's own rates (core/fidelity/profile.ts, `AUTHOR_RATES`): it acts because it is theirs, not by separation */
+  readonly rate?: true;
 }
 
 /** How strongly a feature tells the author from the model, in pairs out of 100: 0.5 is none, either side of it is some. */
@@ -89,7 +91,7 @@ function steeredLine(f: SteeredFeature, pieces: number | null, usual: number): s
   const band = `${edge(f, f.band[0])} to ${edge(f, f.band[1])}${f.unit === 'per1000' ? ' per 1,000 words' : ''}`;
   const higher = (f.auc ?? 0.5) >= 0.5;
   const way = f.unit === 'value' ? (higher ? 'higher' : 'lower') : (higher ? 'more' : 'fewer');
-  const why = f.auc === null ? 'it tells your pieces from the model\'s drafts' : `${way} than the model's drafts (${pairsOf(f.auc)} of 100 pairs)`;
+  const why = f.rate ? 'your own rate, steered on any miss' : f.auc === null ? 'it tells your pieces from the model\'s drafts' : `${way} than the model's drafts (${pairsOf(f.auc)} of 100 pairs)`;
   return `${f.label} · ${band} · ${why}${f.n === usual ? '' : ` · read from ${fromPieces(f.n, pieces)}`}`;
 }
 
@@ -138,7 +140,10 @@ export function renderSkillCard(c: SkillCard, width = 110, opts: { next?: boolea
       for (const x of all) counts.set(x.n, (counts.get(x.n) ?? 0) + 1);
       const usual = [...counts].sort((a, b) => b[1] - a[1] || b[0] - a[0])[0][0];
       const pieces = c.corpus?.pieces ?? null;
-      out.push(`    bands read from ${fromPieces(usual, pieces)}; each acts because it tells your pieces from the model's drafts`);
+      // An author's rate acts because it is theirs; any other band because it tells their pieces from the model's drafts.
+      const why = all.every((x) => x.rate) ? 'each is your own rate, read over all your pieces' : all.some((x) => x.rate) ? 'each acts for the reason its line gives'
+        : 'each acts because it tells your pieces from the model\'s drafts';
+      out.push(`    bands read from ${fromPieces(usual, pieces)}; ${why}`);
       for (const x of shown) out.push(`    ${steeredLine(x, pieces, usual)}`);
       if (all.length > shown.length) out.push(`    and ${all.length - shown.length} more: atelier report --skill ${c.skill}`);
       if (f.ruled) out.push(`    ${f.ruled} more steer as your own rules, counted on every output above`);

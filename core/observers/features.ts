@@ -136,6 +136,8 @@ const stepsOf = (text: string): number[] | null => {
 // than" counts as a comparison and as a contrast, "that's why" as a contraction and as an explanation,
 // because each feature is judged on its own against the author.
 
+/** The first person singular: I and its contractions, me, my, mine, myself (a sentence may open on "My"). */
+const FIRST_SINGULAR = /\b(?:I['’](?:m|ve|d|ll)|I|[Mm]yself|[Mm]ine|[Mm]e|[Mm]y)\b/g;
 /** Comparison: "than", alone. "More X than Y" is how a draft argues against something nobody said. */
 const THAN = /\bthan\b/gi;
 /** Negation: not, never, no, cannot, and every n't form (isn't, don't, can't, won't…). */
@@ -245,6 +247,9 @@ export const FEATURES: readonly Feature[] = [
   } },
   // ── 2. sentence architecture ───────────────────────────────────────────────────────────────────
   { id: 'sentenceP10', layer: 2, label: 'the length of your short sentences (10th percentile, words)', unit: 'value', measure: (t) => { const l = lengths(t); return l.length < 10 ? null : quantile(l, 0.1); } },
+  // THE AUTHOR'S RATES (../fidelity/profile.ts, `AUTHOR_RATES`): the middle sentence, and how many are very short.
+  { id: 'sentenceP50', layer: 2, label: 'the length of your typical sentence (median, words)', unit: 'value', measure: (t) => { const l = lengths(t); return l.length < 10 ? null : quantile(l, 0.5); } },
+  { id: 'shortSentence', layer: 2, label: 'sentences of five words or fewer', unit: 'share', measure: sentenceShare((s) => wordsOf(s).length <= 5).measure },
   { id: 'sentenceP90', layer: 2, label: 'the length of your long sentences (90th percentile, words)', unit: 'value', measure: (t) => { const l = lengths(t); return l.length < 10 ? null : quantile(l, 0.9); } },
   { id: 'cadence', layer: 2, label: 'cadence: how much one sentence\'s length predicts the next (lag-one correlation)', unit: 'value', measure: (t) => {
     const l = lengths(t);
@@ -290,6 +295,7 @@ export const FEATURES: readonly Feature[] = [
     return w.length < MIN_WORDS ? null : r3(w.reduce((n, x) => n + x.length, 0) / w.length);
   } },
   { id: 'secondPerson', layer: 4, label: '"you" and "your"', unit: 'per1000', ...per1000((p) => count(p, /\byou(?:r|rs|rself)?\b/gi)) },
+  { id: 'firstSingular', layer: 4, label: '"I", "my" and "me"', unit: 'per1000', ...per1000((p) => count(p, FIRST_SINGULAR)) },
   { id: 'firstPlural', layer: 4, label: '"we", "our" and "us"', unit: 'per1000', ...per1000((p) => count(p, /\b(?:we|our|ours|us)\b/gi)) },
   { id: 'tentativeModal', layer: 4, label: 'tentative modals (might, may, could)', unit: 'per1000', ...per1000((p) => count(p, /\b(?:might|may|could)\b/gi)) },
   { id: 'firmModal', layer: 4, label: 'firm modals (must, should, need to)', unit: 'per1000', ...per1000((p) => count(p, /\b(?:must|should|need to|needs to)\b/gi)) },

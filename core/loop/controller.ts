@@ -246,6 +246,8 @@ export interface GradedMiss {
   readonly error: number;
   /** expected movement of the best operator here, in band widths, from the effect matrix; null when no operator moves it */
   readonly operatorEffect: number | null;
+  /** one of the author's rates (../fidelity/profile.ts, `AUTHOR_RATES`): a target at any distance, never settled near its band */
+  readonly rate?: true;
   /**
    * a learned band on the piece's length (characters, words: ./shape-steer.ts): no sentence carries a length, so the
    * only action for it is the length-aimed one, the piece written again toward its band, whatever the size of the miss
@@ -381,7 +383,7 @@ export function decide(input: ControllerInput, s: ControllerSettings | null = nu
     .sort((a, b) => Math.abs(b.error) - Math.abs(a.error) || a.id.localeCompare(b.id));
   // NOTHING MATERIAL LEFT: every enforced rule holds, no length is out, and no graded miss is over SETTLED_ERROR.
   const grammar = (input.grammar ?? []).filter((id) => !input.unreachable.has(id) && !grammarFailed(id));
-  if (!input.enforced.length && !input.length && !grammar.length && input.graded.every((g) => Math.abs(g.error) <= SETTLED_ERROR)) {
+  if (!input.enforced.length && !input.length && !grammar.length && input.graded.every((g) => !(g.rate && g.error !== 0) && Math.abs(g.error) <= SETTLED_ERROR)) {
     return { kind: 'stop', why: input.graded.length ? `every enforced rule holds and no graded miss is over ${SETTLED_ERROR} band widths` : 'every enforced rule holds and nothing graded is off' };
   }
   if (taken >= set.maxActions) return { kind: 'stop', why: capStop(set.maxActions) };
@@ -419,12 +421,14 @@ export function decide(input: ControllerInput, s: ControllerSettings | null = nu
   // (4) GRADED: the furthest out first; the step is the action the furthest calls for, over every miss that calls for it,
   // at most TARGETS_PER_STEP of them whatever the action (a redraft included), and never one at or under SETTLED_ERROR:
   // a miss that near its band is no target of any step.
-  const far = graded.filter((g) => Math.abs(g.error) > SETTLED_ERROR);
+  // One of the author's rates is a target at any distance; near its band its carriers are rewritten (no operator adds an "I").
+  const far = graded.filter((g) => g.rate === true || Math.abs(g.error) > SETTLED_ERROR);
   const out = far.length;
   const available = (g: GradedMiss) => (a: 'operators' | 'carrier-rewrite' | 'redraft'): boolean =>
     a === 'operators' ? g.operatorEffect !== null && g.operatorEffect > 0 : a === 'redraft' ? input.can.redraft && !hadRedraft : input.can.rewrite;
   type Rung = 'operators' | 'carrier-rewrite' | 'redraft';
-  const planned = far.map((g) => ({ g, a: actionFor(sizedAction(g.error, out), g.id, input.history, available(g), g.length === true) })).filter((x): x is { g: GradedMiss; a: Rung } => x.a !== null);
+  const sizedFor = (g: GradedMiss): Rung => { const a = sizedAction(g.error, out); return g.rate && a === 'operators' ? 'carrier-rewrite' : a; };
+  const planned = far.map((g) => ({ g, a: actionFor(sizedFor(g), g.id, input.history, available(g), g.length === true) })).filter((x): x is { g: GradedMiss; a: Rung } => x.a !== null);
   if (planned.length) {
     const action = planned[0].a;
     const group = planned.filter((x) => x.a === action).slice(0, TARGETS_PER_STEP).map((x) => x.g);
@@ -436,7 +440,7 @@ export function decide(input: ControllerInput, s: ControllerSettings | null = nu
     const named = group.map((g) => `${g.id} ${Math.abs(g.error).toFixed(2)}`).join(', ');
     // The range named is the one the action is sized for; a target stepped down to it from a larger action (a redraft
     // that did no better) is said at its own distance, never as inside a range it is not in.
-    const sized = group.every((g) => (g.length ? 'redraft' : sizedAction(g.error, out)) === action);
+    const sized = group.every((g) => (g.length ? 'redraft' : sizedFor(g)) === action);
     const how = action === 'operators' ? 'moved by re-punctuation, no model' : action === 'carrier-rewrite' ? `up to ${k} carrier sentence(s) each rewritten` : 'written again with each one\'s direction and distance';
     // The why names exactly the targets: where more features are out than one step takes, it says so.
     const furthest = out > group.length ? `, the furthest ${group.length} taken` : '';

@@ -135,6 +135,10 @@ export function replayOf(name: string, last: LastRun, complaints: readonly strin
     ...files.filter((w) => there(w.path)).flatMap((w) => ['--with', `${w.name}=${w.path}`]), ...kept, ...typed] };
 }
 
+/** What the run is told to change in place: the version of the piece to change, the complaint, and the piece first complained of. */
+export const fixInPlaceArgs = (last: Pick<LastRun, 'invocationId'>, first: string, complaint: string): string[] =>
+  ['--fix-of', last.invocationId, '--corrections-of', first, '--complaint', complaint];
+
 /** The complaint, kept once, against the run it is about. About the work: also a "no" to "would you use it as it is", with the reason. */
 function keep(L: store.StoreLayout, inv: InvocationRecord, complaint: string, about: 'WORK' | 'EVALUATION'): void {
   store.putFeedbackOnce(L, { feedbackId: `f${sha(`${inv.invocationId}|${complaint}`).slice(0, 10)}`, invocationId: inv.invocationId, complaint, at: new Date().toISOString(), ...(about === 'EVALUATION' ? { about } : {}) });
@@ -151,8 +155,10 @@ function thisOutputAgain(L: store.StoreLayout, name: string, inv: InvocationReco
   const complaints = [...(last.correcting?.complaints ?? []).filter((c) => c !== complaint), complaint];
   const { args, notes } = replayOf(name, last, complaints, settingsTyped(complaint), store.getActive(L));
   for (const n of notes) console.log(`(${n})`);
-  console.log(`Writing this piece again with ${complaints.length > 1 ? `everything you have said of it (${complaints.length} things)` : 'that'} put right. Your skill is not changed.\n`);
-  const r = spawnSync(process.execPath, [...process.execArgv, process.argv[1], ...args], { stdio: 'inherit' });
+  console.log('Changing what you named in this piece and keeping the rest word for word (where it is about the whole piece, it is written again). Your skill is not changed.\n');
+  // IN PLACE (cli/fix-in-place.ts): the version of the piece to change, this complaint, and the piece first complained of,
+  // whose earlier fixes' removals stay out.
+  const r = spawnSync(process.execPath, [...process.execArgv, process.argv[1], ...args, ...fixInPlaceArgs(last, inv.invocationId, complaint)], { stdio: 'inherit' });
   // The run just made left its own pointer: it is marked as a correction of the first, so that what is said next
   // (again, --always, --evaluation) is about the piece complained of and carries what was already said.
   const pointer = runFile('last-invocation.json');

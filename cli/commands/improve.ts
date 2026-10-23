@@ -405,7 +405,7 @@ export async function runOnce(
   /** how the output was steered toward the author's range, read on the delivered text (cli/fidelity.ts); null elsewhere */
   fidelity: ((output: string) => FidelityRecord) | null = null,
   /** what was settled before the draft, and what the delivered work copied from its material (cli/commands/invoke.ts); null elsewhere */
-  before: ((output: string) => Pick<InvocationRecord, 'prewrite' | 'copied'>) | null = null,
+  before: ((output: string) => Pick<InvocationRecord, 'prewrite' | 'copied' | 'corrections'>) | null = null,
 ): Promise<InvocationRecord> {
   // PARSED HERE, AND A BROKEN CONTRACT STOPS THE RUN. Falling back to free text on a malformed schema
   // would produce an output nobody constrained, recorded as a normal invocation.

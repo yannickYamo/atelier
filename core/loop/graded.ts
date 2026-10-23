@@ -20,7 +20,9 @@ export const SIGNAL_PREFIX = 'signal·';
 export const SIGNAL_FAR = 1;
 
 /** A SIGNAL feature read as a check, with the band it was read against as FEATURE params (what a note's move is computed from). */
-export interface SignalCheck extends RuleCheck { readonly feature: string; readonly params: { readonly feature: readonly [string]; readonly minValue: number; readonly maxValue: number } }
+export interface SignalCheck extends RuleCheck { readonly feature: string; readonly params: { readonly feature: readonly [string]; readonly minValue: number; readonly maxValue: number };
+  /** one of the author's rates: a target on any miss (../loop/controller.ts, `GradedMiss.rate`) */
+  readonly rate?: true }
 
 /** The profile's steering bands for a text's length class: RULE and SIGNAL on known features, never MONITOR. */
 export function steeringBands(text: string, profile: FidelityProfile): FeatureBand[] {
@@ -38,7 +40,7 @@ const fmt = (unit: string, x: number): string => (unit === 'share' ? `${Math.rou
 
 /**
  * The text's SIGNAL features for its class, as checks: VIOLATED, with carriers and a signed error, only when more than
- * SIGNAL_FAR widths outside the band; MET otherwise (the value and distance kept, so a comparison still reads them).
+ * SIGNAL_FAR widths outside the band (one of the author's rates: outside it at all); MET otherwise (the value and distance kept, so a comparison still reads them).
  * A specifics feature below its band is never a miss: asking for more specifics asks for invention.
  */
 export function signalChecks(text: string, profile: FidelityProfile | null | undefined): SignalCheck[] {
@@ -48,11 +50,12 @@ export function signalChecks(text: string, profile: FidelityProfile | null | und
     if (!f) return [];
     const params = { feature: [b.id] as const, minValue: b.band[0], maxValue: b.band[1] };
     const r = FEATURE.observe(text, params);
-    const far = r.verdict === 'VIOLATED' && Math.abs(r.error ?? 0) > SIGNAL_FAR && !(f.specifics && (r.error ?? 0) < 0);
+    // One of the author's rates (../fidelity/profile.ts, `AUTHOR_RATES`) is steered on any miss; any other signal only far out.
+    const far = r.verdict === 'VIOLATED' && (b.rate === true || Math.abs(r.error ?? 0) > SIGNAL_FAR) && !(f.specifics && (r.error ?? 0) < 0);
     const result = far || r.verdict !== 'VIOLATED' ? r : { ...r, verdict: 'MET' as const, spans: [] };
     const unit = f.unit === 'per1000' ? ' per 1,000 words' : '';
     return [{ requirementId: `${SIGNAL_PREFIX}${b.id}`, statement: `Keep ${f.label} where your pieces hold it (${openEdge(b.band[0]) ? `at most ${fmt(f.unit, b.band[1])}` : openEdge(b.band[1]) ? `at least ${fmt(f.unit, b.band[0])}` : `${fmt(f.unit, b.band[0])} to ${fmt(f.unit, b.band[1])}`}${unit}).`,
-      materiality: null, enforced: false, observer: 'FEATURE', result, feature: b.id, params }];
+      materiality: null, enforced: false, observer: 'FEATURE', result, feature: b.id, params, ...(b.rate ? { rate: true as const } : {}) }];
   });
 }
 
@@ -103,4 +106,20 @@ export function displacement(before: string, after: string, profile: FidelityPro
   }
   const refusedFor = [...(na > nb ? [`${na - nb} more of your features outside their range (${newlyOut.join(', ')})`] : []), ...pushed];
   return { before: nb, after: na, refusedFor };
+}
+
+/**
+ * THE AUTHOR'S RATES, SAID TO THE WRITER as their rates (../fidelity/profile.ts, `AUTHOR_RATES`): about how many "I" per
+ * 1,000 words, how long a sentence runs, and how many run under six words. Told before the draft; the same bands are
+ * graded targets after it. Empty where the profile holds none of them.
+ */
+export function authorRatesNote(profile: FidelityProfile | null | undefined): string {
+  const m = (id: string): number | null => profile?.bands.find((b) => b.id === id && b.cls === 'all' && b.rate)?.median ?? null;
+  const fp = m('firstSingular'); const p50 = m('sentenceP50'); const short = m('shortSentence');
+  const parts = [
+    fp !== null ? (Math.floor(fp) === Math.ceil(fp) ? `about ${fp} "I" per 1,000 words` : `about ${Math.floor(fp)} to ${Math.ceil(fp)} "I" per 1,000 words`) : '',
+    p50 !== null ? `sentences around ${Math.round(p50)} words` : '',
+    short !== null ? (short > 0 ? `about 1 in ${Math.round(1 / short)} under 6 words` : 'almost none under 6 words') : '',
+  ].filter(Boolean);
+  return parts.length ? `How I write, counted over my own pieces: ${parts.join('; ')}. Write at these rates.` : '';
 }

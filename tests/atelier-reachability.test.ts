@@ -476,3 +476,15 @@ describe('what is settled before the draft is on the run path', () => {
     expect(cli).toMatch(/copiedRecord\(output, materialOnly, ownWords\)/);
   });
 });
+
+describe('a fix changes the piece in place, and what it took out stays out', () => {
+  it('fix hands the run the piece to change; the run changes it in place; the whole-piece run reads what was taken out', () => {
+    expect(cli).toMatch(/\.\.\.fixInPlaceArgs\(last, inv\.invocationId, complaint\)/);
+    expect(cli).toMatch(/const fixed = await fixInPlace\(\{/);
+    expect(cli).toMatch(/fixSpans\(c\.writer\(\), budget, piece, ids, instruction, removed\)/);
+    expect(cli).toMatch(/readContext\(FIX_SCOPE, \{ instruction, sentences \}/);
+    expect(cli).toMatch(/removedOfPiece\(L, correctionsOf\)/);
+    expect(cli).toMatch(/\.\.\.\(removed \? \{ removed \} : \{\}\)/);
+    expect(cli).toMatch(/for \(const l of result\.fix\?\.lines \?\? \[\]\) console\.log\(l\)/);
+  });
+});
