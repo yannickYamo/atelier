@@ -52,8 +52,8 @@ Save the work (`output`) as `<arm>/<task>.md` beside its record. The record carr
 For the arm with the author's answers, run each task again with the author's own choices:
 `--answers "angle=<letter or their words>,..."` (never answered by anyone but the author). Read with the audit:
 points used is `points` of `--brief` (the plan's metric: at most 4 of 9), copied runs is `copied` (the material
-metric: 0). The questions' metric (rounds of editing to an accepted post, the thesis judged the author's own) is read
-by the judge and the owner below, not by a count. `--no-questions --no-plan` gives the round-1 arm on the same commit.
+metric: 0). The questions' metric (rounds of editing to an accepted post, the argument judged the author's own) is read
+by the judge's scores and the owner below, not by a count. `--no-questions --no-plan` gives the round-1 arm on the same commit.
 
 ## Fix rounds on the benchmark (round 3)
 
@@ -67,15 +67,36 @@ the arm's last run, then read the record of the new run (`atelier report <run>`,
 
 A fix the reading places on the whole piece writes it again whole: its record has no `fix`, only `corrections`.
 
+## The plan's points and the case-shaped fixture (round 4)
+
+With a plan, an Atelier arm's writer is served the plan's points in the plan's words, never the notes: points used is
+read against that (at most 4 of 10), and copied runs fall with it. A run with no plan says why in its record
+(`prewrite.noPlan`); count those runs apart. `tests/fixtures/reaction-case/` is an invented case of the same shape (one
+essay and four short posts by an invented author, ten points, four owner rules, a reaction-post request with no stated
+angle) on which the offline tests hold these: 0 tells and 0 em dashes delivered under the owner's ban, the skill built
+as documents, the angle asked, 0 of 10 points carried and no run copied by a writer that uses what it is served.
+
 ## The judge (run elsewhere, with approval for the spend)
 
-- **Blind**: the judge sees two outputs for the same task as A and B, never an arm's name, a file name or a record.
-- **Both orders**: every pair is judged twice, A/B and B/A; a preference that flips with the order counts as a tie.
-- **Frozen prompts**: the three questions are fixed before the first call and not edited during the round:
-  1. Which post would the author have published? (A, B, or neither)
-  2. Does the post state one thesis? (for each: yes or no, with the sentence)
-  3. Does the reader meet the problem before the product? (for each: yes or no, with the two sentences)
-- **The owner's pick** on a sample of pairs, read the same way, is the check on the judge.
+A forced choice between two posts, with "does it state one thesis" and "does the reader meet the problem before the
+product", saturated in round 3: every arm passed both, and the preference flipped with the order. From round 4:
 
-Record the model, the prompts' hash and the date with the results, and put the round's numbers in the CHANGELOG's
-Studies section.
+- **Each post is scored on its own from 1 to 10** on three frozen criteria, never as one of a pair: the judge sees one
+  post, the author's pieces and the task, never an arm's name, a file name, a record or another arm's post.
+  1. Voice: does it read as the author wrote it (their sentences, their register, their way into a subject)?
+  2. Argument: does it make one case the author would make, from the points it was given, and hold together?
+  3. Publishable: would the author post it as it is, or after light edits only?
+  The post's score is the mean of the three. The prompts are fixed before the first call and not edited during the
+  round; record the model, the prompts' hash and the date with the results.
+- **A judge is used only after a position test.** Before any arm is scored, the judge scores a set of clear pairs (one
+  post the owner accepted, one they rejected, for the same task) twice, each pair presented in both orders. It is used
+  for the round only if it scores the accepted post higher in both orders on at least 80% of the clear pairs; a judge
+  that fails is not used, and the round reports the counts below and the owner's read alone.
+- **The counts replace the saturated measures**: points used (of the brief, at most 4 of 10 on a plan) and copied runs
+  (0 is the bar), read by `audit.mjs` above, stand where the thesis and the problem-before-product questions stood.
+- **Close wins and clear wins are reported apart.** For the same task, an arm's win is clear where its score is 2 points
+  or more above the other's, close where it is 0.5 to under 2, and a tie under 0.5; a table of wins gives clear and close
+  in separate columns, never one total.
+- **The owner's read** on a sample of posts, scored the same way, is the check on the judge.
+
+Put the round's numbers in the CHANGELOG's Studies section.

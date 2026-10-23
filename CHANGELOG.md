@@ -7,6 +7,51 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+### The owner's ban holds against the examples, posts are documents, the unstated angle is asked, and the plan is what the writer gets
+
+- **The owner's ban beats the examples' rate.** Found by building one case-shaped invented fixture (one essay and four
+  short posts, a typed double hyphen in four of them, ten points, the rules "No AI tells.", "No em dashes.", "No "not X,
+  it's Y"." and "No named sources.") on the version before round 1 and on this branch, with a scripted writer whose
+  draft carries em dashes, a contrastive verdict and a verdict opener. Round 1 made a typed double hyphen a dash; the
+  method build reads the examples for the machine-tell rule, where a move any example makes is the author's, so the em
+  dash stopped being banned and a cap at the author's rate (20.5 per 1,000 words) was added, required and told to the
+  writer beside the owner's ban. Where the owner's step was held as judgement, nothing counted the dashes and the dash
+  repair, which fires only on a counted ban, never ran: 2 em dashes delivered where the earlier version delivered 0. Now
+  a step counted as no em dash removes the examples' allowance; the step-check reading is told that a step banning a
+  construction it lists is that count at zero (a reading case for each added); and "not X, it's Y" is counted with a
+  typed curly apostrophe, which the count read only straight. Metric: on the fixture through the binary, 0 tells and 0
+  em dashes delivered, and the writer is never told an em-dash allowance.
+- **Posts to followers answer nobody.** The work-form reading asks, for each example, whether it answers a particular
+  person who wrote first (with a quote found in the piece) or NONE; a reply needs a grounded quote. The forced choice
+  between a reply and a document read a folder of posts as replies, which turned the questions and the plan off. Metric:
+  the fixture builds as documents with no flag.
+- **The angle and the news are the author's where nothing given states them.** The questions reading says where each
+  is stated (the request, the material, what the skill was told, or NONE) with a quote code finds there; unstated, they
+  are asked whatever status the reader gave them, stated never. Metric: the angle asked on the fixture's reaction post;
+  nothing asked when the request states it.
+- **With a plan, the writer gets the plan's points.** The request goes to the writer without the material, and the
+  plan's points, in the plan's words, are what it writes from; what the plan left out is shown to the person and never
+  named to the writer. The checks still read the material. Metric: a scripted writer that writes from what it is served
+  carries 0 of the fixture's 10 points and copies no 5-word run (10 of 10, and copied runs, without a plan).
+- **"I" is measured, never steered.** The first person is a MONITOR band: read on every output and kept on the record,
+  never told to the writer and never a graded target, also on a profile made before; the typical sentence and the
+  short ones still steer. The at-length band for a counted rate, which only the first person used, is deleted.
+- **A run with no plan says why** on its record (`prewrite.noPlan`) and in `atelier report <run>`: `--no-plan`, no model
+  set up, a plan not grounded in the material, a structured output, a request that states its own shape, or a reply.
+- **A sentence left unfinished at a splice stays as it was.** A join is read by form: the replacement stops on a word
+  with no punctuation where the sentence it replaced had ended and the next sentence opens with a capital ("The good
+  news is that The remedy ..."), or the text before stops mid-sentence and the replacement opens on a capital the
+  sentence did not have. Metric: 0 broken seams on an invented case of that join.
+- **The method build counts the examples' dashes as the amend does.** A stated ban on a counted pattern is said by every
+  piece that uses it at all, short ones too, with the typed double hyphen ("your examples use em dashes (—) in 4 of 5
+  pieces; your rule bans it; kept as you wrote it"); before, a rate unread under 150 words named one piece of five.
+- **The benchmark's judge scores each post on its own** from 1 to 10 on three frozen criteria (voice, argument,
+  publishable), is used only after a position test (the accepted post scored higher in both orders on at least 80% of
+  clear pairs), reports close and clear wins apart, and leaves the saturated thesis and problem-before-product questions
+  to points used and copied runs (`bench/voice-benchmark/README.md`).
+- Not built: argument checks (a ceiling, not the cause), persona from one or two pieces (not the cause). Still open: a
+  ban on a counted pattern is not read on a piece under 150 words, so a short post's dash is not counted at a run.
+
 ### A fix changes what was named, what it took out stays out, and the author's own rates steer
 
 - **`atelier fix` is surgical.** A reading on the house pattern locates the sentences the person's words are about (a

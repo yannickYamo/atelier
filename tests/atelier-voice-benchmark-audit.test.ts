@@ -57,3 +57,16 @@ describe('the audit of the invented fixture', () => {
     expect(await Promise.resolve(execFileSync('node', ['--input-type=module', '-e', js], { encoding: 'utf8' }).trim())).toBe('400');
   });
 });
+
+describe('round 4, item 9: the judge protocol the README freezes', () => {
+  // A forced choice between two posts with "one thesis" and "problem before product" saturated: every arm passed both, so
+  // they told nothing apart. Each post is now scored on its own against frozen criteria, a judge is used only after a
+  // position test, the saturated measures give way to points used and copied runs, and close wins are reported apart.
+  const readme = readFileSync(resolve('bench/voice-benchmark/README.md'), 'utf8');
+  it('scores each post from 1 to 10 on its own, after a position test, with close and clear wins apart', () => {
+    for (const s of ['scored on its own from 1 to 10', 'position test', 'at least 80%', 'points used', 'copied runs', 'Close wins and clear wins are reported apart']) expect(readme).toContain(s);
+  });
+  it('no forced choice, and no thesis or problem-before-product question', () => {
+    for (const s of ['Which post would the author have published? (A, B, or neither)', 'Does the post state one thesis?', 'problem before the product?']) expect(readme).not.toContain(s);
+  });
+});

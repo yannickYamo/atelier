@@ -133,7 +133,8 @@ though, is no.") goes to the model's rewrite, as does anything else.
 piece is drafted the run lists the decisions it needs and asks you only those whose answer is yours alone and would
 change the draft: the angle or why now, what may be named, news about your own work, what to stress. Never voice or form,
 never what the request, material, method or examples settle, at most three, each with two to four options and a
-default, and none when the request carries it. At a terminal you answer with a letter, your own words, or "just write
+default, and none when the request carries it. The angle and news of your own work are asked wherever the request, the
+material and what you said before do not state them in so many words: a reaction post with no stated angle asks for it. At a terminal you answer with a letter, your own words, or "just write
 it". Elsewhere (`--json`, a pipe, the MCP server, an agent) nothing waits: the questions come back as
 `questions: [{id, ask, options, default}]`, the work is written with the defaults, said in one line, and
 `--answers "angle=b,naming=only the product, never its staff"` answers them on the next call (an answer may hold
@@ -141,9 +142,11 @@ commas; a kind not asked this run, `naming=...` say, still applies and replaces 
 the next run's defaults ("last time you said …"); what may be named, once said, is not asked again. Then the run makes a plan: the angle, the
 pain, the turn, the answer, at most three points chosen from your material (each tied to its words), one image, the
 close, and what was left out and why. At a terminal it is shown before writing (enter writes; anything you type makes
-the plan again from scratch with every change you typed); with `--json` it is returned as `plan`. The draft is written from it; the
-plan is never part of the work and stays on the record (`atelier report <run>`). `--no-questions` and `--no-plan` turn
-either off; with no reader set up nothing is asked and there is no plan.
+the plan again from scratch with every change you typed); with `--json` it is returned as `plan`. The draft is written from it: the
+writer is served the plan's points in the plan's words, not your notes, and never what the plan left out (the checks
+still read your notes). The plan is never part of the work and stays on the record (`atelier report <run>`).
+`--no-questions` and `--no-plan` turn either off; with no reader set up nothing is asked and there is no plan, and a run
+with no plan says why on its record.
 
 **Notes written as sentences are points.** Where your bound material holds finished sentences, the run says so once and
 serves it to the writer as points to write from. The work is read for the stretches it copies from the material: every
@@ -288,11 +291,11 @@ account; an event that is not a JSON object exits 2, so a guard wired wrong is s
 - **The evaluation** (`--evaluation`). It blocked what was right, or passed what was not. It is recorded with what the
   evaluation said, and nothing is changed: a check reads one of your rules, and is put right through the rule.
 
-Your own rates steer every run of a skill built from four pieces or more: how often you say "I" (per 1,000 words),
-how long your typical sentence runs, and how many of your sentences are five words or fewer, each read over all your
-pieces. The writer is told them before the draft ("about 4 to 5 "I" per 1,000 words; sentences around 15 words; about
-1 in 8 under 6 words"), and a draft off any of them is written again or rewritten toward it, never failed for it
-(`--graded none` turns the steering off for a run).
+Your own rates steer every run of a skill built from four pieces or more: how long your typical sentence runs, and how
+many of your sentences are five words or fewer, each read over all your pieces. The writer is told them before the draft
+("sentences around 15 words; about 1 in 8 under 6 words"), and a draft off either is written again or rewritten toward
+it, never failed for it (`--graded none` turns the steering off for a run). How often you say "I" is measured on every
+run's record and never steered: a draft short of your rate could only reach it by inventing opinion you never gave.
 
 `--report` on either command adds the engine's whole account. `atelier rate <run> yes|no "why"` records whether you
 would use the work as it is, and `atelier lab eval` shows that and every check over all your runs. Every
@@ -325,6 +328,11 @@ kinds and says, for each check, what it looks for and how your examples fare on 
 
 A check is kept only when every example holds it, and once built it is kept: a rebuild reads a step's check again
 only when the step's wording or the examples changed, so rewording one step changes that step's check and no other.
+
+The build also says what form the work takes, read from your examples: replies in a conversation, or documents. A piece
+is a reply only where it answers a particular person who wrote first; posts written to whoever reads them, an essay, an
+announcement, are documents, and a document is asked its questions and planned before it is drafted.
+`--work-form reply|document` says otherwise.
 An output you reject naming the rule it breaks (`atelier rate <run> no "why" --rule <rule>`) is one more edit a
 written check must catch to qualify: the check is held to it at once, and that step's check is read again at the next build. The rule is named in the
 standard the output was made under and kept by its words, so building again with the steps renumbered does not move
@@ -372,7 +380,9 @@ cut only where you chose `atelier material --cut`.
 
 A rule you state, amend or add that forbids or caps something your own pieces do is kept as you wrote it, and you are
 told once how often they do it: "Your examples use em dashes (—) in 4 of 5 pieces; your rule bans it; kept as you wrote
-it." A double hyphen typed for a dash counts as a dash.
+it." A double hyphen typed for a dash counts as a dash, and a short piece that uses one is counted too. A step of your
+method that bans something Atelier counts ("No em dashes.", "No "not X, it's Y"") is held by that count at zero, and your
+examples' own use of it is then no allowance: nothing tells the writer it may use one.
 
 A standard can also say what a piece must contain: `atelier amend --skill <name> --rule <rule> --measure
 "PRESENCE:in=last,starts=next"` makes "end on the next step" a counted rule, and `PRESENCE:sections=…`
