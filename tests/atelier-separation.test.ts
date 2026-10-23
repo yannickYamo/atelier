@@ -296,7 +296,14 @@ describe.skipIf(!existsSync(CLI))('end to end: the separation held on a real run
     expectOneCounter(out.controller as never, await repairCalls() - before);
     const p = { feature: ['parenthesis'], minValue: 0, maxValue: 5 };
     expect(Math.abs(FEATURE.observe(out.output, p).error ?? 0)).toBeLessThanOrEqual(Math.abs(FEATURE.observe(piece, p).error ?? 0));
-    expect(out.controller.decisions.find((d) => d.action === 'rewrite')).toMatchObject({ outcome: 'not kept', observed: { note: 'the rewrite made x1 worse' } });
+    // SPAN BY SPAN (core/loop/run-repair.ts): the first replacement takes an aside out and is kept; the other two keep their
+    // aside and shorten the text, which takes x1 further out, so those two alone are discarded and named. The whole pass was
+    // refused for them before, and the aside the first span removed was delivered.
+    const rewrite = out.controller.decisions.find((d) => d.action === 'rewrite');
+    expect(rewrite?.outcome).toBe('kept');
+    expect(rewrite?.observed.note).toMatch(/^2 rewritten span\(s\) discarded and 1 kept: "We met the whole team at the old office \(briefly, as it happ" \(it made x1 worse\); "We met the whole team/);
+    expect(out.output).toContain('We met the team at the office.');
+    expect(out.output).not.toContain('We met the team (briefly).');
   }, 120_000);
 
   it('B2, S1, S3: a redraft kept and still far steps down on the new draft; never ends handed; the real movement; four steps at most', async () => {

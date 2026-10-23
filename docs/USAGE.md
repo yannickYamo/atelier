@@ -110,6 +110,24 @@ others must not fire on. A check that now qualifies is enforced, so its failures
 sent to you; the certificate lists what moved (`requalified`). It is counting, with no model call, and runs again on every
 build and on `atelier report --requalify`.
 
+**Repair answers to the same table.** A rewrite is refused only by a rule whose failure would hold the work at the run's
+latitude (a row that sends it to you or blocks it): a rule that would only label or list the work, such as the claim check
+on a creative skill, never undoes the repair of another. Each rewritten span is judged on its own: one that fixes its rule
+and breaks nothing that could hold the work is kept, and only a harmful span is discarded, named on the step.
+
+**What the writer delivers is what it puts inside its field.** The writer is asked for the piece between `<work>` and
+`</work>`; anything it says about the task outside the field is set aside, kept on the record (`work.outside`), and never
+delivered or checked. A reply with no field is taken whole, and the record says so (`work.delimited: false`).
+
+**Fixed in code where meaning cannot change.** Where a rule bans dashes, each one (an em dash, or a double hyphen typed for
+one) is replaced by position: a pair around an aside by commas, a short tail by a comma, a long one by a colon, a dash
+with nothing after it by a full stop. A signposting clause set off by its own punctuation ("To be clear,") is cut with
+it. Anything else goes to the model's rewrite.
+
+**The length the request asks for is a rule of the run.** Outside its range after repair, the piece is written again once
+toward it, and that draft is kept only if it lands inside and breaks nothing that could hold the work. The record says the
+length and the range either way ("170 words written, within the 150 to 200 it allows").
+
 A document of your material is named the way you cite it, at the build and at a run alike: the file's name without its
 folder or extension, `-` and `_` read as spaces (`notice-of-loss.txt` is "notice of loss"); `--with <name>=<file>` keeps
 the name you give. A check written against your examples' material reads the same names on new work.
@@ -312,6 +330,10 @@ For answers rather than published writing (a coding assistant, support replies, 
 versions, costs and estimates you never supplied, so specifics the claim check cannot trace are listed for
 you to check, not cut. Elsewhere an invented story, claim of evidence or quotation meets the skill's latitude, and is
 cut only where you chose `atelier material --cut`.
+
+A rule you state, amend or add that forbids or caps something your own pieces do is kept as you wrote it, and you are
+told once how often they do it: "Your examples use em dashes (—) in 4 of 5 pieces; your rule bans it; kept as you wrote
+it." A double hyphen typed for a dash counts as a dash.
 
 A standard can also say what a piece must contain: `atelier amend --skill <name> --rule <rule> --measure
 "PRESENCE:in=last,starts=next"` makes "end on the next step" a counted rule, and `PRESENCE:sections=…`

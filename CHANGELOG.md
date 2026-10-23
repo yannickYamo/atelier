@@ -7,6 +7,34 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+### The work is what the writer puts in its field, repair answers to the table, and the request's length is a rule
+
+- **Only the work field is delivered.** The writer is asked to put the piece between `<work>` and `</work>`, with anything
+  it says about the task outside. Only the inside is delivered and checked; what stood outside is kept on the record
+  (`work.outside`). A reply with no field is taken whole, as before, and the record says so (`work.delimited: false`).
+  Two tags read as form; nothing is read for meaning.
+- **A repair answers only to the rules that can hold the work.** A rewrite is refused only by a rule whose failure would
+  hold delivery at the run's latitude (a consequence-table row that sends the work to a person or blocks it). A rule that
+  would only label or list it, such as the claim check on a creative skill, no longer undoes the repair of another. Where
+  a whole pass would still be refused, each rewritten span is judged alone and only the harmful ones are discarded, named
+  on the step. On a creative fixture with three required tells and a rewrite that changed the claim listing, all three
+  repairs are now kept (were none).
+- **Dashes and set-off signposts are fixed in code where a rule bans them.** A double hyphen typed for a dash counts as a
+  dash. Where a rule bans dashes, each is replaced by position: a pair around an aside by commas, a short tail by a comma,
+  a long one by a colon, a dash with nothing after it by a full stop. A signposting clause the counted checks already
+  report ("To be clear,", "Here's the thing:") is cut with its own punctuation where it stands as a clause; one that
+  carries its sentence goes to the model rewrite.
+- **The length the request asks for is a rule of the run.** Outside the range after repair, the piece is written again
+  once toward it (no second draft), kept only if it lands inside and breaks nothing that could hold the work. The record
+  says the length and the range either way ("170 words written, within the 150 to 200 it allows").
+- **A rule against what the examples do is said once, and kept as written.** Where a rule the owner amends, or states in
+  `atelier skill` with answers kept, forbids or caps something their own pieces measurably do, the build says how often:
+  "Your examples use em dashes (—) in 4 of 5 pieces; your rule bans it; kept as you wrote it."
+- **A frozen benchmark for posts in an author's voice** (`bench/voice-benchmark/`): an offline audit of an arm's outputs
+  against the author's pieces, the material and the brief (opening reasoning from the record, tells by Atelier's own
+  counts, rhythm against the author's range, 5-word runs copied, length against the range, points carried), and the judge
+  protocol (blind, both orders, frozen prompts) to run elsewhere.
+
 ### Delivered is not verified: a consequence table decides what is done with the work, and the owner's rulings requalify the checks
 
 - **Delivery is its own decision.** The record keeps its state (VERIFIED, NEEDS REVIEW, BLOCKED: what was observed) and
