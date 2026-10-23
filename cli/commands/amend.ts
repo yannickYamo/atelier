@@ -15,7 +15,8 @@ import { readJson } from '../../core/state/read-json.js';
 import { selectForProbing, prepareProbe, foldAnswer } from '../../core/discovery/run-probes.js';
 import type { Budget } from '../../core/inference/client.js';
 import type { Measurement, Requirement, StandardVersion } from '../../core/state/canonical-state.js';
-import { fitToCorpus, piecesBreaking, restateLimits } from '../../core/observers/derive.js';
+import { fitToCorpus, piecesBreaking, restateLimits, ruleAgainstExamples } from '../../core/observers/derive.js';
+import { sessionCorpus } from '../corpus.js';
 import { authorityStateOf, assertSupersessionRecorded, carriedQualifications, carriedSettings, standardHashOf, acceptedCarried, latitudeOf } from '../../core/state/canonical-state.js';
 import { parseLatitude } from '../../core/observers/latitude.js';
 import { unmeasuredSaid, latitudeLine, acceptedNamed } from '../latitude.js';
@@ -142,6 +143,10 @@ export function amend(): void {
     console.log(`  check: ${describeMeasurement(target) ?? 'none'} -> ${describeMeasurement(amended.requirement) ?? 'none'}`
       + (measurement === undefined ? '   (reworded, so the old check no longer states what the rule asks)' : ''));
   }
+  // THE RULE AGAINST THE OWNER'S OWN PIECES, said once (core/observers/derive.ts, `ruleAgainstExamples`): an amended rule
+  // that forbids or caps what their examples measurably do is kept as they wrote it, and they are told how often.
+  const against = amended.requirement.measurement && (measurement !== undefined || statement) ? ruleAgainstExamples(amended.requirement.measurement, sessionCorpus(name)) : null;
+  if (against) console.log(`  ${against.charAt(0).toUpperCase()}${against.slice(1)}.`);
   console.log(`\nStandardVersion ${next.standardVersionHash} supersedes ${prev.standardVersionHash}`);
   console.log(`  reason: ${reason}`);
   if (statement || appliesWhen) {

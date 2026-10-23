@@ -33,6 +33,7 @@
 import { existsSync } from 'node:fs';
 import { basename, resolve } from 'node:path';
 import { sha, die, flag, argv, numericFlag, positional, clientFor, proposerModel, loadSession, saveSession, authoredIdAllocator, DATA, type ProposalSet, type ProposedRule } from '../runtime.js';
+import { ruleAgainstExamples } from '../../core/observers/derive.js';
 import * as store from '../../core/state/store.js';
 import { skillNameFrom } from '../../renderers/agent-skill/render.js';
 import { groundedInUserText, uncarriedSections } from '../../core/ratification/grounding.js';
@@ -252,6 +253,9 @@ export async function skill(): Promise<void> {
     if (!p.grounded) console.log('      ^ MY READING — these words are not in what you said. It needs your decision.');
     const c = pset.checks?.[p.statement];
     if (c) console.log(c.how === 'measure' ? `      checked by code on every output: ${c.means}` : '      a check was written for it: it reports and blocks nothing until you give finished examples it can be qualified on');
+    // A RULE AGAINST THE ANSWERS THEY KEPT, said once (core/observers/derive.ts, `ruleAgainstExamples`): kept as they wrote it.
+    const against = c?.how === 'measure' ? ruleAgainstExamples(c.measurement, keptCases.map((k) => k.reference)) : null;
+    if (against) console.log(`      ${against.replace(/^your examples/, 'the answers you kept')}`);
   });
   const byCode = pset.rules.filter((p) => pset.checks?.[p.statement]?.how === 'measure').length;
   console.log(`\n${byCode} of ${pset.rules.length} checked by code on every output; the rest ${pset.rules.length - byCode === 1 ? 'is' : 'are'} yours to judge.`);

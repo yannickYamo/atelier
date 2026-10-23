@@ -15,6 +15,7 @@
 import type { Measurement, ObserverId, Requirement } from '../state/canonical-state.js';
 import { sentencesOf, paragraphsOf, wordsOf, proseRegions, quantile, findTerms, DEFAULT_HEDGES, measure, validateMeasurement } from './registry.js';
 import { lengthMix, mixDistance } from './balance.js';
+import { findPattern, PATTERN_LABEL, type PatternId } from './style.js';
 import { allowed, CORPUS_RULE_SHARE, thinEvidence } from '../ratification/suggest.js';
 
 /**
@@ -71,6 +72,28 @@ const conformanceOn = (pieces: readonly string[], m: Measurement): { applicable:
  */
 export function piecesBreaking(pieces: readonly string[], m: Measurement): number[] {
   return pieces.flatMap((t, i) => { const v = measure(t, m).verdict; return v !== 'NOT_APPLICABLE' && v !== 'MET' ? [i] : []; });
+}
+
+/**
+ * A RULE AGAINST WHAT THE EXAMPLES DO, COUNTED, as the build says it once: null where the pieces hold it, or there are
+ * none. A rule the owner stated, amended or added is theirs and is kept as they wrote it; where it forbids or caps
+ * something their own pieces measurably do, they are told how often, so a rule newer than the work and a rule read as
+ * something they did not mean look different to them. A ban on a counted pattern (a cap of none) counts the pieces that
+ * use it at all; a cap counts the pieces past it; any other check counts the pieces that break it. Counting only.
+ */
+export function ruleAgainstExamples(m: Measurement, pieces: readonly string[]): string | null {
+  if (!pieces.length) return null;
+  const breaking = piecesBreaking(pieces, m).length;
+  if (!breaking) return null;
+  const p = m.params as { pattern?: readonly string[]; maxPer1000?: number };
+  const one = m.observer === 'PATTERN_RATE' && p.pattern?.length === 1 && typeof p.maxPer1000 === 'number' ? p.pattern[0] as PatternId : null;
+  const label = one ? PATTERN_LABEL[one] : null;
+  if (one && label && p.maxPer1000 === 0) {
+    const using = pieces.filter((t) => findPattern(t, one).length > 0).length;
+    return `your examples use ${label} in ${using} of ${pieces.length} pieces; your rule bans it; kept as you wrote it`;
+  }
+  if (one && label) return `your examples go past it on ${label} in ${breaking} of ${pieces.length} pieces; your rule caps it; kept as you wrote it`;
+  return `${breaking} of your ${pieces.length} examples do not hold it; kept as you wrote it`;
 }
 
 // ── A LIMIT SET WHERE THE AUTHOR'S OWN PIECES ARE ──────────────────────────────────────────────
