@@ -7,6 +7,8 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+- **A ban is read at any length on skills built from now on.** A dash ban (a count at zero) built by this version carries `anyLength`, so one dash in a post under 150 words breaks it and none meets it. A ban a 1.0 store holds keeps its 1.0 verdict under 150 words (decision 0008).
+
 ### A review of round 4: the dash held on the default path, the plan serves what the rules read, good repairs kept
 
 - **A disputed ban keeps the examples' dash cap.** Built without `--yes`, an owner's "No em dashes." that their own

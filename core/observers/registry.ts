@@ -180,6 +180,15 @@ const OBSERVERS: Readonly<Record<ObserverId, Observer>> = {
       // support reply that opens "Let me be blunt" has made it. A RATE needs 150 words to mean anything,
       // unless the rule carries one pooled over the author's short pieces (./pooled.ts): then a short text is
       // held to the count expected of its length, and "under 150 words" is never the answer.
+      // A BAN READ AT ANY LENGTH (`anyLength`, written on bans built from 1.1 on): one hit in a short post breaks it,
+      // none meets it. A ban a 1.0 store holds keeps its 1.0 verdict under 150 words (docs/decisions/0008).
+      if (words < 150 && words > 0 && num(p, 'maxPer1000') === 0 && num(p, 'anyLength') === 1) {
+        const never0 = new Set(list(p, 'never') ?? []);
+        const found = findPattern(text, id).filter((s) => !(s.family !== undefined && BAN_ONLY_FAMILIES.has(s.family) && !never0.has(s.family)))
+          .map((s) => (prefer ? { ...s, why: `${s.why}; write "${prefer}" instead` } : s));
+        return found.length ? { verdict: 'VIOLATED', spans: found, value: found.length, detail: `${found.length} in ${words} words (none allowed)` }
+          : { verdict: 'MET', spans: [], value: 0, detail: `none in ${words} words` };
+      }
       if (words < 150) {
         const neverShort = new Set(list(p, 'never') ?? []);
         const bannedShort = neverShort.size ? findPattern(text, id).filter((s) => s.family !== undefined && neverShort.has(s.family)) : [];

@@ -148,7 +148,10 @@ export const STEP_CHECK: Reading<StepCheckInput, StepCheckOutput> = {
         const m = parsed.measurement;
         // It must run on the owner's example: a measurement that cannot read the example reads no work of this kind.
         try { measure(input.example.head, m, context); } catch (e) { keep(step.id, judgement(step, 'floor', `the measurement could not run on your example (${(e as Error).message.split('\n')[0]})`)); continue; }
-        keep(step.id, { how: 'measure', measurement: m, quote, means: spec ?? means, ...(c.near === true ? { near: true as const } : {}), by: 'model' });
+        // A ban is a ban at any length: a short post's one dash breaks it (core/observers/registry.ts, `anyLength`).
+        const held = m.observer === 'PATTERN_RATE' && m.params.maxPer1000 !== undefined && Number(Array.isArray(m.params.maxPer1000) ? m.params.maxPer1000[0] : m.params.maxPer1000) === 0
+          ? { ...m, params: { ...m.params, anyLength: 1 } } : m;
+        keep(step.id, { how: 'measure', measurement: held, quote, means: spec ?? means, ...(c.near === true ? { near: true as const } : {}), by: 'model' });
         continue;
       }
       if (c.how === 'written') {
