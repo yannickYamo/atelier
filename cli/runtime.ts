@@ -1,0 +1,1110 @@
+import type { Voice } from '../core/compiler/voice.js';
+import { stepGuarded } from '../core/inference/step-guard.js';
+import { setDraftMaxTokens, DEFAULT_DRAFT_MAX_TOKENS } from '../core/loop/run-once.js';
+import { parseArgs } from 'node:util';
+// cli/runtime.ts — the shared ground every command stands on.
+//
+// Extracted because a 1,700-line entry point is a file nobody reads twice, and a reader who opens
+// this repository opens the CLI first. What lives here is the state a command cannot avoid touching:
+// where data goes, how a run advances, and how a model is reached.
+
+import type { SkillMode } from '../core/ratification/suggest.js';
+import { mkdirSync, existsSync, renameSync, readdirSync, readFileSync, copyFileSync, statSync, rmSync } from 'node:fs';
+import { writeAtomic } from '../core/state/fs-atomic.js';
+import { join, dirname, resolve, relative, isAbsolute, basename } from 'node:path';
+import { homedir } from 'node:os';
+import * as store from '../core/state/store.js';
+import { receiptOf, type BuildReceipt } from '../core/state/receipt.js';
+import { readJson } from '../core/state/read-json.js';
+import { createHash } from 'node:crypto';
+import { newRun, transition, type Run } from '../core/state/run-state.js';
+import type { ExpertEvidence, Requirement, StandardVersion, CheckQualification, Measurement, Latitude } from '../core/state/canonical-state.js';
+import { contrastFor, type ContrastPair } from '../core/compiler/contrast-examples.js';
+import type { Reservation } from '../core/golden/reservation.js';
+import { materialName } from '../core/golden/case.js';
+import type { RatificationLedger } from '../core/ratification/decision-record.js';
+import type { AuthorMap } from '../core/composite/authors.js';
+import type { CompositeRecord } from '../core/composite/selection.js';
+import type { TraitClass } from '../core/composite/traits.js';
+import type { VoiceGrouping } from '../core/composite/voices.js';
+import { processSpentUsd, type InferenceClient } from '../core/inference/client.js';
+import { AnthropicInferenceClient, accountRefusal } from '../providers/anthropic.js';
+import { ClaudeCodeAdapter } from '../adapters/claude-code/adapter.js';
+import { CodexAdapter } from '../adapters/codex/adapter.js';
+import type { HostAdapter } from '../adapters/host-adapter.js';
+import { skillNameFrom } from '../renderers/agent-skill/render.js';
+
+export const sha = (s: string): string => createHash('sha256').update(s).digest('hex').slice(0, 16);
+export const DATA = process.env.ATELIER_DATA ?? join(process.env.HOME ?? '.', '.atelier');
+/**
+ * The last line of defence for a provider's raw error: an SDK message is "<status> <body JSON>", and a
+ * refusal over the account (no credit, a key refused) that reached here unconverted is said in one plain
+ * line, request id kept, rather than dumped as JSON.
+ */
+const plainProviderError = (m: string): string => {
+  const raw = /\b(40[013]) (\{[\s\S]*\})/.exec(m);
+  return (raw && accountRefusal(Number(raw[1]), raw[2])) ?? m;
+};
+// A run that stops partway has still been paid for, and nothing else records it: the refusal says how much.
+const spentSoFar = (): string => { const usd = processSpentUsd(); return usd > 0 ? `\n  This run had spent ${usd < 0.01 ? 'under $0.01' : `$${usd.toFixed(2)}`} when it stopped.` : ''; };
+export const die = (m: string): never => { console.error(`atelier: ${plainProviderError(m)}${spentSoFar()}`); process.exit(1); };
+
+/**
+ * WHEN `atelier new` DRIVES A STEP, THE STEP REPORTS IN A LINE.
+ *
+ * Intake, discovery, review, ratify-close and build were each written as a command of their own, with the
+ * full report someone running that command alone wants. Chained by `new`, the reports added up to about
+ * 10,000 words before a first post, and the lines a person had to act on were lost among them. Under `new`
+ * a step prints what the person must know or do; the full report stays with the standalone command and in
+ * the files the run writes. A refusal, a failure or a rule that binds is never shortened away.
+ */
+export const orchestrated = (): boolean => process.env.ATELIER_ORCHESTRATED === '1';
+
+// ── THE COMMAND GRAMMAR, DECLARED ─────────────────────────────────────────────────────────────
+//
+// Option arity is STATED here, never inferred from what a token looks like. The bug that forced this
+// was inference: `argv.find(a => !a.startsWith('--'))` reads as "find the positional" and finds the
+// first token that is not itself a flag — and a flag's VALUE is such a token. So
+//
+//   atelier invoke --skill s --target-provider openai-compatible "Should we hire?"
+//
+// used "openai-compatible" as the writing task. Nothing failed; the record faithfully hashed and
+// stored the wrong task; the model produced a fluent piece about the wrong question.
+//
+// `node:util.parseArgs` is given this table, so the parser knows an option takes a value because we
+// said so. A census test proves every option the codebase reads is declared, which is what stops the
+// table going stale one flag at a time.
+export const VALUED_OPTIONS: readonly string[] = ['correcting', 'moves', 'set-aside',
+  // `atelier fix`, to the run it writes: the version of the piece to change in place, and the piece its fixes are kept for
+  'fix-of', 'corrections-of',
+  // `atelier method`: the one finished example, and what the skill is for
+  'golden', 'for', 'method',
+  // `atelier evolve`: the briefs to work on, how many rounds, and (to a run) what earlier drafts left out
+  'briefs', 'rounds', 'carry-note',
+  'with',
+  'api-key-env', 'applies-when', 'arm-set', 'backend', 'base-url', 'brief',
+  'candidate', 'cap', 'complaint', 'context', 'decision',
+  'declare-viewed', 'decisions', 'description', 'drafts', 'discovery-backend', 'discovery-base-url', 'discovery-model',
+  'discovery-price-in', 'discovery-price-out', 'discovery-provider', 'discovery-strict-schema', 'discovery-structured-output',
+  'exclude', 'exemplar', 'method-text', 'from', 'from-hook', 'held-out', 'host', 'id', 'intent', 'invocation', 'kind', 'mode',
+  'add', 'labels', 'materiality', 'measure', 'form', 'max-calls', 'model', 'name', 'note', 'pick',
+  'one-pager', 'pick', 'price-in', 'price-out', 'provenance', 'provider', 'claims', 'claims-model',
+  'candidates', 'compiled', 'contexts', 'contrast-cap', 'contexts-exercising', 'control', 'frozen-at', 'max-tokens',
+  'cap', 'cases', 'development', 'expert-consistency', 'key', 'observation', 'observer-kappa', 'out', 'page', 'probe-cap', 'prose', 'standard', 'target',
+  'results', 'sealed-at', 'seed', 'suite', 'phase', 'class', 'contrast', 'piece-budget', 'pieces',
+  'corpus', 'tasks', 'fires', 'margin', 'enforce', 'observe', 'check', 'floor-cap',
+  'finalists', 'screen-model', 'voice', 'persona', 'add', 'strike', 'probe', 'read', 'label', 'reader-model', 'runs', 'context-reader', 'evidence-reader', 'work-form',
+  'questions', 'reason', 'required-n', 'reserve', 'role',
+  // `atelier new` with pieces by several authors (cli/commands/composite.ts): who wrote which, what is liked about each, and a conflict's answer
+  'authors', 'admire', 'conflict',
+  // how strictly output is held (cli/latitude.ts), and whether the rules no check reads are accepted unmeasured
+  'latitude', 'unmeasured', 'accept-unmeasured',
+  // what is done with an output, by what was found (core/eval/consequence.ts): the owner's rows of the table
+  'consequence',
+  'rule', 'set', 'skill', 'source-author', 'statement', 'strict-schema',
+  'structured-output', 'supersedes', 'target-backend', 'target-base-url', 'target-model',
+  'target-price-in', 'target-price-out', 'target-provider', 'target-strict-schema', 'target-structured-output',
+  'task', 'material', 'temperature', 'want', 'to', 'token-limit-param', 'verdict', 'try-release', 'promote-release',
+  'why', 'work-type', 'override', 'edits', 'contrast-drafts', 'settings', 'contrast-models', 'topics', 'resamples', 'register', 'until-typical', 'shape-rounds', 'calibrate-from', 'until-author', 'select', 'structure', 'read-structure-from', 'context', 'nearness', 'redraws', 'graded', 'limit',
+  // the person's answers to the questions asked before a draft (cli/prewrite.ts)
+  'answers',
+];
+
+export const BOOLEAN_OPTIONS: readonly string[] = [
+  'accept', 'accept-new-binding', 'fix-grammar', 'profile', 'auto-reserve', 'cluster-per-file', 'drop', 'dry-run', 'indifferent',
+  'allow-unsourced', 'answer-only', 'bare', 'clear', 'holdout', 'json', 'list', 'loop', 'no-contrast', 'no-repair', 'no-coverage', 'repair', 'hook', 'never-this-transition', 'no-negative-probe', 'none', 'public-source',
+  'ai-assisted', 'blind-expert', 'delivery-proven', 'no-ai-assist', 'per-passage',
+  'regenerate',
+  'review', 'score', 'skip', 'skip-methods', 'yes', 'baseline', 'qualify', 'promote',
+  // the runs waiting for a person, and the written checks held again to the owner's rulings (cli/commands/report.ts)
+  'pending', 'requalify',
+  // the run stage by stage (cli/commands/report.ts, core/eval/stages.ts)
+  'stages',
+  'cut', 'no-cut', 'draft-examples',
+  'reflect', 'no-reflect', 'report', 'phrase', 'calibrate', 'placeholders', 'no-placeholders', 'no-unsourced-note', 'no-redraft', 'no-model', 'always', 'evaluation', 'learn', 'include-reserved', 'taste', 'no-taste', 'no-brief', 'examples-first', 'no-infer-method', 'voices', 'setup', 'auto', 'no-fidelity', 'fidelity', 'rollback', 'distill', 'next', 'sections', 'panel', 'quiet', 'label', 'typicality', 'read-subjects', 'strict', 'allow-nonconformant', 'full', 'no-index', 'test-run',
+  // before the draft: no questions, no plan (cli/prewrite.ts)
+  'no-questions', 'no-plan',
+];
+
+export const argv = process.argv.slice(2);
+
+interface Parsed { values: Record<string, string | boolean | undefined>; positionals: string[] }
+
+/** Parse once, against the declared grammar. Unknown options are tolerated so a typo reaches the
+ *  command's own error rather than a parser error nobody can act on. */
+const parsed = ((): Parsed => {
+  const options: Record<string, { type: 'string' | 'boolean' }> = {};
+  for (const o of VALUED_OPTIONS) options[o] = { type: 'string' };
+  for (const o of BOOLEAN_OPTIONS) options[o] = { type: 'boolean' };
+  try {
+    const r = parseArgs({ args: argv.slice(1), options, allowPositionals: true, strict: false });
+    return { values: r.values, positionals: r.positionals };
+  } catch {
+    return { values: {}, positionals: [] };
+  }
+})();
+export const cmd = argv[0] ?? '';
+
+/** Options that may be given more than once. Every value is kept, and a comma list counts the same. */
+export const REPEATABLE_OPTIONS: readonly string[] = ['reserve', 'exclude', 'set', 'margin', 'enforce', 'observe', 'label', 'add', 'strike', 'admire', 'conflict'];
+
+/** Values of an option, read as the parser reads: a value is consumed, so a value that happens to
+ *  spell `--name` (a statement, a task) is never counted as the option itself. */
+const occurrences = (name: string): string[] => {
+  const out: string[] = [];
+  for (let i = 1; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === '--') break;
+    const eq = a.indexOf('=');
+    const opt = a.startsWith('--') ? (eq === -1 ? a.slice(2) : a.slice(2, eq)) : null;
+    if (opt === null) continue;
+    const valued = VALUED_OPTIONS.includes(opt) || opt === name;
+    const value = eq !== -1 ? a.slice(eq + 1) : valued ? argv[i + 1] : undefined;
+    if (valued && eq === -1) i++;                         // the next token is this option's value
+    if (opt === name && value !== undefined) out.push(value);
+  }
+  return out;
+};
+
+/**
+ * EVERY value of a repeatable option. `--reserve a --reserve b` used to keep only `b` — the parser's
+ * last-wins — while the CLI's own hint told people to repeat the flag, so `a` went to discovery with
+ * no warning and a reserve cannot be repaired after the corpus is sealed.
+ */
+export const flagAll = (f: string): string[] =>
+  occurrences(f.replace(/^--/, '')).flatMap((v) => v.split(',')).map((x) => x.trim()).filter(Boolean);
+
+/** Every value of a repeatable option, kept whole: a free line of the person's (`--admire a.md=I like the openings, and the pace`) has commas in it. */
+export const flagEach = (f: string): string[] => occurrences(f.replace(/^--/, '')).map((x) => x.trim()).filter(Boolean);
+
+export const flag = (f: string): string | undefined => {
+  const name = f.replace(/^--/, '');
+  // A single-valued option given twice is refused, not resolved: last-wins is a silent choice
+  // between two things the person typed.
+  if (VALUED_OPTIONS.includes(name) && !REPEATABLE_OPTIONS.includes(name) && occurrences(name).length > 1) {
+    die(`--${name} was given more than once. Give it once.`);
+  }
+  const v = parsed.values[name];
+  if (typeof v === 'string') return v;
+  if (v === true) return undefined;                      // declared boolean, asked for as a value
+  const i = argv.indexOf(f);                             // undeclared option: raw scan, as before
+  return i === -1 ? undefined : argv[i + 1];
+};
+
+/**
+ * THE POSITIONAL, from the declared grammar rather than from token shape.
+ *
+ * `skip` removes tokens the command has already claimed — the skill name, typically — so the task is
+ * what is genuinely left over.
+ */
+/** Every positional argument after the command, flag values excluded. */
+export const positionals = (): readonly string[] => parsed.positionals;
+export const positional = (skip: readonly string[] = []): string | undefined =>
+  parsed.positionals.find((a) => !skip.includes(a));
+
+// ── the model seam ───────────────────────────────────────────────────────────────────────────
+//
+// `core/` depends on the InferenceClient INTERFACE and never on a vendor — enforced by test, not by
+// comment. This is the one place a concrete provider is chosen.
+//
+// ─── DISCOVERY AND TARGET ARE TWO DECISIONS, AND THEY WERE ONE ─────────────────────────────────
+//
+// Reading an expert's work well is a hard inference problem. Executing a compiled skill is not the
+// same problem, and there is no reason the same model has to do both. Collapsing them made the
+// expert's standard hostage to whichever model happened to discover it, which is the exact dependency
+// this product exists to remove:
+//
+//   frontier model reads the corpus  →  YOU ratify the standard  →  a local model runs it, forever
+//
+// or the reverse, for a team that cannot send its corpus anywhere: local discovery, more human review,
+// local runtime. Or cheap discovery and an expensive runtime. Nothing in the ownership model changes
+// across those three, because the StandardVersion belongs to the person either way and carries no
+// model identity at all.
+//
+// So: two providers, two models, two independent flags. `--provider` and `--model` still set both,
+// because most of the time they are the same and typing four flags to say one thing is a tax.
+
+import { OpenAICompatibleInferenceClient, BACKEND_PRESETS, type StructuredOutputMode, type TokenLimitParam } from '../providers/openai-compatible.js';
+import { isLocalBackend, priceFor, ANTHROPIC_PRICING, type Pricing } from '../providers/pricing.js';
+import { bindingHash, type RuntimeBinding } from '../core/runtime/binding.js';
+
+// ─── THE DEFAULTS FOLLOW THE ONE MODEL-DEPENDENT CLAIM THIS PRODUCT MAKES ──────────────────────
+//
+// Atelier is provider-agnostic by construction: `core/` names no vendor, the request maps onto both
+// wire protocols without loss, and a standard carries no model identity. Exactly one thing about it
+// does depend on the model, and it is not a limitation to be engineered away — RECOVERING TACIT
+// JUDGMENT FROM A CORPUS IS A HARD INFERENCE PROBLEM, and how much of it a run recovers tracks how
+// capable the reading model is.
+//
+// So the discovery default is the most capable model available rather than the cheapest adequate
+// one. It used to be a mid-tier model from an older generation, while the README called that model
+// "a frontier model" — the product's default contradicting the product's own advice, on the single
+// axis that most affects what a user gets.
+//
+// EXECUTION IS A DIFFERENT JOB. Running a compiled standard is not the same problem as inferring
+// one, which is the whole reason the two are configured separately. The target default is strong
+// rather than maximal, and a local 8B model is a legitimate target for a standard a frontier model
+// discovered.
+//
+// Both are overridable, and neither is Anthropic-specific by design: `modelFor` refuses to hand an
+// Anthropic default to a provider it was not chosen for, rather than quietly sending a name that
+// backend has never heard of.
+/** The built-in defaults themselves, whatever the environment names: where a refusal falls back to when one model was named for every role. */
+export const MODEL_DEFAULT = 'claude-opus-5';
+export const PROPOSER_DEFAULT = 'claude-fable-5';
+export const MODEL = process.env.ATELIER_MODEL ?? MODEL_DEFAULT;
+export const PROPOSER = process.env.ATELIER_PROPOSER_MODEL ?? PROPOSER_DEFAULT;
+
+export type ProviderId = 'anthropic' | 'openai-compatible';
+export const PROVIDERS: readonly ProviderId[] = ['anthropic', 'openai-compatible'];
+
+/** Which half of the pipeline a client is being built for. The two are configured separately. */
+export type Role = 'discovery' | 'target';
+
+const roleFlag = (role: Role, name: string): string | undefined =>
+  flag(`--${role}-${name}`) ?? process.env[`ATELIER_${role.toUpperCase()}_${name.toUpperCase().replace(/-/g, '_')}`];
+
+/** A role's setting, then the shared setting, then the default. Most people only ever set the middle one. */
+const setting = (role: Role, name: string, envName: string, fallback: string): string =>
+  roleFlag(role, name) ?? flag(`--${name}`) ?? process.env[envName] ?? fallback;
+
+/**
+ * A RATE FROM THE PERSON WHO KNOWS IT.
+ *
+ * `providers/pricing.ts` has said since it was written that "a user who wants a number passes one
+ * in", and until now there was no way to pass one in: the field existed on the client config and no
+ * command could reach it. So one vendor had a working dollar cap and every other backend was
+ * permanently UNKNOWN_PRICING — a two-tier experience decided by which SDK ships, in a product whose
+ * claim is that the standard does not belong to a vendor.
+ *
+ * USD per MILLION tokens, the unit every published rate card uses, so a person can copy the number
+ * off the page they are reading. Both halves are required together: a half-priced call is a wrong
+ * number, and a wrong number is worse than an honest UNKNOWN.
+ */
+export const priceOverrideFor = (role: Role): Pricing | null => {
+  const inM = roleFlag(role, 'price-in') ?? flag('--price-in') ?? process.env.ATELIER_PRICE_IN;
+  const outM = roleFlag(role, 'price-out') ?? flag('--price-out') ?? process.env.ATELIER_PRICE_OUT;
+  if (inM === undefined && outM === undefined) return null;
+  if (inM === undefined || outM === undefined) {
+    die('--price-in and --price-out go together. A rate with only one half priced would be a wrong\n'
+      + '  number, and a wrong number costs more than an honest UNKNOWN.\n'
+      + '  Both are USD per MILLION tokens:  --price-in 3 --price-out 15');
+  }
+  const i = Number(inM), o = Number(outM);
+  if (!Number.isFinite(i) || !Number.isFinite(o) || i < 0 || o < 0) {
+    die(`--price-in / --price-out must be non-negative numbers in USD per million tokens; got "${inM}" and "${outM}".`);
+  }
+  return { inputPerM: i, outputPerM: o };
+};
+
+export const providerFor = (role: Role): ProviderId => {
+  const p = setting(role, 'provider', 'ATELIER_PROVIDER', 'anthropic') as ProviderId;
+  if (!PROVIDERS.includes(p)) die(`unknown provider "${p}". Available: ${PROVIDERS.join(', ')}.`);
+  return p;
+};
+
+/**
+ * The model for one role.
+ *
+ * REFUSES to hand a default to a provider it was not chosen for. The defaults are Anthropic model ids;
+ * sending `claude-opus-4-7` to a local server because the user set a provider and forgot a model is a
+ * confusing HTTP 404 at best and, on a permissive backend, a silent substitution — an inference run
+ * whose provenance names a model that never touched it.
+ */
+export const modelFor = (role: Role, fallback = MODEL): string => {
+  const explicit = roleFlag(role, 'model') ?? flag('--model') ?? process.env.ATELIER_MODEL;
+  if (explicit) return explicit;
+  const provider = providerFor(role);
+  if (provider !== 'anthropic') {
+    die(`no model set for the ${role} runtime.\n`
+      + `  The built-in defaults are Anthropic model ids and mean nothing to ${provider}.\n`
+      + `  Name one:  --${role}-model <id>    (or --model <id> for both roles)`);
+  }
+  return fallback;
+};
+
+/**
+ * The model that READS THE CORPUS. Discovery proposes with PROPOSER, not MODEL, and `check` used to
+ * verify MODEL under the heading "the discovery runtime": a green check on one model, then a 400 from
+ * the other one the moment discovery ran. Every discovery-side proposer call and the check that stands
+ * behind it resolve through here, so what was verified is what runs.
+ */
+export const proposerModel = (): string =>
+  roleFlag('discovery', 'model') ?? flag('--model') ?? process.env.ATELIER_PROPOSER_MODEL ?? modelFor('discovery', PROPOSER);
+
+/**
+ * Whether the corpus is read by the built-in default rather than a model the person named. Only a default
+ * may be swapped for another model when a backend does not serve it: a model the person named is theirs.
+ */
+export const proposerIsDefault = (): boolean => proposerModel() === PROPOSER && !process.env.ATELIER_PROPOSER_MODEL
+  && !roleFlag('discovery', 'model') && !flag('--model') && !process.env.ATELIER_MODEL;
+
+/** Whether a role has a model without dying for one: set explicitly, or an Anthropic default applies. */
+export const hasModelFor = (role: Role): boolean =>
+  Boolean(roleFlag(role, 'model') ?? flag('--model') ?? process.env.ATELIER_MODEL) || providerFor(role) === 'anthropic';
+
+/** The model that diagnoses and proposes repairs. Every such command resolves it here, so `check` verifies it. */
+export const diagnoserModel = (): string => modelFor('discovery');
+
+/**
+ * Schema enforcement is part of the RUNTIME IDENTITY, not a formatting preference.
+ *
+ * The same model asked to satisfy a schema and asked to be VALIDATED against one is not reliably the
+ * same system, which is the same reason `structuredOutput` is in the binding. A run that quietly used
+ * the weaker guarantee must not be comparable to one that did not.
+ */
+const strictSchemaFor = (role: Role): boolean => {
+  const raw = (setting(role, 'strict-schema', 'ATELIER_STRICT_SCHEMA', 'on')).toLowerCase();
+  if (['on', 'true', '1', 'yes'].includes(raw)) return true;
+  if (['off', 'false', '0', 'no'].includes(raw)) return false;
+  return die(`unknown --strict-schema "${raw}". Use on or off.`);
+};
+
+const structuredOutputFor = (role: Role): StructuredOutputMode => {
+  const raw = (setting(role, 'structured-output', 'ATELIER_STRUCTURED_OUTPUT', 'tool-call')).toLowerCase();
+  if (raw === 'tool-call') return 'FORCED_TOOL_CALL';
+  if (raw === 'json-schema') return 'JSON_SCHEMA_RESPONSE_FORMAT';
+  return die(`unknown --structured-output "${raw}". Available: tool-call, json-schema.`);
+};
+
+/**
+ * A named backend, when one was given.
+ *
+ * It supplies a base URL and the protocol quirks someone has checked — today that is which spelling of
+ * the output-token limit the backend accepts. A preset is NOT a support claim: it records a documented
+ * difference, and `atelier check` is what turns it into a verified backend.
+ */
+export const backendFor = (role: Role): { name: string; preset: (typeof BACKEND_PRESETS)[string] } | null => {
+  const name = roleFlag(role, 'backend') ?? flag('--backend') ?? process.env.ATELIER_BACKEND;
+  if (!name) return null;
+  // Typed as possibly absent, which is the truth: `Record<string, T>` claims every key resolves, so
+  // the refusal below read as unreachable while being the only thing standing between a typo and a
+  // request to nowhere.
+  const preset: (typeof BACKEND_PRESETS)[string] | undefined = BACKEND_PRESETS[name];
+  if (!preset) {
+    die(`unknown --backend "${name}". Known: ${Object.keys(BACKEND_PRESETS).join(', ')}.\n`
+      + `  Any other backend works too — give it --base-url directly instead of a name.`);
+  }
+  return { name, preset };
+};
+
+export const baseUrlFor = (role: Role): string =>
+  roleFlag(role, 'base-url') ?? flag('--base-url') ?? process.env.ATELIER_BASE_URL
+  ?? backendFor(role)?.preset.baseUrl
+  ?? die('no backend given. Use --base-url <url>, or --backend <name> for a known one.');
+
+/**
+ * Build the client AND the binding that describes it, together.
+ *
+ * Together because they must not be able to disagree. A binding assembled somewhere else from the same
+ * flags would drift the first time a flag changed, and the record would then describe a configuration
+ * that never ran — the precise failure the binding exists to catch.
+ */
+/**
+ * WHAT EVERY CALL THIS PROCESS MADE WAS SENT WITH, AS ITS PROVIDER SAID: the role, the model that answered, and the
+ * thinking setting. A record that says what thinking its calls used reads it here, never from what was asked for.
+ */
+export interface CallSeen { readonly role: Role; readonly modelId: string; readonly thinkingSent: 'disabled' | null | undefined; readonly thinkingBlocks?: number }
+const seenCalls: CallSeen[] = [];
+export const callsSeen = (): readonly CallSeen[] => seenCalls;
+/** The thinking setting a run's calls were sent with: 'disabled' when every call that says said so; null otherwise. */
+export const thinkingOfCalls = (calls: readonly CallSeen[]): 'disabled' | null =>
+  calls.length > 0 && calls.every((c) => c.thinkingSent === 'disabled') ? 'disabled' : null;
+/**
+ * THE THINKING A RUN WAS RETURNED, NOT ONLY THE SETTING IT SENT: the thinking blocks every call's provider counted on
+ * its result, summed. A backend that thinks with thinking sent off shows here and nowhere else; a provider that does
+ * not count them adds nothing.
+ */
+export const thinkingBlocksOfCalls = (calls: readonly CallSeen[]): number => calls.reduce((n, c) => n + (c.thinkingBlocks ?? 0), 0);
+// Every client the CLI makes carries the step guard (core/inference/step-guard.ts): while a repair chain runs, a call
+// outside a step and outside a registered reader is an error.
+const observed = (role: Role, client: InferenceClient): InferenceClient => stepGuarded({
+  complete: async (req) => {
+    const r = await client.complete(req);
+    seenCalls.push({ role, modelId: r.modelId, thinkingSent: r.thinkingSent, thinkingBlocks: r.thinkingBlocks ?? 0 });
+    return r;
+  },
+});
+
+export function clientAndBinding(role: Role, modelOverride?: string): { client: InferenceClient; binding: RuntimeBinding } {
+  const provider = providerFor(role);
+  const model = modelOverride ?? modelFor(role);
+  const temperature = flag('--temperature') === undefined ? undefined : Number(flag('--temperature'));
+  const parameters: Record<string, string | number | boolean> = {};
+  if (temperature !== undefined) parameters.temperature = temperature;
+
+  // The override wins over any shipped table, for every provider. A person who names their rate is
+  // the authority on it; a dated seed is a convenience for the case where nobody has.
+  const priceOverride = priceOverrideFor(role);
+
+  if (provider === 'anthropic') {
+    return {
+      client: observed(role, new AnthropicInferenceClient(model, undefined, priceOverride ?? priceFor(ANTHROPIC_PRICING, model), temperature)),
+      binding: { providerAdapter: 'anthropic', backend: 'api.anthropic.com', requestedModel: model,
+        structuredOutput: 'NATIVE_TOOL_USE', parameters, runtimeProfile: null },
+    };
+  }
+
+  const backend = backendFor(role);
+  const baseUrl = baseUrlFor(role);
+  const structuredOutput = structuredOutputFor(role);
+  const strictSchema = strictSchemaFor(role);
+  const apiKeyEnv = flag('--api-key-env');
+  const tokenLimitParam = (flag('--token-limit-param') ?? backend?.preset.tokenLimitParam ?? 'max_tokens') as TokenLimitParam;
+  // PART OF THE BINDING. Two runs of one model that differ in which token-limit field was sent are two
+  // configurations, and on a backend that rejects one of them they are a working run and a failing one.
+  parameters.tokenLimitParam = tokenLimitParam;
+  // PART OF THE BINDING for the same reason: two runs of one model that differ in whether the schema
+  // was enforced or merely requested are two configurations, and their evidence is not interchangeable.
+  parameters.strictSchema = strictSchema;
+  return {
+    client: observed(role, new OpenAICompatibleInferenceClient({
+      modelId: model, baseUrl, structuredOutput, temperature, tokenLimitParam, strictSchema,
+      ...(priceOverride ? { pricing: priceOverride } : {}),
+      apiKey: apiKeyEnv ? process.env[apiKeyEnv] : undefined,
+      backendName: backend?.name,
+    })),
+    binding: { providerAdapter: 'openai-compatible', backend: backend?.name ?? baseUrl, requestedModel: model,
+      structuredOutput, parameters, runtimeProfile: null },
+  };
+}
+
+
+/** Convenience for the discovery half, which is where most commands spend their calls. */
+export const clientFor = (modelId: string): InferenceClient => clientAndBinding('discovery', modelId).client;
+
+/** One line naming what will serve, printed before a run so nobody discovers it afterwards. */
+export const describeBinding = (b: RuntimeBinding): string =>
+  `${b.requestedModel} via ${b.providerAdapter}${b.backend ? ` (${b.backend})` : ''} [${bindingHash(b)}]`;
+
+/**
+ * CAN WE REACH A MODEL AT ALL — asked before anything is written down.
+ *
+ * `create` used to read the corpus, print the reserve, SEAL it and advance the run, and only then
+ * construct a client and discover the key was missing. The user exports the key, runs the same
+ * command again, and is refused: there is already a run in progress. The first thing a new reader
+ * does with the quickstart left them with a sealed run and a refusal.
+ *
+ * Nothing here validates the credential — that costs a call and this must be free. It asks the one
+ * question that can be answered locally, which is whether there is a credential to try, and it asks
+ * it before any state exists to be stuck in.
+ */
+/** Is there a model to ask for this step at all? False only where the default provider has no key: nothing is sent to find out. */
+export const canReach = (role: Role): boolean => providerFor(role) !== 'anthropic' || Boolean(process.env.ANTHROPIC_API_KEY ?? process.env.ANTHROPIC_AUTH_TOKEN);
+
+/**
+ * WHO READS FOR CONTEXT (core/inference/reading.ts): the small model that reads what words mean, where a word pattern
+ * used to decide (what form the work takes, what a request asks for). Haiku 5.5 on Anthropic; on another backend the
+ * model named for the run, or none, in which case code and the floor decide and the record says so.
+ */
+export const CONTEXT_READER_DEFAULT = 'claude-haiku-5-5';
+export const contextReaderModel = (): string | null =>
+  flag('--context-reader') ?? process.env.ATELIER_CONTEXT_READER
+  ?? (providerFor('discovery') === 'anthropic' ? CONTEXT_READER_DEFAULT : flag('--model') ?? process.env.ATELIER_MODEL ?? null);
+export const contextReaderClient = (): InferenceClient | null => {
+  const m = contextReaderModel();
+  return m && canReach('discovery') ? clientFor(m) : null;
+};
+/**
+ * WHO READS THE EVIDENCE OF A HABIT (core/compiler/moves.ts: the first reading of each persona point and the table of
+ * every habit against every piece). A reading that decides whether a sentence in a long piece makes an abstract move;
+ * on the hand-labelled corpus the small reader answered it differently from call to call and the mid-size one did
+ * not, so it is Sonnet 5.5 on Anthropic by default, a few calls
+ * per build. --evidence-reader or ATELIER_EVIDENCE_READER names another; on another backend it is the context reader.
+ */
+export const EVIDENCE_READER_DEFAULT = 'claude-sonnet-5-5';
+export const evidenceReaderModel = (): string | null =>
+  flag('--evidence-reader') ?? process.env.ATELIER_EVIDENCE_READER
+  ?? (providerFor('discovery') === 'anthropic' ? EVIDENCE_READER_DEFAULT : contextReaderModel());
+export const evidenceReaderClient = (): InferenceClient | null => {
+  const m = evidenceReaderModel();
+  return m && canReach('discovery') ? clientFor(m) : null;
+};
+
+export const assertReachable = (role: Role): void => {
+  const provider = providerFor(role);
+  if (provider === 'anthropic') {
+    if (!process.env.ANTHROPIC_API_KEY && !process.env.ANTHROPIC_AUTH_TOKEN) {
+      die('Neither ANTHROPIC_API_KEY nor ANTHROPIC_AUTH_TOKEN is set.\n'
+        + '  export ANTHROPIC_API_KEY=sk-...        (or ANTHROPIC_AUTH_TOKEN=... behind a gateway)\n'
+        + `Atelier needs an inference provider for the ${role} step. Your corpus, standard and outputs stay\n`
+        + 'on this machine; nothing is sent anywhere except that one call.\n'
+        + '  Nothing has been read or sealed, so this command is safe to run again once the key is set.');
+    }
+    return;
+  }
+  // An OpenAI-compatible backend on this machine needs no key; a hosted one does. `baseUrlFor` also
+  // fails here rather than after intake when neither --base-url nor --backend was given.
+  const url = baseUrlFor(role);
+  if (!isLocalBackend(url) && !flag('--api-key-env') && !process.env.OPENAI_API_KEY) {
+    die(`no API key for ${url}.\n`
+      + '  export OPENAI_API_KEY=...           (or pass --api-key-env <VAR>)\n'
+      + '  Nothing has been read or sealed, so this command is safe to run again once the key is set.');
+  }
+};
+
+
+// ── BOUNDS THE USER TYPED ─────────────────────────────────────────────────────────────────────
+//
+// `Number(flag('--cap')) || 3.0` reads as a default and is not one. Zero is falsy, so `--cap 0` — the
+// obvious way to ask for a dry run — silently became a live $3 budget. So did `--cap abc`, via NaN.
+// A bound the user asked for and did not get is the one kind of parsing bug that costs money.
+export const numericFlag = (name: string, fallback: number): number => {
+  const raw = flag(name);
+  if (raw === undefined) return fallback;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n < 0) die(`--${name.replace(/^--/, '')} must be a non-negative number; got "${raw}".`);
+  return n;
+};
+// THE DRAFT'S TOKEN CEILING IS THIS FLAG, read when a draft is written (core/loop/run-once.ts, `draftMaxTokens`): the
+// writer lives in core and reads no flag of its own.
+setDraftMaxTokens(() => numericFlag('--max-tokens', DEFAULT_DRAFT_MAX_TOKENS));
+
+/**
+ * RESOURCES THIS INVOCATION HAS. Names only; what a resource IS stays the caller's business.
+ *
+ * `--with support-ticket-history=./tickets.csv`, repeatable. The name is what a requirement's
+ * prerequisite is matched against, so the author's vocabulary and the runtime's agree by string
+ * rather than by a taxonomy neither has needed yet.
+ */
+/** The name a file is bound under when none is given: its own, without the folder or the extension. Null when it is no file. */
+const fileStem = (spec: string): string | null => (existsSync(spec) && statSync(spec).isFile() ? basename(spec).replace(/\.[^.]+$/, '') || basename(spec) : null);
+
+export const boundResources = (): ReadonlySet<string> => {
+  const names = new Set<string>();
+  for (let i = 0; i < argv.length; i++) {
+    if (argv[i] !== '--with' && !argv[i].startsWith('--with=')) continue;
+    const spec = argv[i].startsWith('--with=') ? argv[i].slice('--with='.length) : argv[i + 1];
+    if (!spec) die('--with needs <name>=<path>, for example --with support-ticket-history=./tickets.csv');
+    const name = spec.includes('=') ? spec.slice(0, spec.indexOf('=')) : fileStem(spec) ?? spec;
+    if (!name) die(`--with "${spec}" has no name before the "=".`);
+    names.add(name);
+  }
+  return names;
+};
+
+/**
+ * The CONTENTS of what `--with` binds, handed to the model with the task.
+ *
+ * Binding only ever satisfied the check: `--with figures=./q3.csv` let a REQUIRED rule that needs real
+ * figures pass `checkSatisfiable`, and then the file was never read — the model was still asked to
+ * quantify with nothing to quantify from. A precondition that is met on paper and absent from the
+ * request is the fabrication path with an extra step.
+ */
+export const boundMaterial = (): { name: string; path: string; text: string }[] => {
+  const out: { name: string; path: string; text: string }[] = [];
+  for (let i = 0; i < argv.length; i++) {
+    if (argv[i] !== '--with' && !argv[i].startsWith('--with=')) continue;
+    const spec = argv[i].startsWith('--with=') ? argv[i].slice('--with='.length) : (argv[i + 1] ?? '');
+    // A FILE IS BOUND BY GIVING IT: `--with change.diff` binds it under its own name (`change`). The name matters only
+    // where a rule asks for material by name, and then it is given: `--with figures=q3.csv`. A bare word that is no
+    // file declares a resource held elsewhere and reads nothing; one that looks like a path and is not there is said.
+    if (!spec.includes('=')) {
+      const stem = fileStem(spec);
+      if (stem) { out.push({ name: materialName(spec), path: spec, text: readFileSync(spec, 'utf8') }); continue; }
+      if (/[\\/]|\.[A-Za-z0-9]{1,8}$/.test(spec)) die(`--with ${spec}: there is no file at ${spec}.`);
+      continue;
+    }
+    const name = spec.slice(0, spec.indexOf('='));
+    const path = spec.slice(spec.indexOf('=') + 1);
+    if (!existsSync(path)) die(`--with ${name}=${path}: there is no file at ${path}.`);
+    out.push({ name, path, text: readFileSync(path, 'utf8') });
+  }
+  return out;
+};
+
+// ── hosts ────────────────────────────────────────────────────────────────────────────────────
+/**
+ * The project a command belongs to. An explicit ATELIER_PROJECT_DIR wins. Otherwise the nearest
+ * directory at or above where the command started that already has a run: `atelier fix` typed in
+ * `docs/` of a project whose run lives at its root used to find "nothing to fix yet", while the use it
+ * was about had been recorded one level up.
+ */
+export const projectDir = (): string => {
+  if (process.env.ATELIER_PROJECT_DIR) return process.env.ATELIER_PROJECT_DIR;
+  const start = process.env.CLAUDE_PROJECT_DIR ?? process.cwd();
+  return nearestProject(start, (d) => existsSync(join(DATA, 'sessions', `${keyFor(d)}.json`)) || existsSync(join(DATA, 'runs', keyFor(d)))) ?? start;
+};
+
+/**
+ * Walk up from `start`; the first directory `has` accepts, or null. Bounded, so a run somewhere above
+ * cannot capture unrelated work: the walk never leaves a git repository it started in, and never
+ * climbs to the home directory or above it.
+ */
+export const nearestProject = (start: string, has: (dir: string) => boolean): string | null => {
+  const home = resolve(homedir());
+  for (let d = resolve(start); ; d = dirname(d)) {
+    if (d !== resolve(start) && (d === home || home.startsWith(`${d}/`))) return null;
+    if (has(d)) return d;
+    if (existsSync(join(d, '.git')) || dirname(d) === d) return null;
+  }
+};
+
+/** The run key for a directory — the one `projectKey` computes for the current project. */
+export const keyFor = (dir: string): string => {
+  const leaf = (dir.split('/').filter(Boolean).pop() ?? 'root').replace(/[^A-Za-z0-9._-]/g, '-');
+  return `${leaf}-${sha(dir)}`;
+};
+
+export function pickHost(): HostAdapter {
+  const want = (flag('--host') ?? process.env.ATELIER_HOST ?? 'claude-code').toLowerCase();
+  if (want === 'codex') return new CodexAdapter();
+  if (want === 'claude-code') return new ClaudeCodeAdapter();
+  return die(`unknown host "${want}". Available: claude-code, codex.`);
+}
+
+// ── the front door's persisted proposal ───────────────────────────────────────────────────────
+//
+// What the person is shown is what a later `--yes` ratifies — BYTE FOR BYTE. Before this existed the
+// preview and the acceptance were two independent model calls, and the person approved a roll they
+// had seen while the system compiled a roll they had not.
+export interface ProposedRule {
+  readonly statement: string;
+  readonly kind: 'GENERATIVE' | 'BOUNDARY';
+  readonly appliesWhen: string;
+  /** the stretch of the person's own sentence this rule claims to restate */
+  readonly sourceSpan: string;
+  /** the model's self-report. Evidence for display; NEVER an authority input. */
+  readonly faithful: boolean;
+  /** the deterministic verdict of core/ratification/grounding.ts — the authority input */
+  readonly grounded: boolean;
+  readonly groundingWhy: string;
+}
+export interface ProposalSet {
+  readonly proposalSetHash: string;
+  /** hash of the exact prompt these rules were proposed from; a different prompt invalidates the set */
+  readonly promptHash: string;
+  readonly workType: string;
+  readonly rules: readonly ProposedRule[];
+  /** the form of the work as the proposer read it from what was said (core/observers/work-form.ts); absent when it said none */
+  readonly form?: 'REPLY' | 'DOCUMENT';
+  /** which check each stated rule carries, by its statement (core/method/step-check.ts), read with the proposal so `--yes` asks nothing more */
+  readonly checks?: Readonly<Record<string, { readonly how: 'measure' | 'written'; readonly measurement: Measurement; readonly means: string;
+    /** a written check's standing on the answers the owner kept (`--draft-examples`, then `atelier rate`); absent with none */
+    readonly qualification?: CheckQualification }>>;
+  /** what was said, kept so the skill can be built again with no need to type it again (`atelier skill --yes`) */
+  readonly said?: string;
+  /** the answers the owner kept that the checks were read and qualified on, as one key */
+  readonly casesKey?: string;
+}
+
+// ── session (one active run per PROJECT; a run is a study, not a session) ─────────────────────
+export interface Session {
+  run: Run; skillName: string | null; evidence: ExpertEvidence | null;
+  /**
+   * How this folder came to carry `skillName` before its build finished (cli/commands/method.ts). `owned`: a skill
+   * of that name was already this folder's. Not owned: the name was free when the build began, and is this
+   * folder's only if the skill now stored under it is the one this build was storing. Absent: set by a finished build.
+   */
+  claim?: { owned: boolean };
+  /**
+   * The project this run belongs to, recorded so an orphan can be identified.
+   *
+   * The file name carries a hash of the directory PATH, so renaming or moving a project mid-run
+   * leaves the old session unreachable by name and a new empty one in its place. That is recoverable
+   * only if the file says where it came from, and unrecoverable if it does not. Written on save,
+   * optional on read, because sessions predating this field are still valid.
+   */
+  projectDir?: string;
+  proposals: Requirement[]; decided: Requirement[];
+  /** the front door's proposal: awaiting the person's yes, then kept with the run it built, so a rebuild reuses the rules they accepted */
+  proposalSet?: ProposalSet | null;
+  /** frozen at intake. Discovery must never read these; `reservedIds` is what the filter consults. */
+  reservation?: Reservation | null;
+  /**
+   * APPEND-ONLY, and separate from `decided` on purpose.
+   *
+   * `decided` is the OUTCOME — what is in the standard now — and it is rewritten in place every time
+   * a decision is submitted. That answers "what did the author keep" and cannot answer "what were
+   * they shown, and what did they do about it", which is the only question that tells an approval
+   * apart from an edit or a rejection apart from a proposal nobody surfaced. The module that records
+   * that shipped with the first version and was called by nothing; this field is where it lands.
+   */
+  ledger?: RatificationLedger | null;
+  /** how strictly output is held, read at the build or set by the owner (cli/latitude.ts); minted into the standard at the close */
+  latitude?: Latitude | null;
+  /** what each written check earned on the examples, by requirement id; written beside the standard at the close */
+  qualifications?: Readonly<Record<string, CheckQualification>>;
+  /**
+   * What discovery knew about each proposal that the requirement does not carry: which vantages
+   * reached it, how else it was phrased, how often it held in work the proposer never read, and what
+   * following it needs from the person. The review screen orders and suggests from this. It is kept
+   * beside the proposals, not inside them, because none of it belongs in the standard's identity.
+   */
+  proposalMeta?: Readonly<Record<string, ProposalMeta>> | null;
+  /** what the person said the skill is for, when they said it (`atelier new`), and the mode read off it */
+  intent?: { readonly text: string; readonly mode: SkillMode } | null;
+  /** the folder `atelier new` read the corpus from, so a later call can tell the same run from another */
+  source?: string | null;
+  /** the method note `atelier new <folder> --method <note>` built from, when it sits inside that folder: a step list, not a piece (cli/corpus.ts) */
+  note?: string | null;
+  /** the spending cap the person gave `atelier new`, kept so continuing the run keeps their limit */
+  cap?: string | null;
+  /** when the corpus is someone else's public work: whose. Decided at intake, kept for the run. */
+  publicSource?: string | null;
+  /** pieces by several authors (core/composite/authors.ts): who wrote which, read at intake. Absent for one author, which is every run before this. */
+  authors?: AuthorMap | null;
+  /** what the person said they like about each voice's pieces (`--admire`, never asked for), by voice */
+  admire?: Readonly<Record<string, string>> | null;
+  /** how the admiration lines were read into trait classes, keyed by a hash of the lines: read once, kept for a continuation */
+  admireRead?: { readonly key: string; readonly classes: Readonly<Record<string, readonly TraitClass[]>>; readonly via: 'MODEL' | 'KEYWORDS' } | null;
+  /** an expert's answers to clashes between voices (`--conflict`, a hidden override), by number (null: left for later) */
+  conflictAnswers?: Readonly<Record<number, 'A' | 'B' | 'both' | null>> | null;
+  /** the composite built (core/composite/selection.ts): which proposals from which voice, how every clash was settled, and the inference behind it */
+  composite?: CompositeRecord | null;
+  /** how the pieces were grouped by how they are written, when no author was declared (core/composite/voices.ts) */
+  voices?: VoiceGrouping | null;
+}
+
+export interface ProposalMeta {
+  readonly framings: readonly string[];
+  readonly alsoPhrasedAs: readonly string[];
+  /** held-out pieces where the rule could apply, and where it was followed; null when nothing was held out */
+  readonly heldOut: { readonly applicable: number; readonly present: number } | null;
+  readonly needs: string | null;
+  /** for a measured rule: of the pieces it was checked on, how many could be measured, how many meet it, and whether those pieces were independent of the target */
+  readonly inSample?: { readonly applicable: number; readonly present: number; readonly independent?: boolean; readonly weak?: boolean;
+    /** a rule on sentence length where the writer's rhythm is not a signature of theirs (core/observers/rhythm-signature.ts): why, in words */
+    readonly contextual?: string;
+    /** the limit was moved to where the author's own pieces are; the counts are the held-out pieces against the limit before it moved */
+    readonly fitted?: boolean } | null;
+  /**
+   * for a measured rule: of the author's own pieces discovery could use (read and held out, never the reserve), how
+   * many there are and which break the rule. What `suggestAll` holds a REQUIRED suggestion to.
+   */
+  readonly corpus?: { readonly pieces: number; readonly breaking: readonly number[] } | null;
+  /** the author whose pieces alone this was read or counted from, when the pieces are by several (core/composite) */
+  readonly source?: string;
+  /** for a counted rule of a composite: how many plain model drafts were measured, and how many fall outside its band (core/composite/infer.ts) */
+  readonly vsDrafts?: { readonly drafts: number; readonly breaking: number } | null;
+}
+
+/**
+ * ONE IN-PROGRESS RUN PER PROJECT, NOT PER MACHINE.
+ *
+ * The session used to live at a single `~/.atelier/session.json`. Skills were already namespaced
+ * under `skills/<name>/`, so finished work never collided — but the run in flight did. Starting a
+ * corpus in one project silently adopted the half-finished run from another, and the only symptom
+ * was an illegal-transition refusal naming a state the person had never put anything into.
+ *
+ * The project is identified by `projectDir()`, which already existed for host selection, so this
+ * introduces no new concept and no new flag: `ATELIER_PROJECT_DIR` overrides it where a caller needs
+ * to. The directory PATH is hashed rather than used as a name so a session cannot be addressed by
+ * guessing, and the readable basename is kept alongside it so `ls sessions/` is legible to a person.
+ */
+const projectKey = (): string => keyFor(projectDir());
+
+export const sessionPath = (): string => join(DATA, 'sessions', `${projectKey()}.json`);
+
+// ── THE RUN'S WORKING FILES, KEYED LIKE THE SESSION ──────────────────────────────────────────
+//
+// Everything a run produces BEFORE it lands under `skills/<name>/` — the sealed corpus path list,
+// the import plan, the pending StandardVersion, the ratification ledger, the build proposal, the
+// undo record, the held-out pairs — used to sit at the root of the data directory. The session was
+// made per-project and these were not, so two projects sharing one store overwrote each other's
+// pending standard, and `build` in one project compiled the standard the OTHER project had just
+// ratified. Nothing refused, because the file was exactly where `build` expected it.
+//
+// Keyed by the same project hash as the session, so a run and its working files live and die
+// together. `profiles/` stays global on purpose: a verified backend is a fact about the machine.
+export const runDir = (): string => join(DATA, 'runs', projectKey());
+export const runFile = (name: string): string => join(runDir(), name);
+
+/** The files that lived at the store root before working files were per-project. */
+const LEGACY_RUN_FILES: readonly string[] = [
+  'corpus-paths.json', 'import-plan.json', 'skill-package.json', 'pending-standard.json',
+  'ratification-ledger.json', 'proposal.md', 'already-handled.json', 'undo.json',
+  'reference-pairs.json', 'method-findings.json',
+];
+
+/**
+ * Adopt root-level working files into this project's run — ONLY when this is the sole run under the
+ * store. A root file then has exactly one possible owner. With two runs in flight it could belong to
+ * either, and guessing would re-create the collision this layout exists to end; the files stay
+ * where they are and the project that owns them can re-close its standard.
+ */
+const adoptLegacyRunFiles = (): void => {
+  if (listSessions().some((x) => !x.here)) return;
+  for (const f of LEGACY_RUN_FILES) {
+    const from = join(DATA, f), to = runFile(f);
+    if (!existsSync(from) || existsSync(to)) continue;
+    mkdirSync(runDir(), { recursive: true });
+    renameSync(from, to);
+  }
+};
+
+/**
+ * Put the current run out of the way, so the next command starts clean.
+ *
+ * `abort` used to mark the run terminal and leave the file in place. Every later transition then
+ * refused with "a terminal run is superseded by a new run, never resumed" — and nothing ever
+ * started the new run, so the project was stuck until someone deleted a file no document named.
+ * The run is archived rather than deleted: what was decided is still readable, it just no longer
+ * stands in the way.
+ */
+export const archiveSession = (): string | null => {
+  const p = sessionPath();
+  if (!existsSync(p)) return null;
+  const dir = join(DATA, 'sessions', 'aborted');
+  mkdirSync(dir, { recursive: true });
+  const to = join(dir, `${projectKey()}-${new Date().toISOString().replace(/[:.]/g, '-')}.json`);
+  renameSync(p, to);
+  return to;
+};
+
+/** Where the single global session lived before runs were per-project. */
+const LEGACY_SESSION = join(DATA, 'session.json');
+
+const blankSession = (): Session =>
+  ({ run: newRun(sha(`${Date.now()}`)), skillName: null, evidence: null, proposals: [], decided: [], reservation: null });
+
+export const loadSession = (): Session => {
+  const p = sessionPath();
+  if (existsSync(p)) {
+    adoptLegacyRunFiles();
+    return readJson<Session>(p, { what: "this project's session", requireKeys: ['run'] });
+  }
+  // One-time adoption of a pre-existing global run, so an upgrade does not strand work in flight.
+  // It is MOVED, not copied: leaving it readable would let every other project adopt it too, which
+  // is the exact collision this change exists to end.
+  if (existsSync(LEGACY_SESSION)) {
+    const legacy = readJson<Session>(LEGACY_SESSION, { what: 'the previous global session', requireKeys: ['run'] });
+    mkdirSync(dirname(p), { recursive: true });
+    writeAtomic(p, JSON.stringify(legacy, null, 1));
+    renameSync(LEGACY_SESSION, `${LEGACY_SESSION}.migrated`);
+    console.error(`atelier: adopted the previous global run into this project (${p}).`);
+    adoptLegacyRunFiles();
+    return legacy;
+  }
+  // A project folder that moved, or was copied, with the skill it built: its run is found and carried on, before any
+  // command concludes there is none (and before `atelier new` pays to discover the same pieces again).
+  if (!adopting) {
+    adopting = true;
+    try { if (adoptMovedRun() && existsSync(p)) return readJson<Session>(p, { what: "this project's session", requireKeys: ['run'] }); } finally { adopting = false; }
+  }
+  return blankSession();
+};
+/** Set while a run is being taken over, so that saving the session it takes does not look for another. */
+let adopting = false;
+
+export const saveSession = (s: Session): void => {
+  const p = sessionPath();
+  mkdirSync(dirname(p), { recursive: true });
+  writeAtomic(p, JSON.stringify({ ...s, projectDir: projectDir() }, null, 1));
+};
+
+/** A run's working files that describe the run and not one place on disk: the only ones taken into another project. */
+const PORTABLE_RUN_FILES: readonly string[] = [
+  'pending-standard.json', 'ratification-ledger.json', 'import-plan.json', 'proposal.md', 'signals.json', 'fidelity.json',
+  'retrieval.json', 'typicality.json', 'contrast-drafts.json', 'method-findings.json', 'reference-pairs.json', 'corpus-paths.json',
+];
+
+/**
+ * A PROJECT THAT MOVED KEEPS ITS SKILL. A run's session and working files are keyed by the project's path, so a
+ * project folder renamed, moved or copied (with its store) is, to that key, a project that has never run: `build`
+ * answered "there is no standard to build from yet" beside a store that held the skill and its standard, and
+ * `atelier new` started a second, paid discovery of the same pieces.
+ *
+ * So when this project has no run of its own, the run that built its skill is looked for among the store's
+ * sessions. `skillName` names the skill (`build --name`); without one, a run is this project's when a skill of its
+ * name is installed here, or its folder of pieces came along.
+ *
+ *   the old folder is gone      the project MOVED: its session and working files are moved under this project's key,
+ *                               so no second session is left behind to be mistaken for another project's
+ *   the old folder still exists the project was COPIED: the session is copied, and of the working files only those
+ *                               that describe the run (PORTABLE_RUN_FILES). The undo record and the last invocation
+ *                               belong to the other folder and stay there
+ *
+ * A file already in this project's run is never replaced. Paths that pointed inside the old folder (the folder of
+ * pieces, the sealed list of pieces) are rewritten to this one. Several live projects that built a skill of the name
+ * are not guessed between: they are named, and nothing is taken.
+ * Returns where the run was found, or null when this project has a run already or no run is its own.
+ */
+export function adoptMovedRun(skillName: string | null = null): { readonly from: string | null } | null {
+  if (existsSync(sessionPath())) return null;
+  const dir = join(DATA, 'sessions');
+  if (!existsSync(dir)) return null;
+  const here = resolve(projectDir());
+  const inside = (root: string, path: string): string | null => { const rel = relative(root, path); return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel)) ? rel : null; };
+  const remap = (was: string, path: string): string => { const rel = inside(was, path); return rel === null ? path : join(here, rel); };
+  const all = readdirSync(dir).filter((f) => f.endsWith('.json')).flatMap((f) => {
+    try {
+      const s = readJson<Session>(join(dir, f), { what: 'a session', requireKeys: ['run'] });
+      const was = s.projectDir ? resolve(s.projectDir) : null;
+      return s.skillName && was && was !== here ? [{ file: join(dir, f), key: f.slice(0, -'.json'.length), s, was, gone: !existsSync(was), at: statSync(join(dir, f)).mtimeMs }] : [];
+    } catch { return []; }
+  });
+  // This project's, by name; or, with no name given, by what came along with the folder.
+  const mine = all.filter((x) => (skillName !== null ? x.s.skillName === skillName
+    : existsSync(join(here, '.claude', 'skills', x.s.skillName ?? '', 'SKILL.md')) || (x.gone && Boolean(x.s.source) && inside(x.was, x.s.source ?? '') !== null && existsSync(remap(x.was, x.s.source ?? '')))));
+  // A run whose folder is gone can only be this project, moved; the newest of those, when a store holds leftovers.
+  const moved = mine.filter((x) => x.gone).sort((a, b) => b.at - a.at)[0];
+  const live = mine.filter((x) => !x.gone);
+  if (!moved && live.length > 1) {
+    if (skillName === null) return null;
+    die(`${live.length} projects in this store built a skill called "${skillName}", and this folder is none of them:\n`
+      + live.map((x) => `  ${x.was}`).join('\n') + '\n  Run the build from one of those folders.');
+  }
+  const found = moved ?? live[0];
+  if (!found) return null;
+  const { s, was, key } = found;
+  const source = s.source ? remap(was, s.source) : s.source;
+  // The session first: a copy of the working files that stopped halfway must not leave files with no run to own them.
+  saveSession({ ...s, ...(source === undefined ? {} : { source: source && existsSync(source) ? source : s.source }) });
+  const oldRun = join(DATA, 'runs', key);
+  if (existsSync(oldRun)) {
+    mkdirSync(runDir(), { recursive: true });
+    for (const f of readdirSync(oldRun)) {
+      const from = join(oldRun, f); const to = runFile(f);
+      // The undo record names files in the other folder by absolute path, and is never taken; a file already here stays.
+      if (f === 'undo.json' || existsSync(to) || !statSync(from).isFile() || (!found.gone && !PORTABLE_RUN_FILES.includes(f))) continue;
+      copyFileSync(from, to);
+    }
+    // The sealed list of pieces names each by its path: those under the old folder are under this one now.
+    const paths = runFile('corpus-paths.json');
+    if (existsSync(paths)) writeAtomic(paths, readFileSync(paths, 'utf8').split(JSON.stringify(was).slice(1, -1)).join(JSON.stringify(here).slice(1, -1)));
+  }
+  if (found.gone) { rmSync(found.file, { force: true }); rmSync(oldRun, { recursive: true, force: true }); }
+  console.log(`(this folder had no run of its own; ${found.gone ? 'it carries on the run' : 'it took a copy of the run'} that built "${s.skillName}", which was at ${was}.`
+    + (source && !existsSync(source) ? ` Its folder of pieces (${source}) is not here: a build that chooses pieces again will need it.` : '') + ')');
+  return { from: was };
+}
+
+/** Runs in flight under this store, newest first, so an orphaned one can be found by eye. */
+export const listSessions = (): { file: string; projectDir: string | null; here: boolean }[] => {
+  const dir = join(DATA, 'sessions');
+  if (!existsSync(dir)) return [];
+  const mine = sessionPath();
+  return readdirSync(dir).filter((f) => f.endsWith('.json')).map((f) => {
+    const full = join(dir, f);
+    // A session that cannot be read is still a session worth listing; the point here is orientation,
+    // and refusing the whole listing because one file is damaged would hide the other four.
+    let recorded: string | null;
+    try { recorded = readJson<Session>(full, { what: 'a session' }).projectDir ?? null; } catch { recorded = null; }
+    return { file: full, projectDir: recorded, here: full === mine };
+  });
+};
+
+/**
+ * Where the evidence came from, recorded once and never rewritten.
+ *
+ * A user learning from someone ELSE's public work gets `PUBLIC_BEHAVIOUR_INFERRED`, which is capped
+ * at USER_ADOPTED for the life of the rule. They may decide to use a behaviour; they cannot ratify it
+ * as that author's standard, and the ceiling makes the second impossible rather than discouraged.
+ *
+ * Declared with a flag rather than guessed. Nothing about a folder of markdown says whose it is, and
+ * a system that inferred authorship would be wrong in the direction that matters.
+ */
+export const sourceProvenance = (): 'MACHINE_DISCOVERED' | 'PUBLIC_BEHAVIOUR_INFERRED' =>
+  (argv.includes('--public-source') || Boolean(flag('--source-author')) || Boolean(loadSession().publicSource))
+    ? 'PUBLIC_BEHAVIOUR_INFERRED' : 'MACHINE_DISCOVERED';
+
+
+export const step = (s: Session, to: Run['state'], ctx: Parameters<typeof transition>[2] = {}): Session => {
+  // A REFUSAL IS STILL A REFUSAL. Re-sealing a corpus and closing ratification twice are distinct
+  // acts, not repeats, and blanket idempotency here silently permitted both — the guards exist
+  // because the second one means something different from the first.
+  //
+  // What was wrong was the MESSAGE, not the refusal: "ILLEGAL_TRANSITION — CORPUS_SEALED ->
+  // CORPUS_SEALED" is the state machine's vocabulary leaking into the primary entry point, and a
+  // person reading it has no way to know a session file they were never told about is in the way.
+  const t = transition(s.run, to, ctx);
+  if (!t.ok) {
+    die(`${t.detail}\n\n  This run is at "${s.run.state}" and cannot move to "${to}".`
+      + `\n  Start over:      atelier abort   then run your command again`
+      + `\n  See where it is: atelier status`);
+  }
+  return { ...s, run: (t as { run: Run }).run };
+};
+
+// ── A SKILL NAME FROM THE COMMAND LINE ───────────────────────────────────────────────────────
+//
+// `build` normalises `--name` through `skillNameFrom`, so every skill in the store has a name that
+// is safe to join onto a path. The read-side commands took `--skill` raw, and the store joined it
+// under `skills/` as given — so `--skill ../../elsewhere` read from, and wrote to, a directory that
+// was never part of the store. The sanitiser existed; these commands just did not call it.
+//
+// REFUSED rather than normalised. Normalising `../../x` to `x` on a lookup would silently answer a
+// question about a different skill than the one named.
+export const assertSkillName = (raw: string): string => {
+  let normal: string;
+  try { normal = skillNameFrom(raw); } catch { normal = ''; }
+  if (normal !== raw) {
+    die(`"${raw}" is not a skill name. Names are lower-case letters, digits and hyphens, as \`build --name\` makes them`
+      + (normal ? ` — did you mean "${normal}"?` : '.'));
+  }
+  return raw;
+};
+
+/** `--skill <name>`, validated. `usage` is what to say when it is missing. */
+export const skillArg = (usage = '--skill required'): string => assertSkillName(flag('--skill') ?? die(usage));
+
+// ── ONE ALLOCATOR FOR THE IDS A PERSON MINTS ─────────────────────────────────────────────────
+//
+// `add` numbered its rules from the length of `decided`; a batch `ADD` numbered from a counter that
+// started at 1 on every call; the front door numbered from the position in the model's list. All
+// three said `x1` for the first rule, and `ratify-close` keys the standard by id — so the later `x1`
+// silently replaced the earlier one. The CLI printed "2 kept"; the standard held one. A rule the
+// person typed vanished with no message, in a product whose one promise is that a decision is never
+// lost.
+//
+// The next id is the successor of the highest `x<n>` anywhere in the run — proposals or decisions —
+// so it cannot collide with anything already recorded, whichever path recorded it.
+export const authoredIdAllocator = (s: Session): (() => string) => {
+  let n = 0;
+  for (const r of [...s.proposals, ...s.decided]) {
+    const m = /^x(\d+)$/.exec(r.requirementId);
+    if (m) n = Math.max(n, Number(m[1]));
+  }
+  return () => `x${++n}`;
+};
+
+/**
+ * WHAT A REBUILD CARRIES FROM THE VERSION IT IS DERIVED FROM: the exemplar and the contrast pairs that
+ * version's package served. A candidate built to be compared with that version must differ from it in
+ * what the change is about and nothing else; reading the store's current exemplar or pairs instead
+ * would mix in whatever changed since, after a later build or a rollback. The pairs are then kept only
+ * where they still teach the standard being rendered.
+ */
+export function carriedFrom(L: store.StoreLayout, fromVersion: string | null, v: StandardVersion): {
+  exemplar: { text: string; request?: string } | null; contrast: ContrastPair[]; voice: Voice | null; method: { text: string } | null;
+} {
+  const sv = fromVersion ? store.getSkillVersion(L, fromVersion) : null;
+  const pkg = sv ? store.getPackage(L, sv.materializedHash) : null;
+  if (!pkg) return { exemplar: store.getExemplar(L), contrast: [], voice: store.getVoice(L), method: store.getMethod(L) };
+  // The author's passages travel with the package that served them, like the contrast pairs.
+  const voiceRaw = pkg.assurance?.['voice.json'];
+  const voice = ((): Voice | null => { try { return voiceRaw ? JSON.parse(voiceRaw) as Voice : null; } catch { return null; } })();
+  const ex = pkg.files['examples/exemplar.md'];
+  // Packages stored before pairs travelled with them served examples/contrast.md with no data beside
+  // it: the build's own record of the pairs it chose is the closest thing to what they served.
+  const raw = pkg.assurance?.['contrast-pairs.json']
+    ?? ('examples/contrast.md' in pkg.files ? JSON.stringify(store.getContrast(L).pairs) : undefined);
+  const pairs = ((): ContrastPair[] => { try { return raw ? JSON.parse(raw) as ContrastPair[] : []; } catch { return []; } })();
+  // The method travels with the package that served it, like the voice.
+  const methodRaw = pkg.assurance?.['method.md'];
+  // An exemplar served beside its request is read back as the pair: the renderer wraps it again the same way.
+  // (with or without the lines later builds put around it: "From another conversation…" before, "What I had…" between)
+  const pair = ex === undefined ? null : /^(?:From another conversation, with someone else\.\n\n)?The request it answered: ([^\n]*)\n\n(?:What I had: [^\n]*\n\n)?What I wrote:\n\n([\s\S]*)$/.exec(ex);
+  return { exemplar: ex === undefined ? null : pair ? { text: pair[2], request: pair[1] } : { text: ex }, contrast: store.getContrast(L).off ? [] : contrastFor(pairs, v), voice, method: methodRaw === undefined ? null : { text: methodRaw } };
+}
+
+/**
+ * THE RECEIPT OF A REBUILD (core/state/receipt.ts). A rebuild renders the package again from what the version it derives
+ * from carried (`carriedFrom`) and runs none of a build's reading stages, so what it was built with is what that version
+ * was built with: its receipt is carried under the new version's hashes, and says which command rebuilt it from which
+ * version. `status` read "no receipt (built before receipts were kept)" on a skill a person had just rebuilt. A version
+ * with no receipt leaves the stages empty, and `status` says so; the same version minted again gets no receipt it did not have.
+ */
+export function carryReceipt(L: store.StoreLayout, fromVersion: string | null,
+  skill: { readonly skillVersionHash: string; readonly standardVersionHash: string; readonly architectureHash: string; readonly materializedHash: string }, by: string): BuildReceipt | null {
+  const prev = fromVersion ? store.getReceipt(L, fromVersion) : null;
+  // The same version minted again (an amend that restores the wording) is the same build: its receipt stays its own, and
+  // one it never had is not written now, or it would read as rebuilt from itself.
+  if (fromVersion === skill.skillVersionHash) return prev;
+  const receipt = receiptOf({ skillVersionHash: skill.skillVersionHash, standardVersionHash: skill.standardVersionHash, architectureHash: skill.architectureHash,
+    packageHash: skill.materializedHash, corpusHash: prev?.corpusHash ?? null, methodHash: prev?.methodHash ?? null, models: prev?.models ?? {},
+    movesHash: prev?.movesHash ?? null, rebuilt: { from: fromVersion, by }, stages: prev?.stages ?? [], builtAt: new Date().toISOString() });
+  store.putReceipt(L, receipt);
+  return receipt;
+}

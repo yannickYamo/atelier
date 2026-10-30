@@ -1,0 +1,4 @@
+INVOICE 2
+Supplier: Crane & Sons Electronics
+Item: a desktop workstation
+Amount: 2,742 dollars

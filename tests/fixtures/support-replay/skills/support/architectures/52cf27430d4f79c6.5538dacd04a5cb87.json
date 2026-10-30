@@ -1,0 +1,256 @@
+{
+ "architectureHash": "5538dacd04a5cb87",
+ "standardVersionHash": "52cf27430d4f79c6",
+ "components": [
+  {
+   "id": "show:m1",
+   "carries": [
+    "m1"
+   ],
+   "carrier": "EXAMPLE",
+   "sensor": "NONE",
+   "gateRole": "OBSERVE",
+   "rationale": "the author marked this PREFERRED — characteristic and not obligatory, so it is shown as an example rather than instructed. An output that does otherwise is not wrong."
+  },
+  {
+   "id": "do:m2",
+   "carries": [
+    "m2"
+   ],
+   "carrier": "PROSE",
+   "sensor": "NONE",
+   "gateRole": "ENFORCE",
+   "rationale": "a positive rule evidenced by work the author supplied — prose is the least arrangement that carries it"
+  },
+  {
+   "id": "do:m3",
+   "carries": [
+    "m3"
+   ],
+   "carrier": "PROSE",
+   "sensor": "NONE",
+   "gateRole": "ENFORCE",
+   "rationale": "a positive rule evidenced by work the author supplied — prose is the least arrangement that carries it"
+  },
+  {
+   "id": "avoid:g1",
+   "carries": [
+    "g1"
+   ],
+   "carrier": "PROSE",
+   "sensor": "NONE",
+   "gateRole": "ENFORCE",
+   "rationale": "a prohibition the author confirmed — it may shape the draft"
+  },
+  {
+   "id": "avoid:c1",
+   "carries": [
+    "c1"
+   ],
+   "carrier": "PROSE",
+   "sensor": "NONE",
+   "gateRole": "ENFORCE",
+   "rationale": "a prohibition the author confirmed — it may shape the draft"
+  },
+  {
+   "id": "avoid:c2",
+   "carries": [
+    "c2"
+   ],
+   "carrier": "PROSE",
+   "sensor": "NONE",
+   "gateRole": "ENFORCE",
+   "rationale": "a prohibition the author confirmed — it may shape the draft"
+  },
+  {
+   "id": "show:c3",
+   "carries": [
+    "c3"
+   ],
+   "carrier": "EXAMPLE",
+   "sensor": "NONE",
+   "gateRole": "OBSERVE",
+   "rationale": "the author marked this PREFERRED — characteristic and not obligatory, so it is shown as an example rather than instructed. An output that does otherwise is not wrong."
+  },
+  {
+   "id": "do:c4",
+   "carries": [
+    "c4"
+   ],
+   "carrier": "PROSE",
+   "sensor": "NONE",
+   "gateRole": "ENFORCE",
+   "rationale": "a positive rule evidenced by work the author supplied — prose is the least arrangement that carries it"
+  },
+  {
+   "id": "avoid:c5",
+   "carries": [
+    "c5"
+   ],
+   "carrier": "PROSE",
+   "sensor": "NONE",
+   "gateRole": "ENFORCE",
+   "rationale": "a prohibition the author confirmed — it may shape the draft"
+  },
+  {
+   "id": "show:c6",
+   "carries": [
+    "c6"
+   ],
+   "carrier": "EXAMPLE",
+   "sensor": "NONE",
+   "gateRole": "OBSERVE",
+   "rationale": "the author marked this PREFERRED — characteristic and not obligatory, so it is shown as an example rather than instructed. An output that does otherwise is not wrong."
+  },
+  {
+   "id": "avoid:c7",
+   "carries": [
+    "c7"
+   ],
+   "carrier": "PROSE",
+   "sensor": "NONE",
+   "gateRole": "ENFORCE",
+   "rationale": "a prohibition the author confirmed — it may shape the draft"
+  },
+  {
+   "id": "avoid:c8",
+   "carries": [
+    "c8"
+   ],
+   "carrier": "PROSE",
+   "sensor": "NONE",
+   "gateRole": "ENFORCE",
+   "rationale": "a prohibition the author confirmed — it may shape the draft"
+  },
+  {
+   "id": "avoid:c9",
+   "carries": [
+    "c9"
+   ],
+   "carrier": "PROSE",
+   "sensor": "NONE",
+   "gateRole": "ENFORCE",
+   "rationale": "a prohibition the author confirmed — it may shape the draft"
+  },
+  {
+   "id": "show:c10",
+   "carries": [
+    "c10"
+   ],
+   "carrier": "EXAMPLE",
+   "sensor": "NONE",
+   "gateRole": "OBSERVE",
+   "rationale": "the author marked this PREFERRED — characteristic and not obligatory, so it is shown as an example rather than instructed. An output that does otherwise is not wrong."
+  },
+  {
+   "id": "show:c11",
+   "carries": [
+    "c11"
+   ],
+   "carrier": "EXAMPLE",
+   "sensor": "NONE",
+   "gateRole": "OBSERVE",
+   "rationale": "the author marked this PREFERRED — characteristic and not obligatory, so it is shown as an example rather than instructed. An output that does otherwise is not wrong."
+  },
+  {
+   "id": "show:c12",
+   "carries": [
+    "c12"
+   ],
+   "carrier": "EXAMPLE",
+   "sensor": "NONE",
+   "gateRole": "OBSERVE",
+   "rationale": "the author marked this PREFERRED — characteristic and not obligatory, so it is shown as an example rather than instructed. An output that does otherwise is not wrong."
+  },
+  {
+   "id": "show:c13",
+   "carries": [
+    "c13"
+   ],
+   "carrier": "EXAMPLE",
+   "sensor": "NONE",
+   "gateRole": "OBSERVE",
+   "rationale": "the author marked this PREFERRED — characteristic and not obligatory, so it is shown as an example rather than instructed. An output that does otherwise is not wrong."
+  },
+  {
+   "id": "show:c14",
+   "carries": [
+    "c14"
+   ],
+   "carrier": "EXAMPLE",
+   "sensor": "NONE",
+   "gateRole": "OBSERVE",
+   "rationale": "the author marked this PREFERRED — characteristic and not obligatory, so it is shown as an example rather than instructed. An output that does otherwise is not wrong."
+  },
+  {
+   "id": "show:c15",
+   "carries": [
+    "c15"
+   ],
+   "carrier": "EXAMPLE",
+   "sensor": "NONE",
+   "gateRole": "OBSERVE",
+   "rationale": "the author marked this PREFERRED — characteristic and not obligatory, so it is shown as an example rather than instructed. An output that does otherwise is not wrong."
+  },
+  {
+   "id": "show:c16",
+   "carries": [
+    "c16"
+   ],
+   "carrier": "EXAMPLE",
+   "sensor": "NONE",
+   "gateRole": "OBSERVE",
+   "rationale": "the author marked this PREFERRED — characteristic and not obligatory, so it is shown as an example rather than instructed. An output that does otherwise is not wrong."
+  },
+  {
+   "id": "show:c17",
+   "carries": [
+    "c17"
+   ],
+   "carrier": "EXAMPLE",
+   "sensor": "NONE",
+   "gateRole": "OBSERVE",
+   "rationale": "the author marked this PREFERRED — characteristic and not obligatory, so it is shown as an example rather than instructed. An output that does otherwise is not wrong."
+  },
+  {
+   "id": "avoid:c18",
+   "carries": [
+    "c18"
+   ],
+   "carrier": "PROSE",
+   "sensor": "NONE",
+   "gateRole": "ENFORCE",
+   "rationale": "a prohibition the author confirmed — it may shape the draft"
+  },
+  {
+   "id": "show:c19",
+   "carries": [
+    "c19"
+   ],
+   "carrier": "EXAMPLE",
+   "sensor": "NONE",
+   "gateRole": "OBSERVE",
+   "rationale": "the author marked this PREFERRED — characteristic and not obligatory, so it is shown as an example rather than instructed. An output that does otherwise is not wrong."
+  },
+  {
+   "id": "show:c20",
+   "carries": [
+    "c20"
+   ],
+   "carrier": "EXAMPLE",
+   "sensor": "NONE",
+   "gateRole": "OBSERVE",
+   "rationale": "the author marked this PREFERRED — characteristic and not obligatory, so it is shown as an example rather than instructed. An output that does otherwise is not wrong."
+  },
+  {
+   "id": "avoid:x1",
+   "carries": [
+    "x1"
+   ],
+   "carrier": "PROSE",
+   "sensor": "NONE",
+   "gateRole": "ENFORCE",
+   "rationale": "a prohibition the author confirmed — it may shape the draft"
+  }
+ ]
+}

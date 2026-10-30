@@ -1,0 +1,264 @@
+// tests/atelier-rewrite-keeps-claims.test.ts — A REWRITE KEEPS WHAT THE TEXT CLAIMS; ACCURACY BEFORE STYLE; ONE KIND OF DOCUMENT.
+import { describe, it, expect } from 'vitest';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
+import { spanIntegrity } from '../core/loop/integrity.js';
+import { planRepair, applyRepair, type Reverted } from '../core/loop/repair.js';
+import { refineToStandard, checkDraft, CLAIM_SLOT } from '../core/loop/run-repair.js';
+import { checkClass, normalizeClass } from '../core/observers/doc-class.js';
+import { decide } from '../core/ratification/authority.js';
+import type { StandardVersion, Requirement } from '../core/state/canonical-state.js';
+import type { InferenceClient, InferenceRequest } from '../core/inference/client.js';
+import { anInferenceResult } from './fixtures.js';
+import * as store from '../core/state/store.js';
+
+const none = new Set<string>();
+
+describe('the meaning check: figures, negation, qualifiers and names survive a rewrite', () => {
+  it('a shortened sentence that keeps everything passes', () => {
+    expect(spanIntegrity('NASA may launch roughly 40 missions, not 50.', 'NASA may launch roughly 40 missions, not 50', none, false).ok).toBe(true);
+  });
+  it('a lost figure is named', () => {
+    expect(spanIntegrity('Costs fell by 40% last year.', 'Costs fell sharply last year.', none, false).lost).toContain('the figure 40');
+  });
+  it('a dropped or added negation is named', () => {
+    expect(spanIntegrity('This is not a treaty problem.', 'This is a treaty problem.', none, false).ok).toBe(false);
+    expect(spanIntegrity('This is a treaty problem.', 'This is never a treaty problem.', none, false).ok).toBe(false);
+  });
+  it('"is not" and "isn\'t" are the same negation', () => {
+    expect(spanIntegrity('It is not settled.', 'It isn\'t settled.', none, false).ok).toBe(true);
+  });
+  it('a dropped qualifier makes the claim stronger, and is refused', () => {
+    const r = spanIntegrity('Most operators may never share covariances.', 'Operators never share covariances.', none, false);
+    expect(r.lost).toEqual(expect.arrayContaining(['the qualifier "may"', 'the qualifier "most"']));
+  });
+  it('a dropped name is refused; a sentence-opening capital is not a name', () => {
+    expect(spanIntegrity('The rule comes from the Outer Space Treaty.', 'The rule comes from a treaty.', none, false).lost)
+      .toEqual(expect.arrayContaining(['the name "Outer"', 'the name "Space"', 'the name "Treaty"']));
+    expect(spanIntegrity('Launch is cheap now.', 'It is cheap to launch now.', none, false).ok).toBe(true);
+  });
+  it('a word the broken rule named may go: that is the repair', () => {
+    expect(spanIntegrity('We may perhaps ship.', 'We may ship.', new Set(['perhaps']), false).ok).toBe(true);
+    expect(spanIntegrity('It\'s not a vacancy, it\'s a chain.', 'It is a chain of responsibility.', new Set(['not a vacancy, it\'s']), false).ok).toBe(true);
+  });
+  it('a placeholder an earlier pass left must survive a later one', () => {
+    expect(spanIntegrity('[your story: a launch that slipped] We value synergy.', 'We value teamwork.', none, false).ok).toBe(false);
+  });
+  it('"cannot" is a negation, and "cannot" to "can\'t" keeps it', () => {
+    expect(spanIntegrity('You cannot skip the review.', 'You can skip the review.', none, false).ok).toBe(false);
+    expect(spanIntegrity('You cannot skip it.', "You can't skip it.", none, false).ok).toBe(true);
+  });
+  it('a licensed drop waives only the negations it carried', () => {
+    expect(spanIntegrity("We never shipped it, but it is not a bug, it's a feature.", 'We shipped it, and it is a feature.', new Set(["not a bug, it's"]), false).ok).toBe(false);
+  });
+  it('possessive names, and repeated qualifiers, are counted', () => {
+    expect(spanIntegrity("The plan came from NASA's team.", 'The plan came from a team.', none, false).lost).toContain('the name "NASA"');
+    expect(spanIntegrity('It holds in most cases and for most teams.', 'It holds in most cases and for teams.', none, false).ok).toBe(false);
+  });
+  it('title-cased headings, links and spelled-out numbers are not losses', () => {
+    expect(spanIntegrity('## Why It Matters', '## Why it matters', none, false).ok).toBe(true);
+    expect(spanIntegrity('See [the docs](http://x).', 'See the docs (http://x).', none, false).ok).toBe(true);
+    expect(spanIntegrity('We ran 3 tests.', 'We ran three tests.', none, false).ok).toBe(true);
+  });
+  it('an invented story or figure is expected to lose its specifics', () => {
+    expect(spanIntegrity('In 2019 I saw 40% of launches slip.', '[your story: a launch that slipped]', none, true).ok).toBe(true);
+  });
+  it('"about" and "can" are not treated as hedges', () => {
+    expect(spanIntegrity('This is about launch cadence, and you can see it.', 'This concerns launch cadence, which you see.', none, false).ok).toBe(true);
+  });
+});
+
+const std = (reqs: Partial<Requirement>[]): StandardVersion => ({ standardVersionHash: 's', requirements: reqs.map((r, i) => ({
+  requirementId: `x${i + 1}`, statement: 'r', appliesWhen: 'GENERAL', kind: 'BOUNDARY', materiality: 'REQUIRED', authority: 'EXPERT_AUTHORED', ...r })) } as unknown as StandardVersion);
+
+describe('the splice refuses a rewrite that changes the claim, and keeps the original span', () => {
+  const v = std([{ measurement: { observer: 'LEXICON', params: { terms: ['leverage=>use'] } } }]);
+  const draft = 'We shipped on Monday. Most teams may leverage roughly 40 tools. The team met twice.';
+  const targets = planRepair(draft, checkDraft('d', v, draft, { guardClaims: false }));
+  it('the target licenses dropping the banned word only', () => {
+    expect(targets[0].drops).toEqual(['leverage']);
+  });
+  it('a rewrite that drops "most" and the figure is reverted and reported', () => {
+    const reverted: Reverted[] = [];
+    const out = applyRepair(draft, targets, [{ id: 1, text: 'Teams use tools.' }], reverted);
+    expect(out).toBe(draft);
+    expect(reverted[0].lost).toEqual(expect.arrayContaining(['the figure 40', 'the qualifier "most"']));
+  });
+  it('a faithful rewrite is spliced', () => {
+    expect(applyRepair(draft, targets, [{ id: 1, text: 'Most teams may use roughly 40 tools.' }])).toContain('Most teams may use roughly 40 tools.');
+  });
+});
+
+describe('the loop: accuracy first, and refused rewrites are recorded', () => {
+  const budget = () => ({ spentUsd: 0, capUsd: 5 });
+  it('an invented claim never reaches the model: it is slotted in code, then style is repaired', async () => {
+    const v = std([{ measurement: { observer: 'LEXICON', params: { terms: ['synergy'] } } }]);
+    const draft = 'According to a 2023 survey, 73% of teams failed. We value synergy here. The rest is plain.';
+    const seen: string[] = [];
+    const client: InferenceClient = { complete: async (r: InferenceRequest) => {
+      seen.push(r.userMessage);
+      const spans = [...r.userMessage.matchAll(/SPAN (\d+)\n"""([\s\S]*?)"""/g)].map((m) => ({ id: Number(m[1]), text: m[2] }));
+      return anInferenceResult({ json: { replacements: spans.map((x) => ({ id: x.id, text: x.text.replace('synergy', 'working together') })) } });
+    } };
+    // Slots are asked for here (--placeholders); by default an invented claim is cut instead.
+    const out = await refineToStandard(client, budget(), 'd', v, draft, 2, { material: '', placeholders: true });
+    expect(seen).toHaveLength(1);
+    expect(seen[0]).not.toContain('UNSOURCED');
+    expect(seen.join()).not.toMatch(/SPAN[\s\S]*73%/);
+    expect(out.output).toBe(`${CLAIM_SLOT} We value working together here. The rest is plain.`);
+    expect(out.repair?.violatedAfter).toEqual([]);
+  });
+  it('every invented claim is deleted, never paraphrased, and style still gets its passes', async () => {
+    const v = std([{ measurement: { observer: 'LEXICON', params: { terms: ['synergy'] } } }]);
+    const draft = 'According to a 2023 survey, 73% of teams failed. We value synergy here. In 2021 I watched 40% of launches slip.';
+    const client: InferenceClient = { complete: async (r: InferenceRequest) => {
+      const spans = [...r.userMessage.matchAll(/SPAN (\d+)\n"""([\s\S]*?)"""/g)].map((m) => ({ id: Number(m[1]), text: m[2] }));
+      return anInferenceResult({ json: { replacements: spans.map((x) => ({ id: x.id, text: x.text.replace('synergy', 'working together') })) } });
+    } };
+    const out = await refineToStandard(client, budget(), 'd', v, draft, 2, { material: '' });
+    expect(out.output).toBe('We value working together here.');
+    expect(out.repair?.storiesCut).toHaveLength(2);
+    expect(out.repair?.violatedAfter).toEqual([]);
+  });
+  it('no other rule can keep an invented claim: the cut stands even when it breaks a count', async () => {
+    // "whereas" appears only in the invented sentence; a rule asking for it at least once per thousand
+    // words breaks when that sentence goes. The claim is cut anyway, and the broken count is said.
+    const v = std([{ measurement: { observer: 'TERM_RATE', params: { terms: ['whereas'], minPer1000: 1 } } }]);
+    const draft = 'Plain words open this piece. In 2021 I watched 40% of launches slip, whereas none had before. Plain words close it.';
+    const client: InferenceClient = { complete: async () => anInferenceResult({ json: { replacements: [] } }) };
+    const out = await refineToStandard(client, budget(), 'd', v, draft, 2, { material: '' });
+    expect(out.output).not.toContain('40%');
+    expect(out.output).toBe('Plain words open this piece. Plain words close it.');
+    expect(out.repair?.storiesCut?.[0]).toContain('40%');
+  });
+  it('a rewrite that slips in a vague claim ("I checked our logs") is refused', async () => {
+    const v = std([{ measurement: { observer: 'LEXICON', params: { terms: ['synergy'] } } }]);
+    const draft = 'We value synergy here. The rest is plain.';
+    const client: InferenceClient = { complete: async () => anInferenceResult({ json: { replacements: [{ id: 1, text: 'I checked our logs, and we value working together here.' }] } }) };
+    const out = await refineToStandard(client, budget(), 'd', v, draft, 1, { material: '' });
+    expect(out.output).not.toContain('checked our logs');
+  });
+  it('a pass whose every rewrite loses meaning ends the loop with the draft, and says why', async () => {
+    const v = std([{ measurement: { observer: 'LEXICON', params: { terms: ['leverage'] } } }]);
+    const draft = 'Most operators may leverage 40 tools. Nothing else changes here.';
+    const client: InferenceClient = { complete: async () => anInferenceResult({ json: { replacements: [{ id: 1, text: 'Operators use tools.' }] } }) };
+    const out = await refineToStandard(client, budget(), 'd', v, draft, 2, { guardClaims: false });
+    expect(out.output).toBe(draft);
+    expect(out.repair?.integrityReverted?.[0]).toMatch(/the figure 40/);
+    expect(out.repair?.why).toMatch(/every rewrite was refused \(the figure 40\)/);
+  });
+});
+
+describe('phase is a decision the owner makes, through decide()', () => {
+  const r = { requirementId: 'x1', statement: 'Cite sources.', appliesWhen: 'GENERAL', kind: 'GENERATIVE', materiality: 'REQUIRED',
+    authority: 'EXPERT_AUTHORED', provenance: 'EXPERT_ADDED', evidence: null, evidenceItemId: null, wouldBeAbsentIf: null,
+    realizationTolerance: 'FLEXIBLE', outputShape: null } as unknown as Requirement;
+  it('AMEND with only a phase is a change, recorded on the rule', () => {
+    expect(decide(r, { verb: 'AMEND', phase: 'STYLE' }).requirement.phase).toBe('STYLE');
+    expect(decide(r, { verb: 'AMEND', phase: 'ACCURACY' }).requirement.phase).toBe('ACCURACY');
+  });
+});
+
+describe('document class', () => {
+  it('declared on both sides and different: refused', () => {
+    expect(checkClass('blog-post', 'Support reply').ok).toBe(false);
+  });
+  it('declared on both sides and equal, whatever the spelling: runs silently', () => {
+    expect(checkClass('support-reply', 'Support_Reply')).toEqual({ ok: true, note: null });
+    expect(normalizeClass(' Blog Post ')).toBe('blog-post');
+  });
+  it('one side silent: runs, and says what it assumed', () => {
+    expect(checkClass('blog-post', undefined)).toMatchObject({ ok: true, note: expect.stringMatching(/checked as blog-post/) });
+    expect(checkClass(null, 'tweet')).toMatchObject({ ok: true, note: expect.stringMatching(/declares no document class/) });
+  });
+});
+
+describe('through the binary: class and UNSOURCED on verify, invoke and the MCP tool', () => {
+  const CLI = resolve('dist/cli/atelier.mjs');
+  const seed = () => {
+    const data = mkdtempSync(join(tmpdir(), 'atelier-p5-data-')); const proj = mkdtempSync(join(tmpdir(), 'atelier-p5-proj-'));
+    const env = { ...process.env, ATELIER_DATA: data, ATELIER_PROJECT_DIR: proj };
+    const run = (...a: string[]): { code: number; out: string } => {
+      try { return { code: 0, out: execFileSync('node', [CLI, ...a], { encoding: 'utf8', cwd: proj, env, stdio: ['pipe', 'pipe', 'pipe'] }) }; }
+      catch (e) { const x = e as { status: number; stdout: string; stderr: string }; return { code: x.status, out: x.stdout + x.stderr }; }
+    };
+    run('add', '--statement', 'Never use the word tea.', '--kind', 'BOUNDARY', '--applies-when', 'GENERAL', '--materiality', 'REQUIRED', '--measure', 'LEXICON:tea', '--phase', 'STYLE');
+    run('ratify-close', '--work-type', 'writing');
+    const b = run('build', '--name', 'nodrink', '--class', 'Blog Post');
+    expect(b.out).toContain('Document class: blog-post');
+    // the owner's choice to have what is not in the material cut (on a kind the claim check is measured on)
+    expect(run('material', '--skill', 'nodrink', '--cut').out).toContain('cut where a qualified claim reader finds them');
+    return { data, proj, env, run };
+  };
+  it('verify refuses a text declared as another class with exit 2, and notes the assumption otherwise', () => {
+    const { proj, run } = seed();
+    const f = join(proj, 'd.md'); writeFileSync(f, 'We had coffee on Monday.');
+    expect(run('verify', '--skill', 'nodrink', f, '--class', 'white paper').code).toBe(2);
+    // A short-form kind is not another standard's thresholds: the rules carry, and what was read off longer pieces
+    // does not apply (core/observers/short-form.ts).
+    const short = run('verify', '--skill', 'nodrink', f, '--class', 'tweet');
+    expect(short.code).toBe(0);
+    expect(short.out).toMatch(/Short form \(a post on X, no length limit\)/);
+    const ok = run('verify', '--skill', 'nodrink', f);
+    expect(ok.code).toBe(0);
+    expect(ok.out).toContain('checked as blog-post');
+    expect(run('verify', '--skill', 'nodrink', f, '--class', 'blog post').out).not.toContain('checked as');
+  });
+  it('verify flags an invented figure for review where no qualified reader may cut, and passes it once it is in the material', () => {
+    const { proj, run } = seed();
+    const f = join(proj, 'd.md'); writeFileSync(f, 'According to a 2023 survey, 73% of teams drink coffee.');
+    // with nothing bound there is nothing to check a figure against: it is listed, and nothing fails
+    const unbound = run('verify', '--skill', 'nodrink', f);
+    expect(unbound.code).toBe(0);
+    expect(unbound.out).toContain('no material was bound to check against');
+    const other = join(proj, 'other.md'); writeFileSync(other, 'We like coffee in the morning.');
+    run('material', '--skill', 'nodrink', other);
+    // the owner chose cut, and no qualified reader reads here: the pattern check never cuts nor fails, the level's action
+    // stands (a standard with no latitude is held grounded: flagged for review)
+    const bad = run('verify', '--skill', 'nodrink', f);
+    expect(bad.code, bad.out).toBe(0);
+    expect(bad.out).toContain('the skill is held grounded');
+    expect(bad.out).toContain('73% of teams drink coffee');
+    const notes = join(proj, 'notes.md'); writeFileSync(notes, 'The 2023 survey: 73% of teams drink coffee.');
+    run('material', '--skill', 'nodrink', notes);
+    expect(run('verify', '--skill', 'nodrink', f).code).toBe(0);
+    expect(run('verify', '--skill', 'nodrink', join(proj, 'd.md'), '--allow-unsourced').code).toBe(0);
+  });
+  it('amend --phase reaches the built standard; a bad phase is refused; build --class none clears the class', () => {
+    const { data, run } = seed();
+    const L = { root: data, skillName: 'nodrink' };
+    const rule = () => store.getStandard(L, store.getSkillVersion(L, store.getActive(L)!)!.standardVersionHash)!.requirements[0];
+    expect(rule().phase).toBe('STYLE');
+    expect(run('amend', '--skill', 'nodrink', '--rule', rule().requirementId, '--phase', 'accuracy', '--reason', 'claims first').code).toBe(0);
+    expect(rule().phase).toBe('ACCURACY');
+    expect(run('amend', '--skill', 'nodrink', '--rule', rule().requirementId, '--phase', 'loud', '--reason', 'x').code).not.toBe(0);
+    run('build', '--name', 'nodrink', '--class', 'none');
+    expect(store.getDocClass(L)).toBeNull();
+  });
+  it('invoke refuses another class before spending anything', () => {
+    const { run } = seed();
+    const r = run('invoke', '--skill', 'nodrink', 'write a white paper', '--class', 'white paper', '--provider', 'openai-compatible', '--base-url', 'http://127.0.0.1:9', '--model', 'x');
+    expect(r.code).not.toBe(0);
+    expect(r.out).toContain('this standard measures blog-post');
+  });
+  it('the MCP tool refuses another class, and flags UNSOURCED', () => {
+    const { proj, env } = seed();
+    const input = [
+      { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'atelier_verify', arguments: { skill: 'nodrink', text: 'We had coffee.', class: 'tweet' } } },
+      { jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'atelier_verify', arguments: { skill: 'nodrink', text: 'According to a 2023 survey, 73% of teams drink coffee.' } } },
+      { jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'atelier_verify', arguments: { skill: 'nodrink', text: 'According to a 2023 survey, 73% of teams drink coffee.', material: 'survey 2023: 73%' } } },
+      { jsonrpc: '2.0', id: 4, method: 'tools/call', params: { name: 'atelier_verify', arguments: { skill: 'nodrink', text: 'According to a 2023 survey, 73% of teams drink coffee.', material: 'We like coffee in the morning.' } } },
+    ].map((m) => JSON.stringify(m)).join('\n');
+    const out = execFileSync('node', [CLI, 'mcp'], { encoding: 'utf8', cwd: proj, env, input }).trim().split('\n')
+      .map((l) => JSON.parse(l) as { result: { content: { text: string }[]; isError?: boolean } });
+    expect(out[0].result.isError).toBe(true);
+    // nothing bound: listed, not failed; material that does not hold the figure: flagged for review, with no qualified reader to cut
+    expect(out[1].result.content[0].text).toMatch(/"failed":false/);
+    expect(out[1].result.content[0].text).toContain('no material was bound to check against');
+    expect(out[2].result.content[0].text).toMatch(/"failed":false/);
+    expect(out[3].result.content[0].text).toMatch(/"rule":"UNSOURCED·check"/);
+    expect(out[3].result.content[0].text).toMatch(/"failed":false/);
+  });
+});

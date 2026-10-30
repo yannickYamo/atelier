@@ -1,0 +1,311 @@
+// cli/commands/new.ts — THE WHOLE JOURNEY, FROM A FOLDER AND A SENTENCE.
+//
+//   atelier new ./my-best-work "write me a blog post in the voice and style of these"
+//
+// Reads the work (holding some back to check against), finds the decisions in it, puts them on one
+// screen with the ruling the evidence suggests, and — once the person accepts — mints the standard,
+// compiles it and installs the skill. The person makes exactly one kind of decision, about what their
+// standard says; everything else is machinery that runs itself.
+//
+// Re-entrant: run it again in the same project and it continues from wherever the run stopped, so a
+// person who quit at the review screen does not pay for discovery twice. It refuses, rather than
+// continues, when the second call names a different folder: continuing would build from work the
+// person did not just point at.
+
+import { existsSync, statSync } from 'node:fs';
+import { basename, relative, resolve } from 'node:path';
+import { die, argv, flag, flagAll, positional, loadSession, saveSession, assertReachable, canReach, sourceProvenance, runFile, DATA, contextReaderClient, contextReaderModel } from '../runtime.js';
+import { readContext } from '../../core/inference/reading.js';
+import { INTENT_MODE, WHY } from '../../core/observers/intent-mode.js';
+import { readJson } from '../../core/state/read-json.js';
+import type { SkillMode } from '../../core/ratification/suggest.js';
+import * as store from '../../core/state/store.js';
+import { measure } from '../../core/observers/registry.js';
+import { ensureGrammar } from '../../core/observers/grammar.js';
+import { normalizeClass } from '../../core/observers/doc-class.js';
+import { floorDimensions, proposeMargins, buildContract } from '../../core/distinctiveness/measured.js';
+import { extract } from '../../core/intake/extract.js';
+import { authorship } from '../../core/composite/voices.js';
+import { corpusFiles, sessionCorpus } from '../corpus.js';
+import { settleLatitude } from '../latitude.js';
+import { intake, examplePieces } from './intake.js';
+import { discover } from './discover.js';
+import { method } from './method.js';
+import { review } from './review.js';
+import { compositeReview } from './composite.js';
+import { ratifyClose } from './ratify.js';
+import { build, pieceFlags } from './build.js';
+import { skillNameFrom } from '../../renderers/agent-skill/render.js';
+
+const MODES: readonly SkillMode[] = ['GENERATE', 'GUARD', 'RESPOND'];
+
+/** A path as a person can paste it back into a shell. */
+const shellWord = (p: string): string => (/^[\w./~-]+$/.test(p) ? p : `'${p.replace(/'/g, `'\\''`)}'`);
+
+/**
+ * WHO WROTE THE PIECES AT `path`: the authors declared, or, with none declared, the voices found in the writing
+ * (core/composite/voices.ts). Read once, here, and handed to intake, so the build and intake cannot disagree.
+ */
+function readAuthorship(path: string, mode: SkillMode): ReturnType<typeof authorship> {
+  const dir = statSync(path).isDirectory();
+  const files = corpusFiles(path).flatMap((f) => { const r = extract(f); return r.ok ? [{ id: dir ? relative(path, f) : basename(f), text: (r as { text: string }).text }] : []; });
+  return authorship(examplePieces(files, mode), flagAll('--authors'), argv.includes('--voices'));
+}
+
+/** The folder the sealed corpus was read from, for runs that predate recording it. */
+const sealedFrom = (): string | null => {
+  const f = runFile('corpus-paths.json');
+  if (!existsSync(f)) return null;
+  const files = readJson<{ id: string; path: string }[]>(f, { kind: 'array', what: 'the sealed corpus paths' });
+  const first = files[0] as { id: string; path: string } | undefined;
+  return first ? first.path.slice(0, first.path.length - first.id.length).replace(/\/$/, '') : null;
+};
+
+export async function newSkill(): Promise<void> {
+  // Checked on the first screen, so a mistyped value is refused now and not after the rules are approved. The values
+  // themselves are read by the build: give them on the call that builds (`--accept`).
+  const pieces = pieceFlags();
+  const corpus = positional([]) ?? die('usage: atelier new <folder-of-your-best-work> "<what the skill is for>"\n'
+    + '  e.g.  atelier new ./posts "write me a blog post in the voice and style of these"');
+  const path = resolve(corpus);
+  if (!existsSync(path)) die(`there is nothing at ${path}.`);
+  let s = loadSession();
+
+  // ── THE SAME RUN, OR A REFUSAL — NEVER A SILENT SWITCH ────────────────────────────────────────
+  const from = s.source ?? sealedFrom();
+  if (s.evidence && from && resolve(from) !== path) {
+    die(`this project's run was made from ${from}, not ${path}.\n`
+      + '  To continue that run, point at the same folder.\n'
+      + '  To build a different skill, run this in another project directory, or start over here: atelier abort');
+  }
+
+  const typed = flag('--intent') ?? positional([corpus]) ?? null;
+  const intent = typed ?? s.intent?.text ?? null;
+  const declared = flag('--mode')?.toUpperCase();
+  if (declared && !MODES.includes(declared as SkillMode)) die(`--mode must be one of ${MODES.map((m) => m.toLowerCase()).join(', ')}.`);
+  // WHAT THE SKILL IS FOR, READ FROM THE WORDS (core/observers/intent-mode.ts): once, kept with the run's intent; the
+  // person's --mode first, then what an earlier call read, then the reading. No model, or --no-model: the word lists.
+  const noModelHere = !canReach('discovery') || argv.includes('--no-model');
+  const read = (declared || s.intent?.mode) ? null : await readContext(INTENT_MODE, { intent: intent ?? '' }, noModelHere ? null : contextReaderClient(), noModelHere ? null : contextReaderModel(), { spentUsd: 0, capUsd: 0.05, maxCalls: 1 });
+  const mode: SkillMode = (declared as SkillMode | undefined) ?? s.intent?.mode ?? read?.value.mode ?? 'GENERATE';
+  if (s.intent && typed && typed !== s.intent.text) {
+    console.log(`(this run is for "${s.intent.text}"; the new wording is ignored — start over with atelier abort to change it)`);
+  }
+  // NO MODEL IS NOT A REASON TO BUILD NOTHING. What can be counted in the examples is read without one; a model
+  // adds the rules only a reading finds, and can be added later. Decided before anything is written for the other
+  // path, and what the person said the skill is for is kept as what it is for.
+  const keyless = !canReach('discovery') || argv.includes('--no-model');
+  // PIECES BY SEVERAL VOICES, WITH OR WITHOUT A MODEL: declared (front matter, a folder per author, --authors), or
+  // found in the writing when none is declared (core/composite/voices.ts). Each voice is read on its own and the
+  // combination is inferred (./composite.ts); with no model, from what can be counted in each voice's pieces. Pooled
+  // into one author's examples they would give the average of them all, which nobody asked for.
+  const fresh = s.run.state === 'EMPTY' || !s.evidence;
+  const who = fresh ? readAuthorship(path, mode) : null;
+  // Too few pieces to read rules off some and check them on others, with or without a model (`thinCorpus`): the same
+  // model-free build, with several voices kept apart where there are several.
+  const thin = fresh && thinCorpus(path);
+  const composite = fresh && (keyless || thin) && Boolean(who?.authors);
+  // VOICES READ IN THE WRITING ARE SAID, AND BUILT AS ONE unless asked: the person pointed at one folder.
+  const voicesRead = fresh && who && !who.authors ? who.voices : null;
+  if (voicesRead && voicesRead.groups.length > 1) {
+    console.log(`${voicesRead.groups.length} voices read in how the pieces are written (${voicesRead.groups.map((g) => `${g.pieces.length} piece(s)`).join(', ')}): built as one voice, which is what pointing at one folder asks for.\n  To build the combination of them, each read on its own:  atelier new ${shellWord(corpus)} --voices\n`);
+  }
+  // Nothing at build reads with a model when none is set up: the persona and the other readings are left out, and said.
+  if (keyless) process.env.ATELIER_BUILD_NO_MODEL = '1';
+  if (composite) {
+    console.log('No model is set up (ANTHROPIC_API_KEY), so each voice is read for what can be counted in its pieces alone.\n  To have a model read them too, set the key and run this again in a folder of its own.\n');
+  } else if (fresh && (keyless || thin)) {
+    console.log(keyless ? 'No model is set up (ANTHROPIC_API_KEY), so the skill is built from what can be counted in your examples, with no rules read by a model and none for you to approve.\n  To have a model read them too, set the key and run this again in a folder of its own.\n'
+      // NEVER A REFUSAL FOR FEW EXAMPLES. Two or three pieces cannot have rules read off some and checked on the others,
+      // so none is proposed as if checked: the pieces themselves are served, with what can be counted in them.
+      : ((n: number): string => `With ${n} example(s), rules read by a model could not be checked on pieces it had not read, so none is proposed: your examples are served to the writer whole, with what can be counted in them${argv.includes('--method') ? ' and your method' : ''}${n >= 3 ? ', and how you sound, read from them' : ''}. Add pieces (four or more) to have rules read and checked.\n`)(examplePieces(corpusFiles(path).map((f) => ({ id: f, text: readCorpusText(f) }))).length));
+    if (intent && !argv.includes('--for')) argv.push('--for', intent);
+    await method();
+    return;
+  }
+  const name = flag('--name') ?? s.skillName ?? basename(path);
+  // The kind of document this work is, kept for the skill from the first call: the build that uses it
+  // may be a later continuation that does not repeat the flag.
+  const cls = flag('--class');
+  if (cls) store.setDocClass({ root: DATA, skillName: skillNameFrom(name) }, cls.trim().toLowerCase() === 'none' ? null : normalizeClass(cls));
+  // A SKILL THAT ANSWERS PEOPLE IS CHECKED AS ANSWERS. Respond mode was only a weighting: its skills kept the
+  // claim check of published writing, which cut 189 sentences from 42 coding answers, a correct "17 times 6
+  // is 102" among them. Unless a class was chosen, it now takes `assistant-reply`: specifics are listed for
+  // the reader to check, never cut (core/observers/formats.ts).
+  else if (mode === 'RESPOND' && !store.getDocClass({ root: DATA, skillName: skillNameFrom(name) })) {
+    store.setDocClass({ root: DATA, skillName: skillNameFrom(name) }, 'assistant-reply');
+    console.log('Checked as answers (assistant-reply): specifics not in your material are listed for you to check, not cut.');
+  }
+
+  process.env.ATELIER_ORCHESTRATED = '1';
+  // The limit the person set is theirs for the whole run: a continuation without --cap keeps it.
+  const cap = flag('--cap') ?? s.cap ?? null;
+  if (cap && !argv.includes('--cap')) argv.push('--cap', cap);
+  if (cap && cap !== s.cap && s.run.state !== 'EMPTY') { saveSession({ ...s, cap }); s = loadSession(); }
+
+  // A run continued at review printed its rules on the call that stopped there.
+  const shownBefore = s.run.state === 'PROPOSED';
+  // ── START, OR CONTINUE ──────────────────────────────────────────────────────────────────────
+  if (s.run.state === 'EMPTY' || !s.evidence) {
+    if (!composite) assertReachable('discovery');
+    if (!intent) console.log('No purpose given, so rules are weighed for producing new work. Say what it is for as a second argument.\n');
+    else console.log(`For: "${intent}" — ${declared ? `${mode.toLowerCase()}, as you declared` : read ? read.value.why : WHY[mode]}.\n`);
+    // A held-out check without having to know what one is: some of the work is set aside before
+    // anything reads it (when there are six or more pieces), unless the person named their own.
+    if (!argv.includes('--reserve')) argv.push('--auto-reserve');
+    intake(path, flag('--work-type') ?? (mode === 'RESPOND' ? 'answers' : 'writing'), mode, { voices: who?.voices ?? null });
+    s = loadSession();
+    // The name is the run's from the first call: a continuation that does not repeat --name must build
+    // the same skill (it once built one named after the folder, and the class set on the first call
+    // went to a skill that was never built).
+    saveSession({ ...s, source: path, ...(cap ? { cap } : {}), ...(intent ? { intent: { text: intent, mode } } : {}),
+      ...(flag('--name') ? { skillName: skillNameFrom(name) } : {}) });
+    s = loadSession();
+  } else {
+    // A run already built has nothing left for `new` to build: the flags would be checked and then dropped.
+    if (s.run.state === 'BUILT' && (pieces.budget !== undefined || pieces.form !== undefined)) {
+      die(`this run has already built its skill, so --piece-budget and --pieces would be ignored here. Rebuild it with them: atelier build --name ${s.skillName ?? '<name>'} --piece-budget <words>`);
+    }
+    console.log(`Continuing the run already in this project (state ${s.run.state}).\n`);
+    // AN ANSWER AFTER THE BUILD (the hidden expert override, --conflict) changes nothing built: the clashes were settled
+    // when the composite was built. Said plainly, with the one way to build with it, never dropped in silence.
+    const late = flagAll('--conflict');
+    if (s.run.state === 'BUILT' && s.authors && late.length) {
+      const given = [...Object.entries(s.conflictAnswers ?? {}).flatMap(([n, v]) => (v ? [`${n}=${v}`] : [])), ...late]
+        .reduce<string[]>((all, x) => [...all.filter((y) => y.split('=')[0] !== x.split('=')[0]), x], []);
+      const admired = Object.entries(s.admire ?? {}).map(([a, t]) => ` --admire ${shellWord(`${a}=${t}`)}`).join('');
+      console.log(`--conflict ${late.join(', --conflict ')}: not applied. This skill is already built, with every clash settled when it was combined; an answer after the build needs a rebuild with the answer.\n`
+        + `  To rebuild with it, start the run again and give every answer on the call that builds (your pieces are read again):\n`
+        + `    atelier abort\n    atelier new ${shellWord(corpus)}${s.intent ? ` ${shellWord(s.intent.text)}` : ''}${s.skillName ? ` --name ${shellWord(s.skillName)}` : ''}${admired} ${given.map((x) => `--conflict ${x}`).join(' ')}\n`);
+    }
+    if (intent && !s.intent) { saveSession({ ...s, intent: { text: intent, mode } }); s = loadSession(); }
+    if (flag('--name') && s.skillName !== skillNameFrom(name)) { saveSession({ ...s, skillName: skillNameFrom(name) }); s = loadSession(); }
+  }
+
+  if (s.run.state === 'CORPUS_SEALED' || s.run.state === 'LIST_SEALED') {
+    console.log('\nReading your work…');
+    await discover();
+    s = loadSession();
+  }
+
+  if (s.run.state === 'PROPOSED') {
+    if (!s.proposals.length && !s.decided.length) {
+      console.log('Discovery proposed no rules from this work, so there is nothing to build. Add one in your own words:'
+        + '\n  atelier add --statement "<the rule>" --kind GENERATIVE|BOUNDARY    then run this again');
+      return;
+    }
+    // Someone else's public work goes through the same screen. Accepting there ADOPTS a rule for the
+    // person's own skill — recorded as USER_ADOPTED, never as that author's ratified standard (the
+    // ceiling in `decide` enforces it) — and the person decides which adopted rules instruct.
+    if (sourceProvenance() === 'PUBLIC_BEHAVIOUR_INFERRED') {
+      console.log(`These rules were read from ${s.publicSource ?? 'someone else\'s public work'}. Accepting ADOPTS them for your skill;`
+        + ' it does not make them that author\'s standard, and the record will always say where they came from.\n');
+    }
+    // PIECES BY SEVERAL VOICES: no screen; the combination is inferred and built (./composite.ts).
+    const screen = s.authors ? compositeReview : review;
+    if (!(await screen({ continueWith: `atelier new ${shellWord(corpus)}`, shownBefore }))) return;
+    s = loadSession();
+    if (!s.decided.some((d) => d.authority !== 'EXPERT_REJECTED')) {
+      console.log('\nEvery rule was rejected, so there is nothing to build.'
+        + '\n  Add one in your own words:  atelier add --statement "<the rule>" --kind GENERATIVE|BOUNDARY   then run this again'
+        + '\n  Or start over:              atelier abort');
+      return;
+    }
+    // The purpose becomes how a host decides to load the skill at all — from the run, so a second
+    // call without the sentence still carries it.
+    if (intent && !argv.includes('--description')) argv.push('--description', `Use when asked to: ${intent.replace(/[.\s]+$/, '')}.`);
+    // HOW STRICTLY OUTPUT IS HELD, read from the pieces and what the skill is for (cli/latitude.ts); minted at the close.
+    await settleLatitude({ purpose: intent ?? s.intent?.text ?? null, method: null, examples: sessionCorpus().slice(0, 6) });
+    ratifyClose();
+    s = loadSession();
+  }
+
+  if (s.run.state === 'RATIFIED') {
+    // ONE LIST OF WHAT TO DO NEXT, the one this command ends on: the card's own is left out, and the floor says its
+    // command on its own line.
+    await build(name, { closing: false });
+    s = loadSession();
+  }
+
+  if (s.run.state !== 'BUILT') return;
+  const built = s.skillName ?? name;
+  // The held-back pieces are read by every measured rule, the grammar rule among them: its engine, if not yet loaded.
+  await ensureGrammar();
+  heldOutCheck(built);
+  proposeFloor(built);
+  console.log(`\nUse it:    /${built} <your task>   ·   atelier invoke --skill ${built} "<your task>"`);
+  console.log(`Check:     atelier verify --skill ${built} <file>   ·   correct it: atelier fix "<what was wrong>"`);
+  // A voice is carried by what the author lived and measured, which Atelier will not invent.
+  console.log(`Material:  your real stories and figures make the voice: atelier material --skill ${built} <notes.md>`);
+  if (s.reservation?.reserved.length) {
+    console.log(`Compare it blind against the ${s.reservation.reserved.length} piece(s) held back:  atelier reference --skill ${built}`);
+  }
+}
+
+/**
+ * THE FREE CHECK, RUN EVERY TIME. The measured rules are counted against the pieces that were held
+ * back before anything read them: work the author wrote and discovery never saw. A target the
+ * author's own unseen work misses is a target that describes the pieces it was counted from, and the
+ * person should hear that now rather than from a rewrite loop later. Costs nothing: no model is called.
+ */
+function heldOutCheck(skill: string): void {
+  const s = loadSession();
+  const reserved = s.reservation?.reserved ?? [];
+  const L: store.StoreLayout = { root: DATA, skillName: skill };
+  const active = store.getActive(L);
+  const sv = active ? store.getSkillVersion(L, active) : null;
+  const v = sv ? store.getStandard(L, sv.standardVersionHash) : null;
+  const measured = (v?.requirements ?? []).filter((r) => r.measurement && r.authority !== 'EXPERT_REJECTED');
+  if (!reserved.length || !measured.length) return;
+  const rows = measured.flatMap((r) => (r.measurement ? [{ r, m: r.measurement }] : [])).map(({ r, m }) => {
+    const results = reserved.map((u) => measure(u.artifact, m));
+    const applicable = results.filter((x) => x.verdict !== 'NOT_APPLICABLE');
+    return { r, applicable: applicable.length, met: applicable.filter((x) => x.verdict === 'MET').length };
+  });
+  // What matters is a rule the author's own unseen work misses: those are listed, and all-met is one line.
+  const measurable = rows.filter((x) => x.applicable > 0);
+  const missed = measurable.filter((x) => x.met < x.applicable);
+  if (!measurable.length) return;
+  console.log(`\nChecked against the ${reserved.length} piece(s) held back before anything read them: `
+    + `${measurable.length - missed.length} of ${measurable.length} measurable counted rule(s) met${missed.length ? '; missed by your own work:' : '.'}`);
+  for (const x of missed) {
+    console.log(`  ${x.r.requirementId}  ${x.met} of ${x.applicable} meet it   ${x.r.statement.slice(0, 70)}`);
+  }
+}
+
+/**
+ * THE FLOOR'S MARGINS, PROPOSED WHILE THE CORPUS IS AT HAND. Each measured rule's margin is half the
+ * spread of the author's own pieces on it (core/distinctiveness/measured.ts); every dimension starts
+ * OBSERVE, so nothing blocks until the owner says so. Costs nothing: no model is called. Only the author's
+ * own pieces count; reserved ones are left out, held back for the blind comparison.
+ */
+function proposeFloor(skill: string): void {
+  const L: store.StoreLayout = { root: DATA, skillName: skill };
+  if (store.getFloor(L).contract) return;
+  const active = store.getActive(L);
+  const sv = active ? store.getSkillVersion(L, active) : null;
+  const v = sv ? store.getStandard(L, sv.standardVersionHash) : null;
+  if (!v) return;
+  const dims = floorDimensions(v);
+  const pathsFile = runFile('corpus-paths.json');
+  if (!dims.length || !existsSync(pathsFile)) return;
+  const reserved = new Set((loadSession().reservation?.reserved ?? []).map((u) => u.unitId));
+  const files = readJson<{ id: string; path: string; kind?: string }[]>(pathsFile, { kind: 'array', what: 'the sealed corpus path list' });
+  // The author's own work only: not a "before"/rejected example, a methodology note or an existing skill,
+  // each of which would widen the spread the margins are read from. (An older list has no kinds: all count.)
+  const texts = files.filter((f) => !reserved.has(f.id) && (f.kind ?? 'GOLDEN') === 'GOLDEN')
+    .flatMap((f) => { const r = extract(f.path); return r.ok ? [(r as { text: string }).text] : []; });
+  const proposals = proposeMargins(dims, texts);
+  if (!proposals.length) return;
+  store.setFloor(L, { ...store.getFloor(L), contract: buildContract(proposals, dims, null) });
+  console.log(`\nRegression floor: margins proposed for ${proposals.length} measured rule(s) from your own spread, all watched, none blocking yet (atelier floor --skill ${skill}).`);
+}
+
+/** A folder of fewer than four pieces of work: too few to read rules off some and check them on the rest. */
+function thinCorpus(path: string): boolean {
+  if (!statSync(path).isDirectory()) return true;
+  // The method note is no piece of work, wherever it is kept.
+  const note = flag('--method'); const skip = note ? resolve(note) : null;
+  return examplePieces(corpusFiles(path).filter((f) => resolve(f) !== skip).map((f) => ({ id: f, text: readCorpusText(f) }))).length < 4;
+}
+function readCorpusText(f: string): string { const x = extract(f); return x.ok ? x.text : ''; }

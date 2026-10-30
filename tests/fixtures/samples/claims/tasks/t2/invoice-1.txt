@@ -1,0 +1,4 @@
+INVOICE 1
+Supplier: Beacon Office Supply
+Item: two monitors
+Amount: 4,244 dollars

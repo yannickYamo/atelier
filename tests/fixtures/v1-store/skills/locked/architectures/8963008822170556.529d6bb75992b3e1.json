@@ -1,0 +1,56 @@
+{
+ "architectureHash": "529d6bb75992b3e1",
+ "standardVersionHash": "8963008822170556",
+ "components": [
+  {
+   "id": "do:x1",
+   "carries": [
+    "x1"
+   ],
+   "carrier": "PROSE",
+   "sensor": "NONE",
+   "gateRole": "ENFORCE",
+   "rationale": "a positive rule evidenced by work the author supplied — prose is the least arrangement that carries it"
+  },
+  {
+   "id": "do:x2",
+   "carries": [
+    "x2"
+   ],
+   "carrier": "PROSE",
+   "sensor": "NONE",
+   "gateRole": "ENFORCE",
+   "rationale": "a positive rule evidenced by work the author supplied — prose is the least arrangement that carries it"
+  },
+  {
+   "id": "avoid:x3",
+   "carries": [
+    "x3"
+   ],
+   "carrier": "PROSE",
+   "sensor": "NONE",
+   "gateRole": "ENFORCE",
+   "rationale": "a prohibition the author confirmed — it may shape the draft"
+  },
+  {
+   "id": "avoid:x4",
+   "carries": [
+    "x4"
+   ],
+   "carrier": "PROSE",
+   "sensor": "NONE",
+   "gateRole": "ENFORCE",
+   "rationale": "a prohibition the author confirmed — it may shape the draft"
+  },
+  {
+   "id": "show:x5",
+   "carries": [
+    "x5"
+   ],
+   "carrier": "EXAMPLE",
+   "sensor": "NONE",
+   "gateRole": "OBSERVE",
+   "rationale": "the author marked this PREFERRED — characteristic and not obligatory, so it is shown as an example rather than instructed. An output that does otherwise is not wrong."
+  }
+ ]
+}

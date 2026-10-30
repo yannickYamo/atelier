@@ -1,0 +1,75 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Read-only by default. Nothing in this workflow writes to the repo, and a token that could is a
+# token a compromised action could use.
+permissions:
+  contents: read
+
+# A force-push should cancel the run it superseded rather than queue behind it.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    # Linux keeps the names branch protection requires ("verify (22)", "verify (24)"); macOS reports
+    # beside them as "verify-macos (N)", so adding it did not leave the required checks unreported.
+    name: ${{ matrix.os == 'ubuntu-latest' && 'verify' || 'verify-macos' }} (${{ matrix.node }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      # `engines` claims >=22. Testing only 22 would make that claim about a version nobody ran.
+      # macOS because its tmpdir() is a symlink (/var -> /private/var): a path compared unresolved
+      # passed here and failed there, and only a mac runner would have said so.
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        node: [22, 24]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+
+      # Typecheck first. A failure here is a compile error, and reading it in a test
+      # failure's stack trace instead is a worse way to learn the same thing.
+      - run: npm run typecheck
+
+      # Type-aware lint. It runs before the tests because what it catches — a floating promise, an
+      # `any` that escaped a JSON.parse, a caught error thrown away without its cause — fails as
+      # wrong behaviour at runtime rather than as a red test.
+      - run: npm run lint
+
+      # BUILT BEFORE TESTED, deliberately. The e2e files drive dist/cli/atelier.mjs and each built
+      # it on demand when missing — so on a fresh runner several vitest workers raced each other's
+      # `rm -rf dist`, and a sibling read a half-written module mid-import. One flaky SyntaxError
+      # in CI was the whole diagnosis. `pretest` builds too, so a fresh clone's bare `npm test`
+      # cannot race either; this step also still catches an import that resolves only in-tree.
+      - run: npm run build
+      - run: npm test
+
+      # The plugin tree and the standalone skills are committed because a marketplace install and
+      # `npx skills add` read them from the checkout. A source edit without a rebuild would ship the old
+      # protocol while looking current.
+      - name: the committed plugin tree and skills are what the generator emits
+        run: git status --porcelain -- plugins/hosts .claude-plugin skills && test -z "$(git status --porcelain -- plugins/hosts .claude-plugin skills)"
+
+      # A known-vulnerable transitive dependency is a defect the suite cannot see.
+      - run: npm audit --audit-level=high
+      - name: the built CLI runs
+        run: node dist/cli/atelier.mjs 2>&1 | head -1
+
+      # Reviewer finding F5: "the tarball installs and runs" was a claim in a commit message —
+      # the exact shape of claim this repository refuses everywhere else. Now CI is the witness.
+      - name: the package a user installs actually runs
+        run: |
+          npm pack
+          mkdir -p /tmp/pack-smoke && cd /tmp/pack-smoke && npm init -y > /dev/null
+          npm install "$GITHUB_WORKSPACE"/yannickyamo-atelier-*.tgz > /dev/null
+          ./node_modules/.bin/atelier | head -1

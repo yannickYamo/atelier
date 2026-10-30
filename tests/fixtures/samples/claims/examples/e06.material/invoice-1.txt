@@ -1,0 +1,4 @@
+INVOICE 1
+Supplier: Beacon Office Supply
+Item: a projector
+Amount: 1,785 dollars

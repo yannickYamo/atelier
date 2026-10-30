@@ -1,0 +1,258 @@
+// atelier/core/state/fidelity-store.ts — THE FIDELITY LOOP'S STATE, BESIDE THE SKILL'S, UNDER THE SAME RULES.
+//
+// Laid out under `skills/<name>/fidelity/` with the conventions of ./store.ts: every file written with
+// writeAtomic, every read through readJson with the path in its error, and everything append-only
+// except one pointer.
+//
+//   profile.json            the latest author's bands and detector (FidelityProfile), rebuilt at build time
+//   profiles/<hash>.json    every profile a release has named, kept, so a rollback serves the one it names
+//   retrieval.json          the latest TF-IDF index over the author's passages, checked against its hash on read
+//   retrieval/<hash>.json   every index a release has named, kept for the same reason
+//   releases/<id>.json      implementation releases, content-addressed and never overwritten
+//   active.json             the ONLY mutable file: which release is serving. Rollback moves it to the parent.
+//   typicality/<profile hash>.json
+//                           the conformal calibration of how typical a text is of the author, read against the
+//                           profile it names (../fidelity/typicality.ts)
+//   qualifications/<profile hash>.json
+//                           what `atelier qualify` measured for the instruments of that profile, keyed by
+//                           the profile it qualified: a result is about one detector and one band set
+//
+// A release file is checked on the way out as well as on the way in: an id that does not match the
+// recomputed hash means someone edited a file that names itself by its content, and serving it would
+// steer outputs with something no release recorded.
+
+import { existsSync, readdirSync } from 'node:fs';
+import { join } from 'node:path';
+import { writeAtomic } from './fs-atomic.js';
+import { readJson } from './read-json.js';
+import type { StoreLayout } from './store.js';
+import type { FidelityProfile, ImplementationRelease } from '../fidelity/types.js';
+import type { QualifyResult } from '../fidelity/qualify.js';
+import type { RetrievalIndex } from '../fidelity/retrieval.js';
+import type { TypicalityCalibration } from '../fidelity/typicality.js';
+import type { SubjectCards } from '../fidelity/subject-reader.js';
+import type { StructureMove } from '../structure/moves.js';
+import type { MoveChain } from '../structure/skeleton.js';
+import { passagesHash } from '../fidelity/retrieval.js';
+import { releaseId, canonicalJson } from '../fidelity/release.js';
+
+const base = (l: StoreLayout): string => {
+  const name = l.skillName;
+  if (!name || name === '.' || name === '..' || /[\\/\0]/.test(name)) {
+    throw new Error(`STORE: "${name}" is not a skill name; it would resolve outside skills/.`);
+  }
+  return join(l.root, 'skills', name, 'fidelity');
+};
+const releasesDir = (l: StoreLayout): string => join(base(l), 'releases');
+
+/** The latest profile, or the one with this hash (what a release names). */
+export function getProfile(l: StoreLayout, hash?: string): FidelityProfile | null {
+  const p = hash ? join(base(l), 'profiles', `${hash}.json`) : join(base(l), 'profile.json');
+  const found = existsSync(p) ? readJson<FidelityProfile>(p, { what: 'the fidelity profile', requireKeys: ['bands', 'hash'] }) : null;
+  if (found && hash && found.hash !== hash) throw new Error(`STORE: profile file ${p} names itself ${found.hash}, not ${hash}. It is not served.`);
+  return found;
+}
+export function setProfile(l: StoreLayout, profile: FidelityProfile): void {
+  writeAtomic(join(base(l), 'profile.json'), JSON.stringify(profile, null, 1));
+  writeAtomic(join(base(l), 'profiles', `${profile.hash}.json`), JSON.stringify(profile));
+}
+
+/** The latest index, or the one with this hash (what a release names). */
+export function getRetrievalIndex(l: StoreLayout, hash?: string): RetrievalIndex | null {
+  const p = hash ? join(base(l), 'retrieval', `${hash}.json`) : join(base(l), 'retrieval.json');
+  if (!existsSync(p)) return null;
+  const index = readJson<RetrievalIndex>(p, { what: 'the retrieval index', requireKeys: ['passages', 'df', 'hash'] });
+  if (passagesHash(index.passages) !== index.hash) {
+    throw new Error(`STORE: retrieval index at ${p} names itself ${index.hash} and its passages hash to ${passagesHash(index.passages)}. It is not served.`);
+  }
+  return index;
+}
+export function setRetrievalIndex(l: StoreLayout, index: RetrievalIndex): void {
+  writeAtomic(join(base(l), 'retrieval.json'), JSON.stringify(index));
+  writeAtomic(join(base(l), 'retrieval', `${index.hash}.json`), JSON.stringify(index));
+}
+
+const checked = (r: ImplementationRelease, where: string): ImplementationRelease => {
+  const id = releaseId(r);
+  if (id !== r.id) throw new Error(`STORE: release file ${where} names itself ${r.id} and its content hashes to ${id}. A content-addressed file cannot carry another identity; it is not served.`);
+  return r;
+};
+
+export function getRelease(l: StoreLayout, id: string): ImplementationRelease | null {
+  if (!/^[0-9a-f]+$/.test(id)) return null;
+  const p = join(releasesDir(l), `${id}.json`);
+  if (!existsSync(p)) return null;
+  const r = checked(readJson<ImplementationRelease>(p, { what: `release ${id}`, requireKeys: ['id', 'settings', 'standardVersionHash'] }), `${id}.json`);
+  if (r.id !== id) throw new Error(`STORE: release file ${id}.json holds release ${r.id}.`);
+  return r;
+}
+
+/** Every stored release, oldest first: the active one, its history, and the candidates beside it. */
+export function listReleases(l: StoreLayout): ImplementationRelease[] {
+  if (!existsSync(releasesDir(l))) return [];
+  return readdirSync(releasesDir(l)).filter((f) => /^[0-9a-f]+\.json$/.test(f)).flatMap((f) => { const r = getRelease(l, f.slice(0, -5)); return r ? [r] : []; })
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+}
+
+/**
+ * Write a release under its id. The id must be the hash of its content and the parent must already be
+ * stored. Writing the same release twice keeps the first (its `createdAt` and `why` sit outside the
+ * hash); a different body under an existing id is refused. Returns the release now on disk.
+ */
+export function putRelease(l: StoreLayout, r: ImplementationRelease): ImplementationRelease {
+  checked(r, `for ${r.id}`);
+  if (r.parent !== null && !getRelease(l, r.parent)) {
+    throw new Error(`STORE: release ${r.id} names parent ${r.parent}, which is not stored. A release's history must exist before it does.`);
+  }
+  const existing = getRelease(l, r.id);
+  if (existing) {
+    const { createdAt: _a, why: _b, ...x } = existing; const { createdAt: _c, why: _d, ...y } = r;
+    if (canonicalJson(x) !== canonicalJson(y)) throw new Error(`STORE: release ${r.id} already exists with different content.`);
+    return existing;
+  }
+  writeAtomic(join(releasesDir(l), `${r.id}.json`), JSON.stringify(r, null, 1));
+  return r;
+}
+
+/** The release chain from `id` back to the root, newest first. Throws on a missing link or a cycle. */
+export function releaseChain(l: StoreLayout, id: string): ImplementationRelease[] {
+  const chain: ImplementationRelease[] = [];
+  const seen = new Set<string>();
+  let at: string | null = id;
+  while (at !== null) {
+    if (seen.has(at)) throw new Error(`STORE: release chain from ${id} loops at ${at}.`);
+    seen.add(at);
+    const r = getRelease(l, at);
+    if (!r) throw new Error(`STORE: release ${at} in the chain from ${id} is not stored.`);
+    chain.push(r);
+    at = r.parent;
+  }
+  return chain;
+}
+
+/** Point the skill at a stored release. Activation points at history; it does not create it. */
+/**
+ * Point the skill at a release. `by` says how it got there when a person chose it ('rollback'), so a migration
+ * that moves automatic settings never undoes a choice.
+ */
+export function setActiveRelease(l: StoreLayout, id: string, by?: 'rollback'): void {
+  releaseChain(l, id);
+  writeAtomic(join(base(l), 'active.json'), JSON.stringify({ releaseId: id, at: new Date().toISOString(), ...(by ? { by } : {}) }, null, 1));
+}
+
+/** How the active release was set, when a person chose it. */
+export function activeSetBy(l: StoreLayout): 'rollback' | null {
+  const p = join(base(l), 'active.json');
+  if (!existsSync(p)) return null;
+  return readJson<{ by?: string }>(p, { what: 'the active release pointer' }).by === 'rollback' ? 'rollback' : null;
+}
+
+/** The serving release and its parents (newest first), or null when none was ever activated. */
+export function getActiveRelease(l: StoreLayout): { readonly release: ImplementationRelease; readonly chain: readonly ImplementationRelease[] } | null {
+  const p = join(base(l), 'active.json');
+  if (!existsSync(p)) return null;
+  const { releaseId: id } = readJson<{ releaseId: string }>(p, { what: 'the active release pointer', requireKeys: ['releaseId'] });
+  const chain = releaseChain(l, id);
+  return { release: chain[0], chain };
+}
+
+/** Roll back one release: the pointer moves to the active release's parent. Returns it, or null at the root. */
+export function rollbackRelease(l: StoreLayout): ImplementationRelease | null {
+  const active = getActiveRelease(l);
+  if (!active?.release.parent) return null;
+  // NEVER ACROSS A STANDARD. What the loop learned under one standard says nothing about another; a release
+  // line starts again at each new standard, so its root has no parent to roll back to.
+  if (active.chain[1] && active.chain[1].standardVersionHash !== active.release.standardVersionHash) return null;
+  setActiveRelease(l, active.release.parent, 'rollback');
+  return active.chain[1];
+}
+
+/** One instrument's qualification: the detector, or one steering feature of the profile. */
+export interface InstrumentQualification {
+  readonly instrument: string;
+  readonly kind: 'detector' | 'feature';
+  readonly label: string;
+  readonly result: QualifyResult;
+  readonly verdict: string;
+}
+
+/** What `atelier qualify` measured for one profile's instruments, on the data it names. */
+export interface Qualification {
+  readonly profileHash: string;
+  readonly measuredAt: string;
+  readonly data: {
+    readonly itemsHash: string;
+    readonly author: number;
+    readonly model: number;
+    readonly generators: readonly string[];
+    readonly topicsLabelled: boolean;
+  };
+  readonly seed: number;
+  readonly resamples: number;
+  readonly instruments: readonly InstrumentQualification[];
+}
+
+const qualificationPath = (l: StoreLayout, profileHash: string): string => {
+  if (!/^[0-9a-f]+$/.test(profileHash)) throw new Error(`STORE: "${profileHash}" is not a profile hash.`);
+  return join(base(l), 'qualifications', `${profileHash}.json`);
+};
+
+/** The qualification measured for the profile with this hash, or null when none was. */
+export function getQualification(l: StoreLayout, profileHash: string): Qualification | null {
+  const p = qualificationPath(l, profileHash);
+  if (!existsSync(p)) return null;
+  const q = readJson<Qualification>(p, { what: 'the qualification', requireKeys: ['profileHash', 'instruments'] });
+  if (q.profileHash !== profileHash) throw new Error(`STORE: qualification file ${p} is for profile ${q.profileHash}, not ${profileHash}. It is not served.`);
+  return q;
+}
+
+/** Store a qualification under the hash of the profile it measured. A later measurement replaces it. */
+export function setQualification(l: StoreLayout, q: Qualification): void {
+  writeAtomic(qualificationPath(l, q.profileHash), JSON.stringify(q, null, 1));
+}
+
+const typicalityPath = (l: StoreLayout, profileHash: string): string => {
+  if (!/^[0-9a-f]+$/.test(profileHash)) throw new Error(`STORE: "${profileHash}" is not a profile hash.`);
+  return join(base(l), 'typicality', `${profileHash}.json`);
+};
+
+/** The typicality calibration stored for the profile with this hash, or null. */
+export function getTypicality(l: StoreLayout, profileHash: string): TypicalityCalibration | null {
+  if (!/^[0-9a-f]+$/.test(profileHash)) return null;
+  const p = typicalityPath(l, profileHash);
+  return existsSync(p) ? readJson<TypicalityCalibration>(p, { what: 'the typicality calibration', requireKeys: ['features', 'scores', 'hash'] }) : null;
+}
+export function setTypicality(l: StoreLayout, profileHash: string, cal: TypicalityCalibration): void {
+  writeAtomic(typicalityPath(l, profileHash), JSON.stringify(cal));
+}
+
+/** The author's pieces as read by the structure reader, and the chain of moves sampled from (../structure/skeleton.ts). */
+export interface AuthorStructure {
+  readonly version: 1;
+  readonly reader: string;
+  readonly pieces: readonly { readonly id: string; readonly moves: readonly (StructureMove | null)[]; readonly kappa: number | null }[];
+  readonly chain: MoveChain;
+  readonly at: string;
+}
+
+/** The author's structure read for the profile with this hash, or null. */
+export function getStructure(l: StoreLayout, profileHash: string): AuthorStructure | null {
+  if (!/^[0-9a-f]+$/.test(profileHash)) return null;
+  const p = join(base(l), 'structure', `${profileHash}.json`);
+  return existsSync(p) ? readJson<AuthorStructure>(p, { what: "the author's structure", requireKeys: ['pieces', 'chain'] }) : null;
+}
+export function setStructure(l: StoreLayout, profileHash: string, s: AuthorStructure): void {
+  if (!/^[0-9a-f]+$/.test(profileHash)) throw new Error(`STORE: "${profileHash}" is not a profile hash.`);
+  writeAtomic(join(base(l), 'structure', `${profileHash}.json`), JSON.stringify(s));
+}
+
+/** The subject cards read for the retrieval index with this hash (../fidelity/subject-reader.ts), or null. */
+export function getSubjects(l: StoreLayout, indexHash: string): SubjectCards | null {
+  if (!/^[0-9a-f]+$/.test(indexHash)) return null;
+  const p = join(base(l), 'subjects', `${indexHash}.json`);
+  return existsSync(p) ? readJson<SubjectCards>(p, { what: 'the subject cards', requireKeys: ['cards', 'reader', 'hash'] }) : null;
+}
+export function setSubjects(l: StoreLayout, indexHash: string, cards: SubjectCards): void {
+  if (!/^[0-9a-f]+$/.test(indexHash)) throw new Error(`STORE: "${indexHash}" is not a retrieval index hash.`);
+  writeAtomic(join(base(l), 'subjects', `${indexHash}.json`), JSON.stringify(cards));
+}

@@ -1,0 +1,4 @@
+PRICE LIST (per month, billed monthly)
+Gable: 11 dollars per seat, minimum 10 seats
+Lumen Path: 15 dollars per seat, minimum 25 seats
+Estuary: 21 dollars per seat, minimum 50 seats

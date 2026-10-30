@@ -1,0 +1,41 @@
+{
+ "schema": 1,
+ "skill": "locked",
+ "skillVersion": "3dd15343a6da708e",
+ "standardVersion": "8963008822170556",
+ "builtAt": "2026-10-02T16:04:46.979Z",
+ "corpus": null,
+ "copying": false,
+ "rules": {
+  "total": 5,
+  "required": 4,
+  "counted": 4,
+  "read": 1,
+  "conditional": 0,
+  "needsMaterial": 0
+ },
+ "claims": {
+  "instrument": "pattern check (no API key for the claim reader)",
+  "qualified": false,
+  "answers": false,
+  "measured": null
+ },
+ "fidelity": null,
+ "release": null,
+ "taste": {
+  "rules": 1,
+  "validated": false,
+  "labelled": 0
+ },
+ "notMeasured": [
+  "the reading-based rules, until the taste reader is validated by your labels",
+  "your range (built without a corpus: no profile)"
+ ],
+ "next": [
+  "atelier invoke --skill locked \"<task>\"",
+  "atelier report <run>",
+  "atelier rate <run> yes|no",
+  "atelier eval --skill locked",
+  "atelier taste --skill locked --calibrate"
+ ]
+}

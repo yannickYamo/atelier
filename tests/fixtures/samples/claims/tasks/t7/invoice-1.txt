@@ -1,0 +1,4 @@
+INVOICE 1
+Supplier: Beacon Office Supply
+Item: a soldering station
+Amount: 4,829 dollars

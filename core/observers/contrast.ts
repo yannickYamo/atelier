@@ -1,0 +1,684 @@
+// atelier/core/observers/contrast.ts — RULES FROM THE GAP BETWEEN THE AUTHOR AND THE MODEL'S DEFAULTS.
+//
+// The model writes a few plain drafts on the kind of topic the author writes about, with no skill.
+// Every named pattern in `style.ts` is counted in both. A pattern the model uses far more than the
+// author becomes a proposed cap; one the author uses far more than the model becomes a proposed floor;
+// the author's function-word profile against the model's becomes a style-distance measure. Each
+// proposal carries both numbers, and each is checked on held-out pieces before it is proposed at all:
+// a "rule" the author's own unseen work breaks is a rule against the author, and is dropped.
+//
+// Beyond named patterns, it compares proportions (./balance.ts): which of two competing words the author
+// reaches for ("but" or "however", "it's" or "it is"), connectives they lean on far more than the model,
+// words the model leans on that they barely use, and the mix of short and long sentences.
+//
+// Like every discovered rule, these are proposals. The person rules on them on the same screen.
+
+import { judgeCountedFeatures } from './selection.js';
+import { featureOf } from './features.js';
+import type { Measurement, Requirement } from '../state/canonical-state.js';
+import { measure, findTerms, type ObserverResult } from './registry.js';
+import { RATIO_MIN_EVENTS, lengthMix, mixDistance, bandLabel, DISTRIBUTION_MIN_SENTENCES, unitLengths, coefficientOfVariation, RHYTHM_MIN_UNITS, type RhythmUnit } from './balance.js';
+import { PATTERN_IDS, PATTERN_LABEL, patternRate, findPattern, fragmentShare, deltaReference, styleDistanceDocs, proseWords, perPieceP, type PatternId } from './style.js';
+import { quantile, sentencesOf, paragraphsOf, wordsOf } from './text.js';
+import { TELL_FAMILIES, BAN_ONLY_FAMILIES } from './tells.js';
+import { headingsOf, headingCase, OPENING_TROPES, CLOSING_TROPES, HEADING_TROPES } from './structure.js';
+import { fitToCorpus, fitNote, type MeasuredProposal } from './derive.js';
+import { allowed, CORPUS_RULE_SHARE, MIN_PIECES_TO_COUNT, thinEvidence } from '../ratification/suggest.js';
+import { isShortForm } from './pooled.js';
+
+interface Piece { readonly id: string; readonly text: string }
+
+/** A gap wide enough to be a fingerprint rather than noise. */
+const overUsed = (author: number, model: number): boolean => model >= 1 && model >= Math.max(3 * author, author + 1.5);
+const underUsed = (author: number, model: number): boolean => author >= 1 && author >= Math.max(3 * model, model + 1.5);
+const r1 = (x: number): number => Math.round(x * 10) / 10;
+/** A limit as the measurement finally carries it: what a statement quotes, so the rule and its check cannot disagree. */
+const lim = (m: Measurement, key: string): number => m.params[key] as number;
+
+/** Patterns with a proposal of their own below, not the generic author-against-model comparison. */
+const VOICE_LAYER: ReadonlySet<PatternId> = new Set<PatternId>(['DASH_ASIDE', 'FIRST_PERSON', 'BRITISH_SPELLING', 'AMERICAN_SPELLING', 'CONTRACTION', 'FULL_FORM',
+  // The contrast move is judged once, as the whole family (CONTRAST_VERDICT), never by one spelling; and
+  // the machine-writing moves have a rule of their own (proposeVoice).
+  'NOT_X_ITS_Y', 'RATHER_THAN', 'REFRAME', 'MACHINE_TELL']);
+
+/**
+ * THE AUTHOR'S POSITIVE SIGNATURE, HELD IN A BAND, AND USED TO CHOOSE, NOT TO STEER. Ceilings on the
+ * model's tells alone produce a de-AI'd generic writer. But an author does not write at a rate: across
+ * one real corpus, one-line paragraphs ran 0.4 to 10.4 per 1,000 words by piece, first person 0.7 to
+ * 36. A rule instructing the average steers every piece toward a piece they never wrote. So these bands
+ * are wide (the author's own range) and proposed as WEAK: checked on every output, reported, and used
+ * to choose between drafts, never instructed and never rewritten toward. The voice itself is carried by
+ * the author's own pieces and a persona brief (core/compiler/).
+ */
+const SIGNATURE: ReadonlySet<PatternId> = new Set<PatternId>(['BOLD_SPAN', 'ONE_LINE_PARAGRAPH', 'RHETORICAL_QUESTION', 'SEMICOLON']);
+
+/** Constructions measured as model habits (one author's corpus measured against model drafts): capped at the author's rate when they rarely use them. */
+const MODEL_TYPICAL: ReadonlySet<PatternId> = new Set<PatternId>(['EM_DASH', 'CONTRAST_VERDICT', 'THAT_OPENER', 'HERES_OPENER', 'SIGNPOST', 'INTENSIFIER', 'SHORT_VERDICT', 'REPEATED_OPENER']);
+
+/**
+ * A counted feature whose band tells single drafts from the author's work, proposed as a rule (./selection.ts).
+ * What was qualified is DISCRIMINATION, never enforcement, so the review suggests these as preferred
+ * (../ratification/suggest.ts). Two shapes are not proposed as a band:
+ *
+ *   a flat band    the author's pieces all sit at one value (usually 0: they never do it). A band of
+ *                  -0.001 to 0.001 is a cap wearing a floor; it is proposed as the cap it is, when the
+ *                  model does more of it, and not at all otherwise.
+ *   specifics      links, figures, names, quotations. A floor would ask a draft for specifics nobody
+ *                  supplied, which the UNSOURCED check then cuts: only ever a cap, and only when the
+ *                  model does more of it than the author.
+ */
+function proposeFeatureRules(authorTexts: readonly string[], heldTexts: readonly string[], drafts: readonly string[], propose: Propose): void {
+  for (const v of judgeCountedFeatures(authorTexts, heldTexts, drafts)) {
+    const f = featureOf(v.id); const band = v.band;
+    if (!v.kept || v.role !== 'RULE' || !band || !f) continue;
+    const show = (x: number): string => (f.unit === 'share' ? `${Math.round(x * 100)}%` : `${x}`);
+    const unit = f.unit === 'per1000' ? ' per 1,000 words' : '';
+    const evidence = `you: ${show(v.authorMedian ?? 0)}; the model on its own: ${show(v.modelMedian ?? 0)}; separates your pieces from its drafts (AUC ${v.auc})`;
+    if (v.flat || f.specifics) {
+      // Only a cap, and only where the model does more of it: a cap the model already meets checks nothing.
+      if ((v.auc ?? 0.5) >= 0.5) continue;
+      const cap = Math.max(0, band[1]);
+      const statement = v.flat && (v.authorMedian ?? 0) === 0
+        ? `Keep ${f.label} at zero: my pieces have none.`
+        : `Keep ${f.label} to at most ${show(cap)}${unit} (I'm around ${show(v.authorMedian ?? 0)}).`;
+      propose(statement, 'BOUNDARY', { observer: 'FEATURE', params: { feature: [v.id], maxValue: cap } }, evidence, false, true);
+      continue;
+    }
+    propose(`Keep ${f.label} within my range: ${show(band[0])} to ${show(band[1])}${unit} (I'm around ${show(v.authorMedian ?? 0)}).`, 'GENERATIVE',
+      { observer: 'FEATURE', params: { feature: [v.id], minValue: band[0], maxValue: band[1] } }, evidence, false, true);
+  }
+}
+
+/**
+ * THE MACHINE-TELL RULE, WORKED OUT IN ONE PLACE from the author's own pieces: discovery and the method build both ask
+ * here, so a skill built from a method and one built from a folder hold the same rule. A family the author makes in
+ * fewer than half their pieces is never allowed; an em dash is never allowed only where no piece holds one, and is
+ * otherwise held to the author's own rate (decision 0016). Needs no model: the catalogue is the model's own habits.
+ */
+export function machineTellRule(all: readonly string[], opts: { anyUse?: boolean; allow?: readonly string[] } = {}): { never: string[]; cap: number; dashCap: number | null; usedIn: (family: string) => number; countedRate: (text: string) => number; statement: string } {
+  // HELD TO THE AUTHOR'S TYPICAL PIECE, NOT THEIR AVERAGE: a family is the author's to use only if at least half their
+  // pieces use it. AN EM DASH THE AUTHOR WRITES IS THEIRS, HOWEVER FEW OF THEIR PIECES HOLD ONE (decision 0016).
+  const usedIn = (f: string): number => all.filter((t) => findPattern(t, 'MACHINE_TELL').some((x) => x.family === f)).length;
+  const dashIsTheirs = usedIn('EM_DASH') > 0;
+  // With a handful of examples (a method build), "half their pieces" is one or two: a move any example makes is theirs.
+  // SO TOO WITH SHORT PIECES. A tweet has room for a move once or not at all, so "half their pieces" asked a habit of
+  // three sentences to show up in ten tweets of twenty; a move absent from every piece is never theirs, a move in any
+  // one of them is. That is a ban at any length on the first and none on the second (./registry.ts, PATTERN_RATE).
+  // A family the owner allows in so many words is never banned, whatever the pieces show.
+  const anyUse = opts.anyUse === true || isShortForm(all);
+  const never = TELL_FAMILIES.filter((f) => !opts.allow?.includes(f.id) && (f.id === 'EM_DASH' || anyUse ? usedIn(f.id) === 0 : usedIn(f.id) * 2 < all.length)).map((f) => f.id);
+  // THE RATE THE CHECK READS (./registry.ts, PATTERN_RATE): the families it counts against the cap are the ones not
+  // banned (a banned move breaks the rule whatever the rate) and not ban-only (./tells.ts BAN_ONLY_FAMILIES: an author's
+  // own em dashes would otherwise raise the cap on every other move). The cap is set over this rate, and the figure
+  // shown beside the rule is this rate: one shown over every family said 5.8 per 1,000 words of an author whose dashes
+  // the check never counts.
+  const banned = new Set(never);
+  const countedRate = (t: string): number => {
+    const words = proseWords(t);
+    return words ? (findPattern(t, 'MACHINE_TELL').filter((s) => !(s.family && (BAN_ONLY_FAMILIES.has(s.family) || banned.has(s.family)))).length / words) * 1000 : 0;
+  };
+  const cap = r1(Math.max(perPieceP(all, countedRate, 0.9) * 1.5, 0.25));
+  const dashCap = dashIsTheirs ? r1(Math.max(perPieceP(all, (t) => patternRate(t, 'EM_DASH'), 0.9) * 1.25, r1(all.reduce((n, t) => n + patternRate(t, 'EM_DASH'), 0) / Math.max(1, all.length)) * 1.5, 0.3)) : null;
+  // THE STATEMENT SAYS WHAT THE CHECK HOLDS. The two ban-only families are named only where they are banned: an em
+  // dash or a run of short sentences the author writes is theirs, and a rule that said "none" of it was not the rule.
+  const statement = `Write none of the moves that mark text as machine-written (announcing an insight others "miss", grading your own list, "the single most", announcing candour, "that's the whole game", reading the reader's mind, one thing "wearing another's clothes", a contrastive verdict as the opening line${never.includes('EM_DASH') ? ', an em dash' : ''}${never.includes('STACCATO_RUN') ? ', a run of three or more very short sentences' : ''})${never.length < TELL_FAMILIES.length ? `; the ones I make in most of my pieces at most ${cap} per 1,000 words` : ''}.`;
+  return { never, cap, dashCap, usedIn, countedRate, statement };
+}
+
+export function deriveContrastRules(
+  read: readonly Piece[], held: readonly Piece[], drafts: readonly string[], provenance: Requirement['provenance'],
+): MeasuredProposal[] {
+  if (read.length < MIN_PIECES_TO_COUNT) return [];
+  // Without the model's drafts, only the rules measured on the author alone are proposed: the tell floor,
+  // register, and the contrastive verdict. Every rule that claims a gap from the model needs its drafts.
+  const compared = drafts.length >= 2;
+  const authorTexts = read.map((p) => p.text);
+  const authorAll = authorTexts.join('\n\n'); const modelAll = drafts.join('\n\n');
+  const words = proseWords(authorAll);
+  const checkOn = held.length ? held.map((p) => p.text) : authorTexts;
+  const out: MeasuredProposal[] = [];
+  let n = 0;
+  // THE AUTHOR'S OWN PIECES (read and held out, each once, never anything else): what a limit is fitted to.
+  const own = [...read, ...held.filter((h) => !read.some((r) => r.id === h.id))].map((p) => p.text);
+  const mayBreak = allowed(own.length, CORPUS_RULE_SHARE);
+  // Under five pieces, what is read is thin: shown, used to choose between drafts, and never blocking.
+  const thin = thinEvidence(own.length);
+  const failingDrafts = (m: Measurement): { of: number; failing: number } => {
+    const d = drafts.map((t) => measure(t, m)).filter((x) => x.verdict !== 'NOT_APPLICABLE');
+    return { of: d.length, failing: d.filter((x) => x.verdict === 'VIOLATED').length };
+  };
+  // At least three in five drafts, each measured on its own, must fail it.
+  const separates = (m: Measurement): boolean => { const x = failingDrafts(m); return x.of > 0 && x.failing / x.of >= 0.6; };
+  const propose = (said: Statement, kind: Requirement['kind'], computed: Measurement, evidence: string, weak = false, separate = false,
+    /** a piece of the author's that breaks the rule but should still count as meeting it (see the machine-tell rule) */
+    tolerated: (text: string) => boolean = () => false): void => {
+    // MUST SEPARATE. A proportion the model's own drafts already meet measures nothing about the voice.
+    if (separate && !separates(computed)) return;
+    // THE FALSE-POSITIVE GUARD. A cap the author's own held-out writing breaks is a rule against them.
+    // Where no held-out piece is long enough for the rule to apply (common for a ratio, which needs
+    // several uses), the pieces it was counted from are the check, and the proposal says so; where none
+    // of those applies either, there is no evidence the author meets it, and it is not proposed.
+    let independent = held.length > 0;
+    let on = checkOn;
+    // A BAN APPLIES AT ANY LENGTH. The rate observer checks a move the author never makes even under 150
+    // words, and a short piece without one meets that part (registry.ts, PATTERN_RATE). Read as "not
+    // applicable" here, a corpus of short pieces (answers, support replies) had no piece to check the
+    // rule on, so the machine-tell floor was never proposed, and an answer skill shipped em dashes its
+    // author never writes.
+    const bans = ((computed.params.never as readonly string[] | undefined) ?? []).length > 0;
+    const measureOn = (t: string): ObserverResult => {
+      const x = measure(t, computed);
+      return bans && x.verdict === 'NOT_APPLICABLE' ? { ...x, verdict: 'MET' } : x;
+    };
+    let rs = on.map(measureOn);
+    if (!rs.some((x) => x.verdict !== 'NOT_APPLICABLE')) { on = authorTexts; rs = on.map(measureOn); independent = false; }
+    const applicable = rs.filter((x) => x.verdict !== 'NOT_APPLICABLE').length;
+    const present = rs.filter((x, i) => x.verdict === 'MET' || (x.verdict === 'VIOLATED' && tolerated(on[i]))).length;
+    if (!applicable || present / applicable < 0.8) return;
+    // THE LIMIT, SET WHERE THE AUTHOR'S OWN PIECES ARE (./derive.ts, `fitToCorpus`). Both guards above are passed
+    // by the limit as computed, so fitting never adds a proposal and never drops one: it only moves the number of
+    // a rule that is proposed anyway, and the counts kept with it stay those of the computed limit, because the
+    // held-out pieces helped set the moved one. Only a statement given as a function of its measurement is fitted:
+    // that is how a rule says its number is a limit one of the author's pieces can sit past. A weak rule is left
+    // alone (it is never suggested as required, and its band is the author's own range already). A fitted limit
+    // the model's drafts no longer fail is not taken either: the rule keeps the limit it was computed with.
+    const candidate = typeof said === 'function' && !weak ? fitToCorpus(computed, own, mayBreak) : null;
+    const fitted = candidate && (!separate || separates(candidate)) ? candidate : null;
+    const measurement = fitted ?? computed;
+    if (separate) { const x = failingDrafts(measurement); evidence = `${evidence}; ${x.failing} of ${x.of} of its drafts fail it`; }
+    if (fitted) evidence = `${evidence}; ${fitNote(computed, fitted, own)}`;
+    n += 1;
+    out.push({
+      requirement: { requirementId: `c${n}`, statement: typeof said === 'function' ? said(measurement) : said, appliesWhen: 'GENERAL', kind, authority: 'DERIVED_UNRATIFIED', provenance,
+        evidence, evidenceItemId: null, wouldBeAbsentIf: null, materiality: null, realizationTolerance: null, outputShape: null, wordedFromCheck: true, measurement },
+      conformance: { applicable, present, independent, ...(weak ? { weak: true } : {}), ...(fitted ? { fitted: true } : {}), ...(thin ? { thin } : {}) },
+    });
+  };
+
+  // Mean of per-piece rates, not the rate of everything joined: a pattern that counts repeats (the same
+  // opening three times) grows with length, and a corpus joined into one text inflated it eightfold.
+  const meanRate = (texts: readonly string[], p: PatternId): number => r1(texts.reduce((s0, t) => s0 + patternRate(t, p), 0) / Math.max(1, texts.length));
+  const authorRate = (p: PatternId): number => meanRate(authorTexts, p);
+  const spacedHyphen = authorRate('SPACED_HYPHEN');
+  // The band around an author's own rate: most of their pieces sit inside it, and it neither pushes a
+  // habit up to their heaviest piece nor lets it vanish.
+  const bandOf = (p: PatternId): { lo: number; hi: number; a: number } => {
+    const a = authorRate(p);
+    const per = (q: number): number => perPieceP(authorTexts, (t) => patternRate(t, p), q);
+    return { a, lo: r1(per(0.25) * 0.6), hi: r1(Math.max(per(0.9) * 1.5, a * 2)) };
+  };
+  const everyPiece = [...authorTexts, ...held.map((h) => h.text)];
+  const dashAnywhere = everyPiece.some((t) => t.includes('—'));
+  for (const p of PATTERN_IDS) {
+    if (VOICE_LAYER.has(p) || (!compared && p !== 'CONTRAST_VERDICT')) continue;
+    const a = authorRate(p); const m = meanRate(drafts, p);
+    const perPiece = (q: number): number => perPieceP(authorTexts, (t) => patternRate(t, p), q);
+    const ev = `you: ${a === 0 ? `none in ${words.toLocaleString()} words` : `${a} per 1,000 words`}; the model on its own: ${m} per 1,000`;
+    if (overUsed(a, m)) {
+      // A dash in a piece held out is the author's too: none in the pieces read is then not "never".
+      const theirs = p === 'EM_DASH' && a === 0 && dashAnywhere;
+      const cap = theirs ? r1(Math.max(perPieceP(everyPiece, (t) => patternRate(t, p), 0.9) * 1.25, 0.3)) : a === 0 ? 0 : r1(Math.max(perPiece(0.9) * 1.25, a * 1.5, 0.3));
+      // Where the author has their own mark for the same job, the rule says to use it.
+      const prefer = p === 'EM_DASH' && spacedHyphen >= 1 ? [' - '] : undefined;
+      const statement: Statement = cap === 0
+        ? `Never use ${PATTERN_LABEL[p]}${prefer ? '; I write a spaced hyphen (" - ") instead' : ''}.`
+        : (f) => `Keep ${PATTERN_LABEL[p]} to at most ${lim(f, 'maxPer1000')} per 1,000 words.`;
+      propose(statement, 'BOUNDARY', { observer: 'PATTERN_RATE', params: { pattern: [p], maxPer1000: cap, ...(prefer ? { prefer } : {}) } },
+        theirs ? `you: none in the pieces read, and up to ${r1(Math.max(...everyPiece.map((t) => patternRate(t, p))))} per 1,000 words in a piece held out; the model on its own: ${m} per 1,000` : ev);
+      // THE MOVE GETS A CAP, NOT JUST THE GLYPH. Told to write " - " where it would have written "—", a
+      // model moves every aside onto the substitute: spaced hyphens went to 8.7 and then 8.9 per 1,000
+      // words against the author's 4.0 and 2.9. So every dash aside, whatever the character, is held
+      // near the author's own rate (half as much again as their typical piece, or their overall rate),
+      // proposed when the model's own asides would exceed it.
+      if (prefer) {
+        const aside = authorRate('DASH_ASIDE');
+        const cap = r1(Math.max(perPieceP(authorTexts, (t) => patternRate(t, 'DASH_ASIDE'), 0.5) * 1.5, aside * 1.5, 0.3));
+        const moved = meanRate(drafts, 'DASH_ASIDE');
+        if (moved > cap) {
+          propose((f) => `Keep dash asides (—, – or " - ") to my rate: at most ${lim(f, 'maxPer1000')} per 1,000 words. A banned em dash is not to be moved onto another mark.`, 'BOUNDARY',
+            { observer: 'PATTERN_RATE', params: { pattern: ['DASH_ASIDE'], maxPer1000: cap, role: ['dash-substitute'] } },
+            `you: ${aside} dash asides per 1,000 words; the model on its own: ${moved}`);
+        }
+      }
+    } else if (MODEL_TYPICAL.has(p) && ((a <= 0.5 && m > a + 0.2) || p === 'CONTRAST_VERDICT')) {
+      // A construction models reach for, which this author almost never uses. The cap sits at the
+      // author's own rate. Where the model's plain drafts already exceed it, the evidence is direct;
+      // where they do not, the tic may only appear under a skill's instructions (as it did when a rule
+      // asking for "a short declarative reversal" produced one per paragraph), and the rule is proposed
+      // as WEAK: shown and used to choose between drafts, not instructed, until the owner says so.
+      //
+      // THE CONTRASTIVE VERDICT IS HELD FOR EVERY AUTHOR, AT THEIR OWN RATE. A rewrite inherits it from
+      // its source, so a plain model's drafts never showed it: a post using it three times as often as
+      // a company blog kept every one through a rewrite in that blog's voice. It is the move readers name first.
+      const cap = r1(Math.max(perPiece(0.9) * 1.5, 0.5));
+      const always = p === 'CONTRAST_VERDICT';
+      propose((f) => `Keep ${PATTERN_LABEL[p]} ${always && a > 0.5 ? 'to my rate' : 'rare'}: at most ${lim(f, 'maxPer1000')} per 1,000 words.`, 'BOUNDARY',
+        { observer: 'PATTERN_RATE', params: { pattern: [p], maxPer1000: cap } },
+        `you: ${a === 0 ? `none in ${words.toLocaleString()} words` : `${a} per 1,000 words`}; the model's plain drafts here: ${m} per 1,000`,
+        !always && m <= cap);
+    } else if (SIGNATURE.has(p) && a >= 1) {
+      const b = bandOf(p);
+      if (b.lo > 0) {
+        propose(`Use ${PATTERN_LABEL[p]} within my range: between ${b.lo} and ${b.hi} per 1,000 words (I use about ${b.a}).`, 'GENERATIVE',
+          { observer: 'PATTERN_RATE', params: { pattern: [p], minPer1000: b.lo, maxPer1000: b.hi } }, ev, true);
+      }
+    } else if (underUsed(a, m)) {
+      // A BAND, NOT A FLOOR. Told only "at least", a model overshoots: a first-person floor with no ceiling
+      // produced 14.1 per 1,000 words against an author's 6.5. The ceiling is the band's usual one (half
+      // again the author's heavier pieces, or twice their rate), so their own range always passes.
+      const floor = r1(perPiece(0.1) * 0.8);
+      const ceiling = r1(Math.max(perPiece(0.9) * 1.5, a * 2));
+      if (floor > 0) {
+        propose((f) => `Use ${PATTERN_LABEL[p]} within my range: between ${lim(f, 'minPer1000')} and ${lim(f, 'maxPer1000')} per 1,000 words (I use about ${a}).`, 'GENERATIVE',
+          { observer: 'PATTERN_RATE', params: { pattern: [p], minPer1000: floor, maxPer1000: ceiling } }, ev);
+      }
+    }
+  }
+
+  // Whether a rule on em dashes came through the guard above, not whether one was offered to it: a proposal the
+  // author's held-out pieces break is dropped, and the dash would then be held by nothing.
+  const dashCapped = (): boolean => out.some((r) => r.requirement.measurement?.observer === 'PATTERN_RATE' && (r.requirement.measurement.params.pattern as readonly string[] | undefined)?.join() === 'EM_DASH');
+  proposeVoice(authorTexts, held.map((p) => p.text), drafts, propose, bandOf, meanRate, dashCapped);
+  // Many small counts, selected by this author's pieces against the model's drafts (./features.ts).
+  if (compared) proposeFeatureRules(authorTexts, held.map((p) => p.text), drafts, propose);
+
+  const aFrag = fragmentShare(authorAll, 5); const mFrag = fragmentShare(modelAll, 5);
+  if (mFrag >= 1.5 * aFrag && mFrag - aFrag >= 0.05) {
+    const max = Math.min(0.95, Math.round(Math.max(perPieceP(authorTexts, (t) => fragmentShare(t, 5), 0.9) * 1.15, aFrag * 1.3) * 100) / 100);
+    propose((f) => `Few very short sentences: at most ${Math.round(lim(f, 'maxShare') * 100)}% of sentences are five words or fewer.`, 'BOUNDARY',
+      { observer: 'FRAGMENT_SHARE', params: { maxWords: 5, maxShare: max } },
+      `you: ${Math.round(aFrag * 100)}% of sentences; the model on its own: ${Math.round(mFrag * 100)}%`);
+  }
+
+  // ── Style distance, only where it can tell the two apart ────────────────────────────────────────
+  //
+  // Distances are to each document, averaged — not to a centroid, which with a dozen author pieces and
+  // three drafts sits near the pooled mean and calls anything "closer to the author". And it is proposed
+  // only when it works on this corpus: every model draft, left out in turn, must land on the model's
+  // side, and every held-out piece on the author's. Otherwise it would be a number that sounds like a
+  // measure of voice and is not one.
+  if (read.length >= 4 && drafts.length >= 3) {
+    const ref = deltaReference(authorTexts, drafts);
+    // At least four in five: one borderline draft should not veto a measure that otherwise separates
+    // (measured on real data: 4 of 5 drafts recognised, the fifth by 0.03).
+    const recognised = drafts.filter((d, i) => {
+      const others = drafts.filter((_, j) => j !== i);
+      const x = styleDistanceDocs(d, deltaReference(authorTexts, others));
+      return x.model < x.author;
+    }).length;
+    // And the other side: each of the author's own pieces, left out in turn, must land on the author's
+    // side too. Without this the measure passed the held-out check and then failed 2 of 3 pieces the
+    // author had reserved (a real run): it had learned the pieces, not the voice.
+    const ownRecognised = authorTexts.filter((t, i) => {
+      const x = styleDistanceDocs(t, deltaReference(authorTexts.filter((_, j) => j !== i), drafts));
+      return x.author < x.model;
+    }).length;
+    const loo = recognised / drafts.length >= 0.8 && ownRecognised / authorTexts.length >= 0.8;
+    const heldOk = (held.length ? held.map((p) => p.text) : []).every((t) => { const x = styleDistanceDocs(t, ref); return x.author < x.model; });
+    if (loo && heldOk) {
+      propose('Stay closer to my word habits than to your defaults (the function words I use, and how often).', 'GENERATIVE',
+        { observer: 'STYLE_DISTANCE', params: { words: [...ref.words], mean: [...ref.mean], sd: [...ref.sd],
+          authorDocs: ref.authorDocs.flat(), modelDocs: ref.modelDocs.flat() } },
+        `Burrows' Delta over ${ref.words.length} function words, from ${read.length} of your pieces and ${drafts.length} plain drafts by the model; left out in turn, ${recognised} of ${drafts.length} drafts were recognised as the model's and ${ownRecognised} of ${authorTexts.length} of your pieces as yours`);
+    }
+  }
+  proposeProportions(authorTexts, drafts, propose);
+  proposeStructure(authorTexts, drafts, propose);
+  proposePace(authorTexts, drafts, propose);
+  return out;
+}
+
+/** A rule's words: fixed, or written from its final measurement when it quotes a limit that may be fitted. */
+type Statement = string | ((m: Measurement) => string);
+type Propose = (statement: Statement, kind: Requirement['kind'], measurement: Measurement, evidence: string, weak?: boolean, separate?: boolean, tolerated?: (text: string) => boolean) => void;
+
+/**
+ * Competing ways to say the same thing. The first list is the plain register, the second the one a
+ * model drifts to. Which one an author picks, and how consistently, is voice; neither is wrong.
+ */
+export const COMPETING: readonly { readonly a: readonly string[]; readonly b: readonly string[] }[] = [
+  { a: ['but'], b: ['however', 'nevertheless', 'nonetheless'] },
+  { a: ['so'], b: ['therefore', 'thus', 'hence', 'consequently'] },
+  { a: ['also'], b: ['moreover', 'furthermore', 'additionally', 'in addition'] },
+  { a: ['use', 'uses', 'used', 'using'], b: ['utilize', 'utilizes', 'utilise', 'leverage', 'leverages', 'leveraging'] },
+  { a: ['help', 'helps', 'helped'], b: ['facilitate', 'facilitates', 'facilitated'] },
+  { a: ['show', 'shows', 'showed'], b: ['demonstrate', 'demonstrates', 'demonstrated', 'showcase', 'showcases'] },
+  { a: ['it\'s', 'don\'t', 'isn\'t', 'can\'t', 'won\'t', 'doesn\'t', 'aren\'t', 'that\'s', 'we\'re', 'you\'re'],
+    b: ['it is', 'do not', 'is not', 'cannot', 'will not', 'does not', 'are not', 'that is', 'we are', 'you are'] },
+];
+
+/** Connectives and discourse words whose rate is a habit rather than a topic. */
+const CONNECTIVES: readonly string[] = ['but', 'so', 'and', 'because', 'which', 'though', 'still', 'yet', 'actually', 'just', 'really', 'even', 'then', 'now', 'here', 'instead', 'maybe'];
+
+/** Words a model reaches for in plain prose that careful writers rarely use. Proposed as a cap only
+ *  from the words the model's own drafts used here, never as a list imposed from outside. */
+const MODEL_VOCABULARY: readonly string[] = ['crucial', 'pivotal', 'landscape', 'robust', 'seamless', 'seamlessly', 'navigate',
+  'navigating', 'delve', 'foster', 'fostering', 'harness', 'empower', 'unlock', 'tapestry', 'realm', 'ever-evolving', 'game-changer',
+  'cutting-edge', 'streamline', 'holistic', 'nuanced', 'vital', 'ensure', 'ensuring', 'elevate', 'paramount', 'intricate', 'underscore', 'underscores'];
+
+/** The sentence-length bands a mix is counted over. */
+const LENGTH_EDGES: readonly number[] = [8, 18, 30];
+
+function proposeProportions(authorTexts: readonly string[], drafts: readonly string[], propose: Propose): void {
+  const words = (t: string): number => proseWords(t);
+  const rate = (t: string, terms: readonly string[]): number => { const w = words(t); return w ? (findTerms(t, terms).length / w) * 1000 : 0; };
+  const meanRate = (texts: readonly string[], terms: readonly string[]): number => r1(texts.reduce((x, t) => x + rate(t, terms), 0) / Math.max(1, texts.length));
+  const pct = (x: number): string => `${Math.round(x * 100)}%`;
+  const say = (xs: readonly string[]): string => xs.slice(0, 4).map((x) => `"${x}"`).join('/') + (xs.length > 4 ? '…' : '');
+
+  // ── Which of two competing words ─────────────────────────────────────────────────────────────────
+  for (const { a, b } of COMPETING) {
+    const count = (texts: readonly string[]): { a: number; b: number } =>
+      texts.reduce((c, t) => ({ a: c.a + findTerms(t, a).length, b: c.b + findTerms(t, b).length }), { a: 0, b: 0 });
+    const au = count(authorTexts); const mo = count(drafts);
+    // Enough uses on both sides for a share to mean something: two per piece is not a habit.
+    if (au.a + au.b < 2 * RATIO_MIN_EVENTS || mo.a + mo.b < RATIO_MIN_EVENTS) continue;
+    const sa = au.a / (au.a + au.b); const sm = mo.a / (mo.a + mo.b);
+    if (Math.abs(sa - sm) < 0.3) continue;
+    // Per-piece shares, over the pieces where either occurs often enough, set the bound: the author's
+    // own least typical piece, less a margin, so their normal variation is never a violation.
+    const perPiece = authorTexts.map((t) => ({ x: findTerms(t, a).length, y: findTerms(t, b).length }))
+      .filter((c) => c.x + c.y >= RATIO_MIN_EVENTS).map((c) => c.x / (c.x + c.y));
+    const ev = `you: ${say(a)} in ${pct(sa)} of ${au.a + au.b} uses; the model on its own: ${pct(sm)} of ${mo.a + mo.b}`;
+    if (sa > sm) {
+      const min = Math.max(0.05, Math.round((Math.min(perPiece.length ? quantile(perPiece, 0.1) : sa, sa) - 0.1) * 20) / 20);
+      if (min <= sm) continue;
+      propose((f) => `Prefer ${say(a)} to ${say(b)}: at least ${pct(lim(f, 'minShare'))} of the uses of either.`, 'GENERATIVE',
+        { observer: 'RATIO', params: { numerator: [...a], denominator: [...b], minShare: min } }, ev, false, true);
+    } else {
+      const max = Math.min(0.95, Math.round((Math.max(perPiece.length ? quantile(perPiece, 0.9) : sa, sa) + 0.1) * 20) / 20);
+      if (max >= sm) continue;
+      propose((f) => `Prefer ${say(b)} to ${say(a)}: at most ${pct(lim(f, 'maxShare'))} of the uses of either are ${say(a)}.`, 'GENERATIVE',
+        { observer: 'RATIO', params: { numerator: [...a], denominator: [...b], maxShare: max } }, ev, false, true);
+    }
+  }
+
+  // ── Connectives the author leans on: one floor over the group ───────────────────────────────────
+  //
+  // One connective's rate swings widely from piece to piece (0.7 to 9.2 per 1,000 for "so" across one
+  // author's twelve posts), so a floor on it either fails the author or passes everything. The group of
+  // connectives they lean on is steadier, and is what a reader hears. The floor is the author's own
+  // least typical piece, and it is proposed only if it separates: most of the model's drafts fall below.
+  const group = CONNECTIVES.filter((c) => { const a = meanRate(authorTexts, [c]); const m = meanRate(drafts, [c]); return a >= 1 && a >= 1.5 * m + 0.3; });
+  if (group.length >= 2) {
+    const floor = r1(perPieceP(authorTexts, (t) => rate(t, group), 0.1) * 0.9);
+    if (floor > 0) {
+      // `role` keeps the rule's key stable when a later run finds a slightly different group.
+      propose(`Lean on my connectives (${say(group)}): at least ${floor} per 1,000 words together.`, 'GENERATIVE',
+        { observer: 'TERM_RATE', params: { terms: group, minPer1000: floor, role: ['connectives'] } },
+        `you: ${meanRate(authorTexts, group)} per 1,000 words for these; the model on its own: ${meanRate(drafts, group)}`, false, true);
+    }
+  }
+
+  // ── Words the model leans on that the author barely uses: one cap over the ones it used here ────
+  const used = MODEL_VOCABULARY.filter((w) => meanRate(drafts, [w]) > 0);
+  if (used.length) {
+    const a = meanRate(authorTexts, used); const m = meanRate(drafts, used);
+    if (m >= 1 && m >= Math.max(3 * a, a + 1)) {
+      const cap = r1(Math.max(perPieceP(authorTexts, (t) => rate(t, used), 0.9) * 1.5, 0.5));
+      if (cap < m) {
+        propose((f) => `Keep the model's stock vocabulary rare (${say(used)}): at most ${lim(f, 'maxPer1000')} per 1,000 words together.`, 'BOUNDARY',
+          { observer: 'TERM_RATE', params: { terms: used, maxPer1000: cap, role: ['model-vocabulary'] } },
+          `you: ${a} per 1,000 words for these; the model on its own: ${m} per 1,000`, false, true);
+      }
+    }
+  }
+
+  // ── The mix of sentence lengths ───────────────────────────────────────────────────────────────
+  //
+  // THE AUTHOR'S RHYTHM, READ OFF THEIR OWN PIECES. It was proposed only where it separated the author
+  // from a plain model's drafts, but a rewrite's short sentences come from its source, not the model: in
+  // two rewrites (toward a company blog and toward a technical author) 38% of sentences stayed at eight words or fewer
+  // against the authors' typical 19 to 20%, and no rule pulled them. So the mix is proposed from the
+  // author's pieces alone. Its tolerance is their 80th-percentile piece (about 12 to 14% of sentences for
+  // both authors), their typical range rather than their outliers; the 90th percentile, rounded up, had
+  // let 22% of sentences sit in the wrong band. The held-out guard still applies.
+  const mixable = authorTexts.filter((t) => sentencesOf(t).length >= DISTRIBUTION_MIN_SENTENCES);
+  const draftMixable = drafts.filter((t) => sentencesOf(t).length >= DISTRIBUTION_MIN_SENTENCES);
+  if (mixable.length >= 3) {
+    const mean = (mixes: number[][]): number[] => mixes[0].map((_, i) => mixes.reduce((x, m) => x + m[i], 0) / mixes.length);
+    const author = mean(mixable.map((t) => lengthMix(t, LENGTH_EDGES).shares));
+    const spread = quantile(mixable.map((t) => mixDistance(lengthMix(t, LENGTH_EDGES).shares, author)), 0.8);
+    const tolerance = Math.round(Math.max(0.1, spread) * 100) / 100;
+    const shares = toHundredths(author);
+    const show = (m: readonly number[]): string => m.map((x, i) => `${pct(x)} ${bandLabel(LENGTH_EDGES, i)}`).join(', ');
+    const model = draftMixable.length >= 2 ? mean(draftMixable.map((t) => lengthMix(t, LENGTH_EDGES).shares)) : null;
+    // The statement quotes the mix, which is never moved; what is fitted is the tolerance around it.
+    propose(() => `Mix sentence lengths as I do: about ${show(shares)}.`, 'GENERATIVE',
+      { observer: 'DISTRIBUTION', params: { edges: [...LENGTH_EDGES], shares, tolerance } },
+      `you: ${show(author)}${model ? `; the model on its own: ${show(model)} (${pct(mixDistance(author, model))} of its sentences in a different band)` : ''}`);
+  }
+}
+
+/**
+ * The edges and the signposts: phrases the model's drafts put in openings, closes and headings that the
+ * author's work never uses there, heading case, and how long the opening runs. Each is proposed only if
+ * most of the drafts fail it and the author's held-out work meets it.
+ */
+function proposeStructure(authorTexts: readonly string[], drafts: readonly string[], propose: Propose): void {
+  const first = (t: string): string => paragraphsOf(t)[0]?.text ?? '';
+  const last = (t: string): string => { const ps = paragraphsOf(t); return ps.length >= 2 ? ps[ps.length - 1].text : ''; };
+  const headingText = (t: string): string => headingsOf(t).map((h) => h.text).join('\n');
+  const seenIn = (texts: readonly string[], part: (t: string) => string, tropes: readonly string[]): string[] =>
+    tropes.filter((tr) => texts.some((t) => findTerms(part(t), [tr]).length > 0));
+  const say = (xs: readonly string[]): string => xs.slice(0, 4).map((x) => `"${x}"`).join(', ') + (xs.length > 4 ? '…' : '');
+
+  // STOCK MOVES AT THE EDGES. Like the model-typical tics above, these often appear only once a skill
+  // asks for a voice ("The thing everyone gets wrong about…" arrived in a skill's output, not in the
+  // model's plain drafts). So every trope the author never uses in that position is proposed: as a
+  // firm rule where the plain drafts already fail it, and as WEAK (shown, used to choose between
+  // drafts, not instructed) where they do not.
+  const edgeRule = (id: 'OPENING' | 'CLOSING' | 'HEADINGS', part: (t: string) => string, tropes: readonly string[],
+    statement: (xs: readonly string[]) => string): void => {
+    const absent = tropes.filter((tr) => !seenIn(authorTexts, part, [tr]).length);
+    if (!absent.length) return;
+    const inDrafts = seenIn(drafts, part, absent);
+    const m: Measurement = { observer: id, params: { avoid: absent, role: [`${id.toLowerCase()}-tropes`] } };
+    // Firm only where at least three in five of the drafts it applies to break it.
+    const readings = drafts.map((t) => measure(t, m).verdict).filter((x) => x !== 'NOT_APPLICABLE');
+    const failing = readings.filter((x) => x === 'VIOLATED').length;
+    propose(statement(absent), 'BOUNDARY', m,
+      inDrafts.length ? `your pieces never use these there; the model's plain drafts used ${say(inDrafts)}`
+        : 'your pieces never use these there; stock moves models reach for under a voice instruction',
+      failing / Math.max(1, readings.length) < 0.6);
+  };
+  edgeRule('OPENING', first, OPENING_TROPES, (xs) => `Open the way I do, without the stock moves: never ${say(xs)}.`);
+  edgeRule('CLOSING', last, CLOSING_TROPES, (xs) => `Close the way I do, without the stock moves: never ${say(xs)}.`);
+  edgeRule('HEADINGS', headingText, HEADING_TROPES, (xs) => `Write headings that say what the section says, never ${say(xs)}.`);
+
+  // Openings: the author's own range of lengths, where the model's run outside it.
+  const openLen = (t: string): number => wordsOf(first(t)).length;
+  const lens = authorTexts.filter((t) => paragraphsOf(t).length >= 2).map(openLen);
+  if (lens.length >= 3) {
+    const lo = Math.max(0, Math.floor(quantile(lens, 0.1) * 0.8)); const hi = Math.ceil(quantile(lens, 0.9) * 1.25);
+    propose((f) => `Keep the opening paragraph to my length: ${lo}–${lim(f, 'maxWords')} words.`, 'GENERATIVE',
+      { observer: 'OPENING', params: { minWords: lo, maxWords: hi } },
+      `your openings run ${Math.min(...lens)}–${Math.max(...lens)} words; the model's: ${drafts.map(openLen).join(', ')}`, false, true);
+  }
+
+  // Heading case.
+  const cases = (texts: readonly string[]): { title: number; sentence: number } => texts.flatMap((t) => headingsOf(t).map((h) => headingCase(h.text)))
+    .reduce((c, x) => ({ title: c.title + (x === 'TITLE' ? 1 : 0), sentence: c.sentence + (x === 'SENTENCE' ? 1 : 0) }), { title: 0, sentence: 0 });
+  const a = cases(authorTexts); const m = cases(drafts);
+  const aN = a.title + a.sentence; const mN = m.title + m.sentence;
+  if (aN >= 5 && mN >= 3) {
+    const want = a.sentence / aN >= 0.8 ? 'SENTENCE' : a.title / aN >= 0.8 ? 'TITLE' : null;
+    const modelOther = want === 'SENTENCE' ? m.title / mN : want === 'TITLE' ? m.sentence / mN : 0;
+    if (want && modelOther >= 0.5) {
+      propose(`Write headings in ${want === 'SENTENCE' ? 'sentence case' : 'Title Case'}, as I do.`, 'GENERATIVE',
+        { observer: 'HEADINGS', params: { case: [want] } },
+        `you: ${want === 'SENTENCE' ? a.sentence : a.title} of ${aN} headings; the model: ${want === 'SENTENCE' ? m.sentence : m.title} of ${mN}`, false, true);
+    }
+  }
+
+  // NO SECTION HEADINGS, WHERE THE AUTHOR WRITES NONE. A model asked for a long piece divides it under headings; an
+  // author whose pieces have none got chapters with them. Read from absence, so it is proposed as shown and counted,
+  // and is required only when the owner says so: that none of a few pieces has a heading does not make one forbidden.
+  const long = authorTexts.filter((t) => proseWords(t) >= 300);
+  if (long.length >= 3 && long.every((t) => headingsOf(t).length === 0)) {
+    const headed = drafts.filter((t) => headingsOf(t).length > 0).length;
+    propose('Write a piece without section headings, as I do.', 'BOUNDARY', { observer: 'HEADINGS', params: { maxPer1000: 0 } },
+      `none of your ${long.length} pieces of 300 words or more has a section heading${drafts.length ? `; ${headed} of the model's ${drafts.length} plain drafts have one` : ''}`, true);
+  }
+}
+
+/**
+ * THE VOICE LAYER: what is true of every piece the author writes, whatever the topic, and so easy to
+ * miss for a discovery that looks for distinctive moves. In a blind round the skill's output had no
+ * first person at all (the author writes about 13 "I"/"my" per 1,000 words) and British spelling
+ * throughout (the author's corpus: 93 American spellings to 6 British). Neither was a rule.
+ *
+ *   point of view   a first-person author gets a band on the first person, and the statement separates
+ *                   a VIEW in the first person ("I think", "I'd hold this loosely"), which needs no
+ *                   source, from a first-hand STORY or figure, which does; an author who keeps out of
+ *                   the text gets a cap where the model does not.
+ *   machine tells   the model's machine-writing moves (./tells.ts), held to the author's own rate
+ *   register        a cap on uncontracted forms for an author who mostly contracts (60% or more of the
+ *                   forms that can be), or on contractions for one who mostly does not (40% or less)
+ *   dialect         an author who spells one way (at least ten marked words, the other way at most
+ *                   15% of them) gets a cap on the other dialect's spellings.
+ */
+function proposeVoice(authorTexts: readonly string[], heldTexts: readonly string[], drafts: readonly string[], propose: Propose,
+  bandOf: (p: PatternId) => { lo: number; hi: number; a: number }, meanRate: (texts: readonly string[], p: PatternId) => number,
+  /** whether the comparison with the model's drafts already capped the author's em dashes */
+  dashCapped: () => boolean = () => false): void {
+  // How much a first-person author says "I" depends on the piece (a workflow diary against an analysis:
+  // 0.7 to 36 per 1,000 words in one real corpus), so the floor sits near their lightest pieces. What
+  // it must catch is a text with no first person at all, which is what a rules-only skill produced.
+  const b0 = bandOf('FIRST_PERSON'); const mfp = meanRate(drafts, 'FIRST_PERSON');
+  const fp = { ...b0, lo: r1(Math.max(0.5, perPieceP(authorTexts, (t) => patternRate(t, 'FIRST_PERSON'), 0.1) * 0.4)) };
+  if (fp.a >= 4) {
+    propose(`Write in the first person, as I do: between ${fp.lo} and ${fp.hi} "I", "my" or "me" per 1,000 words (I use about ${fp.a}). `
+      + 'A view or a hedge in the first person ("I think", "I\'d hold this loosely", "I\'m skeptical") needs no source; a first-hand story or figure does.',
+    'GENERATIVE', { observer: 'PATTERN_RATE', params: { pattern: ['FIRST_PERSON'], minPer1000: fp.lo, maxPer1000: fp.hi } },
+    `you: ${fp.a} per 1,000 words; the model on its own: ${mfp}`, true);
+  } else if (fp.a < 1 && mfp >= 3) {
+    const cap = r1(Math.max(fp.hi, 0.5));
+    propose((f) => `Keep myself out of the text, as I do: at most ${lim(f, 'maxPer1000')} "I", "my" or "me" per 1,000 words.`, 'BOUNDARY',
+      { observer: 'PATTERN_RATE', params: { pattern: ['FIRST_PERSON'], maxPer1000: cap } }, `you: ${fp.a} per 1,000 words; the model on its own: ${mfp}`);
+  }
+  const count = (p: PatternId): number => authorTexts.reduce((n, t) => n + findPattern(t, p).length, 0);
+  // MACHINE-WRITING MOVES (./tells.ts): a family catalogue of the model's habits, the same for every
+  // author, held to THIS author's own rate. Always proposed: the catalogue is known to be the model's,
+  // so it needs no plain drafts to show it (the tells appear most under a skill's own instructions,
+  // which plain drafts never see). The held-out guard still applies: an author whose unread pieces use
+  // these moves more than the cap gets no rule, rather than a rule against them.
+  // Per family: one the author never makes, in any piece, is never allowed; the rest are held to their
+  // rate. Pooled, the cap let a long piece spend the author's small budget on moves they never make.
+  // The pooled rate leaves out the ban-only families (./tells.ts BAN_ONLY_FAMILIES): an author's own em
+  // dashes would otherwise raise the cap on every other move.
+  const all = [...authorTexts, ...heldTexts];
+  const { never, cap: tellCap, dashCap, usedIn, countedRate, statement: tellStatement } = machineTellRule(all);
+  const dashIsTheirs = dashCap !== null;
+  if (dashIsTheirs && !dashCapped()) {
+    const rate = (t: string): number => patternRate(t, 'EM_DASH');
+    propose((f) => `Keep ${PATTERN_LABEL.EM_DASH} to at most ${lim(f, 'maxPer1000')} per 1,000 words, as I do.`, 'BOUNDARY',
+      { observer: 'PATTERN_RATE', params: { pattern: ['EM_DASH'], maxPer1000: dashCap } },
+      `you: ${meanRate(all, 'EM_DASH')} per 1,000 words, in ${usedIn('EM_DASH')} of ${all.length} pieces`);
+    // Still held by nothing (the pieces held out break even their own cap): the author's heaviest piece is the limit.
+    if (!dashCapped()) {
+      const most = r1(Math.max(...all.map(rate), 0.3));
+      propose((f) => `Keep ${PATTERN_LABEL.EM_DASH} to at most ${lim(f, 'maxPer1000')} per 1,000 words, as I do.`, 'BOUNDARY',
+        { observer: 'PATTERN_RATE', params: { pattern: ['EM_DASH'], maxPer1000: most } },
+        `your piece with the most: ${most} per 1,000 words; in ${usedIn('EM_DASH')} of ${all.length} pieces`);
+    }
+  }
+  // Output is held to the typical piece. The author's own pieces are checked with their occasional moves
+  // tolerated: the rule targets the model's habit, and a writer who sometimes writes "let me be clear"
+  // has not shown that the rule is against them.
+  // How many such moves the author's own 90th-percentile piece carries (at least one): their own pieces
+  // are tolerated up to that when the rule is checked on them. One real corpus had moves like these in 8
+  // of 20 pieces, and in one piece four; tolerating a single move still dropped the rule.
+  const ownCounts = all.map((t) => findPattern(t, 'MACHINE_TELL').length).sort((a, b) => a - b);
+  const ownTolerance = Math.max(1, ownCounts[Math.min(ownCounts.length - 1, Math.ceil(ownCounts.length * 0.9) - 1)] ?? 1);
+  const occasional = (t: string): boolean => findPattern(t, 'MACHINE_TELL').length <= ownTolerance;
+  propose(tellStatement,
+    'BOUNDARY', { observer: 'PATTERN_RATE', params: { pattern: ['MACHINE_TELL'], maxPer1000: tellCap, never, role: ['machine-tell'] } },
+    // The figure is the rate the check reads: over the families it counts, never the author's own dashes.
+    `you: ${r1(authorTexts.reduce((n, t) => n + countedRate(t), 0) / Math.max(1, authorTexts.length))} per 1,000 words, in ${all.filter((t) => countedRate(t) > 0).length} of ${all.length} pieces; the model's plain drafts: ${r1(drafts.reduce((n, t) => n + countedRate(t), 0) / Math.max(1, drafts.length))}, and more under a skill's instructions`,
+    false, false, occasional);
+  // REGISTER: a speaker who mostly contracts gets a cap on the forms left whole, and one who mostly
+  // writes them out a cap on contractions, at their own rate. A repair fixes either word by word.
+  const contracted = count('CONTRACTION'); const whole = count('FULL_FORM');
+  const share = contracted + whole >= 20 ? contracted / (contracted + whole) : null;
+  if (share !== null && (share >= 0.6 || share <= 0.4)) {
+    const other = share >= 0.6 ? 'FULL_FORM' as const : 'CONTRACTION' as const;
+    const cap = r1(Math.max(perPieceP(authorTexts, (t) => patternRate(t, other), 0.9) * 1.5, 1));
+    const m = meanRate(drafts, other);
+    propose((f) => (share >= 0.6
+      ? `Contract as I do ("don't", "it's", "you're"): at most ${lim(f, 'maxPer1000')} uncontracted forms ("do not", "it is") per 1,000 words.`
+      : `Write out what I write out ("do not", "it is"): at most ${lim(f, 'maxPer1000')} contractions per 1,000 words.`), 'BOUNDARY',
+    { observer: 'PATTERN_RATE', params: { pattern: [other], maxPer1000: cap } },
+    `you contract ${Math.round(share * 100)}% of the forms that can be contracted; the model's plain drafts: ${m} ${other === 'FULL_FORM' ? 'uncontracted forms' : 'contractions'} per 1,000 words`);
+    // AND NOT MORE THAN THE AUTHOR. A cap on the other form alone is one-sided: a repair told to cut
+    // "do not" contracted everything, 49 contractions to 8 whole forms against an author whose prose mixes
+    // them. The form the author prefers is capped at their own 90th-percentile piece too.
+    const mine = share >= 0.6 ? 'CONTRACTION' as const : 'FULL_FORM' as const;
+    const most = r1(Math.max(perPieceP(authorTexts, (t) => patternRate(t, mine), 0.9) * 1.5, 1));
+    propose((f) => (share >= 0.6
+      ? `Contract as often as I do, not more: at most ${lim(f, 'maxPer1000')} contractions per 1,000 words.`
+      : `Write out as often as I do, not more: at most ${lim(f, 'maxPer1000')} uncontracted forms per 1,000 words.`), 'BOUNDARY',
+    { observer: 'PATTERN_RATE', params: { pattern: [mine], maxPer1000: most } },
+    `your 90th-percentile piece: ${r1(perPieceP(authorTexts, (t) => patternRate(t, mine), 0.9))} ${mine === 'CONTRACTION' ? 'contractions' : 'uncontracted forms'} per 1,000 words`);
+  }
+  const us = count('AMERICAN_SPELLING'); const uk = count('BRITISH_SPELLING');
+  const dialect = us >= 10 && uk <= 0.15 * (us + uk) ? { other: 'BRITISH_SPELLING' as const, mine: 'American', eg: 'behavior, organize, center', not: 'behaviour, organise, centre' }
+    : uk >= 10 && us <= 0.15 * (us + uk) ? { other: 'AMERICAN_SPELLING' as const, mine: 'British', eg: 'behaviour, organise, centre', not: 'behavior, organize, center' } : null;
+  if (dialect) {
+    const cap = r1(Math.max(perPieceP(authorTexts, (t) => patternRate(t, dialect.other), 0.9) * 1.5, 0.5));
+    propose((f) => `Spell the ${dialect.mine} way, as I do (${dialect.eg}), not ${dialect.not}: at most ${lim(f, 'maxPer1000')} other spellings per 1,000 words.`, 'BOUNDARY',
+      { observer: 'PATTERN_RATE', params: { pattern: [dialect.other], maxPer1000: cap } },
+      `your pieces: ${dialect.mine === 'American' ? us : uk} ${dialect.mine} spellings to ${dialect.mine === 'American' ? uk : us} of the other`);
+  }
+}
+
+/**
+ * PACE: how much sentence, paragraph and section lengths vary (./balance.ts RHYTHM). Where the author
+ * varies more than the model on average (by 0.1 or more), a floor just under the author's 10th-percentile
+ * piece (×0.95), proposed only if the model's mean falls below it; in the rarer opposite case, a cap just
+ * over the author's 90th-percentile piece. Every proposal then passes the contrast pass's separation guard.
+ */
+function proposePace(authorTexts: readonly string[], drafts: readonly string[], propose: Propose): void {
+  const label: Readonly<Record<RhythmUnit, string>> = { SENTENCE: 'sentence', PARAGRAPH: 'paragraph', SECTION: 'section' };
+  for (const unit of ['SENTENCE', 'PARAGRAPH', 'SECTION'] as const) {
+    const cvs = (texts: readonly string[]): number[] => texts.map((t) => unitLengths(t, unit)).filter((xs) => xs.length >= RHYTHM_MIN_UNITS[unit]).map(coefficientOfVariation);
+    const a = cvs(authorTexts); const m = cvs(drafts);
+    if (a.length < 3 || m.length < 2) continue;
+    const am = r2(mean(a)); const mm = r2(mean(m));
+    const ev = `your ${label[unit]} lengths vary by ${am} on average (standard deviation over mean); the model's plain drafts by ${mm}`;
+    if (am >= mm + 0.1) {
+      const floor = r2(quantile(a, 0.1) * 0.95);
+      if (floor > mm) propose((f) => `Vary ${label[unit]} length as I do: at least ${lim(f, 'minCv')} variation, not one even length after another.`, 'GENERATIVE',
+        { observer: 'RHYTHM', params: { unit: [unit], minCv: floor } }, ev, false, true);
+    } else if (mm >= am + 0.1) {
+      const cap = r2(quantile(a, 0.9) * 1.05);
+      if (cap < mm) propose((f) => `Keep ${label[unit]} lengths as even as mine: at most ${lim(f, 'maxCv')} variation.`, 'GENERATIVE',
+        { observer: 'RHYTHM', params: { unit: [unit], maxCv: cap } }, ev, false, true);
+    }
+  }
+}
+
+// NO POSITIVE VOCABULARY FLOOR BEYOND CONNECTIVES. Keyness against the model's drafts was tried on a
+// real 20-post corpus: the words it found ("verification", "loops", "quality") were the author's TOPIC,
+// not their voice, and a floor over them would push AI-engineering vocabulary into an article about
+// space. On a single-domain corpus positive vocabulary is confounded with topic; the connectives floor
+// above is the part of it that is topic-free. The rest belongs to the reading-based rules (a coined
+// label, a favoured verb), which a reader checks in context.
+
+const mean = (xs: readonly number[]): number => xs.reduce((a, b) => a + b, 0) / Math.max(1, xs.length);
+/** Two decimals: a coefficient of variation needs them, where a rate per 1,000 words (`r1`) does not. */
+const r2 = (x: number): number => Math.round(x * 100) / 100;
+
+/** Shares rounded to hundredths that still sum to exactly 1 (largest remainder), never negative. */
+export function toHundredths(xs: readonly number[]): number[] {
+  const scaled = xs.map((x) => Math.max(0, x) * 100);
+  const floors = scaled.map(Math.floor);
+  let left = 100 - floors.reduce((a, b) => a + b, 0);
+  const order = scaled.map((x, i) => ({ i, r: x - Math.floor(x) })).sort((a, b) => b.r - a.r);
+  for (const { i } of order) { if (left <= 0) break; floors[i] += 1; left -= 1; }
+  return floors.map((x) => x / 100);
+}
+
+/** Topics for the model's plain drafts: the author's own titles, so the comparison is like for like. */
+export const contrastTopics = (read: readonly Piece[], k = 3): string[] =>
+  read.slice(0, k).map((p) => /^#\s+(.+)$/m.exec(p.text)?.[1]?.trim() ?? p.id.replace(/\.[a-z]+$/i, '').replace(/[-_]+/g, ' '));

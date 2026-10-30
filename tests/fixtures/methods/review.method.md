@@ -1,0 +1,4 @@
+- Start with a Summary line.
+- Put blocking comments under a Blocking heading.
+- Put minor comments under a Nits heading.
+- End with a Verdict line.

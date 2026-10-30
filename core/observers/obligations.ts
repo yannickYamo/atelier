@@ -1,0 +1,526 @@
+// core/observers/obligations.ts — WHAT A PIECE OF WORK MUST CONTAIN, AND WHAT IT MUST HAVE BEEN MADE FROM.
+//
+// A method says what is done: which table is always there, that every figure comes from a source. Two of those can be
+// read by code, and are here. Neither reads how the text sounds.
+//
+//   TABLE   a table with these columns is in the output                      read on the OUTPUT alone
+//   CITED   every figure in the output is in the request or the material     read against the BOUND MATERIAL
+//
+// What a check reads decides what it can honestly say. A check on the output says the deliverable has the thing.
+// A check against the material says the work was made from what was given. Neither says a step was carried out in
+// the writer's head ("weigh switching cost before recommending"): that is judgement, and no observer here claims it.
+
+import type { Measurement } from '../state/canonical-state.js';
+import type { Observer, ObserverResult, Span, CheckContext } from './registry.js';
+import { workedFromMaterial } from '../loop/derived.js';
+import { citedLines, citationSpans } from '../loop/locators.js';
+import { proseWords } from './style.js';
+import { sentencesOf } from './text.js';
+import { sectionBodyOf, sectionHeadsOf, headingsOf } from './structure.js';
+
+/** Observers that read a ban: a word, a hedge, a counted move or term. Their spans are the places to fix, whatever kind of thing a method called the rule. */
+export const BAN_OBSERVERS: ReadonlySet<string> = new Set(['LEXICON', 'HEDGE_RATE', 'PATTERN_RATE', 'TERM_RATE']);
+
+/**
+ * IS A MISS OF THIS RULE SOMETHING LEFT OUT? A part the work must contain, a citation that is no line of the material,
+ * a test the work never named: no sentence rewrite fixes those, so the piece is written again. A ban stated as a method
+ * step ("Never use the words simply or just") is a DELIVERABLE by kind, but its miss is a word in a sentence: it is a
+ * span rule, rewritten in place, and never said as left out.
+ */
+export const isOmission = (c: { readonly obligation?: string; readonly observer?: string }): boolean =>
+  (c.obligation === 'DELIVERABLE' && !(c.observer !== undefined && BAN_OBSERVERS.has(c.observer))) || c.observer === 'LINES' || c.observer === 'NAMES_TEST';
+
+const list = (p: Measurement['params'], k: string): readonly string[] => { const v = p[k]; return Array.isArray(v) && v.every((x): x is string => typeof x === 'string') ? v : []; };
+const num = (p: Measurement['params'], k: string): number | null => (typeof p[k] === 'number' ? p[k] : null);
+const norm = (s: string): string => s.toLowerCase().replace(/[*_`]/g, '').replace(/\s+/g, ' ').trim();
+
+export interface MarkdownTable { readonly header: readonly string[]; readonly rows: number; readonly start: number; readonly end: number }
+
+/** Every pipe table in a text, outside code fences: its header cells, how many body rows, and where it is. */
+export function tablesOf(text: string): MarkdownTable[] {
+  const out: MarkdownTable[] = []; const lines = text.split('\n');
+  let offset = 0; const starts = lines.map((l) => { const s = offset; offset += l.length + 1; return s; });
+  let fence = false;
+  const cells = (l: string): string[] => l.trim().replace(/^\||\|$/g, '').split('|').map((c) => norm(c));
+  for (let i = 0; i < lines.length; i++) {
+    if (/^\s*(```|~~~)/.test(lines[i])) { fence = !fence; continue; }
+    if (fence || !lines[i].includes('|') || i + 1 >= lines.length) continue;
+    // A header row is a row of cells directly above a row of dashes.
+    if (!/^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/.test(lines[i + 1]) || !lines[i + 1].includes('|')) continue;
+    let j = i + 2; while (j < lines.length && lines[j].includes('|') && lines[j].trim() !== '') j++;
+    // A row says something when a cell holds a letter or a digit: a row of dashes is a template nobody filled in.
+    const rows = lines.slice(i + 2, j).filter((l) => cells(l).some((c) => /[\p{L}\p{N}]/u.test(c))).length;
+    out.push({ header: cells(lines[i]), rows, start: starts[i], end: starts[j - 1] + lines[j - 1].length });
+    i = j - 1;
+  }
+  return out;
+}
+
+/** A table whose header holds every one of these columns (a header cell that contains the name counts), with at least `minRows` rows. */
+export const TABLE: Observer = {
+  id: 'TABLE',
+  describe: (p) => `a table with the column${list(p, 'columns').length === 1 ? '' : 's'} ${list(p, 'columns').map((c) => `"${c}"`).join(', ')}${num(p, 'minRows') ? `, at least ${num(p, 'minRows')} row(s)` : ''}`,
+  validate: (p) => (list(p, 'columns').length ? null : 'needs columns=<name>|<name>'),
+  observe(text, p): ObserverResult {
+    const want = list(p, 'columns').map(norm); const minRows = num(p, 'minRows') ?? 1;
+    const tables = tablesOf(text);
+    // A column is there when a header cell holds every word of its name: "price" is met by "price per seat", and
+    // "id" is not met by "provider".
+    const words = (x: string): string[] => x.split(/[^a-z0-9%]+/).filter(Boolean);
+    const has = (t: MarkdownTable): string[] => want.filter((w) => !t.header.some((h) => { const cell = new Set(words(h)); return words(w).length > 0 && words(w).every((x) => cell.has(x)); }));
+    const hit = tables.find((t) => has(t).length === 0 && t.rows >= minRows);
+    if (hit) return { verdict: 'MET', spans: [], value: hit.rows, detail: `a table with ${want.length} of ${want.length} column(s), ${hit.rows} row(s)` };
+    // The nearest table says what is missing; with none, the last line of the text is where one would go.
+    const nearest = [...tables].sort((a, b) => has(a).length - has(b).length)[0];
+    const why = !nearest ? `no table; one with the column(s) ${want.map((w) => `"${w}"`).join(', ')} is required`
+      : has(nearest).length ? `the table lacks the column(s) ${has(nearest).map((w) => `"${w}"`).join(', ')}` : `the table has ${nearest.rows} row(s), and ${minRows} are required`;
+    const span: Span = nearest ? { start: nearest.start, end: nearest.end, text: text.slice(nearest.start, Math.min(nearest.end, nearest.start + 120)), why }
+      : { start: Math.max(0, text.length - 1), end: text.length, text: '', why };
+    return { verdict: 'VIOLATED', spans: [span], value: 0, detail: why };
+  },
+};
+
+// ── WHAT COUNTS AS A FIGURE, AND WHEN TWO ARE THE SAME ─────────────────────────────────────────────
+//
+// A figure is a quantity the work states: a number with a unit or a scale, or of two digits or more. A year, a
+// date, a time, a page or version or standard number, a footnote mark and a numbered heading are numbers and are
+// not figures: read as figures, each made an honest piece fail. Two figures are the same when they are the same
+// quantity, however written: "$12,400", "12.4k" and "12400"; "12%" and "12.0 percent"; "twelve" and "12". A percentage
+// is never the same as a bare count ("15%" is not "15 employees").
+
+const WORDS: Readonly<Record<string, number>> = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12,
+  thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17, eighteen: 18, nineteen: 19, twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60, seventy: 70, eighty: 80, ninety: 90, hundred: 100 };
+const SCALE: Readonly<Record<string, number>> = { k: 1e3, thousand: 1e3, m: 1e6, mn: 1e6, million: 1e6, b: 1e9, bn: 1e9, billion: 1e9 };
+const FIGURE = /(?<![\w.,:/])(?<!\p{L}-)(?:[$€£]\s?)?\d(?:[\d,]*\d)?(?:\.\d+)?(?:\s?(?:%|percent\b|bps\b|(?:k|m|mn|b|bn)\b|thousand\b|million\b|billion\b|x\b))?(?![\d:/]|(?:st|nd|rd|th)\b)/giu;
+const WORD_FIGURE = new RegExp(String.raw`\b(${Object.keys(WORDS).join('|')})\b(?=\s+(?:percent|dollars?|euros?|seats?|customers?|users?|employees?|people|months?|years?|days?|weeks?|deals?|accounts?|points?|times)\b)`, 'gi');
+/**
+ * Two numbers of two digits or more with a slash between them are one reading: a blood pressure, a score out of a
+ * total. Not "24/7", "1/3 of the users" or a date, and not an even split.
+ */
+const PAIR = /(?<![\w.,:/-])\d{2,4}\/\d{2,4}(?![\w/])/g;
+/** What comes before a bare number that makes it a label, not a quantity. A percentage or a sum of money is never a label. */
+const LABEL_BEFORE = /(?:\b(?:page|pages|p\.|pp\.|section|chapter|step|figure|fig\.|table|version|v|iso|rfc|q[1-4]|fy|part|appendix|item|no\.|number|lines?|clause|article|schedule|exhibit|bed|room|ward|row|column|ticket|commit|#)\s*|\[)$/i;
+const MONTH = String.raw`(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|June?|July?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)`;
+/** A day of the month beside the month's name, written as a name: a date, not a quantity. ("may" is not May.) */
+const DATE_BEFORE = new RegExp(String.raw`\b${MONTH}\.?\s+$`); const DATE_AFTER = new RegExp(String.raw`^\s+(?:of\s+)?${MONTH}\b`);
+/**
+ * Units of measure, each under one name however it is written. A number that carries one is that much of that
+ * thing: "40 mg" is not met by a bare 40 somewhere else in the material. A single digit that carries one is a figure.
+ */
+const UNIT_NAMES: Readonly<Record<string, string>> = { mcg: 'mcg', 'µg': 'mcg', microgram: 'mcg', micrograms: 'mcg', mg: 'mg', milligram: 'mg', milligrams: 'mg', g: 'g', gram: 'g', grams: 'g',
+  kg: 'kg', kilogram: 'kg', kilograms: 'kg', ml: 'ml', millilitre: 'ml', millilitres: 'ml', milliliter: 'ml', milliliters: 'ml', dl: 'dl', l: 'l', litre: 'l', litres: 'l', liter: 'l', liters: 'l',
+  mmol: 'mmol', mol: 'mol', iu: 'iu', mmhg: 'mmhg', bpm: 'bpm', cm: 'cm', mm: 'mm', km: 'km', kb: 'kb', mb: 'mb', gb: 'gb', ms: 'ms',
+  kilo: 'kg', kilos: 'kg', millisecond: 'ms', milliseconds: 'ms', kilobyte: 'kb', kilobytes: 'kb', megabyte: 'mb', megabytes: 'mb', gigabyte: 'gb', gigabytes: 'gb',
+  kilometre: 'km', kilometres: 'km', kilometer: 'km', kilometers: 'km', centimetre: 'cm', centimetres: 'cm', centimeter: 'cm', centimeters: 'cm', millimetre: 'mm', millimetres: 'mm', millimeter: 'mm', millimeters: 'mm' };
+const MEASURE = new RegExp(String.raw`^[ \t-]?(${Object.keys(UNIT_NAMES).sort((x, y) => y.length - x.length).join('|')})\b`, 'i');
+/** Money is one thing whether it is written with its sign or its name. */
+const MONEY: Readonly<Record<string, string>> = { $: 'dollar', '€': 'euro', '£': 'pound', dollar: 'dollar', euro: 'euro', pound: 'pound' };
+/** A small word after a number that is not what the number counts. */
+const NOT_A_UNIT = new Set(['of', 'and', 'or', 'to', 'in', 'on', 'at', 'the', 'a', 'an', 'for', 'from', 'by', 'with', 'is', 'are', 'was', 'were', 'per', 'out', 'more', 'less', 'than', 'that', 'which', 'who', 'as', 'but', 'so', 'if', 'it', 'this', 'may', 'will', 'would', 'can', 'could', 'should', 'did', 'do', 'have', 'has', 'had', 'not', 'now', 'then', 'each', 'every', 'all', 'total', 'times', 'across', 'versus', 'plus', 'minus', 'over', 'under', 'into', 'onto', 'ones', 'outside', 'inside', 'since', 'during', 'after', 'before']);
+
+interface Figure { readonly key: string; readonly raw: string; readonly start: number; readonly end: number; readonly value: number; readonly percent: boolean;
+  /** what the number counts ("seat", "mg", "dollar"), or null: two figures are added or subtracted only when this is the same */
+  readonly unit: string | null;
+  /** it stands in a row of a table, where the unit is in the column's heading and not beside the number */
+  readonly inTable?: boolean;
+  /** in a table: where its row starts, and the unit its column's heading names in brackets ("Dose (mg)"), if any */
+  readonly row?: number; readonly columnUnit?: string | null }
+
+/**
+ * What a number counts, read from the words after it: the unit of measure if one follows, else the noun of the
+ * phrase ("12 enterprise customers" counts customers, "64 years old" counts years), else nothing.
+ */
+function thingAfter(after: string): string | null {
+  const phrase = /^[\s-]?(\p{L}+(?:[\s-]\p{L}+){0,2})/u.exec(after)?.[1].toLowerCase().split(/[\s-]/) ?? [];
+  const stop = phrase.findIndex((w) => NOT_A_UNIT.has(w));
+  const words = stop === -1 ? phrase : phrase.slice(0, stop);
+  if (!words.length) return null;
+  // The first plural is the noun: "12 enterprise customers", "64 years old", "312 customers across regions".
+  const noun = words.find((w) => w.length > 3 && w.endsWith('s')) ?? words[0];
+  const one = noun.length > 3 ? noun.replace(/s$/, '') : noun;
+  return MONEY[one] ?? one;
+}
+
+function figureAt(raw: string, start: number, after: string): Figure | null {
+  const t = raw.toLowerCase().replace(/[$€£,\s]/g, '');
+  const m = /^(\d+(?:\.\d+)?)(%|percent|bps|k|mn|m|bn|b|thousand|million|billion|x)?$/.exec(t);
+  if (!m) return null;
+  const value = Number(m[1]) * (SCALE[m[2] ?? ''] ?? 1); const percent = m[2] === '%' || m[2] === 'percent';
+  const measured = MEASURE.exec(after); const measure = measured ? UNIT_NAMES[measured[1].toLowerCase()] : null;
+  const sign = /[$€£]/.exec(raw)?.[0];
+  const unit = (sign ? MONEY[sign] : null) ?? measure ?? thingAfter(after);
+  const tail = percent ? '%' : m[2] === 'x' ? 'x' : m[2] === 'bps' ? 'bps' : measure ? `|${measure}` : '';
+  // With its unit of measure, the figure is the number and the unit as written: "74 g".
+  const shown = measured ? `${raw}${measured[0]}` : raw;
+  return { key: `${Math.round(value * 1e6) / 1e6}${tail}`, raw: shown, start, end: start + shown.length, value, percent, unit };
+}
+
+/**
+ * The figures a text states, each as the quantity it is. `given` reads what the writer was handed, where a single
+ * digit counts too: "8 seats" in the material is a quantity a draft may add to another.
+ */
+export function figuresOf(text: string, given = false): Figure[] {
+  const out: Figure[] = [];
+  // Not inside code; not a list marker, a numbered heading or a heading at all.
+  // Nor a date written in figures: "2026-05-12" is not three quantities.
+  const prose = text.replace(/```[\s\S]*?```/g, (m) => ' '.repeat(m.length)).replace(/^\s*#{1,6}\s.*$/gm, (m) => ' '.repeat(m.length)).replace(/^\s*\d+[.)]\s/gm, (m) => ' '.repeat(m.length))
+    .replace(/\b\d{4}-\d{2}-\d{2}\b/g, (m) => ' '.repeat(m.length));
+  const tables = tablesOf(text);
+  for (const m of prose.matchAll(PAIR)) {
+    const [left, right] = m[0].split('/');
+    if (left !== right) out.push({ key: `pair:${m[0]}`, raw: m[0], start: m.index, end: m.index + m[0].length, value: NaN, percent: false, unit: null });
+  }
+  for (const m of prose.matchAll(FIGURE)) {
+    const raw = m[0].trim(); const start = m.index + (m[0].length - m[0].trimStart().length); const end = m.index + m[0].length;
+    const after = prose.slice(end, end + 40);
+    const f = figureAt(raw, start, after);
+    if (!f) continue;
+    const scaled = /[%$€£]|percent|bps|[kmbx]$|thousand|million|billion/i.test(raw);
+    const unit = scaled || MEASURE.test(after);
+    const digits = raw.replace(/\D/g, '').length;
+    if (!unit && digits < 2 && !given) continue;
+    const before = prose.slice(Math.max(0, start - 14), start);
+    // A label or a date is a bare number: "line 214", "12 May". A percentage, a sum of money or an amount never is.
+    if (!unit && (LABEL_BEFORE.test(before) || ((DATE_BEFORE.test(before) || DATE_AFTER.test(after)) && (f.value <= 31 || /^(?:19|20)\d\d$/.test(raw))))) continue;
+    // A year stands alone and is not a quantity.
+    if (!unit && /^(?:19|20)\d\d$/.test(raw)) continue;
+    const lineStart = prose.lastIndexOf('\n', start) + 1;
+    const lineEnd = prose.indexOf('\n', start);
+    const line = prose.slice(lineStart, lineEnd === -1 ? prose.length : lineEnd);
+    if (!/^\s*\|.*\|\s*$/.test(line)) { out.push(f); continue; }
+    // In a table: which row, and what unit its column's heading gives it.
+    const column = (line.slice(0, start - lineStart).match(/\|/g) ?? []).length - 1;
+    const heading = tables.find((t) => start >= t.start && start <= t.end)?.header[column] ?? '';
+    const named = /\(([^)]+)\)/.exec(heading)?.[1].replace(/[^\p{L}µ]/gu, '') ?? '';
+    out.push({ ...f, inTable: true, row: lineStart, columnUnit: UNIT_NAMES[named] ?? null });
+  }
+  for (const m of prose.matchAll(WORD_FIGURE)) {
+    const value = WORDS[m[1].toLowerCase()]; const rest = prose.slice(m.index + m[0].length); const percent = /^\s+percent/i.test(rest);
+    out.push({ key: `${value}${percent ? '%' : ''}`, raw: m[0], start: m.index, end: m.index + m[0].length, value, percent, unit: thingAfter(rest) });
+  }
+  return out.sort((a, b) => a.start - b.start);
+}
+
+/** The other ways a given figure may honestly be written: a multiple as a percentage, and the reverse. */
+function alsoGiven(f: Figure): string[] {
+  if (f.key.endsWith('x')) return [`${Math.round(f.value * 100 * 1e6) / 1e6}%`];
+  if (f.percent) return [`${Math.round((f.value / 100) * 1e6) / 1e6}x`];
+  return [];
+}
+
+/** Whether a figure with a unit of measure is the number in a table whose heading, not its cell, carries the unit. */
+const inGivenTable = (f: Figure, given: readonly Figure[]): boolean => f.key.includes('|') && given.some((g) => g.inTable === true && g.value === f.value && !g.percent && g.columnUnit === f.key.split('|')[1]);
+
+/**
+ * How far a figure may sit from the number it rounds: half its last place, and never more than a twentieth of it.
+ * Only for a figure of two significant figures or more: "about 12,000" rounds 12,400, and "1,000" rounds nothing.
+ */
+function roundingSlack(value: number): number {
+  if (!Number.isInteger(value) || value === 0) return 0;
+  const zeros = /0+$/.exec(String(Math.abs(value)))?.[0].length ?? 0;
+  const significant = String(Math.abs(value)).length - zeros;
+  return zeros >= 1 && significant >= 2 ? Math.min(10 ** zeros / 2, Math.abs(value) * 0.05) : 0;
+}
+/** Whether a round figure is one given figure, rounded: of the same thing, or of nothing named. */
+const roundsGiven = (f: Figure, given: readonly Figure[]): boolean => {
+  const slack = roundingSlack(f.value);
+  return slack > 0 && !f.percent && given.some((g) => !g.percent && Number.isFinite(g.value) && Math.abs(g.value - f.value) <= slack && (g.unit === f.unit || g.unit === null || f.unit === null));
+};
+
+/**
+ * Whether a stated figure follows from what was given, by one step of arithmetic on two given figures.
+ *   A SHARE of one count in a larger one of the same thing, to the nearest point: "half the doses" from "10 of 20".
+ *   THE SUM OR THE DIFFERENCE of two amounts of the same thing: 12 seats and 8 seats are 20 seats, and 12 seats and
+ *   8 dollars are nothing. Exact, or rounded as the figure itself is rounded ("about 20,500" from 20,549).
+ * "Of the same thing" is read from what each number counts. Two numbers that count nothing add up to nothing: read
+ * without that, a dose of 80 passed because a chart held an age of 64 and a breathing rate of 16.
+ */
+function derived(f: Figure, given: readonly Figure[]): boolean {
+  if (!Number.isFinite(f.value)) return false;
+  const counts = given.filter((g) => !g.percent && Number.isFinite(g.value)).slice(0, 80);
+  const slack = roundingSlack(f.value);
+  for (const a of counts) for (const b of counts) {
+    if (a === b || a.value === b.value) continue;
+    const named = [a.unit, b.unit].filter((u): u is string => u !== null);
+    // Named as the same thing, or two cells of one row of a table, which a row is.
+    const oneRow = a.row !== undefined && a.row === b.row;
+    const sameThing = (named.length > 0 && new Set(named).size === 1) || (oneRow && named.length === 0);
+    if (f.percent) {
+      if (sameThing && a.value < b.value && Math.abs(f.value - (a.value / b.value) * 100) <= 0.5) return true;
+      continue;
+    }
+    // At least one of the two says what it counts, neither says something else, and the result counts that too.
+    if (!sameThing || (f.unit !== null && named.length > 0 && f.unit !== named[0])) continue;
+    if (f.key.includes('|') && (a.unit !== f.unit || b.unit !== f.unit)) continue;
+    const same = (x: number): boolean => Math.abs(f.value - x) <= Math.max(slack, Math.abs(x) * 1e-9);
+    if (same(a.value + b.value) || same(Math.abs(a.value - b.value))) return true;
+  }
+  return false;
+}
+
+/** What a figure counts, for arithmetic: money, a percentage, a thing named beside it, or nothing. */
+type Kind = 'money' | 'percent' | 'count' | 'bare';
+const kindOf = (f: Figure): Kind => (f.percent ? 'percent' : f.unit === 'dollar' || f.unit === 'euro' || f.unit === 'pound' ? 'money' : f.unit !== null ? 'count' : 'bare');
+/** `x` at the precision `shown` is written with: "$29.17" from 29.1666…, "$96" from 96. */
+const atShownPrecision = (x: number, shown: string): number => { const dec = /\.(\d+)/.exec(shown.replace(/[,\s]/g, ''))?.[1].length ?? 0; return Number(x.toFixed(dec)); };
+/** Words beside a figure that say it is a year's worth of a monthly or weekly amount: the only constants the arithmetic takes, and only then. */
+const A_YEAR = /\b(?:per|a|each|every|the|one)\s+year\b|\byear(?:ly)?\b|\bannual(?:ly)?\b|\bp\.?a\.?\b/i;
+/** The most figures the arithmetic is tried over: past this, almost any number is some pair's product. */
+const MAX_OPERANDS = 80;
+
+/**
+ * A FIGURE WORKED FROM WHAT WAS GIVEN, BY DIMENSION. A total is a count times a rate; a rate per head is money over
+ * a count; a gap is money less money; a year is a month twelve times. The operands are the given figures and the
+ * output's own figures already found to be sourced, so a chain runs only through figures the text states, and the
+ * reader can check each step. An operation is accepted only where the units make the result: money times a count is
+ * money, money over a count is money, money less money is money, a count less a count of the same name (or of no name)
+ * is that count, a percentage of an amount is that amount; a dose cannot be an age plus a breathing rate, and that
+ * stays blocked here as it was. Exact at the figure's own precision. No search past one operation: an unstated
+ * intermediate is not worked from, and a figure the text does not show its way to is listed as before.
+ */
+function workedByDimension(f: Figure, operands: readonly Figure[], sentence: string): boolean {
+  if (!Number.isFinite(f.value) || operands.length > MAX_OPERANDS) return false;
+  const want = kindOf(f); const same = (x: number): boolean => Number.isFinite(x) && Math.abs(atShownPrecision(x, f.raw) - f.value) < 1e-9;
+  const pool = operands.filter((o) => Number.isFinite(o.value));
+  // a year of a monthly or weekly AMOUNT OF MONEY: the one conversion the words allow; a headcount has no year
+  if (want === 'money' && (A_YEAR.test(sentence) || /\b(?:twelve|12)\s+months\b|\b(?:52|fifty-two)\s+weeks\b/i.test(sentence))) for (const o of pool) if (kindOf(o) === 'money' && (same(o.value * 12) || same(o.value * 52))) return true;
+  for (const a of pool) for (const b of pool) {
+    if (a === b) continue;
+    const ka = kindOf(a), kb = kindOf(b);
+    if (want === 'money') {
+      if (ka === 'money' && kb === 'count' && same(a.value * b.value)) return true;                          // 12 people × $8
+      if (ka === 'money' && kb === 'count' && b.value !== 0 && same(a.value / b.value)) return true;         // $350 ÷ 12 people
+      if (ka === 'money' && kb === 'money' && (same(a.value + b.value) || same(a.value - b.value))) return true; // $350 − $96
+      if (ka === 'money' && kb === 'percent' && same((a.value * b.value) / 100)) return true;                    // 20% of $350
+      if (ka === 'money' && kb === 'percent' && same(a.value * (1 - b.value / 100))) return true;               // $350 less 20%
+    } else if (want === 'count' || want === 'bare') {
+      // a count less a count, named as one of them: 25 seats less 12 people are 13 seats; two numbers that count nothing add up to nothing
+      const fits = (x: Figure): boolean => kindOf(x) === 'count';
+      if (fits(a) && fits(b) && f.unit !== null && (a.unit === f.unit || b.unit === f.unit) && (same(a.value + b.value) || same(a.value - b.value))) return true;
+      if (ka === 'count' && kb === 'count' && a.unit === b.unit && b.value !== 0 && same(a.value / b.value)) return true;   // 300 boxes ÷ 12 boxes
+      if (ka === 'money' && kb === 'money' && b.value !== 0 && same(a.value / b.value)) return true;                        // $950 ÷ $96, times
+    } else if (want === 'percent') {
+      // a share, or a change, of one thing in the same thing
+      if (ka === kb && (ka === 'money' || (ka === 'count' && a.unit === b.unit)) && b.value !== 0 && (same((a.value / b.value) * 100) || same(((a.value - b.value) / b.value) * 100))) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * EVERY FIGURE IS ONE THE WRITER WAS GIVEN. A figure in the output must be in the request or in the bound material,
+ * as the same quantity, or follow from two given figures by one step of arithmetic. `allow` figures may be the
+ * writer's own (a count of the points it makes). With no material bound the rule still runs, against the request
+ * alone: a figure nobody gave was not given, and read as "not applicable" the rule passed every invented number in
+ * exactly the runs that had nothing to check them against.
+ */
+export const CITED: Observer = {
+  id: 'CITED',
+  describe: (p) => `every figure is in the request or the material${num(p, 'allow') ? ` (up to ${num(p, 'allow')} of the writer's own)` : ''}`,
+  validate: (p) => (num(p, 'allow') === null || (num(p, 'allow') ?? 0) >= 0 ? null : 'allow is a count, zero or more'),
+  observe(text, p, context?: CheckContext): ObserverResult {
+    const material = context?.material ?? [];
+    const givenFigures = [context?.request ?? '', ...material.map((m) => m.text)].flatMap((t) => figuresOf(t, true));
+    // A measured figure also gives its bare number: "Potassium 3.4 mmol/L" was given to a draft that says "3.4".
+    const given = new Set(givenFigures.flatMap((f) => [f.key, ...(f.key.includes('|') ? [f.key.split('|')[0]] : []), ...alsoGiven(f)]));
+    const stated = figuresOf(text);
+    // The same quantity, or one that follows from two that were given. A percentage is never met by a bare count.
+    // Or worked from what was given, in the sentence it stands in: a scenario priced from the price list
+    // (../loop/derived.ts). The claim check reads the same arithmetic, so the two never disagree about a total.
+    const source = [context?.request ?? '', ...material.map((m) => m.text)].join('\n');
+    const sentenceAt = (f: Figure): string => {
+      const from = Math.max(text.lastIndexOf('\n', f.start - 1), ...['. ', '! ', '? '].map((e) => { const i = text.lastIndexOf(e, f.start - 1); return i === -1 ? -1 : i + 1; }));
+      const ends = ['\n', '. ', '! ', '? '].map((e) => text.indexOf(e, f.end)).filter((i) => i !== -1);
+      return text.slice(from + 1, ends.length ? Math.min(...ends) + 1 : text.length);
+    };
+    // A SPAN OF THE CALENDAR IS NOT A CLAIM: "over twelve months", "52 weeks", "365 days" state no quantity of the subject.
+    const calendar = (f: Figure): boolean => !f.percent && ((f.unit === 'month' && f.value === 12) || (f.unit === 'week' && f.value === 52) || (f.unit === 'day' && (f.value === 7 || f.value === 365)));
+    const found = (f: Figure): boolean => given.has(f.key) || calendar(f) || inGivenTable(f, givenFigures) || roundsGiven(f, givenFigures) || derived(f, givenFigures) || workedFromMaterial(sentenceAt(f), f.value, source);
+    const sourced = new Set<Figure>(stated.filter(found));
+    // WORKED THROUGH THE TEXT'S OWN FIGURES, to a fixed point: a per-head rate from a total the text states and a count
+    // it was given; a gap from two totals; a year from a month. Each pass may source a figure the last pass could not.
+    for (let changed = true; changed;) {
+      changed = false;
+      for (const f of stated) {
+        if (sourced.has(f)) continue;
+        const operands = [...givenFigures, ...stated.filter((g) => g !== f && sourced.has(g) && g.key !== f.key)];
+        if (workedByDimension(f, operands, sentenceAt(f))) { sourced.add(f); changed = true; }
+      }
+    }
+    const missing = stated.filter((f) => !sourced.has(f));
+    const allow = num(p, 'allow') ?? 0;
+    const where = material.length ? `the request or the material (${material.map((m) => m.name).join(', ')})` : 'the request (no material was bound)';
+    const detail = `${stated.length - missing.length} of ${stated.length} figure(s) are in ${where}`;
+    if (missing.length <= allow) return { verdict: 'MET', spans: [], value: missing.length, detail };
+    return { verdict: 'VIOLATED', value: missing.length, detail,
+      spans: missing.map((f) => ({ start: f.start, end: f.end, text: f.raw, why: `the figure ${f.raw} is in neither the request nor the material` })) };
+  },
+};
+
+// ── THE FINDINGS OF A REVIEW, EACH AS A SPAN ───────────────────────────────────────────────────────
+//
+// A review states its findings as the items of a list, or as the paragraphs under a heading that says what they are.
+// Which heading that is, the method says where it can ("each Blocking issue cites…" names the section); where it
+// does not, a heading that calls its contents findings, issues, risks, problems or a review is one. A review with no
+// such heading states its findings as list items wherever they stand. A paragraph is read as a finding only under a
+// findings heading that holds no list: elsewhere a paragraph is prose about the change, not a finding.
+
+/** A heading under which the paragraphs or items are findings, by the words of the heading itself. */
+const FINDINGS_HEAD = /\b(?:findings?|issues?|risks?|problems?|review|blocking|must[ -]fix|defects?|bugs?|nits?|suggestions?|concerns?)\b/i;
+/** An item that says there is nothing to find is not a finding: "None.", "n/a", "No issues found.", "Nothing blocks the merge." */
+const NO_FINDING = /^[\s*_`-]*(?:none\b|n\/a\b|nothing\s+(?:to\s+\w+|found|seen|here|further|else|blocks?)\b|no\s+(?:\w+\s+){0,3}(?:found|seen|issues?|findings?|problems?|risks?|defects?|concerns?|blockers?)\b)/i;
+const ITEM = /^(\s*)(?:[-*+]|\d{1,3}[.)])\s+/;
+const TABLE_ROW = /^\s*\|/;
+
+export interface FindingSpan { readonly start: number; readonly end: number; readonly text: string }
+
+/** Code is not where a finding is stated: fences are blanked, in place, so every offset is still into the text as written. */
+const blankFences = (text: string): string => text.replace(/```[\s\S]*?(?:```|$)|~~~[\s\S]*?(?:~~~|$)/g, (m) => m.replace(/[^\n]/g, ' '));
+
+/** The items of a region of the text: list items where it holds any, else (where `paragraphs` is set) its paragraphs. */
+function itemsIn(text: string, start: number, end: number, paragraphs: boolean): FindingSpan[] {
+  const lines = text.slice(start, end).split('\n');
+  const items: FindingSpan[] = []; const paras: FindingSpan[] = [];
+  let at = start; let open: { start: number; end: number; list: boolean } | null = null;
+  const close = (): void => { if (open) { (open.list ? items : paras).push({ start: open.start, end: open.end, text: text.slice(open.start, open.end) }); open = null; } };
+  for (const line of lines) {
+    const lineStart = at; at += line.length + 1;
+    const t = line.trim();
+    if (!t || /^#{1,6}\s/.test(t) || TABLE_ROW.test(line)) { close(); continue; }
+    const item = ITEM.exec(line);
+    // A nested item carries on its parent's finding: a sub-bullet is where the citation often sits.
+    // (A tab indents as far as four spaces: a tab-indented sub-bullet is nested too.)
+    if (item && (!open || !open.list || item[1].replace(/\t/g, '    ').length < 2)) { close(); open = { start: lineStart + item[0].length, end: lineStart + line.trimEnd().length, list: true }; continue; }
+    if (!open) open = { start: lineStart + line.search(/\S/), end: lineStart + line.trimEnd().length, list: false };
+    else open.end = lineStart + line.trimEnd().length;
+  }
+  close();
+  return items.length ? items : paragraphs ? paras : [];
+}
+
+/**
+ * THE FINDINGS OF A TEXT, each with where it stands. Under the named sections, where the method names them; under
+ * the headings that call their contents findings, where the text has such headings; else every list item.
+ */
+export function findingsOf(raw: string, sections: readonly string[] = []): FindingSpan[] {
+  const text = blankFences(raw);
+  // Sections are read as the text marks them: by its headings where it has any, by its labels where it has none.
+  const labels = headingsOf(text).length === 0;
+  const heads = sectionHeadsOf(text, labels, sections.length ? [...sections] : undefined);
+  const wanted = sections.length ? heads.filter((h) => sections.some((s) => norm(h.text) === norm(s) || ` ${norm(h.text)} `.includes(` ${norm(s)} `)))
+    : heads.filter((h) => FINDINGS_HEAD.test(h.text));
+  const regions = wanted.map((h) => { const next = heads.slice(heads.indexOf(h) + 1).find((x) => x.level <= h.level); return { start: h.end, end: next ? next.start : text.length }; });
+  const found = regions.length ? regions.flatMap((r) => itemsIn(text, r.start, r.end, true)) : itemsIn(text, 0, text.length, false);
+  return found.filter((f) => !NO_FINDING.test(f.text) && f.text.trim().split(/\s+/).length > 3);
+}
+
+/**
+ * EVERY PLACE THE WORK CITES IS A LINE OF WHAT IT WAS GIVEN (../loop/locators.ts). "Cite each item as path:line,
+ * and only lines the diff adds" is a step code can hold: each citation is looked up, and one that names no file of
+ * the material, no line of it, a line the change did not add, a blank line or a lone bracket fails, by name. `min`
+ * citations must be there at all. Whether the cited line is the right one is the writer's judgement, never read
+ * here. Looked up in the bound material and in the request.
+ *
+ * With `perItem`, EVERY FINDING CARRIES ONE: each finding of the text (`findingsOf`: the items under the `sections`
+ * the method names, else under a heading that calls them findings, else every list item) must hold a citation, and
+ * one that holds none fails with its own span. Whether the cited line supports the finding is still the writer's.
+ */
+export const LINES: Observer = {
+  id: 'LINES',
+  describe: (p) => `every path:line cited is a line of the material with something on it${num(p, 'perItem') ? `, and every finding${list(p, 'sections').length ? ` under ${list(p, 'sections').map((s) => `"${s}"`).join(', ')}` : ''} carries one` : ''}${num(p, 'min') ? ` (at least ${num(p, 'min')} cited)` : ''}`,
+  validate: (p) => (num(p, 'min') !== null && (num(p, 'min') ?? 0) < 0 ? 'min is a count, zero or more' : list(p, 'sections').length && !num(p, 'perItem') ? 'sections are read only with perItem' : null),
+  observe(text, p, context?: CheckContext): ObserverResult {
+    // The request is somewhere a change can be given too (a diff pasted into the task). With nothing bound and
+    // nothing pasted, a citation points at something nobody gave, and fails as one.
+    const material = [...(context?.request ? [{ name: 'request', text: context.request }] : []), ...(context?.material ?? [])];
+    const nothingBound = !(context?.material ?? []).length;
+    const cited = citedLines(text, material).map((c) => (nothingBound && c.why === 'no such file in the material' ? { ...c, why: 'no material is bound to look it up in' } : c));
+    const off = cited.filter((c) => c.why !== null); const min = num(p, 'min') ?? 0;
+    // Each finding, and whether a citation stands inside it.
+    const places = citationSpans(text, material);
+    const findings = num(p, 'perItem') ? findingsOf(text, list(p, 'sections')) : [];
+    const uncited = findings.filter((f) => !places.some((c) => c.start >= f.start && c.end <= f.end));
+    const detail = `${cited.length - off.length} of ${cited.length} citation(s) point at a line of the material with something on it`
+      + (off.length ? `; not: ${off.slice(0, 6).map((c) => `${c.path}:${c.line} (${c.why})`).join(', ')}` : '') + (cited.length < min ? `; ${min} needed` : '')
+      + (num(p, 'perItem') ? `; ${findings.length - uncited.length} of ${findings.length} finding(s) point at a line${uncited.length ? ` (${uncited.length} at none)` : ''}` : '');
+    if (!off.length && !uncited.length && cited.length >= min) return { verdict: 'MET', spans: [], value: 0, detail };
+    return { verdict: 'VIOLATED', value: off.length + uncited.length + Math.max(0, min - cited.length), detail,
+      spans: [...off.map((c) => ({ start: c.start, end: c.end, text: text.slice(c.start, c.end), why: `${c.path}:${c.line} is ${c.why}` })),
+        ...uncited.map((f) => ({ start: f.start, end: f.end, text: f.text.slice(0, 160), why: 'this finding points at no line' }))].sort((a, b) => a.start - b.start) };
+  },
+};
+
+/**
+ * THE WORK NAMES A TEST. "Name the test that would have caught it" is held by looking for one: a test file
+ * (`client.test.ts`, `test_retry.py`), a test function or case in backticks (`test_zero_retries`, `shouldRetryOnce`),
+ * or the word "test" followed by a name in backticks (the test `retries_once`). A text that names none fails with
+ * no span: nothing in it is wrong, something is missing, and the piece is written again with that named
+ * (../plan/execution-plan.ts). Whether the named test is the right one is the writer's judgement, never read here.
+ */
+const TEST_FILE = /\b[\w./-]+\.(?:test|spec)\.[jt]sx?\b|\btest_\w+\.py\b|\b[\w./-]+_test\.(?:go|py|rb|ts|js)\b/;
+const TEST_IN_BACKTICKS = /`[^`\n]*\b(?:test|spec|should)\w*[^`\n]*`/i;
+const TEST_THEN_NAME = /\btests?\s+(?:case\s+|function\s+|named\s+|called\s+)?`[^`\n]+`/i;
+export const NAMES_TEST: Observer = {
+  id: 'NAMES_TEST',
+  describe: () => 'the work names a test (a test file, or a test function or case in backticks)',
+  validate: () => null,
+  observe(text): ObserverResult {
+    const prose = blankFences(text);
+    const named = TEST_FILE.exec(prose) ?? TEST_IN_BACKTICKS.exec(prose) ?? TEST_THEN_NAME.exec(prose);
+    if (named) return { verdict: 'MET', spans: [], value: 1, detail: `names a test: ${named[0].trim().slice(0, 80)}` };
+    return { verdict: 'VIOLATED', spans: [], value: 0, detail: 'no test is named' };
+  },
+};
+
+/**
+ * A LENGTH THE OWNER STATED, IN THE UNIT THEY STATED IT: "between 150 and 230 words", "under 280 characters", "two or
+ * three sentences", "no sentence longer than 25 words". Counted the way a person counts: words of prose, characters
+ * of the text as delivered (less front matter), sentences (a list item counts as one); `sentence` is the longest
+ * sentence, in words. Words are words of prose: a heading, a table and a code block are not counted. A stated length is the
+ * method's; a request that names its own length sets it for that run (cli/commands/invoke.ts). With `in`, the
+ * length is that of one named section.
+ */
+export const LENGTH: Observer = {
+  id: 'LENGTH',
+  describe: (p) => {
+    const unit = (list(p, 'unit')[0] ?? 'words').toLowerCase(); const lo = num(p, 'min'); const hi = num(p, 'max');
+    const range = lo !== null && hi !== null ? `${lo} to ${hi}` : hi !== null ? `at most ${hi}` : `at least ${lo}`;
+    const where = list(p, 'in')[0];
+    return unit === 'sentence' ? `no sentence over ${hi} words` : `${where ? `the "${where}" section: ` : ''}${range} ${unit}`;
+  },
+  validate: (p) => {
+    const unit = (list(p, 'unit')[0] ?? 'words').toLowerCase(); const lo = num(p, 'min'); const hi = num(p, 'max');
+    if (!['words', 'characters', 'sentences', 'sentence'].includes(unit)) return 'unit is words, characters, sentences or sentence';
+    if (lo === null && hi === null) return 'needs min or max';
+    if (unit === 'sentence' && hi === null) return 'the longest sentence needs max';
+    if (unit === 'sentence' && list(p, 'in').length) return 'the longest sentence is read over the whole work, not one section';
+    return lo !== null && hi !== null && lo > hi ? 'min cannot exceed max' : null;
+  },
+  observe(whole, p): ObserverResult {
+    if (!whole.trim()) return { verdict: 'NOT_APPLICABLE', spans: [], value: null, detail: 'no text' };
+    const unit = (list(p, 'unit')[0] ?? 'words').toLowerCase(); const lo = num(p, 'min'); const hi = num(p, 'max');
+    // THE LENGTH OF ONE SECTION (`in`), where the owner stated it of a section or their pieces keep one: what the
+    // section holds is counted, and a text without the section is another rule's to fail.
+    const where = list(p, 'in')[0];
+    const text = where ? sectionBodyOf(whole, where, Boolean(num(p, 'labels')), list(p, 'sections')) : whole;
+    // A length the owner stated of a section (`need`) is not met by leaving the section out.
+    if (text === null) return { verdict: num(p, 'need') ? 'VIOLATED' : 'NOT_APPLICABLE', spans: [], value: null, detail: `no "${where}" section to measure` };
+    if (unit === 'sentence') {
+      const long = sentencesOf(text).filter((s) => hi !== null && s.words > hi);
+      return long.length ? { verdict: 'VIOLATED', value: long.length, detail: `${long.length} sentence(s) over ${hi} words (the longest: ${Math.max(...long.map((s) => s.words))})`,
+        spans: long.map((s) => ({ start: s.start, end: s.end, text: s.text, why: `${s.words} words, where no sentence runs over ${hi}` })) }
+        : { verdict: 'MET', spans: [], value: 0, detail: `no sentence over ${hi} words` };
+    }
+    // Characters of the text as a reader has it: front matter is not part of a post.
+    const n = unit === 'characters' ? text.replace(/^\uFEFF?---\r?\n[\s\S]*?\r?\n---\r?\n?/, '').trim().length : unit === 'sentences' ? sentencesOf(text).length : proseWords(text);
+    const off = lo !== null && n < lo ? 'short' : hi !== null && n > hi ? 'long' : null;
+    const asked = lo !== null && hi !== null ? `${lo} to ${hi}` : hi !== null ? `at most ${hi}` : `at least ${lo}`;
+    // How far off, said as a number: told only "long", a writer asked for at most 420 words came back at 469.
+    const by = off === 'long' ? n - (hi ?? n) : off === 'short' ? (lo ?? n) - n : 0;
+    return { verdict: off ? 'VIOLATED' : 'MET', spans: [], value: n, detail: `${where ? `"${where}": ` : ''}${n} ${unit} (${asked})${off ? `: ${off} by ${by}` : ''}` };
+  },
+};
+
+/** What each check reads: the output alone, or the output against what it was made from. */
+export type ObligationTarget = 'OUTPUT' | 'BOUND_MATERIAL';
+export const targetOf = (observer: string): ObligationTarget => (observer === 'CITED' || observer === 'LINES' ? 'BOUND_MATERIAL' : 'OUTPUT');

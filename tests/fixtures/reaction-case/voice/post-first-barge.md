@@ -1,0 +1,1 @@
+The first barge of the season left Hollin Vale at six this morning with forty tonnes of fruit on board. Mara drove the tug and Owen rode the bow with a flask of tea. I think this is my favourite day of the year, because every grower turns up at the wharf to watch their crates go. It should reach Stannard Lock by three -- weather and herons permitting.

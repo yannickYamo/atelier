@@ -1,0 +1,341 @@
+// cli/commands/amend.ts — Editing a draft, sharpening a rule, answering a probe.
+//
+// Split out of a 1,700-line entry point. The shared ground — session, run transitions,
+// the provider factory, host selection — lives in ../runtime.js and is imported, so a
+// command file reads as one job rather than as a slice of everything.
+
+import { resolveRule, ruleKey } from '../../core/state/rule-key.js';
+import { parseMeasure } from './ratify.js';
+import { describeMeasurement } from '../../core/observers/verify.js';
+import { describeBackup } from '../../adapters/install-tree.js';
+import {mkdirSync, existsSync} from 'node:fs';
+import { writeAtomic } from '../../core/state/fs-atomic.js';
+import { join } from 'node:path';
+import { readJson } from '../../core/state/read-json.js';
+import { selectForProbing, prepareProbe, foldAnswer } from '../../core/discovery/run-probes.js';
+import type { Budget } from '../../core/inference/client.js';
+import type { Measurement, Requirement, StandardVersion } from '../../core/state/canonical-state.js';
+import { fitToCorpus, piecesBreaking, restateLimits, ruleAgainstExamples } from '../../core/observers/derive.js';
+import { sessionCorpus } from '../corpus.js';
+import { authorityStateOf, assertSupersessionRecorded, carriedQualifications, carriedSettings, standardHashOf, acceptedCarried, latitudeOf } from '../../core/state/canonical-state.js';
+import { parseLatitude } from '../../core/observers/latitude.js';
+import { unmeasuredSaid, latitudeLine, acceptedNamed } from '../latitude.js';
+import { parseConsequences, describeTable } from '../../core/eval/consequence.js';
+import { compileArchitecture } from '../../core/architecture/compile.js';
+import { renderAgentSkill, assertPortable, defaultDescription } from '../../renderers/agent-skill/render.js';
+import * as store from '../../core/state/store.js';
+
+import { sha, DATA, die, argv, flag, cmd, projectDir, pickHost, clientFor, numericFlag, skillArg, diagnoserModel, carriedFrom, carryReceipt } from '../runtime.js';
+import { decide } from '../../core/ratification/authority.js';
+import { draftHash, appendDecision, stampVersion } from '../../core/ratification/decision-record.js';
+
+// ── amend ───────────────────────────────────────────────────────────────────────────────────
+/**
+ * REWORD A RULE. MINTS A NEW StandardVersion, WITH A REASON.
+ *
+ * The store could confirm a rule and drop a rule and do nothing in between, which left the one
+ * outcome a measurement campaign actually produces — "this rule is not stated well enough for anyone
+ * to apply it consistently" — with no way to act on it except deleting the rule or hand-editing the
+ * store. Hand-editing is the failure the whole architecture exists to prevent.
+ *
+ * This is an AUTHORITY path, not an optimizer path. It changes what good means, so it mints a new
+ * StandardVersion carrying `supersedes` and the author's reason, exactly as `confirm` does. The
+ * optimizer has no route here and never will: `improve` cannot reach this function.
+ *
+ * The reworded rule becomes EXPERT_AUTHORED — a person wrote these words, so the provenance stops
+ * claiming the machine discovered them.
+ */
+export function amend(): void {
+  const name = skillArg();
+  // THE LATITUDE AND THE RULES ACCEPTED AS UNMEASURED ARE THE OWNER'S TOO (core/observers/latitude.ts): changed here, on
+  // their own, with no rule named; a new version with the reason, like any amendment.
+  const latitudeAsked = flag('--latitude'); const unmeasuredAsked = unmeasuredSaid();
+  // THE CONSEQUENCE TABLE IS THE OWNER'S AS WELL (core/eval/consequence.ts): `--consequence <finding>=<action>,…` sets a row
+  // otherwise than the latitude's default, `<finding>=default` takes it back; the overrides are kept inside the hash.
+  const consequenceAsked = flag('--consequence');
+  const settingOnly = flag('--rule') === undefined && (latitudeAsked !== undefined || unmeasuredAsked !== undefined || flag('--accept-unmeasured') !== undefined || consequenceAsked !== undefined);
+  const ruleRef = settingOnly ? '' : flag('--rule') ?? die('--rule required: the rule\'s id, its key (R-…) or its number in atelier plan (or --latitude strict|grounded|creative, --unmeasured accept|review, --accept-unmeasured <rule,...>, --consequence <finding>=<action>, for the whole skill)');
+  const statement = flag('--statement');
+  const materiality = flag('--materiality');
+  const measureSpec = flag('--measure');
+  const phaseFlag = flag('--phase')?.toUpperCase();
+  if (phaseFlag !== undefined && phaseFlag !== 'ACCURACY' && phaseFlag !== 'STYLE') die('--phase is ACCURACY or STYLE');
+  const phase = phaseFlag as 'ACCURACY' | 'STYLE' | undefined;
+  const appliesWhen = flag('--applies-when');
+  // Scope alone is an amendment. `verify` tells the owner of a conditional measured rule to widen it to
+  // GENERAL, and this guard used to refuse exactly that command unless something else changed with it.
+  if (!settingOnly && !statement && !materiality && measureSpec === undefined && !phase && !appliesWhen) {
+    die('--statement "<the rule in your words>", --materiality REQUIRED|PREFERRED|…, --measure <observer>:<params>|none, --phase ACCURACY|STYLE or --applies-when <condition>|GENERAL required');
+  }
+  const measurement = measureSpec === undefined ? undefined : measureSpec.trim().toLowerCase() === 'none' ? null : parseMeasure(measureSpec);
+  const reason = flag('--reason') ?? die('--reason required — a version history without reasons can be counted, not audited.');
+  const L: store.StoreLayout = { root: DATA, skillName: name };
+  const activeHash = store.getActive(L) ?? die(`no active version for ${name}.`);
+  const sv = store.getSkillVersion(L, activeHash) ?? die(`skill version ${activeHash} is missing.`);
+  const prev = store.getStandard(L, sv.standardVersionHash) ?? die('standard missing.');
+  let requirements = prev.requirements; let ruleId: string | null = null;
+  let target: Requirement | null = null; let amended: ReturnType<typeof decide> | null = null;
+  if (!settingOnly) {
+    const found = resolveRule(prev.requirements, ruleRef);
+    if ('error' in found) return void die(found.error);
+    target = found.rule; const id = target.requirementId; ruleId = id;
+    try { amended = decide(target, { verb: 'AMEND', statement, appliesWhen, materiality, phase, ...(measurement === undefined ? {} : { measurement }) }); }
+    catch (e) { return void die((e as Error).message); }
+    const changed = amended.requirement;
+    requirements = prev.requirements.map((r) => r.requirementId === id ? changed : r);
+  }
+  const level = latitudeAsked === undefined ? null : parseLatitude(latitudeAsked) ?? die(`--latitude takes strict, grounded or creative, not "${latitudeAsked}".`);
+  const kept = carriedSettings(prev, requirements);
+  const latitude = level ? { level, evidence: [], by: 'owner' as const } : kept.latitude;
+  // What the owner accepted unmeasured is carried; a rule that gains a check leaves it, one that loses its check gets the level's default.
+  const accepted = acceptedCarried(latitudeOf({ latitude }), requirements, unmeasuredAsked, prev, acceptedNamed(requirements, prev.qualifications));
+  const consequences = consequenceAsked === undefined ? kept.consequences ?? {} : parseConsequences(consequenceAsked, kept.consequences, (l) => { console.log(l); });
+  const body = { evidenceId: prev.evidenceId, workType: prev.workType, requirements, ...(latitude ? { latitude } : {}), ...(accepted.length ? { acceptedUnmeasured: accepted } : {}),
+    ...(Object.keys(consequences).length ? { consequences } : {}) };
+  if (settingOnly) console.log(latitudeLine(body));
+  if (consequenceAsked !== undefined) console.log(`What is done with an output, by what was found (after repair):\n${describeTable(body).join('\n')}`);
+  // An amended check is a new check: its standing is not carried; the others keep theirs.
+  const minted: StandardVersion = { standardVersionHash: standardHashOf(body), ...body,
+    authorityState: authorityStateOf(requirements), mintedAt: new Date().toISOString(),
+    supersedes: prev.standardVersionHash, reason, ...carriedQualifications(prev, requirements.filter((r) => r.requirementId !== ruleId || measurement === undefined)) };
+  assertSupersessionRecorded(minted);
+
+  // THE HASH IS THE IDENTITY, SO THE FIRST MINT WINS. `mintedAt`, `supersedes` and `reason` sit outside
+  // the hash, so re-minting identical content (a re-run after a partial write, an amend that restores
+  // an earlier wording) is the same version: the store keeps the body it has and hands it back, and the
+  // skill is rendered from that one. Written before the render so a re-run always finds it.
+  const next = store.putStandard(L, minted);
+  if (next !== minted) console.log(`(this exact standard already exists as ${next.standardVersionHash}, minted ${next.mintedAt} — reusing it rather than minting a duplicate identity)`);
+
+  const arch = compileArchitecture(next);
+  const desc = flag('--description') ?? sv.description ?? defaultDescription(next.workType);
+  const carried = carriedFrom(L, sv.skillVersionHash, next);
+  const pkg = renderAgentSkill(next, arch, name, desc, carried.exemplar, carried.contrast, carried.voice, carried.method);
+  assertPortable(pkg);
+  const skill = { skillVersionHash: sha(`${arch.architectureHash}|${pkg.packageHash}`), skillName: name,
+    standardVersionHash: next.standardVersionHash, architectureHash: arch.architectureHash,
+    materializedHash: pkg.packageHash, builtAt: new Date().toISOString(), description: desc };
+  store.putSkillVersion(L, skill); store.putArchitecture(L, arch); store.putPackage(L, pkg);
+  carryReceipt(L, sv.skillVersionHash, skill, cmd);
+  // Installed first, activated second, as `addition` does: a failed install leaves the previous version
+  // active and serving, rather than a pointer naming a version the host does not hold.
+  const inst = pickHost().install(pkg, projectDir());
+  { const moved = describeBackup(inst); if (moved) console.log(moved); }
+  if (!inst.ok) return void die(`install failed: ${inst.reason}\n  Nothing was amended: the active version is unchanged.`);
+  store.setActive(L, skill.skillVersionHash);
+
+  if (!target || !amended) { console.log(`\nStandardVersion ${next.standardVersionHash} supersedes ${prev.standardVersionHash}\n  reason: ${reason}`); return; }
+  // The act is a ratification decision like any other, and until now it left no ledger record —
+  // docs/AUTHORITY.md promised one for "every one of these decisions" and only the session flow kept it.
+  const ledger = stampVersion(appendDecision({ standardDraftHash: draftHash([target]), records: [] },
+    target, amended.ledgerDecision, { humanRevision: amended.requirement, note: reason, decidedAt: minted.mintedAt }), next.standardVersionHash);
+  store.appendEvent(L, { kind: 'LEDGER_DECISION', record: ledger.records[0], at: minted.mintedAt });
+
+  console.log(`\nAmended ${ruleId} (${ruleKey(amended.requirement)}).`);
+  if (statement) {
+    console.log(`  was: ${target.statement}`);
+    console.log(`  now: ${statement}`);
+    console.log(`  authority ${target.authority} -> EXPERT_AUTHORED   (you wrote these words)`);
+  }
+  if (phase) console.log(`  phase ${target.phase ?? 'STYLE'} -> ${phase}   (ACCURACY rules are repaired before STYLE ones)`);
+  if (appliesWhen) console.log(`  applies when: ${target.appliesWhen}  ->  ${appliesWhen}`);
+  if (materiality) console.log(`  weight ${target.materiality ?? 'undeclared'} -> ${amended.requirement.materiality}`);
+  if (measurement !== undefined || (statement && target.measurement && !amended.requirement.measurement)) {
+    console.log(`  check: ${describeMeasurement(target) ?? 'none'} -> ${describeMeasurement(amended.requirement) ?? 'none'}`
+      + (measurement === undefined ? '   (reworded, so the old check no longer states what the rule asks)' : ''));
+  }
+  // THE RULE AGAINST THE OWNER'S OWN PIECES, said once (core/observers/derive.ts, `ruleAgainstExamples`): an amended rule
+  // that forbids or caps what their examples measurably do is kept as they wrote it, and they are told how often.
+  const against = amended.requirement.measurement && (measurement !== undefined || statement) ? ruleAgainstExamples(amended.requirement.measurement, sessionCorpus(name)) : null;
+  if (against) console.log(`  ${against.charAt(0).toUpperCase()}${against.slice(1)}.`);
+  console.log(`\nStandardVersion ${next.standardVersionHash} supersedes ${prev.standardVersionHash}`);
+  console.log(`  reason: ${reason}`);
+  if (statement || appliesWhen) {
+    console.log(`\nEvery measurement taken against ${prev.standardVersionHash} describes the OLD wording of ${ruleId}.`);
+    console.log(`Labels for that rule do not carry over.`);
+  }
+}
+
+// ── a measurement, as `--measure` takes it ──────────────────────────────────────────────────
+/** What `--measure` accepts for each observer whose limit can be set where the author's pieces are (./ratify.ts, `parseMeasure`). */
+const MEASURE_KEYS: Readonly<Record<string, readonly string[]>> = {
+  SENTENCE_LENGTH: ['medianMax', 'p90Max'], PARAGRAPH_LENGTH: ['maxSentences'], HEDGE_RATE: ['maxPer1000'],
+  PATTERN_RATE: ['pattern', 'minPer1000', 'maxPer1000', 'prefer'], FRAGMENT_SHARE: ['maxWords', 'maxShare'],
+  TERM_RATE: ['terms', 'minPer1000', 'maxPer1000'], RATIO: ['numerator', 'denominator', 'minShare', 'maxShare'],
+  DISTRIBUTION: ['edges', 'shares', 'tolerance'], OPENING: ['avoid', 'minWords', 'maxWords'], CLOSING: ['avoid', 'minWords', 'maxWords'],
+  RHYTHM: ['unit', 'minCv', 'maxCv'] };
+const UPPER_CASE_KEYS = new Set(['pattern', 'unit']);
+const WORD_LIST_KEYS = new Set(['terms', 'numerator', 'denominator', 'avoid']);
+const NUMBER_LIST_KEYS = new Set(['edges', 'shares']);
+const PLAIN_NUMBER = /^\d+(\.\d+)?$/;
+
+/**
+ * A MEASUREMENT IN THE WORDS `--measure` TAKES (./ratify.ts, `parseMeasure`), so that parsing what this returns
+ * gives the same measurement back, or null when that grammar cannot say it. It cannot say a parameter the flag
+ * does not take (the `role` and `never` discovery records on some rules), a word the parser would change (it
+ * lower-cases word lists and trims them), or anything that would break out of the quotes the command is printed
+ * in. Null is the honest answer there: a command that silently dropped a rule's `never` list would loosen the
+ * rule by more than its limit. Only the observers whose limit `fitToCorpus` moves are written.
+ */
+export function formatMeasure(m: Measurement): string | null {
+  const keys = MEASURE_KEYS[m.observer] as readonly string[] | undefined;
+  if (!keys) return null;
+  const parts: string[] = [];
+  for (const [k, v] of Object.entries(m.params)) {
+    if (!keys.includes(k)) return null;
+    const strings = Array.isArray(v) && v.every((x): x is string => typeof x === 'string') ? v : null;
+    const numbers = Array.isArray(v) && v.every((x): x is number => typeof x === 'number') ? v : null;
+    if (k === 'prefer' || UPPER_CASE_KEYS.has(k)) {
+      // One value, kept as written for `prefer` (its spaces are the point of it) and upper-cased by the parser otherwise.
+      if (strings?.length !== 1 || (k !== 'prefer' && strings[0] !== strings[0].trim().toUpperCase())) return null;
+      parts.push(`${k}=${strings[0]}`);
+    } else if (WORD_LIST_KEYS.has(k)) {
+      if (!strings?.length || strings.some((x) => x === '' || x !== x.trim().toLowerCase() || x.includes('|'))) return null;
+      parts.push(`${k}=${strings.join('|')}`);
+    } else if (NUMBER_LIST_KEYS.has(k)) {
+      if (!numbers?.length || numbers.some((x) => !PLAIN_NUMBER.test(String(x)))) return null;
+      parts.push(`${k}=${numbers.join('/')}`);
+    } else {
+      if (typeof v !== 'number' || !PLAIN_NUMBER.test(String(v))) return null;
+      // Zero is a target the parser takes for a rate and a share, and for no length.
+      const zeroTaken = ['HEDGE_RATE', 'PATTERN_RATE', 'TERM_RATE'].includes(m.observer) || ['minShare', 'maxShare', 'minPer1000', 'maxPer1000', 'minWords'].includes(k);
+      if (v === 0 && !zeroTaken) return null;
+      parts.push(`${k}=${v}`);
+    }
+  }
+  // A comma ends a parameter and these characters end or reopen the quotes the command is printed in.
+  if (parts.some((x) => /[,"$`\\!]/.test(x))) return null;
+  return `${m.observer}:${parts.join(',')}`;
+}
+
+/**
+ * In double quotes where that is safe in a shell, in single quotes otherwise, with each single quote inside closed,
+ * escaped and reopened. A rule that quotes both kinds ("don't", "it's") had no form, and its command was
+ * printed with a placeholder where the rule's words go: pasted as printed, the placeholder became the rule.
+ */
+const quoted = (text: string): string => (!/["$`\\!]/.test(text) ? `"${text}"` : `'${text.replace(/'/g, '\'\\\'\'')}'`);
+
+/**
+ * THE COMMAND THAT SETS AN APPROVED RULE'S LIMIT WHERE ITS AUTHOR'S OWN PIECES ARE, or null when there is no such
+ * limit: the rule has no numeric limit to move, at most `allowedBreaking` pieces break it already, no loosening
+ * inside the bound brings it there (core/observers/derive.ts, `fitToCorpus`), or `--measure` cannot say the result.
+ *
+ * A new check under old words would leave the rule stating a number it is no longer checked against, so where the
+ * statement quotes the old limit the command carries the statement with the new one. Where which number to replace
+ * would be a guess, the command holds a place for the owner's own wording.
+ * Nothing is amended here: the command is printed, and running it is the owner's ruling.
+ */
+export function amendToFit(name: string, rule: Requirement, pieces: readonly string[], allowedBreaking: number): string | null {
+  if (!rule.measurement) return null;
+  const fitted = fitToCorpus(rule.measurement, pieces, allowedBreaking);
+  const spec = fitted ? formatMeasure(fitted) : null;
+  if (!fitted || spec === null) return null;
+  const restated = restateLimits(rule.statement, rule.measurement, fitted);
+  const words = restated === null ? null : restated === rule.statement ? '' : quoted(restated);
+  const meet = pieces.length - piecesBreaking(pieces, fitted).length;
+  // A statement that could not be restated is asked for inside the command, as `--reason "<why>"` is elsewhere: a
+  // note after the command would be pasted into the shell with it, and the command without `--statement` would
+  // leave the rule quoting a number it is no longer checked against.
+  const statement = words === null ? ' --statement "<the rule, with its new limit>"' : words ? ` --statement ${words}` : '';
+  return `atelier amend --skill ${name} --rule ${rule.requirementId} --measure "${spec}"${statement} --reason "set where ${meet} of my ${pieces.length} pieces meet it"`;
+}
+
+
+// ── sharpen ─────────────────────────────────────────────────────────────────────────────────
+/**
+ * ASK THE QUESTION DISCOVERY CANNOT ANSWER FOR ITSELF.
+ *
+ * Separate from `create` on purpose. Each probe writes three variants, so probing costs real money,
+ * and a `create` that quietly spent six extra generations would be a cost surprise on the one command
+ * a new user runs first. The standard works without this; it is just under-identified, and Atelier
+ * says so rather than hiding it.
+ *
+ * There is no screen. This writes a markdown sheet and prints its path. Three 200-word passages in
+ * terminal scrollback cannot be compared — you would be scrolling back and forth to hold them side by
+ * side — and anyone running this already has an editor open next to it.
+ */
+export async function sharpen(): Promise<void> {
+  const name = skillArg();
+  const k = numericFlag('--questions', 2);
+  const L: store.StoreLayout = { root: DATA, skillName: name };
+  const activeHash = store.getActive(L) ?? die(`no active version for ${name}.`);
+  const sv = store.getSkillVersion(L, activeHash) ?? die(`skill version ${activeHash} is missing.`);
+  const v = store.getStandard(L, sv.standardVersionHash) ?? die('standard missing.');
+
+  // Recurrence is not persisted per requirement yet, so ordering falls back to the discovery order,
+  // which is the proposer's own confidence ranking. Declared here rather than silently assumed.
+  const candidates = v.requirements.map((r, i) => ({
+    requirementId: r.requirementId, statement: r.statement, appliesWhen: r.appliesWhen,
+    recurrence: (v.requirements.length - i) / v.requirements.length }));
+  const picked = selectForProbing(candidates, k);
+  const brief = flag('--brief') ?? `Write a short piece of the kind this author writes (${v.workType}).`;
+
+  const budget: Budget = { spentUsd: 0, capUsd: numericFlag('--cap', 1.0), maxCalls: numericFlag('--max-calls', 12) };
+  const est = picked.length * 3 * 0.02;
+  console.log(`\n${picked.length} question(s), 3 versions each = ${picked.length * 3} short generations, about $${est.toFixed(2)}.`);
+  for (const c of picked) console.log(`  ${c.requirementId}  ${c.statement.slice(0, 78)}`);
+  if (argv.includes('--dry-run')) { console.log('\n--dry-run: nothing generated.'); return; }
+
+  const client = clientFor(diagnoserModel());
+  const dir = join(DATA, 'skills', name, 'probes');
+  mkdirSync(dir, { recursive: true });
+  for (const [i, c] of picked.entries()) {
+    const p = await prepareProbe(client, budget, c, brief, i + 1);
+    const sheet = join(dir, `${c.requirementId}.md`);
+    writeAtomic(sheet, p.blind.rendered);
+    writeAtomic(join(dir, `${c.requirementId}.key.json`), JSON.stringify(p.blind, null, 1));
+    console.log(`\n  ${c.requirementId}  ->  ${sheet}`);
+  }
+  console.log(`\nOpen the sheet(s), read the versions, then tell me which you would ship:`);
+  console.log(`  atelier answer --skill ${name} --rule ${picked[0]?.requirementId ?? '<id>'} --pick <number>`);
+  console.log(`  ...or --none if you would ship none of them, or --indifferent if two are equally fine.`);
+  console.log(`\n($${budget.spentUsd.toFixed(3)})`);
+}
+
+// ── answer ──────────────────────────────────────────────────────────────────────────────────
+/**
+ * Fold one probe answer back into the standard.
+ *
+ * This is an AUTHORITY path: it can reword or narrow a rule, so it mints a new StandardVersion with
+ * the reason recorded, exactly as `confirm` and `amend` do. What it may never do is invent a rule the
+ * probe did not ask about.
+ */
+export function answerProbe(): void {
+  const name = skillArg();
+  const ruleId = flag('--rule') ?? die('--rule required');
+  const L: store.StoreLayout = { root: DATA, skillName: name };
+  const keyPath = join(DATA, 'skills', name, 'probes', `${ruleId}.key.json`);
+  if (!existsSync(keyPath)) die(`no probe for ${ruleId}. Run: atelier sharpen --skill ${name}`);
+  const blind = readJson<Parameters<typeof foldAnswer>[0]['blind']>(keyPath, { what: 'a probe key' });
+
+  const pick = argv.includes('--none') ? { none: true }
+    : argv.includes('--indifferent') ? { noPreference: blind.key.map((k) => k.tag) }
+    : { shipped: flag('--pick') ?? die('--pick <number>, or --none, or --indifferent') };
+
+  const activeHash = store.getActive(L) ?? die(`no active version for ${name}.`);
+  const sv = store.getSkillVersion(L, activeHash) ?? die(`skill version ${activeHash} is missing.`);
+  const prev = store.getStandard(L, sv.standardVersionHash) ?? die('standard missing.');
+  const target = prev.requirements.find((r) => r.requirementId === ruleId) ?? die(`${ruleId} is not in this standard.`);
+  const out = foldAnswer({ requirementId: ruleId, statement: target.statement, blind, costUsd: 0 }, pick);
+
+  console.log(`\n${out.meaning}`);
+  console.log(`\n  ${out.consequence}`);
+  switch (out.consequence) {
+    case 'CONFIRMS':
+      console.log(`  "${target.statement}" holds, and you preferred it in measure over both less and more.`);
+      console.log(`\n  It is still DERIVED_UNRATIFIED — a probe is evidence, not authority. To make it yours:`);
+      console.log(`    atelier confirm --skill ${name} --rule ${ruleId}`);
+      break;
+    case 'NARROWS':
+      console.log(`  The rule does not bind in this context. That NARROWS its scope; it does not refute it.`);
+      console.log(`\n  Sharpen the condition in your own words:`);
+      console.log(`    atelier amend --skill ${name} --rule ${ruleId} --statement "..." --applies-when "..." --reason "probe: indifferent here"`);
+      break;
+    default:
+      console.log(`  You wanted ${out.consequence === 'REWORD_WEAKER' ? 'LESS' : 'MORE'} of it than your examples suggested.`);
+      console.log(`\n  The wording is yours to fix — Atelier will not rewrite what good means:`);
+      console.log(`    atelier amend --skill ${name} --rule ${ruleId} --statement "..." --reason "probe: preferred ${out.consequence === 'REWORD_WEAKER' ? 'less' : 'more'}"`);
+  }
+  store.appendEvent(L, { kind: 'BOUNDARY_PROBE', at: new Date().toISOString(),
+    skillVersionHash: activeHash, requirementId: ruleId, preferredLevel: out.label.preferredLevel, consequence: out.consequence });
+}

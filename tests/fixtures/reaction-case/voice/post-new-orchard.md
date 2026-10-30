@@ -1,0 +1,1 @@
+We voted a new orchard into the co-op last night -- the Pellow family at the top of the valley, with about three hundred trees of old bittersweet varieties. They were vouched for by two members and the vote was unanimous. Their fruit should change the blend at the press for the better. Welcome to them, and to their very patient dog.

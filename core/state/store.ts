@@ -1,0 +1,899 @@
+// atelier/core/state/store.ts — APPEND-ONLY LOCAL STATE.
+//
+// Everything is append-only except one pointer. Standards and skill versions are written under their
+// own hash and never overwritten, so history is a property of the layout rather than of anyone's
+// discipline: to lose a previous version you would have to delete a file, not merely save over one.
+//
+// Rollback is a pointer move. That is the whole mechanism, and it is why rollback cannot corrupt
+// history — the thing being changed is which version is ACTIVE, not what any version says.
+//
+// No telemetry. No network. Corpus and outputs stay where the user put them; this stores metadata,
+// standards and events.
+
+import type { StoredSignal } from '../observers/selection.js';
+import type { Voice } from '../compiler/voice.js';
+import type { CompositeRecord } from '../composite/selection.js';
+import type { ContrastPair } from '../compiler/contrast-examples.js';
+import type { Recurrence, VersionBreakRates } from '../mining/recurrence.js';
+import type { QualityFloorContract, FloorQualification, FrozenBaselineEntry } from '../distinctiveness/floor.js';
+import { mkdirSync, readFileSync, existsSync, readdirSync, appendFileSync, rmSync } from 'node:fs';
+import { writeAtomic } from './fs-atomic.js';
+import { packageHashOf, type BuildReceipt } from './receipt.js';
+import type { MoveProfile } from '../compiler/moves.js';
+import type { InferredMethod } from '../method/infer.js';
+import type { DecisionUnit } from './canonical-state.js';
+import type { StepCheck, StepLedger } from '../method/step-check.js';
+import { readJson, MalformedStoreFile } from './read-json.js';
+import { join, dirname } from 'node:path';
+import type { Observation } from '../measurement/observation.js';
+import type { ExpertEvidence, StandardVersion, SkillVersion, EvidenceEvent, InvocationRecord, FeedbackRecord } from './canonical-state.js';
+import { assertSupersessionRecorded, assertStandardIntegrity, hashedBody } from './canonical-state.js';
+import type { SkillArchitecture } from '../architecture/compile.js';
+import type { RatificationLedger } from '../ratification/decision-record.js';
+
+export interface StoreLayout { readonly root: string; readonly skillName: string }
+
+/**
+ * A skill name is a single directory entry under `skills/`, and the layout refuses anything else.
+ * The CLI validates names before they get here; this is the guard that holds when a caller does not.
+ */
+const safeName = (name: string): string => {
+  if (!name || name === '.' || name === '..' || /[\\/\0]/.test(name)) {
+    throw new Error(`STORE: "${name}" is not a skill name; it would resolve outside skills/.`);
+  }
+  return name;
+};
+
+const dirs = (l: StoreLayout) => ({
+  base: join(l.root, 'skills', safeName(l.skillName)),
+  standards: join(l.root, 'skills', l.skillName, 'standards'),
+  versions: join(l.root, 'skills', l.skillName, 'versions'),
+  architectures: join(l.root, 'skills', l.skillName, 'architectures'),
+  packages: join(l.root, 'skills', l.skillName, 'packages'),
+  invocations: join(l.root, 'skills', l.skillName, 'invocations'),
+  feedback: join(l.root, 'skills', l.skillName, 'feedback'),
+  bindings: join(l.root, 'skills', l.skillName, 'bindings'),
+  ledgers: join(l.root, 'skills', l.skillName, 'ledgers'),
+});
+
+export function initStore(l: StoreLayout): void {
+  const d = dirs(l);
+  for (const p of [d.base, d.standards, d.versions, d.architectures, d.packages, d.invocations, d.feedback, d.bindings]) mkdirSync(p, { recursive: true });
+}
+
+export function putEvidence(l: StoreLayout, e: ExpertEvidence): void {
+  writeAtomic(join(dirs(l).base, 'evidence.json'), JSON.stringify(e, null, 1));
+}
+export const getEvidence = (l: StoreLayout): ExpertEvidence | null => {
+  const p = join(dirs(l).base, 'evidence.json');
+  return existsSync(p) ? readJson<ExpertEvidence>(p, { what: 'sealed evidence', requireKeys: ['evidenceId'] }) : null;
+};
+
+/** What the hash covers, in the order every minting site hashes it. */
+const hashedContent = (v: StandardVersion): string => hashedBody(v);
+
+/**
+ * Write a standard. REFUSES to overwrite an existing hash with different content. Returns the standard
+ * now on disk, which on a re-mint is the one written first.
+ *
+ * Two different standards cannot share a hash, so a collision means the same standard is being written
+ * twice — harmless — while a DIFFERENT body under an existing hash would mean the hash is not an
+ * identity. Refusing is cheap; discovering later that a version's content changed is not.
+ *
+ * THE COMPARISON IS OVER WHAT THE HASH COVERS. It compared the whole file, and `mintedAt`, `reason` and
+ * `supersedes` sit outside the hash, so the same standard minted a second time (confirm after a
+ * rollback, the same rule added again) differed by its timestamp and was refused as a conflicting
+ * identity. Under content addressing it is the same version: the stored file stays canonical and the
+ * caller renders from it. What remains open (B11): two different authority events over identical
+ * requirements collapse to one identity, so the supersession chain records only the first.
+ */
+export function putStandard(l: StoreLayout, v: StandardVersion): StandardVersion {
+  assertSupersessionRecorded(v);
+  const p = join(dirs(l).standards, `${v.standardVersionHash}.json`);
+  if (existsSync(p)) {
+    const existing = readJson<StandardVersion>(p, { what: `standard ${v.standardVersionHash}`, requireKeys: ['standardVersionHash', 'requirements'] });
+    if (hashedContent(existing) !== hashedContent(v)) {
+      throw new Error(`STORE: standard ${v.standardVersionHash} already exists with different content. A version hash is an identity; two bodies cannot share one.`);
+    }
+    return existing;
+  }
+  writeAtomic(p, JSON.stringify(v, null, 1));
+  return v;
+}
+
+/**
+ * THE RATIFICATION LEDGER, KEPT BESIDE THE STANDARD IT PRODUCED.
+ *
+ * AUTHORITY.md promised this and it was not so: the ledger lived only in the per-project working
+ * folder, so the next close in the same project overwrote the record of who decided the previous
+ * standard and what they were shown. Keyed by the standard's hash, written once, never replaced.
+ */
+export function putLedger(l: StoreLayout, standardVersionHash: string, ledger: RatificationLedger): void {
+  // THE FIRST RECORD WINS, as the first mint of a standard does. The same rules ratified again — in
+  // another project, or after an abort — mint the same standard hash with a ledger that differs by
+  // its timestamps, and treating that as a conflicting identity blocked the build permanently.
+  const p = join(dirs(l).ledgers, `${standardVersionHash}.json`);
+  if (existsSync(p)) return;
+  putByHash(p, standardVersionHash, ledger, 'ratification ledger');
+}
+export function getLedger(l: StoreLayout, standardVersionHash: string): RatificationLedger | null {
+  const p = join(dirs(l).ledgers, `${standardVersionHash}.json`);
+  return existsSync(p) ? readJson<RatificationLedger>(p, { what: 'a ratification ledger' }) : null;
+}
+
+/**
+ * The owner's chosen exemplar for a skill: one complete piece of their own, shipped with every build.
+ * Kept beside the skill rather than in a SkillVersion, so every re-render (amend, confirm, fix) carries
+ * the same one until the owner changes it.
+ */
+export function getExemplar(l: StoreLayout): { text: string; request?: string } | null {
+  const p = join(dirs(l).base, 'exemplar.md');
+  if (!existsSync(p)) return null;
+  const q = join(dirs(l).base, 'exemplar-request.txt');
+  return { text: readFileSync(p, 'utf8'), ...(existsSync(q) ? { request: readFileSync(q, 'utf8') } : {}) };
+}
+/** The exemplar, and the request it answered when it carried one: kept apart, so a rebuild serves the same pair. */
+export function setExemplar(l: StoreLayout, text: string | null, request: string | null = null): void {
+  const p = join(dirs(l).base, 'exemplar.md'); const q = join(dirs(l).base, 'exemplar-request.txt');
+  if (text === null || request === null) { if (existsSync(q)) rmSync(q); }
+  if (text === null) { if (existsSync(p)) rmSync(p); return; }
+  mkdirSync(dirs(l).base, { recursive: true });
+  writeAtomic(p, text);
+  if (request !== null) writeAtomic(q, request);
+}
+
+/**
+ * THE OWNER'S METHOD, AS THEY WROTE IT: served whole with every build (renderers/agent-skill/render.ts), so that what
+ * a writer is told is the method itself and not the part of it a check could read. Kept beside the skill like the
+ * exemplar, so every re-render carries the same text until the owner builds from a new one.
+ */
+export function getMethod(l: StoreLayout): { text: string } | null {
+  const p = join(dirs(l).base, 'method.md');
+  return existsSync(p) ? { text: readFileSync(p, 'utf8') } : null;
+}
+export function setMethod(l: StoreLayout, text: string | null): void {
+  const p = join(dirs(l).base, 'method.md');
+  if (text === null) { if (existsSync(p)) rmSync(p); return; }
+  mkdirSync(dirs(l).base, { recursive: true });
+  writeAtomic(p, text);
+}
+/** THE METHOD READ OFF THE PIECES when the owner wrote none (core/method/infer.ts): a habit of the pieces, never a rule; the brief uses it, the standard never does. */
+export function getInferredMethod(l: StoreLayout): InferredMethod | null {
+  const p = join(dirs(l).base, 'method-inferred.json');
+  return existsSync(p) ? readJson<InferredMethod>(p, { what: 'the inferred method', requireKeys: ['steps'] }) : null;
+}
+export function setInferredMethod(l: StoreLayout, m: InferredMethod | null): void {
+  const p = join(dirs(l).base, 'method-inferred.json');
+  if (m === null) { if (existsSync(p)) rmSync(p); return; }
+  mkdirSync(dirs(l).base, { recursive: true });
+  writeAtomic(p, JSON.stringify(m, null, 1));
+}
+
+/**
+ * The machine-writing phrases this skill's own drafts repeat and its author never uses
+ * (core/observers/tell-lexicon.ts), plus what the owner added or struck. Implementation, not standard.
+ */
+export interface StoredTells { readonly learned: readonly string[]; readonly added: readonly string[]; readonly struck: readonly string[]; readonly at: string | null; readonly drafts: number; readonly topics: number }
+export function getTells(l: StoreLayout): StoredTells {
+  const p = join(dirs(l).base, 'tells.json');
+  return existsSync(p) ? readJson<StoredTells>(p, { what: 'the learned machine tells' }) : { learned: [], added: [], struck: [], at: null, drafts: 0, topics: 0 };
+}
+export function setTells(l: StoreLayout, t: StoredTells): void {
+  mkdirSync(dirs(l).base, { recursive: true });
+  writeAtomic(join(dirs(l).base, 'tells.json'), JSON.stringify(t, null, 1));
+}
+/** The phrases every draft is checked against: learned and added, less what the owner struck. */
+export const activeTells = (t: StoredTells): string[] => [...new Set([...t.learned, ...t.added])].filter((x) => !t.struck.includes(x));
+
+/**
+ * HOW THE METHOD IS CARRIED ON A RUN, as the self-improvement loop last left it (core/evolve/loop.ts): how many
+ * drafts, and what the writer is told earlier drafts left out. An implementation setting, never a rule: it is kept
+ * beside the skill, changed only by a search that showed it better, and each earlier one is kept so that it can be
+ * gone back to.
+ */
+/** Said wherever an adopted note is no longer used: an amended standard retires it, and that was silent. */
+export const CARRY_RETIRED = 'The note adopted by atelier evolve was for an earlier standard and is not used. Run atelier evolve again.';
+export interface StoredCarry {
+  readonly drafts: number; readonly note: string; readonly adoptedAt: string;
+  /** the search record that showed it better */
+  readonly from: string;
+  /** the standard the note's wording was taken from: under any other standard the carry is not used */
+  readonly standardVersion: string;
+  /** what it replaced, whole, or null when the skill carried its method as built: what a rollback puts back */
+  readonly before: StoredCarry | null;
+}
+const carryFile = (l: StoreLayout): string => join(dirs(l).base, 'carry.json');
+export function getCarry(l: StoreLayout): StoredCarry | null {
+  const p = carryFile(l);
+  if (!existsSync(p)) return null;
+  const c = readJson<Partial<StoredCarry>>(p, { what: 'how the skill carries its method' });
+  // Written only by an adoption. One that is not whole is said, never half-used: its history is filed by when it was adopted.
+  if (typeof c.drafts !== 'number' || typeof c.note !== 'string' || typeof c.adoptedAt !== 'string' || typeof c.standardVersion !== 'string') {
+    throw new MalformedStoreFile(`${p} is not a whole record of how the skill carries its method (drafts, note, adoptedAt, standardVersion). Remove it to run the skill as built.`);
+  }
+  return c as StoredCarry;
+}
+/** Every carry that is replaced or gone back from is kept, in the order it was left. */
+function keepCarry(l: StoreLayout, was: StoredCarry): void {
+  const d = join(dirs(l).base, 'carry-history');
+  const n = existsSync(d) ? readdirSync(d).length : 0;
+  writeAtomic(join(d, `${String(n + 1).padStart(4, '0')}-${was.adoptedAt.replace(/[:.]/g, '-')}.json`), `${JSON.stringify(was, null, 1)}\n`);
+}
+/** Adopt a way of carrying the method. The one it replaces is kept inside it, whole, so that it can be put back. */
+export function setCarry(l: StoreLayout, carry: Omit<StoredCarry, 'before'>): void {
+  const was = getCarry(l);
+  if (was) keepCarry(l, was);
+  writeAtomic(carryFile(l), `${JSON.stringify({ ...carry, before: was }, null, 1)}\n`);
+}
+/**
+ * Go back one adoption: what the current carry replaced is put back exactly as it was, with the standard it was
+ * adopted under and what it had replaced in turn, so going back again goes further back and ends at as built.
+ * Returns what is now in force, or null for as built.
+ */
+export function restoreCarry(l: StoreLayout): StoredCarry | null {
+  const now = getCarry(l);
+  if (!now) return null;
+  keepCarry(l, now);
+  if (now.before) writeAtomic(carryFile(l), `${JSON.stringify(now.before, null, 1)}\n`); else rmSync(carryFile(l));
+  return now.before;
+}
+
+/** The author's passages a skill serves (core/compiler/voice.ts), chosen at build; null when off or never chosen. */
+export function getVoice(l: StoreLayout): Voice | null {
+  const p = join(dirs(l).base, 'voice.json');
+  return existsSync(p) ? readJson<Voice>(p, { what: "the voice passages" }) : null;
+}
+export function setVoice(l: StoreLayout, voice: Voice | null): void {
+  const p = join(dirs(l).base, 'voice.json');
+  if (voice === null) { if (existsSync(p)) rmSync(p); return; }
+  mkdirSync(dirs(l).base, { recursive: true });
+  writeAtomic(p, JSON.stringify(voice, null, 1));
+}
+
+/** The last `atelier mine` report, so `--add <n>` names the item the owner read. */
+export interface MiningReport {
+  readonly at: string; readonly standardVersionHash?: string; readonly items: readonly Recurrence[];
+  /** internal: each measured rule's first-draft break rate per skill version (core/mining/recurrence.ts) */
+  readonly breakRates?: readonly VersionBreakRates[];
+}
+export function getMining(l: StoreLayout): MiningReport | null {
+  const p = join(dirs(l).base, 'mine.json');
+  return existsSync(p) ? readJson<MiningReport>(p, { what: 'the last mining report' }) : null;
+}
+export function setMining(l: StoreLayout, report: MiningReport): void {
+  mkdirSync(dirs(l).base, { recursive: true });
+  writeAtomic(join(dirs(l).base, 'mine.json'), JSON.stringify(report, null, 1));
+}
+
+/**
+ * THE REGRESSION FLOOR's state for a skill (see ../distinctiveness/measured.ts): the contract (which
+ * rules it watches, the margin on each, ENFORCE or OBSERVE), the tasks it is measured on, and the
+ * qualification an A/A run earned. The qualification names the contract and tasks it was earned on;
+ * change either and it no longer applies.
+ */
+export interface FloorState {
+  readonly contract: QualityFloorContract | null;
+  readonly tasks: readonly string[];
+  /** `contractHash` names everything the rate is a rate of (see qualificationKey in cli/commands/floor.ts) */
+  readonly qualification: (FloorQualification & { readonly contractHash: string; readonly fires: number }) | null;
+  /** A/A evidence so far, on the contract, tasks and model it was gathered under; runs accumulate */
+  readonly aa?: { readonly contractHash: string; readonly falseAlarms: number; readonly trials: number;
+    /** planted regressions of PLANTED_MARGINS × the margin, and how many the floor caught */
+    readonly plantedHits?: number; readonly planted?: number };
+}
+const floorDir = (l: StoreLayout): string => join(dirs(l).base, 'floor');
+export function getFloor(l: StoreLayout): FloorState {
+  const p = join(floorDir(l), 'state.json');
+  return existsSync(p) ? readJson<FloorState>(p, { what: 'the regression floor' }) : { contract: null, tasks: [], qualification: null };
+}
+export function setFloor(l: StoreLayout, f: FloorState): void {
+  mkdirSync(floorDir(l), { recursive: true });
+  writeAtomic(join(floorDir(l), 'state.json'), JSON.stringify(f, null, 1));
+}
+/** The frozen per-task scores of one SkillVersion: what a candidate is compared against. */
+export function getBaseline(l: StoreLayout, skillVersionHash: string): readonly FrozenBaselineEntry[] | null {
+  const p = join(floorDir(l), `baseline-${skillVersionHash}.json`);
+  return existsSync(p) ? readJson<FrozenBaselineEntry[]>(p, { kind: 'array', what: 'a frozen floor baseline' }) : null;
+}
+export function setBaseline(l: StoreLayout, skillVersionHash: string, entries: readonly FrozenBaselineEntry[]): void {
+  mkdirSync(floorDir(l), { recursive: true });
+  writeAtomic(join(floorDir(l), `baseline-${skillVersionHash}.json`), JSON.stringify(entries, null, 1));
+}
+
+/**
+ * The write-this-not-that pairs a skill ships (see ../compiler/contrast-examples.ts), chosen at build
+ * and kept through every rebuild so the package is the same whichever command renders it. `off` is the
+ * owner's `--contrast none`.
+ */
+export interface StoredContrast { readonly off: boolean; readonly pairs: readonly ContrastPair[] }
+/**
+ * THE AUTHOR'S SIGNALS (core/observers/selection.ts): counted features that separate their work from the
+ * model's over many drafts but not draft by draft. Used to choose between drafts and to profile one;
+ * never a rule, never a gate.
+ */
+export function getSignals(l: StoreLayout): StoredSignal[] {
+  const p = join(dirs(l).base, 'signals.json');
+  return existsSync(p) ? readJson<StoredSignal[]>(p, { what: 'the author\'s signals', kind: 'array' }) : [];
+}
+export function setSignals(l: StoreLayout, s: readonly StoredSignal[]): void {
+  mkdirSync(dirs(l).base, { recursive: true });
+  writeAtomic(join(dirs(l).base, 'signals.json'), JSON.stringify(s, null, 1));
+}
+
+export function getContrast(l: StoreLayout): StoredContrast {
+  const p = join(dirs(l).base, 'contrast.json');
+  return existsSync(p) ? readJson<StoredContrast>(p, { what: 'the contrast examples' }) : { off: false, pairs: [] };
+}
+export function setContrast(l: StoreLayout, c: StoredContrast): void {
+  mkdirSync(dirs(l).base, { recursive: true });
+  writeAtomic(join(dirs(l).base, 'contrast.json'), JSON.stringify(c, null, 1));
+}
+
+/**
+ * THE COMPOSITE A SKILL WAS BUILT AS (core/composite/selection.ts): pieces by several authors, and which rules the owner
+ * chose from which, with every conflict's answer or open question. Data, kept with the skill so a rebuild serves the
+ * same combination and changes nothing. Null for a skill built from one author's pieces.
+ */
+export function getComposite(l: StoreLayout): CompositeRecord | null {
+  const p = join(dirs(l).base, 'composite.json');
+  return existsSync(p) ? readJson<CompositeRecord>(p, { what: 'the composite record', requireKeys: ['authors', 'decisions', 'conflicts'] }) : null;
+}
+export function setComposite(l: StoreLayout, c: CompositeRecord | null): void {
+  const p = join(dirs(l).base, 'composite.json');
+  if (c === null) { if (existsSync(p)) rmSync(p); return; }
+  mkdirSync(dirs(l).base, { recursive: true });
+  writeAtomic(p, JSON.stringify(c, null, 1));
+}
+
+/**
+ * The KIND OF DOCUMENT a skill's measured rules describe: "blog-post", "support-reply". Every
+ * threshold was read off pieces of one kind, and a fragment cap calibrated on essays says nothing true
+ * about a tweet. Declared by the owner; null when they never said.
+ */
+/** The form the work takes, as read at build (core/observers/work-form.ts): a reply in a conversation, or a document. */
+/**
+ * WHAT THE PERSON TOLD THIS SKILL BEFORE A DRAFT (core/loop/questions.ts): each answer they gave to a question, in order.
+ * The last answer of a kind is the default the next time it is asked ("last time you said …"); an answer about what may
+ * be named stands, and that question is not asked again. Only answers the person gave are kept, never a default.
+ */
+export function getTold(l: StoreLayout): { id: string; ask: string; answer: string; at: string }[] {
+  const p = join(dirs(l).base, 'told.json');
+  if (!existsSync(p)) return [];
+  interface Told { id: string; ask: string; answer: string; at: string }
+  // A file that cannot be read is no answer told: the run asks again rather than stopping.
+  try {
+    return readJson<(Partial<Told> | null)[]>(p, { kind: 'array', what: 'the answers told to this skill' }).filter((t): t is Told => typeof t?.id === 'string' && typeof t.answer === 'string');
+  } catch { return []; }
+}
+export function addTold(l: StoreLayout, told: readonly { id: string; ask: string; answer: string; at: string }[]): void {
+  if (!told.length) return;
+  const p = join(dirs(l).base, 'told.json');
+  mkdirSync(dirs(l).base, { recursive: true });
+  // the last 50 answers are kept: what a question's default is read from
+  writeAtomic(p, JSON.stringify([...getTold(l), ...told].slice(-50), null, 1));
+}
+
+export function getWorkForm(l: StoreLayout): 'REPLY' | 'DOCUMENT' | null {
+  const p = join(dirs(l).base, 'form.txt');
+  const x = existsSync(p) ? readFileSync(p, 'utf8').trim() : '';
+  return x === 'REPLY' || x === 'DOCUMENT' ? x : null;
+}
+export function setWorkForm(l: StoreLayout, form: 'REPLY' | 'DOCUMENT' | null): void {
+  const p = join(dirs(l).base, 'form.txt');
+  if (form === null) { if (existsSync(p)) rmSync(p); return; }
+  mkdirSync(dirs(l).base, { recursive: true });
+  writeAtomic(p, form);
+}
+/**
+ * THE OWNER'S CHOICE TO HAVE INVENTED SPECIFICS CUT (`atelier material --cut`): the only way a sentence is deleted for
+ * being untraced, and only where a qualified reader made the finding (core/loop/claim-extract.ts, `claimAction`).
+ * Absent, nothing is cut: what is untraced is blocked, sent to review or listed, by the skill's latitude.
+ */
+export function getClaimsCut(l: StoreLayout): boolean { return existsSync(join(dirs(l).base, 'claims-cut.txt')); }
+export function setClaimsCut(l: StoreLayout, cut: boolean): void {
+  const p = join(dirs(l).base, 'claims-cut.txt');
+  if (!cut) { if (existsSync(p)) rmSync(p); return; }
+  mkdirSync(dirs(l).base, { recursive: true });
+  writeAtomic(p, 'cut');
+}
+/**
+ * THE CHECKS FROZEN AT A BUILD, by the key of their step's words and the examples (core/method/freeze.ts): a rebuild
+ * reuses each, qualification and all, while its step and the examples are unchanged. Merged on each build, never
+ * replaced: a step reworded and then reworded back finds its first check again.
+ */
+export function getFrozenChecks(l: StoreLayout): Readonly<Record<string, StepCheck>> {
+  const p = join(dirs(l).base, 'frozen-checks.json');
+  return existsSync(p) ? readJson<Record<string, StepCheck>>(p, { what: 'the frozen checks' }) : {};
+}
+export function putFrozenChecks(l: StoreLayout, checks: Readonly<Record<string, StepCheck>>): void {
+  if (!Object.keys(checks).length) return;
+  mkdirSync(dirs(l).base, { recursive: true });
+  writeAtomic(join(dirs(l).base, 'frozen-checks.json'), JSON.stringify({ ...getFrozenChecks(l), ...checks }, null, 1));
+}
+
+/**
+ * THE LEDGER OF THE METHOD'S CHECKS AT THE LAST METHOD BUILD (core/method/step-check.ts, `ledgerOf`), keyed by the note it
+ * was read for: the build stage reads it for the receipt, on the method build and on a plain rebuild of the same note alike.
+ */
+export function getStepLedger(l: StoreLayout): (StepLedger & { readonly methodHash: string }) | null {
+  const p = join(dirs(l).base, 'step-ledger.json');
+  return existsSync(p) ? readJson<StepLedger & { readonly methodHash: string }>(p, { what: 'the ledger of the method\'s checks' }) : null;
+}
+export function putStepLedger(l: StoreLayout, ledger: StepLedger & { readonly methodHash: string }): void {
+  mkdirSync(dirs(l).base, { recursive: true });
+  writeAtomic(join(dirs(l).base, 'step-ledger.json'), JSON.stringify(ledger, null, 1));
+}
+
+/**
+ * ANSWERS DRAFTED FOR THE OWNER TO KEEP OR REJECT (core/method/draft-examples.ts, `atelier skill --draft-examples`): each
+ * with an id (`d1`…), the request, the answer, and the owner's ruling once they rate it (`atelier rate d1 yes|no`).
+ */
+export interface DraftedExample { readonly id: string; readonly request: string; readonly answer: string; readonly kept: boolean | null; readonly why?: string | null; readonly rule?: string | null;
+  /** the words of that rule in the standard the answer was rejected under: ids move between builds, words do not */
+  readonly ruleStatement?: string | null }
+export function getDrafted(l: StoreLayout): DraftedExample[] {
+  const p = join(dirs(l).base, 'drafted-examples.json');
+  return existsSync(p) ? readJson<DraftedExample[]>(p, { kind: 'array', what: 'the drafted examples' }) : [];
+}
+export function setDrafted(l: StoreLayout, drafted: readonly DraftedExample[]): void {
+  mkdirSync(dirs(l).base, { recursive: true });
+  writeAtomic(join(dirs(l).base, 'drafted-examples.json'), JSON.stringify(drafted, null, 1));
+}
+export function getDocClass(l: StoreLayout): string | null {
+  const p = join(dirs(l).base, 'class.txt');
+  return existsSync(p) ? readFileSync(p, 'utf8').trim() || null : null;
+}
+export function setDocClass(l: StoreLayout, cls: string | null): void {
+  const p = join(dirs(l).base, 'class.txt');
+  if (cls === null) { if (existsSync(p)) rmSync(p); return; }
+  mkdirSync(dirs(l).base, { recursive: true });
+  writeAtomic(p, cls);
+}
+
+/**
+ * The person's MATERIAL for a skill: notes, anecdotes, figures and sources they vouch for. Served with
+ * every task, and the only place a first-person story or a cited figure in the output may come from.
+ */
+export function getMaterial(l: StoreLayout): { name: string; text: string }[] {
+  const d = join(dirs(l).base, 'material');
+  if (!existsSync(d)) return [];
+  return readdirSync(d).filter((f) => !f.startsWith('.')).sort().map((f) => ({ name: materialName(f), text: readFileSync(join(d, f), 'utf8') }));
+}
+export function addMaterial(l: StoreLayout, name: string, text: string): void {
+  const d = join(dirs(l).base, 'material');
+  mkdirSync(d, { recursive: true });
+  writeAtomic(join(d, name.replace(/[^A-Za-z0-9._-]/g, '-')), text);
+}
+export function clearMaterial(l: StoreLayout): void {
+  const d = join(dirs(l).base, 'material');
+  if (existsSync(d)) rmSync(d, { recursive: true, force: true });
+}
+
+/**
+ * A STANDARD IS SERVED ONLY IF IT STILL HASHES TO ITS NAME. `putStandard` refused a second body under
+ * a hash, but nothing re-checked the first one on the way out, so a hand edit to a statement in
+ * `standards/<hash>.json` was served, compiled and promoted under the identity of the version the person
+ * ratified — the one edit the whole append-only layout exists to make visible. Both the file name and the
+ * hash field must match the recomputed hash: a copied file with a stale field is the same defect.
+ */
+/**
+ * WHAT THE WRITTEN CHECKS HAVE EARNED, REWRITTEN BESIDE A STANDARD (core/method/requalify.ts). Only the fields outside the
+ * hash change; the owner's words, levels and table do not, and the file still hashes to its name.
+ */
+export function putQualifications(l: StoreLayout, hash: string, q: Pick<StandardVersion, 'qualifications' | 'requalified'>): StandardVersion | null {
+  const v = getStandard(l, hash);
+  if (!v) return null;
+  const next: StandardVersion = { ...v, ...(q.qualifications ? { qualifications: q.qualifications } : {}), ...(q.requalified ? { requalified: q.requalified } : {}) };
+  if (hashedContent(next) !== hashedContent(v)) throw new Error(`STORE: requalifying ${hash} would change what its hash covers.`);
+  writeAtomic(join(dirs(l).standards, `${hash}.json`), JSON.stringify(next, null, 1));
+  return next;
+}
+
+export const getStandard = (l: StoreLayout, hash: string): StandardVersion | null => {
+  const p = join(dirs(l).standards, `${hash}.json`);
+  if (!existsSync(p)) return null;
+  const v = readJson<StandardVersion>(p, { what: 'a StandardVersion', requireKeys: ['requirements'] });
+  assertStandardIntegrity({ ...v, standardVersionHash: hash }, `standard file ${hash}.json`);
+  if (v.standardVersionHash !== hash) {
+    throw new Error(`STORE: standard file ${hash}.json names itself ${v.standardVersionHash}. A content-addressed file cannot carry another identity; it is not served.`);
+  }
+  return v;
+};
+
+export function putSkillVersion(l: StoreLayout, s: SkillVersion): void {
+  writeAtomic(join(dirs(l).versions, `${s.skillVersionHash}.json`), JSON.stringify(s, null, 1));
+}
+export const getSkillVersion = (l: StoreLayout, hash: string): SkillVersion | null => {
+  const p = join(dirs(l).versions, `${hash}.json`);
+  return existsSync(p) ? readJson<SkillVersion>(p, { what: 'a SkillVersion', requireKeys: ['skillVersionHash'] }) : null;
+};
+
+/**
+ * ─── WHY THE ARRANGEMENT AND THE ARTEFACT ARE STORED, NOT RE-DERIVED ────────────────────────────
+ *
+ * `SkillVersion` records `architectureHash` and `materializedHash` but neither the components nor
+ * the files. That was survivable while every architecture was the DEFAULT one — `compileArchitecture`
+ * could reproduce it from the standard. It stops being survivable the moment a repair produces a
+ * NON-default arrangement: there is then no way to reconstruct what a candidate was, and a candidate
+ * that cannot be reconstructed cannot be served, compared, or promoted.
+ *
+ * Storing the package too is what makes "the exact package the person evaluated is the exact package
+ * promoted" a fact about storage rather than a hope about determinism. Re-rendering to check a hash
+ * proves the renderer still agrees with itself; it does not prove the person saw this artefact.
+ */
+
+/** Structural, so `core/` never imports `renderers/`. A PortableSkillPackage satisfies it as-is. */
+export interface StoredPackage {
+  readonly packageHash: string;
+  readonly skillId: string;
+  readonly standardVersionHash: string;
+  readonly architectureHash: string;
+  readonly files: Readonly<Record<string, string>>;
+  /**
+   * Provenance and regression material. NEVER SERVED to a model.
+   *
+   * Declared because it is already written. `putPackage` takes the rendered package whole, so this
+   * has been persisted since the renderer emitted it while the type said otherwise — a type lying by
+   * omission about what is on disk, which is how a reader concludes the manifest is not kept and
+   * recomputes it instead of reading what was actually built.
+   */
+  readonly assurance?: Readonly<Record<string, string>>;
+}
+
+/**
+ * Same identity discipline as `putStandard`: one hash, one body, refuse on disagreement.
+ *
+ * The mkdir is not defensive clutter — stores created before these two directories existed are
+ * still on disk, and a write into a missing directory during a repair would surface as a crash
+ * mid-candidate rather than as the migration it actually is.
+ */
+function putByHash(path: string, hash: string, body: unknown, what: string): void {
+  mkdirSync(dirname(path), { recursive: true });
+  const text = JSON.stringify(body, null, 1);
+  if (existsSync(path)) {
+    if (readFileSync(path, 'utf8') !== text) {
+      throw new Error(`STORE: ${what} ${hash} already exists with different content. A hash is an identity; two bodies cannot share one.`);
+    }
+    return;
+  }
+  writeAtomic(path, text);
+}
+
+/**
+ * KEYED BY (standard, architecture), NOT BY architectureHash ALONE.
+ *
+ * `architectureHash` is deliberately hashed over COMPONENTS only — that is what lets two arrangements
+ * of one standard differ, and it is the property the whole optimizer rests on. But a `SkillArchitecture`
+ * body also carries the standard it serves, so the SAME arrangement over a DIFFERENT standard has one
+ * hash and two bodies.
+ *
+ * That is not hypothetical: amending a rule's wording changes the standard and leaves the arrangement
+ * untouched, which is the common case. The refuse-on-overwrite guard caught it on the first amend
+ * rather than letting one body silently replace the other — a stored architecture pointing at the
+ * wrong standard would fail `assertArchitectureServesStandard` much later, somewhere unrelated.
+ */
+const archKey = (a: Pick<SkillArchitecture, 'standardVersionHash' | 'architectureHash'>): string =>
+  `${a.standardVersionHash}.${a.architectureHash}`;
+
+export function putArchitecture(l: StoreLayout, a: SkillArchitecture): void {
+  putByHash(join(dirs(l).architectures, `${archKey(a)}.json`), archKey(a), a, 'architecture');
+}
+export const getArchitecture = (l: StoreLayout, hash: string, standardVersionHash?: string): SkillArchitecture | null => {
+  const direct = standardVersionHash ? join(dirs(l).architectures, `${standardVersionHash}.${hash}.json`) : null;
+  if (direct && existsSync(direct)) return readJson<SkillArchitecture>(direct, { what: 'a skill architecture' });
+  // legacy + convenience: fall back to a unique suffix match when the standard is not supplied
+  const d = dirs(l).architectures;
+  if (!existsSync(d)) return null;
+  const hits = readdirSync(d).filter((f) => f === `${hash}.json` || f.endsWith(`.${hash}.json`));
+  if (hits.length === 1) return readJson<SkillArchitecture>(join(d, hits[0]), { what: 'a skill architecture' });
+  if (hits.length === 0) return null;
+  // AMBIGUOUS IS NOT ABSENT, AND RETURNING null CONFLATED THEM.
+  //
+  // One architectureHash under two standards is the ordinary result of amending a confirmed rule:
+  // same carriers, new standard. This returned null there, and `improve.ts` reads that as "never
+  // persisted" and silently recompiles the default arrangement — losing the stored one, which is the
+  // exact thing this persistence exists to keep. Callers know their standard; the fix is to pass it,
+  // and to refuse rather than guess when they have not.
+  throw new Error(`STORE: architecture ${hash} exists under ${hits.length} standards `
+    + `(${hits.join(', ')}). Pass the standardVersionHash: which one is meant is not recoverable here, `
+    + 'and picking one would silently attribute an arrangement to the wrong standard.');
+};
+
+/**
+ * A PACKAGE IS ITS SERVED FILES. The hash is over them (renderers/agent-skill/render.ts, `packageHash`); the record
+ * beside them (the voice, the pairs, the method) is unhashed bookkeeping. A rebuild that serves the same files wrote
+ * that record with its keys in another order (the voice's `pieceRequests` is taken off and put back last on every
+ * build) and was refused as a second body under one hash: no file differed. So the files are what is compared, in
+ * any key order; the stored record stays canonical when they agree, and only files that differ are refused.
+ */
+export function putPackage(l: StoreLayout, pkg: StoredPackage): void {
+  const p = join(dirs(l).packages, `${pkg.packageHash}.json`);
+  if (existsSync(p)) {
+    const existing = readJson<StoredPackage>(p, { what: `package ${pkg.packageHash}`, requireKeys: ['packageHash', 'files'] });
+    if (packageHashOf(existing.files) !== packageHashOf(pkg.files)) {
+      throw new Error(`STORE: package ${pkg.packageHash} already exists with different served files. A hash is an identity; two bodies cannot share one.`);
+    }
+    return;
+  }
+  putByHash(p, pkg.packageHash, pkg, 'package');
+}
+export const getPackage = (l: StoreLayout, hash: string): StoredPackage | null => {
+  const p = join(dirs(l).packages, `${hash}.json`);
+  return existsSync(p) ? readJson<StoredPackage>(p, { what: 'a stored package' }) : null;
+};
+
+/**
+ * Executions and complaints. Append-only, one file per id, refuse-on-overwrite.
+ *
+ * The refusal matters most here and is the lesson of a research harness that overwrote a FAILED run
+ * on re-fire: the record you least want silently replaced is the one that went wrong. An invocation
+ * is a fact about something that happened; it is never revised.
+ */
+export function putInvocation(l: StoreLayout, r: InvocationRecord): void {
+  putByHash(join(dirs(l).invocations, `${r.invocationId}.json`), r.invocationId, r, 'invocation');
+}
+export const getInvocation = (l: StoreLayout, id: string): InvocationRecord | null => {
+  const p = join(dirs(l).invocations, `${id}.json`);
+  return existsSync(p) ? readJson<InvocationRecord>(p, { what: 'an invocation record' }) : null;
+};
+/** Newest first. */
+/**
+ * THE RUNS A SKILL MAY LEARN FROM: every recorded run that was not marked as a test. `listInvocations` is the
+ * history, for audit and for looking one run up; anything that changes what a skill does next (recurrence mining,
+ * break rates, the learned tell list, the search over implementations, the contrast pairs) reads through here.
+ *
+ * A run marked as a test is a measurement of the skill: a benchmark answer, or a held-back case run by
+ * `atelier reproduce`. Read back into what the skill learns, the next run of the same held-back case is no longer a
+ * test of anything, and nobody would have been told. The exclusion is made once, here, so that a new consumer gets
+ * it by using the function that says what it wants.
+ */
+export function listLearningInvocations(l: StoreLayout): readonly InvocationRecord[] {
+  return listInvocations(l).filter((r) => r.settings?.flags.testRun !== true);
+}
+
+/** The ids of the runs marked as tests: what a reader of feedback, observations or evaluations leaves out. */
+export function testRunIds(l: StoreLayout): ReadonlySet<string> {
+  return new Set(listInvocations(l).filter((r) => r.settings?.flags.testRun === true).map((r) => r.invocationId));
+}
+
+export function listInvocations(l: StoreLayout): readonly InvocationRecord[] {
+  const d = dirs(l).invocations;
+  if (!existsSync(d)) return [];
+  return readdirSync(d).filter((f) => f.endsWith('.json'))
+    .map((f) => readJson<InvocationRecord>(join(d, f), { what: 'an invocation record' }))
+    .sort((a, b) => b.at.localeCompare(a.at));
+}
+
+/**
+ * Observations live in the event log, not a new directory.
+ *
+ * An observation is append-only, arrives many-per-invocation, and is read back by folding — the same
+ * shape as repair events, which already reuse this log. A fourth store surface for the same access
+ * pattern is the drift this codebase has paid for before.
+ */
+export function putObservation(l: StoreLayout, o: Observation): void {
+  appendEvent(l, { kind: 'OBSERVATION', ...o });
+}
+
+/** Newest first. Folded from the log, so it cannot disagree with what was written. */
+export function listObservations(l: StoreLayout): readonly Observation[] {
+  return readEvents(l)
+    .filter((e) => e.kind === 'OBSERVATION')
+    .map((e) => { const { kind: _kind, ...rest } = e; return rest as unknown as Observation; })
+    .sort((a, b) => b.at.localeCompare(a.at));
+}
+
+export function putFeedback(l: StoreLayout, f: FeedbackRecord): void {
+  putByHash(join(dirs(l).feedback, `${f.feedbackId}.json`), f.feedbackId, f, 'feedback');
+}
+/**
+ * A complaint is identified by (invocation, words), not by when it was typed. Re-entering the same
+ * complaint keeps the FIRST record — its time and the rule its diagnosis named — and says so.
+ *
+ * The callers used to `putFeedback` a record carrying a fresh timestamp and swallow the store's
+ * refusal in a bare catch, on the stated belief that a re-entry "writes the same bytes". It did not,
+ * and the same catch hid any real I/O failure, so evidence could be lost without a word.
+ */
+export function putFeedbackOnce(l: StoreLayout, f: FeedbackRecord): { readonly written: boolean; readonly record: FeedbackRecord } {
+  const path = join(dirs(l).feedback, `${f.feedbackId}.json`);
+  if (existsSync(path)) return { written: false, record: readJson<FeedbackRecord>(path, { what: 'a feedback record' }) };
+  putFeedback(l, f);
+  return { written: true, record: f };
+}
+export function listFeedback(l: StoreLayout): readonly FeedbackRecord[] {
+  const d = dirs(l).feedback;
+  if (!existsSync(d)) return [];
+  return readdirSync(d).filter((f) => f.endsWith('.json'))
+    .map((f) => readJson<FeedbackRecord>(join(d, f), { what: 'a feedback record' }))
+    .sort((a, b) => b.at.localeCompare(a.at));
+}
+
+/** The ONLY mutable file. Rollback moves this and nothing else. */
+/** THE BUILD RECEIPT (./receipt.ts), beside the version it describes and keyed by the version's hash. */
+export function putReceipt(l: StoreLayout, r: BuildReceipt): void {
+  const d = join(dirs(l).base, 'receipts'); mkdirSync(d, { recursive: true });
+  writeAtomic(join(d, `${r.skillVersionHash}.json`), JSON.stringify(r, null, 1));
+}
+export function getReceipt(l: StoreLayout, skillVersionHash: string): BuildReceipt | null {
+  const p = join(dirs(l).base, 'receipts', `${skillVersionHash}.json`);
+  return existsSync(p) ? readJson<BuildReceipt>(p, { what: 'the build receipt', requireKeys: ['receiptHash', 'stages'] }) : null;
+}
+
+/**
+ * THE DECISION UNITS OF A STANDARD (core/method/decision-units.ts), by requirement id, keyed by the standard version they
+ * were read from: an implementation artifact beside the standard, never inside it, so a model's reading of the steps
+ * moves no standard hash. Absent for a standard built before units were read.
+ */
+export function putUnits(l: StoreLayout, standardVersionHash: string, units: Readonly<Record<string, DecisionUnit>>): void {
+  const d = join(dirs(l).base, 'units'); mkdirSync(d, { recursive: true });
+  writeAtomic(join(d, `${standardVersionHash}.json`), JSON.stringify(units, null, 1));
+}
+export function getUnits(l: StoreLayout, standardVersionHash: string): Readonly<Record<string, DecisionUnit>> {
+  const p = join(dirs(l).base, 'units', `${standardVersionHash}.json`);
+  return existsSync(p) ? readJson<Record<string, DecisionUnit>>(p, { what: 'the decision units' }) : {};
+}
+
+export function setActive(l: StoreLayout, skillVersionHash: string): void {
+  if (!getSkillVersion(l, skillVersionHash)) {
+    throw new Error(`STORE: cannot activate ${skillVersionHash} — no such version. Activation points at history; it does not create it.`);
+  }
+  writeAtomic(join(dirs(l).base, 'active.json'), JSON.stringify({ skillVersionHash, at: new Date().toISOString() }, null, 1));
+}
+export const getActive = (l: StoreLayout): string | null => {
+  const p = join(dirs(l).base, 'active.json');
+  return existsSync(p) ? readJson<{ skillVersionHash: string }>(p, { what: 'the active pointer', requireKeys: ['skillVersionHash'] }).skillVersionHash : null;
+};
+
+/** Append-only event log. One JSON object per line; nothing is ever rewritten. */
+export function appendEvent(l: StoreLayout, e: EvidenceEvent | Record<string, unknown>): void {
+  appendFileSync(join(dirs(l).base, 'events.jsonl'), `${JSON.stringify(e)}\n`);
+}
+// A TORN TAIL IS RECOVERABLE. A TORN MIDDLE IS NOT, AND MUST NOT BE READ PAST.
+//
+// `appendEvent` is the one write in this system that is deliberately not atomic, because an append is
+// the right shape for a ledger. The cost is that an interrupted append can leave a partial final line.
+//
+// Those two damage patterns mean opposite things and must not be handled the same way. A partial LAST
+// line is a crash during a write: every earlier event is intact, the lost record is the one that was
+// still being written, and refusing to start would make one interrupted keystroke brick every command
+// that reads history. A damaged line ANYWHERE ELSE is corruption of a history that claims to be
+// append-only, and reading past it would silently report a ledger missing a record it cannot name.
+// The second case is exactly the failure this project exists to refuse, so it throws.
+export function readEvents(l: StoreLayout): readonly Record<string, unknown>[] {
+  const p = join(dirs(l).base, 'events.jsonl');
+  if (!existsSync(p)) return [];
+  const lines = readFileSync(p, 'utf8').split('\n').filter(Boolean);
+  const out: Record<string, unknown>[] = [];
+  lines.forEach((line, i) => {
+    try {
+      out.push(JSON.parse(line) as Record<string, unknown>);
+    } catch {
+      if (i !== lines.length - 1) {
+        throw new Error(`LEDGER: event ${i + 1} of ${lines.length} in ${p} is not valid JSON. This is `
+          + 'corruption in the middle of an append-only history, not a torn tail, and reading past it '
+          + 'would report a history that is missing a record it cannot name.');
+      }
+      process.stderr.write(`atelier: the last line of ${p} is truncated, which is an interrupted `
+        + `append. ${out.length} intact event(s) read; the torn record is lost.\n`);
+    }
+  });
+  return out;
+}
+
+export interface HistoryEntry { readonly skillVersion: SkillVersion; readonly standard: StandardVersion | null; readonly active: boolean }
+
+/** Newest first. The active pointer is shown, not assumed to be the newest. */
+export function history(l: StoreLayout): readonly HistoryEntry[] {
+  const d = dirs(l);
+  if (!existsSync(d.versions)) return [];
+  const active = getActive(l);
+  return readdirSync(d.versions).filter((f) => f.endsWith('.json'))
+    .map((f) => readJson<SkillVersion>(join(d.versions, f), { what: 'a SkillVersion' }))
+    .sort((a, b) => b.builtAt.localeCompare(a.builtAt))
+    .map((s) => ({ skillVersion: s, standard: getStandard(l, s.standardVersionHash), active: s.skillVersionHash === active }));
+}
+
+
+// ── RUNTIME BINDINGS ─────────────────────────────────────────────────────────────────────────
+//
+// Which runtimes a SkillVersion has ever been served through, IN ORDER. The first is the one its
+// evidence came from; the rest are runtimes a person deliberately accepted afterwards.
+//
+// Kept beside the version rather than inside it, because a binding is not part of the version's
+// identity. The package is byte-identical whichever model runs it — putting the runtime in the
+// SkillVersion hash would mint a new version of an unchanged artefact every time someone switched
+// backends, and the hash would stop meaning "different bytes".
+
+import type { RuntimeBinding } from '../runtime/binding.js';
+import { bindingHash } from '../runtime/binding.js';
+import { materialName } from '../golden/case.js';
+
+interface BindingLog { readonly bindings: { binding: RuntimeBinding; hash: string; firstSeenAt: string }[] }
+
+const bindingPath = (l: StoreLayout, skillVersionHash: string): string =>
+  join(dirs(l).bindings, `${skillVersionHash}.json`);
+
+export function listBindings(l: StoreLayout, skillVersionHash: string): BindingLog['bindings'] {
+  const p = bindingPath(l, skillVersionHash);
+  return existsSync(p) ? readJson<BindingLog>(p, { what: 'the binding log' }).bindings : [];
+}
+
+/**
+ * The binding this SkillVersion's evidence came from — the FIRST one it ever ran under.
+ *
+ * Not "the most recent". Most-recent would silently redefine the baseline every time someone tried a
+ * different model, so the guard would never fire twice and the whole point would be lost after one use.
+ *
+ * ONE BASELINE PER SURFACE, when the caller names the binding about to serve. The Claude Code Stop hook
+ * records the host's own binding (`claude-code`), so after one `/skill` use the first-ever binding was
+ * the host's and every `atelier invoke` was refused as a mismatch: two surfaces that will always
+ * differ, compared as if one had drifted. Given `candidate`, the baseline is the first binding recorded
+ * on the candidate's surface (providerAdapter), and null when that surface has none. A different
+ * model on the same surface is still a mismatch, which is what the guard exists to catch.
+ */
+export function expectedBinding(l: StoreLayout, skillVersionHash: string, candidate?: RuntimeBinding): RuntimeBinding | null {
+  const log = listBindings(l, skillVersionHash);
+  // A BINDING ALREADY ON THE LOG WAS ACCEPTED. The log only grows by a run that was allowed to happen:
+  // the first on a surface, the same configuration again, or one a person took with --accept-new-binding.
+  // Comparing only against the first binding made that acceptance last one run: the next invoke on the
+  // accepted model was refused again, as if nobody had said yes. The exact configuration matches itself;
+  // anything not on the log is still compared with the surface's first binding.
+  if (candidate) {
+    const h = bindingHash(candidate);
+    const accepted = log.find((b) => b.hash === h);
+    if (accepted) return accepted.binding;
+  }
+  const onSurface = candidate ? log.filter((b) => b.binding.providerAdapter === candidate.providerAdapter) : log;
+  return onSurface[0]?.binding ?? null;
+}
+
+/**
+ * The first binding of every OTHER surface, when the candidate's surface has none. A run on a new surface
+ * is not a mismatch (one baseline per surface), and is not refused; it is also not the same evidence,
+ * and a switch of provider went by without a word.
+ */
+export function bindingsElsewhere(l: StoreLayout, skillVersionHash: string, candidate: RuntimeBinding): RuntimeBinding[] {
+  const log = listBindings(l, skillVersionHash);
+  if (log.some((b) => b.binding.providerAdapter === candidate.providerAdapter)) return [];
+  const firsts = new Map<string, RuntimeBinding>();
+  for (const b of log) if (!firsts.has(b.binding.providerAdapter)) firsts.set(b.binding.providerAdapter, b.binding);
+  return [...firsts.values()];
+}
+
+/** Append-only, and a no-op for a binding already on the log. */
+export function recordBinding(l: StoreLayout, skillVersionHash: string, binding: RuntimeBinding): void {
+  const h = bindingHash(binding);
+  const existing = listBindings(l, skillVersionHash);
+  if (existing.some((b) => b.hash === h)) return;
+  mkdirSync(dirs(l).bindings, { recursive: true });
+  const next: BindingLog = { bindings: [...existing, { binding, hash: h, firstSeenAt: new Date().toISOString() }] };
+  writeAtomic(bindingPath(l, skillVersionHash), JSON.stringify(next, null, 1));
+}
+
+/**
+ * THE AUTHOR'S MOVE PROFILE (core/compiler/moves.ts): an immutable implementation artifact beside the voice, never in the
+ * standard or the package, so a model's reading of the moves moves no standard hash. Each profile is written under its
+ * own content hash and never overwritten, so a build receipt that names it resolves for as long as the store does; a
+ * pointer by the persona's hash names the profile a persona currently has, and is what a rebuild with the same
+ * persona reuses (a floor profile is replaced by a model's when one is there, and the floor stays on disk).
+ */
+export function putMoves(l: StoreLayout, personaHash: string, profile: MoveProfile): void {
+  const d = join(dirs(l).base, 'moves'); mkdirSync(d, { recursive: true });
+  // The hash covers everything but the time, so a profile already on disk under this hash is this profile: kept as
+  // first written, never overwritten.
+  const file = join(d, `${profile.hash}.json`);
+  if (!existsSync(file)) writeAtomic(file, JSON.stringify(profile, null, 1));
+  writeAtomic(join(d, `persona-${personaHash}.json`), JSON.stringify({ hash: profile.hash }, null, 1));
+}
+/** The profile a persona currently has, by the persona's hash; null when none was read. */
+export function getMoves(l: StoreLayout, personaHash: string): MoveProfile | null {
+  const p = join(dirs(l).base, 'moves', `persona-${personaHash}.json`);
+  if (!existsSync(p)) return null;
+  const { hash } = readJson<{ hash: string }>(p, { what: 'the move profile pointer', requireKeys: ['hash'] });
+  return getMovesByHash(l, hash);
+}
+/** A profile by its own hash, as a build receipt names it. */
+export function getMovesByHash(l: StoreLayout, hash: string): MoveProfile | null {
+  const p = join(dirs(l).base, 'moves', `${hash}.json`);
+  return existsSync(p) ? readJson<MoveProfile>(p, { what: 'the move profile', requireKeys: ['hash', 'units'] }) : null;
+}

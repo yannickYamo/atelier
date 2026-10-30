@@ -1,0 +1,622 @@
+{
+ "note": "Six authors, one piece folder each, read on their own; what the person said of each, and the classes a model read from it.",
+ "admired": {
+  "ada": "the casual tone",
+  "bram": "the formal register",
+  "cleo": "how the sections are built",
+  "dov": "the short paragraphs",
+  "esme": "the long patient paragraphs",
+  "faro": "the warm voice and the short headings"
+ },
+ "classes": {
+  "ada": [
+   "voice"
+  ],
+  "bram": [
+   "voice"
+  ],
+  "cleo": [
+   "structure"
+  ],
+  "dov": [
+   "pace"
+  ],
+  "esme": [
+   "pace"
+  ],
+  "faro": [
+   "voice",
+   "structure"
+  ]
+ },
+ "rules": [
+  {
+   "id": "p1",
+   "author": "ada",
+   "statement": "Write in a casual, conversational tone.",
+   "evidence": "seen across the pieces"
+  },
+  {
+   "id": "p2",
+   "author": "ada",
+   "statement": "Write in the first person, as I.",
+   "evidence": "seen across the pieces"
+  },
+  {
+   "id": "p3",
+   "author": "ada",
+   "statement": "Write in the present tense.",
+   "evidence": "seen across the pieces"
+  },
+  {
+   "id": "p4",
+   "author": "ada",
+   "statement": "Break the piece up with headings.",
+   "evidence": "seen across the pieces"
+  },
+  {
+   "id": "p5",
+   "author": "ada",
+   "statement": "Use bullet lists for any set of three or more items.",
+   "evidence": "seen across the pieces"
+  },
+  {
+   "id": "p6",
+   "author": "ada",
+   "statement": "Write in a casual, conversational tone.",
+   "evidence": "seen across the pieces"
+  },
+  {
+   "id": "p7",
+   "author": "ada",
+   "statement": "Write in the first person, as I.",
+   "evidence": "seen across the pieces"
+  },
+  {
+   "id": "p8",
+   "author": "ada",
+   "statement": "Write in the present tense.",
+   "evidence": "seen across the pieces"
+  },
+  {
+   "id": "p9",
+   "author": "ada",
+   "statement": "Break the piece up with headings.",
+   "evidence": "seen across the pieces"
+  },
+  {
+   "id": "p10",
+   "author": "ada",
+   "statement": "Use bullet lists for any set of three or more items.",
+   "evidence": "seen across the pieces"
+  },
+  {
+   "id": "m1",
+   "author": "ada",
+   "statement": "I keep sentences short: a median under 6 words, and nine in ten under 7.",
+   "measurement": {
+    "observer": "SENTENCE_LENGTH",
+    "params": {
+     "medianMax": 6,
+     "p90Max": 7
+    }
+   },
+   "evidence": "your median is 4 words and nine in ten are under 6, over 231 sentences in 7 pieces"
+  },
+  {
+   "id": "m2",
+   "author": "ada",
+   "statement": "I keep paragraphs to 2 sentences at most.",
+   "measurement": {
+    "observer": "PARAGRAPH_LENGTH",
+    "params": {
+     "maxSentences": 2
+    }
+   },
+   "evidence": "95% of your 84 paragraphs have 2 sentences or fewer"
+  },
+  {
+   "id": "p11",
+   "author": "bram",
+   "statement": "Keep a formal tone throughout.",
+   "evidence": "seen across the pieces"
+  },
+  {
+   "id": "p12",
+   "author": "bram",
+   "statement": "Address the reader as you, in the second person.",
+   "evidence": "seen across the pieces"
+  },
+  {
+   "id": "p13",
+   "author": "bram",
+   "statement": "Avoid headings; let paragraphs carry the structure.",
+   "evidence": "seen across the pieces"
+  },
+  {
+   "id": "p14",
+   "author": "bram",
+   "statement": "Let a sentence run to forty words when the thought needs it.",
+   "evidence": "seen across the pieces"
+  },
+  {
+   "id": "p15",
+   "author": "bram",
+   "statement": "Keep a formal tone throughout.",
+   "evidence": "seen across the pieces"
+  },
+  {
+   "id": "p16",
+   "author": "bram",
+   "statement": "Address the reader as you, in the second person.",
+   "evidence": "seen across the pieces"
+  },
+  {
+   "id": "p17",
+   "author": "bram",
+   "statement": "Avoid headings; let paragraphs carry the structure.",
+   "evidence": "seen across the pieces"
+  },
+  {
+   "id": "p18",
+   "author": "bram",
+   "statement": "Let a sentence run to forty words when the thought needs it.",
+   "evidence": "seen across the pieces"
+  },
+  {
+   "id": "m3",
+   "author": "bram",
+   "statement": "I keep sentences short: a median under 23 words, and nine in ten under 49.",
+   "measurement": {
+    "observer": "SENTENCE_LENGTH",
+    "params": {
+     "medianMax": 23,
+     "p90Max": 49
+    }
+   },
+   "evidence": "your median is 18 words and nine in ten are under 42, over 162 sentences in 6 pieces"
+  },
+  {
+   "id": "m4",
+   "author": "bram",
+   "statement": "I keep paragraphs to 3 sentences at most.",
+   "measurement": {
+    "observer": "PARAGRAPH_LENGTH",
+    "params": {
+     "maxSentences": 3
+    }
+   },
+   "evidence": "95% of your 54 paragraphs have 3 sentences or fewer"
+  },
+  {
+   "id": "m5",
+   "author": "bram",
+   "statement": "I hedge rarely: at most 2 hedging words per thousand.",
+   "measurement": {
+    "observer": "HEDGE_RATE",
+    "params": {
+     "maxPer1000": 2
+    }
+   },
+   "evidence": "you use about 0 per thousand, over 3564 words"
+  },
+  {
+   "id": "m6",
+   "author": "bram",
+   "statement": "Never use stock model phrasing: delve, delves, delving, tapestry, a testament to, in today's fast-paced, ever-evolving, unlock the power, ….",
+   "measurement": {
+    "observer": "LEXICON",
+    "params": {
+     "terms": [
+      "delve",
+      "delves",
+      "delving",
+      "tapestry",
+      "a testament to",
+      "in today's fast-paced",
+      "ever-evolving",
+      "unlock the power",
+      "unleash the power",
+      "navigate the complexities",
+      "it's important to note",
+      "it is important to note",
+      "it's worth noting",
+      "embark on a journey",
+      "elevate your",
+      "a plethora of",
+      "in the realm of",
+      "the world of",
+      "game-changer",
+      "let's dive in"
+     ]
+    }
+   },
+   "evidence": "none of these appears in 3564 words of your work"
+  },
+  {
+   "id": "p19",
+   "author": "cleo",
+   "statement": "Write in the third person, never as I.",
+   "evidence": "seen across the pieces"
+  },
+  {
+   "id": "p20",
+   "author": "cleo",
+   "statement": "Tell it in the past tense.",
+   "evidence": "seen across the pieces"
+  },
+  {
+   "id": "p21",
+   "author": "cleo",
+   "statement": "Avoid headings that are questions.",
+   "evidence": "seen across the pieces"
+  },
+  {
+   "id": "p22",
+   "author": "cleo",
+   "statement": "Give every section a heading.",
+   "evidence": "seen across the pieces"
+  },
+  {
+   "id": "p23",
+   "author": "cleo",
+   "statement": "Write in the third person, never as I.",
+   "evidence": "seen across the pieces"
+  },
+  {
+   "id": "p24",
+   "author": "cleo",
+   "statement": "Tell it in the past tense.",
+   "evidence": "seen across the pieces"
+  },
+  {
+   "id": "p25",
+   "author": "cleo",
+   "statement": "Avoid headings that are questions.",
+   "evidence": "seen across the pieces"
+  },
+  {
+   "id": "p26",
+   "author": "cleo",
+   "statement": "Give every section a heading.",
+   "evidence": "seen across the pieces"
+  },
+  {
+   "id": "m7",
+   "author": "cleo",
+   "statement": "I keep sentences short: a median under 13 words, and nine in ten under 16.",
+   "measurement": {
+    "observer": "SENTENCE_LENGTH",
+    "params": {
+     "medianMax": 13,
+     "p90Max": 16
+    }
+   },
+   "evidence": "your median is 10 words and nine in ten are under 14, over 252 sentences in 7 pieces"
+  },
+  {
+   "id": "m8",
+   "author": "cleo",
+   "statement": "I keep paragraphs to 4 sentences at most.",
+   "measurement": {
+    "observer": "PARAGRAPH_LENGTH",
+    "params": {
+     "maxSentences": 4
+    }
+   },
+   "evidence": "95% of your 63 paragraphs have 4 sentences or fewer"
+  },
+  {
+   "id": "m9",
+   "author": "cleo",
+   "statement": "I hedge rarely: at most 2 hedging words per thousand.",
+   "measurement": {
+    "observer": "HEDGE_RATE",
+    "params": {
+     "maxPer1000": 2
+    }
+   },
+   "evidence": "you use about 0 per thousand, over 2583 words"
+  },
+  {
+   "id": "p27",
+   "author": "dov",
+   "statement": "Keep paragraphs to two sentences at most.",
+   "evidence": "seen across the pieces"
+  },
+  {
+   "id": "p28",
+   "author": "dov",
+   "statement": "Never more than fifteen words in a sentence.",
+   "evidence": "seen across the pieces"
+  },
+  {
+   "id": "p29",
+   "author": "dov",
+   "statement": "Lay out steps as a numbered list.",
+   "evidence": "seen across the pieces"
+  },
+  {
+   "id": "p30",
+   "author": "dov",
+   "statement": "Avoid contractions in headings.",
+   "evidence": "seen across the pieces"
+  },
+  {
+   "id": "p31",
+   "author": "dov",
+   "statement": "Keep paragraphs to two sentences at most.",
+   "evidence": "seen across the pieces"
+  },
+  {
+   "id": "p32",
+   "author": "dov",
+   "statement": "Never more than fifteen words in a sentence.",
+   "evidence": "seen across the pieces"
+  },
+  {
+   "id": "p33",
+   "author": "dov",
+   "statement": "Lay out steps as a numbered list.",
+   "evidence": "seen across the pieces"
+  },
+  {
+   "id": "p34",
+   "author": "dov",
+   "statement": "Avoid contractions in headings.",
+   "evidence": "seen across the pieces"
+  },
+  {
+   "id": "m10",
+   "author": "dov",
+   "statement": "I keep sentences short: a median under 10 words, and nine in ten under 11.",
+   "measurement": {
+    "observer": "SENTENCE_LENGTH",
+    "params": {
+     "medianMax": 10,
+     "p90Max": 11
+    }
+   },
+   "evidence": "your median is 7 words and nine in ten are under 9, over 189 sentences in 7 pieces"
+  },
+  {
+   "id": "m11",
+   "author": "dov",
+   "statement": "I keep paragraphs to 2 sentences at most.",
+   "measurement": {
+    "observer": "PARAGRAPH_LENGTH",
+    "params": {
+     "maxSentences": 2
+    }
+   },
+   "evidence": "95% of your 63 paragraphs have 2 sentences or fewer"
+  },
+  {
+   "id": "m12",
+   "author": "dov",
+   "statement": "I hedge rarely: at most 2 hedging words per thousand.",
+   "measurement": {
+    "observer": "HEDGE_RATE",
+    "params": {
+     "maxPer1000": 2
+    }
+   },
+   "evidence": "you use about 0 per thousand, over 1197 words"
+  },
+  {
+   "id": "p35",
+   "author": "esme",
+   "statement": "Let a paragraph run to seven sentences when the argument needs room.",
+   "evidence": "seen across the pieces"
+  },
+  {
+   "id": "p36",
+   "author": "esme",
+   "statement": "Never use bullet lists; carry items in sentences.",
+   "evidence": "seen across the pieces"
+  },
+  {
+   "id": "p37",
+   "author": "esme",
+   "statement": "Write in the first person, as I.",
+   "evidence": "seen across the pieces"
+  },
+  {
+   "id": "p38",
+   "author": "esme",
+   "statement": "Hold a formal, impersonal register.",
+   "evidence": "seen across the pieces"
+  },
+  {
+   "id": "p39",
+   "author": "esme",
+   "statement": "Let a paragraph run to seven sentences when the argument needs room.",
+   "evidence": "seen across the pieces"
+  },
+  {
+   "id": "p40",
+   "author": "esme",
+   "statement": "Never use bullet lists; carry items in sentences.",
+   "evidence": "seen across the pieces"
+  },
+  {
+   "id": "p41",
+   "author": "esme",
+   "statement": "Write in the first person, as I.",
+   "evidence": "seen across the pieces"
+  },
+  {
+   "id": "p42",
+   "author": "esme",
+   "statement": "Hold a formal, impersonal register.",
+   "evidence": "seen across the pieces"
+  },
+  {
+   "id": "m13",
+   "author": "esme",
+   "statement": "I keep sentences short: a median under 19 words, and nine in ten under 22.",
+   "measurement": {
+    "observer": "SENTENCE_LENGTH",
+    "params": {
+     "medianMax": 19,
+     "p90Max": 22
+    }
+   },
+   "evidence": "your median is 15 words and nine in ten are under 19, over 252 sentences in 6 pieces"
+  },
+  {
+   "id": "m14",
+   "author": "esme",
+   "statement": "I keep paragraphs to 7 sentences at most.",
+   "measurement": {
+    "observer": "PARAGRAPH_LENGTH",
+    "params": {
+     "maxSentences": 7
+    }
+   },
+   "evidence": "95% of your 36 paragraphs have 7 sentences or fewer"
+  },
+  {
+   "id": "m15",
+   "author": "esme",
+   "statement": "I hedge rarely: at most 8 hedging words per thousand.",
+   "measurement": {
+    "observer": "HEDGE_RATE",
+    "params": {
+     "maxPer1000": 8
+    }
+   },
+   "evidence": "you use about 4.8 per thousand, over 3762 words"
+  },
+  {
+   "id": "m16",
+   "author": "esme",
+   "statement": "Never use stock model phrasing: delve, delves, delving, tapestry, a testament to, in today's fast-paced, ever-evolving, unlock the power, ….",
+   "measurement": {
+    "observer": "LEXICON",
+    "params": {
+     "terms": [
+      "delve",
+      "delves",
+      "delving",
+      "tapestry",
+      "a testament to",
+      "in today's fast-paced",
+      "ever-evolving",
+      "unlock the power",
+      "unleash the power",
+      "navigate the complexities",
+      "it's important to note",
+      "it is important to note",
+      "it's worth noting",
+      "embark on a journey",
+      "elevate your",
+      "a plethora of",
+      "in the realm of",
+      "the world of",
+      "game-changer",
+      "let's dive in"
+     ]
+    }
+   },
+   "evidence": "none of these appears in 3762 words of your work"
+  },
+  {
+   "id": "p43",
+   "author": "faro",
+   "statement": "Use a warm, conversational tone.",
+   "evidence": "seen across the pieces"
+  },
+  {
+   "id": "p44",
+   "author": "faro",
+   "statement": "Use short headings.",
+   "evidence": "seen across the pieces"
+  },
+  {
+   "id": "p45",
+   "author": "faro",
+   "statement": "Never end on a question.",
+   "evidence": "seen across the pieces"
+  },
+  {
+   "id": "p46",
+   "author": "faro",
+   "statement": "Never pad a list; keep each bullet short.",
+   "evidence": "seen across the pieces"
+  },
+  {
+   "id": "p47",
+   "author": "faro",
+   "statement": "Cite sources inline.",
+   "evidence": "seen across the pieces"
+  },
+  {
+   "id": "p48",
+   "author": "faro",
+   "statement": "Use a warm, conversational tone.",
+   "evidence": "seen across the pieces"
+  },
+  {
+   "id": "p49",
+   "author": "faro",
+   "statement": "Use short headings.",
+   "evidence": "seen across the pieces"
+  },
+  {
+   "id": "p50",
+   "author": "faro",
+   "statement": "Never end on a question.",
+   "evidence": "seen across the pieces"
+  },
+  {
+   "id": "p51",
+   "author": "faro",
+   "statement": "Never pad a list; keep each bullet short.",
+   "evidence": "seen across the pieces"
+  },
+  {
+   "id": "p52",
+   "author": "faro",
+   "statement": "Cite sources inline.",
+   "evidence": "seen across the pieces"
+  },
+  {
+   "id": "m17",
+   "author": "faro",
+   "statement": "I keep sentences short: a median under 12 words, and nine in ten under 26.",
+   "measurement": {
+    "observer": "SENTENCE_LENGTH",
+    "params": {
+     "medianMax": 12,
+     "p90Max": 26
+    }
+   },
+   "evidence": "your median is 9 words and nine in ten are under 22, over 147 sentences in 7 pieces"
+  },
+  {
+   "id": "m18",
+   "author": "faro",
+   "statement": "I keep paragraphs to 2 sentences at most.",
+   "measurement": {
+    "observer": "PARAGRAPH_LENGTH",
+    "params": {
+     "maxSentences": 2
+    }
+   },
+   "evidence": "95% of your 63 paragraphs have 2 sentences or fewer"
+  },
+  {
+   "id": "m19",
+   "author": "faro",
+   "statement": "I hedge rarely: at most 2 hedging words per thousand.",
+   "measurement": {
+    "observer": "HEDGE_RATE",
+    "params": {
+     "maxPer1000": 2
+    }
+   },
+   "evidence": "you use about 0 per thousand, over 1428 words"
+  }
+ ]
+}

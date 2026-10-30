@@ -1,0 +1,220 @@
+// tests/atelier-prerequisite.test.ts — AN IMPOSSIBLE EPISTEMIC DEMAND NEVER REACHES THE MODEL.
+//
+// THE CASE, measured on a live provider and reproduced here as a fixture. A compiled standard carried
+// this REQUIRED rule:
+//
+//   "I cite one specific counted observation from our own records — churn notes, percentage of
+//    demos — instead of arguing from principle or benchmarks."
+//
+// The invocation supplied no records. The model satisfied the rule by inventing them: "I pulled our
+// last 200 tickets. 63% of them are the billing-portal password reset…" — a fluent, specific,
+// entirely fabricated statistic, in the author's voice, indistinguishable from a correct run.
+//
+// The rule was followed. The condition that makes following it truthful was absent. Asking a model
+// not to hallucinate is not a mechanism; knowing beforehand that the source is unbound is.
+
+import { describe, it, expect } from 'vitest';
+import { checkSatisfiable, describeSatisfiability, type Prerequisite } from '../core/state/prerequisite.js';
+import { defaultPlan, autonomousPromotionAllowed } from '../core/coverage/observation.js';
+import { materialLine, waitingForMaterial, withoutWaiting } from '../cli/commands/invoke.js';
+import { describeTaste, type TasteReading } from '../core/taste/reader.js';
+import type { Requirement } from '../core/state/canonical-state.js';
+
+const RECORDS: Prerequisite = {
+  kind: 'RECORDS', name: 'support-ticket-history',
+  why: 'the rule asks for a counted observation from the author\'s own records',
+};
+
+const rule = (id: string, materiality: string | null, prerequisites?: Prerequisite[]) => ({
+  requirementId: id,
+  statement: 'I cite one specific counted observation from our own records instead of arguing from principle.',
+  materiality, prerequisites,
+});
+
+describe('a REQUIRED rule whose evidence is not bound', () => {
+  it('refuses before generation rather than asking the model to improvise', () => {
+    const v = checkSatisfiable([rule('g2', 'REQUIRED', [RECORDS])], new Set());
+    expect(v.kind).toBe('MISSING_REQUIRED_EVIDENCE');
+  });
+
+  it('names the rule, the source and the way forward', () => {
+    const v = checkSatisfiable([rule('g2', 'REQUIRED', [RECORDS])], new Set());
+    const msg = describeSatisfiability(v)!;
+    expect(msg).toMatch(/Not every REQUIRED rule can be met on this run/);
+    expect(msg).toMatch(/g2/);
+    expect(msg).toMatch(/support-ticket-history/);
+    expect(msg).toMatch(/--with/);
+    // and it says WHY the rule is not attempted, because "missing evidence" without the mechanism reads as a config error
+    expect(msg).toMatch(/asked for evidence it does not have, a model invents/);
+  });
+
+  it('POLARITY: binding the source makes the same standard satisfiable', () => {
+    const v = checkSatisfiable([rule('g2', 'REQUIRED', [RECORDS])], new Set(['support-ticket-history']));
+    expect(v.kind).toBe('SATISFIABLE');
+    expect(describeSatisfiability(v)).toBeNull();
+  });
+
+  it('a rule with no prerequisites is unaffected — this must not gate ordinary standards', () => {
+    const v = checkSatisfiable([rule('g1', 'REQUIRED'), rule('g3', 'PREFERRED')], new Set());
+    expect(v.kind).toBe('SATISFIABLE');
+  });
+});
+
+describe('a rule the author did not make obligatory', () => {
+  it('DEGRADES rather than refusing — the run proceeds and the behaviour is not attempted', () => {
+    const v = checkSatisfiable([rule('g5', 'PREFERRED', [RECORDS])], new Set());
+    expect(v.kind).toBe('DEGRADED');
+    expect(describeSatisfiability(v)).toMatch(/The run proceeds and those behaviours are not attempted/);
+  });
+
+  it('but one REQUIRED among many PREFERRED still refuses the whole run', () => {
+    const v = checkSatisfiable(
+      [rule('g5', 'PREFERRED', [RECORDS]), rule('g2', 'REQUIRED', [RECORDS])], new Set());
+    expect(v.kind).toBe('MISSING_REQUIRED_EVIDENCE');
+  });
+});
+
+describe('the check is deterministic and costs nothing', () => {
+  it('reaches its verdict from the standard and the bound names alone — no model, no I/O', () => {
+    // If this ever needs a client, the check has moved from "known beforehand" to "observed
+    // afterwards", which is the expensive path this exists to avoid.
+    expect(checkSatisfiable.length).toBe(2);
+    const v = checkSatisfiable([rule('g2', 'REQUIRED', [RECORDS])], new Set());
+    expect(v.kind).toBe('MISSING_REQUIRED_EVIDENCE');
+  });
+
+  it('matches a prerequisite by NAME, so a file or a connector can satisfy the same dependency', () => {
+    // Deliberately not a taxonomy: what `support-ticket-history` IS stays undecided until something
+    // demands it. A CSV today, a query tomorrow, the same rule either way.
+    const asTool: Prerequisite = { ...RECORDS, kind: 'TOOL' };
+    expect(checkSatisfiable([rule('g2', 'REQUIRED', [asTool])], new Set(['support-ticket-history'])).kind)
+      .toBe('SATISFIABLE');
+  });
+});
+
+// ── OBSERVATION IS NOT CARRIER ───────────────────────────────────────────────────────────────
+//
+// The shortcut `OUTPUT_CONTRACT -> observable, PROSE -> unobservable` is wrong both ways. A contract
+// deterministically observes SHAPE and says nothing about whether a citation is grounded; a PROSE
+// requirement may be human-observed, testable, or unobserved. How a behaviour is CAUSED and how it is
+// MEASURED are separate decisions and are represented separately.
+describe('observation is a separate dimension from carrier', () => {
+  const req = (id: string, m: string | null, shape?: Record<string, unknown>, pre?: { name: string }[]) =>
+    ({ requirementId: id, materiality: m, outputShape: shape ?? null, prerequisites: pre });
+
+  it('a shape requirement on a contract is deterministically observed — for SHAPE', () => {
+    const p = defaultPlan(req('r1', 'REQUIRED', { verdict: { type: 'string' } }), 'OUTPUT_CONTRACT');
+    expect(p.mechanism).toBe('DETERMINISTIC');
+    expect(p.basis, 'the basis must not overclaim').toMatch(/SHAPE, not whether the content is true/);
+  });
+
+  it('the SAME carrier does not make a non-shape requirement observable', () => {
+    // no outputShape: the contract carries other fields, and nothing observes THIS rule
+    expect(defaultPlan(req('r2', 'REQUIRED'), 'OUTPUT_CONTRACT').mechanism).toBe('HUMAN');
+  });
+
+  it('a REQUIRED prose requirement is HUMAN-observed, which is a real sensor', () => {
+    expect(defaultPlan(req('r3', 'REQUIRED'), 'PROSE').mechanism).toBe('HUMAN');
+  });
+
+  it('SELF_CHECK earns nothing automatic — the model grading itself is not an independent sensor', () => {
+    expect(defaultPlan(req('r4', 'REQUIRED'), 'SELF_CHECK').mechanism).not.toBe('DETERMINISTIC');
+  });
+
+  it('a requirement blocked on unbound evidence says what would unblock it', () => {
+    const p = defaultPlan(req('r5', 'REQUIRED', undefined, [{ name: 'support-ticket-history' }]), 'PROSE');
+    expect(p.mechanism).toBe('NONE');
+    expect(p.blockedOn).toBe('support-ticket-history');
+    expect(p.basis).toMatch(/invented one/);
+  });
+});
+
+describe('the autonomy boundary, stated precisely', () => {
+  const plan = (id: string, mechanism: 'DETERMINISTIC' | 'HUMAN' | 'NONE') =>
+    ({ requirementId: id, mechanism, basis: 'b' });
+
+  it('a repair touching only deterministically-checked rules may promote itself', () => {
+    expect(autonomousPromotionAllowed([{ requirementId: 'r1', materiality: 'REQUIRED' }],
+      [plan('r1', 'DETERMINISTIC')]).autonomous).toBe(true);
+  });
+
+  it('a repair touching a REQUIRED rule only a human can check may not', () => {
+    const v = autonomousPromotionAllowed([{ requirementId: 'r2', materiality: 'REQUIRED' }], [plan('r2', 'HUMAN')]);
+    expect(v.autonomous).toBe(false);
+  });
+
+  it('and it says human promotion is still available, rather than implying the loop is dead', () => {
+    const v = autonomousPromotionAllowed([{ requirementId: 'r2', materiality: 'REQUIRED' }], [plan('r2', 'NONE')]);
+    expect(v.autonomous).toBe(false);
+    if (!v.autonomous) {
+      expect(v.why).toMatch(/atelier compare/);
+      expect(v.why).toMatch(/not because the loop is broken/);
+    }
+  });
+
+  it('a PREFERRED rule with no sensor does not block autonomy', () => {
+    expect(autonomousPromotionAllowed([{ requirementId: 'r3', materiality: 'PREFERRED' }],
+      [plan('r3', 'NONE')]).autonomous).toBe(true);
+  });
+});
+
+// ── A RULE WAITING FOR MATERIAL IS NOT A MISSED RULE ─────────────────────────────────────────────
+describe('when material is not bound, the run says so once, and nothing reads a waiting rule as missed', () => {
+  const figures: Prerequisite = { kind: 'CONTEXT', name: 'actual-figures-incidents', why: 'the actual figures from your incidents' };
+  const degraded = checkSatisfiable([{ requirementId: 'p6', statement: 'Give the real figure.', materiality: 'PREFERRED', prerequisites: [figures] }], new Set());
+
+  it('names the exact --with that lets the waiting rule fire, since a prerequisite is matched by name', () => {
+    const line = materialLine(degraded, false, true, 'posts');
+    expect(line).toMatch(/^1 rule\(s\) need your real specifics to fire \(p6\)\. Add them: --with actual-figures-incidents=<file>/);
+    // nothing is bound, so nothing can be checked against it: listed, not cut
+    expect(line).toMatch(/meanwhile a story, source or figure in the draft cannot be checked against anything of yours, and is listed for you, not cut/);
+    expect(materialLine(degraded, true, true, 'posts')).toMatch(/meanwhile any story, source or figure not found in what you bound is blocked, flagged or listed by the skill's latitude, and cut only where you chose that/);
+    expect(line?.split('\n')).toHaveLength(1);
+  });
+  it('with nothing waiting and no notes, one line on the cut; with notes or no claim guard, nothing to say', () => {
+    const ok = checkSatisfiable([], new Set());
+    expect(materialLine(ok, false, true, 'posts')).toMatch(/^No notes of yours are bound/);
+    expect(materialLine(ok, true, true, 'posts')).toBeNull();
+    expect(materialLine(ok, false, false, 'posts')).toBeNull();
+  });
+  it('a waiting rule leaves the taste reader\'s VETO: with nothing bound, a repair toward it could only invent', () => {
+    const waiting = waitingForMaterial(degraded);
+    expect([...waiting]).toEqual(['p6']);
+    const rules = [{ rule: { requirementId: 'p6' }, key: 'k6' }, { rule: { requirementId: 'p2' }, key: 'k2' }];
+    expect([...withoutWaiting(new Set(['k6', 'k2']), rules, waiting)]).toEqual(['k2']);
+  });
+  it('the reader\'s report counts it as waiting, not missed', () => {
+    const miss = { requirementId: 'p6', key: 'k6', verdict: 'MISSED', kind: 'PRESENCE', quote: '', why: 'no figure' } as unknown as TasteReading;
+    const rules = new Map([['p6', { requirementId: 'p6', statement: 'Give the real figure.' } as Requirement]]);
+    const told = describeTaste([miss], rules, new Set(), false, new Set(['p6']));
+    expect(told).toMatch(/0 missed.*1 waiting for your material \(p6\)/);
+    expect(told).not.toMatch(/missed p6/);
+    expect(describeTaste([miss], rules)).toMatch(/missed p6/);
+  });
+});
+
+// 2026-10-27: a CONTEXT prerequisite is met by the text the run works on; names match as the same words; records stay by name.
+import { describeAssumed } from '../core/state/prerequisite.js';
+describe('a prerequisite met by the bound text (the stage baseline: 16 of 18 review rules withheld by exact-name matching)', () => {
+  const needsDoc = { requirementId: 'r1', statement: 'Anchor every finding to a line of the proposal.', materiality: 'REQUIRED',
+    prerequisites: [{ kind: 'CONTEXT' as const, name: 'actual-document-stable-line', why: 'The actual document with stable line numbers.' }] };
+  const needsFigures = { requirementId: 'r2', statement: 'Quantify with our own figures.', materiality: 'REQUIRED',
+    prerequisites: [{ kind: 'RECORDS' as const, name: 'real-figures-quarter', why: 'The real figures for the quarter.' }] };
+  it('bound under another name, with a text to work on: the context rule fires, and the record says it was assumed', () => {
+    const v = checkSatisfiable([needsDoc], new Set(['draft']), { subjectBound: true });
+    expect(v.kind).toBe('SATISFIABLE');
+    expect(v.assumed?.map((a) => [a.requirementId, a.prerequisite.name])).toEqual([['r1', 'actual-document-stable-line']]);
+    expect(describeAssumed(v)).toContain('r1');
+  });
+  it('a records prerequisite is not met by a text: still missing', () => {
+    const v = checkSatisfiable([needsFigures], new Set(['draft']), { subjectBound: true });
+    expect(v.kind).toBe('MISSING_REQUIRED_EVIDENCE');
+  });
+  it('nothing bound: the context rule is missing as before', () => {
+    expect(checkSatisfiable([needsDoc], new Set()).kind).toBe('MISSING_REQUIRED_EVIDENCE');
+  });
+  it('the same name in other spelling is the same name', () => {
+    const v = checkSatisfiable([{ ...needsFigures, prerequisites: [{ kind: 'RECORDS' as const, name: 'notice-of-loss', why: 'the notice of loss' }] }], new Set(['notice of loss']));
+    expect(v.kind).toBe('SATISFIABLE');
+  });
+});

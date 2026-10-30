@@ -1,0 +1,147 @@
+// atelier/core/loop/shape-steer.ts — WHICH LEARNED SHAPE BANDS A RUN STEERS, AND THE REMOVAL THAT NEEDS NO MODEL.
+//
+// A skill built from five tweets learns its shape bands as PREFERRED (../observers/short-form.ts): the author's habit,
+// never a rule until the owner makes it one. Listed only, they did nothing: a writer that answered "write a tweet" with
+// a 384-character corporate paragraph had it delivered as written, against pieces that run 117 to 155 characters. So a
+// learned band is a GRADED TARGET for the run, routed as a counted feature's miss is (./run-repair.ts, `gradedRules`):
+// never a failure, never a line that lowers the verdict, off with `--graded none`, and every step it causes held to
+// the one acceptance rule (./repair.ts, `applyStep`: no enforced rule newly broken or further from holding).
+//
+//   LENGTH     characters and words past their band's ceiling: the piece is written again toward the band (the
+//              length-aimed action, ./controller.ts), told how far and what to aim for. A sentence rewrite cannot carry a
+//              length. A draft short of the band is not steered up: that asks for padding (`steersMiss`).
+//   REMOVAL    hashtags, links and emoji over the band's ceiling: the extras removed in code, no model call. A trailing
+//              run of them goes whole; a hashtag inside a sentence keeps its word ("the #approval" → "the approval").
+//
+// NOT STEERED, ON PURPOSE: the count of sentences, the longest sentence, line breaks, mentions, and what a piece opens or
+// closes on. Rhythm and the build of a sentence are never steered by a count (a draft cut to the author's number of
+// sentences is pace by arithmetic), and an opening or a closing is a kind a rewrite would have to invent: those stay
+// preferences the run lists, for the person to read.
+
+import type { Measurement, Requirement } from '../state/canonical-state.js';
+import type { NumericShape } from '../observers/shape.js';
+import type { Span } from '../observers/registry.js';
+import { maskCode } from '../observers/text.js';
+
+/** The learned shapes a run steers toward their band, and how. */
+export const STEERED_SHAPES: Readonly<Partial<Record<NumericShape, 'length' | 'remove'>>> = {
+  characters: 'length', words: 'length', hashtags: 'remove', links: 'remove', emoji: 'remove',
+};
+
+/** The shape a SHAPE measurement holds, when a run may steer it; null for every other measurement. */
+export function steeredShape(m: Measurement | null | undefined): { readonly shape: NumericShape; readonly how: 'length' | 'remove' } | null {
+  if (m?.observer !== 'SHAPE') return null;
+  const id = (m.params.shape as readonly string[] | undefined)?.[0] as NumericShape | undefined;
+  const how = id ? STEERED_SHAPES[id] : undefined;
+  return id && how ? { shape: id, how } : null;
+}
+
+/**
+ * IS A MISS OF A STEERED SHAPE ONE THE RUN ACTS ON? Only one past the band's ceiling: a piece that runs long, a hashtag
+ * too many. A draft short of the author's floor is not steered up toward it: it could be filled only with words the
+ * request did not ask for, which is padding at best and invention at worst (as a specifics feature below its band is
+ * never a miss, ./graded.ts). Such a miss stays a preference the run lists.
+ */
+export function steersMiss(m: Measurement | null | undefined, error: number | undefined, value?: number | null): boolean {
+  const sh = steeredShape(m);
+  if (sh === null || (error ?? 0) <= 0) return false;
+  // a length is acted on only past the ceiling by more than the tolerance (LENGTH_TOLERANCE): length is held loosely
+  const max = m?.params.max;
+  return sh.how !== 'length' || typeof value !== 'number' || typeof max !== 'number' || value > max * (1 + LENGTH_TOLERANCE);
+}
+
+/**
+ * IS THIS SHAPE RULE THE AUTHOR'S HABIT, LEARNED FROM THEIR PIECES? Only that is steered as a habit. A rule the owner
+ * stated, added or authored is theirs: it is held as they gave it, never pulled at as a preference; one they made
+ * REQUIRED is enforced like any rule they require (the caller leaves enforced rules out).
+ */
+export const learnedShape = (r: Pick<Requirement, 'provenance' | 'authority' | 'measurement'>): boolean =>
+  steeredShape(r.measurement) !== null && r.provenance !== 'EXPERT_STATED' && r.provenance !== 'EXPERT_ADDED' && r.authority !== 'EXPERT_AUTHORED';
+
+// a hashtag holds a letter: "#42" is an issue number, "C#" a language
+const HASHTAG = /(?<![\w&])#(?=[\p{N}_]*\p{L})[\p{L}\p{N}_]+/gu;
+const LINK = /\bhttps?:\/\/\S+|\bwww\.\S+/g;
+// an emoji with what rides on it: a skin tone, a variation selector, a joiner and the emoji it joins
+const EMOJI = /\p{Extended_Pictographic}(?:\p{Emoji_Modifier}|️|‍\p{Extended_Pictographic})*/gu;
+const PATTERN: Readonly<Record<'hashtags' | 'links' | 'emoji', RegExp>> = { hashtags: HASHTAG, links: LINK, emoji: EMOJI };
+
+/** A link as the request or the material would hold it: without the punctuation that ends its sentence. */
+const bareLink = (l: string): string => l.replace(/[.,;:!?)\]]+$/, '');
+
+/**
+ * THE LINKS OF A TEXT THAT THE REQUEST OR THE MATERIAL SUPPLIED: the person's own, never a habit miss. A skill built from
+ * pieces with no links learned "no links" as a habit, and a draft that linked the spec the request named was written
+ * again for it. A link that stands in what the person gave (the request, the bound material) is theirs: left out of the
+ * count before a learned band is steered, and never removed. Read in the prose only (code masked), as the band counts.
+ */
+export function ownLinks(text: string, sources: readonly string[]): string[] {
+  const pool = sources.join('\n');
+  if (!pool.trim()) return [];
+  return [...maskCode(text).matchAll(new RegExp(LINK.source, 'g'))].map((m) => bareLink(m[0])).filter((l) => l.length > 0 && pool.includes(l));
+}
+
+/**
+ * A LEARNED LINKS BAND'S CHECK WITH THE PERSON'S OWN LINKS LEFT OUT OF THE COUNT. The band's line as the observer wrote
+ * it, read again over the draft's own links alone: met where those are within the ceiling, with the person's named; a
+ * miss otherwise, by the draft's own links only, pointing at none of the person's. Nothing else on the line changes.
+ */
+export function withoutOwnLinks<C extends { readonly result: { readonly verdict: string; readonly spans: readonly Span[]; readonly value: number | null; readonly error?: number; readonly detail: string } }>(c: C, params: Measurement['params'], own: readonly string[]): C {
+  if (typeof c.result.value !== 'number' || !own.length) return c;
+  const hi = typeof params.max === 'number' ? params.max : null; const lo = typeof params.min === 'number' ? params.min : null;
+  const value = Math.max(0, c.result.value - own.length);
+  const theirs = `${own.length} ${own.length === 1 ? 'is' : 'are'} from the request or the material`;
+  if (hi === null || value <= hi) {
+    const ceiling = hi === 0 ? 'your pieces carry none' : `at most ${hi}`;
+    return { ...c, result: { ...c.result, verdict: 'MET', spans: [], value, error: 0, detail: `${value === 0 ? 'no links of its own' : `${value} link${value === 1 ? '' : 's'} of its own`} (${own.length} from the request or the material; ${ceiling})` } };
+  }
+  const width = lo !== null && hi > lo ? hi - lo : 1;
+  const spans = c.result.spans.filter((sp) => !own.includes(bareLink(sp.text)));
+  const detail = hi === 0 ? `no links; this has ${value} of its own (${theirs.replace(/^(\d+) (?:is|are)/, (_, n: string) => `${n} more ${n === '1' ? 'is' : 'are'}`)})` : `${value} link${value === 1 ? '' : 's'} of its own (at most ${hi}): long by ${value - hi} (${theirs})`;
+  return { ...c, result: { ...c.result, verdict: 'VIOLATED', spans, value, error: Math.round(((value - hi) / width) * 1000) / 1000, detail } };
+}
+
+/**
+ * The text with every `shape` (hashtags, links, emoji) past the first `max` removed, and the gaps closed. A HASHTAG IS A
+ * TAG ONLY WHERE IT STANDS OUTSIDE THE SENTENCE: on a line of tags, or after the sentence has ended (". #devops"). There
+ * it goes whole. Anywhere else it is a word of the sentence ("after #approval.", "#Python is"): its `#` goes and its word
+ * stays, so no removal takes a word away. A link goes only where it stands as a tag would; inside a sentence it stays
+ * (removing it would leave a hole), for the rewrite. Emoji go whole, with the space before them; a line a removal empties
+ * goes with it. A link in `keep` (the person's own, `ownLinks`) is never removed and is not counted against `max`.
+ * Nothing else in the text changes.
+ */
+export function removeShapeExtras(text: string, shape: 'hashtags' | 'links' | 'emoji', max: number, keep: readonly string[] = []): string {
+  const re = new RegExp(PATTERN[shape].source, PATTERN[shape].flags);
+  // only the prose's: a URL, a `#` or an emoji inside code is the code's (../observers/text.ts, maskCode)
+  const found = [...maskCode(text).matchAll(re)].filter((m) => !(shape === 'links' && keep.includes(bareLink(m[0])))).slice(Math.max(0, max));
+  let out = text;
+  for (const m of found.reverse()) {
+    const start = m.index; const end = start + m[0].length;
+    // what stands beside it on its line once the other tags, links and emoji are set aside
+    const bare = (t: string): string => t.replace(new RegExp(HASHTAG.source, 'gu'), '').replace(new RegExp(LINK.source, 'g'), '').replace(new RegExp(EMOJI.source, 'gu'), '').trim();
+    const lineBefore = bare(out.slice(0, start).split('\n').pop() ?? ''); const lineAfter = bare(out.slice(end).split('\n')[0]);
+    // a tag: nothing of the sentence after it, and before it either nothing or a sentence that has already ended
+    const isTag = !/[\p{L}\p{N}]/u.test(lineAfter) && (lineBefore === '' || /[.!?…]["'”’)\]]*$/u.test(lineBefore));
+    const inSentence = shape === 'hashtags' && !isTag;
+    if (inSentence) { out = `${out.slice(0, start)}${m[0].slice(1)}${out.slice(end)}`; continue; }
+    // A LINK THAT IS A WORD OF ITS SENTENCE STAYS: taking it leaves "See for the spec.", a sentence with a hole. Only a
+    // link standing on its own (a line of links, or after its sentence has ended) goes in code; the rest is the rewrite's.
+    if (shape === 'links' && !isTag) continue;
+    const before = out.slice(0, start).replace(/[ \t]+$/, ''); const after = out.slice(end).replace(/^[ \t]+/, '');
+    out = `${before}${before && after && !before.endsWith('\n') && !after.startsWith('\n') && !/^[.,;:!?)]/.test(after) ? ' ' : ''}${after}`;
+  }
+  return out.replace(/[ \t]+$/gm, '').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+/**
+ * HOW CLOSE A LENGTH NEEDS TO BE (owner, 16 Oct): length comes with pace and style, so it is held loosely. A draft within
+ * 15% of the author's band is left as it is; one further out is aimed at the band itself, never at a number under its
+ * floor, so the writer cannot be sent below the author's range.
+ */
+export const LENGTH_TOLERANCE = 0.15;
+/** What to aim for once a length is past its learned band and the tolerance: the band, with the move that mends it. */
+export function shapeLengthAim(n: number, lo: number | null, hi: number | null, unit: 'characters' | 'words'): { readonly aim?: string; readonly move?: string; readonly off: number } {
+  const band = lo !== null && hi !== null ? `${lo} to ${hi}` : hi !== null ? `${hi} or fewer` : `${lo} or more`;
+  if (hi !== null && n > hi * (1 + LENGTH_TOLERANCE)) return { aim: `aim for ${band} ${unit}`, move: `about ${n - hi} ${unit} shorter`, off: n - hi };
+  if (lo !== null && n < lo * (1 - LENGTH_TOLERANCE)) return { aim: `aim for ${band} ${unit}`, move: `about ${lo - n} ${unit} longer`, off: lo - n };
+  return { off: 0 };
+}

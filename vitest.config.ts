@@ -1,0 +1,27 @@
+import { defineConfig } from 'vitest/config';
+
+export default defineConfig({
+  test: {
+    include: ['tests/**/*.test.ts'],
+    // MOST OF THIS SUITE SPAWNS THE SHIPPED BINARY, and vitest's default per-test budget is 5s.
+    // A build-and-run e2e finishes in well under a second of real work and still blew that budget
+    // under full-suite parallel load — `atelier-p0-regressions` timed out in CI-shaped runs and
+    // passed alone in the same tree, which is a flake in the harness, not a defect in the product.
+    // The bound is kept (a hung child must still fail rather than hang the run), just set to a
+    // figure that measures the code instead of the scheduler.
+    testTimeout: 30_000,
+    // THE SUITE IS OFFLINE. A developer's ANTHROPIC_API_KEY would otherwise let every spawned command
+    // call the claim reader for real. Tests of the reader set ATELIER_CLAIMS=model and script it.
+    // The grammar engine builds its dictionary in about five seconds per process, and most of this suite spawns the
+    // binary many times over: the suite runs a small fixed checker instead (providers/grammar.ts, `stubGrammar`),
+    // wired in the same place as the real one, so the rule is still checked. The grammar tests ask for harper itself.
+    // A model call made while a repair chain runs, outside a step and outside a registered reader, throws under the suite
+    // (core/inference/step-guard.ts): in-process and in every binary the tests spawn with this environment.
+    env: { ATELIER_CLAIMS: 'pattern', ATELIER_GRAMMAR: 'stub', ATELIER_STEP_GUARD: 'throw' },
+    setupFiles: ['tests/setup-grammar.ts'],
+    // Source imports use .js specifiers (NodeNext), which is what `tsc` emits and what Node runs.
+    // Vitest resolves them back to the .ts on disk, so the tests exercise the same module graph the
+    // build produces rather than a parallel one.
+    alias: [{ find: /^(\.{1,2}\/.*)\.js$/, replacement: '$1.ts' }],
+  },
+});

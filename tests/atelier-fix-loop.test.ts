@@ -1,0 +1,478 @@
+// tests/atelier-fix-loop.test.ts — CREATE → USE → CORRECT, CLOSED, AGAINST THE REAL BINARY.
+//
+// `fix` is the product's third verb: a complaint goes in; either the implementation improves under a
+// byte-identical StandardVersion, or the person is asked the one question that is theirs. These
+// tests run the whole loop with a scripted backend playing both the diagnoser and the generator,
+// plus unit tests on the lateral policy, the runtime-scoped memory (Amendment A2), and the hard
+// standard-hash invariant (Constraint B).
+
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
+import { mkdtempSync, readFileSync, existsSync, readdirSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
+import * as store from '../core/state/store.js';
+import { proposeReplacement, eligibleCarriers, assertStandardUnchanged } from '../core/architecture/replace-carrier.js';
+import { mayPropose, WEAKEST_EVALUATION, WEAKEST_EVIDENCE, type RepairRecord, type Prohibition } from '../core/architecture/repair-memory.js';
+import { applyEscalation, type ServedMissEvidence } from '../core/architecture/escalate.js';
+import { mutationsOf } from '../core/optimizer/genome.js';
+import type { SkillArchitecture } from '../core/architecture/compile.js';
+import { aRequirement } from './fixtures.js';
+import { standardHashOf, type StandardVersion } from '../core/state/canonical-state.js';
+
+const CLI = resolve('dist/cli/atelier.mjs');
+
+beforeAll(() => {
+  // NEVER REBUILD FROM INSIDE A TEST FILE. `npm test` builds once, before any worker starts, via
+  // `pretest`. The build script begins with `rm -rf dist`, so a rebuild triggered by one worker
+  // deletes the binary out from under every other worker mid-run, and the failure surfaces as an
+  // unrelated assertion in whichever file happened to be spawning the CLI at that instant.
+  if (!existsSync(CLI)) throw new Error(`${CLI} is missing: run \`npm run build\` (or \`npm test\`, which builds first) before running this file alone.`);
+});
+
+// ── scripted backend, out of process (see scripted-backend.mjs for why) ───────────────────────
+let backend: ChildProcess; let port = 0;
+const setByTool = async (byTool: Record<string, unknown>): Promise<void> => {
+  await fetch(`http://127.0.0.1:${port}/__set`, { method: 'POST', body: JSON.stringify({ byTool }) });
+};
+const requestCount = async (): Promise<number> =>
+  ((await (await fetch(`http://127.0.0.1:${port}/__count`)).json()) as { count: number }).count;
+
+beforeAll(async () => {
+  backend = spawn(process.execPath, [resolve('tests/fixtures/scripted-backend.mjs')], { stdio: ['ignore', 'pipe', 'inherit'] });
+  port = await new Promise<number>((ok, bad) => {
+    backend.stdout!.on('data', (d: Buffer) => { const m = /PORT (\d+)/.exec(d.toString()); if (m) ok(Number(m[1])); });
+    backend.on('exit', () => { bad(new Error('scripted backend exited')); });
+  });
+});
+afterAll(() => { backend.kill(); });
+
+const run = (data: string, proj: string, ...args: string[]): string => {
+  try {
+    return execFileSync('node', [CLI, ...args,
+      '--provider', 'openai-compatible', '--base-url', `http://127.0.0.1:${port}`, '--model', 'scripted'], {
+      encoding: 'utf8', cwd: proj,
+      env: { ...process.env, ATELIER_DATA: data, ATELIER_PROJECT_DIR: proj },
+    });
+  } catch (e) {
+    const err = e as { status?: number; stdout?: string; stderr?: string };
+    return `EXIT:${err.status}\n${err.stderr ?? ''}${err.stdout ?? ''}`;
+  }
+};
+
+const COVERED = { coverage: 'COVERED', requirementIds: ['x1'], proposedRequirement: null, question: null, reasoning: 'x1 covers it' };
+const ABSENT = (proposal: string) =>
+  ({ coverage: 'ABSENT', requirementIds: [], proposedRequirement: proposal, question: null, reasoning: 'nothing covers it' });
+
+/** A built direct skill plus one real CLI invocation, so last-invocation.json exists. */
+const seeded = async (): Promise<{ data: string; proj: string }> => {
+  const data = mkdtempSync(join(tmpdir(), 'atelier-fix-data-'));
+  const proj = mkdtempSync(join(tmpdir(), 'atelier-fix-proj-'));
+  run(data, proj, 'add', '--statement', 'Lead with the action.', '--kind', 'GENERATIVE', '--applies-when', 'GENERAL');
+  run(data, proj, 'ratify-close', '--work-type', 'writing');
+  run(data, proj, 'build', '--name', 'focus');
+  await setByTool({ emit_piece: { piece: 'the original answer' } });
+  const out = run(data, proj, 'invoke', '--skill', 'focus', '--task', 'write the recommendation');
+  expect(out, 'seeding invoke failed').not.toMatch(/^EXIT:/);
+  return { data, proj };
+};
+
+describe('invoke for a script: the answer alone on stdout', () => {
+  it('--answer-only prints only the piece; --json prints one parseable record of the run', async () => {
+    const { data, proj } = await seeded();
+    await setByTool({ emit_piece: { piece: 'the scripted answer' } });
+    // execFileSync returns stdout only: the run report must have gone to stderr
+    expect(run(data, proj, 'invoke', '--skill', 'focus', '--task', 'write it', '--answer-only').trim()).toBe('the scripted answer');
+    const out = run(data, proj, 'invoke', '--skill', 'focus', '--task', 'write it', '--json');
+    const record = JSON.parse(out) as { output: string; invocationId: string; rulesBroken: unknown[]; cut: unknown[] };
+    expect(record.output).toBe('the scripted answer');
+    expect(record.invocationId).toBeTruthy();
+    expect(Array.isArray(record.rulesBroken) && Array.isArray(record.cut)).toBe(true);
+  });
+});
+
+describe('IMPLEMENTATION_MISS: candidate → rerun → blinded pick → winner active AND installed', () => {
+  it('the full two-phase loop, with the standard hash immovable', async () => {
+    const { data, proj } = await seeded();
+    const L: store.StoreLayout = { root: data, skillName: 'focus' };
+    const s1 = store.getStandard(L, store.getSkillVersion(L, store.getActive(L)!)!.standardVersionHash)!;
+
+    await setByTool({ emit_coverage: COVERED, emit_piece: { piece: 'the improved answer' } });
+    const first = run(data, proj, 'fix', '--always', 'the answer buried the recommendation');
+    expect(first).toContain('About your last run of /focus');
+    expect(first).toContain('Your rules already say this, and the skill did not carry it.');
+    expect(first).toContain('──── A ────');
+    expect(first).toContain('the original answer');
+    expect(first).toContain('the improved answer');
+    expect(first).toContain('--pick a|b|same');
+
+    // which letter holds the candidate is sealed but readable off the printed pair
+    const aFirst = first.indexOf('the improved answer') < first.indexOf('the original answer');
+    const candidateLetter = aFirst ? 'a' : 'b';
+
+    // phase two resumes the pending candidate: no new generation, only the re-diagnosis
+    const before = await requestCount();
+    const second = run(data, proj, 'fix', '--always', 'the answer buried the recommendation', '--pick', candidateLetter);
+    expect(await requestCount(), 'the resume re-generated instead of resuming').toBe(before + 1);
+    expect(second).toContain('Kept.');
+    expect(second).toContain('unchanged, which is the point');
+
+    const active = store.getActive(L)!;
+    const sv = store.getSkillVersion(L, active)!;
+    expect(sv.standardVersionHash, 'the repair moved the standard').toBe(s1.standardVersionHash);
+    const pkg = store.getPackage(L, sv.materializedHash)!;
+    for (const [rel, content] of Object.entries(pkg.files)) {
+      expect(readFileSync(join(proj, '.claude', 'skills', 'focus', rel), 'utf8'), 'host serves stale bytes').toBe(content);
+    }
+    // the pick landed as the first BEHAVIOR observation and a judgement row
+    expect(store.listObservations(L).some((o) => o.domain === 'BEHAVIOR' && o.producer === 'expert-blind-ab')).toBe(true);
+    expect(store.readEvents(L).some((e) => e.kind === 'JUDGEMENT_RECORDED' && e.choice === 'CANDIDATE')).toBe(true);
+    expect(store.readEvents(L).some((e) => e.kind === 'REPAIR_SETTLED' && e.outcome === 'PROMOTED')).toBe(true);
+  }, 120_000);
+
+  // Every run fix makes is a replay made to evaluate a repair. Recorded as ORGANIC_USE it inflated the
+  // one class a generalisation claim may rest on; it is also not the optimizer grading itself, so a
+  // person may still promote the candidate it produced.
+  it('fix records its runs as FIX_EVALUATION from source FIX, and promote still accepts the candidate', async () => {
+    const { data, proj } = await seeded();
+    const L: store.StoreLayout = { root: data, skillName: 'focus' };
+    const organicBefore = store.listInvocations(L).filter((r) => r.provenance === 'ORGANIC_USE').length;
+    await setByTool({ emit_coverage: COVERED, emit_piece: { piece: 'the improved answer' } });
+    expect(run(data, proj, 'fix', '--always', 'the answer buried the recommendation')).toContain('--pick a|b|same');
+    const proposed = store.readEvents(L).filter((e) => e.kind === 'REPAIR_PROPOSED');
+    const cand = (proposed[proposed.length - 1] as { candidateSkillVersionHash: string }).candidateSkillVersionHash;
+    const candRuns = store.listInvocations(L).filter((r) => r.skillVersionHash === cand);
+    expect(candRuns).toHaveLength(1);
+    expect(candRuns[0].provenance).toBe('FIX_EVALUATION');
+    expect(candRuns[0].request.source).toBe('FIX');
+    expect(store.listInvocations(L).filter((r) => r.provenance === 'ORGANIC_USE')).toHaveLength(organicBefore);
+    const out = run(data, proj, 'promote', '--skill', 'focus', '--candidate', cand, '--why', 'it led with the action');
+    expect(out).not.toMatch(/^EXIT/);
+    expect(store.getActive(L)).toBe(cand);
+  }, 120_000);
+
+  it('picking the champion records the rejection and keeps everything as it was', async () => {
+    const { data, proj } = await seeded();
+    const L: store.StoreLayout = { root: data, skillName: 'focus' };
+    const activeBefore = store.getActive(L)!;
+    await setByTool({ emit_coverage: COVERED, emit_piece: { piece: 'the improved answer' } });
+    const first = run(data, proj, 'fix', '--always', 'too abstract');
+    const champLetter = first.indexOf('the original answer') < first.indexOf('the improved answer') ? 'a' : 'b';
+    const second = run(data, proj, 'fix', '--always', 'too abstract', '--pick', champLetter);
+    expect(second).toContain('The current version stays');
+    expect(store.getActive(L)).toBe(activeBefore);
+    expect(store.readEvents(L).some((e) => e.kind === 'REPAIR_SETTLED' && e.outcome === 'REJECTED')).toBe(true);
+  }, 120_000);
+});
+
+describe('a counted decision goes through the promotion gate: it may reject on its own, never adopt', () => {
+  const seededMeasured = async (original: string): Promise<{ data: string; proj: string }> => {
+    const data = mkdtempSync(join(tmpdir(), 'atelier-fix-data-'));
+    const proj = mkdtempSync(join(tmpdir(), 'atelier-fix-proj-'));
+    run(data, proj, 'add', '--statement', 'Never say synergy.', '--kind', 'BOUNDARY', '--applies-when', 'GENERAL',
+      '--materiality', 'PREFERRED', '--measure', 'LEXICON:synergy');
+    run(data, proj, 'ratify-close', '--work-type', 'writing');
+    run(data, proj, 'build', '--name', 'focus');
+    await setByTool({ emit_piece: { piece: original } });
+    const out = run(data, proj, 'invoke', '--skill', 'focus', '--task', 'write the recommendation');
+    expect(out, 'seeding invoke failed').not.toMatch(/^EXIT:/);
+    return { data, proj };
+  };
+
+  it('a count favouring the candidate does NOT install it: the gate asks for a person', async () => {
+    const { data, proj } = await seededMeasured('the synergy answer');
+    const L: store.StoreLayout = { root: data, skillName: 'focus' };
+    const activeBefore = store.getActive(L)!;
+    await setByTool({ emit_coverage: COVERED, emit_piece: { piece: 'the plain answer' } });
+    const out = run(data, proj, 'fix', '--always', 'it said synergy');
+    expect(out).toContain('its count favours one of these two; which one is shown after you pick');
+    expect(out, 'the count named a letter before the blind pick').not.toMatch(/favours [AB]\b/);
+    expect(out).toContain('not installed on its own');
+    expect(out).toContain('--pick a|b|same');
+    expect(store.getActive(L), 'a counted win installed itself').toBe(activeBefore);
+    const gate = store.readEvents(L).find((e) => e.kind === 'PROMOTION_GATE') as { authority?: string } | undefined;
+    expect(gate?.authority).toBe('HUMAN_GATED');
+    expect(store.readEvents(L).some((e) => e.kind === 'REPAIR_SETTLED')).toBe(false);
+  }, 120_000);
+
+  it('a count showing the candidate worse rejects it with no person, through the gate', async () => {
+    const { data, proj } = await seededMeasured('the plain answer');
+    const L: store.StoreLayout = { root: data, skillName: 'focus' };
+    const activeBefore = store.getActive(L)!;
+    await setByTool({ emit_coverage: COVERED, emit_piece: { piece: 'the synergy answer' } });
+    const out = run(data, proj, 'fix', '--always', 'it was vague');
+    expect(out).toContain('decided by its count');
+    expect(store.getActive(L)).toBe(activeBefore);
+    const gate = store.readEvents(L).find((e) => e.kind === 'PROMOTION_GATE') as { authority?: string } | undefined;
+    expect(gate?.authority).toBe('AUTO_REJECT');
+    expect(store.readEvents(L).some((e) => e.kind === 'REPAIR_SETTLED' && e.outcome === 'REJECTED')).toBe(true);
+  }, 120_000);
+
+  it('a --pick of the candidate the count rejects is refused: --pick is not a way around the gate', async () => {
+    // The pair's order is sealed until shown, so `--pick a` lands on either arm. Fresh seeds until it
+    // lands on the candidate (each is a coin flip), so the refusal itself is what is proven.
+    let refused = false;
+    for (let attempt = 0; attempt < 12 && !refused; attempt++) {
+      const { data, proj } = await seededMeasured('the plain answer');
+      const L: store.StoreLayout = { root: data, skillName: 'focus' };
+      const activeBefore = store.getActive(L)!;
+      await setByTool({ emit_coverage: COVERED, emit_piece: { piece: 'the synergy answer' } });
+      const out = run(data, proj, 'fix', '--always', 'it was vague', '--pick', 'a');
+      expect((store.readEvents(L).find((e) => e.kind === 'PROMOTION_GATE') as { authority?: string } | undefined)?.authority,
+        'a --pick skipped the gate').toBe('AUTO_REJECT');
+      expect(store.getActive(L)).toBe(activeBefore);
+      if (out.indexOf('the synergy answer') < out.indexOf('the plain answer')) {
+        expect(out).toMatch(/^EXIT:1/);
+        expect(out).toContain('the pick is refused');
+        refused = true;
+      }
+    }
+    expect(refused, 'never drew the candidate as A in 12 seeds').toBe(true);
+  }, 300_000);
+});
+
+describe('in fix, a deterministic regression means a REQUIRED rule got worse', () => {
+  // The target (x1, REQUIRED, counted) is fixed by the candidate while another counted rule gets worse.
+  // A PREFERRED rule getting worse used to make the gate AUTO_REJECT on its own.
+  const seedTwo = async (otherMateriality: 'PREFERRED' | 'REQUIRED'): Promise<{ data: string; proj: string }> => {
+    const data = mkdtempSync(join(tmpdir(), 'atelier-fix-data-'));
+    const proj = mkdtempSync(join(tmpdir(), 'atelier-fix-proj-'));
+    run(data, proj, 'add', '--statement', 'Never say synergy.', '--kind', 'BOUNDARY', '--applies-when', 'GENERAL',
+      '--materiality', 'REQUIRED', '--measure', 'LEXICON:synergy');
+    run(data, proj, 'add', '--statement', 'Never say leverage.', '--kind', 'BOUNDARY', '--applies-when', 'GENERAL',
+      '--materiality', otherMateriality, '--measure', 'LEXICON:leverage');
+    run(data, proj, 'ratify-close', '--work-type', 'writing');
+    run(data, proj, 'build', '--name', 'focus');
+    await setByTool({ emit_piece: { piece: 'the synergy answer' } });
+    // The seed is blocked by design (it says synergy), and a blocked delivery exits 1: anything else is a failed seed.
+    expect(run(data, proj, 'invoke', '--skill', 'focus', '--task', 'write the recommendation', '--no-repair'), 'seeding invoke failed').not.toMatch(/^EXIT:(?!1\n)/);
+    return { data, proj };
+  };
+  const gateOf = (data: string): string | undefined =>
+    (store.readEvents({ root: data, skillName: 'focus' }).find((e) => e.kind === 'PROMOTION_GATE') as { authority?: string } | undefined)?.authority;
+
+  it('a PREFERRED rule getting worse does not auto-reject: a person decides', async () => {
+    const { data, proj } = await seedTwo('PREFERRED');
+    await setByTool({ emit_coverage: COVERED, emit_piece: { piece: 'the leverage answer' } });
+    const out = run(data, proj, 'fix', '--always', 'it said synergy');
+    expect(gateOf(data)).toBe('HUMAN_GATED');
+    expect(out).toContain('--pick a|b|same');
+    expect(out).not.toContain('decided by its count');
+  }, 120_000);
+
+  it('POLARITY — the same change breaking a REQUIRED rule is rejected by the count', async () => {
+    const { data, proj } = await seedTwo('REQUIRED');
+    await setByTool({ emit_coverage: COVERED, emit_piece: { piece: 'the leverage answer' } });
+    const out = run(data, proj, 'fix', '--always', 'it said synergy');
+    expect(gateOf(data)).toBe('AUTO_REJECT');
+    expect(out).toContain('decided by its count');
+  }, 120_000);
+});
+
+describe('STANDARD_GAP: one approval mints, compiles and installs — or one refusal is remembered', () => {
+  it('--add required supersedes with the complaint as the reason, and the rule instructs', async () => {
+    const { data, proj } = await seeded();
+    const L: store.StoreLayout = { root: data, skillName: 'focus' };
+    const s1hash = store.getSkillVersion(L, store.getActive(L)!)!.standardVersionHash;
+    await setByTool({ emit_coverage: ABSENT('Lead with the recommendation before the framework.') });
+    const out = run(data, proj, 'fix', '--always', 'I always want the recommendation first', '--add', 'required');
+    expect(out).toContain('Added as REQUIRED');
+    expect(out).toContain('supersedes');
+
+    const sv = store.getSkillVersion(L, store.getActive(L)!)!;
+    const s2 = store.getStandard(L, sv.standardVersionHash)!;
+    expect(s2.supersedes).toBe(s1hash);
+    expect(s2.reason).toBe('I always want the recommendation first');
+    const md = readFileSync(join(proj, '.claude', 'skills', 'focus', 'SKILL.md'), 'utf8');
+    const doStart = md.indexOf('## What to do');
+    expect(md.slice(doStart, md.indexOf('\n## ', doStart + 1))).toContain('Lead with the recommendation before the framework.');
+    // the approval is a ledger record, and it is a RATIFICATION of a machine proposal — not authorship
+    expect(s2.requirements.find((r) => r.statement.includes('before the framework'))?.authority).toBe('EXPERT_RATIFIED');
+    expect(store.readEvents(L).some((e) => e.kind === 'PROPOSED_CHANGE' && e.accepted === true)).toBe(true);
+    expect(store.readEvents(L).some((e) => e.kind === 'LEDGER_DECISION')).toBe(true);
+  }, 120_000);
+
+  it('two additions against the SAME run accumulate: the second lands on the first, not beside it', async () => {
+    // Found live: a user added "never use em dashes", then, from the same invocation, added a grammar
+    // rule. Both were minted from the standard the run used, so the second silently dropped the first
+    // and the installed skill no longer mentioned em dashes. An addition must base on the ACTIVE
+    // standard; the complaint's provenance survives in `reason`.
+    const { data, proj } = await seeded();
+    const L: store.StoreLayout = { root: data, skillName: 'focus' };
+    const s1 = store.getSkillVersion(L, store.getActive(L)!)!.standardVersionHash;
+
+    await setByTool({ emit_coverage: ABSENT('Never use an em dash.') });
+    expect(run(data, proj, 'fix', '--always', 'it uses em dashes', '--add', 'required')).toContain('Added as REQUIRED');
+    const s2 = store.getSkillVersion(L, store.getActive(L)!)!.standardVersionHash;
+    expect(s2).not.toBe(s1);
+
+    // no new invocation in between: the second complaint is about the same run as the first
+    await setByTool({ emit_coverage: ABSENT('Every sentence must parse as correct English.') });
+    const out = run(data, proj, 'fix', '--always', 'it has ungrammatical sentences', '--add', 'required');
+    expect(out).toContain('Added as REQUIRED');
+    expect(out).toContain('has moved since that run');
+
+    const s3 = store.getStandard(L, store.getSkillVersion(L, store.getActive(L)!)!.standardVersionHash)!;
+    expect(s3.supersedes, 'the second addition must supersede the FIRST addition, not the original').toBe(s2);
+    const statements = s3.requirements.map((r) => r.statement);
+    expect(statements).toContain('Never use an em dash.');
+    expect(statements).toContain('Every sentence must parse as correct English.');
+    const md = readFileSync(join(proj, '.claude', 'skills', 'focus', 'SKILL.md'), 'utf8');
+    expect(md).toContain('em dash');
+    expect(md).toContain('correct English');
+  }, 180_000);
+
+  it('--skip records the refusal, mints nothing, and is not re-asked on the same proposal', async () => {
+    const { data, proj } = await seeded();
+    await setByTool({ emit_coverage: ABSENT('Always name the deadline.') });
+    const out = run(data, proj, 'fix', '--always', 'no deadline mentioned', '--skip');
+    expect(out).toContain('Not added');
+    expect(readdirSync(join(data, 'skills', 'focus', 'standards'))).toHaveLength(1);
+    const again = run(data, proj, 'fix', '--always', 'no deadline mentioned');
+    expect(again).toContain('declined exactly this addition before');
+  }, 120_000);
+});
+
+describe('a repair follows a moved standard instead of dying on it', () => {
+  it('after an addition, a miss against the old run re-runs on the current standard and repairs that', async () => {
+    // Found live: two `fix --add` calls moved the standard to S2; a third complaint about the same
+    // (S1) run took the repair route, built a candidate on S1, and was correctly refused at promotion
+    // ("active is bound to S2, candidate to S1"). The invariant held and the user was stuck.
+    const { data, proj } = await seeded();
+    const L: store.StoreLayout = { root: data, skillName: 'focus' };
+    const s1 = store.getSkillVersion(L, store.getActive(L)!)!.standardVersionHash;
+
+    await setByTool({ emit_coverage: ABSENT('Never use an em dash.') });
+    expect(run(data, proj, 'fix', '--always', 'it uses em dashes', '--add', 'required')).toContain('Added as REQUIRED');
+    const s2 = store.getSkillVersion(L, store.getActive(L)!)!.standardVersionHash;
+    expect(s2).not.toBe(s1);
+
+    // the last recorded invocation is still the S1 run; complain about x1, which S2 also carries
+    await setByTool({ emit_coverage: COVERED, emit_piece: { piece: 'a fresh answer on the current standard' } });
+    const out = run(data, proj, 'fix', '--always', 'the answer buried the recommendation');
+    expect(out).toContain('has moved since that run');
+    // the re-run on the current version is fix's replay too, not organic use
+    expect(store.listInvocations(L).filter((r) => r.request.source === 'FIX').every((r) => r.provenance === 'FIX_EVALUATION')).toBe(true);
+    expect(store.listInvocations(L).filter((r) => r.provenance === 'FIX_EVALUATION').length).toBeGreaterThanOrEqual(2);
+    expect(out).toContain('Your rules already say this, and the skill did not carry it.');
+    expect(out).not.toContain('REPAIR INVARIANT');
+    expect(out).toContain('--pick a|b|same');
+
+    // the candidate it minted is bound to the CURRENT standard, so promotion is possible
+    const pending = store.readEvents(L).filter((e) => e.kind === 'REPAIR_PROPOSED');
+    const last = pending[pending.length - 1] as { standardVersionHash?: string; candidateSkillVersionHash: string };
+    expect(last.standardVersionHash).toBe(s2);
+    expect(store.getSkillVersion(L, last.candidateSkillVersionHash)!.standardVersionHash).toBe(s2);
+  }, 180_000);
+
+  it('the "rule no longer carried" guard is unreachable today, and this pins WHY', () => {
+    // The moved-standard branch dies if the current standard lacks the rule the diagnosis named.
+    // Reaching that state needs a verb that REMOVES an authored rule from a standard, and the
+    // product has none: `confirm --drop` only rules on DERIVED_UNRATIFIED proposals, `amend` keeps
+    // ids, and additions only grow the set. Until a removal verb exists, the guard is defensive
+    // code for an impossible state. This test exists so that adding such a verb also adds the
+    // scenario test the guard deserves, rather than leaving it to be discovered live.
+    const src = readFileSync(resolve('cli/commands/confirm.ts'), 'utf8');
+    expect(src).toContain("if (target.authority !== 'DERIVED_UNRATIFIED') die(");
+    const fixSrc = readFileSync(resolve('cli/commands/fix.ts'), 'utf8');
+    expect(fixSrc).toContain('no longer carries ${d.requirementId}');
+  });
+});
+
+describe('the lateral policy (unit)', () => {
+  const arch = (carrier: 'PROSE' | 'SELF_CHECK'): SkillArchitecture => ({
+    architectureHash: 'a1', standardVersionHash: 'sv1',
+    components: [{ id: 'c1', carrier, sensor: 'NONE', gateRole: 'ENFORCE', carries: ['x1'], rationale: 'r' } as never],
+  });
+  const ev: ServedMissEvidence = { invocationId: 'i1', requirementId: 'x1', carrierAtServe: 'PROSE', expertConfirmed: true, at: 't' };
+  const rule = (o: Partial<Parameters<typeof aRequirement>[0]> = {}) => aRequirement({ requirementId: 'x1', ...o });
+
+  it('eligibility comes from typed properties, never materiality', () => {
+    expect(eligibleCarriers(rule({ evidence: null, outputShape: null }))).toEqual(['SELF_CHECK', 'PROSE']);
+    expect(eligibleCarriers(rule({ evidence: 'a quote', outputShape: null }))).toContain('EXAMPLE');
+    expect(eligibleCarriers(rule({ outputShape: { v: {} }, evidence: null, materiality: 'REQUIRED' }))).toContain('OUTPUT_CONTRACT');
+  });
+
+  // A contract enforces. A PREFERRED rule — "an excellent output may break this" — or an unconfirmed
+  // one with a shape was a legal OUTPUT_CONTRACT move, so fix and optimize could harden guidance.
+  it('a rule that is not ENFORCE is never moved to OUTPUT_CONTRACT', () => {
+    expect(eligibleCarriers(rule({ outputShape: { v: {} }, materiality: 'PREFERRED' }))).not.toContain('OUTPUT_CONTRACT');
+    expect(eligibleCarriers(rule({ outputShape: { v: {} }, materiality: 'REQUIRED', authority: 'DERIVED_UNRATIFIED' }))).not.toContain('OUTPUT_CONTRACT');
+    const preferred = rule({ outputShape: { v: {} }, materiality: 'PREFERRED' });
+    const v = { standardVersionHash: 's', evidenceId: null, workType: 'w', requirements: [preferred],
+      authorityState: 'RATIFIED', mintedAt: 't', supersedes: null, reason: null } as StandardVersion;
+    const g = { carriers: { x1: 'PROSE' as const }, exemplar: false, contrast: false };
+    expect(mutationsOf(g, v, { exemplar: false, contrast: false }).filter((m) => m.kind === 'CARRIER' && m.to === 'OUTPUT_CONTRACT')).toEqual([]);
+    const required = { ...preferred, materiality: 'REQUIRED' as const };
+    expect(mutationsOf(g, { ...v, requirements: [required] }, { exemplar: false, contrast: false })
+      .some((m) => m.kind === 'CARRIER' && m.to === 'OUTPUT_CONTRACT')).toBe(true);
+    // and the mint itself refuses, whoever proposed the move
+    const observing: SkillArchitecture = { architectureHash: 'a', standardVersionHash: 's',
+      components: [{ id: 'c', carries: ['x1'], carrier: 'PROSE', sensor: 'NONE', gateRole: 'OBSERVE', rationale: 'r' }] };
+    expect(() => applyEscalation(observing, { kind: 'ESCALATE_CARRIER', requirementId: 'x1', from: 'PROSE', to: 'OUTPUT_CONTRACT', becauseInvocation: 'i', rationale: 'r' }, 'b'))
+      .toThrow(/AUTHORITY ESCALATION/);
+  });
+
+  it('the first untried legal alternative under the fixed ordering is the candidate', () => {
+    const op = proposeReplacement(ev, arch('PROSE'), rule({ evidence: 'q' }), new Set());
+    expect('refused' in op ? null : op.to).toBe('SELF_CHECK');
+    const op2 = proposeReplacement(ev, arch('PROSE'), rule({ evidence: 'q' }), new Set(['SELF_CHECK']));
+    expect('refused' in op2 ? null : op2.to).toBe('EXAMPLE');
+  });
+
+  it('exhausted alternatives refuse toward the standard question, not toward a ladder', () => {
+    const op = proposeReplacement(ev, arch('PROSE'), rule({ evidence: null, outputShape: null }), new Set(['SELF_CHECK']));
+    expect('refused' in op && op.reason).toContain('atelier amend');
+  });
+});
+
+describe('Amendment A2: rejection memory is (standard, model)-scoped (unit)', () => {
+  const rec = (o: Partial<RepairRecord>): RepairRecord => ({
+    repairId: 'r1', skillName: 's', requirementId: 'x1', from: 'PROSE', to: 'SELF_CHECK',
+    sourceSkillVersionHash: 'k1', candidateSkillVersionHash: 'k2',
+    evidenceBasis: WEAKEST_EVIDENCE, evaluationBasis: WEAKEST_EVALUATION,
+    outcome: 'REJECTED', outcomeAt: 't', note: null, at: 't', ...o });
+  const proposal = { evidence: WEAKEST_EVIDENCE, evaluation: WEAKEST_EVALUATION };
+  const scopeA = { standardVersionHash: 'S1', providerAdapter: 'anthropic', requestedModel: 'claude-opus-5' };
+
+  it('a rejection under model X does not suppress the same move under model Y', () => {
+    const history = [rec({ standardVersionHash: 'S1', providerAdapter: 'anthropic', requestedModel: 'claude-opus-5' })];
+    expect(mayPropose(history, [], 'x1', 'PROSE', 'SELF_CHECK', proposal, scopeA).allowed).toBe(false);
+    expect(mayPropose(history, [], 'x1', 'PROSE', 'SELF_CHECK', proposal,
+      { ...scopeA, requestedModel: 'gpt-x' }).allowed).toBe(true);
+  });
+
+  it('a superseding StandardVersion inherits no rejections', () => {
+    const history = [rec({ standardVersionHash: 'S1', providerAdapter: 'anthropic', requestedModel: 'claude-opus-5' })];
+    expect(mayPropose(history, [], 'x1', 'PROSE', 'SELF_CHECK', proposal,
+      { ...scopeA, standardVersionHash: 'S2' }).allowed).toBe(true);
+  });
+
+  it('a record from before A2 suppresses conservatively, whatever the scope asked about', () => {
+    const legacy = [rec({})];
+    expect(mayPropose(legacy, [], 'x1', 'PROSE', 'SELF_CHECK', proposal, scopeA).allowed).toBe(false);
+    expect(mayPropose(legacy, [], 'x1', 'PROSE', 'SELF_CHECK', proposal,
+      { ...scopeA, requestedModel: 'gpt-x' }).allowed).toBe(false);
+  });
+
+  it('a human TRANSITION_FORBIDDEN holds across runtimes but not across standard versions', () => {
+    const ban: Prohibition[] = [{ requirementId: 'x1', from: 'PROSE', to: 'SELF_CHECK', by: 'expert', reason: 'no', at: 't', standardVersionHash: 'S1' }];
+    expect(mayPropose([], ban, 'x1', 'PROSE', 'SELF_CHECK', proposal, { ...scopeA, requestedModel: 'gpt-x' }).allowed).toBe(false);
+    expect(mayPropose([], ban, 'x1', 'PROSE', 'SELF_CHECK', proposal, { ...scopeA, standardVersionHash: 'S2' }).allowed).toBe(true);
+  });
+});
+
+describe('Constraint B: the standard hash is a throwing assertion (unit)', () => {
+  const body = { evidenceId: null, workType: 'writing', requirements: [aRequirement({ requirementId: 'r1' })] };
+  const real = { ...body, standardVersionHash: standardHashOf(body), authorityState: 'RATIFIED', mintedAt: 't', supersedes: null, reason: null } as StandardVersion;
+  it('identical hashes over unchanged content pass; a moved standard dies', () => {
+    expect(() => { assertStandardUnchanged(real, real, real); }).not.toThrow();
+    expect(() => { assertStandardUnchanged(real, { standardVersionHash: 'bbbb' }, real); }).toThrow(/STANDARD MUTATED/);
+  });
+  // The old call sites compared a standard with itself. The rendered content is now re-hashed, so a
+  // statement edited in memory under an unchanged hash field is caught even though every name agrees.
+  it('POLARITY — content edited under an unchanged hash field dies', () => {
+    const edited = { ...real, requirements: [{ ...real.requirements[0], statement: 'something else' }] };
+    expect(() => { assertStandardUnchanged(real, real, edited); }).toThrow(/STANDARD MUTATED BY REPAIR/);
+  });
+});

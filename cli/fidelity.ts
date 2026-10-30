@@ -1,0 +1,254 @@
+// cli/fidelity.ts — THE FIDELITY LOOP, WIRED: WHAT BUILD INSTALLS AND WHAT INVOKE SERVES.
+//
+// The pieces live in core/fidelity (the profile, the reading, the structural actuator, retrieval,
+// experience notes, implementation releases, the estimator) and core/state/fidelity-store.ts. This file
+// is the one place the commands meet them, so `build`, `invoke` and `fidelity` cannot disagree about which
+// release is active or what it serves.
+//
+// The standard is never touched here. A release names the standard's hash and the skill version, and
+// every change below the standard is a new release with a parent.
+
+import { existsSync, renameSync, rmSync } from 'node:fs';
+import * as store from '../core/state/store.js';
+import * as fstore from '../core/state/fidelity-store.js';
+import { makeRelease, assertSameStandard } from '../core/fidelity/release.js';
+import { renderRetrieved, type RetrievalIndex } from '../core/fidelity/retrieval.js';
+import { retrieveNear, type Nearness } from '../core/fidelity/nearness.js';
+import { renderNotes, noteProblem } from '../core/fidelity/experience.js';
+import { baselineOf } from '../core/fidelity/profile.js';
+import { DEFAULT_SETTINGS, type FidelityProfile, type ImplementationRelease, type ImplementationSettings } from '../core/fidelity/types.js';
+import type { InvocationRecord, StandardVersion } from '../core/state/canonical-state.js';
+import { summariseEffects } from '../core/fidelity/estimator.js';
+import { readJson } from '../core/state/read-json.js';
+import { restrictCalibration, type TypicalityCalibration } from '../core/fidelity/typicality.js';
+import { runFile } from './runtime.js';
+import { createHash } from 'node:crypto';
+
+const sha = (s: string): string => createHash('sha256').update(s).digest('hex').slice(0, 16);
+
+/**
+ * THE OWNER'S RULINGS DECIDE WHAT STEERS. The profile discovery wrote, with:
+ *   - every feature the ratified standard holds as a FEATURE rule set to RULE, with the band the owner
+ *     ratified (a ruling that changed the range is the range);
+ *   - every feature selection was strong enough to propose as a rule, and the owner did not adopt (rejected,
+ *     or never ratified), set to MONITOR: a rule the owner turned down must not steer drafts anyway.
+ * Its hash is recomputed.
+ */
+export function ratifiedProfile(p: FidelityProfile, v: StandardVersion): FidelityProfile {
+  const ruled = new Map<string, readonly [number, number] | null>();
+  for (const q of v.requirements) {
+    if (q.authority === 'EXPERT_REJECTED' || q.measurement?.observer !== 'FEATURE') continue;
+    const id = (q.measurement.params.feature as readonly string[] | undefined)?.[0];
+    if (!id) continue;
+    const lo = q.measurement.params.minValue; const hi = q.measurement.params.maxValue;
+    ruled.set(id, typeof lo === 'number' || typeof hi === 'number' ? [typeof lo === 'number' ? lo : -Infinity, typeof hi === 'number' ? hi : Infinity] : null);
+  }
+  const bands = p.bands.map((b) => {
+    if (ruled.has(b.id)) {
+      const r = ruled.get(b.id);
+      return { ...b, role: 'RULE' as const, ...(r ? { band: [Math.max(r[0], -1e9), Math.min(r[1], 1e9)] as const } : {}) };
+    }
+    return b.proposable ? { ...b, role: 'MONITOR' as const } : b;
+  });
+  // The baseline recounted with these roles: read with other roles than the run, it compared unlike counts.
+  const draft = { version: p.version, corpusHash: p.corpusHash, bands, detector: p.detector, factDensity: p.factDensity ?? null,
+    ...(p.effects ? { effects: p.effects } : {}), ...(p.unseen ? { unseen: p.unseen } : {}), hash: '' };
+  const baseline = baselineOf(draft);
+  const { hash: _h, ...body } = { ...draft, ...(baseline ? { baseline } : {}) };
+  return { ...body, hash: sha(JSON.stringify(body)) };
+}
+
+/**
+ * AT BUILD. Installs the profile and the retrieval index discovery wrote, when it wrote them, and makes the
+ * first implementation release for this skill version. Returns the release, or null for a skill built
+ * without a corpus (a standard written by hand has no author's range to steer toward).
+ */
+export function installFidelity(L: store.StoreLayout, v: StandardVersion, skillVersionHash: string, expectCorpusHash: string | null = null): ImplementationRelease | null {
+  const profileFile = runFile('fidelity.json'); const indexFile = runFile('retrieval.json');
+  if (!existsSync(profileFile)) return null;
+  const read = readJson<FidelityProfile>(profileFile, { what: 'the fidelity profile' });
+  // ONLY A PROFILE OF THESE PIECES. The run folder is the project's, so a profile discovery wrote for one corpus was
+  // installed by any later build in that folder (a method build, a skill from stated rules) for pieces it never
+  // measured. A profile is installed only for the sealed corpus it names; anything else is set aside, kept, and said.
+  if (expectCorpusHash === null || read.corpusHash !== expectCorpusHash) { quarantineRunFiles(); return null; }
+  const profile = ratifiedProfile(read, v);
+  fstore.setProfile(L, profile);
+  const index = existsSync(indexFile) ? readJson<RetrievalIndex>(indexFile, { what: 'the retrieval index' }) : null;
+  if (index) fstore.setRetrievalIndex(L, index);
+  // Keyed by the profile installed, which the owner's rulings may have changed from the one discovery wrote.
+  const typicalityFile = runFile('typicality.json');
+  // ON THE FEATURES THAT STEER AFTER THE OWNER'S RULINGS: a band the owner turned down is monitored, not steered, and
+  // a calibration over it would disagree with the one `fidelity --calibrate-from` makes for the same profile.
+  const discovered = existsSync(typicalityFile) ? readJson<TypicalityCalibration>(typicalityFile, { what: 'the typicality calibration' }) : null;
+  const calibration = discovered ? restrictCalibration(discovered, profile.bands.filter((b) => b.cls === 'all' && b.role !== 'MONITOR').map((b) => b.id)) : null;
+  if (calibration) fstore.setTypicality(L, profile.hash, calibration);
+  // A NEW STANDARD STARTS A NEW LINE. Settings and notes earned under one standard are not evidence about
+  // another: under a changed standard the first release is a root, with the first settings for this profile.
+  const prior = fstore.getActiveRelease(L)?.release ?? null;
+  const parent = prior?.standardVersionHash === v.standardVersionHash ? prior : null;
+  const release = fstore.putRelease(L, makeRelease({
+    parent: parent?.id ?? null, standardVersionHash: v.standardVersionHash, skillVersionHash,
+    // A rebuild keeps the settings and notes the loop had earned; a first build starts from the defaults.
+    settings: parent?.settings ?? firstSettings(profile, index !== null),
+    notes: parent?.notes ?? [],
+    profileHash: profile.hash, retrievalHash: index?.hash ?? null,
+    createdAt: new Date().toISOString(), why: parent ? `rebuilt as skill version ${skillVersionHash}` : 'the first release, built with the skill',
+  }));
+  fstore.setActiveRelease(L, release.id);
+  return release;
+}
+
+/** The discovery artifacts set aside at the last `installFidelity`, by name; empty when none was. */
+let setAside: string[] = [];
+export const lastSetAside = (): readonly string[] => setAside;
+/**
+ * A PROFILE THAT IS NOT THIS BUILD'S IS SET ASIDE, NOT DELETED: renamed beside itself (`fidelity.stale.json`) with the
+ * signals, index and calibration written with it, so what was there can still be read, and so no later build in this
+ * folder installs it either. Said once by the caller.
+ */
+export function quarantineRunFiles(): readonly string[] {
+  setAside = [];
+  for (const f of ['fidelity', 'signals', 'retrieval', 'typicality']) {
+    const from = runFile(`${f}.json`);
+    if (!existsSync(from)) continue;
+    const to = runFile(`${f}.stale.json`);
+    rmSync(to, { force: true }); renameSync(from, to); setAside.push(`${f}.stale.json`);
+  }
+  return setAside;
+}
+
+/**
+ * THE FIRST RELEASE'S SETTINGS: 0.7's cost (DEFAULT_SETTINGS, ../core/fidelity/types.ts), whatever the profile
+ * holds; the loop is opt-in until a study shows it pays. Retrieval only with an index to retrieve from.
+ */
+export function firstSettings(_profile: FidelityProfile, hasIndex: boolean): ImplementationSettings {
+  return hasIndex ? DEFAULT_SETTINGS : { ...DEFAULT_SETTINGS, retrievalK: 0 };
+}
+
+/**
+ * AT INVOKE. The release that steers this run: the active one, carried to the served skill version as a
+ * child release when the skill has moved since (a `fix` or a promotion), never across a change of standard.
+ * Null when the skill has no profile.
+ */
+export function releaseFor(L: store.StoreLayout, sv: { skillVersionHash: string; standardVersionHash: string },
+  /** a stored release to run instead of the active one (`invoke --try-release`): it is run, never made active */
+  tryRelease: string | null = null): { release: ImplementationRelease; profile: FidelityProfile; index: RetrievalIndex | null; typicality: TypicalityCalibration | null } | null {
+  let active = (tryRelease ? fstore.getRelease(L, tryRelease) : null) ?? fstore.getActiveRelease(L)?.release ?? null;
+  if (tryRelease && active?.id !== tryRelease) throw new Error(`no release ${tryRelease} in this skill: atelier fidelity --skill ${L.skillName} lists them`);
+  if (!active) return null;
+  if (tryRelease) {
+    // TRIED, NOT ADOPTED: run as stored, under the standard it was made for; nothing here moves the active release.
+    assertSameStandard(active, sv.standardVersionHash);
+    const p = active.profileHash ? fstore.getProfile(L, active.profileHash) : fstore.getProfile(L);
+    if (!p) return null;
+    const ix = active.retrievalHash ? fstore.getRetrievalIndex(L, active.retrievalHash) : null;
+    return { release: active, profile: p, index: ix?.hash === active.retrievalHash ? ix : null, typicality: fstore.getTypicality(L, p.hash) };
+  }
+  // A NEW STANDARD STARTS A NEW LINE; IT DOES NOT LOSE THE AUTHOR. What the loop learned under one standard (settings,
+  // notes) says nothing about another, so none of it carries. The author's pieces do: the profile, re-ratified against
+  // the new rules, the retrieval index, the typicality calibration and the structure read. Returning nothing here, as
+  // before, left a skill whose rule was amended with no profile, no detector and no retrieval, said nowhere.
+  if (active.standardVersionHash !== sv.standardVersionHash) active = newLineUnder(L, active, sv) ?? active;
+  // The profile and index the release names, not whichever was built last: a rollback serves what it says.
+  const profile = active.profileHash ? fstore.getProfile(L, active.profileHash) ?? fstore.getProfile(L) : fstore.getProfile(L);
+  if (!profile || (active.profileHash && profile.hash !== active.profileHash)) return null;
+  if (active.standardVersionHash !== sv.standardVersionHash) return null;
+  let release = active;
+  // 0.8'S DEFAULT IS NOT A CHOICE. A skill built under 0.8 got the full loop as its first release, which 1.0
+  // makes opt-in. Where nobody chose those settings (no release in its line was set by hand or by the settings
+  // search), the active skill moves to 1.0's default through a child release that says why; a setting a person
+  // chose is never touched.
+  const isActiveSkill = store.getActive(L) === sv.skillVersionHash;
+  if (wasLoopByDefault(L, active) && isActiveSkill) {
+    release = fstore.putRelease(L, makeRelease({ ...withoutId(active), parent: active.id,
+      settings: { ...DEFAULT_SETTINGS, retrievalK: active.settings.retrievalK }, createdAt: new Date().toISOString(),
+      why: 'moved to the 1.0 default: the fidelity loop is opt-in until a study shows it pays (decision 0007)' }));
+    fstore.setActiveRelease(L, release.id);
+  }
+  if (release.skillVersionHash !== sv.skillVersionHash) {
+    // A candidate carried from 0.8's automatic loop settings runs at 1.0's default too.
+    const carried = !isActiveSkill && wasLoopByDefault(L, release) ? { ...DEFAULT_SETTINGS, retrievalK: release.settings.retrievalK } : release.settings;
+    release = fstore.putRelease(L, makeRelease({ ...withoutId(release), settings: carried, parent: release.id, skillVersionHash: sv.skillVersionHash,
+      createdAt: new Date().toISOString(), why: `carried to skill version ${sv.skillVersionHash}` }));
+    // A CANDIDATE RUN STEERS, IT DOES NOT ADOPT. Trying a version that is not active (`invoke --candidate`)
+    // runs under a release made for it, and leaves the active release where it was.
+    if (store.getActive(L) === sv.skillVersionHash) fstore.setActiveRelease(L, release.id);
+  }
+  assertSameStandard(release, sv.standardVersionHash);
+  const index = release.retrievalHash ? fstore.getRetrievalIndex(L, release.retrievalHash) ?? fstore.getRetrievalIndex(L) : null;
+  return { release, profile, index: index?.hash === release.retrievalHash ? index : null, typicality: fstore.getTypicality(L, profile.hash) };
+}
+
+/** Whether a release still carries 0.8's automatic loop settings, never chosen by a person or the search. */
+function wasLoopByDefault(L: store.StoreLayout, r: ImplementationRelease): boolean {
+  const s = r.settings;
+  if (!(s.drafts === 4 && s.editBudget === 2 && s.notesCap === 6 && !s.diversity && r.notes.length === 0)) return false;
+  // A release a person rolled back to is a choice, however its settings look.
+  if (fstore.getActiveRelease(L)?.release.id === r.id && fstore.activeSetBy(L) === 'rollback') return false;
+  return !fstore.releaseChain(L, r.id).some((x) => /^(settings set by hand|the settings search)/.test(x.why));
+}
+
+/** A release's fields to make a child from: never its id, and never its candidate mark (a child is its own proposal). */
+const withoutId = (r: ImplementationRelease): Omit<ImplementationRelease, 'id' | 'candidate'> => {
+  const { id: _id, candidate: _c, ...rest } = r;
+  return rest;
+};
+
+/**
+ * What a release adds to the served skill for one request: the author's passages closest to it, and the
+ * experience notes. Both are implementation, fenced and named as such, and both are recorded with the run.
+ */
+export function implementationBlock(release: ImplementationRelease, index: RetrievalIndex | null, task: string, near: Nearness | null = null): { retrieved: number[]; notes: string; passages: string } {
+  const retrieved = index && release.settings.retrievalK > 0 ? retrieveNear(index, task, release.settings.retrievalK, near) : [];
+  const passages = retrieved.length && index ? renderRetrieved(index, retrieved) : '';
+  // Every stored note is held to today's grammar before it is served: a note distilled under 0.8 that the
+  // grammar now refuses is never served (core/fidelity/experience.ts, noteProblem).
+  const notes = release.settings.notesCap > 0 && release.notes.length ? renderNotes(release.notes.filter((n) => noteProblem(n.text) === null).slice(0, release.settings.notesCap)) : '';
+  // The notes are the release's, the same on every request; the passages are chosen for this one (`passages`, said
+  // after the skill: ./served.ts, `forThisRequest`).
+  return { retrieved, notes, passages };
+}
+
+/**
+ * WHAT THE REPAIR CONTROLLER LEARNS, WRITTEN WHEN A RELEASE IS MADE. The effect of each repair action (what it moved per
+ * target, what it cost), read by `summariseEffects` over this skill's recorded runs under the same standard, goes into
+ * the new release's `controller.effects`; a run reads it from its release and never from the runs themselves. With no
+ * step on record the settings are returned as they are.
+ */
+export function withMeasuredEffects(settings: ImplementationSettings, runs: readonly InvocationRecord[], standardVersionHash: string): ImplementationSettings {
+  const effects = summariseEffects(runs.filter((r) => r.standardVersionHash === standardVersionHash));
+  return Object.keys(effects).length ? { ...settings, controller: { ...settings.controller, effects } } : settings;
+}
+
+/** A new release under `from` with changed settings: the only way settings change. */
+export function releaseWithSettings(L: store.StoreLayout, from: ImplementationRelease, settings: ImplementationSettings, why: string,
+  /** stored as a candidate and left inactive: a proposal of the settings search or of distilled notes */
+  opts: { readonly candidate?: boolean } = {}): ImplementationRelease {
+  const measured = withMeasuredEffects(settings, store.listLearningInvocations(L), from.standardVersionHash);
+  const r = fstore.putRelease(L, makeRelease({ ...withoutId(from), parent: from.id, settings: measured, createdAt: new Date().toISOString(), why, ...(opts.candidate ? { candidate: true as const } : {}) }));
+  if (!opts.candidate) fstore.setActiveRelease(L, r.id);
+  return r;
+}
+
+/**
+ * THE FIRST RELEASE UNDER A STANDARD THE OWNER CHANGED, carrying what describes the author and nothing the loop
+ * learned. Null when the new standard is not stored or the old release names no profile.
+ */
+function newLineUnder(L: store.StoreLayout, old: ImplementationRelease, sv: { skillVersionHash: string; standardVersionHash: string }): ImplementationRelease | null {
+  const v = store.getStandard(L, sv.standardVersionHash);
+  const oldProfile = old.profileHash ? fstore.getProfile(L, old.profileHash) : null;
+  if (!v || !oldProfile) return null;
+  const profile = ratifiedProfile(oldProfile, v);
+  fstore.setProfile(L, profile);
+  const steering = profile.bands.filter((b) => b.cls === 'all' && b.role !== 'MONITOR').map((b) => b.id);
+  const cal = fstore.getTypicality(L, oldProfile.hash);
+  const carriedCal = cal ? restrictCalibration(cal, steering) : null;
+  if (carriedCal && !fstore.getTypicality(L, profile.hash)) fstore.setTypicality(L, profile.hash, carriedCal);
+  const structure = fstore.getStructure(L, oldProfile.hash);
+  if (structure && !fstore.getStructure(L, profile.hash)) fstore.setStructure(L, profile.hash, structure);
+  const release = fstore.putRelease(L, makeRelease({ parent: null, standardVersionHash: sv.standardVersionHash, skillVersionHash: sv.skillVersionHash,
+    settings: firstSettings(profile, old.retrievalHash !== null), notes: [], profileHash: profile.hash, retrievalHash: old.retrievalHash,
+    createdAt: new Date().toISOString(), why: `the first release under standard ${sv.standardVersionHash}: your profile and passages carried, nothing the loop learned` }));
+  if (store.getActive(L) === sv.skillVersionHash) fstore.setActiveRelease(L, release.id);
+  return release;
+}

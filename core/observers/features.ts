@@ -1,0 +1,495 @@
+// atelier/core/observers/features.ts — MANY SMALL COUNTS, SO THE AUTHOR'S TASTE CAN SELECT AMONG THEM.
+//
+// Taste lives at several depths, and the shallow ones are cheap to count and easy to fake. The patterns in
+// ./style.ts are the constructions that were known to matter before any author was read. This registry
+// is the other half: a wide set of plain, deterministic features across the layers of a text
+// (punctuation, sentence shape, page furniture, wording, movement, specifics, stance, sound, unevenness),
+// none of which is assumed to matter. Which of them carry THIS author's taste is decided by ./selection.ts, from their
+// own pieces against the model's own drafts: most features separate nobody, and a feature that does not
+// separate is not taste and is never proposed.
+//
+// Every feature is a number per text, or null when the text is too short or has too few events for the
+// number to mean anything. No feature calls a model. The FEATURE observer holds a text to the band the
+// selection read off the author's pieces, both sides: a floor with no ceiling is how a model overshoots.
+
+import { wordsOf, proseRegions, proseSentencesOf, paragraphsOf, quantile, proseWordsOf } from './text.js';
+import { pooledOut, expectedBand, sayPooled } from './pooled.js';
+import { carriersOf } from './carrier.js';
+import { visible } from './visible.js';
+import { bagOf, paceSteps, callbackShare } from './pace.js';
+import type { Observer, Span } from './registry.js';
+
+/** The layers of a text a feature belongs to. Numbered as in docs/FORMATS.md. */
+export type Layer = 1 | 2 | 3 | 4 | 6 | 7 | 8 | 9 | 10;
+export const LAYER_LABEL: Readonly<Record<Layer, string>> = {
+  1: 'punctuation and typography', 2: 'sentence architecture', 3: 'page and document', 4: 'lexicon and wording',
+  6: 'argument and movement', 7: 'narrator and stance', 8: 'content and specifics', 9: 'sound', 10: 'irregularity',
+};
+
+export interface Feature {
+  readonly id: string;
+  readonly layer: Layer;
+  readonly label: string;
+  /** how the value reads: a rate per 1,000 prose words, a share between 0 and 1, or a plain value */
+  readonly unit: 'per1000' | 'share' | 'value';
+  /**
+   * More of it means more specifics the writer must supply (links, figures, names, quotations). Such a
+   * feature is only ever proposed as a cap: a floor would ask a draft for links or figures that the
+   * UNSOURCED check (../loop/claim-extract.ts) then cuts, because nobody supplied them.
+   */
+  readonly specifics?: true;
+  measure(text: string): number | null;
+  /**
+   * The events themselves, counted, at any length: what a pooled rate is read from and checked by (./pooled.ts). A
+   * per-1,000 rate has one; a share of sentences counts the sentences that pass; a plain value has none.
+   */
+  count?(text: string): number;
+}
+
+const MIN_WORDS = 150;
+const prose = (text: string): string => proseRegions(text).map((r) => r.text).join('\n\n');
+const proseWordCount = proseWordsOf;
+const r3 = (x: number): number => Math.round(x * 1000) / 1000;
+
+type Counted = Pick<Feature, 'measure' | 'count'>;
+/** A count per 1,000 prose words, or null under MIN_WORDS; and the count itself, at any length. */
+const per1000 = (count: (p: string, raw: string) => number): Counted => ({
+  measure: (text) => { const n = proseWordCount(text); return n < MIN_WORDS ? null : r3((count(prose(text), text) / n) * 1000); },
+  count: (text) => count(prose(text), text),
+});
+/** A share of sentences, or null under ten sentences; and how many sentences pass, at any length. */
+const sentenceShare = (test: (s: string) => boolean): Counted => ({
+  measure: (text) => { const ss = proseSentencesOf(text); return ss.length < 10 ? null : r3(ss.filter((s) => test(s.text.trim())).length / ss.length); },
+  count: (text) => proseSentencesOf(text).filter((s) => test(s.text.trim())).length,
+});
+const count = (s: string, re: RegExp): number => (s.match(re) ?? []).length;
+
+/**
+ * THE PAGE, WITHOUT WHAT IS NOT WRITING. The page-furniture counts read the raw markdown (a list item
+ * is its marker), so they must not read YAML front matter (a `tags:` list took list items from 0 to
+ * 15 per 1,000 words, and a `url:` line counted as a link) or the inside of a code fence (a `- flag`
+ * in a shell snippet is not a list item). Both are blanked, line for line; the fences themselves are
+ * counted, ``` and ~~~ alike, the same way ./text.ts reads them. An unclosed fence runs to the end.
+ */
+export function pageOf(raw: string): { readonly body: string; readonly fences: number } {
+  const lines = visible(raw).split('\n');
+  let fence: string | null = null; let front = false; let fences = 0;
+  const body = lines.map((line, i) => {
+    const t = line.trim();
+    if (i === 0 && t === '---') { front = true; return ''; }
+    if (front) { if (t === '---' || t === '...') front = false; return ''; }
+    const f = /^(```|~~~)/.exec(t);
+    if (fence) { if (f && t.startsWith(fence)) fence = null; return ''; }
+    if (f) { fence = f[1]; fences += 1; return ''; }
+    return line;
+  }).join('\n');
+  return { body, fences };
+}
+/** A count over the page (see `pageOf`) per 1,000 prose words, or null under MIN_WORDS; and the count itself. */
+const perPage1000 = (c: (page: { body: string; fences: number }) => number): Counted => ({
+  measure: (text) => { const n = proseWordCount(text); return n < MIN_WORDS ? null : r3((c(pageOf(text)) / n) * 1000); },
+  count: (text) => c(pageOf(text)),
+});
+const lengths = (text: string): number[] => proseSentencesOf(text).map((s) => s.words).filter((w) => w > 0);
+
+/** Spread over mean (population standard deviation), or null when the mean is 0 and the ratio means nothing. */
+const cv = (xs: readonly number[]): number | null => {
+  const m = xs.reduce((a, b) => a + b, 0) / xs.length;
+  return m === 0 ? null : Math.sqrt(xs.reduce((n, x) => n + (x - m) ** 2, 0) / xs.length) / m;
+};
+
+/**
+ * PARAGRAPHS, PROSE ONLY. Paragraph pace is what a skill was found to miss: it matched an author's
+ * punctuation and missed that they write one-line paragraphs between long ones, or never do. A list item
+ * is not a paragraph (it is short by design and would make every listy draft look terse), so only prose
+ * blocks are read, the way ./text.ts cuts them.
+ * A TEXT IS LONG ENOUGH, NOT ITS PARAGRAPH COUNT. Gated on four paragraphs, a 250-word wall of a single
+ * paragraph measured nothing, and that wall is the commonest way a model's draft misses an author who
+ * breaks often: the miss was invisible to the very feature meant to see it. So the gate is the text's
+ * length (MIN_WORDS of prose, as for every rate here): one 250-word paragraph is a paragraph of 250 words.
+ */
+interface ParagraphShape { readonly words: number; readonly sentences: number }
+const paragraphShape = (f: (ps: readonly ParagraphShape[]) => number) => (text: string): number | null => {
+  const ps = paragraphsOf(text).map((p) => ({ words: wordsOf(p.text).length, sentences: p.sentences })).filter((p) => p.words > 0);
+  return !ps.length || proseWordCount(text) < MIN_WORDS ? null : r3(f(ps));
+};
+
+/**
+ * MOVEMENT, read lexically (./pace.ts). Twelve sentences give eleven steps, the fewest that say anything
+ * about a mean and its spread; a callback needs room for a return at least five sentences back and a run
+ * after it, so it waits for fifteen. Fewer than six informative steps (pairs where both sentences have
+ * content words) is too few to average, however many sentences there are.
+ */
+const MIN_PACE_SENTENCES = 12;
+const MIN_CALLBACK_SENTENCES = 15;
+const stepsOf = (text: string): number[] | null => {
+  const bags = proseSentencesOf(text).map((s) => bagOf(s.text));
+  if (bags.length < MIN_PACE_SENTENCES) return null;
+  const st = paceSteps(bags);
+  return st.length < 6 ? null : st;
+};
+
+// ── Over-articulation ─────────────────────────────────────────────────────────────────────────────
+// Model imitations explain and contrast where authors assert and narrate: they overuse "than", "that's",
+// "isn't", "not", "let's", "because". Each list below is a proxy for one habit, counted as words, and
+// written out so a reader can see exactly what was counted. Overlaps are deliberate and harmless: "rather
+// than" counts as a comparison and as a contrast, "that's why" as a contraction and as an explanation,
+// because each feature is judged on its own against the author.
+
+/** The first person singular: I and its contractions, me, my, mine, myself (a sentence may open on "My"). */
+const FIRST_SINGULAR = /\b(?:I['’](?:m|ve|d|ll)|I|[Mm]yself|[Mm]ine|[Mm]e|[Mm]y)\b/g;
+/** Comparison: "than", alone. "More X than Y" is how a draft argues against something nobody said. */
+const THAN = /\bthan\b/gi;
+/** Negation: not, never, no, cannot, and every n't form (isn't, don't, can't, won't…). */
+const NEGATION = /\b(?:not|never|no|cannot)\b|\b\w+n['’]t\b/gi;
+/** "That's": the pointing-back contraction an explaining voice leans on ("that's the point", "that's why"). */
+const THATS = /\bthat['’]s\b/gi;
+/** The reader taken along as company: "let's", "let me", "let us". */
+const LET_US = /\blet(?:['’]s\b|\s+(?:me|us)\b)/gi;
+/**
+ * Explanation, the connectives that give a reason or restate one: because, since, so that, which means,
+ * that's why, this is why, the reason, in other words, and "that is," with its comma (the restating use,
+ * not "that is true"). "Since" is counted in its temporal sense too: telling the two apart needs a parser,
+ * and the causal sense is the common one in argument.
+ */
+const EXPLANATORY = /\b(?:because|since|so that|which means|that['’]s why|this is why|the reason|in other words)\b|\bthat is,/gi;
+/**
+ * Contrast: but, however, instead, rather than, whereas, yet, although. "Not X but Y" counts once, through
+ * its "but"; its "not" is NEGATION's, which is a different habit.
+ */
+const CONTRASTIVE = /\b(?:but|however|instead|rather than|whereas|yet|although)\b/gi;
+
+/**
+ * SPECIFICS ON THE PAGE: money, percentages, years, digits with a unit or a counted noun ("94 minutes",
+ * "1,200 customers"), capitalised names of two or more words mid-sentence, and quotations of two or more
+ * words (one quoted word is a scare quote, not a source). One pattern read left to right, so "12%" is one
+ * specific, not a number and a percentage. This measures how dense the writing is in things a reader could
+ * check; ../loop/fact-ledger.ts asks the other question, whether those things were supplied.
+ */
+const SPECIFIC = new RegExp([
+  /[$€£]\s?\d[\d,]*(?:\.\d+)?(?:\s?(?:k|m|bn|million|billion|thousand)\b)?/.source,
+  /\b\d[\d,]*(?:\.\d+)?\s?(?:%|percent\b|per cent\b)/.source,
+  /\b(?:1[89]|20)\d\d\b/.source,
+  /\b\d[\d,]*(?:\.\d+)?\s?(?!(?:of|and|or|to|in|the|a|an|is|are|was|were|for|on|at|by|with)\b)[a-z]+\b/.source,
+  /(?<=[a-z0-9,;:] )[A-Z][\w'’-]*(?: [A-Z][\w'’-]*)+/.source,
+  /["“][^"”\n]*?\S\s+\S[^"”\n]*?["”]/.source,
+].join('|'), 'g');
+
+const syllables = (w: string): number => {
+  const x = w.toLowerCase().replace(/[^a-z]/g, '');
+  if (!x) return 0;
+  if (x.length <= 3) return 1;
+  const groups = x.replace(/(?:[^laeiouy]es|ed|[^laeiouy]e)$/, '').replace(/^y/, '').match(/[aeiouy]{1,2}/g);
+  return Math.max(1, groups?.length ?? 1);
+};
+
+/** Measure of textual lexical diversity, one direction: the mean length of runs that keep type/token above 0.72. */
+function mtldOneWay(words: readonly string[]): number {
+  let factors = 0; let types = new Set<string>(); let tokens = 0;
+  for (const w of words) {
+    types.add(w); tokens += 1;
+    if (types.size / tokens <= 0.72) { factors += 1; types = new Set(); tokens = 0; }
+  }
+  if (tokens > 0) factors += (1 - types.size / tokens) / (1 - 0.72);
+  return factors > 0 ? words.length / factors : words.length;
+}
+
+const SMALL_WORDS = ['two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'];
+export const IMPERATIVES = new Set(['use', 'write', 'stop', 'start', 'try', 'make', 'keep', 'ask', "don't", 'do', 'pick', 'run', 'read', 'think', 'look',
+  'let', 'take', 'give', 'put', 'avoid', 'build', 'treat', 'check', 'measure', 'add', 'drop', 'cut', 'set', 'go', 'consider', 'remember', 'notice']);
+const DISCOURSE = /^(?:so|now|look|okay|ok|well|right|anyway|honestly)\b[,:]?/i;
+/** Words that open a sentence and take a comma without starting a list: sentence adverbs and connectives. */
+const INTRODUCTORY = new Set(['however', 'so', 'now', 'well', 'yes', 'no', 'still', 'also', 'then', 'thus', 'therefore', 'instead',
+  'meanwhile', 'moreover', 'furthermore', 'besides', 'indeed', 'first', 'second', 'third', 'finally', 'next', 'again', 'otherwise',
+  'anyway', 'look', 'okay', 'ok', 'right', 'today', 'yesterday', 'here', 'sometimes', 'often', 'later', 'afterwards', 'consequently',
+  'hence', 'nevertheless', 'nonetheless', 'similarly', 'likewise', 'overall', 'ultimately', 'but', 'and', 'or', 'yet']);
+/**
+ * Lists of three matched by `re`, less those whose first item (group 1) is an introductory word, or any
+ * -ly adverb, opening its sentence. Not a parser: the one bias it removes is the common one.
+ */
+function listsOf(p: string, re: RegExp): number {
+  let n = 0;
+  const g = new RegExp(re.source, 'g');
+  for (let m = g.exec(p); m; m = g.exec(p)) {
+    const first = m[1].toLowerCase();
+    const opensSentence = /(?:^|[.!?]["”')\]]*\s+)$/.test(p.slice(0, m.index));
+    // Skipped, the search resumes just past the introductory word, so a real list after it still counts.
+    if (opensSentence && (INTRODUCTORY.has(first) || first.endsWith('ly'))) { g.lastIndex = m.index + first.length; continue; }
+    n += 1;
+  }
+  return n;
+}
+
+export const FEATURES: readonly Feature[] = [
+  // ── 1. punctuation and typography ──────────────────────────────────────────────────────────────
+  { id: 'colon', layer: 1, label: 'colons', unit: 'per1000', ...per1000((p) => count(p.replace(/https?:\/\//g, ''), /:(?=\s)/g)) },
+  { id: 'parenthesis', layer: 1, label: 'parenthetical asides', unit: 'per1000', ...per1000((p) => count(p.replace(/\]\([^)]*\)/g, ']'), /\(/g)) },
+  { id: 'exclamation', layer: 1, label: 'exclamation marks', unit: 'per1000', ...per1000((p) => count(p, /!(?!\[)/g)) },
+  { id: 'ellipsis', layer: 1, label: 'ellipses', unit: 'per1000', ...per1000((p) => count(p, /…|\.\.\./g)) },
+  { id: 'question', layer: 1, label: 'questions', unit: 'share', ...sentenceShare((s) => s.endsWith('?')) },
+  { id: 'italic', layer: 1, label: 'italics', unit: 'per1000', ...perPage1000(({ body }) => count(body.replace(/\*\*[^*]+\*\*/g, ''), /(?<![*\w])[*_][^*_\n]{2,80}[*_](?![*\w])/g)) },
+  { id: 'quoted', layer: 1, label: 'quoted phrases', unit: 'per1000', specifics: true, ...per1000((p) => count(p, /["“][^"”\n]{2,200}["”]/g)) },
+  // A list's first item is never an introductory word that opens its sentence: "However, the cat and
+  // dog" is a sentence adverb and a pair, not three items without the serial comma.
+  { id: 'oxfordComma', layer: 1, label: 'the serial comma, in lists of three', unit: 'share', measure: (text) => {
+    const p = prose(text);
+    const withComma = listsOf(p, /\b(\w+), \w+(?: \w+){0,2}, (?:and|or) \w/g);
+    const without = listsOf(p, /\b(\w+), \w+(?: \w+){0,2} (?:and|or) \w/g);
+    return withComma + without < 3 ? null : r3(withComma / (withComma + without));
+  } },
+  { id: 'smallNumerals', layer: 1, label: 'small numbers written as digits rather than words', unit: 'share', measure: (text) => {
+    const p = prose(text);
+    // A digit is part of a larger number only when a digit is on the other side of the point or comma:
+    // "3.5" and "4,000" are not small numbers, "We had 3." and "then 4, then 5" are.
+    const digits = count(p, /(?<!\d[.,])\b[2-9]\b(?![.,]\d|%)/g);
+    const spelled = count(p, new RegExp(`\\b(?:${SMALL_WORDS.join('|')})\\b`, 'gi'));
+    return digits + spelled < 3 ? null : r3(digits / (digits + spelled));
+  } },
+  // ── 2. sentence architecture ───────────────────────────────────────────────────────────────────
+  { id: 'sentenceP10', layer: 2, label: 'the length of your short sentences (10th percentile, words)', unit: 'value', measure: (t) => { const l = lengths(t); return l.length < 10 ? null : quantile(l, 0.1); } },
+  // THE AUTHOR'S RATES (../fidelity/profile.ts, `AUTHOR_RATES`): the middle sentence, and how many are very short.
+  { id: 'sentenceP50', layer: 2, label: 'the length of your typical sentence (median, words)', unit: 'value', measure: (t) => { const l = lengths(t); return l.length < 10 ? null : quantile(l, 0.5); } },
+  { id: 'shortSentence', layer: 2, label: 'sentences of five words or fewer', unit: 'share', measure: sentenceShare((s) => wordsOf(s).length <= 5).measure },
+  { id: 'sentenceP90', layer: 2, label: 'the length of your long sentences (90th percentile, words)', unit: 'value', measure: (t) => { const l = lengths(t); return l.length < 10 ? null : quantile(l, 0.9); } },
+  { id: 'cadence', layer: 2, label: 'cadence: how much one sentence\'s length predicts the next (lag-one correlation)', unit: 'value', measure: (t) => {
+    const l = lengths(t);
+    if (l.length < 12) return null;
+    const m = l.reduce((a, b) => a + b, 0) / l.length;
+    let num = 0; let den = 0;
+    for (let i = 0; i < l.length; i++) { den += (l[i] - m) ** 2; if (i > 0) num += (l[i] - m) * (l[i - 1] - m); }
+    return den === 0 ? null : r3(num / den);
+  } },
+  // How far sentence length swings around its own mean, scaled so a writer of long sentences and one of
+  // short sentences are compared on unevenness alone. The percentiles above say where the ends are; this
+  // says how often the writer goes there.
+  { id: 'sentenceCv', layer: 2, label: 'how much your sentence lengths vary (coefficient of variation)', unit: 'value', measure: (t) => {
+    const l = lengths(t);
+    const v = l.length < 10 ? null : cv(l);
+    return v === null ? null : r3(v);
+  } },
+  { id: 'openerConjunction', layer: 2, label: 'sentences opening on And, But, So, Or or Yet', unit: 'share', ...sentenceShare((s) => /^(?:and|but|so|or|yet)\b/i.test(s)) },
+  { id: 'openerSelf', layer: 2, label: 'sentences opening on I or We', unit: 'share', ...sentenceShare((s) => /^(?:i|we)\b/i.test(s)) },
+  { id: 'openerDeictic', layer: 2, label: 'sentences opening on The, This, That, It, These or There', unit: 'share', ...sentenceShare((s) => /^(?:the|this|that|it|these|there)\b/i.test(s)) },
+  { id: 'passive', layer: 2, label: 'passive constructions', unit: 'per1000', ...per1000((p) => count(p, /\b(?:is|are|was|were|be|been|being)\s+(?:\w+ly\s+)?\w+(?:ed|en)\b/gi)) },
+  { id: 'nominalisation', layer: 2, label: 'nominalisations (-tion, -ment, -ness, -ity, -ance, -ence)', unit: 'per1000', ...per1000((p) => count(p, /\b\w{4,}(?:tion|ment|ness|ity|ance|ence)s?\b/gi)) },
+  { id: 'triad', layer: 2, label: 'three-item lists', unit: 'per1000', ...per1000((p) => count(p, /\b\w+(?: \w+)?, \w+(?: \w+)?,? (?:and|or) \w+/g)) },
+  // ── 3. page and document ──────────────────────────────────────────────────────────────────────
+  // Page furniture is read off the raw page, less front matter and the inside of code fences (`pageOf`).
+  { id: 'listItem', layer: 3, label: 'list items', unit: 'per1000', ...perPage1000(({ body }) => count(body, /^\s*(?:[-*+]|\d+[.)])\s+\S/gm)) },
+  { id: 'link', layer: 3, label: 'links', unit: 'per1000', specifics: true, ...perPage1000(({ body }) => count(body, /\]\(https?:\/\/|(?<!\()https?:\/\/\S+/g)) },
+  { id: 'codeBlock', layer: 3, label: 'code blocks', unit: 'per1000', ...perPage1000(({ fences }) => fences) },
+  { id: 'blockquote', layer: 3, label: 'block quotations', unit: 'per1000', ...perPage1000(({ body }) => count(body, /^>\s*\S/gm)) },
+  // Paragraph pace, prose paragraphs only (`paragraphShape`), in words and sentences.
+  { id: 'paragraphP10', layer: 3, label: 'the length of your short paragraphs (10th percentile, words)', unit: 'value', measure: paragraphShape((ps) => quantile(ps.map((p) => p.words), 0.1)) },
+  { id: 'paragraphP50', layer: 3, label: 'the length of your typical paragraph (median, words)', unit: 'value', measure: paragraphShape((ps) => quantile(ps.map((p) => p.words), 0.5)) },
+  { id: 'paragraphP90', layer: 3, label: 'the length of your long paragraphs (90th percentile, words)', unit: 'value', measure: paragraphShape((ps) => quantile(ps.map((p) => p.words), 0.9)) },
+  { id: 'oneSentenceParagraph', layer: 3, label: 'paragraphs of a single sentence', unit: 'share', measure: paragraphShape((ps) => ps.filter((p) => p.sentences === 1).length / ps.length) },
+  { id: 'sentencesPerParagraph', layer: 3, label: 'sentences per paragraph (mean)', unit: 'value', measure: paragraphShape((ps) => ps.reduce((n, p) => n + p.sentences, 0) / ps.length) },
+  // ── 4. lexicon and wording ────────────────────────────────────────────────────────────────────
+  { id: 'lexicalDiversity', layer: 4, label: 'lexical diversity (MTLD)', unit: 'value', measure: (text) => {
+    const w = wordsOf(prose(text)).map((x) => x.toLowerCase());
+    return w.length < MIN_WORDS ? null : r3((mtldOneWay(w) + mtldOneWay([...w].reverse())) / 2);
+  } },
+  { id: 'wordLength', layer: 4, label: 'mean word length (letters)', unit: 'value', measure: (text) => {
+    const w = wordsOf(prose(text)).map((x) => x.replace(/[^A-Za-z]/g, '')).filter(Boolean);
+    return w.length < MIN_WORDS ? null : r3(w.reduce((n, x) => n + x.length, 0) / w.length);
+  } },
+  { id: 'secondPerson', layer: 4, label: '"you" and "your"', unit: 'per1000', ...per1000((p) => count(p, /\byou(?:r|rs|rself)?\b/gi)) },
+  { id: 'firstSingular', layer: 4, label: '"I", "my" and "me"', unit: 'per1000', ...per1000((p) => count(p, FIRST_SINGULAR)) },
+  { id: 'firstPlural', layer: 4, label: '"we", "our" and "us"', unit: 'per1000', ...per1000((p) => count(p, /\b(?:we|our|ours|us)\b/gi)) },
+  { id: 'tentativeModal', layer: 4, label: 'tentative modals (might, may, could)', unit: 'per1000', ...per1000((p) => count(p, /\b(?:might|may|could)\b/gi)) },
+  { id: 'firmModal', layer: 4, label: 'firm modals (must, should, need to)', unit: 'per1000', ...per1000((p) => count(p, /\b(?:must|should|need to|needs to)\b/gi)) },
+  { id: 'numbers', layer: 4, label: 'figures written in digits', unit: 'per1000', specifics: true, ...per1000((p) => count(p, /\b\d[\d,.]*%?/g)) },
+  { id: 'names', layer: 4, label: 'names mid-sentence (people, products, organisations)', unit: 'per1000', specifics: true, ...per1000((p) => count(p, /(?<=[a-z,;:] )[A-Z][a-z]+(?:[A-Z][a-z]+)*\b/g)) },
+  // Over-articulation (the lists above, each documented where it is defined).
+  { id: 'than', layer: 4, label: '"than" (comparisons)', unit: 'per1000', ...per1000((p) => count(p, THAN)) },
+  { id: 'negation', layer: 4, label: 'negations (not, never, no, and the n\'t forms)', unit: 'per1000', ...per1000((p) => count(p, NEGATION)) },
+  { id: 'thatsContraction', layer: 4, label: '"that\'s"', unit: 'per1000', ...per1000((p) => count(p, THATS)) },
+  { id: 'letUs', layer: 4, label: '"let\'s", "let me" and "let us"', unit: 'per1000', ...per1000((p) => count(p, LET_US)) },
+  { id: 'explanatory', layer: 4, label: 'explaining connectives (because, since, which means, in other words…)', unit: 'per1000', ...per1000((p) => count(p, EXPLANATORY)) },
+  { id: 'contrastive', layer: 4, label: 'contrasting connectives (but, however, instead, rather than, yet…)', unit: 'per1000', ...per1000((p) => count(p, CONTRASTIVE)) },
+  { id: 'discourse', layer: 4, label: 'spoken discourse markers opening a sentence (so, now, look, okay, well)', unit: 'share', ...sentenceShare((s) => DISCOURSE.test(s)) },
+  // ── 6. argument and movement ──────────────────────────────────────────────────────────────────
+  // A lexical proxy for semantic pace (./pace.ts): how far each sentence's content words move from the last.
+  { id: 'paceStep', layer: 6, label: 'how far each sentence moves from the one before (1 minus word overlap, mean)', unit: 'value', measure: (t) => {
+    const st = stepsOf(t);
+    return st ? r3(st.reduce((a, b) => a + b, 0) / st.length) : null;
+  } },
+  // Whether the moves come evenly (every sentence drifts a little) or in bursts (stay, stay, jump).
+  { id: 'paceBurstiness', layer: 6, label: 'how unevenly the text moves (variation in step size)', unit: 'value', measure: (t) => {
+    const st = stepsOf(t); const v = st ? cv(st) : null;
+    return v === null ? null : r3(v);
+  } },
+  { id: 'callbacks', layer: 6, label: 'sentences that return to a topic left at least five sentences earlier', unit: 'share', measure: (t) => {
+    const ss = proseSentencesOf(t);
+    return ss.length < MIN_CALLBACK_SENTENCES ? null : r3(callbackShare(ss.map((s) => bagOf(s.text))));
+  } },
+  // ── 7. narrator and stance ────────────────────────────────────────────────────────────────────
+  { id: 'imperative', layer: 7, label: 'sentences that tell the reader what to do', unit: 'share', ...sentenceShare((s) => IMPERATIVES.has((s.split(/\s+/)[0] ?? '').toLowerCase().replace(/[^a-z']/g, ''))) },
+  // ── 8. content and specifics ──────────────────────────────────────────────────────────────────
+  // Only ever a cap (`specifics`): a floor would reward invented figures. Coverage of what the person
+  // supplied is ../loop/fact-ledger.ts's measure, not this count's.
+  { id: 'specificsDensity', layer: 8, label: 'specifics (figures, dates, names, quotations) per 100 words', unit: 'value', specifics: true, measure: (text) => {
+    const p = prose(text); const n = wordsOf(p).length;
+    return n < MIN_WORDS ? null : r3((count(p, SPECIFIC) / n) * 100);
+  } },
+  // ── 9. sound ──────────────────────────────────────────────────────────────────────────────────
+  { id: 'readingEase', layer: 9, label: 'reading ease (Flesch)', unit: 'value', measure: (text) => {
+    const w = wordsOf(prose(text)); const l = lengths(text);
+    if (w.length < MIN_WORDS || l.length < 5) return null;
+    const syl = w.reduce((n, x) => n + syllables(x), 0);
+    return r3(206.835 - 1.015 * (w.length / l.length) - 84.6 * (syl / w.length));
+  } },
+  { id: 'commasPerSentence', layer: 9, label: 'commas per sentence', unit: 'value', measure: (text) => { const ss = proseSentencesOf(text); return ss.length < 10 ? null : r3(ss.reduce((n, s) => n + count(s.text, /,/g), 0) / ss.length); } },
+  { id: 'monosyllabicRun', layer: 9, label: 'runs of five or more one-syllable words', unit: 'per1000', ...per1000((p) => {
+    let runs = 0; let run = 0;
+    for (const w of wordsOf(p)) { if (syllables(w) === 1) { run += 1; if (run === 5) runs += 1; } else run = 0; }
+    return runs;
+  }) },
+  // ── 10. irregularity ──────────────────────────────────────────────────────────────────────────
+  { id: 'sectionSpread', layer: 10, label: 'how uneven your sections are (longest over shortest, in words)', unit: 'value', measure: (text) => {
+    const sections = pageOf(text).body.split(/^#{2,6}\s.*$/m).map((s) => wordsOf(prose(s)).length).filter((n) => n >= 30);
+    return sections.length < 3 ? null : r3(Math.max(...sections) / Math.min(...sections));
+  } },
+  { id: 'paragraphSpread', layer: 10, label: 'how uneven your paragraphs are (variation in length)', unit: 'value', measure: (text) => {
+    const ps = prose(text).split(/\n\s*\n/).map((p) => wordsOf(p).length).filter((n) => n > 0);
+    if (ps.length < 6) return null;
+    const m = ps.reduce((a, b) => a + b, 0) / ps.length;
+    return r3(Math.sqrt(ps.reduce((n, x) => n + (x - m) ** 2, 0) / ps.length) / m);
+  } },
+];
+
+const BY_ID = new Map(FEATURES.map((f) => [f.id, f]));
+export const featureOf = (id: string): Feature | null => BY_ID.get(id) ?? null;
+
+// An edge stored as ±1e9 or ±Infinity is an edge the band does not have: read as absent, never as a width of a billion.
+const num = (p: Readonly<Record<string, unknown>>, k: string): number | null => (typeof p[k] === 'number' && Number.isFinite(p[k]) && Math.abs(p[k]) < 1e9 ? p[k] : null);
+const fmt = (f: Feature, x: number): string => (f.unit === 'share' ? `${Math.round(x * 100)}%` : `${x}`);
+
+/** The band a FEATURE measurement states, and how far outside it `v` sits: positive above, negative below, 0 inside. */
+function missOf(p: Readonly<Record<string, unknown>>, v: number): { lo: number | null; hi: number | null; distance: number; above: boolean; error: number } {
+  const lo = num(p, 'minValue'); const hi = num(p, 'maxValue');
+  const above = hi !== null && v > hi; const below = lo !== null && v < lo;
+  const distance = above ? v - hi : below ? lo - v : 0;
+  // In widths of the band, so "0.5 out" means the same for colons and for paragraph length; a band with one edge or no
+  // width is read in the feature's own unit.
+  const width = lo !== null && hi !== null && hi > lo ? hi - lo : 1;
+  return { lo, hi, distance, above, error: distance === 0 ? 0 : r3((above ? distance : -distance) / width) };
+}
+const r1 = (x: number): number => Math.round(x * 10) / 10;
+/** A distance in the feature's own unit, rounded to one decimal; a share's in percentage points. */
+const amount = (f: Feature, d: number): string => (f.unit === 'share' ? `${r1(d * 100)} points` : `${r1(d)}`);
+/** "about 4.1", or, for a distance that rounds to nothing, "under 0.1": never "about 0" of a miss that is there. */
+const about = (f: Feature, d: number): string => (d > 0 && /^-?0(?: points)?$/.test(amount(f, d)) ? `under ${f.unit === 'share' ? '0.1 points' : '0.1'}` : `about ${amount(f, d)}`);
+const unitOf = (f: Feature): string => (f.unit === 'per1000' ? ' per 1,000 words' : '');
+const rangeOf = (f: Feature, lo: number | null, hi: number | null): string =>
+  (lo !== null && hi !== null ? `${fmt(f, lo)} to ${fmt(f, hi)}` : lo !== null ? `at least ${fmt(f, lo)}` : `at most ${fmt(f, hi ?? 0)}`) + unitOf(f);
+
+/**
+ * WHAT THE NEXT DRAFT IS TO DO ABOUT A FEATURE MISS, in plain words: "about 4.1 fewer parenthetical asides per 1,000
+ * words", "about 12 points more questions". Null inside the band, or when the measurement names no feature.
+ */
+export function featureMove(p: Readonly<Record<string, unknown>>, v: number): string | null {
+  const f = featureOf(((p.feature as readonly string[] | undefined) ?? [])[0] ?? '');
+  if (!f) return null;
+  const m = missOf(p, v);
+  if (m.distance === 0) return null;
+  return f.unit === 'value' ? `${f.label}: ${about(f, m.distance)} ${m.above ? 'lower' : 'higher'}`
+    : `${about(f, m.distance)} ${m.above ? 'fewer' : 'more'} ${f.label}${unitOf(f)}`;
+}
+
+/** How many carrier sentences a miss is pointed at, at most. */
+const MAX_CARRIERS = 3;
+
+/** How far a text's length may move (as a share) before a rate per 1,000 words is read at the new length (`errorAtLength`). */
+export const LENGTH_DRIFT = 0.02;
+/** The prose words a rate per 1,000 is counted over: what a comparison of one rate across two lengths scales by. */
+export const featureWordCount = proseWordCount;
+
+/**
+ * A FEATURE check's error, read as it would be at another length. A rate per 1,000 words rises when a text shortens
+ * with the count unchanged: a rewrite that fixed one banned word and cut 5% of the words raised every such rate by 5%,
+ * and read as a drift that discarded a good pass. So when the length moved by more than LENGTH_DRIFT, the value is
+ * scaled by (words before / words after), the rate the same count would show at the new length, and the error is
+ * taken on the band from that. A share or a value is no rate of the length and is read as it is.
+ */
+export function errorAtLength(p: Readonly<Record<string, unknown>>, value: number, wordsBefore: number, wordsAfter: number): number {
+  const f = featureOf(((p.feature as readonly string[] | undefined) ?? [])[0] ?? '');
+  const ratio = wordsBefore > 0 && wordsAfter > 0 ? wordsBefore / wordsAfter : 1;
+  if (f?.unit !== 'per1000' || Math.abs(ratio - 1) <= LENGTH_DRIFT) return missOf(p, value).error;
+  return missOf(p, r3(value * ratio)).error;
+}
+
+/**
+ * FEATURE: one registered feature held to a band, both sides. A rate has no single place it lives, so a miss is pointed
+ * at its CARRIERS (./carrier.ts): the sentences whose removal moves the value most toward the band, as many of them
+ * as it takes to cover the distance (never more than three). The detail says which way and how far, in the feature's
+ * own unit, so a writer told only the band is told the move too.
+ */
+export const FEATURE: Observer = {
+  id: 'FEATURE',
+  describe: (p) => {
+    const f = featureOf(((p.feature as readonly string[] | undefined) ?? [])[0] ?? '');
+    const lo = num(p, 'minValue'); const hi = num(p, 'maxValue');
+    if (!f) return 'an unknown feature';
+    const unit = f.unit === 'per1000' ? ' per 1,000 words' : '';
+    const pooled = num(p, 'pooledPerWord');
+    const band = `${f.label}${lo !== null && hi !== null ? ` between ${fmt(f, lo)} and ${fmt(f, hi)}${unit}` : lo !== null ? ` at least ${fmt(f, lo)}${unit}` : hi !== null ? ` at most ${fmt(f, hi)}${unit}` : ''}`;
+    if (pooled === null) return band;
+    const rate = `${f.label}: about ${sayPooled(pooled)}, read over ${(num(p, 'pooledWords') ?? 0).toLocaleString('en-US')} words of your pieces; a short piece is held to the count expected of its length`;
+    return lo !== null || hi !== null ? `${band}; on a short piece, ${rate}` : rate;
+  },
+  validate: (p) => {
+    const id = ((p.feature as readonly string[] | undefined) ?? [])[0];
+    const f = id ? featureOf(id) : null;
+    if (!id || !f) return `needs feature=<one of: ${FEATURES.map((x) => x.id).join(', ')}>`;
+    const lo = num(p, 'minValue'); const hi = num(p, 'maxValue'); const pooled = num(p, 'pooledPerWord');
+    if (pooled !== null && (pooled < 0 || !f.count)) return pooled < 0 ? 'pooledPerWord cannot be negative' : `${id} is a value, not a count: it has no pooled rate`;
+    if (pooled !== null && (num(p, 'pooledWords') ?? 0) <= 0) return 'a pooled rate needs pooledWords, the words it was read over';
+    if (lo === null && hi === null && pooled === null) return 'needs minValue, maxValue or both, or a pooled rate (pooledPerWord, pooledWords)';
+    return lo !== null && hi !== null && lo > hi ? 'minValue cannot exceed maxValue' : null;
+  },
+  observe(text, p) {
+    const f = featureOf(((p.feature as readonly string[] | undefined) ?? [])[0] ?? '');
+    if (!f) return { verdict: 'NOT_APPLICABLE', spans: [], value: null, detail: 'unknown feature' };
+    const v = f.measure(text);
+    // A SHORT PIECE IS HELD TO THE COUNT EXPECTED OF ITS LENGTH (./pooled.ts). Where the measurement carries a rate
+    // pooled over the author's pieces and the text is too short for a rate of its own (or no band was ever read), the
+    // text's events are counted and checked against λn by a Poisson tail. Never "too short" where a count can be read.
+    const pooled = num(p, 'pooledPerWord');
+    if (pooled !== null && f.count && (v === null || (num(p, 'minValue') === null && num(p, 'maxValue') === null))) {
+      const n = proseWordCount(text);
+      if (n === 0) return { verdict: 'NOT_APPLICABLE', spans: [], value: null, detail: 'no prose to count' };
+      const k = f.count(text); const lambda = pooled * n;
+      const [okLo, okHi] = expectedBand(lambda);
+      // A specific (a figure, a name, a link) is only ever capped: a floor would reward inventing one.
+      const side = f.specifics ? 'high' as const : 'both' as const;
+      const out = pooledOut(k, lambda, side);
+      const expected = `about ${Math.round(lambda * 10) / 10} expected in ${n} words (${side === 'high' ? `at most ${okHi}` : okLo === okHi ? `${okLo}` : `${okLo} to ${okHi}`} is within your rate)`;
+      if (!out) return { verdict: 'MET', spans: [], value: k, error: 0, detail: `${f.label}: ${k} in ${n} words; ${expected}` };
+      const over = out === 'high';
+      const carriers = over ? carriersOf(text, (t) => f.count?.(t) ?? 0, proseSentencesOf(text).map((s) => ({ s: s.text, at: s.start })), 'lower', Math.max(1, k - okHi)) : [];
+      const spans: Span[] = carriers.map((c) => ({ start: c.at, end: c.at + c.s.length, text: c.s, why: `this sentence carries ${f.label} the length does not allow; ${k - okHi} too many` }));
+      // In widths of the acceptable band, as a band miss is: so a repair reads the direction and how far.
+      const width = Math.max(1, okHi - okLo);
+      return { verdict: 'VIOLATED', spans, value: k, error: r3(over ? (k - okHi) / width : (k - okLo) / width),
+        detail: `${f.label}: ${k} in ${n} words; ${expected}; ${over ? `${k - okHi} to remove` : `${okLo - k} to add`}` };
+    }
+    if (v === null) return { verdict: 'NOT_APPLICABLE', spans: [], value: null, detail: `too short to measure ${f.label}` };
+    const m = missOf(p, v);
+    if (m.distance === 0) return { verdict: 'MET', spans: [], value: v, error: 0, detail: `${f.label}: ${fmt(f, v)}` };
+    const verb = m.above ? 'remove' : 'add';
+    // As many carriers as cover the distance, so a draft nearer the band is pointed at fewer places, never more.
+    const carriers = carriersOf(text, (t) => f.measure(t), proseSentencesOf(text).map((s) => ({ s: s.text, at: s.start })), m.above ? 'lower' : 'higher', MAX_CARRIERS);
+    let covered = 0; const spans: Span[] = [];
+    for (const c of carriers) {
+      if (covered >= m.distance) break;
+      covered += c.moves;
+      spans.push({ start: c.at, end: c.at + c.s.length, text: c.s, why: m.above
+        ? `this sentence carries ${about(f, c.moves)} of the ${amount(f, m.distance)} to remove`
+        : `this sentence has room for one; ${about(f, m.distance)} to add` });
+    }
+    return { verdict: 'VIOLATED', spans, value: v, error: m.error,
+      detail: `${f.label} ${fmt(f, v)}${unitOf(f)}; your range is ${rangeOf(f, m.lo, m.hi)}; ${about(f, m.distance)} to ${verb}` };
+  },
+};

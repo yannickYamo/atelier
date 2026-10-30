@@ -1,0 +1,4 @@
+PRICE LIST (per month, billed monthly)
+Dorado: 19 dollars per seat, minimum 1 seat
+Inkwell: 8 dollars per seat, minimum 10 seats
+Borealis: 12 dollars per seat, minimum 25 seats

@@ -1,0 +1,918 @@
+// atelier/renderers/agent-skill/render.ts — ONE STANDARD, ONE PORTABLE SKILL, MANY HOSTS.
+//
+// Claude Code, Codex, OpenClaw and the OpenAI Skills tool all consume the open Agent Skills format:
+// a directory with SKILL.md plus optional references/ and scripts/. So there is no ClaudeSkill and no
+// CodexSkill — there is one PortableSkillPackage, and adapters differ only in how they INSTALL it.
+//
+// ─── THE RESTRAINT THAT MAKES IT PORTABLE ─────────────────────────────────────────────────────
+//
+// Every host offers frontmatter fields and template variables the others do not. Using one is how a
+// portable artifact quietly becomes a host artifact — it still renders everywhere, it just stops
+// meaning the same thing. So the renderer emits ONLY `name` and `description`, and anything
+// host-specific must be declared as an explicit adaptation the compiler chose, never a default.
+
+import { describeScope, groundScope } from '../../core/compiler/scope.js';
+import { packageHashOf } from '../../core/state/receipt.js';
+import { moveEvidence, ownerWrote, HOLDS_BACK } from '../../core/compiler/applicability.js';
+import { renderContrastFile, type ContrastPair } from '../../core/compiler/contrast-examples.js';
+import { EXCERPT_GAP, isExcerpt, pieceLabel, type Voice } from '../../core/compiler/voice.js';
+import { describePersona, describeRepertoire, standingPoints, conditionalPoints } from '../../core/compiler/persona.js';
+import { TRAIT_LABEL } from '../../core/composite/traits.js';
+import { observerFor } from '../../core/observers/registry.js';
+import type { StandardVersion, Provenance } from '../../core/state/canonical-state.js';
+import { isGeneralScope } from '../../core/state/canonical-state.js';
+import { assertArchitectureServesStandard, type SkillArchitecture, type Carrier, type GateRole } from '../../core/architecture/compile.js';
+import { isConfirmed } from '../../core/architecture/compile.js';
+
+
+/**
+ * Normalise a skill identity. kebab-case works as a directory name on every host and as the suffix of
+ * both `/name` and `$name`, so identity survives the move between them.
+ */
+
+/**
+ * THE SOURCE ROLES, SAID TO THE WRITER, for every kind of work: the examples (the author's and the method's) are
+ * instruction, never evidence about the request in hand.
+ */
+export const FACTS_BELONG = `Facts in my examples, and in my method's examples, belong to their case. Say of this request only what it
+and its material show; give anything else as an assumption you state, or as a check for the person to run.`;
+
+/**
+ * THE ONE FRAME AROUND THE AUTHOR'S PIECES, FOR WORK THAT WRITES. Four layers used to say what not to take from them
+ * ("never reuse its topic, facts, names…", "never take my topics…", "say of this request only what it shows", the
+ * fence's "do not reproduce…"), and a writer told four times to keep its distance wrote abstractly where the author
+ * writes in links, named products, figures and scenes: the posts had none. The pieces are the standard for how a
+ * piece is written; the facts come from the request; what the piece needs and the request did not give is written
+ * in the author's shape and marked as a slot for the person to fill, never invented and never left out.
+ */
+export const WRITE_LIKE_THESE = `Write the way my pieces are written: who is speaking, the register, the hedging, the rhythm and the spelling; how
+a piece opens, moves and closes; and how concrete it is, with the links, named things, figures, quoted lines and
+scenes a piece of mine carries. The facts, names, figures and stories of the new piece come from this request and
+its material, never from my pieces (a story of mine you were not given is not yours to tell).`;
+
+/**
+ * THE SLOT, SAID FOR THE RUN THAT WANTS ONE, NEVER IN THE SKILL. Shown in the skill, the slot shape was taken as the safe
+ * answer on every run: a code review with the diff bound named "[person: who owns the shipping policy]" as a Must fix.
+ * `invoke` serves this line in the request's own notes only where slots are on (a document, no material bound).
+ */
+/** The author's short passages, served as a reference file beside SKILL.md. */
+export const PASSAGES_FILE = 'examples/voice-passages.md';
+
+export const SLOT_NOTE = `Where this piece needs a specific that neither the request nor its material gives, write it in the shape I would and mark it as a slot for me to fill: [link: what it points to], [product: which one], [figure: what it measures], [quote: who says what], [story: what it shows].`;
+
+export function skillNameFrom(raw: string): string {
+  const n = raw.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);
+  if (!n) throw new Error('SKILL NAME: empty after normalisation — supply a name with at least one alphanumeric character.');
+  return n;
+}
+
+/** The only frontmatter keys guaranteed to mean the same thing on every host. */
+export const PORTABLE_FRONTMATTER = ['name', 'description'] as const;
+
+/**
+ * THE DEFAULT DESCRIPTION, IN ONE PLACE.
+ *
+ * It used to be a string literal written out at six call sites. Four of them minted a SkillVersion and
+ * two RE-DERIVED a package for comparison, and because a description reaches the frontmatter it
+ * reaches the package hash — so the two re-derivers built a package that was not the one on disk and
+ * reported the difference as a hand-edited file.
+ *
+ * The re-derivers are gone; they read the stored package now. This exists so the remaining four cannot
+ * drift from each other, and so that a skill about something other than writing is not described as
+ * writing by a literal nobody remembered to change.
+ */
+/**
+ * AUTHORITY-NEUTRAL, AND THAT IS THE POINT.
+ *
+ * This said "Writes in the author's own standard". For a standard inferred from a third party's
+ * public behaviour and adopted by someone else, that is the exact claim `assertAuthorityCeiling`
+ * exists to refuse — appearing in the one place the ceiling never looked, because the ceiling guards
+ * the RECORD and this is the ARTIFACT. The record was right and the served bytes contradicted it.
+ *
+ * Universal rather than conditional. A description that is honest for every provenance cannot drift
+ * into overclaiming when a new one is added.
+ */
+export const defaultDescription = (workType: string): string =>
+  `Applies a compiled standard (${workType})`;
+
+/**
+ * WHERE THE RULE CAME FROM. Never who chose to bind it — that is `authority`, and conflating the two
+ * is what produced the defect this function replaces.
+ *
+ * EXHAUSTIVE BY CONSTRUCTION. The previous version was a ternary whose final branch caught everything
+ * it did not name, so `PUBLIC_BEHAVIOUR_INFERRED` rendered as "rewritten by you": the compiled file
+ * told a reader they had rewritten a rule that was read off a stranger's public work and never
+ * touched. The `never` check below makes adding a provenance value without a rendering policy a
+ * COMPILE ERROR rather than a silent mislabel.
+ */
+/**
+ * Prefix a condition with "when" unless the author already wrote one.
+ *
+ * A ratified `appliesWhen` is the author's text and may not be edited to suit the renderer, so the
+ * renderer accommodates it. Without this, a condition beginning "when uncertainty is material..."
+ * renders as "when when uncertainty is material", in the bytes a model is served.
+ */
+// ─── WHAT PUBLIC EVIDENCE MAY SAY ABOUT A PERSON ───────────────────────────────────────────────
+//
+// The artifact said "It is how the author works." We know a behaviour was OBSERVED in published work
+// and recurred in held-out material. We do not know it defines how that person works, and no corpus
+// can establish it. The gap between "observed in the source" and "how they work" is the whole of the
+// authority distinction, and it had been crossed in the served bytes while the record stayed correct.
+//
+// THE INVARIANT: public evidence may describe what was observed. It may never generalize that
+// observation into a claim about the source person's overall standard or identity.
+
+const condition = (appliesWhen: string): string => {
+  const t = appliesWhen.trim();
+  return /^when\b/i.test(t) ? t : `when ${t}`;
+};
+
+export function provenanceLabel(p: Provenance): string {
+  switch (p) {
+    case 'MACHINE_DISCOVERED': return 'discovered';
+    case 'SUBSTANTIVELY_REWRITTEN': return 'rewritten by you';
+    case 'EXPERT_ADDED': return 'added by you';
+    case 'EXPERT_STATED': return 'stated by you';
+    case 'PUBLIC_BEHAVIOUR_INFERRED': return 'inferred from public work; adopted for this skill';
+    default: { const _exhaustive: never = p; return _exhaustive; }
+  }
+}
+
+/** Carriers this renderer can actually honour. Anything else must refuse, not quietly degrade. */
+const IMPLEMENTED_CARRIERS = new Set<Carrier>(['PROSE', 'SELF_CHECK', 'EXAMPLE', 'OUTPUT_CONTRACT', 'NONE']);
+
+/**
+ * A carrier the renderer cannot honour must FAIL, not fall through to prose.
+ *
+ * All five carriers render now, so this guard is a tripwire for the NEXT one rather than a live gate.
+ * It stays because falling through is the worst available outcome: the architecture id and the
+ * SkillVersion id would both move while the model read the same instructions, so an optimizer would
+ * record an escalation it never received and a person would be shown "a repaired skill" that is the
+ * old skill.
+ *
+ * Emitting the artefact is where this guard stops, and that is deliberately not the same as the
+ * carrier reaching a model — see `core/delivery/carrier-delivery.ts` for the surface that answers
+ * the second question, and for the reason one field could not answer both.
+ */
+function assertCarriersImplemented(carried: readonly { readonly r: { readonly requirementId: string }; readonly carrier: Carrier }[]): void {
+  const unimplemented = carried.filter((x) => !IMPLEMENTED_CARRIERS.has(x.carrier));
+  if (unimplemented.length) {
+    const detail = unimplemented.map((x) => `${x.r.requirementId}:${x.carrier}`).join(', ');
+    throw new Error(
+      `CARRIER NOT IMPLEMENTED: ${detail}. This renderer honours ${[...IMPLEMENTED_CARRIERS].join(' and ')}. `
+      + 'Rendering an unimplemented carrier as prose would change the architecture and SkillVersion ids '
+      + 'while serving identical instructions — an escalation on the record that the model never saw.',
+    );
+  }
+}
+
+export interface PortableSkillPackage {
+  /** conceptual identity — NOT invocation punctuation, which differs per host */
+  readonly skillId: string;
+  readonly standardVersionHash: string;
+  /** which arrangement produced this. Two packages over one standard differ HERE. */
+  readonly architectureHash: string;
+  /**
+   * What the model receives. Nothing else may be served.
+   *
+   * Kept apart from `assurance` because the separation is a correctness property, not tidiness: an
+   * eval case in the model's context is a test whose answers the subject can read, and the result
+   * would look like fidelity.
+   */
+  readonly runtime: Readonly<Record<string, string>>;
+  /** Provenance and regression material. NEVER served. */
+  readonly assurance: Readonly<Record<string, string>>;
+  /** runtime only, preserved for callers that predate the split */
+  readonly files: Readonly<Record<string, string>>;
+  readonly packageHash: string;
+}
+
+/**
+ * One row per requirement: what it became, where it landed, and whether it reached the model.
+ *
+ * This exists because an architecture hash moving is a CLAIM about served behaviour, and the claim
+ * has been wrong before — a carrier changed, both ids moved, and the model read identical bytes. A
+ * manifest that names the emitted artifact for each requirement makes that checkable by anyone,
+ * without trusting the compiler's own account of itself.
+ */
+export interface ManifestRow {
+  readonly requirementId: string;
+  readonly materiality: string;
+  readonly realizationTolerance: string;
+  readonly carrier: Carrier;
+  readonly gateRole: GateRole;
+  /** the file it landed in, or null when the carrier is NONE */
+  readonly artifact: string | null;
+  /**
+   * did the COMPILER emit a carrier for this requirement?
+   *
+   * Renamed from `served`, which was computed as `carrier !== 'NONE'` — that is, by checking that a
+   * file had been produced. Emission is a build-time, host-independent fact and this field owns it.
+   * Whether the carrier's semantics REACH the model is a different question with a different owner:
+   * it depends on which surface runs the package, and it is answered by the host's delivery matrix.
+   * One boolean cannot hold both, and trying made every OUTPUT_CONTRACT row read `served: true` while
+   * generation ran against a hardcoded schema.
+   */
+  readonly emitted: boolean;
+  /** the condition under which it is relevant — carried so a router can exclude it */
+  readonly appliesWhen: string;
+  readonly why: string;
+}
+
+/**
+ * Render a standard THROUGH an architecture.
+ *
+ * The architecture is a parameter, not a derivation, and that is the whole change: the same standard
+ * arranged differently produces a different skill, so an optimizer has something to improve that is
+ * not the thing the expert authorized.
+ *
+ * ENFORCE components instruct the model while it writes. OBSERVE components are checked against the
+ * finished draft and reported — never used to suppress or rewrite it.
+ */
+export function renderAgentSkill(
+  v: StandardVersion,
+  arch: SkillArchitecture,
+  skillId: string,
+  description: string,
+  /**
+   * ONE COMPLETE PIECE BY THE AUTHOR, shipped with the skill and read before drafting. Per-rule
+   * fragments show a move; only a whole piece shows how the moves sit together over its length, which
+   * is where a voice drifts. It is an implementation carrier, chosen by the owner, never part of the
+   * standard — and it is labelled as something to take the voice from, never the content.
+   */
+  exemplar: { readonly text: string; readonly request?: string } | null = null,
+  /**
+   * WRITE THIS, NOT THAT: sentences written for this skill that broke one of its measured rules, each
+   * next to the rewrite that met it (see core/compiler/contrast-examples.ts). Chosen at build from the
+   * loop's accepted repairs; model output only, never the author's corpus.
+   */
+  contrast: readonly ContrastPair[] = [],
+  /**
+   * A FEW PASSAGES OF THE AUTHOR'S OWN (core/compiler/voice.ts), inline in SKILL.md, with their usual
+   * piece length. Rules describe a writer; these are how the writer sounds. Implementation, not standard.
+   */
+  voice: Voice | null = null,
+  /**
+   * THE OWNER'S METHOD, AS WRITTEN (core/state/store.ts, `getMethod`). Served whole and first: every instruction,
+   * explanation, exception, worked example and final check in its own place. The requirements read from it decide
+   * what is CHECKED; they never decide what the writer is TOLD. A step that only a person can judge still reaches the
+   * writer, in the owner's words and under the owner's heading.
+   */
+  method: { readonly text: string } | null = null,
+): PortableSkillPackage {
+  assertArchitectureServesStandard(arch, v);
+  // EACH PIECE OF THE AUTHOR'S IS SERVED ONCE. The worked example is also among the pieces chosen for the voice when a
+  // folder is small, and served under both names it was read twice and weighed twice: its topic came back in answers
+  // to requests that had nothing to do with it. The copy among the voice pieces goes; the worked example stays.
+  if (exemplar && voice?.pieces?.length) {
+    const same = (t: string): string => t.replace(/^\uFEFF/, '').replace(/\s+/g, ' ').trim();
+    const keep = (voice.pieces ?? []).map((t) => same(t) !== same(exemplar.text));
+    if (keep.some((k) => !k)) {
+      voice = { ...voice, pieces: (voice.pieces ?? []).filter((_, i) => keep[i]),
+        // Each request stays with its piece.
+        ...(voice.pieceRequests ? { pieceRequests: voice.pieceRequests.filter((_, i) => keep[i]) } : {}),
+        ...(voice.composite ? { composite: { ...voice.composite, pieceAuthors: voice.composite.pieceAuthors.filter((_, i) => keep[i]) } } : {}) };
+    }
+  }
+  // A skill that answers people is compiled in the words of answers, not essays (the length is a default the
+  // request overrides; the line against invention names results, files and commands, not stories).
+  const answers = voice?.form === 'REPLY';
+  // SECTION ROUTING IS BY AUTHORITY AND KIND, NEVER BY COMPONENT ID.
+  //
+  // The first version keyed on an id prefix (`do:` / `avoid:` / `observe:`). That made the safety of
+  // the output depend on a naming convention an optimizer is free to rename around: a transaction
+  // that both escalated the role AND renamed the component would have walked an unconfirmed
+  // prohibition straight into the instructions. The requirement's own kind and authority cannot be
+  // renamed, so they decide where it lands.
+  const byId = new Map(v.requirements.map((r) => [r.requirementId, r]));
+  const carried = arch.components.flatMap((c) => c.carries.flatMap((id) => {
+    const r = byId.get(id);
+    return r ? [{ r, role: c.gateRole, carrier: c.carrier }] : [];
+  }));
+
+  assertCarriersImplemented(carried);
+
+  // A NONE carrier reaches the model nowhere. Without this filter an INCIDENTAL requirement — one
+  // the expert LOOKED AT and declared not to be taste — still landed in the observe section, which
+  // is the instruction they declined to give, delivered by a different door.
+  const serves = carried.filter((x) => x.carrier !== 'NONE');
+  // AND AN OUTPUT_CONTRACT DOES NOT ALSO BECOME AN INSTRUCTION.
+  //
+  // EXAMPLE was already excluded from its section for this reason and OUTPUT_CONTRACT was not, so a
+  // rule whose carrier is a schema was ALSO restated in the prose. Two owners of one shape, and the
+  // compiler's own rationale for choosing the carrier says why that is wrong: "prose describing a
+  // schema is a weaker version of the schema", chosen so "the runtime enforces it rather than the
+  // instructions asking for it".
+  //
+  // The consequence was worse than redundancy. On a host that cannot enforce the schema, the rule was
+  // still quietly present as an instruction — the silent degradation to prose that the delivery matrix
+  // reports as UNSUPPORTED. The report was right and the bytes disagreed with it.
+  //
+  // Removing it means that on such a host NOTHING carries this rule, which is the honest outcome and
+  // exactly what UNSUPPORTED says. What to do about that is the author's call, made with the matrix in
+  // front of them, not a decision the renderer makes for them by smuggling the rule back in.
+  const gen = serves.filter((x) => x.role === 'ENFORCE' && x.r.kind === 'GENERATIVE' && x.carrier !== 'OUTPUT_CONTRACT').map((x) => x.r);
+  const bound = serves.filter((x) => x.role === 'ENFORCE' && x.r.kind === 'BOUNDARY').map((x) => x.r);
+  // EXAMPLE components are shown in their own files, not restated in the observe pass.
+  const observed = serves.filter((x) => x.role === 'OBSERVE' && x.carrier !== 'EXAMPLE').map((x) => x.r);
+
+  // ESCALATION IS CUMULATIVE, NOT SUBSTITUTIVE.
+  //
+  // These requirements are ALREADY in `gen` or `bound` above and stay there. SELF_CHECK adds a
+  // pre-finalize check on top of the generation instruction; it does not move the rule out of the
+  // instructions. An earlier compiler chose the other way: its writer returned METHODOLOGY_PROSE
+  // *or* SECTION_CONTRACT and never both, and inheriting that here would demote a rule from
+  // "shape the writing" to "notice
+  // afterwards" while calling it an escalation. A carrier may buy MORE support for a requirement.
+  // It may never buy less.
+  const preFinalize = serves.filter((x) => x.role === 'ENFORCE' && x.carrier === 'SELF_CHECK').map((x) => x.r);
+
+  // ── A CONDITION IS RENDERED WITH BOTH BRANCHES ────────────────────────────────────────────────
+  //
+  // "Applies when: X" as a trailing annotation says when the rule applies and never says what to do
+  // otherwise. A rule sitting under "What to do" with a note attached reads as an instruction with a
+  // hint, and a measured study found exactly the failure that predicts: the conditional rule's
+  // activation rose and its RESTRAINT fell, so the model applied it where the condition did not hold.
+  //
+  // This is not carrying the requirement harder — that repair is refused elsewhere and the same
+  // study is why. It is stating the half that was never stated. The requirement, its authority and
+  // its condition are untouched; only the sentence that carries them changes, which is a carrier
+  // decision the compiler owns.
+  //
+  // THE SENTENCE IS THE MEASURED ONE. "When <condition>, <statement>. When that does not hold, do not."
+  // is the form the negative-branch study measured (restraint +0.292), so it stays until a study says
+  // otherwise. Two defects in how it was FILLED are fixed without touching the frame: an author's "I"
+  // (or an acronym) is no longer lowercased into "i", and the "; " Atelier itself uses to join a
+  // condition's predicates reads as " and ".
+  //
+  // ONE CONDITION SHAPE IS NOT A CLAUSE, AND ONLY THAT ONE GETS A DIFFERENT FRAME. "any statement about
+  // size, frequency, or duration" is a noun phrase: after "When" it rendered as a sentence with no verb.
+  // A quantified noun phrase names the cases the rule covers, so it reads "For <condition>, <statement>.
+  // Elsewhere, do not." — the same two branches in the only English that holds them. The test is narrow
+  // on purpose: it opens with a quantifier AND no finite verb was found. "the post reports an outcome
+  // metric" opens with "the" and is a clause; keying on articles would move every such rule off the
+  // measured frame, which is the one change this block refuses to make without a study. The For frame
+  // itself is unmeasured; it earns its place only because the When frame was not a sentence here.
+  const QUANTIFIER = /^(any|every|each|no|all)\s+/i;
+  // Closed-class finite verbs, plus an -s/-ed word before the NP's first preposition or relative (so
+  // "every piece ends with a question" is a clause). A verb inside "that …"/"which …" belongs to the
+  // noun phrase. Doubt falls back to the measured frame, never to the new one.
+  const FINITE = /^(is|are|was|were|isn't|aren't|wasn't|weren't|has|have|had|does|do|did|doesn't|don't|can|could|will|would|shall|should|may|might|must|can't|won't)$/i;
+  const NP_BREAK = /^(about|of|on|in|for|with|from|to|at|by|over|under|into|involving|concerning|regarding|like|that|which|who|whose|where)$/i;
+  const isQuantifiedNounPhrase = (w: string): boolean => {
+    const q = QUANTIFIER.exec(w);
+    if (!q) return false;
+    const words = w.slice(q[0].length).split(/[\s,]+/).filter(Boolean);
+    const rel = words.findIndex((x) => /^(that|which|who|whose|where)$/i.test(x));
+    const main = rel === -1 ? words : words.slice(0, rel);
+    if (main.some((x) => FINITE.test(x))) return false;
+    const brk = main.findIndex((x) => NP_BREAK.test(x));
+    const head = brk === -1 ? main : main.slice(0, brk);
+    return !head.slice(1).some((x) => /[a-z](s|ed)$/i.test(x) && !/(ss|us|is)$/i.test(x));
+  };
+  const conditionalLine = (statement: string, appliesWhen: string): string => {
+    // The author's condition, verbatim, with a leading "when" only if they did not write one.
+    const w = appliesWhen.trim().replace(/[.\s]+$/, '').split(/\s*;\s*/).filter(Boolean).join(' and ');
+    let body = statement.trim().replace(/[.\s]+$/, '');
+    if (isQuantifiedNounPhrase(w)) {
+      // A statement's own "when" stays its own: "For any figure, when it is an estimate, I say so."
+      const keep = /^(I\b|I'|[A-Z]{2,})/.test(body);
+      return `For ${w.charAt(0).toLowerCase() + w.slice(1)}, ${keep ? body : body.charAt(0).toLowerCase() + body.slice(1)}. Elsewhere, do not.`;
+    }
+    const clause = /^when\b/i.test(w) ? w : `when ${w}`;
+    // A statement with a "when" of its own joins the condition rather than following it: "When A, when
+    // B, I do C" read as two conditions with a comma splice. It becomes "When A and B, I do C".
+    let joined = clause;
+    const own = /^when\s+([^,]+),\s*(.+)$/i.exec(body);
+    if (own) { joined = `${clause} and ${own[1]}`; body = own[2]; }
+    const keepCase = /^(I\b|I'|[A-Z]{2,})/.test(body);
+    const lead = keepCase ? body : body.charAt(0).toLowerCase() + body.slice(1);
+    return `${joined.charAt(0).toUpperCase() + joined.slice(1)}, ${lead}. `
+      + 'When that does not hold, do not.';
+  };
+
+  // A STEP THE SERVED METHOD ALREADY SAYS IS NOT SAID TWICE. The owner's steps are served in their method, in order
+  // and under their headings; restated below as numbered items they were cut loose from the heading that governed
+  // them ("Before sending, delete:" lost, so the things to delete read as things to do). Such a step keeps its check,
+  // listed under "How your method is checked". A step the method does not contain verbatim is served as before.
+  // The method as it is served: front matter off, whole otherwise. What travels with the package is this, so two notes
+  // that serve the same words are one package (a changed front-matter key or a trailing newline is not a new skill).
+  const methodPlain = method ? method.text.replace(/^\uFEFF/, '').replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, '').trim() : '';
+  const flat = (t: string): string => t.toLowerCase().replace(/[*_`>#]/g, '').replace(/\s+/g, ' ').trim();
+  const methodFlat = flat(methodPlain);
+  // Only a step as the method states it: one the owner later scoped (`amend --applies-when`) carries a condition the
+  // method does not, and is served with it below.
+  const inMethod = (r: typeof v.requirements[number]): boolean => Boolean(methodFlat) && r.provenance === 'EXPERT_STATED'
+    && isGeneralScope(r.appliesWhen) && methodFlat.includes(flat(r.statement).replace(/[.\s]+$/, ''));
+  const line = (r: typeof v.requirements[number], i: number): string => {
+    const prov = provenanceLabel(r.provenance);
+    const text = isGeneralScope(r.appliesWhen)
+      ? r.statement
+      : conditionalLine(r.statement, r.appliesWhen);
+    // A rule that needs material the model does not have is where invention happens. `atelier invoke`
+    // refuses before the call; a host serving this file directly cannot be made to, so the file says it.
+    const needs = (r.prerequisites ?? []).map((p) =>
+      `\n   Needs: ${p.why.replace(/[.\s]+$/, '')}. If you were not given it, ask for it. Never invent it.`).join('');
+    // A measured rule states its number: the model is told the target it will be checked against. One no count
+    // checks says so too: a run reports it as the owner's to read (or a reader's to report), never as held.
+    const checked = r.measurement ? `\n   Checked: ${observerFor(r.measurement.observer).describe(r.measurement.params)}.`
+      : '\n   Read, not counted: no check measures this; whether the work does it is reported, never counted as held.';
+    return `${i + 1}. ${text}${needs}${checked}\n   <!-- ${r.requirementId} · ${prov} -->`;
+  };
+
+  const boundShown = bound.filter((r) => !inMethod(r));
+  const avoidSection = boundShown.length
+    ? `\n## What not to do\n\n${boundShown.map(line).join('\n\n')}\n`
+    : '';
+
+  // ENFORCE + SELF_CHECK: the rule is confirmed, so the check MAY act on the draft.
+  //
+  // This is a different section from the OBSERVE pass below, and the separation is the point. One
+  // section cannot hold both without either licensing revision on a prohibition nobody confirmed —
+  // the exact escalation the authority seam exists to refuse — or forbidding it on a rule the
+  // author stands behind, which would make the escalation buy nothing.
+  const preFinalizeSection = preFinalize.length
+    ? `\n## Before you finalize\n\nYou were told these while writing. Now read the draft back against them one at a time. Where the\ndraft does not meet one, REVISE it so that it does, then continue.\n\n${preFinalize.map(line).join('\n\n')}\n`
+    : '';
+
+  // OBSERVE lands AFTER the draft exists, in its own pass, and says so. A prohibition nobody has
+  // confirmed must not quietly shape the writing — if it is wrong it would suppress something and
+  // leave no trace that it did.
+  // ── THE PREAMBLE IS DERIVED FROM WHAT IS IN THE SECTION, NEVER ASSERTED OVER IT ──────────────
+  //
+  // This said "patterns inferred from the author's work that NO ONE HAS CONFIRMED yet. Do not let
+  // them shape what you write" about EVERYTHING here — but the section is defined by ROLE, not by
+  // confirmation status, and the two are not the same set. A requirement the author wrote in their
+  // own words, marked PREFERRED, can land here and be told to the model as an unconfirmed guess it
+  // must not act on. That is not a hedge, it is a false statement about the author's own rule, and
+  // it actively suppresses a behaviour they asked for.
+  //
+  // Found while diffing two study arms that were supposed to differ only in carrier: the prose arm
+  // told the model p6 was unconfirmed and to ignore it, while the example arm said "reach for this
+  // when it fits". Same requirement, opposite instruction.
+  const anyConfirmed = observed.some((r) => isConfirmed(r));
+  const observePreamble = observed.every((r) => isConfirmed(r))
+    ? 'These are things the author does that are NOT obligations. Reach for one where it fits and do\nnot force it. When the draft is finished, read it back and note briefly which of them it did.'
+    : anyConfirmed
+      ? 'Some of these the author confirmed and some are inferred from their work and CONFIRMED BY NOBODY.\nNeither is an obligation. Do not let the unconfirmed ones shape what you write. When the draft is\nfinished, read it back and note briefly whether any of them apply.'
+      : "These are patterns inferred from the author's work that NO ONE HAS CONFIRMED yet. Do not let them\nshape what you write. Once the draft is finished, read it back and note briefly whether any of them\napply. Report what you find and leave the draft as it is.";
+  const observeSection = observed.length
+    ? `\n## After you have written it, check yourself\n\n${observePreamble}\n\n${observed.map(line).join('\n\n')}\n`
+    : '';
+
+  // ── REFERENCE MATERIAL, NAMED FROM SKILL.md ────────────────────────────────────────────────
+  //
+  // Examples used to be written to `examples/*.md` and never mentioned anywhere the model would read.
+  // On Atelier's own invocation path that was fine — it composes the files into the payload itself.
+  // On a host's native path it was the old bug in a new place: the artefact existed, the manifest said
+  // so, and the host had no reason to open it.
+  //
+  // A host that reads further material does so when the instructions point at it. So SKILL.md names each
+  // file and the condition it applies under, which also carries the routing that `context-map.json`
+  // holds — a condition stated where the reader is, rather than in a sidecar only Atelier parses.
+  //
+  // This makes the file REFERENCED. It does not make it read, and the host capability matrix says
+  // REFERENCED_UNVERIFIED for exactly that reason.
+  //
+  // The OUTPUT CONTRACT is deliberately NOT referenced here. Restating a schema as an instruction is
+  // the weaker version of the schema — half-satisfiable with nothing noticing — and swapping a runtime
+  // guarantee for a request is the substitution the carrier exists to prevent. Where a host cannot
+  // enforce it, the honest report is UNSUPPORTED, not a paragraph.
+  // A COUNT IS A CHECK, NOT AN EXAMPLE. A habit counted off the pieces ("a new piece stays between 110 and 686
+  // characters", "no links") and not required was served as a reference card beside every request: seventeen of them
+  // were a third of what the writer read, and a band read off five short answers told it how long a requested
+  // explanation could be. Such a rule is held by its check and steered by its note after the draft; the writer is not
+  // handed it. What the author's own words show (a move with its quote) is still served.
+  const countedOnly = (r: typeof v.requirements[number]): boolean => Boolean(r.measurement) && r.materiality !== 'REQUIRED' && !r.evidence?.trim();
+  const exampleCarried = carried.filter((x) => x.carrier === 'EXAMPLE' && !countedOnly(x.r));
+  const always = (r: { appliesWhen: string }): boolean => isGeneralScope(r.appliesWhen);
+  // ── A MOVE IS CARRIED NO MORE WIDELY THAN THE CORPUS SUPPORTS (core/compiler/applicability.ts) ──
+  //
+  // The moves a standard holds but does not require. Each is stated as something I do, stated only with its
+  // condition, or shown as one instance and never stated, by how many pieces show it. A move that holds back what
+  // was asked stays an instance until the owner rules on it. The standard is untouched: this is how a rule is carried.
+  const sometimes = exampleCarried.map((x) => x.r).filter((r) => !r.measurement && !r.realizes && r.materiality !== 'REQUIRED' && r.kind === 'GENERATIVE');
+  const moveCarriers = new Map(sometimes.map((r) => [r.requirementId, moveEvidence(r.observedRate, voice?.corpusPieces ?? null, {
+    // The reading kept with the voice decides for every move it covered; the word pattern only for a move none read.
+    answers, general: always(r), holdsBack: voice?.holdsBackOf?.includes(r.requirementId) || (voice?.holdsBack && !voice.holdsBackOf) ? Boolean(voice.holdsBack?.includes(r.requirementId)) : HOLDS_BACK.test(r.statement), ownerRuled: ownerWrote(r) })]));
+  const isExemplarOnly = (id: string): boolean => moveCarriers.get(id)?.carrier === 'exemplar';
+  const stated = sometimes.filter((r) => !isExemplarOnly(r.requirementId));
+  // The index names a file only when the file shows something: a stated move, or an instance in the author's own words.
+  const indexed = exampleCarried.filter((x) => !isExemplarOnly(x.r.requirementId) || Boolean(x.r.evidence?.trim()));
+  const referenceSection = indexed.length
+    ? `\n## Reference material\n\nEach file below shows an observed realization from the source work. Read a file when its condition\napplies to what you are writing; they are instances, not extra instructions.\n\n`
+      + indexed.map((x) => `- \`examples/${x.r.requirementId}.md\` — `
+        + (isExemplarOnly(x.r.requirementId) ? `one instance, not a habit${always(x.r) ? '' : `, from ${condition(x.r.appliesWhen)}`}`
+          : always(x.r) ? 'relevant to any piece of this kind' : condition(x.r.appliesWhen))).join('\n') + '\n'
+    : '';
+
+  // ── HOW I SOUND (core/compiler/voice.ts, persona.ts) ───────────────────────────────────────────
+  //
+  // The voice is carried by description and by the author's own writing, not by rules: four blind
+  // rounds found rules alone never produced it. The persona says how the author sounds and HOW OFTEN;
+  // whole pieces show their modes; the length is theirs. Never their topics, facts or sentences.
+  const pieceFiles = (voice?.pieces ?? []).map((_, i) => `examples/voice-${i + 1}.md`);
+  // A required cap on the piece's words, from the standard (a method's "between 220 and 420 words"), when there is one.
+  const wordCap = ((): number | null => {
+    for (const q of v.requirements) {
+      if (q.materiality !== 'REQUIRED' || q.measurement?.observer !== 'LENGTH') continue;
+      const prm = q.measurement.params as { unit?: unknown; max?: unknown; in?: unknown };
+      if (Array.isArray(prm.unit) && (prm.unit.includes('word') || prm.unit.includes('words')) && !prm.in && typeof prm.max === 'number') return prm.max;
+    }
+    return null;
+  })();
+  // A COMPOSITE VOICE (core/composite): several writers, and the owner's choice from each. Said as what it is, so no one
+  // piece is read as the voice and no writer's words are reused: the traits chosen carry it, and the rules above hold them.
+  // A composite of nobody (no writer with a trait taken) is no composite: the pieces are served as one author's are.
+  const composite = voice?.composite?.authors.length ? voice.composite : undefined;
+  const authorOf = (i: number): string | undefined => composite?.pieceAuthors[i];
+  // Which served pieces were cut: under `excerpts`, the ones that carry the mark. A short piece is served whole.
+  const cutPieces = (voice?.pieces ?? []).map((t) => voice?.pieceForm === 'excerpts' && isExcerpt(t));
+  // EVERY POINT READ IS SERVED (core/compiler/persona.ts). A point that more probably holds in most pieces than not (by
+  // its measured rate, or by the reading's word where none was measured) is how the author sounds; the rest is a move
+  // they make when a piece calls for it, served as a repertoire index below. The conditional points are not filtered out here: the moves section is built
+  // from the standard's rated requirements and never reads the persona, so without them the author's conditional
+  // moves (the ones that make them recognisable) would reach no writer.
+  const traits = voice?.persona ? { ...voice.persona, points: standingPoints(voice.persona) } : undefined;
+  const repertoire = voice?.persona ? conditionalPoints(voice.persona) : [];
+  const voiceParts = [
+    composite ? `My voice is a composite: the owner of this skill read pieces by ${composite.authors.length === 1 ? 'one writer' : `${composite.authors.length} writers`} and chose what to take from each. It is that combination, not any one of them and not their average:\n\n${composite.authors.map((a) => `- From ${a.name}: ${a.classes.map((c) => TRAIT_LABEL[c]).join('; ')}.${a.traits.length ? ` Taken as: ${a.traits.map((t) => `"${t.trim().replace(/\.$/, '')}"`).join('; ')}.` : ''}`).join('\n')}\n\nNothing else about these writers is to be imitated, and none of their words is to be reused: a phrase of theirs in my work is copying, and is checked for.` : '',
+    // A TRAIT IS WHAT HOLDS ACROSS PIECES. A point marked "sometimes" or "rarely" is a conditional habit, and served
+    // under "How I sound" it reads as how I always am: it is served apart, as what I do in some pieces.
+    traits?.points.length ? `How I sound (each point is quoted from my own pieces, and holds across them; where a count is given, it is how many of my pieces show it):\n\n${describePersona(traits)}` : '',
+    // THE REPERTOIRE: descriptive, no quote, no instruction. What the author does when a piece calls for it, so the
+    // writer knows the range; which of these fit one request is the brief's to say (core/loop/execution-brief.ts,
+    // Gate C2), never a rate to hit.
+    repertoire.length ? `Moves I make in some pieces, not most (what I do when a piece calls for it; none of these is a rule, and no piece of mine carries many of them; a count is how many of my pieces show it, with the range it could hold in):\n\n${describeRepertoire(repertoire)}` : '',
+    // Whole pieces, or each piece shown by its opening and a passage from its middle (core/compiler/voice.ts,
+    // `selectWithinBudget`). Said as what it is: a model told it holds a whole piece takes the cut for the ending.
+    pieceFiles.length && composite ? `${pieceFiles.map((f, i) => `\`${f}\` (${authorOf(i) ?? 'one of the writers'})`).join(', ')}: ${cutPieces.some(Boolean) ? `passages from one piece by each writer named, the opening and a part from the middle, with ${EXCERPT_GAP} where text is left out` : 'one whole piece by each writer named'}. Read each for the trait taken from that writer and for nothing else; take no content, no sentence and no phrase from any of them.`
+      : pieceFiles.length ? (cutPieces.some(Boolean)
+      ? `${pieceFiles.map((f) => `\`${f}\``).join(', ')} ${pieceFiles.length === 1 ? 'holds passages from one piece' : cutPieces.every(Boolean) ? 'each hold passages from one piece' : 'each hold one piece, or passages from one,'} of mine: the opening and a part from the middle, with ${EXCERPT_GAP} where text is left out. They were chosen to show the different ways I write. Read them before drafting and take the voice from them, not the content, and never the place where a passage stops.`
+      : `${pieceFiles.map((f) => `\`${f}\``).join(', ')} ${pieceFiles.length === 1 ? 'is a whole piece' : 'are whole pieces'} of mine, chosen to show the different ways I write. Read them before drafting and take the voice from them, not the content.`) : '',
+    // The passages are a file of their own, like the pieces (examples/voice-N.md): inline they grew SKILL.md with the
+    // corpus, past the body a host loads whole (core/eval/size.ts, SKILL_BODY_LIMIT).
+    voice?.passages.length ? `\`${PASSAGES_FILE}\` holds ${voice.passages.length} passage(s) of my own, from different pieces. Read it before drafting and take the voice from it, not the content.` : '',
+    // AN ANSWER'S LENGTH BELONGS TO ITS REQUEST (core/compiler/scope.ts). "My answers usually run about 100 words,
+    // unless the request asks for more or less" was read off twelve small answers, and the number won over the
+    // clause: a requested walkthrough came back a third as long as the bare model's. So a skill that answers states
+    // no usual length: it states how much it adds beyond what was asked, and that the request sets the length.
+    answers ? (voice ? describeScope(voice.scope ?? groundScope([], null, null)) : '')
+      // For writing, the length the author's pieces run is theirs, and still only a default: it is what a piece runs
+      // when the request names no length. (The line keeps its opening words: `invoke` finds it by them to withhold it
+      // from a run whose request states a length.)
+      // UNDER A REQUIRED CAP, THE AUTHOR'S SPAN IS THE TARGET. "Run about 400 words, but that is not how long an answer must
+      // be" beside a method's "between 220 and 420 words" overshot on 10 of 10 drafts (449–502), and the trim then cut
+      // the clause every example carries. Where the standard requires a length in words, the span the pieces run is
+      // the aim and the cap is named; the hedge that licensed the overshoot is left out.
+      // The aim ends at least a twentieth under the cap: told to aim at 405–419 under a cap of 420, the writer landed at
+      // 429–452 on 10 of 10 drafts; a draft lands a few percent long, and the margin has to hold that.
+      : voice?.lengthWords && wordCap ? ((): string => {
+        const span = voice.lengthSpan ?? [voice.lengthWords[0], voice.lengthWords[1]];
+        const hi = Math.min(span[1], Math.floor(wordCap * 0.95)); const lo = Math.min(span[0], Math.floor(wordCap * 0.9));
+        return `My pieces of this kind run about ${span[0] === span[1] ? span[0] : `${span[0]} to ${span[1]}`} words, and my method allows at most ${wordCap}. A draft lands a few percent longer than it was aimed, so aim for ${lo} to ${hi} words and never pass ${wordCap}. Make room by writing the standard parts tightly, never by dropping one of them.`;
+      })()
+      : voice?.lengthWords ? `My pieces of this kind run about ${voice.lengthWords[0] === voice.lengthWords[1] ? voice.lengthWords[0] : `${voice.lengthWords[0]} to ${voice.lengthWords[1]}`} words when a request asks for a piece like mine and names no length. That is how my pieces ran, not how long an answer must be: the task sets how much is needed, so a request that needs less (a short reply, a direct answer) gets less, and one that needs more gets more.` : '',
+  ].filter(Boolean);
+  const voiceSection = voiceParts.length ? `
+## How I sound
+
+${voiceParts.join('\n\n')}
+
+${answers
+    ? `Take who is speaking, the register, the rhythm and the spelling. Do the work the request asks for instead of
+handing it back: with tools, use them and report only what they returned; without them, do what the request
+itself allows (write the fix, the report, the command) and say how to check it. Never describe a step you did
+not take or a result you did not see. Finding something out is your job: when the request says where the work is
+(a file, a repository), do it, or say exactly what you would open and change. Ask only for a decision that is
+the person's to make (which environment, which of two services), never for what you could find yourself.
+Give what was asked first. When the request depends on files or a system you were not shown, write the answer
+against assumptions you state ("assuming \`parseDate(s: string): Date\`"), then ask for the one thing that
+would change it. When an action is destructive, name the risk, give the safe path (a dry run, a backup, the
+narrower command) and then the command. Ask instead of answering only when the request names no target and
+acting on the wrong one would do damage, and then say what you will do with each answer. Never describe a
+project, a file or a result you have not seen.`
+    : composite ? `Take from each writer only what is named for them above. Never take their topics, facts, names, figures,
+sentences, coined terms or stories: a story you were not given is not yours to tell.`
+      : WRITE_LIKE_THESE}
+${answers || composite || method ? `\n${FACTS_BELONG}\n` : ''}` : '';
+  // ── MOVES I SOMETIMES MAKE ───────────────────────────────────────────────────────────────────────
+  //
+  // A move the author makes in some pieces, instructed as a rule, is made in every piece, and several
+  // such moves together became a template a blind reader recognised across five topics. So the moves a
+  // standard holds but does not require are stated with how often the author makes them, and one piece
+  // may use about as many as the author's own pieces carry on average, never all of them.
+  const rateOf = (r: StandardVersion['requirements'][number]): number | null => (r.observedRate && r.observedRate.applicable > 0 ? r.observedRate.present / r.observedRate.applicable : null);
+  const expected = stated.reduce((n, r) => n + (rateOf(r) ?? 0.5), 0);
+  const perPiece = Math.max(1, Math.min(stated.length, Math.round(expected)));
+  const counted = (r: StandardVersion['requirements'][number]): string => (r.observedRate ? ` (in ${r.observedRate.present} of ${r.observedRate.applicable} of my pieces where it could apply)` : '');
+  const sometimesSection = stated.length ? `
+## Moves I sometimes make
+
+${answers
+    ? 'Not rules: things I do in some answers and not others. Use one only where the request calls for it, and never in place of giving what was asked.'
+    : `Not rules: things I do in some pieces and not others. Use about ${perPiece} of them in one piece, only where the piece
+calls for one, and never the same set every time.`}
+
+${stated.map((r) => `- ${moveCarriers.get(r.requirementId)?.carrier === 'general' || always(r) ? r.statement.trim() : conditionalLine(r.statement, r.appliesWhen)}${counted(r)}`).join('\n')}
+` : '';
+
+  // THE METHOD, WHOLE. Its headings move down two levels so they sit under this one; nothing else is touched.
+  // Shifted outside code fences only (a "# run tests" in a bash block is code), and never past level six.
+  const methodBody = methodPlain ? ((): string => { let fenced = false; return methodPlain.split('\n').map((l) => {
+    if (/^\s*(```|~~~)/.test(l)) { fenced = !fenced; return l; }
+    return fenced ? l : l.replace(/^(#{1,6})(\s)/, (_m, h: string, sp: string) => `${'#'.repeat(Math.min(6, h.length + 2))}${sp}`);
+  }).join('\n'); })() : '';
+  const methodSection = method ? `
+## My method
+
+Follow it as written: its steps, its exceptions, its examples of what to do and not do, and its final checks. It is
+how this work is done.
+
+${methodBody}
+` : '';
+  const genShown = gen.filter((r) => !inMethod(r));
+  const checkedSteps = [...gen, ...bound].filter((r) => inMethod(r) && r.measurement);
+  const checkedSection = checkedSteps.length ? `
+## How your method is checked
+
+Code reads the finished work for these parts of the method above (the step itself is said once, in the method):
+
+${checkedSteps.map((r) => `- ${r.measurement ? observerFor(r.measurement.observer).describe(r.measurement.params) : ''}.\n  <!-- ${r.requirementId} · ${provenanceLabel(r.provenance)} -->`).join('\n')}
+` : '';
+  // THE FORM OF THE WORK, IN THE PACKAGE: what frames the served examples at run time (cli/served.ts) is read from this
+  // marker, so the text a run is served is a function of the package's files alone, as the card and the delivery check
+  // require. A comment: the only frontmatter keys that travel are name and description (`PORTABLE_FRONTMATTER`).
+  // ── THE OUTPUT CONTRACT, ENFORCED OR DECLARED ─────────────────────────────────
+  //
+  // Where the runtime is Atelier's, the schema is passed to the provider as the response schema and a shape that
+  // breaks it never ships (core/delivery/carrier-delivery.ts, ATELIER_CLI_DELIVERY). A host that loads this package as
+  // text (Claude Code, Codex) enforces nothing by loading it: there the contract is declared, with the one mechanism
+  // that does hold it, so "carried as OUTPUT_CONTRACT" never reads as "held" on a surface where it is not.
+  const contractRules = carried.filter((x) => x.carrier === 'OUTPUT_CONTRACT').map((x) => x.r.requirementId);
+  const contractSection = contractRules.length ? `
+## Output contract
+
+\`contracts/output.schema.json\` holds the shape ${contractRules.join(', ')} require${contractRules.length === 1 ? 's' : ''}. Atelier's own
+runtime passes it to the model as the response schema and refuses an output that breaks it. A host that reads this
+file as text does not enforce it: there, run \`atelier verify --skill ${skillId} --hook\` as the host's hook on
+what is written (exit 2 blocks with the broken rules), or \`atelier verify --skill ${skillId} <file>\` on the output
+before it ships. Until one of those runs, the shape is asked for, not held.
+` : '';
+  const skillMd = `---
+name: ${skillId}
+description: ${yamlScalar(description)}
+---
+<!-- form: ${answers ? 'replies' : 'documents'} -->
+
+# ${skillId}
+${methodSection}
+${method ? `Everything below my method is secondary: examples of finished work, how I sound, and rules read from my
+pieces. Apply those as judgment, including knowing when one does not apply. None of them overrides the method.${!voiceSection && !exemplar ? `\n\n${FACTS_BELONG}` : ''}`
+  : `Apply the standard below as judgment, not as a checklist — including knowing when a rule does not
+apply.`}
+${exemplar ? `
+## Read first
+
+\`examples/exemplar.md\` is one complete piece by the author. Read it before drafting and take its
+voice from it: how it opens, how its sentences and paragraphs run, how it moves from point to point.
+Not its length: the request sets that. Never take its topic, facts, names, figures or sentences.
+${voiceSection ? '' : `\n${FACTS_BELONG}\n`}` : ''}${voiceSection}${sometimesSection}${contrast.length ? `
+## Write this, not that
+
+\`examples/contrast.md\` has ${contrast.length} sentence(s) written for this skill that broke one of its rules, each
+next to the rewrite that met it. Before finalizing, check your draft for the same moves.
+` : ''}
+${genShown.length || !method ? `
+## What to do
+
+${genShown.map(line).join('\n\n') || '_(none)_'}
+` : ''}${checkedSection}${contractSection}${avoidSection}${preFinalizeSection}${observeSection}${referenceSection}
+---
+
+<!--
+Atelier materialization. Do not edit this file to change the standard.
+This is a compiled output; the authority record is StandardVersion ${v.standardVersionHash}.
+Editing here changes what is served without changing what was ratified, and the two would silently diverge.
+
+Two different things can change, and they are not the same command:
+  the IMPLEMENTATION — how this is arranged so a model reproduces the standard reliably.
+    atelier improve  keeps this StandardVersion and mints a new SkillVersion.
+  the STANDARD — what the author means by good.
+    atelier confirm  rules on one inferred rule and mints a new StandardVersion, with a reason.
+
+standardVersion: ${v.standardVersionHash}
+architecture:    ${arch.architectureHash} (${arch.components.length} component(s))
+workType:        ${v.workType}
+requirements:    ${v.requirements.length} — ${gen.length} enforced, ${bound.length} confirmed boundary, ${observed.length} observed-only
+authority:       ${v.authorityState}
+mintedAt:        ${v.mintedAt}
+-->
+`;
+  // ── EXAMPLES ────────────────────────────────────────────────────────────────────────────────
+  //
+  // One file per requirement rather than one file of examples, so a router can serve the two that
+  // apply to a task and leave the other nine unread. Framed as "how the author did it, and an output
+  // that does otherwise is not wrong" — which is the entire difference between PREFERRED and
+  // REQUIRED, and is unsayable in a document whose every line reads as instruction.
+  const exampleFiles: Record<string, string> = {};
+  for (const x of exampleCarried) {
+    const r = x.r;
+    // SHOWN, NEVER STATED. A move with too little evidence to be a habit, or one that holds back what was asked and
+    // the owner has not ruled on, reaches the model only as the author's own words in the one situation they came
+    // from. The statement Atelier wrote about it is not served: an instruction read off one piece is what turned
+    // "ask first, in 3 of 24 answers" into an answer that withheld the command.
+    if (isExemplarOnly(r.requirementId)) {
+      const quote = r.evidence?.trim();
+      exampleFiles[`examples/${r.requirementId}.md`] = quote
+        ? `[${r.requirementId}] One instance from my own work${isGeneralScope(r.appliesWhen) ? '' : `, from ${condition(r.appliesWhen)}`}. Not a habit and not a rule: nothing is to be done from it beyond recognising the case.\n\n> ${quote.replace(/\n/g, '\n> ')}\n`
+        : `[${r.requirementId}] Seen too rarely in my work to state, and no passage of mine was anchored for it. Nothing is to be done from this.\n`;
+      continue;
+    }
+    // A LINKED REALIZATION SAYS WHOSE FORM IT IS. Without the parent named, the model reads it as one
+    // more thing to do; with it, the obligation stays with the decision and this is how that decision
+    // characteristically lands. `realizationTolerance` is the author's answer to how tightly the form
+    // itself binds, which is the question a realization poses instead of "is this REQUIRED".
+    const tol = r.realizationTolerance;
+    const binding = r.realizes
+      ? `This is not a separate instruction. It is one way the author carries out **${r.realizes}**,\n`
+        + `which is where the obligation sits.\n\n`
+        + (tol === 'STRICT'
+          ? 'The author marked this form STRICT: the exact realization is part of what they mean.'
+          : tol === 'FUNCTIONALLY_EQUIVALENT'
+            ? 'The author marked this FUNCTIONALLY_EQUIVALENT: another form doing the same work is fine.'
+            : tol === 'FLEXIBLE'
+              ? 'The author marked this FLEXIBLE: characteristic, and nothing turns on the exact form.'
+              : 'The author did not say how tightly the form binds. Treat it as characteristic, not required.')
+      : r.materiality === 'REQUIRED'
+        ? 'This IS required, and the form shown is the point — the author said the exact realization matters.'
+        : 'This is NOT required. It is an observed realization from the source material. An output that\ndoes otherwise is not wrong; reach for this when it fits, and do not force it.';
+    // SHOWING BEATS TELLING, AND FOR A REALIZATION THAT ORDER IS THE POINT.
+    //
+    // The description is a paraphrase of a form. The span is the form. Leading with the paraphrase
+    // turns the example carrier back into a second sentence of instruction, which is what it was
+    // doing before a span existed to lead with. Where there is no anchored span the file says so
+    // plainly rather than presenting the paraphrase as if it were an instance.
+    const span = r.evidence?.trim();
+    const shown = r.realizes && span
+      ? `> ${span.replace(/\n/g, '\n> ')}\n\nThat is one way the author does it. In their words, the rule is:\n\n${r.statement}\n\n`
+      : r.realizes
+        ? `${r.statement}\n\n*(No verbatim span was anchored for this one, so what follows describes the form\nrather than showing it.)*\n\n`
+        : `${r.statement}\n\n`;
+    // ── NO MARKDOWN HEADINGS IN REFERENCE MATERIAL ────────────────────────────────────────────
+    //
+    // These bodies used to open with `# p6` and carry a `## How the author did it`. Served to a
+    // model as context, a heading is not a label — it is a document structure, and the model
+    // CONTINUED it. Measured on 74 generations of a blind study: 31 outputs emitted a literal
+    // `# pN` line and 10 reproduced a served instance verbatim, so a user's deliverable ended with
+    // the skill's own guts appended to it. The arm carrying one extra example did it 59% of the
+    // time against the other arm's 29%.
+    //
+    // "These are instances, not instructions" addressed AUTHORITY. It said nothing about OUTPUT
+    // OWNERSHIP, which is the thing that was actually being got wrong. Labels are now bracketed
+    // rather than headed, so there is no structure to continue.
+    exampleFiles[`examples/${r.requirementId}.md`] =
+      `[${r.requirementId}]${r.realizes ? ` — how ${r.realizes} lands` : ''}\n\n${shown}`
+      + (isGeneralScope(r.appliesWhen) ? '' : `**Applies when:** ${r.appliesWhen}\n\n`)
+      + `${binding}\n\n`
+      // THE COUNTERFACTUAL IS NOT SERVED, AND THIS IS THE PLACE IT NEARLY WAS.
+      //
+      // `wouldBeAbsentIf` is a machine-proposed falsifying statement whose whole job is to give the
+      // AUTHOR something to disagree with at ratification. It is not a second ratified requirement.
+      // Rendering it here reads as "avoid X" and would hand an unratified sentence the same carrier
+      // as a ratified one — the precise escalation the authority seam exists to refuse.
+      + (r.evidence && !r.realizes
+        ? `observed in the author's work:\n> ${r.evidence.replace(/\n/g, '\n> ')}\n` : '');
+  }
+
+  // ── OUTPUT CONTRACTS ────────────────────────────────────────────────────────────────────────
+  //
+  // A schema, not prose about a schema. Where the runtime can hold the shape, asking the model to
+  // hold it is strictly weaker — it can be half-satisfied and nothing notices.
+  const contractCarried = carried.filter((x) => x.carrier === 'OUTPUT_CONTRACT');
+  const contractFiles: Record<string, string> = {};
+  if (contractCarried.length) {
+    const props: Record<string, unknown> = {};
+    for (const x of contractCarried) Object.assign(props, x.r.outputShape ?? {});
+    contractFiles['contracts/output.schema.json'] = `${JSON.stringify({
+      $schema: 'https://json-schema.org/draft/2020-12/schema',
+      title: `${skillId} output`,
+      description: "Enforced by Atelier's runtime as the response schema. A host that reads this package as text does not enforce it: SKILL.md says what does.",
+      type: 'object', properties: props,
+      required: Object.keys(props), additionalProperties: false,
+    }, null, 2)}\n`;
+  }
+
+  // ── CONTEXT MAP ─────────────────────────────────────────────────────────────────────────────
+  //
+  // Deterministic, and deliberately not a semantic router. It records the condition each component
+  // already carries so a runtime can exclude what plainly does not apply. Having `appliesWhen` text
+  // is not the same as routing on it, and this is the smallest thing that is actually routing.
+  const conditional = carried.filter((x) => !isGeneralScope(x.r.appliesWhen) && x.carrier !== 'NONE');
+  const contextMap: Record<string, string> = conditional.length ? { 'context-map.json': `${JSON.stringify({
+    note: 'Serve a component when its condition holds. Unconditional components always serve.',
+    // A MOVE IS SERVED WITH ITS EXAMPLE, OR NOT AT ALL. Without a context named, a conditional move's instruction
+    // was served and its example withheld: the model got "ask one question first" without the answer that shows
+    // the question coming with three commands. Each example file carries its own condition, so all are served.
+    serveAll: true,
+    components: conditional.map((x) => ({ requirementId: x.r.requirementId, carrier: x.carrier,
+      artifact: x.carrier === 'EXAMPLE' ? `examples/${x.r.requirementId}.md` : 'SKILL.md',
+      appliesWhen: x.r.appliesWhen })),
+  }, null, 2)}\n` } : {};
+
+  // A PIECE AND THE REQUEST IT ANSWERED, shown as the pair they are: the subject is that request's.
+  // What the piece was written from, said with it: the request, and that the request was all there was. Its facts are
+  // that case's (the source roles): a writer who sees what the author had can tell what was read from the request.
+  const withRequest = (request: string | null, text: string): string => (request
+    ? `From another conversation, with someone else.\n\nThe request it answered: ${request.trim().replace(/\s+/g, ' ')}\n\nWhat I had: the request above; anything else I drew on is not shown, so its facts are not yours to use.\n\nWhat I wrote:\n\n${text}` : text);
+  const runtime: Record<string, string> = { 'SKILL.md': skillMd, ...exampleFiles, ...contractFiles, ...contextMap,
+    ...(exemplar ? { 'examples/exemplar.md': withRequest(exemplar.request ?? null, exemplar.text) } : {}),
+    ...Object.fromEntries((voice?.pieces ?? []).map((t, i) => [`examples/voice-${i + 1}.md`,
+      `${pieceLabel(i + 1, cutPieces[i], authorOf(i))}\n\n${withRequest(voice?.pieceRequests?.[i] ?? null, t)}`])),
+    ...(voice?.passages.length ? { [PASSAGES_FILE]: voice.passages.map((x) => `> ${x.trim().replace(/\n/g, '\n> ')}`).join('\n\n* * *\n\n') } : {}),
+    ...(contrast.length ? { 'examples/contrast.md': renderContrastFile(contrast, v) } : {}) };
+
+  // ── MANIFEST + ASSURANCE ────────────────────────────────────────────────────────────────────
+  const artifactFor = (c: Carrier, id: string): string | null =>
+    c === 'NONE' ? null
+      : c === 'EXAMPLE' ? `examples/${id}.md`
+        : c === 'OUTPUT_CONTRACT' ? 'contracts/output.schema.json' : 'SKILL.md';
+  const rows: ManifestRow[] = carried.map((x) => ({
+    requirementId: x.r.requirementId,
+    materiality: x.r.materiality ?? 'UNDECLARED',
+    realizationTolerance: x.r.realizationTolerance ?? 'UNDECLARED',
+    carrier: x.carrier, gateRole: x.role,
+    artifact: artifactFor(x.carrier, x.r.requirementId),
+    emitted: x.carrier !== 'NONE',
+    appliesWhen: x.r.appliesWhen,
+    why: x.carrier === 'NONE' ? 'the author ratified this as not taste; nothing is served for it'
+      : `carried as ${x.carrier} under gate role ${x.role}`,
+  }));
+  const assurance: Record<string, string> = {
+    'assurance/manifest.json': `${JSON.stringify({
+      skillId, standardVersionHash: v.standardVersionHash, architectureHash: arch.architectureHash,
+      workType: v.workType, authorityState: v.authorityState,
+      runtimeFiles: Object.keys(runtime).sort(),
+      requirements: rows,
+      emittedCount: rows.filter((r) => r.emitted).length,
+      notEmittedCount: rows.filter((r) => !r.emitted).length,
+      note: 'Every requirement appears exactly once. An architecture hash that moved without a row '
+        + 'moving is a claim about served behaviour that the bytes do not support. `emitted` says the '
+        + 'compiler produced a carrier; it does NOT say the carrier reached a model. Which carriers a '
+        + 'given surface delivers is that surface\'s claim, not this file\'s.',
+    }, null, 2)}\n`,
+  };
+
+  // The pairs themselves, as data, travel with the package that served them (never served, never
+  // hashed), so a candidate rebuilt from this version carries the same ones: see carriedFrom in cli/runtime.ts.
+  //
+  // THE VOICE TRAVELS WITH THE PACKAGE, AND THE STORE REFUSES TWO BODIES UNDER ONE HASH. The hash is over the files a
+  // model is served; this record is beside them, unhashed. So what a build adds to it must not differ between two
+  // builds that serve the same files. Two things are kept out of that risk here. The word budget the pieces were
+  // chosen within is the owner's preference for the next build, not something this package served: two budgets that
+  // choose the same pieces render the same files, and recording it made the second build collide with the first. It
+  // lives with the skill's stored voice (core/state/store.ts, `setVoice`). And the form of the pieces is written
+  // last, so its place in the record does not depend on which path of the build set it, and only when a piece was
+  // actually cut: asked of pieces too short to cut, `excerpts` serves the very files `whole` does. Every other field is written as it always was, in the order it came.
+  const travelling = voice ? (() => {
+    // Which moves a reading covered is the build's own bookkeeping, like the budget: it shaped no file. So is whether
+    // the pieces are served whole (`servedWhole`): it tells the next build not to spread them, and the same files
+    // are served with or without it.
+    const { pieceBudget: _budget, holdsBackOf: _covered, standardWording: _standard, lengthSpan: _span, lengthPieces: _pieces, sharedAmong: _shared, guardPieces: _guard, servedWhole: _whole, pieceForm, ...rest } = voice;
+    void _budget; void _covered; void _standard; void _span; void _pieces; void _guard; void _whole;
+    return { ...rest, ...(pieceForm === 'excerpts' && cutPieces.some(Boolean) ? { pieceForm } : {}) };
+  })() : null;
+  const withPairs = { ...(contrast.length ? { ...assurance, 'contrast-pairs.json': `${JSON.stringify(contrast, null, 1)}\n` } : assurance),
+    ...(travelling ? { 'voice.json': `${JSON.stringify(travelling, null, 1)}\n` } : {}),
+    ...(methodPlain ? { 'method.md': methodPlain } : {}) };
+  return { skillId, standardVersionHash: v.standardVersionHash, architectureHash: arch.architectureHash,
+    runtime, assurance: withPairs, files: runtime, packageHash: packageHashOf(runtime) };
+}
+
+/** Refuses a package that has picked up host-only frontmatter. */
+export function assertPortable(pkg: PortableSkillPackage): void {
+  const md = pkg.files['SKILL.md'] ?? '';
+  const fm = md.split('---')[1] ?? '';
+  const keys = fm.split('\n').map((l) => l.split(':')[0]?.trim()).filter((k): k is string => !!k);
+  const foreign = keys.filter((k) => !(PORTABLE_FRONTMATTER as readonly string[]).includes(k));
+  if (foreign.length) {
+    throw new Error(
+      `PORTABILITY: SKILL.md declares host-specific frontmatter (${foreign.join(', ')}). Only ` +
+      `${PORTABLE_FRONTMATTER.join(', ')} mean the same thing on every host. A key one host ignores is a ` +
+      'key that silently changes behaviour when the standard moves — which is the thing the standard is for.',
+    );
+  }
+  if (/\$\{[A-Z_]+\}/.test(md)) {
+    throw new Error('PORTABILITY: SKILL.md contains a host template variable. It would expand on one host and remain literal on another.');
+  }
+}
+
+/**
+ * A front-matter value as YAML reads it: plain when plain is safe, double-quoted when it holds what YAML would read as
+ * structure (": ", " #", a leading indicator). A description taken from a method ("Note: this is how I review") was
+ * written plain and broke a host's front-matter parser.
+ */
+export function yamlScalar(v: string): string {
+  const t = v.replace(/\s+/g, ' ').trim();
+  return /: |\s#|^[-?:,[\]{}#&*!|>'"%@`]|:$/.test(t) ? JSON.stringify(t) : t;
+}

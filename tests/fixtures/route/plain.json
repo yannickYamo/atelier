@@ -1,0 +1,144 @@
+{
+ "architectureHash": "9cc61e1481131f6e",
+ "copied": {
+  "longest": 0,
+  "repairAt": 8,
+  "runs": 0,
+  "shown": []
+ },
+ "delivery": {
+  "matched": true,
+  "outputContract": null,
+  "servedExamples": [],
+  "servedFiles": [
+   "SKILL.md"
+  ],
+  "withheldByContext": []
+ },
+ "input": "Write a post on the new terminal.\n\n(The material holds every specific this piece names. Leave no bracketed slot for me to fill: what the material does not give, the piece does without.)",
+ "inputHash": "bf66a4b361b790d4",
+ "invocationSurface": "ATELIER_CLI",
+ "output": "March brings the new terminal and twice the berths. I will take the first hourly ferry to the islands.",
+ "outputHash": "7efbeb9d5cc0457c",
+ "prewrite": {
+  "answers": [
+   {
+    "answer": "My daily crossing",
+    "by": "default",
+    "id": "angle"
+   }
+  ],
+  "plan": {
+   "angle": "The terminal gives the islands back their hour.",
+   "answer": "Go and use it.",
+   "close": "See you on the first boat.",
+   "image": null,
+   "leftOut": [],
+   "pain": "Waiting half a day for a boat.",
+   "points": [
+    {
+     "from": "Ferries to the islands will leave every hour",
+     "point": "hourly island ferries"
+    }
+   ],
+   "turn": "Hourly ferries change the trip.",
+   "use": "choose"
+  },
+  "planBy": "model",
+  "questions": [
+   {
+    "ask": "Why does the terminal matter to you now?",
+    "default": "My daily crossing",
+    "id": "angle",
+    "options": [
+     "My daily crossing",
+     "The island shops",
+     "The old pier"
+    ]
+   }
+  ],
+  "questionsBy": "model"
+ },
+ "provenance": "ORGANIC_USE",
+ "request": {
+  "resolvedTaskHash": "bf66a4b361b790d4",
+  "servedTaskHash": "bf66a4b361b790d4",
+  "source": "POSITIONAL"
+ },
+ "served": {
+  "blocks": {
+   "answers": false,
+   "assumed": true,
+   "brief": false,
+   "examples": 0,
+   "forThisRequest": true,
+   "latitude": false,
+   "persona": false,
+   "plan": true,
+   "points": true,
+   "repertoire": false
+  },
+  "bytes": 2305
+ },
+ "settings": {
+  "atelierVersion": "1.1.0",
+  "certificate": {
+   "acceptedUnmeasured": [],
+   "checks": {
+    "counted": 0,
+    "total": 0,
+    "written": 0,
+    "writtenQualified": 0
+   },
+   "errorBound": null,
+   "latitude": {
+    "run": "GROUNDED",
+    "setBy": "default",
+    "skill": "GROUNDED",
+    "tightenedBy": null
+   },
+   "readers": {
+    "claims": {
+     "gate": "pattern",
+     "instrument": "pattern check (--claims pattern)",
+     "kinds": [],
+     "measured": null,
+     "qualified": false,
+     "version": null
+    },
+    "taste": {
+     "falseBlockUpper95": null,
+     "labelledMisses": 0,
+     "veto": []
+    }
+   },
+   "standardVersionHash": "34a053f5e40ad14e",
+   "why": "no delivered-error bound: it needs an audit sample of your own labels, drawn like the work this skill does; the checks and readers above are what this output was held to"
+  },
+  "claim": {
+   "degraded": false,
+   "gate": "pattern",
+   "instrument": "pattern check (--claims pattern)",
+   "qualified": false,
+   "spentUsd": 0,
+   "version": null
+  },
+  "claimInstrument": "pattern check (--claims pattern)",
+  "contextJudge": null,
+  "flags": {
+   "allowUnsourced": false,
+   "drafts": 1,
+   "noTaste": true,
+   "placeholders": false
+  },
+  "formatProfile": null,
+  "learnedTellsHash": "4f53cda18c2baa0c",
+  "maxTokens": 12000,
+  "tasteVeto": []
+ },
+ "skillName": "quay",
+ "standardVersionHash": "34a053f5e40ad14e",
+ "work": {
+  "delimited": true
+ }
+}

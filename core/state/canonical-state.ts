@@ -1,0 +1,1266 @@
+// atelier/core/state/canonical-state.ts — THE CANONICAL STATE IS OURS, NOT THE HOST'S.
+//
+// Five host-independent objects carry everything. Claude Code's SKILL.md is a COMPILED MATERIALIZATION
+// of these — an output, never an input.
+//
+// ─── THE RULE THAT MAKES PORTABILITY REAL ─────────────────────────────────────────────────────
+//
+// A generated SKILL.md must NEVER be read back as authority while a StandardVersion exists. The moment
+// it is, the host's file format becomes the source of truth, a second adapter means a second standard,
+// and "the optimizer may not redefine what the human ratified" becomes unenforceable — because anyone
+// editing the materialization would be editing the standard.
+//
+// This is the same defect the compiler work found earlier at a different layer: reading an authored file
+// as evidence of what is served. Here it would be reading a served file as evidence of what was ratified.
+
+import type { RuntimeBinding, ObservedRuntime } from '../runtime/binding.js';
+import type { ServedBlocks } from '../eval/stages.js';
+import type { Profile } from '../loop/profile.js';
+import type { Route } from '../loop/route.js';
+import type { Prerequisite } from './prerequisite.js';
+// ALIASED, because two unrelated things in this codebase are called `Provenance`. The one declared
+// below says where a REQUIREMENT came from (discovered, rewritten, added, inferred from public work).
+// This one says why an INVOCATION was made (organic use, dev probe, stress probe). They share no
+// values. An inline `import()` was hiding the collision at the one place both are in scope.
+import type { Provenance as InvocationProvenance } from '../fidelity/provenance.js';
+import type { FidelityRecord } from '../fidelity/types.js';
+import { createHash } from 'node:crypto';
+
+/**
+ * Who stands behind a requirement.
+ *
+ * `EXPERT_REJECTED` exists because "the expert looked and said no" and "nobody has looked yet" were
+ * the same value until the ratification gate came out. While every unconfirmed rule was dropped at
+ * build, the conflation was invisible. The moment unconfirmed rules reach the standard, it stops
+ * being invisible: without the distinction, a rule the author explicitly refused would come back.
+ */
+export type Authority =
+  /** the expert whose standard this is confirmed it */
+  | 'EXPERT_RATIFIED'
+  /** the expert wrote it themselves */
+  | 'EXPERT_AUTHORED'
+  /** the expert looked at it and said no */
+  | 'EXPERT_REJECTED'
+  /**
+   * A USER adopted a behaviour inferred from someone ELSE's work, for their own skill.
+   *
+   * Two different facts, and only one of them is the user's to assert:
+   *   "I want this behaviour in the skill I am building."   — theirs
+   *   "This is definitively part of that author's standard." — not theirs, and never obtainable
+   *                                                            from a corpus
+   *
+   * Without this value the two collapse. Adopting a rule read off a third party's public writing
+   * would have to be recorded as EXPERT_RATIFIED, which asserts something about a person who was
+   * never asked. The source provenance stays PUBLIC_BEHAVIOUR_INFERRED for the life of the rule;
+   * adoption records who chose to use it, and rewrites nothing about where it came from.
+   */
+  | 'USER_ADOPTED'
+  /** nobody has confirmed anything. May never shape output. */
+  | 'DERIVED_UNRATIFIED';
+export type Provenance =
+  | 'MACHINE_DISCOVERED' | 'SUBSTANTIVELY_REWRITTEN' | 'EXPERT_ADDED'
+  /**
+   * Inferred from an expert's PUBLIC BEHAVIOUR, with no contact and no ratification.
+   *
+   * A public record contains an expert's decisions and not their authority. A maintainer who wrote
+   * "should use a Map here" made a decision; they did not review, correct, or endorse any standard
+   * inferred from it. Reading behaviour as endorsement is the exact inversion this system exists to
+   * prevent — and it is most tempting in a study designed to prove the system, because a cooperating
+   * expert is the expensive part.
+   *
+   * CEILING: such a requirement may be DERIVED_UNRATIFIED or USER_ADOPTED, and nothing above.
+   * `assertAuthorityCeiling` enforces exactly that. An earlier version of this comment said the cap
+   * was DERIVED_UNRATIFIED alone, which is narrower than the code and wrong in a way that matters: a
+   * reader planning a public-corpus study would conclude adoption was impossible and either abandon
+   * it or reach for EXPERT_RATIFIED, which is the inversion the ceiling exists to stop.
+   */
+  | 'PUBLIC_BEHAVIOUR_INFERRED'
+  /**
+   * THE PERSON SAID IT; A MACHINE ONLY BROKE IT INTO SEPARATE RULES.
+   *
+   * Distinct from both neighbours, and the distinction changes what a number means. EXPERT_ADDED is
+   * a rule its author typed as a rule. MACHINE_DISCOVERED is a rule read out of their work, which
+   * they may never have been able to state. This is the middle case a prompt produces: someone says
+   * "lead with the action, no preamble, never end with an offer of help" and a model separates that
+   * into three requirements without inventing any of them.
+   *
+   * Filing those as MACHINE_DISCOVERED would report `discovered 100%` on a standard its author
+   * dictated, which is false in the direction that flatters the machine. Filing them as EXPERT_ADDED
+   * would hide that a model chose the wording, and wording is where a faithful decomposition and an
+   * invented rule become indistinguishable.
+   *
+   * A rule the model adds that the person did NOT say is not this. It is MACHINE_DISCOVERED, and it
+   * carries the ordinary ceiling until someone ratifies it.
+   */
+  | 'EXPERT_STATED';
+export type RuleKind = 'GENERATIVE' | 'BOUNDARY';
+
+/**
+ * HOW A RULE IS MEASURED, WHEN IT CAN BE — DECLARED, NEVER INFERRED FROM ITS WORDS.
+ *
+ * Deterministic observers whose verdict is a fact about the text rather than a judgement of it: a
+ * banned phrase is present or it is not; a median sentence length is a number. A rule carries one
+ * only when a person ratified a rule that was proposed WITH it (discovery measures the corpus and
+ * proposes the target) or declared it themselves. The obligation layer's refusal to read
+ * checkability off prose stands; this is the assertion path it always named and never had.
+ */
+export type ObserverId = 'LEXICON' | 'SENTENCE_LENGTH' | 'PARAGRAPH_LENGTH' | 'HEDGE_RATE'
+  | 'PATTERN_RATE' | 'FRAGMENT_SHARE' | 'STYLE_DISTANCE' | 'TERM_RATE' | 'RATIO' | 'DISTRIBUTION'
+  | 'OPENING' | 'CLOSING' | 'HEADINGS' | 'RHYTHM' | 'FEATURE' | 'PRESENCE'
+  // what a method requires of the work itself (core/observers/obligations.ts)
+  | 'TABLE' | 'CITED' | 'LINES' | 'LENGTH' | 'NAMES_TEST'
+  // the shape of one short piece: characters, words, sentences, line breaks, hashtags, what it opens and closes on (core/observers/shape.ts)
+  | 'SHAPE'
+  // mechanical errors, found by a grammar engine the process wires in (core/observers/grammar.ts)
+  | 'GRAMMAR'
+  // a check a model wrote for one step of a method, run in a sandbox, qualified before it may block (core/observers/written.ts)
+  | 'CHECK';
+export interface Measurement {
+  readonly observer: ObserverId;
+  readonly params: Readonly<Record<string, number | readonly string[] | readonly number[]>>;
+}
+
+/** 1. What the expert supplied. Frozen at seal time; its hash is the run's identity. */
+export interface ExpertEvidence {
+  readonly evidenceId: string;
+  readonly workType: string;
+  readonly items: readonly { readonly id: string; readonly contentHash: string; readonly tokens: number }[];
+  readonly corpusHash: string;
+  readonly sealedAt: string;
+  /** declared, never inferred — it changes what any result means */
+  readonly aiAssisted: boolean | null;
+  readonly published: boolean | null;
+}
+
+/** A ratified rule. `appliesWhen` is required; GENERAL is a value, and a smell, not an absence. */
+/**
+ * Public behaviour can never become expert authority.
+ *
+ * Enforced as a function rather than a convention because the convenient move in a public-corpus
+ * study is to mark the inferred standard ratified so the rest of the pipeline runs.
+ */
+export function assertAuthorityCeiling(r: Pick<Requirement, 'provenance' | 'authority'>): void {
+  if (r.provenance === 'PUBLIC_BEHAVIOUR_INFERRED'
+    && r.authority !== 'DERIVED_UNRATIFIED' && r.authority !== 'USER_ADOPTED') {
+    throw new Error(
+      `AUTHORITY CEILING: a requirement inferred from public behaviour cannot be ${r.authority}. `
+      + 'The author was never asked and ratified nothing. A user may ADOPT it for their own skill '
+      + '(USER_ADOPTED) — that is their decision to make. Claiming it as that author\'s ratified '
+      + 'standard is not, and no corpus can supply it.');
+  }
+}
+
+/** What kind of thing a step of a method is: an instruction, a template example, an explanation, or a criterion (core/method/decision-units.ts). */
+export type UnitKind = 'instruction' | 'template' | 'explanation' | 'criterion';
+/**
+ * A STEP OF A METHOD, COMPILED FOR EXECUTION (core/method/decision-units.ts): the decision it asks for, what it consults,
+ * when it applies (its own words), what it puts in the work, what changes the default, and which steps come first.
+ * Never a requirement of its own and never a weight, and never inside the standard: a reading of the owner's step, kept
+ * beside the standard version it was read from (core/state/store.ts, `putUnits`), so a reading never moves the
+ * standard's hash. `by` says whether a model read it or the words alone decided (the floor: an instruction, applying
+ * always unless its words, or its heading's, say when).
+ */
+export interface DecisionUnit {
+  readonly kind: UnitKind;
+  readonly decision: string | null;
+  readonly inputs: readonly string[];
+  readonly condition: string | null;
+  readonly output: string | null;
+  readonly exception: string | null;
+  readonly dependsOn: readonly string[];
+  readonly quote: string;
+  readonly by: 'model' | 'floor';
+}
+
+export interface Requirement {
+  readonly requirementId: string;
+  readonly statement: string;
+  readonly appliesWhen: string;
+  readonly kind: RuleKind;
+  readonly authority: Authority;
+  readonly provenance: Provenance;
+  /** verbatim span from the corpus, or null when EXPERT_ADDED */
+  readonly evidence: string | null;
+  readonly evidenceItemId: string | null;
+  /**
+   * What you would see in a piece if this rule were NOT operating.
+   *
+   * THE ANTIDOTE TO RECOGNITION-AS-RATIFICATION. An expert reading "you ground abstract concepts in
+   * concrete moments" agrees readily, and agreement is a weak signal — the recorded study saw it
+   * exactly: *"'yes, I do write like this' is recognition, not fidelity; people recognise themselves
+   * in horoscopes."* At one or two goldens the discovery is least reliable and human ratification is
+   * the only filter, so the filter has to be given something to bite on.
+   *
+   * A counterfactual is that something. "If you didn't, I'd expect X" is falsifiable against the
+   * corpus and against the expert's memory in a way a bare statement is not, and a rule for which no
+   * counterfactual can be stated is a horoscope regardless of how readily it is recognised.
+   *
+   * Null for EXPERT_ADDED rules — a person stating their own rule owes no counterfactual to a
+   * machine — and for anything proposed before this field existed.
+   */
+  readonly wouldBeAbsentIf: string | null;
+  /**
+   * HOW MUCH the expert's judgment binds, and HOW MUCH its surface form binds. Two axes, because one
+   * cannot express "always compress the close, and any compressed form will do".
+   *
+   * Null for requirements ratified before the axes existed — absent, not defaulted, because a
+   * default here would silently answer a question the author was never asked.
+   */
+  readonly materiality: Materiality | null;
+  readonly realizationTolerance: RealizationTolerance | null;
+  /**
+   * THE DECISION THIS IS ONE WAY OF CARRYING OUT, when it is a way of carrying out another rule.
+   *
+   * Discovery finds expressive taste at roughly the rate it finds judgmental taste — form, figure,
+   * rhythm, register, pronoun discipline. What it could not do was say that one of those is HOW
+   * another one lands. Read flat, "end the beat on a short declarative that renames the thing" is a
+   * fussy habit and gets rejected. Read as the way a concrete scene is landed, it is the more
+   * interesting half of the pair. That is not a discovery failure; the ratification packet lost it.
+   *
+   * ASSERTED, NEVER INFERRED SILENTLY. Deriving this edge from a model was measured across three
+   * independent runs on one corpus: one rule was given three different parents in three runs, a
+   * standalone preference was captured into a parent twice, and the graph produced a chain the design
+   * forbids. A proposer may offer an edge with its run-stability; only the author's confirmation makes
+   * it structure. Discovery grants no authority, and that rule does not stop applying because the
+   * object being discovered is a relationship.
+   *
+   * `null` is BOTH "a latent decision" and "an expressive preference that stands on its own". Those
+   * are distinguished by materiality and tolerance, which they already carry, not by a third state.
+   */
+  readonly realizes?: string | null;
+  /**
+   * A machine-checkable shape this requirement demands of the output, when it demands one.
+   *
+   * Present only where the requirement genuinely constrains STRUCTURE rather than judgment. Most do
+   * not: "name the real constraint before proposing solutions" has no schema, and inventing one for
+   * it would convert judgment into form-filling. Null is the ordinary case and must stay cheap.
+   */
+  readonly outputShape: Readonly<Record<string, unknown>> | null;
+  /**
+   * The statement was written BY THE MACHINE FROM ITS CHECK (a count read off the examples, a section order shown by
+   * them), so the check reads all the statement says. Absent on anything a person or a model worded: there, how much
+   * of the sentence the check reads is worked out from the sentence (core/eval/observes.ts). Dropped whenever the
+   * check or the wording is changed afterwards.
+   */
+  readonly wordedFromCheck?: true;
+  /**
+   * THE OWNER STATED THIS RULE, AND THEIR OWN FINISHED WORK DOES NOT DO WHAT ITS CHECK READS: here is what was found.
+   * Either the rule is newer than the work, or the step was read as something they did not mean, and only they know.
+   * Until they confirm it the rule stays theirs and required, is checked and shown on every run, and its check
+   * blocks nothing (core/eval/record-build.ts): a reading the owner's own work contradicts has not earned belief.
+   * Absent once they confirm it.
+   */
+  readonly contested?: string;
+  /**
+   * THE CHECK READS SOMETHING NEAR THE RULE, NOT THE RULE: it was tied to the owner's step by the step's subject
+   * (it speaks of sources and of figures) and not by what the step asks. Its failing is not the rule broken, so it
+   * is run and shown and blocks nothing (core/plan/execution-plan.ts), unless the owner makes the rule required
+   * with this check, which is them saying the check is what they meant.
+   */
+  readonly related?: true;
+  /**
+   * WHAT MUST BE BOUND FOR THIS RULE TO BE EXECUTED TRUTHFULLY.
+   *
+   * Orthogonal to carrier and to materiality. The carrier says how the behaviour is caused; this says
+   * whether causing it is currently possible at all. A REQUIRED rule reading "cite one counted
+   * observation from our own records" is not satisfiable by a runtime with no records, and asking a
+   * model to satisfy it anyway produced an invented statistic rather than a refusal.
+   */
+  readonly prerequisites?: readonly Prerequisite[];
+  /** a deterministic measurement of this rule, when it has one. See `Measurement`. */
+  readonly measurement?: Measurement;
+  /**
+   * WHICH KIND OF RULE A REWRITE SERVES FIRST. An ACCURACY rule (a figure must be sourced, a
+   * disclaimer must appear) is repaired before any STYLE rule, so a pass spent shortening sentences
+   * never runs over a claim that is about to be corrected. Unset reads as STYLE.
+   */
+  readonly phase?: 'ACCURACY' | 'STYLE';
+  /**
+   * THE RULE'S NAME ACROSS VERSIONS (see ../state/rule-key.ts). Unset, it is derived from the rule's
+   * content; an amendment writes the old key onto the new wording so the lineage survives a reword.
+   */
+  readonly key?: string;
+  /**
+   * HOW OFTEN THE AUTHOR DOES IT: in how many of the unread pieces where the rule could apply they did.
+   * Set when a discovered rule is approved. A rule that is not required is compiled as a move the author
+   * sometimes makes, with this rate, rather than as something every piece must do.
+   */
+  readonly observedRate?: { readonly present: number; readonly applicable: number };
+  /**
+   * FOR A REQUIREMENT THAT COMES FROM A METHOD (core/method/standard.ts): what kind of thing it asks, which decides
+   * how it can be checked and what a failure is answered with. DELIVERABLE is something the output must hold, read
+   * by code on the output. EXECUTION is something the work must have been made from or done with, counted only
+   * where an artifact shows it (a figure found in the bound material). JUDGEMENT is the rest: stated, shown to the
+   * writer, and reported as not measured. Absent on a rule that describes how an author writes.
+   */
+  readonly obligation?: 'DELIVERABLE' | 'EXECUTION' | 'JUDGEMENT';
+}
+
+/**
+ * What a behaviour obliges. Only REQUIRED compiles as an obligation.
+ *
+ * TOLERATED is the asymmetric member and the reason this is not a boolean: a behaviour the expert
+ * declines to polish away is PROTECTED, never GENERATED. "Informal punctuation sometimes remains"
+ * must reach the model as a bound against over-smoothing and must never reach it as an instruction
+ * to introduce errors.
+ */
+export type Materiality =
+  | 'REQUIRED' | 'PREFERRED' | 'EXEMPLAR_ONLY' | 'TOLERATED' | 'INCIDENTAL';
+
+/** Whether the exact realization is the point, or only what it achieves. */
+export type RealizationTolerance = 'STRICT' | 'FUNCTIONALLY_EQUIVALENT' | 'FLEXIBLE';
+
+/**
+ * A realization points at a rule that exists, and never at itself or at another realization.
+ *
+ * One level, deliberately. The measured failure mode when this was derived automatically was chained
+ * edges — A realizes B while B realizes C — which is a hierarchy nobody authored and nobody can
+ * ratify. If a real corpus ever demands depth, that is a decision with evidence behind it; today it
+ * would be graph theory solved in advance of a problem.
+ */
+export function assertRealizationGraph(reqs: readonly Requirement[]): void {
+  const byId = new Map(reqs.map((r) => [r.requirementId, r]));
+  for (const r of reqs) {
+    if (!r.realizes) continue;
+    if (r.realizes === r.requirementId) {
+      throw new Error(`REALIZATION: ${r.requirementId} cannot realize itself.`);
+    }
+    const parent = byId.get(r.realizes);
+    if (!parent) {
+      throw new Error(
+        `REALIZATION: ${r.requirementId} realizes "${r.realizes}", which is not in this standard. `
+        + 'A realization without its decision is a form with nothing to serve.');
+    }
+    if (parent.realizes) {
+      throw new Error(
+        `REALIZATION: ${r.requirementId} realizes ${parent.requirementId}, which itself realizes `
+        + `${parent.realizes}. Chains are not represented — a realization attaches to a decision, and `
+        + 'a decision stands on its own. Point it at the decision, or leave it independent.');
+    }
+  }
+}
+
+
+/**
+ * 2. THE TARGET. Immutable. Editing mints a new version; it never amends this one.
+ *
+ * ─── WHY THIS IS NOT SIMPLY "THE RATIFIED RECORD" ANY MORE ──────────────────────────────────
+ *
+ * When ratification was a mandatory gate, everything in here had been confirmed by a person and the
+ * word "ratified" was accurate. Removing the gate changed that: a standard now also carries rules
+ * nobody has looked at yet. Keeping a field called `ratifiedAt` on an object containing unconfirmed
+ * proposals would state, in the record itself, something untrue — and the record is the one place
+ * that must never overstate its own authority.
+ *
+ * So the timestamp says only when the version was MINTED, and `authorityState` says plainly whether
+ * a person stands behind all of it. DRAFT is not a lesser object; it is an honest one. What protects
+ * the law is not the label but the compiler: an unconfirmed prohibition can never reach ENFORCE, and
+ * no optimizer can change that (`roleFor` in core/architecture/compile.ts).
+ */
+export type AuthorityState = 'DRAFT' | 'RATIFIED';
+
+/**
+ * WHAT A WRITTEN CHECK EARNED ON THE OWNER'S EXAMPLES (core/method/mutants.ts): every example it reads passed, its own
+ * mutants caught, other steps' mutants left alone. Kept BESIDE the standard, never inside its hash: the hash is what
+ * the owner ratified, and a machine's measurement of a check changes nothing they said. A rebuild that qualifies the
+ * same check differently leaves the standard's identity where it was and says so here.
+ */
+/** A finding kind of the consequence table (core/eval/consequence.ts). */
+export type ConsequenceFinding = 'trusted-fail' | 'untrusted-fail' | 'untrusted-pass' | 'judgement-unread' | 'judgement-missed' | 'untraced-specific' | 'claim-flagged' | 'not-run' | 'listed' | 'clean';
+/** What the table does with a finding, once repair has run: ship, ship labelled, send to a person, block. */
+export type ConsequenceAction = 'ship' | 'label' | 'person' | 'block';
+
+/** One written check held again to the owner's rulings: where it started, what was folded in, and when. */
+export interface Requalification {
+  readonly base: CheckQualification;
+  /** from when ratings count: rulings before it were in the build's own count */
+  readonly since: string;
+  /** rated runs folded in: accepted (extra examples), rejected naming this step (its own breaks), rejected naming another written step */
+  readonly accepted: readonly string[];
+  readonly rejected: readonly string[];
+  readonly cross: readonly string[];
+  readonly at: string;
+}
+
+export interface CheckQualification {
+  readonly examples: { readonly passed: number; readonly read: number; readonly of: number };
+  readonly own: { readonly caught: number; readonly of: number };
+  readonly cross: { readonly fired: number; readonly of: number };
+  readonly qualified: boolean;
+  readonly why: string | null;
+}
+
+/**
+ * HOW STRICTLY A SKILL'S OUTPUT IS HELD, by the kind of work it does (core/observers/latitude.ts). STRICT: house
+ * language, and a figure, date or citation not in the bound material blocks. GROUNDED: free within the method, and an
+ * untraced fact goes to review. CREATIVE: free composition, and an untraced fact is listed for the author, never cut.
+ * At every level a fact presented as real needs a source; what changes is the action on one that has none.
+ */
+export type LatitudeLevel = 'STRICT' | 'GROUNDED' | 'CREATIVE';
+export const LATITUDE_LEVELS: readonly LatitudeLevel[] = ['STRICT', 'GROUNDED', 'CREATIVE'];
+/** The default where nothing could be read: the middle level. */
+export const DEFAULT_LATITUDE: LatitudeLevel = 'GROUNDED';
+export interface Latitude {
+  readonly level: LatitudeLevel;
+  /** the words of the examples, the method or the purpose the reading stood on; empty when the owner set it or the floor did */
+  readonly evidence: readonly string[];
+  /** who set it: the owner (`--latitude`, `amend --latitude`), the reading, or the floor */
+  readonly by: 'owner' | 'model' | 'floor';
+}
+
+export interface StandardVersion {
+  readonly standardVersionHash: string;
+  /**
+   * How strictly output is held (`LatitudeLevel`). The owner's: inside the hash. Absent on a standard minted before
+   * it existed, which is held as GROUNDED.
+   */
+  readonly latitude?: Latitude;
+  /**
+   * Rules the owner accepted as unmeasured, by requirement id: no check reads them, and a run is not sent to review on
+   * their account. Each stays listed on the record and the certificate. The owner's: inside the hash.
+   */
+  readonly acceptedUnmeasured?: readonly string[];
+  /**
+   * The rows of the consequence table the owner set differently from their latitude's defaults (core/eval/consequence.ts):
+   * only the overrides, by finding. The owner's: inside the hash. Absent: every row is the latitude's default.
+   */
+  readonly consequences?: Readonly<Partial<Record<ConsequenceFinding, ConsequenceAction>>>;
+  /** by requirement id, for the written checks of this standard; absent where none was ever qualified. Not hashed. */
+  readonly qualifications?: Readonly<Record<string, CheckQualification>>;
+  /**
+   * WRITTEN CHECKS HELD AGAIN TO THE OWNER'S RULINGS (core/method/requalify.ts), by requirement id: the standing the build
+   * gave (`base`), the rated runs folded into it since, and when. `qualifications` holds the result. Not hashed: a ruling
+   * changes what a check has earned, never what the owner said.
+   */
+  readonly requalified?: Readonly<Record<string, Requalification>>;
+  /**
+   * The sealed corpus this standard was recovered from, when there was one.
+   *
+   * NULL FOR A STANDARD ITS AUTHOR WROTE DIRECTLY, and that is a fact worth carrying rather than a
+   * hole to fill. A person stating "always lead with the next action" is exercising authority, not
+   * supplying evidence about themselves, and there is no corpus behind it to name. This was
+   * mandatory once, which made the whole direct-authoring path unreachable: rules could be added and
+   * never compiled, because the close demanded an evidence id that a directly authored standard
+   * cannot honestly produce.
+   *
+   * `discoveryRecall` reports 0% for such a standard, which is the truth and not a failure — the
+   * machine found none of it because a person wrote all of it.
+   */
+  readonly evidenceId: string | null;
+  /**
+   * WHAT KIND OF WORK THIS GOVERNS. Required on every path, including the direct one.
+   *
+   * It survives the evidence id becoming optional because it is not a fact about the corpus. It is
+   * what `defaultDescription` turns into the skill's description, which is the first thing a host
+   * reads when deciding whether to load the skill at all. Weakening it to follow the evidence id
+   * would quietly degrade skill-level triggering, which is a different problem from anything the
+   * corpus answers.
+   */
+  readonly workType: string;
+  readonly requirements: readonly Requirement[];
+  /** DRAFT while any requirement is still DERIVED_UNRATIFIED. Derived, never asserted by a caller. */
+  readonly authorityState: AuthorityState;
+  /** when this version came into existence — NOT a claim that anyone approved it */
+  readonly mintedAt: string;
+  readonly supersedes: string | null;
+  /** why this version exists, when it supersedes another */
+  readonly reason: string | null;
+}
+
+/**
+ * 3. How the standard is arranged for execution. May change freely — it carries no authority.
+ *
+ * Defined in `core/architecture/compile.ts` and re-exported here so the five canonical objects still
+ * read as one set. It lives there because it has real compilation rules; a shape with no rules was
+ * how it degenerated into a hash of the requirement list.
+ */
+export type { SkillArchitecture, ArchitectureComponent, Carrier, Sensor, GateRole } from '../architecture/compile.js';
+
+/** 4. A built, installable artifact. */
+export interface SkillVersion {
+  readonly skillVersionHash: string;
+  readonly skillName: string;
+  readonly standardVersionHash: string;
+  readonly architectureHash: string;
+  /** hash of the emitted SKILL.md — proves what was installed, is NEVER read back as authority */
+  readonly materializedHash: string;
+  readonly builtAt: string;
+  /**
+   * The frontmatter description this version was built with.
+   *
+   * Stored because it is an INPUT to materialization and was previously reconstructed from a default
+   * at every later mint, so a description set once on `build` silently reverted on the next `improve`,
+   * `amend` or `confirm`. Its consumers are those three commands, which inherit it when no new one is
+   * given.
+   *
+   * Optional because SkillVersions minted before this field existed do not carry it. Absent means "unknown",
+   * and the reader falls back to the default rather than pretending to know.
+   */
+  readonly description?: string;
+}
+
+/** 5. Append-only. Feedback and outcomes accumulate here; nothing here mutates a standard. */
+export type EvidenceEvent =
+  | { readonly kind: 'FEEDBACK'; readonly at: string; readonly skillVersionHash: string; readonly verdict: 'GOOD' | 'CLOSE' | 'BAD'; readonly note: string | null }
+  | { readonly kind: 'PROPOSED_CHANGE'; readonly at: string; readonly skillVersionHash: string; readonly proposal: string; readonly accepted: boolean | null }
+  | { readonly kind: 'BLIND_PREFERENCE'; readonly at: string; readonly skillVersionHash: string; readonly preference: 'A' | 'B' | 'TIE' | 'NONE' };
+
+export interface EvidenceHistory { readonly skillName: string; readonly events: readonly EvidenceEvent[] }
+
+/**
+ * 6. ONE REAL EXECUTION. Immutable.
+ *
+ * ─── WHY THIS EXISTS ────────────────────────────────────────────────────────────────────────────
+ *
+ * Feedback used to bind to a skill NAME and a free-text note, which cannot answer the only question
+ * a repair needs answered: *what exact implementation produced the output the person disliked?*
+ * A name resolves to whatever is active when the complaint arrives, which is not necessarily what
+ * was active when the output was made. Binding feedback to an invocation makes the causal chain a
+ * fact rather than an inference.
+ *
+ * ─── WHY `invocationSurface` IS A TYPED VALUE AND NOT A BOOLEAN ─────────────────────────────────
+ *
+ * V1's only instrumented execution owner is the Atelier CLI. Claude Code and Codex invoke the
+ * installed skill through their own hosts and Atelier never sees it, so those invocations produce
+ * NO record. That is a real gap, and a typed surface means closing it later ADDS a value rather
+ * than silently reusing this one — nobody can mistake a CLI-proven loop for a host-proven one.
+ */
+export type InvocationSurface = 'ATELIER_CLI' | 'HOST_PLUGIN';
+
+/**
+ * WHY THIS INPUT EXISTS. Declared at the call, never inferred afterwards.
+ *
+ * The defect this closes: a first version derived context provenance from the EXECUTION PATH — every
+ * input that had reached a real InvocationRecord was stamped REAL_USAGE. So seven tasks written to
+ * stress-test the skill became a "certification-grade" suite, because they had been run properly.
+ * Passing through the real invocation path says how an input was EXECUTED. It says nothing about
+ * where it CAME FROM, and only the latter decides what a result may claim.
+ *
+ * UNDECLARED is the default and is treated as the WEAKEST grade. Certification has to be asserted,
+ * never fallen into: an unflagged probe must not drift upward, and an unflagged genuine use costing
+ * us evidence is the cheap direction to be wrong in.
+ */
+export type InputOrigin =
+  /** authored to test, probe or optimise the skill. Never certification evidence. */
+  | 'PROBE'
+  /** a real person wanting real work done. The only origin that can certify. */
+  | 'GENUINE_USE'
+  /** nobody said. Treated as PROBE. */
+  | 'UNDECLARED';
+
+/**
+ * Proof that what the model was given is what this SkillVersion says it should have been given.
+ *
+ * Recomputed at serve time from the STORED package, never re-derived from the standard: re-rendering
+ * would prove the renderer still agrees with itself, which is a different claim from "the artefact
+ * on record is the artefact that ran".
+ */
+export interface DeliveryEvidence {
+  readonly expectedPackageHash: string;
+  readonly servedPackageHash: string;
+  readonly matched: boolean;
+  readonly servedFiles: readonly string[];
+  /** rules withheld from this run's prompt because the material they need was not bound (invoke.ts) */
+  readonly withheldRules?: readonly string[];
+  /**
+   * Proof that the OUTPUT_CONTRACT carrier reached the provider — not that its file exists.
+   *
+   * The package hash above proves the contract file is the compiled one. It cannot see whether the
+   * schema was ever handed to the model, and for a while it was not: the file was emitted, the
+   * manifest read `served: true`, and generation ran against a hardcoded `{piece: string}`. The
+   * carrier was dark in exactly the way this system was built to prevent.
+   *
+   * So the schema ACTUALLY SENT is hashed at the call and compared with the stored contract. `null`
+   * when the package carries no contract, which is different from a contract that failed to arrive.
+   */
+  readonly outputContract: {
+    readonly artifact: string;
+    /** hash of the contract file in the stored package */
+    readonly contractHash: string;
+    /** hash of the schema object the provider actually received */
+    readonly schemaHash: string;
+    readonly enforced: boolean;
+  } | null;
+}
+
+/** Where a task came from, so a wrong task can be traced to the surface that produced it. */
+/** `FIX`: the task an earlier run was given, replayed by `atelier fix` to evaluate a repair. */
+export type TaskSource = 'POSITIONAL' | 'FLAG' | 'STDIN' | 'FILE' | 'API' | 'HARNESS' | 'HOST_PROMPT' | 'FIX';
+
+export interface RequestBinding {
+  /** what the command resolved the user's request to be */
+  readonly resolvedTaskHash: string;
+  /** what the inference request actually carried. Equal to the above, or the run is refused. */
+  readonly servedTaskHash: string;
+  readonly source: TaskSource;
+}
+
+/**
+ * I-REQUEST-BOUND — the resolved task and the served task are the same task.
+ *
+ * Deterministic, and checked at the moment the record is written rather than trusted. A mismatch is
+ * not a degraded run to be reported; it means the system did work the user did not ask for, and there
+ * is nothing to salvage from it.
+ */
+export function assertRequestBound(r: RequestBinding, resolvedTask: string): void {
+  if (r.resolvedTaskHash !== r.servedTaskHash) {
+    throw new Error(
+      `I-REQUEST-BOUND: the task recorded for this invocation is not the task the model received.\n`
+      + `  resolved: ${r.resolvedTaskHash} (from ${r.source})\n`
+      + `  served:   ${r.servedTaskHash}\n`
+      + `  resolved task began: "${resolvedTask.slice(0, 80)}"\n`
+      + `  The output answers a request nobody made. Nothing is recorded.`);
+  }
+}
+
+/**
+ * WHAT A RECORD NEEDS TO BE RE-RUN, NOT ONLY READ. A study arm was recorded with its binding and its
+ * package, and still could not be reproduced: which instrument read it for invented claims, which taste
+ * rules held VETO, which learned tells were served, which format profile applied, the token ceiling and
+ * the flags all changed what was delivered and none of them was on the record.
+ */
+export interface InvocationSettings {
+  /** the Atelier package version that ran */
+  readonly atelierVersion: string;
+  /**
+   * THE CERTIFICATE: what this output was held to and by what, so a reader later can see which standard, which
+   * instruments, and at what measured error. The error bound is null until an audit sample of the owner's own
+   * labels, drawn like production, exists; until then the record says so rather than imply one.
+   */
+  readonly certificate?: {
+    readonly standardVersionHash: string;
+    /** the measured rules: counted by a built-in observer, or a written check, qualified or not */
+    readonly checks: { readonly total: number; readonly counted: number; readonly written: number; readonly writtenQualified: number };
+    /** the readers and what they have earned: VETO on these rules, from this many labelled misses at this false-block bound */
+    readonly readers: {
+      readonly taste: { readonly veto: readonly string[]; readonly labelledMisses: number; readonly falseBlockUpper95: number | null };
+      /** the claim instrument that read this output: what gated, and the rates it was measured at on the kinds it was measured on (none elsewhere) */
+      readonly claims?: { readonly instrument: string; readonly version: string | null; readonly gate: 'reader' | 'pattern'; readonly qualified: boolean;
+        readonly measured: { readonly caught: number; readonly planted: number; readonly leftAlone: number; readonly clean: number; readonly on: string } | null; readonly kinds: readonly string[] } | null;
+    };
+    /**
+     * How strictly this output was held: the skill's level, the level the run held it at (stricter where the request
+     * asked for it, quoted), and who set the skill's level. Absent on a certificate written before latitude existed.
+     */
+    readonly latitude?: { readonly skill: LatitudeLevel; readonly run: LatitudeLevel; readonly tightenedBy: string | null; readonly setBy: 'owner' | 'model' | 'floor' | 'default' };
+    /** rules the owner accepted as unmeasured: listed here and on the record, never a reason to send the run to review */
+    readonly acceptedUnmeasured?: readonly { readonly id: string; readonly statement: string; /** for a rule a check reads, the part accepted unread */ readonly part?: string }[];
+    /** the owner's rows of the consequence table, where they set any (core/eval/consequence.ts); the rest are the latitude's */
+    readonly consequences?: Readonly<Partial<Record<ConsequenceFinding, ConsequenceAction>>>;
+    /** written checks held again to the owner's rulings since the build: whether each was qualified, is now, and on how many rated runs */
+    readonly requalified?: readonly { readonly id: string; readonly statement: string; readonly was: boolean; readonly now: boolean; readonly accepted: number; readonly rejected: number; readonly cross: number; readonly at: string }[];
+    /** what was done with this output: SHIP, SHIP_LABELLED, PERSON or BLOCK (carried by the record head) */
+    readonly delivery?: 'SHIP' | 'SHIP_LABELLED' | 'PERSON' | 'BLOCK';
+    /** the route the run took through the repair chain (core/loop/route.ts): one row per pass, on or off, with why (carried by the record head) */
+    readonly route?: Route;
+    /** the delivered-error bound on the owner's labels; null, with why, until the audit sample exists */
+    readonly errorBound: { readonly alpha: number; readonly n: number } | null;
+    readonly why: string | null;
+  };
+  /** the invented-claim instrument, as it names itself; null when the check was off */
+  readonly claimInstrument: string | null;
+  /**
+   * The claim instrument as it stood when the record was WRITTEN, after the run: which reader and version,
+   * whether it was qualified to gate, whether it degraded mid-run, and what it spent. Null when off.
+   */
+  readonly claim: { readonly instrument: string; readonly version: string | null; readonly qualified: boolean; readonly gate: string; readonly degraded: boolean; readonly spentUsd: number } | null;
+  /** rule keys the taste reader held VETO on for this run (empty: it acted on nothing) */
+  readonly tasteVeto: readonly string[];
+  /** hash of the learned machine-writing phrases served to the checks */
+  readonly learnedTellsHash: string;
+  /** the format profile the text was checked as, when one applied */
+  readonly formatProfile: string | null;
+  /**
+   * The context judge that read this run (core/loop/context-judge.ts), or null: every instrument that ran is
+   * recorded, whether or not it may act. It may list and report; it may not cut (core/loop/cut-authority.ts).
+   */
+  readonly contextJudge?: string | null;
+  readonly maxTokens: number;
+  readonly temperature?: number;
+  readonly flags: { readonly drafts: number; readonly noTaste: boolean; readonly allowUnsourced: boolean; readonly placeholders: boolean;
+    /** a run made as a test (`invoke --test-run`): recorded like any run, and never a source of what the skill learns from its runs */
+    readonly testRun?: boolean;
+    /** the note from earlier runs that was served beside the skill (`atelier evolve`), by its hash: two runs of one skill version differ by it */
+    readonly carryNoteHash?: string;
+    /** the execution brief (core/loop/execution-brief.ts): who decided it, and the stated steps held as applying, set aside, and left open */
+    readonly brief?: { readonly by: 'code' | 'model' | 'floor'; readonly applies: readonly string[]; readonly setAside: readonly string[];
+      /** steps the reading could not place: held as applying, and said so */
+      readonly unresolved?: readonly string[]; readonly unsupported: readonly string[];
+      /** steps the request asked against: they stand, and the writer was told */
+      readonly contradicted?: readonly string[];
+      /** the writer was served the pieces, the method and the rules with no description of the author (`--examples-first`) */
+      readonly served?: 'examples-first';
+      /** the steps were read off the pieces, not written by the owner (core/method/infer.ts): a habit briefed, never a rule */
+      readonly inferred?: true;
+      /** the author's moves for this request (core/loop/execution-brief.ts, `selectMoves`): the profile they came from, and the mode they were served under */
+      readonly moves?: { readonly by: 'code' | 'model' | 'floor'; readonly mode: 'observe' | 'serve'; readonly profile: string; readonly placed: readonly string[]; readonly standing: readonly string[];
+        readonly notPlaced: readonly string[]; readonly unresolved: readonly string[]; readonly budget: number } } };
+  /**
+   * THE KIND OF RUN (core/loop/profile.ts): the facts the passes' conditions read, computed once before the chain is composed
+   * (a standard, a structured output, what the request states, what the pieces gave, the register, the judge). Absent on a
+   * record older than the field, and on a run that composed no chain.
+   */
+  readonly profile?: Profile;
+  /**
+   * THE ROUTE (core/loop/route.ts): one row per pass of the repair chain, in the order composed, whether it ran and why in
+   * words. The same booleans the chain was composed from, so a pass turned off is on the record, not only an absence.
+   */
+  readonly route?: Route;
+}
+
+export interface InvocationRecord {
+  readonly invocationId: string;
+  readonly skillName: string;
+  /** the full identity chain, so a diagnosis never has to guess which version spoke */
+  readonly standardVersionHash: string;
+  readonly skillVersionHash: string;
+  readonly architectureHash: string;
+  readonly servedPackageHash: string;
+  /**
+   * WHAT SERVED IT. The third identity, and the one a package hash cannot supply.
+   *
+   * `provider` and `model` used to sit here as two loose strings, which was enough to print and not
+   * enough to compare: the same bytes served by two different models produced two records that
+   * differed in a field nothing checked. A binding is one object with one hash, so "was this the same
+   * system?" is a comparison rather than a habit.
+   */
+  readonly runtimeBinding: RuntimeBinding;
+  /** which model the provider said answered, and how much that is worth. Observed, never configured. */
+  readonly observedRuntime: ObservedRuntime;
+  readonly invocationSurface: InvocationSurface;
+  /** WHY this input existed. Resolved at the call; never derived from how it ran. */
+  readonly provenance: InvocationProvenance;
+  readonly inputHash: string;
+  /**
+   * THE FOURTH BINDING. What the user asked for, and what the model was actually given.
+   *
+   * Three identities were tracked — standard, skill, runtime — and the delivery proof answered "did
+   * this package reach this model". Nothing answered "is this the task the user asked for". A CLI
+   * parser that inferred the positional from token shape handed a flag's VALUE to inference as the
+   * brief; the record hashed and stored it faithfully; the output was fluent and about the wrong
+   * question. Every guard in the system passed.
+   *
+   * `resolvedTaskHash` is what the command resolved from the user's input. `servedTaskHash` is what
+   * the inference request carried. They are recorded separately BECAUSE they can disagree, and the
+   * disagreement is the only thing that can catch this class.
+   */
+  readonly request: RequestBinding;
+  readonly outputHash: string;
+  readonly at: string;
+  readonly delivery: DeliveryEvidence;
+  /** Kept in full, not only hashed. A hash proves identity; it cannot be read back to diagnose. */
+  readonly input: string;
+  readonly output: string;
+  /**
+   * When the output was checked against the standard's measured rules and spans were rewritten, what
+   * happened: the rules broken before and after, and the hash of what the model first wrote. `output`
+   * is what was delivered. Absent when nothing was checked or nothing needed fixing.
+   */
+  readonly repair?: RepairRecord;
+  /**
+   * THE WORK FIELD (core/loop/work-field.ts): whether the delivered draft came inside the `<work>` field the writer is
+   * asked for, and what it said outside it (kept here, never delivered or checked). `delimited: false`: the reply had no
+   * field and was taken whole, as it was before the field existed. Absent for a structured output and older records.
+   */
+  readonly work?: { readonly delimited: boolean; readonly outside?: string };
+  /**
+   * WHAT WAS SETTLED BEFORE THE DRAFT (core/loop/questions.ts, core/loop/piece-plan.ts): the questions asked of the person
+   * for what only they know, their answers (or the defaults, said so), and the plan the draft was written from, never
+   * delivered as the work. Absent where nothing was read before the draft.
+   */
+  readonly prewrite?: {
+    readonly questions: readonly { readonly id: string; readonly ask: string; readonly options: readonly string[]; readonly default: string; readonly last?: string }[];
+    /** the answer each question was written with, and whether the person gave it or it was the default */
+    readonly answers: readonly { readonly id: string; readonly answer: string; readonly by: 'person' | 'default' | 'told' }[];
+    readonly questionsBy: 'code' | 'model' | 'floor';
+    readonly plan: { readonly use?: 'every' | 'choose'; readonly angle: string; readonly pain: string; readonly turn: string; readonly answer: string; readonly points: readonly { readonly point: string; readonly from: string }[];
+      readonly image: string | null; readonly close: string; readonly leftOut: readonly { readonly what: string; readonly why: string }[] } | null;
+    readonly planBy: 'code' | 'model' | 'floor' | 'off';
+    /** how many times the person changed the plan before it was written from */
+    readonly planChanges?: number;
+    /** why the piece was written with no plan, where it was: "no plan: <why>" */
+    readonly noPlan?: string;
+  };
+  /**
+   * STRETCHES COPIED FROM MATERIAL WRITTEN AS SENTENCES (core/loop/material-points.ts), read on the delivered work: every
+   * run of 5 words or more it shares with the material, the longest, and the length a run is repaired at. Absent where the
+   * material was not written as sentences.
+   */
+  readonly copied?: { readonly runs: number; readonly longest: number; readonly shown: readonly string[]; readonly repairAt: number };
+  /** THE TEXT THE REQUEST WORKS ON (core/loop/task-needs.ts, `subject`): the request's words naming it, where copying from it was not checked. */
+  readonly worksOn?: string;
+  /**
+   * A FIX OF A PIECE MADE IN PLACE (core/loop/surgical-fix.ts): the person's words, the run first fixed (`of`) and the
+   * version of the piece this one was made from (`from`), the sentences named, the diff (sentences changed of total, and
+   * how many outside the spans named: 0 by construction, measured), every span's before and after, what that removed
+   * (core/loop/corrections.ts), removed wording a replacement brought back, and each named sentence that still stands as it
+   * was, with why (absent when none), and the removed wording the person asked back in their own words (`restored`: no
+   * later fix of the piece keeps it out). Absent from every other run.
+   */
+  readonly fix?: { readonly of: string; readonly from: string; readonly instruction: string; readonly by: 'code' | 'model' | 'floor'; readonly sentences: readonly number[];
+    readonly diff: { readonly total: number; readonly changed: number; readonly outside: number };
+    readonly spans: readonly { readonly before: string; readonly after: string }[]; readonly removed: readonly string[];
+    readonly reintroduced: { readonly found: readonly string[]; readonly rewritten: number; readonly keptAsItWas: number };
+    readonly unchanged?: readonly { readonly id: number; readonly why: string }[]; readonly restored?: readonly string[] };
+  /** WHAT EARLIER FIXES OF THIS PIECE TOOK OUT, read on a run that wrote it again whole: how many stretches, and which came back (core/loop/corrections.ts). */
+  readonly corrections?: { readonly removed: number; readonly reintroduced: readonly string[] };
+  /**
+   * THE PROMPT THE WRITER WAS GIVEN, BY ITS LAYERS (core/eval/stages.ts, `servedLayersOf`): its hash and size, and which
+   * blocks the composer put in it (the persona, the repertoire, how many examples, the plan, the answers, the brief, the
+   * points note, the latitude), read off the served bytes by the composer's own markers, never off the flags. A layer
+   * switched off counts as off only when the bytes show it absent. Absent on a record older than the field.
+   */
+  readonly served?: { readonly hash: string; readonly bytes: number; readonly blocks: ServedBlocks };
+  /**
+   * When several drafts were written and one delivered: how many, and why that one. `drafts` is how
+   * many were asked for; when some calls failed, `written` is how many came back and `chosen` indexes
+   * those, and `failed` says why each missing one is missing. `unchosen` is the text of every draft not
+   * delivered, in the order written, capped in total (UNCHOSEN_CAP_CHARS) with `unchosenTruncated` set
+   * when the cap cut it: a study comparing the chosen draft with the others needs the others.
+   */
+  readonly selection?: { readonly drafts: number; readonly chosen: number; readonly why: string;
+    readonly written?: number; readonly failed?: readonly string[];
+    /** planned drafts not written because the first held every rule the drafts are chosen by (core/loop/run-once.ts) */
+    readonly spared?: number;
+    readonly unchosen?: readonly string[]; readonly unchosenTruncated?: boolean };
+  /** what the run was configured with beyond the binding, so a study arm can be re-run from its record */
+  readonly settings?: InvocationSettings;
+  /**
+   * How the output was steered toward the author's range, and where it landed (../fidelity/types.ts): the
+   * implementation release, every draft's reading, the structural edits tried, the passages retrieved, and
+   * each requirement's applicability. Absent for a skill with no fidelity profile.
+   */
+  readonly fidelity?: FidelityRecord;
+}
+
+export interface RepairPair {
+  /** the broken rule's key (see ../state/rule-key.ts), so the pair follows the rule across versions */
+  readonly key: string;
+  /** the exact check the rule had when the pair was recorded, thresholds included; a pair recorded
+   *  under one check is not an example of another (see measurementId in ../state/rule-key.ts) */
+  readonly check?: string;
+  readonly before: string;
+  readonly after: string;
+}
+
+export interface RepairRecord {
+  readonly passes: number;
+  readonly violatedBefore: readonly string[];
+  readonly violatedAfter: readonly string[];
+  readonly originalOutputHash: string;
+  /** what the model first wrote. Kept whole so a later comparison can be made draft against draft. */
+  readonly draft?: string;
+  /** host repairs only: whether text outside the named spans changed (an instruction there, not a splice) */
+  readonly outsideSpansChanged?: boolean;
+  /** rewrites refused because they lost a figure, a negation, a qualifier or a name, and what each lost */
+  readonly integrityReverted?: readonly string[];
+  /** invented stories or figures the repair cut (generation's default): where a story of the person's own would fit */
+  readonly storiesCut?: readonly string[];
+  /** specifics a `list` format left in for the person to check (core/observers/formats.ts, `claims`) */
+  readonly claimsToCheck?: readonly string[];
+  /** what the steps after the first repair said they did or could not do (a draft written again for a missing section, and how it fared): printed on the run, and kept so the record can say why */
+  readonly notes?: readonly string[];
+  /** the rules whose rewrites `integrityReverted` refused, so a refusal is charged to the rule it was for */
+  readonly revertedRules?: readonly string[];
+  /** host repairs only: what the host's rewrite lost that the draft claimed (it holds the pen, so this is reported, not reverted) */
+  readonly meaningLost?: readonly string[];
+  /**
+   * The spans an accepted pass rewrote, before and after, with the rule they broke (by key). A verified
+   * "write this, not that" from this author's own standard: the source of the skill's contrast examples.
+   */
+  readonly pairs?: readonly RepairPair[];
+  /** the taste pass (core/taste/repair.ts): rules the reader, holding VETO, read as missed, and which it no longer does */
+  readonly taste?: { readonly targeted: readonly string[]; readonly fixed: readonly string[]; readonly why: string };
+  /**
+   * EVERY EDIT THE REPAIR TRIED: how many span rewrites were kept, how many were refused or discarded, and why
+   * (the guard that refused each, the acceptance that discarded a pass). Present whenever a rewrite pass ran.
+   */
+  readonly edits?: RepairEdits;
+  /**
+   * GRADED FEATURES (`--graded`, a study arm): the counted features whose rules were repair targets without being
+   * failures, and everything the flag caused. Present only on a run that asked for it; the evaluation never reads it.
+   */
+  readonly graded?: GradedRecord;
+  /**
+   * THE BOUNDED CONTROLLER (core/loop/controller.ts): every repair action chosen, in order, with what it was expected to
+   * gain and cost, what it did, and why the repair stopped. Present wherever the repair loop ran on a draft that was
+   * off in any way; absent under --no-repair, which runs no repair at all.
+   */
+  readonly controller?: ControllerRecord;
+  /**
+   * UNMEASURABLE IS NOT HELD: the enforced rules the draft was read on (broken or held) that the delivered text is too short
+   * to read. Said as not measured on every surface (core/eval/record-build.ts), never as held; the run is not conformant on them.
+   */
+  readonly unmeasured?: readonly string[];
+  readonly why: string;
+}
+
+/**
+ * What one step on a run's ledger may be (core/loop/controller.ts, rule B). The controller chooses the first eight; the
+ * rest are taken by the loops around it and counted all the same: a draft written again to give what the request asks
+ * for ('coverage'), the structural edits toward the author's range ('steer'), the voice pass ('voice'), a rewrite the
+ * taste reader asked for ('taste') and a draft written again around a claim cut that would leave a fragment ('claim-redraft').
+ * Two more are held to the same rule and recorded, never counted against the limit: a later shape round judged against
+ * the best so far ('shape': a round is a draft attempt with a limit of its own) and the grounding of an example's fact
+ * on the delivered text ('ground').
+ */
+export type ControllerAction = 'cut' | 'mechanical' | 'rewrite' | 'operators' | 'carrier-rewrite' | 'redraft' | 'grammar' | 'trim'
+  | 'coverage' | 'steer' | 'voice' | 'taste' | 'claim-redraft' | 'shape' | 'ground';
+
+/** One step the controller took, and what came of it. Movement is movement: never a probability of acceptance. */
+export interface ControllerDecisionRecord {
+  readonly action: ControllerAction;
+  /** the rule ids (or SIGNAL ids) it was pointed at */
+  readonly targets: readonly string[];
+  readonly why: string;
+  /** expected movement: summed band widths toward the band (graded), or rules held (enforced, weighted) */
+  readonly expectedGain: number;
+  readonly expectedCostUsd: number;
+  /** 'refused': the step limit or the budget would not hold it, so it was never taken (and is no step) */
+  readonly outcome: 'kept' | 'not kept' | 'no change' | 'handed to a redraft' | 'could not run' | 'refused';
+  readonly observed: {
+    /** what moved, in the units of `expectedGain`; 0 when nothing was kept */
+    readonly movement: number;
+    /** inference calls and dollars this step cost, from the ledger */
+    readonly calls: number;
+    readonly usd: number;
+    readonly note?: string;
+  };
+  /**
+   * the step was taken on a draft written again that was not kept: the 1-based place, in the same list, of the step
+   * that wrote that draft. It counts against the limit all the same; its text was never delivered.
+   */
+  readonly onDraftNotKept?: number;
+}
+
+export interface ControllerRecord {
+  readonly policy: 'bounded-v1';
+  readonly decisions: readonly ControllerDecisionRecord[];
+  readonly stoppedBecause: string;
+  /** the sums of the decisions' observed calls and dollars: what the ledger charged for them */
+  readonly callsUsed: number;
+  readonly usdUsed: number;
+  /**
+   * the controller handed this draft to be written again, and the draft has not been written yet: read by the caller
+   * (cli/commands/invoke.ts, `withRedraft`) whatever bookkeeping step was recorded after the hand-off
+   */
+  readonly handedToRedraft?: true;
+  /**
+   * `--until-typical`: every shape round's own steps, the kept round's among them (`kept`). Each round is a draft
+   * attempt of its own, with its own step limit; `decisions` above are the kept round's.
+   */
+  readonly rounds?: readonly ShapeRoundSteps[];
+}
+
+/** One shape round's steps, as its own record. */
+export interface ShapeRoundSteps {
+  readonly round: number;
+  readonly kept: boolean;
+  readonly decisions: readonly ControllerDecisionRecord[];
+  readonly stoppedBecause: string;
+  readonly callsUsed: number;
+  readonly usdUsed: number;
+}
+
+export interface RepairEdits { readonly accepted: number; readonly rejected: number; readonly reasons: readonly string[] }
+
+/** What `--graded` did on one run. `calls` and `costUsd` are the ledger's lines for the purpose `graded`, not estimates. */
+export interface GradedRecord {
+  /** the features graded on this standard */
+  readonly features: readonly string[];
+  /** how many of them a rewrite of the delivered text was pointed at */
+  readonly targeted: number;
+  /** how many of them a kept rewrite moved toward the band */
+  readonly repaired: number;
+  /** the features a rewrite or a draft written again was pointed at, standard rules and profile signals alike */
+  readonly steered: readonly string[];
+  /** drafts written again for graded misses alone (one per round at most); 0 before the run's wrappers add theirs */
+  readonly redrafts: number;
+  /** the directional note lines for graded misses sent to a redraft or a shape round, as sent */
+  readonly notes: readonly string[];
+  /** each graded feature's value on the first draft and on the delivered text, its band, and where the band came from: a FEATURE rule of the standard, or a SIGNAL band of the profile */
+  readonly values: Readonly<Record<string, { readonly before: number | null; readonly after: number | null; readonly lo: number | null; readonly hi: number | null; readonly source: 'standard' | 'profile' }>>;
+  /** the displacement guard (core/loop/graded.ts): features outside their band on the first draft and on the delivered text, and every rewrite or draft it refused, with why */
+  readonly displacement?: { readonly before: number; readonly after: number; readonly refusedFor: readonly string[] };
+  /** the span rewrites of passes the flag alone caused: kept, refused or discarded, and why */
+  readonly edits: RepairEdits;
+  /** inference calls and dollars the flag alone caused, from the ledger (`SpendPurpose` 'graded') */
+  readonly calls: number;
+  readonly costUsd: number;
+  /** what the run's call and dollar bounds were raised by for the graded redrafts (one draft per round) */
+  readonly allowance?: { readonly calls: number; readonly usd: number };
+}
+
+/**
+ * 7. What a person said about ONE execution. Append-only; never overwrites the observation.
+ *
+ * `verdict` is deliberately absent. A verdict is a summary, and the repair path needs the complaint
+ * itself — "the opening is too abstract" routes to a requirement; "BAD" routes nowhere.
+ */
+export interface FeedbackRecord {
+  readonly feedbackId: string;
+  readonly invocationId: string;
+  readonly complaint: string;
+  /** which rule the diagnosis attributed the miss to. Absent while undiagnosed, or for older records.
+   *  Evidence strength for a rule counts only records that NAME it — complaints about other rules
+   *  used to inflate the dominance check the repair memory exists to enforce. */
+  readonly requirementId?: string;
+  /** the complaint is that the evaluation was wrong about the work, not that the work was wrong: never read as a miss of a rule */
+  readonly about?: 'EVALUATION';
+  readonly at: string;
+}
+
+// ─── GUARDS ───────────────────────────────────────────────────────────────────────────────────
+
+/**
+ * THE PORTABILITY INVARIANT. Refuses any attempt to treat a materialization as authority.
+ *
+ * Called wherever a SKILL.md might be parsed. There is no flag to bypass it: a caller who needs to read
+ * the file for display can read it; a caller who needs to know what was ratified reads the
+ * StandardVersion, which is a different object with a different hash.
+ */
+export function assertSourceIsNotAuthority(source: 'SKILL_MD' | 'STANDARD_VERSION', hasCanonical: boolean): void {
+  if (source === 'SKILL_MD' && hasCanonical) {
+    throw new Error(
+      'AUTHORITY SOURCE: a generated SKILL.md was read as authority while a StandardVersion exists. '
+      + 'SKILL.md is a compiled materialization — an output. Treating it as input makes the host file '
+      + 'format the source of truth, so a second adapter becomes a second standard and editing the '
+      + 'materialization silently edits what the human ratified.',
+    );
+  }
+}
+
+/** Feedback is evidence. It may PROPOSE a change; it may never apply one. */
+export function assertFeedbackDidNotMutate(before: StandardVersion, after: StandardVersion): void {
+  if (before.standardVersionHash !== after.standardVersionHash) {
+    throw new Error(
+      `STANDARD MUTATED BY FEEDBACK: ${before.standardVersionHash} -> ${after.standardVersionHash}. `
+      + 'Feedback accumulates in EvidenceHistory and may propose a change. An authority-changing update '
+      + 'mints a new StandardVersion with an explicit supersedes link and a recorded reason.',
+    );
+  }
+}
+
+/**
+ * WHAT A STANDARD'S HASH IS A HASH OF, as one function. Every minting site (ratify-close, amend,
+ * confirm, add) hashes exactly `{ evidenceId, workType, requirements }` in that key order, and
+ * `mintedAt`, `supersedes`, `reason` and `authorityState` sit outside it. The store recomputes this on
+ * every read: a file whose content no longer hashes to its name was edited by hand, and serving it
+ * would put words the person never ratified under an identity they did.
+ */
+export const standardHashOf = (v: Pick<StandardVersion, 'evidenceId' | 'workType' | 'requirements' | 'latitude' | 'acceptedUnmeasured' | 'consequences'>): string =>
+  createHash('sha256').update(hashedBody(v)).digest('hex').slice(0, 16);
+
+/**
+ * The text a standard's hash is taken over. The latitude's level and the rules accepted as unmeasured are the owner's
+ * and are in it; a standard minted before they existed carries neither, and hashes exactly as it did.
+ */
+export const hashedBody = (v: Pick<StandardVersion, 'evidenceId' | 'workType' | 'requirements' | 'latitude' | 'acceptedUnmeasured' | 'consequences'>): string =>
+  JSON.stringify({ evidenceId: v.evidenceId, workType: v.workType, requirements: v.requirements,
+    ...(v.latitude ? { latitude: v.latitude.level } : {}), ...(v.acceptedUnmeasured?.length ? { acceptedUnmeasured: [...v.acceptedUnmeasured].sort() } : {}),
+    // The owner's overrides of the consequence table, in a fixed order: a standard with none hashes as it did.
+    ...(v.consequences && Object.keys(v.consequences).length ? { consequences: Object.fromEntries(Object.entries(v.consequences).sort(([a], [b]) => a.localeCompare(b))) } : {}) });
+
+/** What a supersession carries of the owner's settings that sit beside the rules: the latitude, the accepted rules still in it, and their consequence table. */
+export const carriedSettings = (prev: Pick<StandardVersion, 'latitude' | 'acceptedUnmeasured' | 'consequences'>, kept: readonly Requirement[]): Pick<StandardVersion, 'latitude' | 'acceptedUnmeasured' | 'consequences'> => {
+  const accepted = (prev.acceptedUnmeasured ?? []).filter((id) => kept.some((r) => r.requirementId === id));
+  return { ...(prev.latitude ? { latitude: prev.latitude } : {}), ...(accepted.length ? { acceptedUnmeasured: accepted } : {}),
+    ...(prev.consequences && Object.keys(prev.consequences).length ? { consequences: prev.consequences } : {}) };
+};
+
+/**
+ * WHICH RULES ARE ACCEPTED AS UNMEASURED BY DEFAULT, by the level: on CREATIVE work every rule no check reads (the
+ * owner's judgement) is accepted, so a run is not sent to review for what only a person reads; on GROUNDED and STRICT
+ * work none is. A proposal like the level itself: shown at the build, kept by the owner, `--unmeasured accept|review`
+ * to say otherwise.
+ */
+export const defaultAccepted = (level: LatitudeLevel, kept: readonly Requirement[], said?: 'accept' | 'review'): string[] =>
+  (said === 'review' || (said === undefined && level !== 'CREATIVE')) ? []
+    : kept.filter((r) => r.authority !== 'EXPERT_REJECTED' && !r.measurement).map((r) => r.requirementId);
+
+/**
+ * THE RULES ACCEPTED AS UNMEASURED IN A NEW VERSION. What the owner said now (`--unmeasured`) decides the rules no check
+ * reads; otherwise a rule the previous version knew as unmeasured keeps the standing it had there (found by its words, or by
+ * its id where its words changed), and a rule that was not unmeasured there (new, or one whose check was taken away) gets
+ * the level's default. A rule with a check is accepted only where the owner NAMED it (`--accept-unmeasured`: the part of it
+ * no qualified check reads, cli/latitude.ts `acceptedNamed`); that acceptance is kept while the rule keeps a check, and a
+ * rule that gains a check leaves the list. `named` are the ids the owner named now.
+ */
+export function acceptedCarried(level: LatitudeLevel, kept: readonly Requirement[], said: 'accept' | 'review' | undefined,
+  prior: Pick<StandardVersion, 'requirements' | 'acceptedUnmeasured' | 'latitude'> | null | undefined, named: readonly string[] = []): string[] {
+  const live = kept.filter((r) => r.authority !== 'EXPERT_REJECTED');
+  const withNamed = (ids: readonly string[]): string[] => [...new Set([...ids, ...named.filter((id) => live.some((r) => r.requirementId === id))])];
+  const fresh = new Set(defaultAccepted(level, kept, said));
+  if (!prior) return withNamed([...fresh]);
+  const was = new Set(prior.acceptedUnmeasured ?? []);
+  const words = new Set(kept.map((r) => r.statement));
+  const priorOf = (r: Requirement): Requirement | undefined => prior.requirements.find((p) => p.statement === r.statement)
+    ?? prior.requirements.find((p) => p.requirementId === r.requirementId && !words.has(p.statement));
+  // A rule the owner named with its check is theirs to have named: kept while it has a check, unless they now say review.
+  const namedBefore = said === 'review' ? [] : live.filter((r) => r.measurement).filter((r) => { const p = priorOf(r); return p?.measurement && was.has(p.requirementId); }).map((r) => r.requirementId);
+  if (said !== undefined) return withNamed([...fresh, ...namedBefore]);
+  // What the previous level proposed and nobody changed is that level's default, not a choice: a new level proposes its own.
+  const proposed = defaultAccepted(latitudeOf(prior), prior.requirements);
+  const unmeasuredWas = prior.requirements.filter((p) => !p.measurement && was.has(p.requirementId));
+  if (latitudeOf(prior) !== level && proposed.length === unmeasuredWas.length && proposed.every((id) => was.has(id))) return withNamed([...fresh, ...namedBefore]);
+  const unmeasured = live.filter((r) => !r.measurement).filter((r) => {
+    const p = priorOf(r);
+    return p && !p.measurement ? was.has(p.requirementId) : fresh.has(r.requirementId);
+  }).map((r) => r.requirementId);
+  return withNamed([...unmeasured, ...namedBefore]);
+}
+
+/** The level a standard is held at: its own, or GROUNDED for one minted before latitude existed. */
+export const latitudeOf = (v: Pick<StandardVersion, 'latitude'> | null | undefined): LatitudeLevel => v?.latitude?.level ?? DEFAULT_LATITUDE;
+
+/** Throws unless `v`'s content hashes to the name it carries. */
+export function assertStandardIntegrity(v: StandardVersion, where = 'standard'): void {
+  const recomputed = standardHashOf(v);
+  if (recomputed !== v.standardVersionHash) {
+    throw new Error(`STORE: ${where} ${v.standardVersionHash} does not hash to its name (its content hashes to ${recomputed}). `
+      + 'A standard is content-addressed, so this file was edited after it was minted. It is not served: '
+      + 'what the person ratified is no longer what it says. Restore it from history, or mint the change '
+      + 'properly with atelier amend / confirm.');
+  }
+}
+
+/** A new version must say what it replaces and why. An unexplained supersession is an untraceable one. */
+export function assertSupersessionRecorded(v: StandardVersion): void {
+  if (v.supersedes !== null && (!v.reason || v.reason.trim() === '')) {
+    throw new Error(`SUPERSESSION: ${v.standardVersionHash} supersedes ${v.supersedes} with no recorded reason. Version history without reasons cannot be audited, only counted.`);
+  }
+}
+
+/**
+ * How much of this standard no person has confirmed. REPORTED, never a build block.
+ *
+ * The old guard here refused to build with any DERIVED_UNRATIFIED requirement, which made
+ * ratification a mandatory form standing between a person and any output at all. That gate is
+ * retired (a ruling by the person whose standard it is): the expert authorizes by supplying the work, the arrangement is
+ * compiled automatically, and what no one has confirmed is DISCLOSED rather than demanded up front.
+ *
+ * The authority record did not weaken — every requirement still carries its own `authority`, an
+ * unconfirmed BOUNDARY still compiles to OBSERVE and cannot shape output, and the optimizer still
+ * has no write access to any of it. What went away was the click, not the control.
+ */
+/** DRAFT the moment anything in it is unconfirmed. Computed at mint; never passed in by a caller. */
+/** The qualifications a supersession keeps: those of the written checks still in it, unchanged. */
+export const carriedQualifications = (prev: Pick<StandardVersion, 'qualifications' | 'requalified'>, kept: readonly Requirement[]): Pick<StandardVersion, 'qualifications' | 'requalified'> => {
+  const live = ([id]: [string, unknown]): boolean => kept.some((r) => r.requirementId === id && r.measurement?.observer === 'CHECK');
+  const q = Object.fromEntries(Object.entries(prev.qualifications ?? {}).filter(live));
+  // What the owner's rulings folded in is carried with the standing it produced, so a ruling is never counted twice.
+  const rq = Object.fromEntries(Object.entries(prev.requalified ?? {}).filter(live));
+  return { ...(Object.keys(q).length ? { qualifications: q } : {}), ...(Object.keys(rq).length ? { requalified: rq } : {}) };
+};
+
+export const authorityStateOf = (rs: readonly Requirement[]): AuthorityState =>
+  rs.some((r) => r.authority === 'DERIVED_UNRATIFIED') ? 'DRAFT' : 'RATIFIED';
+
+export const unconfirmedRate = (v: StandardVersion): number =>
+  v.requirements.length === 0 ? 0 : v.requirements.filter((r) => r.authority === 'DERIVED_UNRATIFIED').length / v.requirements.length;
+
+/**
+ * Discovery credit counts only what the machine FOUND. Human completion is product, not recall.
+ *
+ * `EXPERT_STATED` is excluded deliberately: a model that separated a sentence into three rules
+ * discovered nothing, and counting it here would report `discovered 100%` on a standard its author
+ * dictated.
+ */
+export const discoveryRecall = (v: StandardVersion): number =>
+  v.requirements.length === 0 ? 0 : v.requirements.filter((r) => r.provenance === 'MACHINE_DISCOVERED').length / v.requirements.length;
+
+/**
+ * Does this rule apply everywhere, or only under a stated condition?
+ *
+ * THIS IS THE ONE PLACE THAT DECIDES. The question was previously answered at thirteen call sites
+ * with two different rules: twelve tested `/^GENERAL\b/i` against a trimmed value, and the prose
+ * baseline in `cli/commands/reference.ts` tested `!== 'GENERAL'` exactly, case-sensitively and
+ * untrimmed. One of those sites also skipped the trim.
+ *
+ * The divergence was not cosmetic. That baseline is the B3_STANDARD_AS_PROSE arm, whose whole
+ * purpose is to present the SAME standard without the compiler's machinery. A rule written
+ * `general` or `GENERAL ` would have been unconditional to the renderer and conditional to the
+ * baseline, so the two arms would have described the same standard differently and the comparison
+ * between them would have been measuring a formatting disagreement.
+ *
+ * Blank counts as GENERAL. A rule that names no condition applies always; that is the only reading
+ * under which the two former behaviours agree, and it is the sensible one. Blankness is still a
+ * smell, which is what `declaredGeneralShare` is for.
+ */
+export const isGeneralScope = (appliesWhen: string): boolean => {
+  // A condition with no words in it (";", " , ", what joining empty predicates leaves) names nothing:
+  // rendered, it read "When , I close…".
+  const v = appliesWhen.trim();
+  return v.replace(/[\s;,.:]+/g, '') === '' || /^GENERAL\b/i.test(v);
+};
+
+/**
+ * The share of rules whose text declined to name a condition.
+ *
+ * NOT APPLICABILITY DENSITY, and the distinction is load-bearing. The paper's `a_j = Pr_x[alpha_j(x)]`
+ * is a per-requirement probability over DEPLOYMENT CONTEXTS: how often a rule's condition actually
+ * holds in use. This is a per-standard count of DECLARATIONS: how many rules said GENERAL. Ten
+ * perfectly authored conditional rules score zero here while being perfectly articulable, so a low
+ * number says nothing about whether their author could state them.
+ *
+ * It is also not a substitute waiting for the real thing. `a_j` ranges over contexts that do not
+ * exist when a standard is written, so no applicability density is available at authoring time at
+ * all. Nothing may route on this.
+ */
+/**
+ * WHAT THE FROZEN TEXT ALONE SAYS ABOUT WHERE A REQUIREMENT GOVERNS.
+ *
+ * Three values and no more, because three is what text can support. A finer reading — separating a
+ * condition a machine could evaluate ("ARR > $1m") from one only a reader can ("when the customer is
+ * asking primarily about risk") — has no syntactic tell, and deriving it from prose would be an
+ * inference wearing a derivation's clothes. When that distinction is needed it becomes a TYPED field
+ * an author sets, not a guess this function makes.
+ *
+ * Planning and display read this. Evidence admissibility does NOT: `canProveApplicableFromText` in
+ * `measurement/applicability.ts` is deliberately stricter, because counting a marginal case as clean
+ * evidence is a costlier mistake than showing a reader a slightly generous label.
+ */
+export type ApplicabilityMode =
+  /** the text says it applies everywhere */
+  | 'GENERAL'
+  /** the text states a condition. Whether anything can EVALUATE that condition is a separate question. */
+  | 'CONDITION_PRESENT'
+  /** there is no text to read. Not a condition, and not general — an absence. */
+  | 'UNRESOLVED';
+
+export const applicabilityModeOf = (appliesWhen: string | null | undefined): ApplicabilityMode =>
+  appliesWhen === null || appliesWhen === undefined ? 'UNRESOLVED'
+    : isGeneralScope(appliesWhen) ? 'GENERAL' : 'CONDITION_PRESENT';
+
+/**
+ * WHERE THE CONTENT OF THIS STANDARD CAME FROM.
+ *
+ * DERIVED, never stored. Every requirement already carries its own `provenance`, so a second field
+ * at version level would be a second place the same fact could be settled, and the two would
+ * eventually disagree. `authorityStateOf` is the precedent: it reads authorities rather than being
+ * asserted alongside them.
+ *
+ * The distinction matters at the close, where a reader is told how much of what they are about to
+ * compile the machine proposed and how much they wrote themselves.
+ */
+export type SourceMode =
+  /** every requirement was written by its author. No corpus was read. */
+  | 'DIRECT'
+  /** every requirement came from reading work */
+  | 'DISCOVERED'
+  /** both, which is the ordinary case once a person starts adding to what was found */
+  | 'HYBRID'
+  /** nothing to characterise */
+  | 'EMPTY';
+
+// A rule the person stated is theirs, however it was transcribed. A rule a machine found is not.
+const AUTHORED: ReadonlySet<Provenance> = new Set(['EXPERT_ADDED', 'EXPERT_STATED']);
+
+export const sourceModeOf = (v: StandardVersion): SourceMode => {
+  if (!v.requirements.length) return 'EMPTY';
+  const authored = v.requirements.filter((r) => AUTHORED.has(r.provenance)).length;
+  return authored === v.requirements.length ? 'DIRECT' : authored === 0 ? 'DISCOVERED' : 'HYBRID';
+};
+
+export const declaredGeneralShare = (v: StandardVersion): number =>
+  v.requirements.length === 0 ? 0 : v.requirements.filter((r) => isGeneralScope(r.appliesWhen)).length / v.requirements.length;

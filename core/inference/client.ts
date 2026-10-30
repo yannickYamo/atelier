@@ -1,0 +1,438 @@
+// atelier/core/inference/client.ts — THE ONLY PLACE CORE TOUCHES A MODEL, AND IT TOUCHES AN INTERFACE.
+//
+// Core must not know which provider, which host, or which SDK. Discovery needs inference; it does not
+// need Anthropic. Naming a vendor here would put a provider in the domain layer, and the whole claim
+// Atelier makes — that the expert's standard belongs to the expert, not to the model implementing it —
+// is falsified the moment the standard's own compiler cannot run anywhere else.
+//
+// The stable/variable split is part of the CONTRACT, not an optimisation detail: an implementation that
+// ignores it still works, it just costs ~9x more, and a caller cannot tell. Making it explicit is how
+// the interface stays honest about what it expects.
+
+export interface InferenceRequest {
+  /** invariant across calls in a batch — implementations SHOULD cache this */
+  readonly stableBlock: string;
+  /** varies per call — implementations MUST NOT cache this */
+  readonly variableBlock: string;
+  /**
+   * The variable block is the same across every call of one run (the material a claim reader reads each candidate
+   * against), so an implementation MAY cache it beside the stable one. Off, it is sent uncached, as a block that
+   * varies per call must be.
+   */
+  readonly cacheVariableBlock?: boolean;
+  readonly userMessage: string;
+  readonly toolName: string;
+  readonly toolDescription: string;
+  readonly schema: Record<string, unknown>;
+  readonly maxTokens: number;
+  /**
+   * Ask the backend for the distribution over emitted tokens.
+   *
+   * Off by default. Logprobs enlarge every response and only an instrument reads them; a generation
+   * that ignores them would pay for a measurement nobody takes.
+   */
+  readonly wantLogprobs?: boolean;
+  /**
+   * Sampling temperature for this call. Checking calls (the claim reader, the taste reader) send 0: an
+   * instrument that reads the same text twice must read it the same way, and at the default of 1.0 the
+   * claim reader gave pass, one flag and two flags on one text. Absent, the client's own setting applies.
+   */
+  readonly temperature?: number;
+}
+
+/**
+ * WHAT THE CALL COST, AND ON WHAT BASIS.
+ *
+ * A local model is not free — it costs electricity, hardware and time — it is UNMETERED. Reporting
+ * `$0.0000` for it says the computation had no cost, which is false and quietly makes a local run
+ * look strictly better than a hosted one on the only axis the ledger shows. Reporting `null` with a
+ * basis says the true thing: nobody is billing for this, so there is no number to add up.
+ *
+ * `UNKNOWN_PRICING` is the third honest state and it is distinct from both. A hosted model at a price
+ * this build does not know about did cost money; a ledger that silently counted it as zero would
+ * understate spend and let a budget cap pass that should have stopped.
+ */
+export type CostBasis = 'API_METERED' | 'LOCAL_UNMETERED' | 'UNKNOWN_PRICING';
+
+export interface InferenceCost {
+  readonly basis: CostBasis;
+  /** what the provider will bill for this call. `null` when nothing is billed or the price is unknown. */
+  readonly billingUsd: number | null;
+}
+
+export const metered = (billingUsd: number): InferenceCost => ({ basis: 'API_METERED', billingUsd });
+export const unmetered = (): InferenceCost => ({ basis: 'LOCAL_UNMETERED', billingUsd: null });
+export const unpriced = (): InferenceCost => ({ basis: 'UNKNOWN_PRICING', billingUsd: null });
+
+/**
+ * What the budget ledger adds up. DERIVED from `cost` and never set beside it.
+ *
+ * An unbilled call contributes nothing to a dollar cap, which is correct and is also why a dollar cap
+ * is the wrong instrument for a local run — see `Budget`.
+ */
+export const budgetUsd = (c: InferenceCost): number => c.billingUsd ?? 0;
+
+/**
+ * HOW LONG ONE CALL MAY HANG BEFORE IT IS A FAILURE RATHER THAN A WAIT.
+ *
+ * One owner, because the two providers had different answers and only one of them was deliberate.
+ * The OpenAI-compatible path computed this and could be overridden; the Anthropic path set nothing
+ * and inherited the SDK default of ten minutes, twice over with retries. Same product, same run, a
+ * stalled call costing twenty minutes on one provider and two on the other, and nothing in the
+ * output said which.
+ *
+ * Generous and scaled by what was asked for, because a local model on modest hardware is slow rather
+ * than broken and a long generation legitimately takes longer than a short one. The floor is what
+ * makes a small request fail fast instead of inheriting a ceiling sized for a large one.
+ */
+export const inferenceTimeoutMs = (maxTokens: number): number => Math.max(120_000, maxTokens * 60);
+
+/**
+ * How many times a call is retried before the failure is reported.
+ *
+ * Two, matching the SDK default that was already in force on one path, so this makes the existing
+ * behaviour visible rather than changing it. Stated here so that a person reading a budget can work
+ * out the worst-case wall time — `maxCalls` counts attempts the caller made, not attempts the
+ * transport made underneath it.
+ */
+export const INFERENCE_MAX_RETRIES = 2;
+
+// ─── HOW A GENERATION ENDED, AS A VALUE, OWNED IN ONE PLACE ────────────────────────────────────
+//
+// This exists because a study reported behaviour that had never happened. 54 of 144 generations were
+// cut off at the token limit before an answer was written, the observer read the fragments as
+// choices, and a coverage effect was published from them and later retracted. The provider knew. It
+// said `stop_reason: "max_tokens"` on every one of those calls, and this interface threw the fact
+// away — it was read once, to interpolate into an error string.
+//
+// NEVER INFER TERMINATION FROM THE TEXT. Only the caller that made the request can know whether the
+// provider stopped it, and a runner that guesses from the output is guessing at exactly the thing
+// that must not be guessed. That is the invariant this type exists to make structural.
+//
+// PROVIDER-NEUTRAL BY CONSTRUCTION. `stop_reason` is Anthropic's vocabulary and `finish_reason` is
+// OpenAI's; they do not share values and neither belongs in core. Normalisation happens at the
+// adapter boundary and nothing upstream ever sees a vendor string except inside `OTHER`, which
+// carries it verbatim so an unmapped value can be diagnosed rather than silently flattened.
+export type InferenceTermination =
+  /**
+   * the model finished on its own terms. Behaviour may be read from this. A FORCED TOOL CALL THAT ENDED IN A TOOL
+   * CALL IS `COMPLETE`, NOT ITS OWN KIND: every request this system makes sets `tool_choice`, so `stop_reason:
+   * "tool_use"` is the success path, and a separate kind would make every successful call non-COMPLETE. The
+   * distinction a caller needs is whether an answer was FINISHED, and by that question `tool_use` and `end_turn`
+   * are the same event.
+   */
+  | { readonly kind: 'COMPLETE' }
+  /** stopped at the token limit. Nothing about behaviour can be read from it. */
+  | { readonly kind: 'MAX_TOKENS' }
+  /** the provider suppressed the response */
+  | { readonly kind: 'CONTENT_FILTER' }
+  /** the model declined */
+  | { readonly kind: 'REFUSAL' }
+  /** a value this build does not know. Kept verbatim rather than guessed at. */
+  | { readonly kind: 'OTHER'; readonly providerValue: string };
+
+/**
+ * THE MODEL NAMED IS NOT ONE THIS BACKEND SERVES. The key works; the name does not. Anthropic answers
+ * 404, a gateway such as LiteLLM answers 400 "Invalid model name", and both used to reach a person as raw
+ * JSON that never named the setting to change. The first run of the shipped CLI died here, on a default.
+ *
+ * Distinct from a refusal (the model answered and declined) and from an account problem (the key was
+ * refused), because the fix differs: name another model. A caller running on a DEFAULT model may try its
+ * other configured model and say so (discovery does); a model the person named is theirs to change.
+ */
+export class ModelUnavailable extends Error {
+  constructor(readonly model: string, readonly providerDetail: string) {
+    super(`the model "${model}" is not available on this backend. Name one it serves: ATELIER_MODEL for every step, `
+      + `or ATELIER_DISCOVERY_MODEL / ATELIER_TARGET_MODEL for one (\`atelier check\` tests them before anything is spent).`
+      + `\n  the backend said: ${providerDetail.replace(/\s+/g, ' ').slice(0, 300)}`);
+    this.name = 'ModelUnavailable';
+  }
+}
+
+/** Whether a provider's error says the model id is unknown to it. Status and body, as both providers see them. */
+export const isUnknownModel = (status: number | undefined, body: string): boolean =>
+  (status === 404 && /\bmodel\b/i.test(body))
+  || ((status === 400 || status === 404)
+    && /invalid model|unknown model|no such model|model[^.\n]{0,60}(?:not found|does not exist|not supported|is not available)/i.test(body));
+
+/**
+ * Raised when a generation did not finish, so no partial artifact can reach an observer.
+ *
+ * THIS THROWS RATHER THAN RETURNING, AND THAT IS DELIBERATE. `provider-conformance.ts` establishes
+ * failing closed as a property: a truncated structured output is not a partial answer, it is an
+ * unparseable one, and an adapter that returns something anyway hands a half-object to a discovery
+ * run that records it as evidence. Returning termination as an ordinary value everywhere would
+ * reopen precisely that hazard for the fifteen callers who cannot act on it.
+ *
+ * So the fact is carried BY THE ERROR. Callers who must merely not record a fragment keep failing
+ * closed for free; the one caller that must COUNT truncations — a behavioural study, which needs to
+ * report "n of these never ran" rather than crash — catches this and reads `termination`.
+ */
+export class GenerationIncomplete extends Error {
+  constructor(
+    readonly termination: InferenceTermination,
+    readonly detail: string,
+    /** what the call had produced when it stopped, for a budget probe to learn from */
+    readonly outputTokens: number | null = null,
+  ) {
+    super(detail);
+    this.name = 'GenerationIncomplete';
+  }
+}
+
+
+export interface InferenceResult {
+  readonly json: unknown;
+  /**
+   * HOW THE PROVIDER SAYS THIS ENDED. Reported, never inferred.
+   *
+   * Present on every successful result so a consumer can assert on it rather than assume it. A
+   * generation that did not finish does not arrive here at all — it raises `GenerationIncomplete`,
+   * so a partial object cannot reach an observer by omission.
+   */
+  readonly termination: InferenceTermination;
+  /**
+   * The temperature this call was actually sent with, or null when none was (the provider default, or a model
+   * that refuses one). Recorded by a caller that varies temperature, so a record never claims a temperature the
+   * provider did not receive. Absent from a provider that does not say.
+   */
+  readonly temperatureSent?: number | null;
+  /** the thinking setting this call was sent with: 'disabled', or null when the endpoint refused the field */
+  readonly thinkingSent?: 'disabled' | null;
+  /**
+   * The model the PROVIDER says answered, not the one we asked for. An alias resolves server-side,
+   * and a binding that recorded the request would be recording our intent rather than what ran.
+   */
+  readonly modelId: string;
+  readonly inputTokens: number;
+  readonly cacheReadTokens: number;
+  readonly cacheWriteTokens: number;
+  readonly outputTokens: number;
+  /** the authority on what this call cost. */
+  readonly cost: InferenceCost;
+  /** `budgetUsd(cost)`. Kept as a field because the budget ledger reads it on every call. */
+  readonly costUsd: number;
+  /**
+   * THE DISTRIBUTION THE MODEL PUT OVER ITS OWN ANSWER, where the protocol exposes one.
+   *
+   * Every model-based instrument this programme has built asked for a verdict and read ONE TOKEN.
+   * Three produced ZERO abstentions across 150 observations, and the recorded reason is that
+   * abstention was ELICITED — offered as a refusal to answer rather than produced as an answer. A
+   * fourth prompt does not fix that and was ruled out.
+   *
+   * A distribution is a different READOUT, not a different prompt. Asked to place an output on a
+   * graded scale, a model that cannot separate two candidates spreads its mass across neighbouring
+   * scores, and that spread is COMPUTED rather than requested — the property the deterministic floor
+   * has and the model-based instruments did not.
+   *
+   * `null` where the provider does not expose it, which is a constraint rather than a gap:
+   * `/v1/chat/completions` returns `logprobs`; the Anthropic Messages API does not. An instrument
+   * built on this works on some backends and has to say so rather than fail quietly on the others.
+   */
+  readonly logprobs?: readonly TokenLogprobs[] | null;
+  /**
+   * How many thinking blocks the response held, as the provider returned them (Anthropic's thinking and redacted
+   * thinking blocks; an OpenAI-compatible backend's reasoning text). Every call is sent with thinking off, so a
+   * count above zero says the setting did not hold. Absent from a provider that does not say.
+   */
+  readonly thinkingBlocks?: number;
+}
+
+/** One emitted token and the alternatives the model weighed against it at that position. */
+export interface TokenLogprobs {
+  readonly token: string;
+  readonly logprob: number;
+  readonly top: readonly { readonly token: string; readonly logprob: number }[];
+}
+
+export interface InferenceClient {
+  complete(req: InferenceRequest): Promise<InferenceResult>;
+}
+
+/**
+ * A hard cap the caller sets. Core refuses to continue past it rather than trusting a provider.
+ *
+ * A DOLLAR cap is the wrong instrument for an unmetered runtime — every local call adds zero, so the
+ * cap never binds and a runaway loop runs until something else stops it. `calls` is the bound that
+ * still works there, and it is counted for every provider so the two never disagree.
+ */
+export interface Budget {
+  spentUsd: number; readonly capUsd: number; calls?: number; readonly maxCalls?: number;
+  /**
+   * Estimates of calls in flight. Calls run concurrently now, and a cap checked only against what
+   * has already been SPENT would admit every parallel call before the first one reported its cost.
+   */
+  inFlightUsd?: number;
+}
+
+export class CallBudgetExceeded extends Error {
+  constructor(public readonly made: number, public readonly max: number) {
+    super(`call budget exhausted: ${made} of ${max} inference calls. Nothing further was requested. `
+      + `A dollar cap does not bind an unmetered runtime; this one does.`);
+    this.name = 'CallBudgetExceeded';
+  }
+}
+
+export class BudgetExceeded extends Error {
+  constructor(public readonly spent: number, public readonly cap: number) {
+    super(`budget exhausted: $${spent.toFixed(4)} of $${cap.toFixed(2)}. Nothing further was requested.`);
+    this.name = 'BudgetExceeded';
+  }
+}
+
+/**
+ * A DOLLAR CAP OVER CALLS NOTHING IS BILLING FOR IS NOT A CAP.
+ *
+ * This module already said so about a local runtime, three paragraphs up, and then the ledger threw
+ * the distinction away one line later: `budgetUsd` maps a null bill to 0, so an unpriced call adds
+ * nothing, `spentUsd` never moves, and `capUsd` never binds. With `OPENAI_COMPATIBLE_PRICING`
+ * deliberately empty, that was EVERY hosted call through that adapter — `create`, `discover`,
+ * `improve`, `amend` and `promote` all ran with no effective bound at all while printing a cap.
+ *
+ * It cannot be caught before the first call, because what a call costs is a fact the provider
+ * reports. It can be caught after exactly one, which is what this does.
+ */
+export class UnboundedRuntime extends Error {
+  constructor(public readonly basis: CostBasis, public readonly cap: number) {
+    super(`this runtime reports ${basis}, so the $${cap.toFixed(2)} cap cannot bind it.\n`
+      + `  Nothing is billing per token here that Atelier can price, so every call adds $0.00 to the\n`
+      + `  ledger and the dollar cap would never stop anything. One call was made; nothing further was\n`
+      + `  requested.\n`
+      + `  Bound it by COUNT instead:  --max-calls <n>\n`
+      + (basis === 'UNKNOWN_PRICING'
+        ? '  This build does not know this model\'s rate. That is not the same as it being free.'
+        : '  A local model bills nobody, so a count is the only bound that can hold it.'));
+    this.name = 'UnboundedRuntime';
+  }
+}
+
+/**
+ * Spend one unit of inference against a budget.
+ *
+ * Checks BEFORE the call using a caller-supplied estimate, not after using the actual. A ledger that
+ * only notices overspend afterwards is an accounting record, not a cap.
+ *
+ * TAKES THE COST, NOT A NUMBER. It used to take `actualUsd`, which collapsed the three honest cost
+ * states into one figure at the moment the ledger most needed to tell them apart: `$0.00 because it
+ * was cheap`, `$0.00 because nobody is billing`, and `$0.00 because we do not know the rate` are the
+ * same number and three different facts. The caller already holds the typed value; flattening it here
+ * is what let an unpriced runtime look fully accounted for.
+ */
+/**
+ * EVERYTHING THIS PROCESS SPENT, WHICHEVER BUDGET IT WAS METERED ON. A command can hold budgets it
+ * cannot see: the claim reader meters its own (cli/checks.ts), so `invoke` printed the writer's cost
+ * and not the reader's, and the figure a person read was short by every claim check. Summed here, in
+ * the one function every metered call goes through, so no budget can be left out of the total.
+ */
+let processSpent = 0;
+export const processSpentUsd = (): number => processSpent;
+
+/**
+ * WHAT A CALL WAS FOR. A run's total says what it cost and not where the money went: the checked runtime cost about
+ * seven times the plug-in, two drafts explain at most two of the seven, and nothing recorded the rest. Each call on
+ * the path of a run names its purpose where it is made, and the ledger below adds them up beside the total. A call
+ * that names none is counted under `other`, so the lines always sum to the total and what nobody attributed shows.
+ */
+export type SpendPurpose =
+  | 'writing'          // a draft, a redraw, a completion, a section or its plan
+  | 'repair'           // rewriting the spans that broke a rule, or redrafting around a cut claim
+  | 'graded'           // what `--graded` alone caused: a draft written again, or spans rewritten, for a graded feature that no enforced rule asked for
+  | 'claim reader'     // reading a draft for invented specifics
+  | 'taste reader'     // reading a draft against the rules only a reading can check, and its repair
+  | 'context judge'    // what the request asks for: its register, its parts, what a specific refers to
+  | 'steering'         // sentence rewrites toward the author's range
+  | 'voice pass'       // the in-context voice rewrite and its gate's second read
+  | 'nearness'         // which of the author's pieces are on the request's subject
+  | 'structure'        // reading a text's paragraph moves
+  | 'preference'       // reading what the person likes about each author's pieces into trait classes (core/composite/admire.ts)
+  | 'composite contradictions' // reading a composite's final instructions for pairs that cannot both be followed (core/composite/contradictions.ts)
+  | 'other';
+
+/** What the provider reported for one call. Absent where a call site does not pass it on. */
+export interface CallUsage { readonly inputTokens: number; readonly cacheReadTokens: number; readonly cacheWriteTokens: number; readonly outputTokens: number }
+
+/** One purpose's share of what a process (or a run, as a difference of two snapshots) spent. */
+export interface SpendLine { readonly purpose: SpendPurpose; readonly usd: number; readonly calls: number;
+  /** every input token the provider counted, cached or not; 0 where no call of this purpose reported its usage */
+  readonly inputTokens: number; readonly outputTokens: number;
+  /** of `inputTokens`, those read from the provider's prompt cache, and those written to it; absent when none */
+  readonly cacheReadTokens?: number; readonly cacheWriteTokens?: number }
+
+const processLedger = new Map<SpendPurpose, { usd: number; calls: number; inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheWriteTokens: number }>();
+
+/** A line with its cache counts said only when there are any. */
+const withCache = (l: { purpose: SpendPurpose; usd: number; calls: number; inputTokens: number; outputTokens: number; cacheReadTokens?: number; cacheWriteTokens?: number }): SpendLine => {
+  const { cacheReadTokens: r = 0, cacheWriteTokens: w = 0, ...rest } = l;
+  return { ...rest, ...(r ? { cacheReadTokens: r } : {}), ...(w ? { cacheWriteTokens: w } : {}) };
+};
+
+/** A copy of the ledger as it stands, to be compared with a later one (`spendBetween`). */
+export const processSpendByPurpose = (): readonly SpendLine[] => [...processLedger].map(([purpose, x]) => withCache({ purpose, ...x }));
+
+/** What was spent between two snapshots, largest first; purposes with no call in between are left out. */
+export function spendBetween(before: readonly SpendLine[], after: readonly SpendLine[]): SpendLine[] {
+  const was = new Map(before.map((l) => [l.purpose, l]));
+  return after.map((l) => { const b = was.get(l.purpose);
+    // Rounded to a millionth of a dollar: a difference of two running sums is otherwise recorded with float noise.
+    return withCache({ purpose: l.purpose, usd: Math.round((l.usd - (b?.usd ?? 0)) * 1e6) / 1e6, calls: l.calls - (b?.calls ?? 0), inputTokens: l.inputTokens - (b?.inputTokens ?? 0), outputTokens: l.outputTokens - (b?.outputTokens ?? 0),
+      cacheReadTokens: (l.cacheReadTokens ?? 0) - (b?.cacheReadTokens ?? 0), cacheWriteTokens: (l.cacheWriteTokens ?? 0) - (b?.cacheWriteTokens ?? 0) }); })
+    .filter((l) => l.calls > 0).sort((a, b) => b.usd - a.usd || b.calls - a.calls || a.purpose.localeCompare(b.purpose));
+}
+
+/**
+ * A CONNECTION THAT DROPPED, as against a backend that answered with an error. Three builds at once on one gateway
+ * ended a paid discovery on "Connection error." after the transport's own two quick retries. A dropped connection
+ * (reset, hung up, the SDK's connection error) is tried again here, slowly, at the one place every call passes. A
+ * backend that is not there (refused, unknown host), an HTTP error, a refusal and a call that ran out its own time
+ * limit are not: each is an answer, or has already waited as long as it is allowed, and is reported as it was. Read
+ * off the error's own name, code and message, never off a response body.
+ */
+export function isDroppedConnection(e: unknown): boolean {
+  const seen = new Set<unknown>(); let text = '';
+  for (let x: unknown = e; x && typeof x === 'object' && !seen.has(x) && seen.size < 5; x = (x as { cause?: unknown }).cause) {
+    seen.add(x);
+    text += ` ${(x as { name?: string }).name ?? ''} ${(x as { code?: string }).code ?? ''} ${(x as { message?: string }).message ?? ''}`;
+  }
+  if (/ECONNREFUSED|ENOTFOUND|EAI_AGAIN/.test(text)) return false;
+  if (/\bHTTP \d{3}\b|timed out/i.test(text)) return false;
+  return /APIConnectionError|Connection error|ECONNRESET|EPIPE|UND_ERR_SOCKET|socket hang up|other side closed|network socket disconnected/i.test(text);
+}
+/** How many times a dropped connection is tried again at this seam, and the first wait; each wait is three times the last. */
+export const CONNECTION_RETRIES = 3;
+const retryBaseMs = (): number => { const x = Number(process.env.ATELIER_RETRY_BASE_MS); return Number.isFinite(x) && x >= 0 && process.env.ATELIER_RETRY_BASE_MS !== undefined ? x : 1000; };
+
+export async function spend<T>(budget: Budget, estimateUsd: number, fn: () => Promise<{ value: T; cost: InferenceCost; usage?: CallUsage }>, purpose: SpendPurpose = 'other'): Promise<T> {
+  const inFlight = budget.inFlightUsd ?? 0;
+  if (budget.spentUsd + inFlight + estimateUsd > budget.capUsd) throw new BudgetExceeded(budget.spentUsd + inFlight + estimateUsd, budget.capUsd);
+  const used = budget.calls ?? 0;
+  if (budget.maxCalls !== undefined && used >= budget.maxCalls) {
+    throw new CallBudgetExceeded(used, budget.maxCalls);
+  }
+  budget.calls = used + 1;
+  budget.inFlightUsd = inFlight + estimateUsd;
+  let result: { value: T; cost: InferenceCost; usage?: CallUsage };
+  try {
+    for (let attempt = 0; ; attempt++) {
+      try { result = await fn(); break; } catch (e) {
+        // The budget is held before each further attempt: a failed call cost nothing, but calls made beside this one may
+        // have spent what was left while it waited.
+        if (attempt >= CONNECTION_RETRIES || !isDroppedConnection(e) || budget.spentUsd + (budget.inFlightUsd ?? 0) > budget.capUsd) throw e;
+        await new Promise((ok) => { setTimeout(ok, retryBaseMs() * 3 ** attempt); });
+      }
+    }
+  } finally { budget.inFlightUsd = (budget.inFlightUsd ?? 0) - estimateUsd; }
+  const { value, cost, usage } = result;
+  budget.spentUsd += budgetUsd(cost);
+  processSpent += budgetUsd(cost);
+  const line = processLedger.get(purpose) ?? { usd: 0, calls: 0, inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 };
+  processLedger.set(purpose, { usd: line.usd + budgetUsd(cost), calls: line.calls + 1,
+    inputTokens: line.inputTokens + (usage ? usage.inputTokens + usage.cacheReadTokens + usage.cacheWriteTokens : 0), outputTokens: line.outputTokens + (usage?.outputTokens ?? 0),
+    cacheReadTokens: line.cacheReadTokens + (usage?.cacheReadTokens ?? 0), cacheWriteTokens: line.cacheWriteTokens + (usage?.cacheWriteTokens ?? 0) });
+  // AFTER ONE CALL, AND NOT BEFORE. What a call costs is reported by the provider, so the first one
+  // is what establishes whether a dollar cap is capable of binding this runtime at all. If it is not,
+  // and no call bound was set, then continuing means running with no bound while displaying one.
+  if (cost.billingUsd === null && budget.maxCalls === undefined) {
+    throw new UnboundedRuntime(cost.basis, budget.capUsd);
+  }
+  return value;
+}

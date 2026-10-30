@@ -1,0 +1,60 @@
+{
+ "evidenceId": "b64aa0870f12dcfc",
+ "workType": "answers",
+ "items": [
+  {
+   "id": "reply-01.md",
+   "contentHash": "02a6514850163c2e",
+   "tokens": 357
+  },
+  {
+   "id": "reply-02.md",
+   "contentHash": "90d4efce8d22e573",
+   "tokens": 355
+  },
+  {
+   "id": "reply-03.md",
+   "contentHash": "2b82223dd6781bc5",
+   "tokens": 428
+  },
+  {
+   "id": "reply-04.md",
+   "contentHash": "76944995c6850d28",
+   "tokens": 367
+  },
+  {
+   "id": "reply-05.md",
+   "contentHash": "82f46501938e5795",
+   "tokens": 391
+  },
+  {
+   "id": "reply-06.md",
+   "contentHash": "25005186b3a20230",
+   "tokens": 381
+  },
+  {
+   "id": "reply-07.md",
+   "contentHash": "856cd8d5b07212e8",
+   "tokens": 416
+  },
+  {
+   "id": "reply-08.md",
+   "contentHash": "78096f98942c3a4d",
+   "tokens": 414
+  },
+  {
+   "id": "reply-09.md",
+   "contentHash": "183050c9858aec0a",
+   "tokens": 410
+  },
+  {
+   "id": "reply-10.md",
+   "contentHash": "8af3a1a6e8bb85a0",
+   "tokens": 372
+  }
+ ],
+ "corpusHash": "03530dd0aa8ef224",
+ "sealedAt": "2026-10-15T08:32:54.628Z",
+ "aiAssisted": null,
+ "published": null
+}

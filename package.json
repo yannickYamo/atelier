@@ -1,0 +1,76 @@
+{
+  "name": "@yannickyamo/atelier",
+  "version": "1.1.0",
+  "description": "Flags what your agent made up: a check any coding agent can call for invented facts, copied passages and broken rules, built from the pieces you would sign.",
+  "type": "module",
+  "bin": {
+    "atelier": "./dist/cli/atelier.mjs"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "AGENTS.md",
+    "CHANGELOG.md",
+    "CONTRIBUTING.md",
+    "MEASUREMENTS.md",
+    "EVALS.md",
+    "SECURITY.md",
+    "docs",
+    "examples"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.125.0"
+  },
+  "optionalDependencies": {
+    "harper.js": "2.10.0"
+  },
+  "license": "SEE LICENSE IN LICENSE",
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "clean": "rm -rf dist",
+    "build": "rm -rf dist && tsc -p tsconfig.build.json && node -e \"require('node:fs').chmodSync('dist/cli/atelier.mjs', 0o755)\"",
+    "prepack": "npm run build",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "build:plugins": "tsx plugins/build-plugins.mts",
+    "pretest": "npm run build:plugins && npm run build",
+    "preflight": "npm run typecheck && npm run lint && npm test && npm run build",
+    "prepublishOnly": "npm run typecheck && npm run lint && npm test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yannickYamo/atelier.git"
+  },
+  "homepage": "https://github.com/yannickYamo/atelier#readme",
+  "bugs": {
+    "url": "https://github.com/yannickYamo/atelier/issues"
+  },
+  "keywords": [
+    "ai",
+    "agent",
+    "skills",
+    "llm",
+    "claude",
+    "codex",
+    "writing",
+    "long-form",
+    "agent-skills"
+  ],
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^26.2.0",
+    "eslint": "^10.9.1",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0",
+    "typescript-eslint": "^8.68.0",
+    "vitest": "^5.0.0"
+  }
+}

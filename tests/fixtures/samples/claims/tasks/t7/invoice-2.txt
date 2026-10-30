@@ -1,0 +1,4 @@
+INVOICE 2
+Supplier: Crane & Sons Electronics
+Item: an oscilloscope
+Amount: 1,047 dollars

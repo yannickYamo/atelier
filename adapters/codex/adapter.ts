@@ -1,0 +1,73 @@
+// atelier/adapters/codex/adapter.ts — ADAPTER #2, built now rather than "ported later".
+//
+// Codex consumes the same open Agent Skills format (SKILL.md + optional references/ scripts/) and
+// supports plugins and lifecycle hooks including PreToolUse. So this adapter reuses the IDENTICAL
+// PortableSkillPackage — there is no Codex compilation path, no Codex discovery, no Codex standard.
+//
+// What differs is genuinely only: where skills live, and how a user types the invocation.
+import { rmSync } from 'node:fs';
+import { join } from 'node:path';
+import { installTree, verifyTree } from '../install-tree.js';
+import type { CarrierDeliveryMatrix } from '../../core/delivery/carrier-delivery.js';
+import type { HostAdapter, HostCapabilities, InstallResult, VerificationResult, ProtocolPolicy, GuardResult, InstallablePackage } from '../host-adapter.js';
+
+
+export class CodexAdapter implements HostAdapter {
+  detect(): HostCapabilities {
+    return { hostId: 'codex', skills: true, plugins: true, blockingHooks: true, persistentPluginData: true, invocationStyle: '$' };
+  }
+  private dir(projectDir: string, skillId: string): string { return join(projectDir, '.codex', 'skills', skillId); }
+
+  /**
+   * WHAT Codex ITSELF DELIVERS, when a user invokes the skill natively instead of through Atelier.
+   *
+   * PROSE and SELF_CHECK are delivered because they are IN SKILL.md, and loading SKILL.md is what makes
+   * something a skill on this host — that is the host's own contract, not an assumption about it.
+   *
+   * EXAMPLE is REFERENCED_UNVERIFIED. SKILL.md names each example file and the condition it applies
+   * under, which is how a host that reads further material finds it. That is a real mechanism and it is
+   * still not an observation: nobody has watched this host load one. Calling it DELIVERED would rebuild
+   * the dark-carrier bug behind a tidier path.
+   *
+   * OUTPUT_CONTRACT is UNSUPPORTED, and deliberately NOT degraded to prose. A JSON Schema file sitting
+   * in a skill directory is not an API-level output constraint; the host composes its own request and
+   * Atelier has no way in. Restating the schema as an instruction would swap a runtime guarantee for a
+   * request the model can half-satisfy while everything reports success — which is the weaker version
+   * the carrier exists to replace.
+   */
+  carrierDelivery(): CarrierDeliveryMatrix {
+    return {
+      PROSE: { state: 'DELIVERED', basis: 'SKILL.md is the skill; this host loads it to invoke at all' },
+      SELF_CHECK: { state: 'DELIVERED', basis: 'carried in the same SKILL.md body the host loads to invoke' },
+      EXAMPLE: { state: 'REFERENCED_UNVERIFIED', basis: 'named from SKILL.md with its condition, for a host that reads further material when pointed at it' },
+      OUTPUT_CONTRACT: { state: 'UNSUPPORTED', basis: 'this host composes its own inference request; Atelier cannot supply the schema' },
+      NONE: { state: 'NOT_APPLICABLE', basis: 'the author ratified this as not taste' },
+    };
+  }
+
+  install(pkg: InstallablePackage, projectDir: string): InstallResult { return installTree(this.dir(projectDir, pkg.skillId), pkg); }
+  uninstall(skillId: string, projectDir: string): void { rmSync(this.dir(projectDir, skillId), { recursive: true, force: true }); }
+
+  /** Codex selects skills with a $ mention. Different punctuation, same skill. */
+  invocationHint(skillId: string): string { return `$${skillId} <your task>`; }
+
+  installProtocolGuards(policy: ProtocolPolicy): GuardResult {
+    // NOTHING IS INSTALLED HERE, AND THAT IS NOW WHAT IT SAYS.
+    //
+    // This returned `installed: true, enforcedBy: 'BLOCKING_HOOK'` as a hardcoded literal. No hook was
+    // written, no config was touched, and `verifyInstallation` — the one method that reads the disk —
+    // never looked for one. The value described a capability the host has, from a method whose name
+    // promises an action taken.
+    //
+    // Nothing but a test called it, so no invariant was actually resting on the lie. That is luck, not
+    // a defence: the next caller would have found a method reporting successful enforcement and had no
+    // way to discover it was a constant.
+    return { installed: false, enforcedBy: 'NOT_INSTALLED', artifact: null,
+      detail: `Codex can enforce a blocking pre-tool hook; Atelier does not install one yet, so the `
+        + `protocol is enforced only where Atelier owns the call. `
+        + (policy.reasonIfBlocked ? `Current policy would block: ${policy.reasonIfBlocked}.` : 'No active block.') };
+  }
+
+  verifyInstallation(pkg: InstallablePackage, projectDir: string): VerificationResult { return verifyTree(this.dir(projectDir, pkg.skillId), pkg); }
+  persistentStateLocation(): string { return process.env.CODEX_PLUGIN_DATA ?? join(process.env.HOME ?? '.', '.atelier'); }
+}

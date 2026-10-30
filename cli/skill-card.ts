@@ -1,0 +1,117 @@
+// cli/skill-card.ts — THE SKILL'S EVALUATION CARD, BUILT FROM WHAT THE SKILL VERSION HOLDS.
+//
+// Called at the end of `build` (so at the end of `atelier new … --accept`), stored once per skill version, and
+// read back by `atelier report --skill` and the MCP tool. Every line comes from the stored standard, profile,
+// release and instruments: nothing here runs a model or estimates anything new.
+
+import * as store from '../core/state/store.js';
+import * as fstore from '../core/state/fidelity-store.js';
+import * as vstore from '../core/state/voice-store.js';
+import { featureTrait, split } from '../core/voice/transfer.js';
+import { putSkillCard, getSkillCard } from '../core/state/eval-store.js';
+import { isGeneralScope } from '../core/state/canonical-state.js';
+import { QUALIFIED_READERS, claimAction } from '../core/loop/claim-extract.js';
+import { latitudeOf } from '../core/state/canonical-state.js';
+import { featureOf, LAYER_LABEL } from '../core/observers/features.js';
+import { FORMATS } from '../core/observers/formats.js';
+import { tasteRules } from '../core/taste/reader.js';
+import { tastePermissions } from '../core/taste/calibration.js';
+import { claimSensorFor } from './checks.js';
+import { readerModel } from './commands/taste.js';
+import type { SkillCard } from '../core/eval/skill-card.js';
+import { skillSizeOf } from '../core/eval/size.js';
+import { composeServed } from './served.js';
+import { copyLimit } from './eval-run.js';
+
+/** The card for the skill's active version (or `skillVersion`), built from its stored state and stored once. */
+export function skillCardFor(L: store.StoreLayout, opts: { heldBack?: number; skillVersion?: string; persist?: boolean } = {}): SkillCard | null {
+  const sv = opts.skillVersion ?? store.getActive(L);
+  const version = sv ? store.getSkillVersion(L, sv) : null;
+  const std = version ? store.getStandard(L, version.standardVersionHash) : null;
+  if (!sv || !version || !std) return null;
+  // LIVE, NOT FROZEN. What can change after the build (the release, a qualification, the taste labels, which
+  // claim reader would run) is read now; the stored card supplies only when it was built and what was held back.
+  const stored = getSkillCard(L, sv);
+  const live = std.requirements.filter((q) => q.authority !== 'EXPERT_REJECTED' && q.materiality !== 'INCIDENTAL');
+  const evidence = store.getEvidence(L);
+  // The claim check as it would run now: instrument, qualification and the rates it was measured at.
+  const sensor = claimSensorFor('', '', false);
+  // The measured rates belong to one model at one prompt version, and only when it is the one deciding.
+  const measured = sensor.qualified && sensor.gate === 'reader' && sensor.version
+    ? QUALIFIED_READERS.find((r) => r.version === sensor.version && r.measured && sensor.instrument.includes(r.model))?.measured ?? null : null;
+  const cls = store.getDocClass(L);
+  // The card speaks for the skill as stored: a run that binds material with --with says its own (cli/checks.ts).
+  const unmeasured = claimAction({ level: latitudeOf(std), cls, bound: store.getMaterial(L).length > 0, ownerCut: store.getClaimsCut(L) }).why?.replace('no material was bound to check against', 'no material is stored with the skill (bind it with atelier material, or --with on a run)') ?? null;
+  const answers = cls ? (FORMATS as Record<string, { claims?: string } | undefined>)[cls]?.claims === 'list' : false;
+  const active = fstore.getActiveRelease(L)?.release ?? null;
+  const profile = active?.profileHash ? fstore.getProfile(L, active.profileHash) : fstore.getProfile(L);
+  const pooled = profile?.bands.filter((b) => b.cls === 'all') ?? [];
+  const layers = new Map<string, { steering: number; monitored: number }>();
+  for (const b of pooled) {
+    const layer = LAYER_LABEL[featureOf(b.id)?.layer ?? 1];
+    const x = layers.get(layer) ?? { steering: 0, monitored: 0 };
+    layers.set(layer, b.role === 'MONITOR' ? { ...x, monitored: x.monitored + 1 } : { ...x, steering: x.steering + 1 });
+  }
+  const qual = profile ? fstore.getQualification(L, profile.hash) : null;
+  // The voice layer exists only where the owner declared the corpus's register, under this standard.
+  const policy = vstore.getPolicy(L);
+  const traits = [...live.map((q) => q.requirementId), ...pooled.filter((b) => b.role !== 'MONITOR').map((b) => featureTrait(b.id))];
+  const transfer = policy?.standardVersionHash === std.standardVersionHash ? split(policy, traits) : null;
+  const rulesRead = tasteRules(std);
+  const perms = rulesRead.length ? tastePermissions(rulesRead, store.readEvents(L), readerModel()) : null;
+  // The size of the package this version serves, measured on the text a run is served and an export writes.
+  const pkg = store.getPackage(L, version.materializedHash);
+  // A card is read by `report`, the MCP tool and the end of every build: a package that cannot be composed costs the
+  // card its size, never the card.
+  const served = ((): ReturnType<typeof composeServed> | null => { try { return pkg?.files['SKILL.md'] !== undefined ? composeServed(pkg.files, '') : null; } catch { return null; } })();
+  const card: SkillCard = {
+    schema: 1, skill: L.skillName, skillVersion: sv, standardVersion: std.standardVersionHash,
+    builtAt: stored?.builtAt ?? (opts.persist ? new Date().toISOString() : null),
+    corpus: evidence ? (() => { const held = opts.heldBack ?? stored?.corpus?.heldBack ?? 0; return { pieces: Math.max(0, evidence.items.length - held), heldBack: held }; })() : null,
+    copying: (store.getVoice(L)?.pieces?.length ?? 0) + (store.getVoice(L)?.passages?.length ?? 0) > 0,
+    // ONE LIMIT, ONE WORDING: the run's own (cli/eval-run.ts), never a number written here.
+    copyLimit: copyLimit(store.getVoice(L)),
+    rules: {
+      total: live.length, required: live.filter((q) => q.materiality === 'REQUIRED').length,
+      counted: live.filter((q) => q.measurement).length, read: live.filter((q) => !q.measurement).length,
+      conditional: live.filter((q) => !isGeneralScope(q.appliesWhen)).length,
+      needsMaterial: live.filter((q) => q.prerequisites?.length).length,
+      written: live.filter((q) => q.authority === 'EXPERT_AUTHORED').length,
+      unconfirmed: live.filter((q) => q.authority === 'DERIVED_UNRATIFIED').length,
+    },
+    claims: { instrument: sensor.instrument, qualified: sensor.qualified, answers, ...(unmeasured ? { unmeasured } : {}),
+      measured: measured && !unmeasured ? { caught: measured.caught, planted: measured.planted, leftAlone: measured.leftAlone, clean: measured.clean, on: measured.on } : null },
+    fidelity: profile ? {
+      profile: profile.hash, features: pooled.length, steering: pooled.filter((b) => b.role !== 'MONITOR').length,
+      layers: [...layers].map(([layer, x]) => ({ layer, ...x })),
+      classes: [...new Set(profile.bands.map((b) => b.cls).filter((c) => c !== 'all'))],
+      baseline: profile.baseline ?? null, operators: Boolean(profile.effects),
+      detector: profile.detector ? { families: profile.detector.families ?? [], cvAuc: profile.detector.cvAuc,
+        qualified: qual?.instruments.find((i) => i.kind === 'detector')?.result.passes ?? null } : null,
+      // WHAT STEERS EVERY DRAFT AND IS NEVER REQUIRED, by name: the features selection kept on the author's pieces.
+      steered: pooled.filter((b) => b.role === 'SIGNAL').flatMap((b) => {
+        const f = featureOf(b.id);
+        return f ? [{ id: b.id, label: f.label, unit: f.unit, band: b.band, n: b.n, auc: b.auc, ...(b.rate ? { rate: true as const } : {}) }] : [];
+      }),
+      ruled: pooled.filter((b) => b.role === 'RULE').length,
+    } : null,
+    release: active ? { id: active.id, drafts: active.settings.drafts, editBudget: active.settings.editBudget, retrievalK: active.settings.retrievalK,
+      notesCap: active.settings.notesCap, loop: active.settings.editBudget > 0 || Boolean(active.settings.diversity) } : null,
+    taste: rulesRead.length ? { rules: rulesRead.length, validated: (perms?.veto.size ?? 0) > 0, labelled: perms?.pooled.trials ?? 0 } : null,
+    ...(policy && transfer ? { voice: { registers: policy.corpusRegisters, carried: transfer.carried.length,
+      invariant: transfer.carried.filter((t) => policy.states[t].kind === 'invariant').length, unknown: transfer.unknown.length,
+      pairs: vstore.getBank(L)?.pairs.length ?? null, mode: active?.settings.voice ?? 'off' } } : {}),
+    ...(pkg && served ? { size: skillSizeOf(pkg.files, served.servedText, served.servedExamples) } : {}),
+    notMeasured: [
+      rulesRead.length ? 'the reading-based rules, until the taste reader is validated by your labels' : 'argument, stance and content',
+      profile ? `voice beyond the ${pooled.length} counted features` : 'your range (built without a corpus: no profile)',
+      ...(profile?.detector ? ['whether the detector holds for model families it was not trained on'] : []),
+      ...(policy && transfer ? ['fidelity in another register: not measurable from this corpus, your policy is applied'] : []),
+    ],
+    next: [`atelier invoke --skill ${L.skillName} "<task>"`, `atelier report <run>`, `atelier rate <run> yes|no`, `atelier eval --skill ${L.skillName}`,
+      ...(profile ? [`atelier qualify --skill ${L.skillName}`] : []), ...(rulesRead.length ? [`atelier taste --skill ${L.skillName} --calibrate`] : [])],
+  };
+  // Stored once, at build: reading a card never writes one.
+  if (opts.persist) putSkillCard(L, card);
+  return card;
+}

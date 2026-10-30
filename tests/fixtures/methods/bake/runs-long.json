@@ -1,0 +1,58 @@
+{
+    "byTool": {
+        "emit_piece": {
+            "piece": "Brioche wants patience and cold butter. The dough is sticky for a long time, and that is how it should be.\n\nBeat the eggs and flour first, until the dough pulls away from the bowl in long strands. Then add the butter a spoonful at a time. Just let each spoonful vanish before the next goes in.\n\nChill the dough overnight. Cold brioche shapes cleanly, and the slow rest deepens the flavour. In the morning the kitchen smells of yeast and warm milk as the shaped loaves rise by the stove.\n\nBake at 180 degrees for thirty minutes, until the top is the colour of a chestnut. Let it cool in the tin for ten minutes, then turn it out.\n\nBefore the oven door shuts, check the egg wash has not pooled at the edges. Pooled wash burns before the crumb sets.\n\n\nWhile it bakes, wash the bowl in hot water before the butter sets on it. The kitchen fills with the smell of browning crust and warm sugar. Keep the oven door shut for the first twenty minutes. Turn the tin halfway through if your oven runs hot at the back.\n\nA skewer should come out clean from the middle. If the top darkens too fast, lay a sheet of foil over it. The crumb keeps setting as it cools, so do not slice it hot. Wrap what is left in a cloth, not in plastic, and it will keep for two days.\n\nToast the last slices and eat them with salted butter. The crust softens overnight in the cloth, which is how it should be. Leftover brioche makes the best bread pudding you will ever eat. Soak it in custard for an hour before it goes in.\n\nMeanwhile, the kitchen smells of yeast. Simply use a dark tin if you have one, since its dark surface browns the base evenly. Never grease it with oil. Butter it and dust it with flour.\n\nWeigh the flour rather than scooping it. A heavy hand with the flour makes a dry, tight crumb. Sift it once if it has sat in the cupboard for a while. Then rub in the salt with your fingers.\n\nWarm the milk until it feels like bath water on your wrist. Hotter milk kills the yeast before it starts. Whisk the yeast in and leave it until it foams. That takes about ten minutes in a warm kitchen."
+        },
+        "emit_replacements": {
+            "replacements": [
+                {
+                    "id": 1,
+                    "text": "Use a dark tin if you have one, since its dark surface browns the base evenly."
+                }
+            ]
+        }
+    },
+    "when": [
+        {
+            "containsAll": [
+                "emit_piece",
+                "Choose what to delete"
+            ],
+            "answer": {
+                "piece": "Leftover brioche makes the best bread pudding you will ever eat.\nThe crust softens overnight in the cloth, which is how it should be."
+            }
+        },
+        {
+            "containsAll": [
+                "emit_piece",
+                "Return the same piece with words removed"
+            ],
+            "answer": {
+                "piece": "Brioche wants patience and cold butter. The dough is sticky for a long time, and that is how it should be.\n\nBeat the eggs and flour first, until the dough pulls away from the bowl in long strands. Then add the butter a spoonful at a time. Each spoonful should vanish before the next goes in.\n\nChill the dough overnight. Cold brioche shapes cleanly, and the slow rest deepens the flavour. In the morning the kitchen smells of yeast and warm milk as the shaped loaves rise by the stove.\n\nBake at 180 degrees for thirty minutes, until the top is the colour of a chestnut. Let it cool in the tin for ten minutes, then turn it out.\n\nBefore the oven door shuts, check the egg wash has not pooled at the edges. Pooled wash burns before the crumb sets.\n\n\nWhile it bakes, wash the bowl in hot water before the butter sets on it. The kitchen fills with the smell of browning crust and warm sugar. Keep the oven door shut for the first twenty minutes. Turn the tin halfway through if your oven runs hot at the back.\n\nA skewer should come out clean from the middle. If the top darkens too fast, lay a sheet of foil over it. The crumb keeps setting as it cools, so do not slice it hot. Wrap what is left in a cloth, not in plastic, and it will keep for two days.\n\nWeigh the flour rather than scooping it. A heavy hand with the flour makes a dry, tight crumb. Sift it once if it has sat in the cupboard for a while. Then rub in the salt with your fingers.\n\nWarm the milk until it feels like bath water on your wrist. Hotter milk kills the yeast before it starts. Whisk the yeast in and leave it until it foams. That takes about ten minutes in a warm kitchen."
+            }
+        },
+        {
+            "containsAll": [
+                "emit_piece",
+                "earlier-draft"
+            ],
+            "answer": {
+                "piece": "Brioche wants patience and cold butter. The dough is sticky for a long time, and that is how it should be.\n\nBeat the eggs and flour first, until the dough pulls away from the bowl in long strands. Then add the butter a spoonful at a time. Each spoonful should vanish before the next goes in.\n\nChill the dough overnight. Cold brioche shapes cleanly, and the slow rest deepens the flavour. In the morning the kitchen smells of yeast and warm milk as the shaped loaves rise by the stove.\n\nBake at 180 degrees for thirty minutes, until the top is the colour of a chestnut. Let it cool in the tin for ten minutes, then turn it out.\n\nBefore the oven door shuts, check the egg wash has not pooled at the edges. Pooled wash burns before the crumb sets.\n\n\nWhile it bakes, wash the bowl in hot water before the butter sets on it. The kitchen fills with the smell of browning crust and warm sugar. Keep the oven door shut for the first twenty minutes. Turn the tin halfway through if your oven runs hot at the back.\n\nA skewer should come out clean from the middle. If the top darkens too fast, lay a sheet of foil over it. The crumb keeps setting as it cools, so do not slice it hot. Wrap what is left in a cloth, not in plastic, and it will keep for two days.\n\nWeigh the flour rather than scooping it. A heavy hand with the flour makes a dry, tight crumb. Sift it once if it has sat in the cupboard for a while. Then rub in the salt with your fingers.\n\nWarm the milk until it feels like bath water on your wrist. Hotter milk kills the yeast before it starts. Whisk the yeast in and leave it until it foams. That takes about ten minutes in a warm kitchen."
+            }
+        },
+        {
+            "containsAll": [
+                "emit_replacements",
+                "Just let each"
+            ],
+            "answer": {
+                "replacements": [
+                    {
+                        "id": 1,
+                        "text": "Let each spoonful vanish before the next goes in."
+                    }
+                ]
+            }
+        }
+    ]
+}

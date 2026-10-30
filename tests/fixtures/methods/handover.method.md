@@ -1,0 +1,4 @@
+- Open with a Status section: green, amber or red, and why in one sentence.
+- Include an Open issues section listing each issue with its owner.
+- Include a Decisions needed section.
+- End with a Next 48 hours section.

@@ -1,0 +1,147 @@
+// core/state/prerequisite.ts — WHAT MUST EXIST BEFORE A REQUIREMENT CAN BE EXECUTED TRUTHFULLY.
+//
+// A compiled standard said: *cite one specific counted observation from our own records*. It was
+// REQUIRED, it compiled to PROSE, and the invocation supplied no records. The model satisfied it —
+// "I pulled our last 200 tickets. 63% of them are…" — by inventing the records.
+//
+// The rule was followed. The condition that makes following it truthful was absent, and nothing in
+// the system could represent that, so an impossible epistemic demand was handed to a model as an
+// instruction and the model did the only thing it could.
+//
+// ─── THIS IS NOT AN OBSERVATION PROBLEM ────────────────────────────────────────────────────────
+//
+// It is tempting to file this under "we could not observe whether the citation was grounded", which
+// leads straight back to building a semantic judge. That is the wrong read and the expensive one.
+// We did not need to observe the outcome. We could have known BEFORE the call, deterministically,
+// that the required source was not bound to this invocation.
+//
+// A precondition is checkable. Groundedness is not, yet. Do the checkable thing.
+//
+// ─── DELIBERATELY NOT AN ONTOLOGY ──────────────────────────────────────────────────────────────
+//
+// One case justified this, so it represents that case and no more: a requirement names a resource it
+// needs, an invocation binds resources by name, and the two are compared by string. What a resource
+// IS — a file, a query, a connector — is not decided here, because nothing has yet demanded that it
+// be. `RECORDS("support-ticket-history")` can later be satisfied by a file or a CRM without this
+// module learning either.
+
+import { isGeneralScope } from './canonical-state.js';
+
+/** A named thing a requirement needs in order to be executed truthfully. */
+export interface Prerequisite {
+  /** the kind of thing needed. Open on purpose; the runtime matches on `name`, not on this. */
+  readonly kind: 'RECORDS' | 'CONTEXT' | 'TOOL';
+  /** the identifier the invocation must bind. Compared as a string, deliberately. */
+  readonly name: string;
+  /** what the author was relying on, in their words. Shown when the run is refused. */
+  readonly why: string;
+}
+
+/** What an invocation actually has. Names only — the value is the caller's business. */
+export type BoundResources = ReadonlySet<string>;
+
+/** A prerequisite taken as met by the text the run works on, under its own name: said on the record, never silent. */
+export interface AssumedPrerequisite { readonly requirementId: string; readonly prerequisite: Prerequisite }
+/** What the run bound beyond names: whether a text was bound for the run to work on. */
+export interface BindingContext { readonly subjectBound?: boolean }
+
+export type SatisfiabilityVerdict =
+  /** every prerequisite of every REQUIRED rule is bound */
+  | { readonly kind: 'SATISFIABLE'; readonly assumed?: readonly AssumedPrerequisite[] }
+  /** a REQUIRED rule needs something this invocation does not have: it is not attempted, and is shown as not checked */
+  | { readonly kind: 'MISSING_REQUIRED_EVIDENCE'; readonly missing: readonly MissingPrerequisite[]; readonly assumed?: readonly AssumedPrerequisite[] }
+  /** only non-obligatory rules are short. The run proceeds and the behaviour is not attempted. */
+  | { readonly kind: 'DEGRADED'; readonly missing: readonly MissingPrerequisite[]; readonly assumed?: readonly AssumedPrerequisite[] };
+
+export interface MissingPrerequisite {
+  readonly requirementId: string;
+  readonly statement: string;
+  readonly materiality: string | null;
+  readonly prerequisite: Prerequisite;
+  /** REQUIRED, but only under a condition: withheld from this run rather than refusing it */
+  readonly conditional?: boolean;
+  /** REQUIRED of every output: held back, the run is not finished on its account (recorded as not checked) */
+  readonly unfinished?: true;
+}
+
+interface RequirementLike {
+  readonly requirementId: string;
+  readonly statement: string;
+  readonly materiality: string | null;
+  readonly prerequisites?: readonly Prerequisite[];
+  /** the rule's condition; GENERAL (or absent) applies to every output */
+  readonly appliesWhen?: string;
+}
+
+/**
+ * Decide before spending anything.
+ *
+ * REQUIRED is the line. A rule the author made obligatory, whose evidence is absent, cannot be
+ * executed honestly and must not be attempted — the alternative is asking a model not to invent, which
+ * is not a mechanism. A PREFERRED rule in the same position simply does not fire, and saying so is
+ * more useful than silently dropping it.
+ */
+/** Names compared as the same words: "notice of loss", "Notice-of-Loss" and "notice_of_loss" are one name. */
+const flatName = (s: string): string => s.toLowerCase().replace(/[\s_-]+/g, '-').replace(/^-|-$/g, '');
+
+export function checkSatisfiable(
+  requirements: readonly RequirementLike[], bound: BoundResources, ctx: BindingContext = {},
+): SatisfiabilityVerdict {
+  const missing: MissingPrerequisite[] = [];
+  const assumed: AssumedPrerequisite[] = [];
+  const boundFlat = new Set([...bound].map(flatName));
+  for (const r of requirements) {
+    // A CONDITIONAL RULE CANNOT REFUSE A REQUEST ITS CONDITION MAY NOT TOUCH. "Name the exact file and
+    // line, when pointing at a change I made" refused "What is 17 multiplied by 6?" because no file of
+    // paths was bound. Whether a prose condition applies cannot be known before the answer exists, so
+    // such a rule is withheld from the run and named; only a rule that applies to everything refuses.
+    const conditional = r.appliesWhen !== undefined && !isGeneralScope(r.appliesWhen);
+    for (const p of r.prerequisites ?? []) {
+      if (bound.has(p.name) || boundFlat.has(flatName(p.name))) continue;
+      // THE TEXT THE RUN WORKS ON IS THE CONTEXT A READING RULE NEEDS. A review skill's rules need "the actual content of
+      // the proposal being reviewed", "the specific figures the proposal uses": the proposal, bound under whatever name
+      // the person gave it (`--with draft=...`). Matched by exact name, 16 of 18 rules were withheld from every review
+      // on the stage baseline (27 Oct). A CONTEXT prerequisite is met by the bound text and said so; records and tools
+      // are still bound by name, since a text is no substitute for figures nobody gave.
+      if (ctx.subjectBound && p.kind === 'CONTEXT') { assumed.push({ requirementId: r.requirementId, prerequisite: p }); continue; }
+      missing.push({ requirementId: r.requirementId, statement: r.statement, materiality: r.materiality, prerequisite: p,
+        ...(conditional && r.materiality === 'REQUIRED' ? { conditional: true } : {}), ...(!conditional && r.materiality === 'REQUIRED' ? { unfinished: true as const } : {}) });
+    }
+  }
+  const withAssumed = assumed.length ? { assumed } : {};
+  if (!missing.length) return { kind: 'SATISFIABLE', ...withAssumed };
+  return missing.some((m) => m.materiality === 'REQUIRED' && !m.conditional)
+    ? { kind: 'MISSING_REQUIRED_EVIDENCE', missing, ...withAssumed }
+    : { kind: 'DEGRADED', missing, ...withAssumed };
+}
+
+/** One line for the rules whose context the bound text was taken to supply; null where none was. */
+export function describeAssumed(v: SatisfiabilityVerdict): string | null {
+  const a = v.assumed ?? [];
+  if (!a.length) return null;
+  const ids = [...new Set(a.map((x) => x.requirementId))];
+  return `${ids.length} rule${ids.length === 1 ? '' : 's'} read the bound text as the context ${ids.length === 1 ? 'it needs' : 'they need'} (${a.map((x) => x.prerequisite.name).join(', ')}): ${ids.join(', ')}.`;
+}
+
+/** What a person reads. Names the rule, the source, and the two ways forward. */
+export function describeSatisfiability(v: SatisfiabilityVerdict): string | null {
+  if (v.kind === 'SATISFIABLE') return null;
+  const rows = v.missing.map((m) =>
+    `  ${m.requirementId}  [${m.materiality ?? 'undeclared'}]  needs ${m.prerequisite.kind}("${m.prerequisite.name}")\n`
+    + `      rule: ${m.statement.slice(0, 96)}\n`
+    + `      why:  ${m.prerequisite.why}`).join('\n');
+
+  if (v.kind === 'DEGRADED') {
+    const held = v.missing.filter((m) => m.conditional).map((m) => m.requirementId);
+    return `\nNot every rule can fire on this invocation.\n\n${rows}\n\n`
+      + (held.length ? `${held.join(', ')} ${held.length === 1 ? 'is' : 'are'} REQUIRED only under a condition, so withheld from this run rather than refusing it.\n` : '')
+      + 'The run proceeds and those behaviours are not attempted. Bind the source to get them.\n';
+  }
+  // MATERIAL NOT GIVEN IS NO REASON TO REFUSE THE WORK. A model asked for a counted observation it cannot make produces
+  // a plausible one, so the rule is not attempted: it is held back from the draft, and the evaluation shows it as not
+  // checked, which keeps the run from reading as VERIFIED on its account.
+  return `Not every REQUIRED rule can be met on this run: the material it needs was not given.\n\n${rows}\n\n`
+    + 'The run goes on without them. They are not attempted (asked for evidence it does not have, a model invents\n'
+    + 'it), and the evaluation shows them as not checked, so this work needs your review.\n\n'
+    + `  Bind the source:   ${v.missing.filter((m) => m.materiality === 'REQUIRED').map((m) => `--with ${m.prerequisite.name}=<file>`).join(' ')}\n`;
+}

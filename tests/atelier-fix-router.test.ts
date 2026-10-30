@@ -1,0 +1,107 @@
+// tests/atelier-fix-router.test.ts — WHERE A COMPLAINT GOES: THIS OUTPUT, UNLESS THE PERSON SAYS OTHERWISE.
+//
+// One complaint about one piece is not a rule. By default only the piece is written again; the skill changes when
+// the person says it should for every run, and a complaint that the evaluation was wrong changes neither.
+import { describe, it, expect } from 'vitest';
+import { routeOf } from '../cli/commands/fix.js';
+import { correctionFor } from '../cli/commands/invoke.js';
+import { statedLength } from '../core/intake/length.js';
+
+describe('the four ways, and the default', () => {
+  const ran = { asked: 'Review this change.' };
+  it('a complaint about a run made with `atelier run` is about that output', () => {
+    expect(routeOf(['fix', 'it missed the migration cost'], ran)).toBe('THIS_OUTPUT');
+  });
+  it('the skill changes only when the person says every run should do this, or answers a question an earlier fix asked', () => {
+    for (const f of ['--always', '--add', '--pick', '--skip', '--invocation']) expect(routeOf(['fix', 'x', f, 'v'], ran), f).toBe('EVERY_RUN');
+    expect(routeOf(['fix', 'x', '--add=required'], ran)).toBe('EVERY_RUN');
+  });
+  it('a complaint about the evaluation changes neither the piece nor the skill', () => {
+    expect(routeOf(['fix', 'it blocked a clause I always use', '--evaluation'], ran)).toBe('EVALUATION');
+    expect(routeOf(['fix', 'x', '--evaluation', '--always'], ran)).toBe('EVALUATION');
+  });
+  it('a run that cannot be written again from here (made in a host, or before runs kept what was asked) goes to the skill', () => {
+    expect(routeOf(['fix', 'x'], {})).toBe('EVERY_RUN');
+    expect(routeOf(['fix', 'x'], null)).toBe('EVERY_RUN');
+  });
+});
+
+describe('what is passed on when a piece is written again', () => {
+  it('the settings typed for the writing, and nothing that names the run, the route or a machine\'s format', async () => {
+    const { settingsTyped } = await import('../cli/commands/fix.js');
+    expect(settingsTyped('too long', ['too long', '--model', 'm', '--skill', 'other', '--json', '--cap', '2', '--complaint=x', '--always', '--evaluation', '--invocation', 'i1']))
+      .toEqual(['--model', 'm', '--cap', '2']);
+    // the complaint is taken out once, where it stands, even when another argument says the same
+    expect(settingsTyped('m', ['m', '--model', 'm'])).toEqual(['--model', 'm']);
+  });
+  it('an empty request cannot be written again: the complaint goes to the skill', () => {
+    expect(routeOf(['fix', 'x'], { asked: '' })).toBe('EVERY_RUN');
+    expect(routeOf(['fix', 'x'], { asked: '   ' })).toBe('EVERY_RUN');
+  });
+});
+
+describe('what the writer is told when a piece is written again', () => {
+  it('the person\'s words, beside the task and no part of it', () => {
+    const note = correctionFor('it missed the "migration" cost');
+    expect(note).toContain('The person who asked for it said, in their words: "it missed the \'migration\' cost".');
+    expect(note).toContain('change nothing else about what was asked');
+    expect(correctionFor(undefined)).toBe('');
+    expect(correctionFor('   ')).toBe('');
+  });
+  it('the complaint goes to the writer through its own option, never joined to what was asked', async () => {
+    // What was asked is read for a length, a format and material; a complaint is none of those. The run takes it as
+    // --correcting, and writes what was asked, unchanged, to the record the next fix reads.
+    const { VALUED_OPTIONS } = await import('../cli/runtime.js');
+    expect(VALUED_OPTIONS).toContain('correcting');
+    expect(statedLength('Review this change.')).toBeNull();
+  });
+});
+
+describe('a piece written again is written as the first was: under its settings, and it says what it could not recover', () => {
+  it('a run keeps the settings typed for the writing, and nothing that names the run, its material or a machine\'s format', async () => {
+    const { settingsOfRun } = await import('../cli/commands/invoke.js');
+    expect(settingsOfRun(['invoke', '--skill', 's', '--task=Review this.', '--model', 'm', '--drafts=2', '--no-redraft', '--with', 'notes=n.md', '--json', '--correcting', 'too long', '--provenance', 'p', '--cap', '3', 'a stray word', '--quiet']))
+      .toEqual(['--model', 'm', '--drafts=2', '--no-redraft', '--cap', '3']);
+    expect(settingsOfRun(['invoke', '--skill', 's', 'Review this.'])).toEqual([]);
+  });
+  it('the first run\'s settings come first and what is typed beside the complaint after, so the person\'s word now is the last', async () => {
+    const { replayOf } = await import('../cli/commands/fix.js');
+    const last = { invocationId: 'i1', skillName: 's', asked: 'Review this.', with: [], settings: ['--model', 'm', '--drafts=2'], skillVersion: 'v1' };
+    const r = replayOf('s', last, ['too long'], ['--cap', '2'], 'v1', () => true);
+    expect(r.args.slice(0, 4)).toEqual(['run', 'Review this.', '--skill', 's']);
+    expect(r.args.slice(-5)).toEqual(['--model', 'm', '--drafts=2', '--cap', '2']);
+    expect(r.notes).toEqual([]);
+  });
+  it('a run from before settings were kept is written again under the defaults, and says so', async () => {
+    const { replayOf } = await import('../cli/commands/fix.js');
+    const r = replayOf('s', { invocationId: 'i1', skillName: 's', asked: 'Review this.' }, ['too long'], [], null, () => true);
+    expect(r.notes.join(' ')).toMatch(/settings of the first run were not kept.+under the defaults.+type them beside the complaint/);
+  });
+  it('a skill changed since the piece was written, or a file given with it that is gone, is said: never called the same run', async () => {
+    const { replayOf } = await import('../cli/commands/fix.js');
+    const last = { invocationId: 'i1', skillName: 's', asked: 'Review this.', with: [{ name: 'notes', path: '/gone/n.md' }, { name: 'sheet', path: '/here/s.md' }], settings: [], skillVersion: 'v1aaaaaaaaaa' };
+    const r = replayOf('s', last, ['too long'], [], 'v2bbbbbbbbbb', (p) => p === '/here/s.md');
+    expect(r.args).toContain('sheet=/here/s.md');
+    expect(r.args.join(' ')).not.toContain('/gone/n.md');
+    expect(r.notes).toEqual(['/gone/n.md is no longer there, so the piece is written again without it.',
+      'Your skill has changed since this piece was written (it was v1aaaaaa, it is now v2bbbbbb): the piece is written again by the skill as it is now.']);
+  });
+});
+
+describe('a setting typed beside the complaint replaces the first run\'s, and is never given twice', () => {
+  it('the same option in both: the one typed now is the one passed, once, however either was written', async () => {
+    const { replayOf } = await import('../cli/commands/fix.js');
+    const last = { invocationId: 'i1', skillName: 's', asked: 'Review this.', with: [], settings: ['--model', 'm', '--drafts=2', '--no-redraft', '--cap', '3'], skillVersion: 'v1' };
+    const r = replayOf('s', last, ['too long'], ['--model=n', '--drafts', '3'], 'v1', () => true);
+    expect(r.args.slice(r.args.indexOf('--provenance') + 2)).toEqual(['--no-redraft', '--cap', '3', '--model=n', '--drafts', '3']);
+  });
+  it('twice in a row with the same setting typed: still once', async () => {
+    const { replayOf } = await import('../cli/commands/fix.js');
+    const last = { invocationId: 'i1', skillName: 's', asked: 'Review this.', with: [], settings: ['--cap', '2'], skillVersion: 'v1' };
+    expect(replayOf('s', last, ['x', 'y'], ['--cap', '2'], 'v1', () => true).args.filter((a) => a === '--cap').length).toBe(1);
+  });
+  it('a bare "--" is no setting: kept, it would turn everything typed after it into words of the task', async () => {
+    const { settingsOfRun } = await import('../cli/commands/invoke.js');
+    expect(settingsOfRun(['invoke', '--model', 'm', '--', '--drafts', '2'])).toEqual(['--model', 'm', '--drafts', '2']);
+  });
+});
