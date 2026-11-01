@@ -1,7 +1,7 @@
 {
   "name": "@yannickyamo/atelier",
   "version": "1.1.0",
-  "description": "Your voice on every piece your agents write: learns your taste from the pieces you would sign, writes to it, and flags anything made up or copied.",
+  "description": "Learns how you write from the pieces you would sign, writes new pieces that way, and reads each one for anything made up or copied before you see it.",
   "type": "module",
   "bin": {
     "atelier": "./dist/cli/atelier.mjs"

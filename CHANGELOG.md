@@ -2,7 +2,7 @@
 
 ## [Unreleased]
 
-Your voice on every piece your agents write. Atelier learns your taste from the pieces you would sign, writes to it, and flags anything made up or copied.
+Atelier learns how you write from the pieces you would sign, writes new pieces that way, and reads each one for anything made up or copied before you see it.
 
 - `atelier new` builds the check from your finished pieces, with or without a note of your own rules, and shows every rule for approval before it binds.
 - `atelier verify` checks any text for invented specifics, passages copied from your examples and broken rules; as a Claude Code hook it blocks the break and hands the agent the reason.

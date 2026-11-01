@@ -80,7 +80,7 @@
     <text class="muted b" x="24" y="168">asks, from the material</text>
     <text class="muted b" x="24" y="192">that came with it.</text>
     <rect class="chip" x="24" y="240" width="202" height="44" rx="22"/>
-    <text class="accent s" x="125" y="268" text-anchor="middle">The 1st or the 500th</text>
+    <text class="accent s" x="125" y="268" text-anchor="middle">Fitted to each request</text>
   </g>
 
   <line class="accent-s" x1="816" y1="196" x2="856" y2="196" stroke-width="2.5" marker-end="url(#arrow)"/>

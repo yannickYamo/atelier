@@ -1,8 +1,6 @@
 # Atelier
 
-### Your voice, on every piece your agents write. Nothing made up, nothing copied.
-
-**You can tell the draft isn't yours. You usually can't say why.** That's the whole frustration in one line. You hand a post to an agent because there's more writing than there are evenings, and what comes back is fluent, competent, and wearing someone else's face. It opens with a summary you'd never write. It hedges in the exact place you'd commit. You paste in three of your own posts as examples, and it gets the surface right, then invents a statistic you never saw and hands a paragraph of yours back to you as if it were new. So you rewrite it yourself, or you skim it and hope. One costs your nights. The other costs your name.
+Atelier is a tool that learns how you write from the pieces you'd sign, then writes new pieces that way and reads each one before you see it.
 
 [![CI](https://github.com/yannickYamo/atelier/actions/workflows/ci.yml/badge.svg)](https://github.com/yannickYamo/atelier/actions/workflows/ci.yml)
 [![license](https://img.shields.io/badge/license-source--available-blue)](LICENSE)
@@ -10,24 +8,42 @@
 
 <p align="center"><img src="docs/how-it-works.svg" alt="Your best work goes in. Atelier learns your taste and you approve each habit it found. It writes every new piece in your voice, for that request. It reads each piece before you do: made-up facts flagged, copied passages caught. Next: expert agents." width="100%"></p>
 
-## The problem
+## How it learns your taste
 
-Taste is the part nobody wrote down. You know your own rules: where you refuse to hedge, which figures you'd never cite without a sample size, the fact that you always name who's answerable at the end. But they live in your hands, not in a doc. A system prompt can only ask for what you can articulate. A model judge scores a draft 7 out of 10 against its own idea of good, which is the average of everyone's writing and therefore nobody's. Neither one knows what *your* good is, so neither can hold a draft to it.
+You point it at finished work you're happy with. Ten blog posts, a folder of product requirement docs, a stack of past contracts. It reads what all of them have in common.
+
+Some of that is countable: how long your paragraphs run, how your pieces open, which words never appear, how often you ask the reader a question. Some of it isn't. Where you commit and where you hedge. How you close. What you always cut before sending.
+
+Most of this was never written down anywhere. People know good when they see it and can't say why. Atelier does the saying part, then hands it back to you one rule at a time, in plain words. You keep the rules that are actually you and drop the rest.
+
+What you approve is fixed. A model can't quietly reword it later.
+
+## Your voice on every piece
+
+Every new piece gets written against those rules, for that specific request: what you asked for, the material you attached, and which of your rules apply to this kind of writing. A contract and a newsletter don't get the same set.
+
+Then every piece gets read before it reaches you. The counted habits get checked. Any figure or name that isn't in the material you provided gets flagged. Any paragraph lifted out of your own examples gets flagged too, because a story of yours it wasn't given isn't yours to retell back at you.
+
+The same rules run on every piece. So the tenth one sounds like the first, not like a model that drifted over a long afternoon.
+
+## Where it works
+
+- **Blog posts and newsletters:** your voice, your openings, no invented anecdotes or numbers.
+- **Product requirement docs:** the sections your team expects, with every figure traced back to the data you attached.
+- **Contracts:** the clauses you always include, your defined terms, nothing added that wasn't in the deal notes.
+- **Release notes, design reviews, support replies, internal memos:** anything your team writes often and wants to sound like itself.
+
+You still read it. You still sign it. The judgment moved earlier in the loop, not out of it.
+
+## Why not just prompt it
+
+A system prompt can only ask for what you can articulate. A model judge scores a draft 7 out of 10 against its own idea of good, which is the average of everyone's writing and therefore nobody's. Neither one knows what *your* good is, so neither can hold a draft to it.
 
 And the failure isn't only stylistic. Fluent drafts invent. They attribute, they quantify, they tell a story that sounds like one of yours because it was assembled out of one of yours. You're the one signing it.
-
-## What it does
-
-**It learns your taste.** Atelier reads your existing work and infers what good looks like to you, including the habits you've never named. Then it shows you what it found, one rule at a time, and you rule on each one. Approved rules become a versioned standard: yours, in your words, not something a model can quietly reword on the next run.
-
-**It writes in your voice.** For each new request, it writes against that standard: what this piece asks for, what source material came with it, which of your habits actually apply here (and which don't: a rule that fits a long guide shouldn't be forced onto a release note).
-
-**It reads every piece before you do.** Every figure, name, and anecdote gets checked against the material you supplied; anything that isn't there gets flagged. Passages lifted from your own examples get caught too, because a story of yours that wasn't given to this piece isn't this piece's to tell. What lands in front of you comes with a note: what held, what it repaired, and what's still yours to decide.
 
 ## What's shown so far
 
 - **Blind readers ranked Atelier's pieces first** on a single read, ahead of the same model given the author's own posts as examples.
-- **The voice holds on piece five hundred the way it holds on piece one,** because the standard is read fresh against each one rather than drifting out of a context window.
 - **0 invented specifics across 60 pieces.** Plain prompting and pasted examples produced between 37 and 67 per corpus.
 - **46 of 46 planted inventions caught.**
 
