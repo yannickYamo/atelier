@@ -137,7 +137,7 @@ export const COMMANDS: readonly string[] = [
  * everything else is still here, under `atelier lab`, for whoever wants it.
  */
 export const FRONT_DOOR: readonly string[] = [
-  'atelier: flags what your agent made up, and checks its writing against pieces you would sign.',
+  'atelier: your voice on every piece your agents write. Nothing made up, nothing copied.',
   '',
   '  atelier new <your-work> "<what it is for>"    build the check from your finished pieces (--method <note> adds your own rules)',
   '  atelier verify --skill <name> <file>          check any text: made-up facts, copied passages, broken rules',

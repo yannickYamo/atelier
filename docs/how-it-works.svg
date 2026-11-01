@@ -1,0 +1,110 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1160 520" width="1160" height="520" role="img" aria-labelledby="t d">
+  <title id="t">How Atelier works</title>
+  <desc id="d">Your best work goes in. Atelier learns your taste, including the habits you never wrote down, and you approve each one. It writes each new piece in your voice, for that request. It reads every piece before you do, flagging made-up facts and copied passages. You get work you can sign. Next: expert agents that learn the decisions behind the work.</desc>
+  <style>
+    .bg { fill: #faf7f2; }
+    .card { fill: #ffffff; stroke: #e4ddd2; stroke-width: 1.5; }
+    .soft { fill: #f3ede4; stroke: #e4ddd2; stroke-width: 1.5; }
+    .ink { fill: #1f1b16; }
+    .muted { fill: #6b6258; }
+    .accent { fill: #b8512f; }
+    .accent-s { stroke: #b8512f; }
+    .line { stroke: #b9afa2; }
+    .next { fill: none; stroke: #b9afa2; stroke-width: 1.5; stroke-dasharray: 6 6; }
+    .chip { fill: #f6e5dc; }
+    text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; }
+    .h { font-size: 23px; font-weight: 650; }
+    .b { font-size: 17px; }
+    .n { font-size: 15px; font-weight: 700; letter-spacing: 1.5px; }
+    .s { font-size: 15px; font-weight: 600; }
+    @media (prefers-color-scheme: dark) {
+      .bg { fill: #15120f; }
+      .card { fill: #1f1b17; stroke: #3a332b; }
+      .soft { fill: #26211b; stroke: #3a332b; }
+      .ink { fill: #f1ebe3; }
+      .muted { fill: #a89f93; }
+      .accent { fill: #e88a64; }
+      .accent-s { stroke: #e88a64; }
+      .line { stroke: #5c5348; }
+      .next { stroke: #5c5348; }
+      .chip { fill: #3a2a22; }
+    }
+  </style>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" class="accent"/>
+    </marker>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="1160" height="520" rx="18"/>
+
+  <!-- Your best work -->
+  <g transform="translate(36 96)">
+    <rect class="soft" x="14" y="0" width="128" height="164" rx="10"/>
+    <rect class="soft" x="7" y="8" width="128" height="164" rx="10"/>
+    <rect class="card" x="0" y="16" width="128" height="164" rx="10"/>
+    <line class="line" x1="18" y1="62" x2="110" y2="62" stroke-width="3" stroke-linecap="round"/>
+    <line class="line" x1="18" y1="80" x2="104" y2="80" stroke-width="3" stroke-linecap="round"/>
+    <line class="line" x1="18" y1="98" x2="110" y2="98" stroke-width="3" stroke-linecap="round"/>
+    <line class="line" x1="18" y1="116" x2="86" y2="116" stroke-width="3" stroke-linecap="round"/>
+    <line class="line" x1="18" y1="134" x2="106" y2="134" stroke-width="3" stroke-linecap="round"/>
+    <line class="line" x1="18" y1="152" x2="72" y2="152" stroke-width="3" stroke-linecap="round"/>
+    <text class="ink h" x="64" y="226" text-anchor="middle">Your best work</text>
+    <text class="muted b" x="64" y="252" text-anchor="middle">the pieces you'd sign</text>
+  </g>
+
+  <line class="accent-s" x1="196" y1="196" x2="236" y2="196" stroke-width="2.5" marker-end="url(#arrow)"/>
+
+  <!-- 1 learns -->
+  <g transform="translate(246 40)">
+    <rect class="card" width="250" height="312" rx="14"/>
+    <text class="accent n" x="24" y="44">1 · LEARNS</text>
+    <text class="ink h" x="24" y="84">Your taste</text>
+    <text class="muted b" x="24" y="120">What all your pieces</text>
+    <text class="muted b" x="24" y="144">do, including the</text>
+    <text class="muted b" x="24" y="168">habits you never</text>
+    <text class="muted b" x="24" y="192">put into words.</text>
+    <rect class="chip" x="24" y="240" width="202" height="44" rx="22"/>
+    <text class="accent s" x="125" y="268" text-anchor="middle">You approve each one</text>
+  </g>
+
+  <line class="accent-s" x1="506" y1="196" x2="546" y2="196" stroke-width="2.5" marker-end="url(#arrow)"/>
+
+  <!-- 2 writes -->
+  <g transform="translate(556 40)">
+    <rect class="card" width="250" height="312" rx="14"/>
+    <text class="accent n" x="24" y="44">2 · WRITES</text>
+    <text class="ink h" x="24" y="84">In your voice</text>
+    <text class="muted b" x="24" y="120">Every new piece, for</text>
+    <text class="muted b" x="24" y="144">what this request</text>
+    <text class="muted b" x="24" y="168">asks, from the material</text>
+    <text class="muted b" x="24" y="192">that came with it.</text>
+    <rect class="chip" x="24" y="240" width="202" height="44" rx="22"/>
+    <text class="accent s" x="125" y="268" text-anchor="middle">The 1st or the 500th</text>
+  </g>
+
+  <line class="accent-s" x1="816" y1="196" x2="856" y2="196" stroke-width="2.5" marker-end="url(#arrow)"/>
+
+  <!-- 3 reads -->
+  <g transform="translate(866 40)">
+    <rect class="card" width="258" height="312" rx="14"/>
+    <text class="accent n" x="24" y="44">3 · READS</text>
+    <text class="ink h" x="24" y="84">Before you do</text>
+    <g class="b">
+      <circle class="accent" cx="32" cy="115" r="4"/>
+      <text class="muted b" x="46" y="121">Made-up facts flagged</text>
+      <circle class="accent" cx="32" cy="151" r="4"/>
+      <text class="muted b" x="46" y="157">Copied passages caught</text>
+      <circle class="accent" cx="32" cy="187" r="4"/>
+      <text class="muted b" x="46" y="193">A note on what held</text>
+    </g>
+    <rect class="chip" x="24" y="240" width="210" height="44" rx="22"/>
+    <text class="accent s" x="129" y="268" text-anchor="middle">Work you can sign</text>
+  </g>
+
+  <!-- next -->
+  <rect class="next" x="246" y="392" width="878" height="92" rx="14"/>
+  <text class="accent n" x="276" y="430">NEXT</text>
+  <text class="ink h" x="350" y="431">Expert agents</text>
+  <text class="muted b" x="276" y="462">Not how an expert's work looks, but why they decide what they decide.</text>
+</svg>

@@ -1,7 +1,7 @@
 {
   "name": "@yannickyamo/atelier",
   "version": "1.1.0",
-  "description": "Flags what your agent made up: a check any coding agent can call for invented facts, copied passages and broken rules, built from the pieces you would sign.",
+  "description": "Your voice on every piece your agents write: learns your taste from the pieces you would sign, writes to it, and flags anything made up or copied.",
   "type": "module",
   "bin": {
     "atelier": "./dist/cli/atelier.mjs"
