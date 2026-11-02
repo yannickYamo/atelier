@@ -1,0 +1,7 @@
+[
+  { "kind": "blog", "beat": "hook", "position": 0, "concentration": 4, "job": "give the reader a reason to keep reading: a fact, a tension or a question they already have" },
+  { "kind": "blog", "beat": "stakes", "position": 0.1, "concentration": 4, "job": "say what is at stake for the reader if they keep their current belief" },
+  { "kind": "blog", "beat": "turn", "position": 0.5, "concentration": 4, "job": "the point where the old belief stops working and the new idea takes over" },
+  { "kind": "blog", "beat": "payoff", "position": 0.85, "concentration": 4, "job": "the idea delivered in full, with what the reader can now do or see" },
+  { "kind": "blog", "beat": "echo", "position": 1, "concentration": 4, "job": "return to the opening image or fact, changed by what came between" }
+]

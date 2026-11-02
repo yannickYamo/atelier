@@ -1,0 +1,68 @@
+[
+  {
+    "id": "blog-surprising-number",
+    "kind": "blog",
+    "idea": "Build the post on one number that runs against what the reader expects.",
+    "structure": "The number; why it is surprising; where it comes from and how sure it is; what explains it; what follows for the reader.",
+    "openingMove": "State the number and the expectation it breaks, in two plain sentences.",
+    "evidenceType": "a measured figure with a known source",
+    "fitsWhen": "the material holds a real, sourced figure that most readers would guess wrong",
+    "pitfalls": ["a number that is only mildly surprising", "a figure whose source cannot be shown", "explaining the number away until it is no longer interesting"],
+    "steal": "Lead with the fact the reader would have bet against, then earn it."
+  },
+  {
+    "id": "blog-practice-teardown",
+    "kind": "blog",
+    "idea": "Take a common practice apart and show where it fails.",
+    "structure": "The practice as people do it; why it seems right; the case where it breaks; the cause; what to do instead.",
+    "openingMove": "Describe the practice fairly, so a reader who follows it nods.",
+    "evidenceType": "a worked case or a test of the practice",
+    "fitsWhen": "the writer has seen a widely used method fail in a way that generalises",
+    "pitfalls": ["a straw version of the practice", "no replacement offered", "one failure presented as a law"],
+    "steal": "Steelman the habit first; the break lands harder when the reader agreed with it."
+  },
+  {
+    "id": "blog-case-start-to-finish",
+    "kind": "blog",
+    "idea": "Tell one real case from start to finish and let the lesson come out of it.",
+    "structure": "The situation; what was tried; what went wrong or right; the moment it turned; what it shows beyond itself.",
+    "openingMove": "Drop the reader into the situation at the point where something was at stake.",
+    "evidenceType": "a case the writer knows first-hand",
+    "fitsWhen": "the material is a single project, incident or decision with a clear arc",
+    "pitfalls": ["detail that does not bear on the lesson", "a lesson bolted on at the end", "a case too private to be useful to anyone else"],
+    "steal": "Let the case carry the argument; state the lesson once, after the reader has already seen it."
+  },
+  {
+    "id": "blog-before-after",
+    "kind": "blog",
+    "idea": "Show the same thing before and after one change, and name the change.",
+    "structure": "The before, concretely; the change; the after, measured the same way; why the change mattered; when it would not.",
+    "openingMove": "Show the before as the reader would recognise it in their own work.",
+    "evidenceType": "two states measured the same way",
+    "fitsWhen": "the writer made one change and can show its effect",
+    "pitfalls": ["several changes credited to one", "an after measured differently from the before", "no word on when the change would not help"],
+    "steal": "Hold everything still but one thing, so the reader can see what moved."
+  },
+  {
+    "id": "blog-mistake-lesson",
+    "kind": "blog",
+    "idea": "Tell a mistake the writer made and what it taught.",
+    "structure": "What the writer believed; what they did; how it went wrong; what they understand now; how a reader can avoid it.",
+    "openingMove": "Admit the mistake in the first lines, plainly, without softening it.",
+    "evidenceType": "the writer's own experience, with its consequences",
+    "fitsWhen": "the writer has a real error with a cost and a lesson others can use",
+    "pitfalls": ["a humble-brag dressed as a mistake", "a lesson too general to act on", "blaming circumstances for the whole of it"],
+    "steal": "Spend the reader's trust on an honest cost, then pay it back with something they can use."
+  },
+  {
+    "id": "blog-field-guide",
+    "kind": "blog",
+    "idea": "Give the reader a guide to recognise and handle a set of situations.",
+    "structure": "What the guide covers and for whom; each situation with how to spot it and what to do; the one that matters most; where the guide stops.",
+    "openingMove": "Name the situation the reader is in when they need this guide.",
+    "evidenceType": "patterns drawn from repeated experience, each with an example",
+    "fitsWhen": "the material is a set of related cases the writer has handled many times",
+    "pitfalls": ["entries with no example", "every entry weighted the same", "a list with no reason it is in that order"],
+    "steal": "Make each entry recognisable in the wild: how to spot it before what to do about it."
+  }
+]

@@ -16,7 +16,8 @@
     "EVALS.md",
     "SECURITY.md",
     "docs",
-    "examples"
+    "examples",
+    "library"
   ],
   "engines": {
     "node": ">=22"
