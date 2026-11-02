@@ -253,6 +253,7 @@ function parseSettings(spec: string, base: ImplementationSettings): Implementati
   let context = base.context;
   let nearness = base.nearness;
   let delivery = base.delivery;
+  let mode = base.mode;
   for (const part of spec.split(',')) {
     const [k, v] = part.split('=').map((x) => x.trim());
     if (k === 'selection') {
@@ -268,6 +269,11 @@ function parseSettings(spec: string, base: ImplementationSettings): Implementati
     if (k === 'delivery') {
       if (!['strict', 'open'].includes(v)) die(`"delivery" is strict or open, got "${v}".`);
       delivery = v === 'strict' ? 'strict' : undefined;
+      continue;
+    }
+    if (k === 'mode') {
+      if (!['deep', 'plain'].includes(v)) die(`"mode" is deep or plain, got "${v}".`);
+      mode = v === 'deep' ? 'deep' : undefined;
       continue;
     }
     if (k === 'nearness') {
@@ -290,13 +296,13 @@ function parseSettings(spec: string, base: ImplementationSettings): Implementati
       diversity = ['1', 'on', 'true'].includes(v);
       continue;
     }
-    if (!(k in counts)) die(`unknown setting "${k}": drafts, editBudget, retrievalK, notesCap, diversity, voice, voiceGate, selection, context, nearness or delivery.`);
+    if (!(k in counts)) die(`unknown setting "${k}": drafts, editBudget, retrievalK, notesCap, diversity, voice, voiceGate, selection, context, nearness, delivery or mode.`);
     const n = Number(v);
     if (!Number.isFinite(n) || n < 0) die(`"${k}" needs a number of 0 or more, got "${v}".`);
     counts[k] = Math.floor(n);
   }
   if (counts.drafts < 1) die('drafts must be at least 1.');
-  return { drafts: counts.drafts, editBudget: counts.editBudget, retrievalK: counts.retrievalK, notesCap: counts.notesCap, ...(diversity ? { diversity: true } : {}), ...(voice ? { voice } : {}), ...(voiceGate ? { voiceGate } : {}), ...(selection ? { selection } : {}), ...(context ? { context } : {}), ...(nearness ? { nearness } : {}), ...(delivery ? { delivery } : {}), ...(base.controller ? { controller: base.controller } : {}) };
+  return { drafts: counts.drafts, editBudget: counts.editBudget, retrievalK: counts.retrievalK, notesCap: counts.notesCap, ...(diversity ? { diversity: true } : {}), ...(voice ? { voice } : {}), ...(voiceGate ? { voiceGate } : {}), ...(selection ? { selection } : {}), ...(context ? { context } : {}), ...(nearness ? { nearness } : {}), ...(delivery ? { delivery } : {}), ...(mode ? { mode } : {}), ...(base.controller ? { controller: base.controller } : {}) };
 }
 
 const describeSettings = (s: ImplementationSettings): string =>

@@ -8,7 +8,7 @@
 import type { CheckContext } from '../core/observers/registry.js';
 import * as store from '../core/state/store.js';
 import type { CheckOptions } from '../core/loop/run-repair.js';
-import { modelSensor, patternSensor, claimAction, withRules, type ClaimSensor } from '../core/loop/claim-extract.js';
+import { modelSensor, patternSensor, claimAction, withRules, type ClaimSensor, type EnrichedSource } from '../core/loop/claim-extract.js';
 import { modelJudge, type ContextJudge } from '../core/loop/context-judge.js';
 import type { Budget, InferenceClient } from '../core/inference/client.js';
 import { argv, flag, providerFor, clientAndBinding, boundMaterial, DATA, CONTEXT_READER_DEFAULT } from './runtime.js';
@@ -53,30 +53,32 @@ export const CLAIMS_MODEL_DEFAULT = 'claude-haiku-4-5';
  * gate anyway: an escape hatch for someone who has measured it on their own writing, and the sensor's
  * notes say so every time it is used.
  */
-export function claimSensorFor(evidence: string, task: string, placeholders: boolean, strict = false, bound = true, rules = ''): ClaimSensor {
+export function claimSensorFor(evidence: string, task: string, placeholders: boolean, strict = false, bound = true, rules = '',
+  /** documents a deep run's web pass fetched: a specific traced to one is grounded and marked enriched, never the person's own */
+  enriched: readonly EnrichedSource[] = []): ClaimSensor {
   // the figure-only pattern check may repeat a rule's figure as written; the reader's evidence is the request and its material alone
   const material = withRules(evidence, rules);
   const mode = flag('--claims') ?? process.env.ATELIER_CLAIMS ?? 'model';
-  if (mode === 'pattern') return patternSensor(material, placeholders, 'pattern check (--claims pattern)');
+  if (mode === 'pattern') return patternSensor(material, placeholders, 'pattern check (--claims pattern)', enriched);
   // WITH NOTHING BOUND, A READING CAN ONLY LIST. Nothing is cut without material (claim-extract.ts, `listsBecause`), so
   // two model reads per text bought a list the pattern check also makes: four of a short answer's seven calls. The
   // reader is asked where its reading can act: material bound, or strict delivery, or the person naming a reader.
   // (Not when the person chose a reader, or asked for slots: a slot is the reader acting with nothing bound.)
-  if (!bound && !strict && !argv.includes('--strict') && !placeholders && flag('--claims') === undefined && process.env.ATELIER_CLAIMS === undefined) return patternSensor(material, placeholders, 'pattern check (no material bound: a model reading of specifics could only list them)');
+  if (!bound && !strict && !argv.includes('--strict') && !placeholders && flag('--claims') === undefined && process.env.ATELIER_CLAIMS === undefined) return patternSensor(material, placeholders, 'pattern check (no material bound: a model reading of specifics could only list them)', enriched);
   const named = flag('--claims-model') ?? process.env.ATELIER_CLAIMS_MODEL;
   const provider = providerFor('discovery');
   if (!named && provider !== 'anthropic') {
-    return patternSensor(material, placeholders, 'pattern check (no claim reader configured: set ATELIER_CLAIMS_MODEL to a model on your backend)');
+    return patternSensor(material, placeholders, 'pattern check (no claim reader configured: set ATELIER_CLAIMS_MODEL to a model on your backend)', enriched);
   }
   if (provider === 'anthropic' && !process.env.ANTHROPIC_API_KEY && !process.env.ANTHROPIC_AUTH_TOKEN) {
-    return patternSensor(material, placeholders, 'pattern check (no API key for the claim reader)');
+    return patternSensor(material, placeholders, 'pattern check (no API key for the claim reader)', enriched);
   }
   const model = named ?? CLAIMS_MODEL_DEFAULT;
   const cap = Number(process.env.ATELIER_CLAIMS_CAP ?? 0.5);
   // Two reads per new text (the gate below), so twice the calls of a single-read reader.
   const budget = { spentUsd: 0, capUsd: Number.isFinite(cap) && cap > 0 ? cap : 0.5, maxCalls: 48 };
   return modelSensor(clientAndBinding('discovery', model).client, budget, model,
-    { material: evidence, rules, task, placeholders, strict, gateAnyway: process.env.ATELIER_CLAIMS_GATE === 'reader', cacheDir: join(DATA, 'cache', 'claims'), reads: 2 });
+    { material: evidence, rules, task, placeholders, strict, gateAnyway: process.env.ATELIER_CLAIMS_GATE === 'reader', cacheDir: join(DATA, 'cache', 'claims'), reads: 2, ...(enriched.length ? { enriched } : {}) });
 }
 
 /**
@@ -155,6 +157,8 @@ export function checksFor(L: store.StoreLayout, opts: {
   readonly cls?: string | null;
   /** the level this output is held at, where a run tightened it (cli/latitude.ts); the skill's own otherwise */
   readonly level?: LatitudeLevel;
+  /** documents a deep run's web pass fetched (cli/deep.ts): a specific found in one is grounded there, marked enriched */
+  readonly enriched?: readonly EnrichedSource[];
 }): CheckOptions {
   const guardClaims = opts.guardClaims ?? true;
   const placeholders = opts.placeholders ?? false;
@@ -179,7 +183,7 @@ export function checksFor(L: store.StoreLayout, opts: {
   // Where a deletion is not earned (no material bound, or a kind of work nobody measured), findings are listed.
   const bound = opts.bound ?? (store.getMaterial(L).length > 0 || boundMaterial().length > 0);
   const sensor = (): ClaimSensor => (opts.offline ? patternSensor(material, placeholders, 'pattern check (offline)')
-    : claimSensorFor(evidence, opts.task ?? '', placeholders, format?.strictSpecifics ?? false, bound, own));
+    : claimSensorFor(evidence, opts.task ?? '', placeholders, format?.strictSpecifics ?? false, bound, own, opts.enriched ?? []));
   // WHAT AN UNTRACED SPECIFIC MEETS, by the latitude (core/loop/claim-extract.ts, `claimAction`): cut only where the owner
   // chose it and a qualified reader found it; otherwise blocked, sent to review or listed.
   const action = claimAction({ level: opts.level ?? latitudeOf(activeStandard(L)), bound, ownerCut: store.getClaimsCut(L), cls: opts.cls ?? flag('--class') ?? store.getDocClass(L), slots: placeholders });

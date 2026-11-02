@@ -115,9 +115,11 @@ export const DEFAULT_COST: Readonly<Record<ControllerAction, number>> = {
   // a later shape round reserves what its draft call does (cli/commands/improve.ts, `spendOneWithResult`), so no round the
   // budget would have let the call make is refused before it; the grounding reserves what its one call does (core/loop/grounding.ts)
   shape: 0.2, ground: 0.02,
+  // a deep run's span rewrites for its story and thin targets, and what its reviewer asked for (a few spans, or one draft)
+  story: 0.15, review: 0.4,
 };
 /** Steps that need a model call to run. The structural edits ('steer') may run on the free operators alone. */
-const MODEL_ACTIONS: ReadonlySet<ControllerAction> = new Set(['rewrite', 'carrier-rewrite', 'redraft', 'trim', 'coverage', 'voice', 'taste', 'claim-redraft', 'shape', 'ground']);
+const MODEL_ACTIONS: ReadonlySet<ControllerAction> = new Set(['rewrite', 'carrier-rewrite', 'redraft', 'trim', 'coverage', 'voice', 'taste', 'claim-redraft', 'shape', 'ground', 'story', 'review']);
 /**
  * Steps counted against maxActions, as against code that always runs (the claim cut, the mechanical fixes) and the two
  * steps held to the rule outside a draft's own repair: a later shape round (a draft attempt with a limit of its own) and
@@ -137,7 +139,7 @@ export const stepsTaken = (history: readonly ControllerDecisionRecord[]): number
 export const stepWords = (a: ControllerAction): string => ({ cut: 'cut of invented claims', mechanical: 'fix without a model', rewrite: 'rewrite', operators: 're-punctuation',
   'carrier-rewrite': 'carrier rewrite', redraft: 'redraft', grammar: 'grammar fix', trim: 'cut for length', coverage: 'draft written again for what the request asks',
   steer: 'structural edit', voice: 'voice pass', taste: 'taste rewrite', 'claim-redraft': 'draft written again around a cut claim',
-  shape: 'shape round', ground: 'grounding of an example\'s fact' } satisfies Record<ControllerAction, string>)[a];
+  shape: 'shape round', ground: 'grounding of an example\'s fact', story: 'rewrite of a story or thin target', review: 'change the reviewer asked for' } satisfies Record<ControllerAction, string>)[a];
 
 /** The stop said when the step limit is reached. */
 export const capStop = (maxActions: number): string => `the controller took its ${maxActions} steps`;

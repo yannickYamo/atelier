@@ -223,6 +223,11 @@ export interface ImplementationSettings {
    */
   readonly delivery?: 'strict';
   /**
+   * HOW DEEP A RUN GOES: absent, the run as it has always been; 'deep', every run of the skill is a deep run (`--deep`):
+   * facts listed and looked up, questions from the gaps, a dealt direction, and an isolated review before delivery.
+   */
+  readonly mode?: 'deep';
+  /**
    * THE BOUNDED REPAIR CONTROLLER (../loop/controller.ts): how much a repair step must be expected to move per dollar,
    * how many steps a draft may take, whether one more draft may be written when an enforced rule still fails, and the
    * measured effect of each action. Absent, or any field absent: the documented defaults (`CONTROLLER_DEFAULTS`).
