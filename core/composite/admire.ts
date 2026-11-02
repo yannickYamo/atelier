@@ -50,7 +50,8 @@ const PRAISE: Readonly<Partial<Record<TraitClass, RegExp>>> = {
   pace: /\b(speed|quick|momentum)\b/i,
   voice: /\b(formality|funny|direct|style|sound|sounds)\b/i,
   figure: /\b(vivid|picture|pictures|paints)\b/i,
-  effect: /\b(touching|gripping|haunting|heart|warmth|makes me|made me)\b/i,
+  // A rule's effect is read, never matched (./effect-reading.ts); a person's line, when no model reads it, still is.
+  effect: /\b(touching|gripping|haunting|heart|warmth|makes me|made me|emotion|emotions|emotional|feel|feels|feeling|feelings|moved|moving|suspense|tension|surprise|surprises|delight|urgency|unease|empathy|laugh|laughter|tender|tenderness|nostalgia|nostalgic|dread)\b/i,
   method: /\b(method|approach|decides|decision|decisions|discipline|process|way of working|moves|thinks|thinking|reasoning)\b/i,
 };
 const KEYWORDS: readonly (readonly [TraitClass, RegExp | undefined, RegExp | undefined])[] = TRAIT_CLASSES.map((c) => [c, CLASS_WORDS.find(([k]) => k === c)?.[1], PRAISE[c]]);

@@ -23,6 +23,7 @@ import type { ContextClass } from '../fidelity/types.js';
 import { NUMBER_WORDS } from '../loop/numbers.js';
 import { boundedNumber, quantitiesOf, withinTolerance, type Quantity } from './quantity.js';
 import { sharedLengthMeasures } from './length.js';
+import type { EffectRead } from './effect-reading.js';
 
 // FIGURE and EFFECT come last: what a person most often likes in a writer is how they write (their figures of speech,
 // and what the writing does to whoever reads it), and a rule about either was a decision move before they had a class.
@@ -50,7 +51,8 @@ const BY_OBSERVER: Readonly<Partial<Record<string, TraitClass>>> = {
 
 /**
  * THE WORDS OF EACH CLASS: one list, read the same way for a rule (here) and for what a person says they like
- * (./admire.ts, when no model reads their line). A statement carries every class whose words it uses, wherever they
+ * (./admire.ts, when no model reads their line). EFFECT has no words here: what a rule makes a reader feel is read
+ * (./effect-reading.ts), never matched, and arrives as `effect`. A statement carries every class whose words it uses, wherever they
  * stand in it. A count's unit ("fifteen words in a sentence", "eight hundred words") is not a word about words.
  */
 const COUNT_UNIT = String.raw`(?<!\b(?:\d[\d,]*|${NUMBER_WORDS.join('|')})[\s-])`;
@@ -61,7 +63,6 @@ export const CLASS_WORDS: readonly (readonly [TraitClass, RegExp])[] = [
   ['structure', /\b(structure|structured|argument|arguments|section|sections|order|sequence|outline|heading|headings|subheading|subheadings|list|lists|bullet|bullets|numbered|step|steps|close|closes|closing|end|ends|ending|conclusion|transition|transitions|moves)\b/i],
   ['voice', new RegExp(String.raw`\b(tone|register|voice|formal|informal|casual|conversational|chatty|relaxed|colloquial|impersonal|person|tense|contraction|contractions|first person|we|humou?r|wry|warm|dry|plain|jargon|hedge|hedges|hedging|spelling|dash|dashes|${COUNT_UNIT}word|${COUNT_UNIT}words|phrasing|vocabulary|irony|understatement|slang|diction)\b`, 'i')],
   ['figure', /\b(metaphor|metaphors|metaphorical|analogy|analogies|simile|similes|image|images|imagery|figurative|figures? of speech|personification|comparison|comparisons|allusion|allusions)\b/i],
-  ['effect', /\b(emotion|emotions|emotional|feel|feels|feeling|feelings|moved|moving|suspense|tension|surprise|surprises|delight|urgency|unease|empathy|laugh|laughter|tender|tenderness|nostalgia|nostalgic|dread)\b/i],
 ];
 const BY_WORDS = CLASS_WORDS;
 
@@ -78,10 +79,10 @@ const quantityClasses = (statement: string): TraitClass[] => [...new Set(quantit
  * when the evidence needs it" is both pace and evidence, and so is the same rule said the other way round. A rule with
  * none of these words is a decision move.
  */
-export function traitClassesOf(r: Pick<Requirement, 'statement' | 'measurement'>): TraitClass[] {
+export function traitClassesOf(r: Pick<Requirement, 'statement' | 'measurement'>, effect?: EffectRead[string]): TraitClass[] {
   const byObserver = r.measurement ? BY_OBSERVER[r.measurement.observer] : undefined;
   if (byObserver) return [byObserver];
-  const found = new Set([...BY_WORDS.filter(([, re]) => re.test(r.statement)).map(([cls]) => cls), ...quantityClasses(r.statement)]);
+  const found = new Set([...BY_WORDS.filter(([, re]) => re.test(r.statement)).map(([cls]) => cls), ...quantityClasses(r.statement), ...(effect ? ['effect' as const] : [])]);
   const ordered = TRAIT_CLASSES.filter((c) => found.has(c));
   return ordered.length ? ordered : ['method'];
 }
@@ -92,16 +93,18 @@ export function traitClassesOf(r: Pick<Requirement, 'statement' | 'measurement'>
  * needs room" is about paragraphs. Admiring a class takes the rules mainly about it, never a rule that merely uses
  * one of its words (./selection.ts).
  */
-export function primaryClassOf(r: Pick<Requirement, 'statement' | 'measurement'>): TraitClass {
+export function primaryClassOf(r: Pick<Requirement, 'statement' | 'measurement'>, effect?: EffectRead[string]): TraitClass {
   const byObserver = r.measurement ? BY_OBSERVER[r.measurement.observer] : undefined;
   if (byObserver) return byObserver;
+  // Read as mainly about the reader's response: that is what it is about, whatever words it uses.
+  if (effect === 'MAIN') return 'effect';
   let best: { cls: TraitClass; at: number } | null = null;
   for (const cls of TRAIT_CLASSES) {
     const re = BY_WORDS.find(([c]) => c === cls)?.[1];
     const at = re ? r.statement.search(re) : -1;
     if (at >= 0 && (!best || at < best.at)) best = { cls, at };
   }
-  return best?.cls ?? quantityClasses(r.statement)[0] ?? 'method';
+  return best?.cls ?? quantityClasses(r.statement)[0] ?? (effect ? 'effect' : 'method');
 }
 
 export type TraitKind = 'SHARED' | 'UNIQUE' | 'CONFLICTING' | 'TASK_DEPENDENT';
@@ -118,6 +121,8 @@ export interface TraitRow {
   readonly with: readonly string[];
   /** the same rule said again by the same author (a repeated reading): it stands and falls with this one */
   readonly sameAs?: string;
+  /** what the rule is mainly about (`primaryClassOf`, with the effect reading); absent on a table stored before it was kept */
+  readonly primary?: TraitClass;
 }
 
 export interface ConflictSide { readonly id: string; readonly author: string; readonly statement: string }
@@ -132,7 +137,9 @@ export interface Conflict {
   readonly taskDependent: boolean;
 }
 
-export interface TraitTable { readonly rows: readonly TraitRow[]; readonly conflicts: readonly Conflict[] }
+/** Who decided which rules are about the reader's response (./effect-reading.ts): the model, code, or the floor, and why. */
+export interface EffectRecord { readonly by: 'code' | 'model' | 'floor'; readonly reader: string; readonly why?: string }
+export interface TraitTable { readonly rows: readonly TraitRow[]; readonly conflicts: readonly Conflict[]; readonly effect?: EffectRecord }
 
 const STOP = new Set(['i', 'the', 'a', 'an', 'of', 'to', 'in', 'on', 'at', 'with', 'and', 'or', 'for', 'my', 'it', 'its', 'is', 'are', 'be',
   'that', 'this', 'as', 'by', 'from', 'when', 'then', 'than', 'so', 'if', 'each', 'every', 'one', 'all', 'most', 'keep', 'use', 'write', 'give', 'make']);
@@ -460,8 +467,12 @@ export const labelOf = (a: Requirement, b: Requirement): string => {
  * null when unknown), which tells a conflict of taste from one of kind of work.
  */
 export function buildTraitTable(proposals: readonly Requirement[], sourceOf: (id: string) => string | undefined,
-  lengthClassOf: (author: string) => ContextClass | null = () => null): TraitTable {
-  const all = proposals.flatMap((p) => { const author = sourceOf(p.requirementId); const classes = traitClassesOf(p); return author ? [{ p, author, cls: classes[0], classes }] : []; });
+  lengthClassOf: (author: string) => ContextClass | null = () => null, effect: { readonly value: EffectRead } & Partial<EffectRecord> | null = null): TraitTable {
+  const effectOf = (id: string): EffectRead[string] | undefined => effect?.value[id];
+  const all = proposals.flatMap((p) => {
+    const author = sourceOf(p.requirementId); const e = effectOf(p.requirementId); const classes = traitClassesOf(p, e);
+    return author ? [{ p, author, cls: classes[0], classes, primary: primaryClassOf(p, e) }] : [];
+  });
   // ONE RULE SAID TWICE BY ONE AUTHOR (two readings that agreed) is one rule: paired once, so one disagreement is one
   // conflict, not one per repetition. The repetition stands and falls with the first.
   const keyOf = (x: (typeof all)[number]): string => JSON.stringify([x.author, x.p.statement.trim().toLowerCase().replace(/\s+/g, ' '), x.p.measurement ?? null]);
@@ -490,16 +501,19 @@ export function buildTraitTable(proposals: readonly Requirement[], sourceOf: (id
       }
     }
   }
-  const rows: TraitRow[] = all.map(({ p, author, cls, classes }) => {
+  const rows: TraitRow[] = all.map(({ p, author, cls, classes, primary }) => {
     const first = sameAs.get(p.requirementId);
     const id = first ?? p.requirementId;
     const c = conflict.get(id) ?? []; const s = same.get(id) ?? [];
     const kind: TraitKind = c.length
       ? (conflicts.filter((x) => x.sides.some((side) => side.id === id)).every((x) => x.taskDependent) ? 'TASK_DEPENDENT' : 'CONFLICTING')
       : s.length ? 'SHARED' : 'UNIQUE';
-    return { id: p.requirementId, author, cls, classes, kind, with: [...new Set([...c, ...s])], ...(first ? { sameAs: first } : {}) };
+    return { id: p.requirementId, author, cls, classes, kind, with: [...new Set([...c, ...s])], ...(first ? { sameAs: first } : {}), primary };
   });
-  return { rows, conflicts };
+  const record: EffectRecord = effect?.by && effect.reader
+    ? { by: effect.by, reader: effect.reader, ...(effect.why ? { why: effect.why } : {}) }
+    : { by: 'floor', reader: 'rule-effect', why: 'the effect of each rule was not read' };
+  return { rows, conflicts, effect: record };
 }
 
 /** The table in one line, the same wherever it is said: rows, and how they stand (a task-dependent conflict is a conflict). */

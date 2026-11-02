@@ -32,6 +32,8 @@ import { buildProfile } from '../../core/fidelity/profile.js';
 import { SELECTION } from '../../core/observers/selection.js';
 import { CLASS_MIN_PIECES, CONTEXT_CLASSES, contextClassOf, type ContextClass } from '../../core/fidelity/types.js';
 import { buildTraitTable, describeTraitCounts } from '../../core/composite/traits.js';
+import { RULE_EFFECT, effectInput } from '../../core/composite/effect-reading.js';
+import { readContext } from '../../core/inference/reading.js';
 import { buildRetrievalIndex } from '../../core/fidelity/retrieval.js';
 import { calibrateTypicality } from '../../core/fidelity/typicality.js';
 import { judgeCountedFeatures, signalsOf } from '../../core/observers/selection.js';
@@ -43,7 +45,7 @@ import * as store from '../../core/state/store.js';
 import { skillNameFrom } from '../../renderers/agent-skill/render.js';
 import { mapLimit } from '../../core/inference/concurrency.js';
 import { GenerationIncomplete, ModelUnavailable } from '../../core/inference/client.js';
-import { sha, die, argv, orchestrated, proposerModel, proposerIsDefault, diagnoserModel, modelFor, providerFor, MODEL_DEFAULT, PROPOSER_DEFAULT, type ProposalMeta, clientFor, clientAndBinding, loadSession, saveSession, sourceProvenance, numericFlag, priceOverrideFor, runFile, flag, DATA, canReach } from '../runtime.js';
+import { sha, die, argv, orchestrated, proposerModel, proposerIsDefault, diagnoserModel, modelFor, providerFor, MODEL_DEFAULT, PROPOSER_DEFAULT, type ProposalMeta, clientFor, clientAndBinding, loadSession, saveSession, sourceProvenance, numericFlag, priceOverrideFor, runFile, flag, DATA, canReach, contextReaderClient, contextReaderModel } from '../runtime.js';
 import { priceFor, ANTHROPIC_PRICING, PRICES_CHECKED_ON } from '../../providers/pricing.js';
 
 // ── discover ─────────────────────────────────────────────────────────────────────────────────
@@ -415,7 +417,9 @@ export async function discover(): Promise<void> {
     proposals = [...proposals, grammar];
     proposalMeta = { ...proposalMeta, [grammar.requirementId]: { framings: [], alsoPhrasedAs: [], heldOut: null, needs: null, inSample: null,
       corpus: grammar.measurement ? { pieces: allPieces.length, breaking: piecesBreaking(allPieces, grammar.measurement) } : null } satisfies ProposalMeta };
-    const table = buildTraitTable(proposals, (id) => proposalMeta[id]?.source, (a) => lengthClass[a] ?? null);
+    // WHICH RULES ARE ABOUT WHAT THE WRITING MAKES A READER FEEL is read, never matched (core/composite/effect-reading.ts).
+    const effect = await readContext(RULE_EFFECT, effectInput(proposals), noModel ? null : contextReaderClient(), noModel ? null : contextReaderModel(), { spentUsd: 0, capUsd: 0.05, maxCalls: 1 }, 'context judge');
+    const table = buildTraitTable(proposals, (id) => proposalMeta[id]?.source, (a) => lengthClass[a] ?? null, effect);
     writeAtomic(runFile('trait-table.json'), JSON.stringify(table, null, 1));
     persist(heldOutPieces || null);
     for (const f of ['signals.json', 'fidelity.json', 'retrieval.json', 'typicality.json']) rmSync(runFile(f), { force: true });
