@@ -197,7 +197,7 @@ const main = async (): Promise<void> => {
     case 'mcp': return mcp();
     case 'material': { material(); return; }
     case 'create': return create(argv[1] ?? die('usage: atelier create <path-to-your-work>'));
-    case 'intake': { intake(argv[1] ?? die('usage: atelier intake <path> [--work-type <type>]'), process.argv.includes('--work-type') ? process.argv[process.argv.indexOf('--work-type') + 1] : 'writing'); return; }
+    case 'intake': { await intake(argv[1] ?? die('usage: atelier intake <path> [--work-type <type>]'), process.argv.includes('--work-type') ? process.argv[process.argv.indexOf('--work-type') + 1] : 'writing'); return; }
     case 'discover': return discover();
     case 'pending': { pending(); return; }
     case 'ratify': { ratifyBatch(); return; }

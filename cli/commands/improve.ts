@@ -224,7 +224,7 @@ export async function create(path: string): Promise<void> {
   // next step runs itself, and a hint that is already stale when it prints teaches distrust.
   process.env.ATELIER_ORCHESTRATED = '1';
   assertReachable('discovery');
-  intake(path, flag('--work-type') ?? 'writing');
+  await intake(path, flag('--work-type') ?? 'writing');
   if (argv.includes('--dry-run')) return;   // intake already returned without sealing
   console.log('\nReading your work…');
   await discover();
