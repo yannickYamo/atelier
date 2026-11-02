@@ -27,6 +27,7 @@ import { deriveMeasuredRules, piecesBreaking, countedFloorOf, MIN_SENTENCES, MIN
 import { ensureGrammar, grammarMeasurement, termsOf, GRAMMAR_STATEMENT } from '../../core/observers/grammar.js';
 import type { Measurement } from '../../core/state/canonical-state.js';
 import { deriveContrastRules, contrastTopics } from '../../core/observers/contrast.js';
+import { deepAtBuild } from '../deep.js';
 import { shortFormMeasured, shortFormOptions } from '../../core/observers/short-form.js';
 import { buildProfile } from '../../core/fidelity/profile.js';
 import { SELECTION } from '../../core/observers/selection.js';
@@ -523,6 +524,10 @@ export async function discover(): Promise<void> {
       console.log(`(the model's plain drafts could not be written: ${(e as Error).message.split('\n')[0]}; rules measured on your pieces alone are still proposed)`);
     }
   }
+  // A BUILD ASKED FOR --deep (cli/deep.ts) reads the plain drafts' habits in form and the story bands of the pieces now,
+  // and keeps them with the skill; a build without it leaves them to the skill's first deep run.
+  if (argv.includes('--deep')) await deepAtBuild({ skillName: skillNameOf(s), drafts, pieces: read.map((i) => i.text),
+    reader: argv.includes('--no-model') ? { client: null, model: null } : { client: contextReaderClient(), model: contextReaderModel() }, say: (l) => { console.log(l); } });
   const contrast = deriveContrastRules(read, heldItems, drafts, sourceProvenance());
   if (drafts.length >= 2) {
     // THE SIGNALS. Counted features that separate this author from the model over many drafts, but not
@@ -617,9 +622,15 @@ export async function discover(): Promise<void> {
 function declaredClass(s: { skillName?: string | null; source?: string | null }): string | null {
   const cls = flag('--class');
   if (cls !== undefined) return cls.trim().toLowerCase() === 'none' ? null : normalizeClass(cls);
-  let name = s.skillName ?? null;
-  if (!name && s.source) { try { name = skillNameFrom(basename(s.source)); } catch { name = null; } }
+  const name = skillNameOf(s);
   return name ? store.getDocClass({ root: DATA, skillName: name }) : null;
+}
+
+/** The skill this build is for: the one `atelier new` named, or the name its source folder gives. */
+function skillNameOf(s: { skillName?: string | null; source?: string | null }): string | null {
+  if (s.skillName) return s.skillName;
+  if (!s.source) return null;
+  try { return skillNameFrom(basename(s.source)); } catch { return null; }
 }
 
 /**
