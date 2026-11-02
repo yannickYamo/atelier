@@ -18,6 +18,7 @@ import { unsourcedClaims, wordCountClaims, claimUnitsOf, statedFigureClaims, bra
 import { derivedFromKnown, derivedArithmetic } from './derived.js';
 import { answerWorkClaims, answerSentences, judgedOnly, judgedSituations, agreedWorkClaims } from './answer-claims.js';
 import { assertMayCut, type CutAuthority } from './cut-authority.js';
+import { planGapLines, withGapLine, type GapLineOptions } from './gap-lines.js';
 import type { ContextJudge } from './context-judge.js';
 import type { ClaimSensor, ClaimAct } from './claim-extract.js';
 import { NO_MATERIAL } from './claim-extract.js';
@@ -128,6 +129,12 @@ export interface CheckOptions {
    * every reader of a blind round; `placeholders: true` (`--placeholders`) asks for slots instead.
    */
   readonly placeholders?: boolean;
+  /**
+   * A flagged sentence the piece stands on is replaced by one line that says what is not known (./gap-lines.ts), instead
+   * of cut. Off by default; under `placeholders` the slot wins. Which sentences are load-bearing, and the line, are a
+   * reading; with no model the floor decides by position.
+   */
+  readonly gapLines?: GapLineOptions;
   /**
    * Phrases this skill's own drafts repeat across unrelated topics and its author never uses
    * (core/observers/tell-lexicon.ts). Checked only where the standard holds the ratified machine-tell rule:
@@ -548,9 +555,10 @@ export function claimMemory(): ClaimMemory {
  * again after each cut, at most three times, with `memory` holding each sentence to its first verdict.
  */
 export async function enforceClaims(skill: string, v: StandardVersion, text: string, opts: CheckOptions = {},
-  known?: VerifyReport, memory: ClaimMemory = claimMemory()): Promise<{ text: string; report: VerifyReport; cut: string[]; listed: string[]; kept: string[] }> {
+  known?: VerifyReport, memory: ClaimMemory = claimMemory()): Promise<{ text: string; report: VerifyReport; cut: string[]; listed: string[]; kept: string[]; gapped?: { sentence: string; line: string }[] }> {
   let report = memory.apply(text, known ?? await checkDraftAsync(skill, v, text, opts));
   const cut: string[] = []; const kept = new Set<string>();
+  const gapped: { sentence: string; line: string }[] = [];
   const original = text;
   if (opts.guardClaims === false) return { text, report, cut, listed: [], kept: [] };
   for (let round = 0; round < 3; round++) {
@@ -595,8 +603,12 @@ export async function enforceClaims(skill: string, v: StandardVersion, text: str
       || lostToLength(was.find((b) => b.requirementId === c.requirementId), c)).map((c) => c.requirementId));
     let reading = readIn(next);
     let held = notHeld(reading, reading);
-    for (const sp of spans) {
-      const without = opts.placeholders ? `${next.slice(0, sp.start)}${CLAIM_SLOT}${next.slice(sp.end)}` : cutClaim(next, sp.start, sp.end);
+    // GAP LINES, when asked for: a load-bearing sentence says what is not known instead of leaving a hole (./gap-lines.ts)
+    const gapsFor = opts.gapLines && !opts.placeholders
+      ? (await planGapLines({ text, spans, given: `${opts.evidence ?? ''}\n${opts.material ?? ''}` }, opts.gapLines)).value : null;
+    for (const [i, sp] of spans.entries()) {
+      const gap = gapsFor?.[i] ?? null;
+      const without = opts.placeholders ? `${next.slice(0, sp.start)}${CLAIM_SLOT}${next.slice(sp.end)}` : gap ? withGapLine(next, sp.start, sp.end, gap) : cutClaim(next, sp.start, sp.end);
       // NO CUT EMPTIES A SECTION. The last sentence under a heading stays, still flagged: the check fails on it
       // and names it, which a person can act on. A heading over nothing passed as a section that was there.
       if (emptyHeadings(without) > emptyHeadings(next)) { kept.add(sp.text.trim().slice(0, 160)); continue; }
@@ -612,11 +624,12 @@ export async function enforceClaims(skill: string, v: StandardVersion, text: str
       held = after; reading = now.map((c) => (tooShort(c) ? reading.find((b) => b.requirementId === c.requirementId) ?? c : c));
       next = without;
       cut.push(sp.text.trim().slice(0, 160));
+      if (gap) gapped.push({ sentence: sp.text.trim().slice(0, 160), line: gap });
     }
     if (next === text) break;
     text = next; report = memory.apply(text, await checkDraftAsync(skill, v, text, opts));
   }
-  return { text, report, cut: cut.reverse(), listed: memory.listed(), kept: [...kept] };
+  return { text, report, cut: cut.reverse(), listed: memory.listed(), kept: [...kept], ...(opts.gapLines ? { gapped } : {}) };
 }
 
 /** The id of the line that holds claims the check could neither clear nor cut. */
