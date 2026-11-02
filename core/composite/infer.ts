@@ -117,7 +117,8 @@ export function weighTraits(table: TraitTable, proposals: readonly Requirement[]
     } else {
       distinctivenessBasis += p.measurement ? '; no plain drafts to compare with' : '; a worded rule, not compared with plain drafts';
     }
-    const cls = primaryClassOf(p);
+    // The table's own reading of what the rule is mainly about; a table stored before it was kept is read again by code.
+    const cls = r.primary ?? primaryClassOf(p);
     const preference = (liked[r.author] ?? []).includes(cls) ? PREFERENCE_BOOST : 1;
     const framings = m?.framings ?? [];
     return { id: r.id, voice: r.author, statement: p.statement, cls, consistency: r3(consistency), consistencyBasis, distinctiveness: r3(distinctiveness), distinctivenessBasis,

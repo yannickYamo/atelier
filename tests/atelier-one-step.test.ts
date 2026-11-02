@@ -193,6 +193,8 @@ const ALLOWED: Readonly<Record<string, readonly { readonly line: RegExp; readonl
     { line: /const ledger = stepLedger\(steps\?\.settings \?\? null, steps\?\.budget \?\? null, \[\], steps\?\.source \?\? ''\);/, why: 'THE one ledger a run (or a shape round) makes, in `withShape`, with the request and the material a step may not add a figure beyond' },
     { line: /const rounds = stepLedger\(steps\?\.settings \?\? null, steps\?\.budget \?\? null, \[\], steps\?\.source \?\? ''\);/, why: 'the rounds\' own ledger, made by the run in `withShape` beside each round\'s: a later round is one step on it, judged against the best round so far' },
     { line: /const ledger = stepLedger\(c\.steps\?\.settings \?\? null, c\.steps\?\.budget \?\? null, d\.repair\?\.controller\?\.decisions \?\? \[\], c\.steps\?\.source \?\? ''\);/, why: 'the grounding, after the chain: it continues the run\'s ledger from the record (the steps taken are its history), as a refinement resumed after a redraft does' },
+    { line: /const ledger = stepLedger\(c\.steps\?\.settings \?\? null, c\.steps\?\.budget \?\? null, from, c\.steps\?\.source \?\? ''\);/, why: 'a deep run after the chain (`withDeep`): it continues the run\'s ledger from the record, as the grounding does; its story repair and the reviewer\'s pass are steps on it' },
+    { line: /deepRedraft: async \(note: string\) => \(await spendOneWithResult\(/, why: 'the one more draft a deep run\'s reviewer asks for, called only from its `applyStep` proposal (`c.deepRedraft`)' },
   ],
   'core/loop/run-repair.ts': [
     { line: /const x = await client\.complete\(\{ stableBlock: REDRAFT_SYSTEM/, why: 'the draft written again around a claim cut, called only from its `applyStep` proposal' },
@@ -228,9 +230,9 @@ describe('2. static: no model call and no ledger in the chain outside the listed
       for (const a of ALLOWED[file] ?? []) expect(found.some((x) => a.line.test(x.l)), a.why).toBe(true);
     });
   }
-  it('no wrapper of the chain makes a ledger: three sites, the round\'s and the rounds\' in `withShape`, and the run\'s continued from its record in `withGrounding` after the chain', () => {
+  it('no wrapper of the chain makes a ledger: four sites, the round\'s and the rounds\' in `withShape`, and the run\'s continued from its record in `withGrounding` and in `withDeep` after the chain', () => {
     const src = readFileSync(join(ROOT, 'cli/commands/invoke.ts'), 'utf8');
-    expect(src.match(/stepLedger\(/g)?.length).toBe(3);
+    expect(src.match(/stepLedger\(/g)?.length).toBe(4);
     // and only the one step helper begins or settles a step outside the ledger's own module and the claim cut's record
     for (const file of ['cli/commands/invoke.ts', 'core/taste/repair.ts']) expect(readFileSync(join(ROOT, file), 'utf8')).not.toMatch(/ledger\.(begin|settle)\(/);
   });

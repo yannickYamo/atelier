@@ -96,7 +96,8 @@ const PROPS: readonly (readonly [string, Requirement, WeighMeta])[] = [
 ];
 const props = PROPS.map(([, p]) => p);
 const meta = new Map(PROPS.map(([a, p, m]) => [p.requirementId, { ...m, source: a }]));
-const table = buildTraitTable(props, (id) => meta.get(id)?.source);
+// p4's effect on the reader is a reading's answer (core/composite/effect-reading.ts), given here as the reader would.
+const table = buildTraitTable(props, (id) => meta.get(id)?.source, () => null, { value: { p4: 'MAIN' }, by: 'model', reader: 'rule-effect-1:test' });
 const weigh = (liked: Record<string, ('opening' | 'voice' | 'effect' | 'pace')[]> = {}) => weighTraits(table, props, (id) => meta.get(id), AUTHORS, liked);
 const by = (ws: ReturnType<typeof weigh>, id: string) => ws.find((w) => w.id === id);
 

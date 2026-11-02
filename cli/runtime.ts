@@ -86,7 +86,7 @@ export const VALUED_OPTIONS: readonly string[] = ['correcting', 'moves', 'set-as
   'candidate', 'cap', 'complaint', 'context', 'decision',
   'declare-viewed', 'decisions', 'description', 'drafts', 'discovery-backend', 'discovery-base-url', 'discovery-model',
   'discovery-price-in', 'discovery-price-out', 'discovery-provider', 'discovery-strict-schema', 'discovery-structured-output',
-  'exclude', 'exemplar', 'method-text', 'from', 'from-hook', 'held-out', 'host', 'id', 'intent', 'invocation', 'kind', 'mode',
+  'exclude', 'exemplar', 'method-text', 'from', 'from-hook', 'held-out', 'host', 'id', 'intent', 'invocation', 'kind', 'mode', 'pack',
   'add', 'labels', 'materiality', 'measure', 'form', 'max-calls', 'model', 'name', 'note', 'pick',
   'one-pager', 'pick', 'price-in', 'price-out', 'provenance', 'provider', 'claims', 'claims-model',
   'candidates', 'compiled', 'contexts', 'contrast-cap', 'contexts-exercising', 'control', 'frozen-at', 'max-tokens',
@@ -124,6 +124,8 @@ export const BOOLEAN_OPTIONS: readonly string[] = [
   'reflect', 'no-reflect', 'report', 'phrase', 'calibrate', 'placeholders', 'no-placeholders', 'no-unsourced-note', 'no-redraft', 'no-model', 'always', 'evaluation', 'learn', 'include-reserved', 'taste', 'no-taste', 'no-brief', 'examples-first', 'no-infer-method', 'voices', 'setup', 'auto', 'no-fidelity', 'fidelity', 'rollback', 'distill', 'next', 'sections', 'panel', 'quiet', 'label', 'typicality', 'read-subjects', 'strict', 'allow-nonconformant', 'full', 'no-index', 'test-run',
   // before the draft: no questions, no plan (cli/prewrite.ts)
   'no-questions', 'no-plan',
+  // a deep run (cli/deep.ts), and its web pass turned off
+  'deep', 'no-enrich',
 ];
 
 export const argv = process.argv.slice(2);

@@ -26,6 +26,7 @@ import { optimize } from './commands/optimize.js';
 import { mine } from './commands/mine.js';
 import { taste } from './commands/taste.js';
 import { tells } from './commands/tells.js';
+import { library } from './commands/library.js';
 import { tend, skillDashboard } from './commands/tend.js';
 import { fidelity } from './commands/fidelity.js';
 import { report as reportRun, rate } from './commands/report.js';
@@ -115,6 +116,7 @@ export const COMMANDS: readonly string[] = [
   'voice',
   'setup',
   'tells',
+  'library',
   'optimize',
   'judgements',
   'pending',
@@ -153,7 +155,7 @@ const LAB: readonly (readonly [string, readonly string[]])[] = [
   ['check and correct', ['score', 'material', 'amend', 'add', 'status', 'report', 'rate', 'export', 'mcp']],
   ['build, the long way', ['method', 'skill', 'review', 'pending', 'ratify', 'ratify-one', 'ratify-close', 'build', 'confirm', 'plan', 'abort', 'check']],
   ['measure a skill', ['reproduce', 'evolve', 'eval', 'qualify', 'floor', 'reference', 'history', 'inspect']],
-  ['experimental: not shown to help yet', ['fidelity', 'taste', 'tells', 'tend', 'voice', 'optimize', 'mine', 'sharpen', 'improve', 'compare', 'profiles', 'carriers']],
+  ['experimental: not shown to help yet', ['fidelity', 'taste', 'tells', 'library', 'tend', 'voice', 'optimize', 'mine', 'sharpen', 'improve', 'compare', 'profiles', 'carriers']],
 ];
 
 function lab(): void {
@@ -197,7 +199,7 @@ const main = async (): Promise<void> => {
     case 'mcp': return mcp();
     case 'material': { material(); return; }
     case 'create': return create(argv[1] ?? die('usage: atelier create <path-to-your-work>'));
-    case 'intake': { intake(argv[1] ?? die('usage: atelier intake <path> [--work-type <type>]'), process.argv.includes('--work-type') ? process.argv[process.argv.indexOf('--work-type') + 1] : 'writing'); return; }
+    case 'intake': { await intake(argv[1] ?? die('usage: atelier intake <path> [--work-type <type>]'), process.argv.includes('--work-type') ? process.argv[process.argv.indexOf('--work-type') + 1] : 'writing'); return; }
     case 'discover': return discover();
     case 'pending': { pending(); return; }
     case 'ratify': { ratifyBatch(); return; }
@@ -213,6 +215,7 @@ const main = async (): Promise<void> => {
     case 'mine': { await mine(); return; }
     case 'taste': { await taste(); return; }
     case 'tells': { await tells(); return; }
+    case 'library': { library(); return; }
     case 'tend': { await tend(); return; }
     case 'fidelity': { await fidelity(); return; }
     case 'report': { reportRun(); return; }

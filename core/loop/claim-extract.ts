@@ -70,7 +70,18 @@ export interface ClaimReading {
    * very text, shown beside its verdict: a flag only one read raised is listed as disputed, never cut.
    */
   readonly agreement?: { readonly both: number; readonly either: number };
+  /**
+   * Specifics traced to an enriched document rather than to the person's material: grounded, and marked so, with the
+   * document's URL. Present only when enriched documents were given and at least one specific traced to one.
+   */
+  readonly enriched?: readonly EnrichedTrace[];
 }
+
+/** A specific traced to an enriched document: where in the text it stands, what it is, and the page it came from. */
+export interface EnrichedTrace { readonly start: number; readonly end: number; readonly text: string; readonly source: 'enriched'; readonly url: string; readonly title: string }
+
+/** What an enriched document lends the decision: its URL, its title, its text. */
+export interface EnrichedSource { readonly url: string; readonly title: string; readonly text: string }
 
 /** The reason a flag carries when only one of two reads raised it: listed as disputed, never cut. */
 export const DISPUTED_WHY = 'flagged on one of two reads: check it before you publish';
@@ -376,7 +387,12 @@ export function decideSpecifics(text: string, specifics: readonly ExtractedSpeci
   /** a format where every specific must trace to the person (a white paper, a report, a contract): nothing passes as public */
   strict = false,
   /** the skill's own approved rules: instructions, never evidence. A specific repeated from one as written traces to it; nothing else does */
-  rules = ''): ClaimReading {
+  rules = '',
+  /**
+   * documents a web pass fetched for this request: a specific found in one is grounded as ENRICHED, with its URL, never
+   * as the person's own. A story told as lived never traces to one: only the person can have lived it
+   */
+  enriched: readonly EnrichedSource[] = []): ClaimReading {
   const ss = claimUnitsOf(text);
   const known = `${material}\n\n${task}`;
   const ruleNumbers = new Set(numbersIn(rules));
@@ -393,6 +409,7 @@ export function decideSpecifics(text: string, specifics: readonly ExtractedSpeci
   };
   const bySentence = new Map<number, Claim>();
   const publicFacts: { start: number; end: number; text: string; why: string }[] = [];
+  const traced: EnrichedTrace[] = [];
   const rank: Readonly<Record<Claim['kind'], number>> = { EXPERIENCE: 3, SOURCE: 2, FIGURE: 1 };
   // WHERE IS IT, REALLY. The sentence number the reader gives is its word like any other; trusting it
   // cut plain sentences beside the one that held the specific. The specific must be IN the sentence it
@@ -438,8 +455,12 @@ export function decideSpecifics(text: string, specifics: readonly ExtractedSpeci
       && (supportIsIn(sp.text, rules) || contentWords(sp.text).every((w) => ruleAndKnownWords.has(w)));
     const tracedItself = (numbersOk && supportIsIn(sp.text, known)) || fromRule || namesShownLine(sp.text);
     let supported: boolean;
+    const fromWeb = !tracedItself && enriched.length ? enrichedSourceOf(sp, enriched) : null;
     if (tracedItself) {
       supported = true;
+    } else if (fromWeb) {
+      if (!traced.some((t) => t.start === s.start && t.text === sp.text)) traced.push({ start: s.start, end: s.end, text: sp.text, source: 'enriched', url: fromWeb.url, title: fromWeb.title });
+      continue;
     } else if (sp.source === 'MATERIAL' || sp.source === 'TASK') {
       const src = sp.source === 'MATERIAL' ? material : task;
       const inSource = supportIsIn(sp.support, src) || supportIsIn(sp.support, known);
@@ -462,7 +483,27 @@ export function decideSpecifics(text: string, specifics: readonly ExtractedSpeci
     }
   }
   const claims = [...bySentence.entries()].sort((a, b) => a[0] - b[0]).map(([, c]) => c);
-  return { claims, publicFacts, instrument, specifics };
+  return { claims, publicFacts, instrument, specifics, ...(traced.length ? { enriched: traced } : {}) };
+}
+
+/**
+ * The enriched document a specific traces to, or null. The same test as the material's, held to one document: the
+ * specific's numbers are all in that document, and its words are (`supportIsIn`), or the passage the reader quoted is
+ * and shares the specific's substance. Never for a story told as lived.
+ */
+export function enrichedSourceOf(sp: Pick<ExtractedSpecific, 'text' | 'kind' | 'support'>, docs: readonly EnrichedSource[]): EnrichedSource | null {
+  if (sp.kind === 'FIRST_PERSON_EVENT' || sp.kind === 'SECOND_HAND_EVENT') return null;
+  const nums = numbersIn(sp.text);
+  for (const d of docs) {
+    const dn = new Set(numbersIn(d.text));
+    if (!nums.every((n) => dn.has(n))) continue;
+    if (supportIsIn(sp.text, d.text)) return d;
+    if (sp.support.trim() && supportIsIn(sp.support, d.text)) {
+      const cw = contentWords(sp.text); const sup = new Set(contentWords(sp.support));
+      if (cw.length && cw.filter((w) => sup.has(w)).length / cw.length >= 0.4) return d;
+    }
+  }
+  return null;
 }
 
 /**
@@ -476,7 +517,9 @@ export const numbered = (text: string): string => claimUnitsOf(text).map((s, i) 
 export const withRules = (material: string, rules: string): string => [material, ...(rules.trim() ? [`\`\`\`\n${rules.trim()}\n\`\`\``] : [])].filter(Boolean).join('\n\n');
 
 /** The pattern check, behind the same seam: what runs when no reader model is configured. */
-export function patternSensor(material: string, placeholders: boolean, why = 'pattern check'): Omit<ClaimSensor, 'reading'> & { reading(text: string): ClaimReading } {
+export function patternSensor(material: string, placeholders: boolean, why = 'pattern check',
+  /** documents a web pass fetched: a figure claim whose every figure is in one of them is grounded and marked enriched */
+  enriched: readonly EnrichedSource[] = []): Omit<ClaimSensor, 'reading'> & { reading(text: string): ClaimReading } {
   const cache = new Map<string, ClaimReading>();
   const instrument = why;
   const sensor: Omit<ClaimSensor, 'reading'> & { reading(text: string): ClaimReading } = {
@@ -485,11 +528,33 @@ export function patternSensor(material: string, placeholders: boolean, why = 'pa
     reading: (text) => {
       const k = sha(text);
       let r = cache.get(k);
-      if (!r) { r = { claims: unsourcedClaims(text, material, placeholders), listed: wordCountClaims(text, material), publicFacts: [], instrument }; cache.set(k, r); }
+      if (!r) {
+        r = { claims: unsourcedClaims(text, material, placeholders), listed: wordCountClaims(text, material), publicFacts: [], instrument };
+        if (enriched.length) r = withEnrichedFigures(r, enriched);
+        cache.set(k, r);
+      }
       return r;
     },
   };
   return sensor;
+}
+
+/**
+ * The pattern check's figure claims, each moved out of `claims` when every figure it states is in one enriched document:
+ * grounded there, marked enriched, with the URL. Stories and sources stay as they were: the pattern check reads no
+ * source for them, and a lived story never traces to the web.
+ */
+export function withEnrichedFigures(r: ClaimReading, docs: readonly EnrichedSource[]): ClaimReading {
+  const traced: EnrichedTrace[] = [];
+  const claims = r.claims.filter((c) => {
+    if (c.kind !== 'FIGURE') return true;
+    const nums = numbersIn(c.text);
+    const d = nums.length ? docs.find((x) => { const dn = new Set(numbersIn(x.text)); return nums.every((n) => dn.has(n)); }) : undefined;
+    if (!d) return true;
+    traced.push({ start: c.start, end: c.end, text: c.text, source: 'enriched', url: d.url, title: d.title });
+    return false;
+  });
+  return traced.length ? { ...r, claims, enriched: [...(r.enriched ?? []), ...traced] } : r;
 }
 
 /**
@@ -530,8 +595,11 @@ export function modelSensor(client: InferenceClient, budget: Budget, model: stri
      * cut: a gate that deletes text must not act on a coin flip, and taking the union of reads would only
      * raise false cuts. Both reads are cached, so the resolved verdict holds on every later run.
      */
-    readonly reads?: 1 | 2 }): ClaimSensor {
+    readonly reads?: 1 | 2
+    /** documents a web pass fetched for this request: what traces to one is grounded and marked enriched (`decideSpecifics`) */
+    readonly enriched?: readonly EnrichedSource[] }): ClaimSensor {
   const cache = new Map<string, ClaimReading>();
+  // The reader's list does not depend on enriched documents (the decision in code reads them), so they are not in the key.
   const diskKey = (text: string): string => sha(JSON.stringify([model, READER_VERSION, text, ctx.material, ctx.task, ctx.placeholders, ctx.strict ?? false, ctx.rules ?? '']));
   const reads = ctx.reads ?? 1;
   const asSpecifics = (raw: unknown): ExtractedSpecific[] | null => (Array.isArray(raw) ? raw.filter((x): x is ExtractedSpecific => typeof x === 'object' && x !== null
@@ -552,7 +620,7 @@ export function modelSensor(client: InferenceClient, budget: Budget, model: stri
   };
   /** One reading from one or two reads: flags both raise, and the ones only one raised listed to check. */
   const resolve = (text: string, each: readonly (readonly ExtractedSpecific[])[]): ClaimReading => {
-    const [a, b] = each.map((sp) => decideSpecifics(text, sp, ctx.material, ctx.task, ctx.placeholders, named, ctx.strict ?? false, ctx.rules ?? ''));
+    const [a, b] = each.map((sp) => decideSpecifics(text, sp, ctx.material, ctx.task, ctx.placeholders, named, ctx.strict ?? false, ctx.rules ?? '', ctx.enriched ?? []));
     if (!b) return a;
     const at = (c: { start: number; end: number }): string => `${c.start}:${c.end}`;
     const both = new Set(b.claims.map(at));
@@ -563,8 +631,8 @@ export function modelSensor(client: InferenceClient, budget: Budget, model: stri
   };
   // The pattern check reads figures only, and a figure in a rule may be repeated as written: it reads the rules beside the material.
   const patternMaterial = withRules(ctx.material, ctx.rules ?? '');
-  const fallback = patternSensor(patternMaterial, ctx.placeholders, 'pattern check (the claim reader could not run)');
-  const gatePattern = patternSensor(patternMaterial, ctx.placeholders, 'pattern check (the gate: the claim reader is not qualified)');
+  const fallback = patternSensor(patternMaterial, ctx.placeholders, 'pattern check (the claim reader could not run)', ctx.enriched ?? []);
+  const gatePattern = patternSensor(patternMaterial, ctx.placeholders, 'pattern check (the gate: the claim reader is not qualified)', ctx.enriched ?? []);
   const qualified = isQualified(model, READER_VERSION, ctx.qualifiedReaders ?? QUALIFIED_READERS);
   const readerGates = qualified || (ctx.gateAnyway ?? false);
   // The prompt's hash is part of the instrument's name: a reading from a changed prompt is a reading

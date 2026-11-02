@@ -36,7 +36,27 @@ export const STATED_IN = ['request', 'material', 'told', 'NONE'] as const;
 /** The kinds asked by where they are stated, not by the reader's status: what the piece argues now, and news of the author's own work. */
 export const STATED_KINDS: ReadonlySet<QuestionKind> = new Set(['ANGLE', 'NEWS']);
 /** What the writer is told a kind's answer is about, where it was given for a kind this run did not ask. */
-export const KIND_ASK: Readonly<Record<QuestionKind, string>> = { ANGLE: 'The angle, and why now:', NAMING: 'What the piece may name:', NEWS: 'News of my own work it may carry:', EMPHASIS: 'What to stress:' };
+export const KIND_ASK: Readonly<Record<QuestionKind | GapKind, string>> = { ANGLE: 'The angle, and why now:', NAMING: 'What the piece may name:', NEWS: 'News of my own work it may carry:', EMPHASIS: 'What to stress:',
+  PROOF: 'Proof the piece can carry:', READER: 'Who the piece is for:', STAKES: 'What is at stake:' };
+/**
+ * The kinds asked from a GAP in what was given (`GAPS`, below): a claim the piece will need whose proof nothing given
+ * holds, and who the piece is for or what is at stake where nothing given says. Each supplies a fact or a frame; none
+ * asks what the piece argues.
+ */
+export const GAP_KINDS = ['PROOF', 'READER', 'STAKES'] as const;
+export type GapKind = typeof GAP_KINDS[number];
+/** An answer of the person's own words shorter than this, to a gap question, is a decline: the default stands. */
+export const DECLINE_UNDER = 20;
+/** What answering a question of each kind unlocks, said once with it. Proof's line names its claim (`GAPS`). */
+export const KIND_UNLOCKS: Readonly<Record<QuestionKind | GapKind, string>> = {
+  ANGLE: 'How the piece opens and the line it argues from.',
+  NAMING: 'Which names the piece may carry, for this skill from now on.',
+  NEWS: 'Whether the piece can carry news of your own work.',
+  EMPHASIS: 'Which part of the piece gets the most room.',
+  PROOF: 'The claim can stand as a fact instead of as your view.',
+  READER: 'What the piece explains and what it takes as known.',
+  STAKES: 'What the opening puts in front of the reader.',
+};
 
 /** One question as the person sees it, and as `--json` and the MCP return it. */
 export interface Question {
@@ -48,6 +68,8 @@ export interface Question {
   readonly default: string;
   /** what this skill was told last time, said as "last time you said …" */
   readonly last?: string;
+  /** what an answer unlocks, one line (`chooseQuestions` sets it on every question it returns) */
+  readonly unlocks?: string;
 }
 /** An answer the skill was given, kept per skill (../state/store.ts). */
 export interface ToldAnswer { readonly id: string; readonly ask: string; readonly answer: string; readonly at: string }
@@ -63,7 +85,11 @@ export interface QuestionsInput {
   readonly told: readonly ToldAnswer[];
 }
 /** One decision the piece needs, as read and grounded. */
-export interface Decided { readonly kind: QuestionKind | 'OTHER'; readonly status: 'KNOWN' | 'INFERABLE' | 'UNKNOWN'; readonly spread: 'SAME' | 'SOME' | 'DIFFERENT'; readonly settledBy: typeof SETTLED_BY[number] | null; readonly what: string }
+export interface Decided {
+  readonly kind: QuestionKind | 'OTHER'; readonly status: 'KNOWN' | 'INFERABLE' | 'UNKNOWN'; readonly spread: 'SAME' | 'SOME' | 'DIFFERENT'; readonly settledBy: typeof SETTLED_BY[number] | null; readonly what: string;
+  /** why it was not asked, where it was not: for the question log */
+  readonly why?: string;
+}
 export interface QuestionsReading { readonly decisions: readonly Decided[]; readonly questions: readonly Question[] }
 
 export const QUESTIONS_SYSTEM = `You prepare a writer to write one piece in a person's own voice. You are shown the person's request, the material that came with it, their method, the heads of a few of their finished pieces, and what they told this skill before.
@@ -154,29 +180,33 @@ export const QUESTIONS: Reading<QuestionsInput, QuestionsReading> = {
       const what = typeof x?.what === 'string' ? clip(x.what, 120) : '';
       const settledBy = (SETTLED_BY as readonly string[]).includes(String(x?.settledBy)) ? x.settledBy as typeof SETTLED_BY[number] : null;
       if (!kind || !status || !spread || !what) continue;
-      decisions.push({ kind, status, spread, settledBy, what });
+      const base: Decided = { kind, status, spread, settledBy, what };
       // ABOVE THE LINE: the author's own content (settled by the author alone, by the reader's closed field), unknown, and
       // answers that give different drafts.
-      // THE ANGLE AND THE NEWS ARE THE AUTHOR'S WHERE NOTHING GIVEN STATES THEM. Read by where they are stated (a closed field
-      // with NONE allowed) and grounded by code: a quote not found where the reader says is no statement. A reader that
-      // called an unstated angle inferable from the material had the writer guess it; stated, it is never asked.
       // THE ANGLE AND THE NEWS, unstated, are the author's whatever status the reader gave them (a reader that called an
       // unstated angle inferable from the material had the writer guess it). A statement is held to its quote: one said
       // to be stated in the request with no quote the request holds is no statement, whatever settles it. One gate
       // silences them: the reader says the material already settles it (settledBy 'material', KNOWN). INFERABLE is no
       // settlement, a missing or made-up settledBy means the author's, and spread alone never gates. Every other kind is
       // asked only where the author alone settles it and the answers would change the draft.
+      // Each decision not asked keeps why, for the question log (`chooseQuestions`).
       const byStatement = kind !== 'OTHER' && STATED_KINDS.has(kind) && (STATED_IN as readonly string[]).includes(String(x?.statedIn));
       const stated = byStatement && statedWhere(String(x.statedIn), typeof x.quote === 'string' ? x.quote : '', input);
       const settled = byStatement ? settledBy === 'material' && status === 'KNOWN' : settledBy !== 'author-only';
-      if (kind === 'OTHER' || asked.has(kind) || stated || settled || (byStatement ? false : spreadScore({ status, spread }) < ASK_THRESHOLD)) continue;
+      const why = kind === 'OTHER' ? 'voice, tone or form: the examples and the method settle it'
+        : asked.has(kind) ? `one question per kind: a ${kind.toLowerCase()} question was already taken`
+          : stated ? `stated in the ${String(x.statedIn)}`
+            : settled ? (byStatement ? 'the material settles it' : settledBy ? `settled by the ${settledBy}` : 'not marked as the author\'s alone')
+              : !byStatement && spreadScore({ status, spread }) < ASK_THRESHOLD ? 'known or inferable, or the answers would not change the draft' : undefined;
+      if (why || kind === 'OTHER') { decisions.push({ ...base, why: why ?? '' }); continue; }
       const told = [...input.told].reverse().find((t) => t.id === kind.toLowerCase());
       // What may be named, once told, stands: never asked again.
-      if (told && STANDING_KINDS.has(kind)) continue;
+      if (told && STANDING_KINDS.has(kind)) { decisions.push({ ...base, why: 'what may be named was told before and stands' }); continue; }
       const ask = typeof x.ask === 'string' ? clip(x.ask, 200) : '';
       const options = [...new Set((Array.isArray(x.options) ? x.options : []).filter((o): o is string => typeof o === 'string' && clip(o, 120).length > 0).map((o) => clip(o, 120)))];
       const def = typeof x.default === 'string' ? options.find((o) => same(o, x.default as string)) : undefined;
-      if (!ask || options.length < 2 || options.length > 4 || !def) continue;
+      if (!ask || options.length < 2 || options.length > 4 || !def) { decisions.push({ ...base, why: 'the question came without 2 to 4 options and a default among them' }); continue; }
+      decisions.push(base);
       asked.set(kind, { q: { id: kind.toLowerCase(), ask, options, default: told ? told.answer : def, ...(told ? { last: told.answer } : {}) }, score: spreadScore({ status, spread }) });
     }
     if (!decisions.length) return null;
@@ -203,7 +233,8 @@ const PAIR_BREAK = /,(?=\s*[a-z][a-z0-9_-]*\s*=)/i;
  */
 export function readAnswers(s: string | undefined, questions: readonly Question[]): { readonly answers: Map<string, string>; readonly said: string[] } {
   const answers = new Map<string, string>(); const said: string[] = [];
-  const kinds = QUESTION_KINDS.map((k) => k.toLowerCase());
+  const kinds = [...QUESTION_KINDS, ...GAP_KINDS].map((k) => k.toLowerCase());
+  const gapIds = new Set<string>(GAP_KINDS.map((k) => k.toLowerCase()));
   for (const part of (s ?? '').split(PAIR_BREAK)) {
     const eq = part.indexOf('=');
     if (eq <= 0) continue;
@@ -212,7 +243,14 @@ export function readAnswers(s: string | undefined, questions: readonly Question[
     if (!kinds.includes(id)) { said.push(`${id} matched no question; ignored.`); continue; }
     const q = questions.find((x) => x.id === id);
     const i = /^[a-d]$/i.test(choice) ? choice.toLowerCase().charCodeAt(0) - 97 : -1;
-    if (i < 0) { answers.set(id, choice); continue; }
+    if (i < 0) {
+      // A gap question's answer in the person's own words is a fact or a frame: a few characters carry neither, and
+      // count as a decline (an option, by letter or in full, is never one).
+      if (gapIds.has(id) && choice.length < DECLINE_UNDER && !(q?.options ?? []).some((o) => same(o, choice))) {
+        said.push(`${id}=${choice}: under ${DECLINE_UNDER} characters, counted as a decline; written with the default${q ? ` (${q.default})` : ''}.`); continue;
+      }
+      answers.set(id, choice); continue;
+    }
     if (q && i < q.options.length) { answers.set(id, q.options[i]); continue; }
     said.push(q ? `${id}=${choice}: the question has no option ${choice.toLowerCase()}; written with the default (${q.default}).`
       : `${id}=${choice}: no ${id} question was asked this run to pick ${choice.toLowerCase()} from; ignored.`);
@@ -220,10 +258,10 @@ export function readAnswers(s: string | undefined, questions: readonly Question[
   return { answers, said };
 }
 
-/** The questions as a person reads them in a terminal: each with its lettered options and its default. */
+/** The questions as a person reads them in a terminal: each with its lettered options and its default, and what an answer unlocks. */
 export function questionLines(qs: readonly Question[]): string[] {
   return qs.flatMap((q, n) => [`${n + 1}. ${q.ask}`, ...q.options.map((o, i) => `   ${letter(i)}) ${o}${same(o, q.default) ? ' (default)' : ''}`),
-    ...(q.last ? [`   last time you said: ${q.last}`] : [])]);
+    ...(q.last ? [`   last time you said: ${q.last}`] : []), ...(q.unlocks ? [`   an answer unlocks: ${q.unlocks}`] : [])]);
 }
 
 /** The one line said where the questions are not asked (a host, a pipe, --json): written with the defaults, and how to answer. */
@@ -246,4 +284,184 @@ export function answersNote(qs: readonly Question[], answers: ReadonlyMap<string
   const assumed = qs.filter((q) => !answers.has(q.id)).map((q) => `- ${q.ask} ${ASSUMED} ${q.default}`);
   return [mine.length ? `Before writing I settled these (my answers; write from them):\n\n${mine.join('\n')}` : '',
     assumed.length ? `Not settled: nobody answered these, so each is a working assumption, not my position. Write from it as an assumption (never state it as a fact about me, my work or my company) and keep what rests on it easy to change:\n\n${assumed.join('\n')}` : ''].filter(Boolean).join('\n\n');
+}
+
+// ── QUESTIONS FROM GAPS ──────────────────────────────────────────────────────────────────────
+//
+// The reading above asks what only the author can decide. A second reading asks what only the author can SUPPLY: a fact
+// the piece will lean on that nothing given holds, and the frame (who it is for, what is at stake) where nothing given
+// states it. A question is derived from the gap, never invented: the reader lists the claims the piece will need and
+// where each one's proof is stated, and says where the reader and the stakes are stated; code holds every "stated" to its
+// quote, so only a real absence is asked.
+//
+// Never the call. Each claim carries a closed field: does an answer supply a FACT (a figure, a case, a source) or decide
+// the POSITION the piece takes? A POSITION is the piece's own judgment, never asked; it is logged as such.
+
+/** What the gap reader is shown: the request, the material, the facts already inventoried, and what the skill was told. */
+export interface GapsInput {
+  readonly request: string;
+  readonly material: readonly { readonly name: string; readonly head: string }[];
+  /** the facts the material and any enrichment already hold, one per item (a sibling module's inventory, or none) */
+  readonly inventory: readonly { readonly text: string }[];
+  readonly told: readonly ToldAnswer[];
+  /** authored wording for the gap questions, by gap ("reader", "stakes", "proof"); the house wording where absent */
+  readonly wording?: readonly { readonly gap: string; readonly ask: string; readonly unlocks: string }[];
+}
+/** One candidate from a gap, as grounded: asked (with its question) or not, and why. */
+export interface GapCandidate { readonly kind: GapKind; readonly what: string; readonly question?: Question; readonly why?: string }
+export interface GapsReading { readonly candidates: readonly GapCandidate[] }
+
+/** The most claims the reader lists. */
+export const MAX_CLAIMS = 4;
+/** Where a proof, the reader or the stakes are stated: a closed field, NONE where nothing states it. */
+export const GAP_STATED_IN = ['request', 'material', 'inventory', 'told', 'NONE'] as const;
+/** The default for a proof nobody gives: never invented, said as the author's view. */
+export const PROOF_DEFAULT = 'No proof to hand: say it as my view, not as a fact';
+export const PROOF_OPTIONS = [PROOF_DEFAULT, 'Leave the claim out'] as const;
+/** The house wording of the frame questions; a library's wording for the same gap replaces it. */
+export const GAP_WORDING: Readonly<Record<'READER' | 'STAKES', { readonly ask: string; readonly unlocks: string }>> = {
+  READER: { ask: 'Who is this piece for?', unlocks: KIND_UNLOCKS.READER },
+  STAKES: { ask: 'What is at stake for the reader if they skip it?', unlocks: KIND_UNLOCKS.STAKES },
+};
+
+export const GAPS_SYSTEM = `You prepare a writer to write one piece. You are shown the person's request, the material that came with it, the facts already listed from that material, and what they told this skill before.
+
+1. claims: the factual claims this piece will need to make to do what the request asks (at most four, the ones the piece leans on). For each:
+- claim: the claim in one short sentence.
+- answer: FACT if an answer from the person would supply a fact (a figure, a case, a source, a date, a name), POSITION if it would decide what the piece argues or concludes. The piece's own position is never asked.
+- supportIn: where its proof is stated in so many words: "request", "material", "inventory" (the listed facts) or "told"; "NONE" where nothing given holds it.
+- quote: a short quote copied exactly from where the proof is stated; null for NONE.
+- unlocks: one line: what the piece can do once the person gives the proof.
+2. reader and stakes: who the piece is for, and what is at stake for that reader. For each:
+- statedIn: "request", "material", "inventory" or "told" with a quote copied exactly from there; "NONE" with no quote where nothing given states it. A reader you could guess is not a stated reader: answer NONE.
+- spread: would different answers give the SAME draft, SOME difference, or DIFFERENT drafts.
+- options: two to four short answers the person could give, and default: the one you would write for if they say nothing.
+
+Most requests carry what they need: then every claim has its proof and the reader and stakes are stated.`;
+
+const frameSchema = { type: 'object', properties: {
+  statedIn: { type: 'string', enum: [...GAP_STATED_IN] }, quote: { type: ['string', 'null'] },
+  spread: { type: 'string', enum: ['SAME', 'SOME', 'DIFFERENT'] },
+  options: { type: 'array', items: { type: 'string' } }, default: { type: ['string', 'null'] },
+}, required: ['statedIn', 'quote', 'spread', 'options', 'default'], additionalProperties: false };
+
+export const GAPS_SCHEMA: Record<string, unknown> = {
+  type: 'object',
+  properties: {
+    claims: { type: 'array', items: { type: 'object', properties: {
+      claim: { type: 'string' }, answer: { type: 'string', enum: ['FACT', 'POSITION'] },
+      supportIn: { type: 'string', enum: [...GAP_STATED_IN] }, quote: { type: ['string', 'null'] }, unlocks: { type: 'string' },
+    }, required: ['claim', 'answer', 'supportIn', 'quote', 'unlocks'], additionalProperties: false } },
+    reader: frameSchema, stakes: frameSchema,
+  },
+  required: ['claims', 'reader', 'stakes'], additionalProperties: false,
+};
+
+/** Whether a quote of five or more characters is in the source the reader named (a form check). */
+function gapStated(where: string, quote: unknown, input: GapsInput): boolean {
+  const q = straight(clip(typeof quote === 'string' ? quote : '', 400)).toLowerCase();
+  if (q.length < 5) return false;
+  const source = where === 'request' ? input.request : where === 'material' ? input.material.map((m) => m.head).join('\n')
+    : where === 'inventory' ? input.inventory.map((f) => f.text).join('\n') : where === 'told' ? input.told.map((t) => t.answer).join('\n') : '';
+  return straight(clip(source, 100000)).toLowerCase().includes(q);
+}
+const wordingFor = (input: GapsInput, gap: string): { ask: string; unlocks: string } | undefined =>
+  input.wording?.find((w) => w.gap.toLowerCase() === gap && clip(w.ask, 200).length > 0);
+
+export const GAPS: Reading<GapsInput, GapsReading> = {
+  id: 'question-gaps', version: '1',
+  system: GAPS_SYSTEM, schema: GAPS_SCHEMA,
+  toolName: 'emit_gaps', toolDescription: 'The claims the piece needs and where each proof is stated; where the reader and the stakes are stated.',
+  maxTokens: 1200, estimateUsd: 0.01,
+  prompt(input) {
+    return [`The request:\n${input.request.slice(0, 4000)}`,
+      input.material.length ? `The material:\n${input.material.map((m) => `[${m.name}]\n${m.head}`).join('\n\n')}` : 'No material came with it.',
+      input.inventory.length ? `The facts listed from it:\n${input.inventory.slice(0, 60).map((f, i) => `${i + 1}. ${clip(f.text, 300)}`).join('\n')}` : 'No facts were listed.',
+      input.told.length ? `What they told this skill before:\n${input.told.map((t) => `- ${t.ask} ${t.answer}`).join('\n')}` : ''].filter(Boolean).join('\n\n');
+  },
+  decide(input) { return input.request.trim() ? null : { candidates: [] }; },
+  ground(raw, input) {
+    const r = raw as { claims?: unknown; reader?: unknown; stakes?: unknown } | null;
+    if (!r || !Array.isArray(r.claims)) return null;
+    const candidates: GapCandidate[] = [];
+    let proofAsked = false;
+    for (const c of r.claims.slice(0, MAX_CLAIMS) as Record<string, unknown>[]) {
+      const claim = typeof c?.claim === 'string' ? clip(c.claim, 200) : '';
+      if (!claim || (c.answer !== 'FACT' && c.answer !== 'POSITION')) continue;
+      const where = String(c.supportIn);
+      const proved = where !== 'NONE' && gapStated(where, c.quote, input);
+      const why = c.answer === 'POSITION' ? 'the piece\'s own position: never asked'
+        : proved ? `its proof is stated in the ${where}`
+          : proofAsked ? 'one proof question per run: an earlier claim was taken' : undefined;
+      if (why) { candidates.push({ kind: 'PROOF', what: claim, why }); continue; }
+      proofAsked = true;
+      const w = wordingFor(input, 'proof');
+      const unlocks = typeof c.unlocks === 'string' && clip(c.unlocks, 160) ? clip(c.unlocks, 160) : w?.unlocks ?? KIND_UNLOCKS.PROOF;
+      // The claim is quoted as the reader wrote it, inside authored wording: no derived sentence to come out ungrammatical.
+      const ask = w ? `${clip(w.ask, 200)} "${claim}"` : `The piece will need proof for this: "${claim}" What shows it (a figure, a case or a source of yours)?`;
+      candidates.push({ kind: 'PROOF', what: claim, question: { id: 'proof', ask, options: [...PROOF_OPTIONS], default: PROOF_DEFAULT, unlocks } });
+    }
+    for (const kind of ['READER', 'STAKES'] as const) {
+      const f = (kind === 'READER' ? r.reader : r.stakes) as Record<string, unknown> | null | undefined;
+      const what = kind === 'READER' ? 'who the piece is for' : 'what is at stake for the reader';
+      if (!f || typeof f !== 'object') continue;
+      const where = String(f.statedIn);
+      if (where !== 'NONE' && gapStated(where, f.quote, input)) { candidates.push({ kind, what, why: `stated in the ${where}` }); continue; }
+      if (f.spread !== 'DIFFERENT') { candidates.push({ kind, what, why: 'not stated, but the answers would not change the draft' }); continue; }
+      const options = [...new Set((Array.isArray(f.options) ? f.options : []).filter((o): o is string => typeof o === 'string' && clip(o, 120).length > 0).map((o) => clip(o, 120)))];
+      const def = typeof f.default === 'string' ? options.find((o) => same(o, f.default as string)) : undefined;
+      if (options.length < 2 || options.length > 4 || !def) { candidates.push({ kind, what, why: 'the question came without 2 to 4 options and a default among them' }); continue; }
+      const told = [...input.told].reverse().find((t) => t.id === kind.toLowerCase());
+      const w = wordingFor(input, kind.toLowerCase()) ?? GAP_WORDING[kind];
+      candidates.push({ kind, what, question: { id: kind.toLowerCase(), ask: clip(w.ask, 200), options, default: told ? told.answer : def, ...(told ? { last: told.answer } : {}), unlocks: clip(w.unlocks, 160) || KIND_UNLOCKS[kind] } });
+    }
+    return candidates.length ? { candidates } : null;
+  },
+  floor() { return { candidates: [] }; },
+};
+
+/** One candidate the run considered, asked or not, with why: the run record keeps them all, so the value of asking can be measured later. */
+export interface QuestionLogEntry {
+  readonly kind: QuestionKind | GapKind | 'OTHER';
+  readonly what: string;
+  readonly asked: boolean;
+  readonly why: string;
+  /** the question as it would have been put, where one was formed */
+  readonly ask?: string;
+  readonly default?: string;
+  readonly unlocks?: string;
+}
+
+/** The order the cap keeps questions in: the angle, then what is missing (proof, the frame), then the author's other decisions. */
+export const ASK_ORDER: readonly (QuestionKind | GapKind)[] = ['ANGLE', 'PROOF', 'READER', 'STAKES', 'NAMING', 'NEWS', 'EMPHASIS'];
+
+/**
+ * THE QUESTIONS A RUN ASKS, AND THE LOG OF ALL IT CONSIDERED. The decisions reading and the gap reading each propose;
+ * code keeps at most MAX_QUESTIONS in ASK_ORDER, every one carrying what it unlocks and a default. Where the angle is
+ * asked, the stakes question is not (the angle already asks why it matters now). With no gap candidates, the questions
+ * are the decisions reading's, in its order, unchanged apart from `unlocks`. Every candidate goes in the log with why.
+ */
+export function chooseQuestions(decided: QuestionsReading, gaps: GapsReading | null): { readonly questions: Question[]; readonly log: QuestionLogEntry[] } {
+  const formed = new Map<QuestionKind | GapKind, Question>();
+  for (const q of decided.questions) formed.set(q.id.toUpperCase() as QuestionKind, { ...q, unlocks: q.unlocks ?? KIND_UNLOCKS[q.id.toUpperCase() as QuestionKind] });
+  for (const c of gaps?.candidates ?? []) if (c.question && !formed.has(c.kind)) formed.set(c.kind, c.question);
+  const dropped = new Map<string, string>();
+  if (formed.has('ANGLE') && formed.has('STAKES')) { formed.delete('STAKES'); dropped.set('STAKES', 'the angle question already asks why it matters now'); }
+  const ordered = ASK_ORDER.flatMap((k) => { const q = formed.get(k); return q ? [q] : []; });
+  const questions = ordered.slice(0, MAX_QUESTIONS);
+  for (const q of ordered.slice(MAX_QUESTIONS)) dropped.set(q.id.toUpperCase(), `cut by the cap of ${MAX_QUESTIONS}`);
+  const isAsked = (kind: string, ask?: string): boolean => questions.some((q) => q.id.toUpperCase() === kind && (!ask || q.ask === ask));
+  const log: QuestionLogEntry[] = [];
+  for (const d of decided.decisions) {
+    const q = d.kind === 'OTHER' ? undefined : decided.questions.find((x) => x.id === d.kind.toLowerCase());
+    const asked = !d.why && !!q && isAsked(d.kind, q.ask);
+    log.push({ kind: d.kind, what: d.what, asked, why: asked ? 'asked' : d.why ?? dropped.get(d.kind) ?? 'not asked',
+      ...(q && !d.why ? { ask: q.ask, default: q.default, unlocks: q.unlocks ?? (d.kind === 'OTHER' ? undefined : KIND_UNLOCKS[d.kind]) } : {}) });
+  }
+  for (const c of gaps?.candidates ?? []) {
+    const asked = !!c.question && isAsked(c.kind, c.question.ask);
+    log.push({ kind: c.kind, what: c.what, asked, why: asked ? 'asked' : c.why ?? dropped.get(c.kind) ?? `a ${c.kind.toLowerCase()} question was already taken`,
+      ...(c.question ? { ask: c.question.ask, default: c.question.default, unlocks: c.question.unlocks } : {}) });
+  }
+  return { questions, log };
 }

@@ -15,7 +15,7 @@
 import { createInterface } from 'node:readline/promises';
 import { readContext, type DecidedBy } from '../core/inference/reading.js';
 import type { InferenceClient } from '../core/inference/client.js';
-import { QUESTIONS, readAnswers, questionLines, defaultsLine, answersNote, materialShown, STANDING_KINDS, QUESTION_KINDS, KIND_ASK, type Question, type QuestionKind } from '../core/loop/questions.js';
+import { QUESTIONS, GAPS, chooseQuestions, readAnswers, questionLines, defaultsLine, answersNote, materialShown, STANDING_KINDS, QUESTION_KINDS, KIND_ASK, type Question, type QuestionKind } from '../core/loop/questions.js';
 import { PIECE_PLAN, planLines, planNote, type PiecePlan, type PlanInput } from '../core/loop/piece-plan.js';
 import * as store from '../core/state/store.js';
 import type { InvocationRecord } from '../core/state/canonical-state.js';
@@ -39,6 +39,12 @@ export interface PrewriteInput {
   readonly model: string | null;
   /** how a line is read from the person: the terminal by default (a test passes its own) */
   readonly read?: (prompt: string) => Promise<string>;
+  /**
+   * A DEEP RUN (cli/deep.ts): the facts already listed for the piece and the library's wording of the gap questions. The
+   * gaps in those facts are read after the author's decisions, and at most three questions are kept from both; every one
+   * considered is logged. Absent, the questions are the decisions reading's alone, as before.
+   */
+  readonly gaps?: { readonly inventory: readonly { readonly text: string }[]; readonly wording: readonly { readonly gap: string; readonly ask: string; readonly unlocks: string }[] };
 }
 export interface Prewrite {
   /** what the writer is told, after the skill: the answers, then the plan */
@@ -75,7 +81,11 @@ export async function beforeTheDraft(o: PrewriteInput): Promise<Prewrite> {
   // ── THE QUESTIONS ──────────────────────────────────────────────────────────────────────────
   const q = o.questions ? await readContext(QUESTIONS, { request: o.request, material: materialShown(o.material), method: o.method, examples: o.examples, told },
     o.client, o.model, tiny(), 'context judge') : null;
-  const questions = q?.value.questions ?? [];
+  // THE GAPS IN THE FACTS (a deep run): read beside the decisions, and the questions kept from both by code, at most three.
+  const g = o.questions && o.gaps ? await readContext(GAPS, { request: o.request, material: materialShown(o.material), inventory: o.gaps.inventory, told, wording: o.gaps.wording },
+    o.client, o.model, tiny(), 'context judge') : null;
+  const chosen = g ? chooseQuestions(q?.value ?? { decisions: [], questions: [] }, g.value) : null;
+  const questions = chosen ? chosen.questions : q?.value.questions ?? [];
   const { answers: given, said: answersSaid } = readAnswers(o.answers, questions);
   said.push(...answersSaid);
   const answers: { id: string; answer: string; by: 'person' | 'default' | 'told' }[] = [];
@@ -130,7 +140,8 @@ export async function beforeTheDraft(o: PrewriteInput): Promise<Prewrite> {
     if (plan) said.push(`Planned before writing: ${plan.points.length} point(s) from the material${plan.leftOut.length ? `, ${plan.leftOut.length} left out` : ''}; the plan is on the record, never in the work (atelier report <run>).`);
   }
   const note = [answerText, plan ? planNote(plan, o.material) : ''].filter(Boolean).join('\n\n');
-  const record = questions.length || answers.length || plan || noPlan ? { questions, answers, questionsBy: q?.by ?? 'floor', plan, planBy, ...(typedChanges.length ? { planChanges: typedChanges.length } : {}), ...(noPlan ? { noPlan } : {}) } : null;
+  const record = questions.length || answers.length || plan || noPlan || chosen ? { questions, answers, questionsBy: q?.by ?? 'floor', plan, planBy, ...(typedChanges.length ? { planChanges: typedChanges.length } : {}), ...(noPlan ? { noPlan } : {}),
+    ...(chosen ? { questionLog: chosen.log } : {}) } : null;
   return { note, said, questions, plan, record };
 }
 

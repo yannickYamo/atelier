@@ -1,0 +1,8 @@
+[
+  { "id": "q-angle", "gap": "angle", "ask": "What is the one thing you want a reader to take from this post?", "unlocks": "a post built around that one idea instead of a tour of the topic" },
+  { "id": "q-proof", "gap": "proof", "ask": "What is the strongest evidence you have for the main claim: a number, a case, or something you tried?", "unlocks": "the main claim carried by your own proof instead of a general statement" },
+  { "id": "q-reader", "gap": "reader", "ask": "Who is this for, and what do they believe about it now?", "unlocks": "an opening that meets that reader where they stand" },
+  { "id": "q-stakes", "gap": "stakes", "ask": "What goes wrong for a reader who never reads this?", "unlocks": "stakes stated early, so the reader knows why it matters" },
+  { "id": "q-not-say", "gap": "not-to-say", "ask": "Is there anything this post must not say or promise?", "unlocks": "a draft that stays clear of it from the start" },
+  { "id": "q-example", "gap": "example", "ask": "Is there one real example you would want in it: a project, a moment, a result?", "unlocks": "a concrete case of yours in place of a generic one" }
+]

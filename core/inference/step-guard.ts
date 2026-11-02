@@ -22,8 +22,11 @@ import type { InferenceClient, InferenceRequest, InferenceResult } from './clien
  *   structure read  the paragraph-move reader (../structure/moves.ts)
  *   subject reader  the subject cards and their grading (../fidelity/subject-reader.ts)
  *   context judge   what the request asks and whether a reply gives it (../loop/context-judge.ts)
+ *   gap lines       which flagged sentences the piece stands on, and the line that names the gap (../loop/gap-lines.ts)
+ *   story reader    the loops and the new information a draft carries (../story/loops.ts, ../story/novelty.ts)
+ *   reviewer        the isolated review of a draft, and which of two drafts is better (../review/)
  */
-export const READERS = ['claim reader', 'taste reader', 'structure read', 'subject reader', 'context judge'] as const;
+export const READERS = ['claim reader', 'taste reader', 'structure read', 'subject reader', 'context judge', 'gap lines', 'story reader', 'reviewer'] as const;
 export type Reader = (typeof READERS)[number];
 
 interface Context { readonly chain: boolean; readonly step: boolean; readonly reader: Reader | null }

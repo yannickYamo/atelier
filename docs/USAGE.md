@@ -585,6 +585,28 @@ path. `atelier lab` lists them. Each stays opt-in until a measurement moves it o
 | `--examples-first` | your pieces, method and rules served with no description of how you sound | not measured |
 | `--voice incontext` | the voice pass from a pair bank (next section) | whether it moves your voice has not been measured |
 
+### A deeper run (opt-in)
+
+`atelier run --deep "<the task>"` (or `atelier invoke --deep`) spends more on one piece. Before the draft it lists the
+facts the material actually holds, looks for more on the web when it can, and asks the questions that would fill the
+biggest gaps (three at most; a run nobody answers uses the defaults). It picks one direction for the piece from a deck
+of angles, never the one used last time, and tells the writer which habits of a plain draft to avoid. After the draft
+it repairs where the story drops a thread or runs thin, has two drafts compared, and lets a reviewer score the piece
+and fix it, or ask for one more draft, once. Nothing it finds blocks the work; it only steers it. Without `--deep`, a
+run is exactly what it was.
+
+| flag | what it does |
+|---|---|
+| `--deep` | the deeper run, for this run |
+| `--no-enrich` | no web search for more facts (search runs only with an Anthropic key on the writer's provider) |
+| `--kind <kind>` | the kind of piece the library's angles and scoring are taken from (a blog post by default) |
+| `atelier fidelity --skill <name> --set mode=deep` | every run of the skill is deep (`mode=plain` turns it off) |
+| `atelier new ... --deep` | reads the story ranges and plain-draft habits at the build, instead of on the first deep run |
+
+`--json` keeps the piece in `output`, and adds a `deep` object: the facts and where they came from, the questions
+asked, the direction chosen and why, what the story and review steps changed, which draft won and why, and what the
+extra steps cost.
+
 ### Voice, and other registers (opt-in)
 
 A skill built from blog posts is evidence about blog posts. Ask it for a contract and nothing in the corpus

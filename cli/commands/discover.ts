@@ -27,11 +27,14 @@ import { deriveMeasuredRules, piecesBreaking, countedFloorOf, MIN_SENTENCES, MIN
 import { ensureGrammar, grammarMeasurement, termsOf, GRAMMAR_STATEMENT } from '../../core/observers/grammar.js';
 import type { Measurement } from '../../core/state/canonical-state.js';
 import { deriveContrastRules, contrastTopics } from '../../core/observers/contrast.js';
+import { deepAtBuild } from '../deep.js';
 import { shortFormMeasured, shortFormOptions } from '../../core/observers/short-form.js';
 import { buildProfile } from '../../core/fidelity/profile.js';
 import { SELECTION } from '../../core/observers/selection.js';
 import { CLASS_MIN_PIECES, CONTEXT_CLASSES, contextClassOf, type ContextClass } from '../../core/fidelity/types.js';
 import { buildTraitTable, describeTraitCounts } from '../../core/composite/traits.js';
+import { RULE_EFFECT, effectInput } from '../../core/composite/effect-reading.js';
+import { readContext } from '../../core/inference/reading.js';
 import { buildRetrievalIndex } from '../../core/fidelity/retrieval.js';
 import { calibrateTypicality } from '../../core/fidelity/typicality.js';
 import { judgeCountedFeatures, signalsOf } from '../../core/observers/selection.js';
@@ -43,7 +46,7 @@ import * as store from '../../core/state/store.js';
 import { skillNameFrom } from '../../renderers/agent-skill/render.js';
 import { mapLimit } from '../../core/inference/concurrency.js';
 import { GenerationIncomplete, ModelUnavailable } from '../../core/inference/client.js';
-import { sha, die, argv, orchestrated, proposerModel, proposerIsDefault, diagnoserModel, modelFor, providerFor, MODEL_DEFAULT, PROPOSER_DEFAULT, type ProposalMeta, clientFor, clientAndBinding, loadSession, saveSession, sourceProvenance, numericFlag, priceOverrideFor, runFile, flag, DATA, canReach } from '../runtime.js';
+import { sha, die, argv, orchestrated, proposerModel, proposerIsDefault, diagnoserModel, modelFor, providerFor, MODEL_DEFAULT, PROPOSER_DEFAULT, type ProposalMeta, clientFor, clientAndBinding, loadSession, saveSession, sourceProvenance, numericFlag, priceOverrideFor, runFile, flag, DATA, canReach, contextReaderClient, contextReaderModel } from '../runtime.js';
 import { priceFor, ANTHROPIC_PRICING, PRICES_CHECKED_ON } from '../../providers/pricing.js';
 
 // ── discover ─────────────────────────────────────────────────────────────────────────────────
@@ -415,7 +418,9 @@ export async function discover(): Promise<void> {
     proposals = [...proposals, grammar];
     proposalMeta = { ...proposalMeta, [grammar.requirementId]: { framings: [], alsoPhrasedAs: [], heldOut: null, needs: null, inSample: null,
       corpus: grammar.measurement ? { pieces: allPieces.length, breaking: piecesBreaking(allPieces, grammar.measurement) } : null } satisfies ProposalMeta };
-    const table = buildTraitTable(proposals, (id) => proposalMeta[id]?.source, (a) => lengthClass[a] ?? null);
+    // WHICH RULES ARE ABOUT WHAT THE WRITING MAKES A READER FEEL is read, never matched (core/composite/effect-reading.ts).
+    const effect = await readContext(RULE_EFFECT, effectInput(proposals), noModel ? null : contextReaderClient(), noModel ? null : contextReaderModel(), { spentUsd: 0, capUsd: 0.05, maxCalls: 1 }, 'context judge');
+    const table = buildTraitTable(proposals, (id) => proposalMeta[id]?.source, (a) => lengthClass[a] ?? null, effect);
     writeAtomic(runFile('trait-table.json'), JSON.stringify(table, null, 1));
     persist(heldOutPieces || null);
     for (const f of ['signals.json', 'fidelity.json', 'retrieval.json', 'typicality.json']) rmSync(runFile(f), { force: true });
@@ -519,6 +524,10 @@ export async function discover(): Promise<void> {
       console.log(`(the model's plain drafts could not be written: ${(e as Error).message.split('\n')[0]}; rules measured on your pieces alone are still proposed)`);
     }
   }
+  // A BUILD ASKED FOR --deep (cli/deep.ts) reads the plain drafts' habits in form and the story bands of the pieces now,
+  // and keeps them with the skill; a build without it leaves them to the skill's first deep run.
+  if (argv.includes('--deep')) await deepAtBuild({ skillName: skillNameOf(s), drafts, pieces: read.map((i) => i.text),
+    reader: argv.includes('--no-model') ? { client: null, model: null } : { client: contextReaderClient(), model: contextReaderModel() }, say: (l) => { console.log(l); } });
   const contrast = deriveContrastRules(read, heldItems, drafts, sourceProvenance());
   if (drafts.length >= 2) {
     // THE SIGNALS. Counted features that separate this author from the model over many drafts, but not
@@ -613,9 +622,15 @@ export async function discover(): Promise<void> {
 function declaredClass(s: { skillName?: string | null; source?: string | null }): string | null {
   const cls = flag('--class');
   if (cls !== undefined) return cls.trim().toLowerCase() === 'none' ? null : normalizeClass(cls);
-  let name = s.skillName ?? null;
-  if (!name && s.source) { try { name = skillNameFrom(basename(s.source)); } catch { name = null; } }
+  const name = skillNameOf(s);
   return name ? store.getDocClass({ root: DATA, skillName: name }) : null;
+}
+
+/** The skill this build is for: the one `atelier new` named, or the name its source folder gives. */
+function skillNameOf(s: { skillName?: string | null; source?: string | null }): string | null {
+  if (s.skillName) return s.skillName;
+  if (!s.source) return null;
+  try { return skillNameFrom(basename(s.source)); } catch { return null; }
 }
 
 /**

@@ -91,9 +91,11 @@ const SCHEMA = { type: 'object', properties: { rewrites: { type: 'array', items:
 export async function groundCarried(text: string, c: {
   readonly client: InferenceClient; readonly budget: Budget; readonly request: string; readonly evidence: string; readonly examples: string;
   readonly breaksNothing?: (next: string) => Promise<boolean>;
+  /** documents a web pass fetched for this request: a term one of them holds is no example's, so it is not borrowed */
+  readonly enriched?: readonly { readonly url: string; readonly text: string }[];
 }): Promise<GroundingResult> {
   if (!c.request.trim() || !c.examples.trim()) return { text, found: [], note: null };
-  const given = `${c.evidence}\n${c.request}`;
+  const given = c.enriched?.length ? `${c.evidence}\n${c.request}\n${c.enriched.map((d) => d.text).join('\n')}` : `${c.evidence}\n${c.request}`;
   const claims = carriedClaims(text, c.examples, given);
   if (!claims.length) return { text, found: [], note: null };
   const items = claims.map((cl, i) => ({ id: i + 1, claim: cl, borrowed: borrowedOf(cl) }));

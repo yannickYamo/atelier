@@ -1,0 +1,17 @@
+[
+  {
+    "kind": "blog",
+    "criteria": [
+      { "id": "one-idea", "weight": 3, "question": "Can the post's one idea be said in a sentence, and does every section serve it?" },
+      { "id": "proof", "weight": 3, "question": "Does each load-bearing claim carry its proof, with wording no stronger than the proof?" },
+      { "id": "reader-moves", "weight": 2, "question": "Does the reader leave believing something they did not believe at the start?" },
+      { "id": "specific", "weight": 1, "question": "Are the facts ones only this subject has, rather than ones any post on the topic would carry?" },
+      { "id": "voice", "weight": 1, "question": "Does it read as the writer's own voice, free of machine-prose tells?" }
+    ],
+    "caps": [
+      { "when": "a figure, source or case is invented or cannot be traced to the material", "max": 3 },
+      { "when": "the post has no idea that a reader could disagree with", "max": 5 },
+      { "when": "the main claim has no proof at all", "max": 5 }
+    ]
+  }
+]

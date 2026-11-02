@@ -5,7 +5,7 @@
 // command file reads as one job rather than as a slice of everything.
 
 import { wordsOf as overlapWords } from '../../core/observers/overlap.js';
-import { inRepairChain, stepGuarded, outOfStepCalls } from '../../core/inference/step-guard.js';
+import { inRepairChain, stepGuarded, outOfStepCalls, readingAs } from '../../core/inference/step-guard.js';
 import { existsSync, readFileSync, writeSync } from 'node:fs';
 import { methodReading, methodLine } from '../../core/eval/obligations.js';
 import type { CheckContext } from '../../core/observers/registry.js';
@@ -29,6 +29,15 @@ const READ_CALLS_DEFAULT = 4;
 import { readContext } from '../../core/inference/reading.js';
 import { needsNote, needsNothing } from '../../core/loop/task-needs.js';
 import { beforeTheDraft, questionsJson } from '../prewrite.js';
+import { deepAsked, deepFacts, deepDirection, bandsFor, goldenOf, excerptsOf, reviewKit, reviewEnrichment, deepRunId, enricherFor, deepRecord, deepLines, reviewNote, regatherNote, DEEP_USD, DEEP_CALLS, type DeepBands, type DeepReader, type DeepTrace } from '../deep.js';
+import { readLoops } from '../../core/story/loops.js';
+import { readNovelty, thinTargets } from '../../core/story/novelty.js';
+import { storyTargets } from '../../core/story/checks.js';
+import { reviewDraft, type Review, type ReviewInput } from '../../core/review/reviewer.js';
+import { runFixLoop, FIXES_APPLIED, type FixLoopResult, type SpanWriter } from '../../core/review/fix-loop.js';
+import { chooseDraft } from '../../core/review/choose.js';
+import { writeSpan } from '../../core/loop/surgical-fix.js';
+import type { Card, Rubric } from '../../core/library/schema.js';
 import { withoutPlanLines, figuresAndNames, type PiecePlan } from '../../core/loop/piece-plan.js';
 import { checkReadsMaterial } from '../../core/observers/written.js';
 import { writtenAsSentences, copiedRecord, POINTS_LINE, POINTS_NOTE, pointsNote } from '../../core/loop/material-points.js';
@@ -510,7 +519,10 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const adoptedCarry = store.getCarry(L); const methodCarry = adoptedCarry?.standardVersion === sv.standardVersionHash ? adoptedCarry : null;
   const carryNoteFile = flag('--carry-note');
   const carryNote = (carryNoteFile !== undefined ? (existsSync(carryNoteFile) ? readFileSync(carryNoteFile, 'utf8') : die(`--carry-note ${carryNoteFile}: there is no such file.`)) : methodCarry?.note ?? '').trim();
-  const nDrafts = Math.max(1, Math.floor(numericFlag('--drafts', runSettings ? runSettings.drafts : methodCarry?.drafts ?? 1)));
+  // A DEEP RUN (cli/deep.ts): `--deep`, or the release's `mode=deep`. It writes two drafts unless --drafts says otherwise.
+  const deepWant = deepAsked(runSettings?.mode) && std !== null && contractFile === null;
+  const draftsDefault = runSettings ? runSettings.drafts : methodCarry?.drafts ?? 1;
+  const nDrafts = Math.max(1, Math.floor(numericFlag('--drafts', deepWant ? Math.max(2, draftsDefault) : draftsDefault)));
   const editBudget = runSettings && !argv.includes('--no-repair') ? Math.max(0, Math.floor(numericFlag('--edits', runSettings.editBudget))) : 0;
   // THE TASTE READER IS A MODEL'S OPINION OF THE OWNER'S RULES, and has not earned a say (docs/TASTE.md). It reads the
   // delivered text against every rule no count checks, in reporting mode, wherever a model can be reached: what it
@@ -533,14 +545,14 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
     allowance: { calls: flag('--max-calls') === undefined ? gradedRounds * GRADED_DRAFT_CALLS : 0, usd: flag('--cap') === undefined ? gradedRounds * GRADED_DRAFT_USD : 0 } };
   const budget: Budget = { spentUsd: 0, capUsd: numericFlag('--cap', Math.max(1.0, 0.3 * nDrafts + 0.15 * editBudget + 0.4
       + (argv.includes('--sections') ? 0.1 * MAX_SECTIONS * nDrafts : 0)) + (voiceCould ? 0.03 * MAX_PARAGRAPHS : 0) + shapeRounds * (0.3 + 0.15 * editBudget + (voiceCould ? 0.03 * MAX_PARAGRAPHS : 0)) + (strict ? (shapeRounds + 1) * 0.4 : 0)
-      + gradedRounds * GRADED_DRAFT_USD),
+      + gradedRounds * GRADED_DRAFT_USD + (deepWant ? DEEP_USD : 0)),
     // Edits come last; their calls are reserved on top of the repair's (up to five), so a release's edit
     // budget is not silently starved by the rewrites before it.
     // Long form by section: a plan, and up to MAX_SECTIONS calls per draft instead of one.
     // A skill built from a method may write once more with what is missing named, and check that draft like the first.
     maxCalls: numericFlag('--max-calls', nDrafts + editBudget + 4 + (editBudget ? 5 : 0) + (taste?.callsFor(nDrafts) ?? 0) + (std?.requirements.some((r) => r.obligation === 'DELIVERABLE' && r.measurement) ? 6 : 0)
       + (argv.includes('--sections') ? 1 + MAX_SECTIONS * nDrafts : 0) + (nearnessWanted ? 1 : 0) + (voiceCould ? MAX_PARAGRAPHS * 2 + 4 : 0) + shapeRounds * (1 + 5 + editBudget + (voiceCould ? MAX_PARAGRAPHS + 4 : 0) + (taste?.callsFor(1) ?? 0)) + (structureFlag ? 2 : 0)
-      + (strict ? (shapeRounds + 1) * (9 + editBudget + (taste?.callsFor(1) ?? 0)) + 1 : 0) + gradedRounds * GRADED_DRAFT_CALLS) };
+      + (strict ? (shapeRounds + 1) * (9 + editBudget + (taste?.callsFor(1) ?? 0)) + 1 : 0) + gradedRounds * GRADED_DRAFT_CALLS + (deepWant ? DEEP_CALLS : 0)) };
   // FROM HERE ON, EVERYTHING SPENT IS THIS RUN'S. Taken where the budget is made, before the first call that can
   // draw on it: the reading of the request and the grading of its subject are paid for before any draft, and a
   // snapshot taken at the first draft left them out of the lines by purpose, and out of the total whenever the claim
@@ -784,19 +796,30 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   if (removed) report.say(`Earlier fixes of this piece took out ${removed.phrases.length} stretch(es) of wording: brought back, one is written again.`);
   // the owner's own words (the method's steps, the standard's statements): a stretch of them is never a copy from the notes
   const ownWords = [...briefSteps.map((s) => s.statement), ...(std?.requirements.map((q) => q.statement) ?? [])].join('\n');
-  const checks = { ...checksFor(L, { material: materialText, task: asked, context: { request: asked, material, ...(subjectName ? { worksOn: material.find((m) => m.name === subjectName)?.text ?? '' } : {}) }, guardClaims: !argv.includes('--allow-unsourced'), placeholders: placeholdersOn, ...(judge ? { judge } : {}), ...(held ? { level: held.level } : {}) }),
+  // A DEEP RUN'S FACTS, BEFORE THE CHECKS ARE MADE: what the web pass found is a source the claim check may trace a specific to.
+  // Not for a structured output, a request that states its own shape, or a skill whose work is a reply.
+  const deepOn = deepWant && shape !== 'SHAPE' && store.getWorkForm(L) !== 'REPLY';
+  if (deepWant && !deepOn) report.say(`(--deep does not apply here: ${shape === 'SHAPE' ? 'the request states its own shape' : 'the skill\'s work is a reply in a conversation'}; the run is written as usual.)`);
+  const deepReader: DeepReader = { client: contextJudgeModel() ? contextReaderClient() : null, model: contextJudgeModel() };
+  const deepTrace: DeepTrace = {};
+  const deepF = deepOn ? await deepFacts({ runId: deepRunId(asked, started), request: asked, material, reader: deepReader, budget,
+    ...((e) => ({ enricher: e.enricher, ...(e.off ? { enrichOff: e.off } : {}) }))(enricherFor()), say: (l) => { report.say(l); } }) : null;
+  const deepDocs = deepF?.enrichment?.docs ?? [];
+  const checks = { ...checksFor(L, { material: materialText, task: asked, ...(deepDocs.length ? { enriched: deepDocs } : {}), context: { request: asked, material, ...(subjectName ? { worksOn: material.find((m) => m.name === subjectName)?.text ?? '' } : {}) }, guardClaims: !argv.includes('--allow-unsourced'), placeholders: placeholdersOn, ...(judge ? { judge } : {}), ...(held ? { level: held.level } : {}) }),
     ...(asPoints ? { copiedFrom: materialOnly, copiedOwn: ownWords } : {}),
     ...(removed ? { removed } : {}),
     ...(short.format ? { format: short.format } : {}),
     ...(transfer ? { doesNotApply: transfer.doesNotApply } : {}),
-    ...(waived.size ? { waived } : {}), ...(graded !== undefined ? { graded, gradedProfile: carried } : {}) };
+    ...(waived.size ? { waived } : {}), ...(graded !== undefined ? { graded, gradedProfile: carried } : {}),
+    // a deep run: a cut claim the piece stands on says what is not known, in one line, instead of leaving a hole
+    ...(deepOn ? { gapLines: { client: deepReader.client ? readingAs('gap lines', deepReader.client) : null, model: deepReader.model, budget: { spentUsd: 0, capUsd: 0.1, maxCalls: 6 } } } : {}) };
   // DRAFTS THAT DIFFER (core/fidelity/types.ts, `diversity`): each draft its own temperature and its own slice of
   // the author's closest passages, so the shared block carries only the notes.
   const diverse = Boolean(runSettings?.diversity) && nDrafts > 1 && fid !== null;
   // DRAFTS ON DEMAND (core/loop/run-once.ts, `enough`): the drafts a release setting plans are written only as far as
   // the first wants a rival. Drafts the person asked for by `--drafts`, and drafts sampled or varied to keep the author's
   // spread, are all written, as asked.
-  const draftsOnDemand = nDrafts > 1 && !argv.includes('--drafts') && !sampling && !diverse;
+  const draftsOnDemand = nDrafts > 1 && !argv.includes('--drafts') && !sampling && !diverse && !deepWant;
   const impl = fid && runSettings ? implementationBlock({ ...fid.release, settings: diverse ? { ...runSettings, retrievalK: 0 } : runSettings }, fid.index, asked, readNear) : { retrieved: [], notes: '', passages: '' };
   const pool = diverse && fid?.index && runSettings && runSettings.retrievalK > 0 ? retrieveNear(fid.index, asked, runSettings.retrievalK * nDrafts, readNear) : [];
   // A run whose flags changed what the release would have done is recorded with the settings that ran and
@@ -852,8 +875,14 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
     questions: !argv.includes('--no-questions'), plan: !argv.includes('--no-plan') && !worksOn, answers: flag('--answers'),
     ...(worksOn && !argv.includes('--no-plan') ? { noPlan: 'no plan: the request works on the text it supplies' } : {}),
     interactive: machine === null && process.stdin.isTTY && process.stdout.isTTY,
+    ...(deepF ? { gaps: { inventory: deepF.inventory.value.facts, wording: deepF.wording } } : {}),
     client: contextJudgeModel() ? contextReaderClient() : null, model: contextJudgeModel() }) : null;
   for (const line of before?.said ?? []) report.say(line);
+  // A DEEP RUN'S DIRECTION, AND THE BANDS ITS STORY CHECKS HOLD THE DRAFT TO (read from the author's pieces the first time).
+  const deepD = deepF ? await deepDirection({ L, facts: deepF, request: asked, reader: deepReader, budget, say: (l) => { report.say(l); } }) : null;
+  const deepB: DeepBands | null = deepF ? await bandsFor(L, deepF.lib, deepF.kind, goldenOf(L), deepReader, budget) : null;
+  if (deepB && deepB.from !== 'stored') report.say(`Story bands: ${deepB.from === 'read now' ? 'read from your pieces and kept with the skill' : `assumed (${deepB.why ?? ''})`}.`);
+  const deepKit = deepF ? reviewKit(deepF.lib, deepF.kind) : null;
   // WHY THERE IS NO PLAN where nothing was read before the draft: on the record, as the reading says it where it ran.
   const noPlan = before ? null : contractFile !== null ? 'no plan: the output is structured' : shape === 'SHAPE' ? 'no plan: the request states its own shape'
     : !piece ? 'no plan: the skill\'s work is a reply in a conversation' : worksOn ? 'no plan: the request works on the text it supplies' : 'no plan: --no-plan was given';
@@ -879,7 +908,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const inMaterialNote = inMaterial && (inMaterial.figures.length || inMaterial.names.length)
     ? `A rule of this skill reads the work against the whole of the material. Where the piece gives a figure or a name, give it exactly as the material writes it:${inMaterial.figures.length ? `\n- figures: ${inMaterial.figures.slice(0, 60).join('; ')}` : ''}${inMaterial.names.length ? `\n- names: ${inMaterial.names.slice(0, 60).join('; ')}` : ''}` : '';
   const requestNotes = forThisRequest(withheld.filter((w) => !needMaterial.includes(w)), briefText, impl.passages, lengthNote, needsNote(needs), placeholdersOn ? SLOT_NOTE : '', held ? latitudeBrief(held.level) : '',
-    asPoints && !planServes ? (worksOn ? pointsNote(notesMaterial.map((m) => m.name)) : POINTS_NOTE) : '', before?.note ?? '', inMaterialNote, ratesNote);
+    asPoints && !planServes ? (worksOn ? pointsNote(notesMaterial.map((m) => m.name)) : POINTS_NOTE) : '', before?.note ?? '', inMaterialNote, ratesNote, deepD?.note ?? '');
   const servedBase = examplesFirst ? withoutPersonaBlocks(servedText) : servedText;
   if (examplesFirst) report.say(`Examples first: served without the description of how I sound or my repertoire${servedBase === servedText ? ' (the skill carried none)' : ''}; my moves are read on the work and never served.`);
   const servedForRun = `${needMaterial.length ? withoutRules(servedBase, needMaterial) : servedBase}${impl.notes ? `\n\n${impl.notes}` : ''}${carryBlock}${requestNotes}`;
@@ -948,7 +977,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const rec = await runOnce(L, sv, servedForRun, servedHash, deliveryForRun, taskForRun, client, budget, binding,
     resolveProvenance(flag('--provenance'), process.env), contractFile,
     flag('--task') ? 'FLAG' : 'POSITIONAL',
-    refining ? keepDelivered(withSituations(withGrounding(withGradedRecord(withStructureRead(withoutEcho(repairChain(refineFor(),
+    refining ? keepDelivered(withDeep(withSituations(withGrounding(withGradedRecord(withStructureRead(withoutEcho(repairChain(refineFor(),
       redrafting ? { unmet: redrafting, notes: completions, resume: refineFor(), paramsOf: ruleParamsOf(refining), vetoes: repairVetoes(refining, checks), round: shapeRoundNow, protect: store.getVoice(L)?.standardWording ?? [], check: (text: string) => checkDraft(name, refining, text, { ...checks, claimSensor: undefined }), redraft: async (note, purpose) => (await spendOneWithResult(client, budget, servedForRun, taskForRun, null, note, {}, purpose)).piece, graded: gradedTrace,
         steps: { usdPerCall: () => { const ls = spendBetween(ledgerBefore, processSpendByPurpose()).filter((l) => l.purpose === 'writing' || l.purpose === 'graded'); const n = ls.reduce((k, l) => k + l.calls, 0); return n ? ls.reduce((k, l) => k + l.usd, 0) / n : undefined; } },
         displaced: (from: string, to: string) => displacement(from, to, graded !== undefined ? carried : null, new Set())?.refusedFor ?? [] } : null,
@@ -961,9 +990,18 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
       runSteps), isOn('echo') ? { notes: requestNotes, say: completions, plan: before?.plan ?? null } : null),
       skeleton ? { budget, trace, state: skeleton } : null), ifOn('graded-record', gradedTrace), ledgerBefore),
       grounding ? { client, budget, request: asked, evidence: `${checks.evidence ?? ''}\n${checks.approved ?? ''}`, examples: grounding, notes: completions,
-        recheck: (text: string) => checkDraftAsync(name, refining, text, checks), paramsOf: ruleParamsOf(refining), steps: runSteps } : null),
-      situating ? { judge: situating, request: asked, material: checks.evidence ?? '' } : null)) : null,
-    std && nDrafts > 1 ? withSections(selectDraft({ n: nDrafts, onDemand: draftsOnDemand, name, std, checks, taste, ownBand, signals: store.getSignals(L), profile: steerProfile, trace, ledger, sampling, ...(diverse ? { variant: variantOf, retrievedFor } : {}) }), sectionWriter)
+        recheck: (text: string) => checkDraftAsync(name, refining, text, checks), paramsOf: ruleParamsOf(refining), steps: runSteps, ...(deepDocs.length ? { enriched: deepDocs } : {}) } : null),
+      situating ? { judge: situating, request: asked, material: checks.evidence ?? '' } : null),
+      // A DEEP RUN AFTER THE CHAIN: the story and thin targets, then the isolated review and the one pass its verdict asks for.
+      deepF && deepB ? { client, budget, writerModel: binding.requestedModel, reader: deepReader, bands: deepB, kit: deepKit, trace: deepTrace,
+        review: { request: asked, material: materialText, enrichment: reviewEnrichment(deepF), goldenExcerpts: excerptsOf(goldenOf(L)), contract: `${deepD?.note ?? ''}\n\n${before?.note ?? ''}`.trim() },
+        recheck: (text: string) => checkDraftAsync(name, refining, text, checks), paramsOf: ruleParamsOf(refining), steps: runSteps,
+        deepRedraft: async (note: string) => (await spendOneWithResult(client, budget, servedForRun, taskForRun, null, note, {}, 'writing')).piece,
+        regather: (missing: readonly string[]) => regatherNote({ facts: deepF, missing, request: asked, material, reader: deepReader, budget }) } : null)) : null,
+    std && nDrafts > 1 ? withSections(withDeepChoice(selectDraft({ n: nDrafts, onDemand: draftsOnDemand, name, std, checks, taste, ownBand, signals: store.getSignals(L), profile: steerProfile, trace, ledger, sampling, ...(diverse ? { variant: variantOf, retrievedFor } : {}) }),
+      deepF && deepKit ? { kit: deepKit, trace: deepTrace, check: (text: string) => checkDraft(name, std, text, { ...checks, claimSensor: undefined }),
+        model: { client: readingAs('reviewer', client), model: binding.requestedModel, budget }, request: asked, material: materialText,
+        enrichment: reviewEnrichment(deepF), goldenExcerpts: excerptsOf(goldenOf(L)) } : null), sectionWriter)
       : sectionWriter ? { n: 1, write: sectionWriter, choose: () => ({ index: 0, why: '' }) } : null,
     std && checks.guardClaims !== false ? async (text: string) => {
       const r = await checkDraftAsync(name, std, text, checks);
@@ -985,7 +1023,8 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
         ...(local ? ['range' as const] : []), ...(planState ? ['skeleton' as const] : [])] } : null) : null,
     // what was settled before the draft, and what the delivered work copied from material written as sentences
     // WHAT THE WRITER WAS SERVED IS ON EVERY RECORD, by its layers (core/eval/stages.ts): a layer is off only where the bytes show it absent.
-    (output: string) => ({ served: servedLayersOf(servedForRun), ...(prewriteRecord ? { prewrite: prewriteRecord } : {}), ...(asPoints ? { copied: copiedRecord(output, materialOnly, ownWords) } : {}),
+    (output: string) => ({ served: servedLayersOf(servedForRun), ...(prewriteRecord ? { prewrite: prewriteRecord } : {}),
+      ...(deepF && deepD && deepB ? { deep: deepRecord(deepF, deepD, deepB, deepTrace, output, processSpentUsd() - spentBefore) } : {}), ...(asPoints ? { copied: copiedRecord(output, materialOnly, ownWords) } : {}),
       ...(worksOn ? { worksOn } : {}),
       ...(removed ? { corrections: { removed: removed.phrases.length, reintroduced: reintroducedRuns(output, removed.phrases, removed.previous, removed.own).map((r) => r.text) } } : {}) }));
 
@@ -1008,6 +1047,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   // The work is printed once its delivery is decided (core/eval/consequence.ts), below: marked where it goes to a person.
   if (adoptedCarry && !methodCarry) report.say(store.CARRY_RETIRED);
   for (const c of completions) report.say(c);
+  for (const l of deepLines(deepTrace)) report.say(l);
   reportChecks(report, rec, std, checks);
   if (lineCiting && material.length) report.say(lineCitationsLine(rec.output, material));
   const tasteMonitor = taste ? await taste.report(report, rec, name) : null;
@@ -1101,6 +1141,8 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
       ...(rec.copied ? { copied: rec.copied } : {}),
       // the text this request works on (core/loop/task-needs.ts): served whole, no plan, and quoting it is no copy
       ...(rec.worksOn ? { worksOn: rec.worksOn } : {}),
+      // what a deep run did (cli/deep.ts), with every question it considered; `output` above stays the piece alone
+      ...(rec.deep ? { deep: { ...rec.deep, questions: rec.prewrite?.questionLog ?? [] } } : {}),
       ...(rec.repair?.graded ? { graded: rec.repair.graded } : {}),
       // every repair step the controller chose, what it moved and cost, and why it stopped (core/loop/controller.ts)
       ...(rec.repair?.controller ? { controller: rec.repair.controller } : {}),
@@ -2318,7 +2360,9 @@ export function withGrounding(refine: (draft: string) => Promise<Delivered>,
     /** which way a rate is out, for the one acceptance rule (`ruleParamsOf`) */
     paramsOf?: ParamsOf;
     /** what the run's ledger reads (the settings, the budget, the source a figure must be found in); null in a test */
-    steps?: RunSteps | null } | null): (draft: string) => Promise<Delivered> {
+    steps?: RunSteps | null;
+    /** documents a deep run's web pass fetched: a term one of them holds is no example's (core/loop/grounding.ts) */
+    enriched?: readonly { readonly url: string; readonly text: string }[] } | null): (draft: string) => Promise<Delivered> {
   if (!c) return refine;
   return async (draft: string) => {
     const d = await refine(draft);
@@ -2364,6 +2408,198 @@ export function withGrounding(refine: (draft: string) => Promise<Delivered>,
     const toCheck = (done.repair?.claimsToCheck ?? []).filter((t) => !rewritten.some((r) => t.slice(0, 60) === r));
     return recorded(done.repair ? { ...done, repair: { ...done.repair, claimsToCheck: [...new Set([...toCheck, ...listedClaims(s.after.report)])] } } : done);
   };
+}
+
+/** What a deep run's gate needs (cli/deep.ts): the writer, the readers, the bands and the reviewer's kit, and the one pass back. */
+export interface DeepGate {
+  readonly client: InferenceClient; readonly budget: Budget; readonly writerModel: string;
+  readonly reader: DeepReader; readonly bands: DeepBands; readonly kit: { readonly rubric: Rubric; readonly cards: readonly Card[] } | null;
+  readonly trace: DeepTrace;
+  /** what the reviewer reads beside the draft: never the writer's contract until its verdict stage */
+  readonly review: Omit<ReviewInput, 'draft' | 'rubric' | 'cards'>;
+  readonly recheck: (text: string) => Promise<VerifyReport>; readonly paramsOf?: ParamsOf; readonly steps?: RunSteps | null;
+  /** one more whole draft, told what the reviewer found */
+  readonly deepRedraft: (note: string) => Promise<string>;
+  /** the facts read again for what the reviewer found missing: the note the one more draft is written with */
+  readonly regather: (missing: readonly string[]) => Promise<string>;
+}
+
+/** The most spans the story and thin checks send to repair on one draft. */
+export const STORY_SPANS = 3;
+/**
+ * The widest span a story target is written again in place, as a share of the piece. Wider is a verdict on the piece's
+ * shape, not a span: on the dev run "nothing in question for 72% (and 100%) of the piece" was sent to the span writer
+ * whole and cut off at its token limit both times. It stays on the record, unrepaired.
+ */
+export const STORY_SPAN_SHARE = 0.4;
+
+/** The delivered text changed by a deep step, its record kept: the model's own text stays on it, as the grounding keeps it. */
+function deepChanged(d: Delivered, text: string, report: VerifyReport, why: string): Delivered {
+  const violatedBefore = brokenIn(d.report);
+  const repair: RepairRecord = d.repair ?? { passes: 0, violatedBefore, violatedAfter: violatedBefore, originalOutputHash: sha(d.output), draft: d.output, why };
+  return { ...d, output: text, report, repair: { ...repair, violatedAfter: brokenIn(report), notes: [...(repair.notes ?? []), why], claimsToCheck: [...new Set([...(repair.claimsToCheck ?? []), ...listedClaims(report)])] } };
+}
+
+/**
+ * A DEEP RUN AFTER THE CHAIN (cli/deep.ts). On the text the chain delivers:
+ *   - the story and thin checks (core/story/): where a loop is left open, nothing is in question too long, beats only follow
+ *     one another, or a stretch says nothing new, the span is written again (core/loop/surgical-fix.ts, `writeSpan`); graded
+ *     targets, never failures, as one step on the run's ledger, kept only on the one acceptance rule;
+ *   - the isolated review (core/review/reviewer.ts): its verdict word decides one pass and no more: 'fix' writes its first
+ *     three fixes where they stand and checks them once (`runFixLoop`); 'redraft' writes one more draft told what it found;
+ *     'regather' reads the facts again for what it found missing and writes one more draft from them; 'ship' and
+ *     'unverified' deliver. Each pass is one step, kept only on the one rule, and the second draft only where the reviewer
+ *     rates it no lower. The ledger is the run's, continued from the record, as the grounding continues it.
+ */
+export function withDeep(refine: (draft: string) => Promise<Delivered>, c: DeepGate | null): (draft: string) => Promise<Delivered> {
+  if (!c) return refine;
+  return async (draft: string) => {
+    const first = await refine(draft);
+    const from = first.repair?.controller?.decisions ?? [];
+    const ledger = stepLedger(c.steps?.settings ?? null, c.steps?.budget ?? null, from, c.steps?.source ?? '');
+    const told = await deepStory(first, c, ledger);
+    const reviewed = await deepReview(told, c, ledger, refine);
+    return ledger.entries.length > from.length ? withSteps(reviewed, ledger.entries) : reviewed;
+  };
+}
+
+/**
+ * The story spans written again in place: the first ones in the piece that do not overlap, at most STORY_SPANS, none
+ * wider than STORY_SPAN_SHARE of the piece. `wide` counts the targets left out for their width.
+ */
+export function storySpans(length: number, targets: readonly { readonly kind: string; readonly repair: string; readonly span?: { readonly start: number; readonly end: number } | null }[]):
+  { spans: { kind: string; repair: string; start: number; end: number }[]; wide: number } {
+  const widest = length * STORY_SPAN_SHARE;
+  const wide = targets.filter((x) => x.span && x.span.end - x.span.start > widest).length;
+  const spans: { kind: string; repair: string; start: number; end: number }[] = [];
+  for (const t of targets.flatMap((x) => (x.span && x.span.end - x.span.start <= widest ? [{ kind: x.kind, repair: x.repair, start: x.span.start, end: x.span.end }] : [])).sort((a, b) => a.start - b.start)) {
+    if (spans.length < STORY_SPANS && !spans.some((q) => t.start < q.end && q.start < t.end)) spans.push(t);
+  }
+  return { spans, wide };
+}
+
+async function deepStory(d: Delivered, c: DeepGate, ledger: StepLedger): Promise<Delivered> {
+  const reader = c.reader.client ? readingAs('story reader', c.reader.client) : null;
+  const loops = await readLoops(d.output, reader, c.reader.model, c.budget);
+  const novelty = await readNovelty(d.output, reader, c.reader.model, c.budget);
+  const targets = [...(loops.graph ? storyTargets(d.output, loops.graph, c.bands.story) : []), ...(novelty.map ? thinTargets(d.output, novelty.map, c.bands.novelty) : [])];
+  const read = [loops.graph ? 'loops read' : `loops not read (${loops.why ?? ''})`, novelty.map ? 'novelty read' : `novelty not read (${novelty.why ?? ''})`].join('; ');
+  const { spans, wide } = storySpans(d.output.length, targets);
+  c.trace.story = { targets: targets.map((t) => ({ kind: t.kind, repair: t.repair, quotes: t.quotes })), read, repaired: 0, kept: null, ...(wide ? { why: `${wide} target(s) span more than ${Math.round(STORY_SPAN_SHARE * 100)}% of the piece: the piece's shape, listed and not written again in place` } : {}) };
+  if (!spans.length) return d;
+  const held = new Set(brokenIn(d.report));
+  type Told = Proposed & { readonly n: number };
+  const s = await applyStep<Told>(ledger, { action: 'story', targets: spans.map((t) => t.kind),
+    why: `${spans.length} span(s) where the piece lets its reader go (a loop left open, nothing in question, beats that only follow, nothing new): each written again where it stands`,
+    expectedGain: 0, expectedCostUsd: DEFAULT_COST.story }, { text: d.output, report: d.report }, async () => {
+    let text = d.output; let n = 0;
+    // from the end of the piece back, so each span's place still holds when it is written
+    for (const t of [...spans].reverse()) {
+      const was = text.slice(t.start, t.end);
+      const w = await writeSpan(c.client, c.budget, text, { id: n + 1, start: t.start, end: t.end, text: was, reasons: [t.repair], requirementIds: [], drops: [], specifics: false }, t.repair, []);
+      if (w.missing || !w.text.trim() || w.text.trim() === was.trim()) continue;
+      const lead = /^\s*/.exec(was)?.[0] ?? ''; const tail = /\s*$/.exec(was)?.[0] ?? '';
+      text = `${text.slice(0, t.start)}${lead}${w.text.trim()}${tail}${text.slice(t.end)}`; n += 1;
+    }
+    if (!n) return { unchanged: 'the writer left every span as it was', outcome: 'no change' };
+    return { text, report: await c.recheck(text), n };
+  }, { paramsOf: c.paramsOf, purposes: ['repair'],
+    also: (x) => (brokenIn(x.report).every((id) => held.has(id)) ? null : 'the rewritten spans break a rule that held before'),
+    movement: (x, kept) => (kept ? x.n : 0) });
+  if (s.kind === 'judged' && s.kept) {
+    c.trace.story = { ...c.trace.story, repaired: s.after.n, kept: true };
+    return deepChanged(d, s.after.text, s.after.report, `story and thin checks: ${s.after.n} span(s) written again`);
+  }
+  c.trace.story = { ...c.trace.story, kept: false, why: s.kind === 'judged' ? s.why ?? s.own ?? 'not kept' : s.why };
+  return d;
+}
+
+const reviewSummary = (r: Review): Omit<NonNullable<DeepTrace['review']>, 'action' | 'applied' | 'kept' | 'outcome'> => ({
+  verdict: r.verdict, overall: r.overall === null ? null : Math.round(r.overall * 100) / 100, mainFailure: r.mainFailure, missingFacts: r.missingFacts, keep: r.keep,
+  scores: r.scores.map((x) => ({ id: x.id, score: x.score })), caps: r.capsFired.map((x) => x.when), ...(r.why ? { why: r.why } : {}) });
+
+async function deepReview(d: Delivered, c: DeepGate, ledger: StepLedger, refine: (draft: string) => Promise<Delivered>): Promise<Delivered> {
+  if (!c.kit) {
+    c.trace.review = { verdict: 'unverified', overall: null, mainFailure: null, missingFacts: [], keep: null, scores: [], caps: [], why: 'the library has no rubric for this kind', action: 'none', applied: [], kept: null, outcome: 'delivered as checked' };
+    return d;
+  }
+  const kit = c.kit;
+  const m = { client: readingAs('reviewer', c.client), model: c.writerModel, budget: c.budget };
+  const review = await reviewDraft({ ...c.review, draft: d.output, rubric: kit.rubric, cards: kit.cards }, m);
+  const said = reviewSummary(review);
+  if (review.verdict === 'ship' || review.verdict === 'unverified') {
+    c.trace.review = { ...said, action: 'none', applied: [], kept: null, outcome: review.verdict === 'ship' ? 'delivered' : 'delivered without a review' };
+    return d;
+  }
+  const held = new Set(brokenIn(d.report));
+  const breaksNothing = (x: Proposed): string | null => (brokenIn(x.report).every((id) => held.has(id)) ? null : 'the change breaks a rule that held before');
+  if (review.verdict === 'fix') {
+    type Fixed = Proposed & { readonly loop: FixLoopResult };
+    const write: SpanWriter = async ({ draft: text, span, instruction }) => {
+      const at = text.indexOf(span);
+      const w = await writeSpan(c.client, c.budget, text, { id: 1, start: at, end: at + span.length, text: span, reasons: [instruction], requirementIds: [], drops: [], specifics: false }, instruction, []);
+      return w.missing ? null : w.text.trim() || null;
+    };
+    const s = await applyStep<Fixed>(ledger, { action: 'review', targets: ['review'], why: `the reviewer's verdict is fix: its first ${FIXES_APPLIED} fixes written where they stand, and checked once`,
+      expectedGain: 0, expectedCostUsd: DEFAULT_COST.review }, { text: d.output, report: d.report }, async () => {
+      const loop = await runFixLoop(d.output, review, write, m);
+      if (!loop.revised || loop.draft === d.output) {
+        const stop = loop.history.find((h) => h.step === 'stop');
+        return { unchanged: stop?.step === 'stop' ? stop.why : 'no fix was applied', outcome: 'not kept' };
+      }
+      return { text: loop.draft, report: await c.recheck(loop.draft), loop };
+    }, { paramsOf: c.paramsOf, purposes: ['repair', 'other'], also: breaksNothing });
+    const loop = s.kind === 'judged' ? s.after.loop : null;
+    const applied = (loop?.history ?? []).flatMap((h) => (h.step === 'apply' ? h.applied.map((a) => ({ before: a.before, after: a.after, instruction: a.fix.instruction })) : []));
+    const kept = s.kind === 'judged' && s.kept;
+    c.trace.review = { ...said, action: 'fix', applied, kept, outcome: kept ? `${applied.length} fix(es) written and kept` : `the fixes were not kept (${s.kind === 'judged' ? s.why ?? s.own ?? '' : s.why})` };
+    return kept && s.kind === 'judged' ? deepChanged(d, s.after.text, s.after.report, `the reviewer's fixes: ${applied.length} written where they stood`) : d;
+  }
+  // 'redraft' or 'regather': one more draft, once, kept only where the reviewer rates it no lower
+  const action = review.verdict;
+  type Again = Proposed & { readonly again: Delivered; readonly second: Review };
+  const s = await applyStep<Again>(ledger, { action: 'review', targets: ['review'],
+    why: action === 'regather' ? 'the reviewer found facts missing: they are looked for again and the piece written once more from them' : 'the reviewer asked for the piece to be written again: once, told what it found',
+    expectedGain: 0, expectedCostUsd: DEFAULT_COST.review }, { text: d.output, report: d.report }, async () => {
+    const note = action === 'regather' ? await c.regather(review.missingFacts) : reviewNote(review);
+    const again = await refine(await c.deepRedraft(note));
+    const second = await reviewDraft({ ...c.review, draft: again.output, rubric: kit.rubric, cards: kit.cards }, m);
+    return { text: again.output, report: again.report, again, second };
+  }, { paramsOf: c.paramsOf, purposes: ['writing', 'repair', 'other'],
+    also: (x) => breaksNothing(x) ?? (x.second.overall !== null && (review.overall === null || x.second.overall >= review.overall) ? null : 'the reviewer rated the draft written again lower') });
+  const second = s.kind === 'judged' ? { verdict: s.after.second.verdict, overall: s.after.second.overall === null ? null : Math.round(s.after.second.overall * 100) / 100 } : undefined;
+  const kept = s.kind === 'judged' && s.kept;
+  c.trace.review = { ...said, action, applied: [], kept, outcome: kept ? 'written once more and kept' : `written once more and not kept (${s.kind === 'judged' ? s.why ?? s.own ?? '' : s.why})`, ...(second ? { second } : {}) };
+  return kept && s.kind === 'judged' ? s.after.again : d;
+}
+
+/**
+ * A DEEP RUN'S CHOICE OF TWO DRAFTS (core/review/choose.ts). The checks first: a draft that breaks fewer required rules wins as
+ * it always did. Where the checks cannot separate them, the reviewer compares them in both orders; a draft it prefers both
+ * times wins, and a split is the usual ranking's to decide.
+ */
+export function withDeepChoice<S extends { readonly choose: (drafts: readonly string[], written?: readonly { readonly index: number; readonly temperatureSent: number | null }[]) => Promise<{ index: number; why: string }> }>(sel: S,
+  c: { readonly kit: { readonly rubric: Rubric; readonly cards: readonly Card[] }; readonly trace: DeepTrace; readonly check: (text: string) => VerifyReport;
+    readonly model: { readonly client: InferenceClient; readonly model: string; readonly budget: Budget }; readonly request: string; readonly material: string;
+    readonly enrichment: readonly string[]; readonly goldenExcerpts: readonly string[] } | null): S {
+  if (!c) return sel;
+  return { ...sel, choose: async (drafts: readonly string[], written?: readonly { readonly index: number; readonly temperatureSent: number | null }[]) => {
+    if (drafts.length !== 2) return sel.choose(drafts, written);
+    const [a, b] = drafts.map((x) => brokenIn(c.check(x)).length);
+    if (a !== b) {
+      const r = await sel.choose(drafts, written);
+      c.trace.choice = { winner: r.index === 0 ? 'a' : 'b', decidedBy: 'the checks', reasons: [r.why] };
+      return r;
+    }
+    const ch = await chooseDraft(drafts[0], drafts[1], { ...c.model, request: c.request, material: c.material, enrichment: c.enrichment, goldenExcerpts: c.goldenExcerpts, rubric: c.kit.rubric, cards: c.kit.cards });
+    if (ch.winner !== 'tie') {
+      c.trace.choice = { winner: ch.winner, decidedBy: 'the reviewer', reasons: ch.reasons };
+      return { index: ch.winner === 'a' ? 0 : 1, why: `the reviewer preferred it read both ways round${ch.reasons[0] ? `: ${ch.reasons[0]}` : ''}` };
+    }
+    const r = await sel.choose(drafts, written);
+    c.trace.choice = { winner: 'tie', decidedBy: 'the ranking', reasons: ch.reasons };
+    return r;
+  } };
 }
 
 /**

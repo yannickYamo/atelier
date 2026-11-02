@@ -19,7 +19,10 @@ import { describeVoices, voicesAsAuthors, type VoiceGrouping } from '../../core/
 import { formatOf } from '../../core/observers/formats.js';
 import { isShortForm } from '../../core/observers/pooled.js';
 
-import { sha, die, argv, flag, flagAll, loadSession, saveSession, step, runFile, orchestrated } from '../runtime.js';
+import { UNIT_KIND, unitKindInput, mintKinds } from '../../core/golden/unit-kind.js';
+import { readContext } from '../../core/inference/reading.js';
+
+import { sha, die, argv, flag, flagAll, loadSession, saveSession, step, runFile, orchestrated, canReach, contextReaderClient, contextReaderModel } from '../runtime.js';
 
 // ── intake ───────────────────────────────────────────────────────────────────────────────────
 /**
@@ -59,7 +62,7 @@ export function autoReserveIds(ids: readonly string[], rank: (id: string) => num
   return [...ids].sort((a, b) => rank(a) - rank(b) || sha(a).localeCompare(sha(b))).slice(0, k);
 }
 
-export function intake(path: string, workType: string, mode?: 'GENERATE' | 'GUARD' | 'RESPOND', opts: { readonly voices?: VoiceGrouping | null } = {}): void {
+export async function intake(path: string, workType: string, mode?: 'GENERATE' | 'GUARD' | 'RESPOND', opts: { readonly voices?: VoiceGrouping | null } = {}): Promise<void> {
   let minChars = minCharsFor(mode);
   const dir = resolve(path);
   if (!existsSync(dir)) die(`no such path: ${dir}`);
@@ -342,6 +345,20 @@ export function intake(path: string, workType: string, mode?: 'GENERATE' | 'GUAR
   } else console.log(`\n${plan.summary}`);
   if (plan.refusals.length) process.exit(1);
   if (argv.includes('--dry-run')) { console.log('\n--dry-run: nothing sealed.'); return; }
+
+  // WHAT KIND OF DECISION EACH KEPT EXAMPLE IS (core/golden/unit-kind.ts): a piece whose main job is to settle a choice
+  // is a DECISION_MEMO, read, never matched; unread, a PROSE_SECTION. The units are kept only with a reservation, so
+  // only then is anything read; a held-back piece is read by its request alone.
+  if (reservation) {
+    const offline = !canReach('discovery') || argv.includes('--no-model');
+    const requestOf = new Map(goldenFiles.map((r) => [r.file, r.request ?? null]));
+    const units = [...reservation.discovery, ...reservation.reserved];
+    const input = unitKindInput(units, new Set(reservation.reserved.map((u) => u.unitId)), (id) => requestOf.get(id) ?? null);
+    const read = await readContext(UNIT_KIND, input, offline ? null : contextReaderClient(), offline ? null : contextReaderModel(), { spentUsd: 0, capUsd: 0.05, maxCalls: 1 }, 'context judge');
+    reservation = { ...reservation, discovery: mintKinds(reservation.discovery, read.value), reserved: mintKinds(reservation.reserved, read.value) };
+    const memos = units.filter((u) => read.value[u.unitId] === 'DECISION_MEMO').length;
+    if (memos) console.log(`${orchestrated() ? '' : '\n'}${memos} example(s) read as decision memos: their main job is to settle a choice.`);
+  }
 
   // id AND path. `planImport` assigns roles by the relative path, and the walk is recursive now, so
   // a golden at `essays/a.md` has id "essays/a.md" while its basename is "a.md". Storing only the

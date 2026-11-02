@@ -780,7 +780,14 @@ export interface InvocationRecord {
     readonly planChanges?: number;
     /** why the piece was written with no plan, where it was: "no plan: <why>" */
     readonly noPlan?: string;
+    /**
+     * A DEEP RUN'S QUESTION LOG (core/loop/questions.ts, `chooseQuestions`): every question it considered, from the author's
+     * decisions and from the gaps in its facts, asked or not, with why. Absent from a run that was not deep.
+     */
+    readonly questionLog?: readonly { readonly kind: string; readonly what: string; readonly asked: boolean; readonly why: string; readonly ask?: string; readonly default?: string; readonly unlocks?: string }[];
   };
+  /** WHAT A DEEP RUN DID (cli/deep.ts): absent from every other run. */
+  readonly deep?: DeepRecord;
   /**
    * STRETCHES COPIED FROM MATERIAL WRITTEN AS SENTENCES (core/loop/material-points.ts), read on the delivered work: every
    * run of 5 words or more it shares with the material, the longest, and the length a run is repaired at. Absent where the
@@ -902,10 +909,44 @@ export interface RepairRecord {
  * taste reader asked for ('taste') and a draft written again around a claim cut that would leave a fragment ('claim-redraft').
  * Two more are held to the same rule and recorded, never counted against the limit: a later shape round judged against
  * the best so far ('shape': a round is a draft attempt with a limit of its own) and the grounding of an example's fact
- * on the delivered text ('ground').
+ * on the delivered text ('ground'). A deep run adds two more of that kind: the spans a story or thin target names, written
+ * again ('story'), and what the isolated reviewer asked for ('review').
  */
 export type ControllerAction = 'cut' | 'mechanical' | 'rewrite' | 'operators' | 'carrier-rewrite' | 'redraft' | 'grammar' | 'trim'
-  | 'coverage' | 'steer' | 'voice' | 'taste' | 'claim-redraft' | 'shape' | 'ground';
+  | 'coverage' | 'steer' | 'voice' | 'taste' | 'claim-redraft' | 'shape' | 'ground' | 'story' | 'review';
+
+/**
+ * A DEEP RUN, AS ITS RECORD KEEPS IT (`atelier run --deep`, cli/deep.ts): the library it read, the facts listed and where each
+ * came from, the web pass, the direction dealt and chosen, the habits and bands it was held to, the story and thin targets
+ * and what their repair did, the draft choice, the reviewer's verdict word as it gave it and the fixes applied, and the cost.
+ */
+export interface DeepRecord {
+  /** the seed of this run's deal: the same seed deals the same directions */
+  readonly runId: string;
+  readonly kind: string;
+  readonly library: { readonly sources: readonly string[]; readonly problems: readonly string[] };
+  readonly inventory: { readonly by: string; readonly why?: string; readonly sourced: number; readonly enriched: number; readonly sample: number;
+    readonly facts: readonly { readonly text: string; readonly source: string; readonly sourceRef: string; readonly quote: string }[] };
+  readonly enrichment: { readonly via: string; readonly queries: readonly string[]; readonly queriesBy: string; readonly urls: readonly string[]; readonly notes: readonly string[]; readonly off?: string };
+  readonly direction: { readonly dealt: readonly string[]; readonly choice: string; readonly reason: string; readonly by: string; readonly seed: string; readonly fitBy: string };
+  readonly rendition: { readonly habits: readonly string[]; readonly from: 'stored' | 'read now' | 'none'; readonly why?: string };
+  readonly bands: { readonly from: 'stored' | 'read now' | 'assumed'; readonly why?: string };
+  /** the blocks a deep run adds to what the writer is served, by name (never the library's cards) */
+  readonly served: readonly string[];
+  readonly story?: { readonly targets: readonly { readonly kind: string; readonly repair: string; readonly quotes: readonly string[] }[]; readonly read: string; readonly repaired: number; readonly kept: boolean | null; readonly why?: string };
+  readonly choice?: { readonly winner: 'a' | 'b' | 'tie'; readonly decidedBy: 'the checks' | 'the reviewer' | 'the ranking'; readonly reasons: readonly string[] };
+  readonly review?: { readonly verdict: string; readonly overall: number | null; readonly mainFailure: string | null; readonly missingFacts: readonly string[]; readonly keep: string | null;
+    readonly scores: readonly { readonly id: string; readonly score: number }[]; readonly caps: readonly string[]; readonly why?: string;
+    /** what was done on the verdict: nothing, the fix loop, one more draft, or one more pass for facts */
+    readonly action: 'none' | 'fix' | 'redraft' | 'regather';
+    readonly applied: readonly { readonly before: string; readonly after: string; readonly instruction: string }[];
+    readonly kept: boolean | null; readonly outcome: string;
+    /** the second review, after one more draft */
+    readonly second?: { readonly verdict: string; readonly overall: number | null } };
+  /** specifics of the delivered work traced to a web page, never to the person */
+  readonly enrichedUsed: readonly { readonly text: string; readonly url: string }[];
+  readonly costUsd: number;
+}
 
 /** One step the controller took, and what came of it. Movement is movement: never a probability of acceptance. */
 export interface ControllerDecisionRecord {

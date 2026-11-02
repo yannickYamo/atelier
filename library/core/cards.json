@@ -1,0 +1,59 @@
+[
+  {
+    "id": "blog-one-idea",
+    "kind": "blog",
+    "appliesWhen": "any post that argues, explains or teaches; most of all when the material holds several good points",
+    "theCall": "Name the one idea the post stands on, and let every section serve it or leave.",
+    "strong": [
+      "the idea can be said in one sentence a reader could repeat to someone else",
+      "each section moves that idea forward: a reason for it, a case of it, a limit on it",
+      "material that is true but beside the idea is cut, however good"
+    ],
+    "nearMiss": "A clear central idea, but one section in the middle is a second idea the writer also liked; the reader leaves with two half-points instead of one whole one.",
+    "weak": "A tour of everything the writer knows about the topic, each part sound, none of it adding up to a claim anyone could disagree with.",
+    "antiPatterns": [
+      "a thesis that is a topic, not a claim (\"some thoughts on pricing\")",
+      "a closing section that introduces the real point for the first time",
+      "a list of tips with no idea that ranks or connects them"
+    ],
+    "evidence": "principle"
+  },
+  {
+    "id": "blog-claims-carry-proof",
+    "kind": "blog",
+    "appliesWhen": "a post that makes claims a reader could doubt: numbers, causes, recommendations, comparisons",
+    "theCall": "Every claim that carries weight is followed by the thing that makes it believable, or it is cut or marked as a guess.",
+    "strong": [
+      "each load-bearing claim sits next to its proof: a figure with its source, a case, a test the reader can run",
+      "the strength of the wording matches the strength of the proof",
+      "what is not known is said plainly in one line, not covered with confidence"
+    ],
+    "nearMiss": "The main claim is well proven, but two supporting claims lean on the writer's say-so; a careful reader stops trusting the rest at the first unsupported one.",
+    "weak": "Confident general statements throughout (\"teams that do this ship faster\") with no figure, case or source anywhere.",
+    "antiPatterns": [
+      "a precise-looking number with no origin",
+      "a source named for authority but not for what it shows",
+      "proof that supports a softer claim than the one made"
+    ],
+    "evidence": "principle"
+  },
+  {
+    "id": "blog-belief-before-after",
+    "kind": "blog",
+    "appliesWhen": "a post meant to change how a reader thinks or what they do next",
+    "theCall": "Know what the reader believes before the first line and what they should believe after the last, and spend the post moving them from one to the other.",
+    "strong": [
+      "the opening meets the reader where they stand, in terms they already hold",
+      "the turn names the point where the old belief stops working",
+      "the end leaves a changed belief and, where it fits, one thing to do with it"
+    ],
+    "nearMiss": "The new belief is argued well, but the post never states the old one, so a reader who already agreed learns nothing and a reader who disagreed is never met.",
+    "weak": "A post that restates what the reader already thinks, warmly, and ends where it began.",
+    "antiPatterns": [
+      "arguing against a position no reader holds",
+      "an ending that summarises instead of landing the change",
+      "a call to action unrelated to the belief the post changed"
+    ],
+    "evidence": "principle"
+  }
+]

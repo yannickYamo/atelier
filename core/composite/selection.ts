@@ -304,7 +304,7 @@ export function composeSelection(table: TraitTable, proposals: readonly Requirem
   const rowOf = new Map(table.rows.map((r) => [r.id, r]));
   const byId = new Map(proposals.map((p) => [p.requirementId, p]));
   // The class each rule is taken for: what it is mainly about. Admiring a class takes the rules mainly about it.
-  const clsOf = (id: string): TraitClass | undefined => { const p = byId.get(id); return p ? primaryClassOf(p) : rowOf.get(id)?.cls; };
+  const clsOf = (id: string): TraitClass | undefined => { const r = rowOf.get(id); if (r?.primary) return r.primary; const p = byId.get(id); return p ? primaryClassOf(p) : r?.cls; };
   const inf = options.inferred;
   // INFERRED: what is taken is what was inferred, with a stated preference already in its weight (./infer.ts).
   const admired = (id: string): boolean => { if (inf) return inf.chosen.has(id); const r = rowOf.get(id); const c = clsOf(id); return Boolean(r && c && classesOf.get(r.author)?.has(c)); };

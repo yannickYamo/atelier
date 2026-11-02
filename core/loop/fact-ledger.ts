@@ -191,6 +191,28 @@ export interface FactCoverage {
   readonly per100: number;
   /** specifics in the text that match no ledger fact, as written: for the claim gate to judge, never a cut here */
   readonly outside: string[];
+  /**
+   * Specifics that match no fact of the person's but one of an enriched document: grounded, marked enriched, with the
+   * URL. Present only when enriched documents were given. They are not the person's own, so they never count in `used`
+   * or `per100`, which measure how densely a draft carries what the person supplied.
+   */
+  readonly enriched?: readonly EnrichedFact[];
+}
+
+/** A fact of an enriched document: the fact, and the page it is on. */
+export interface EnrichedFact extends Fact { readonly source: 'enriched'; readonly url: string }
+
+/** Every atomic fact in each enriched document, tagged with its URL (the first document that holds a fact names it). */
+export function enrichedLedger(docs: readonly { readonly url: string; readonly text: string }[]): EnrichedFact[] {
+  const out: EnrichedFact[] = [];
+  const seen = new Set<string>();
+  for (const d of docs) {
+    for (const f of factLedger(d.text)) {
+      const k = `${f.kind}:${f.norm}`;
+      if (!seen.has(k)) { seen.add(k); out.push({ ...f, source: 'enriched', url: d.url }); }
+    }
+  }
+  return out;
 }
 
 /**
@@ -198,12 +220,19 @@ export interface FactCoverage {
  * somewhere else. `per100` is the number to steer toward the author's density (`authorFactDensity`);
  * `outside` is never rewarded and never cut here.
  */
-export function factCoverage(text: string, ledger: readonly Fact[]): FactCoverage {
+export function factCoverage(text: string, ledger: readonly Fact[], enriched?: readonly EnrichedFact[]): FactCoverage {
   const found = factLedger(text);
   const words = wordsOf(pageOf(text).body).length;
   const used = ledger.filter((l) => found.some((t) => sameFact(t, l)));
-  const outside = found.filter((t) => !ledger.some((l) => sameFact(t, l))).map((t) => t.text);
-  return { used, per100: words ? r3((used.length / words) * 100) : 0, outside };
+  const notOurs = found.filter((t) => !ledger.some((l) => sameFact(t, l)));
+  if (!enriched) return { used, per100: words ? r3((used.length / words) * 100) : 0, outside: notOurs.map((t) => t.text) };
+  const fromWeb: EnrichedFact[] = [];
+  const outside: string[] = [];
+  for (const t of notOurs) {
+    const e = enriched.find((l) => sameFact(t, l));
+    if (e) fromWeb.push({ ...t, source: 'enriched', url: e.url }); else outside.push(t.text);
+  }
+  return { used, per100: words ? r3((used.length / words) * 100) : 0, outside, enriched: fromWeb };
 }
 
 /** Pieces shorter than this say too little about how densely the author writes in facts. */
