@@ -34,10 +34,10 @@ interface PairOut { readonly better: Pick; readonly reasons: readonly string[] }
 export const pairwiseReading: Reading<PairIn, PairOut | null> = {
   id: 'review-pairwise', version: '1', system: PAIRWISE_SYSTEM,
   toolName: 'choose_draft', toolDescription: 'Say which draft better meets the rubric for this request.',
-  maxTokens: 800, estimateUsd: 0.05,
+  maxTokens: 2000, estimateUsd: 0.05,
   schema: {
     type: 'object', additionalProperties: false, required: ['better', 'reasons'],
-    properties: { better: { type: 'string', enum: ['first', 'second', 'neither'] }, reasons: { type: 'array', items: { type: 'string' } } },
+    properties: { better: { type: 'string', enum: ['first', 'second', 'neither'] }, reasons: { type: 'array', maxItems: 3, items: { type: 'string' } } },
   },
   prompt: ({ ctx, first, second }) => [
     `<request>\n${ctx.request}\n</request>`,

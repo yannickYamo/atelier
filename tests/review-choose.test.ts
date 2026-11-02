@@ -23,6 +23,11 @@ describe('chooseDraft', () => {
     expect((await chooseDraft(SHORT, LONG, ctx(k.c))).winner).toBe('a');
     expect(k.calls).toHaveLength(4);
   });
+  it('the comparison leaves room for a long answer (800 tokens cut four of seven dev comparisons off)', async () => {
+    const k = client(() => 'neither');
+    await chooseDraft(SHORT, LONG, ctx(k.c));
+    expect(k.calls[0].maxTokens).toBeGreaterThanOrEqual(2000);
+  });
   it('a comparison that cannot be read says why on its reason', async () => {
     const failing: InferenceClient = { complete: async () => { throw new Error('upstream 529 overloaded'); } };
     const r = await chooseDraft(SHORT, LONG, ctx(failing));
