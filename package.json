@@ -41,6 +41,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
+    "check:private": "tsx scripts/check-private.mts",
     "build:plugins": "tsx plugins/build-plugins.mts",
     "pretest": "npm run build:plugins && npm run build",
     "preflight": "npm run typecheck && npm run lint && npm test && npm run build",

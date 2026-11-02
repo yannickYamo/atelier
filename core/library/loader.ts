@@ -9,7 +9,7 @@
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { LIBRARY_FILES, type Angle, type BeatPrior, type Card, type Library, type PieceKind, type QuestionWording, type Rubric, type Tell } from './schema.js';
+import { type LIBRARY_FILES, type Angle, type BeatPrior, type Card, type Library, type PieceKind, type QuestionWording, type Rubric, type Tell } from './schema.js';
 
 export interface LoadedLibrary extends Library {
   /** what was left out and why, one line each; empty when everything read */
@@ -36,7 +36,7 @@ export const coreLibraryDir = (): string | null => { const root = packageRoot();
 // ── SHAPES ─────────────────────────────────────────────────────────────────────────────────────
 type Obj = Record<string, unknown>;
 const isObj = (x: unknown): x is Obj => typeof x === 'object' && x !== null && !Array.isArray(x);
-const str = (o: Obj, k: string): boolean => typeof o[k] === 'string' && (o[k] as string).trim() !== '';
+const str = (o: Obj, k: string): boolean => typeof o[k] === 'string' && (o[k]).trim() !== '';
 const strs = (o: Obj, k: string): boolean => Array.isArray(o[k]) && (o[k] as unknown[]).every((x) => typeof x === 'string');
 const num = (o: Obj, k: string): boolean => typeof o[k] === 'number' && Number.isFinite(o[k]);
 
@@ -48,7 +48,7 @@ const need = (o: Obj, fields: readonly [string, (o: Obj, k: string) => boolean][
 const SHAPES = {
   'cards.json': { key: (c: Card) => c.id, check: (o) => need(o, [['id', str], ['kind', str], ['appliesWhen', str], ['theCall', str], ['strong', strs], ['nearMiss', str], ['weak', str], ['antiPatterns', strs], ['evidence', (x, k) => ['locked-golden', 'measured', 'principle'].includes(x[k] as string)]]) } as Shape<Card>,
   'angles.json': { key: (a: Angle) => a.id, check: (o) => need(o, [['id', str], ['kind', str], ['idea', str], ['structure', str], ['openingMove', str], ['evidenceType', str], ['fitsWhen', str], ['pitfalls', strs], ['steal', str]]) } as Shape<Angle>,
-  'tells.json': { key: (t: Tell) => t.id, check: (o) => need(o, [['id', str], ['since', (x, k) => typeof x[k] === 'string' && /^\d{4}-\d{2}$/.test(x[k] as string)], ['description', str], ['instead', str], ['status', (x, k) => x[k] === 'banned' || x[k] === 'warned']]) } as Shape<Tell>,
+  'tells.json': { key: (t: Tell) => t.id, check: (o) => need(o, [['id', str], ['since', (x, k) => typeof x[k] === 'string' && /^\d{4}-\d{2}$/.test(x[k])], ['description', str], ['instead', str], ['status', (x, k) => x[k] === 'banned' || x[k] === 'warned']]) } as Shape<Tell>,
   'rubrics.json': { key: (r: Rubric) => r.kind, check: (o) => need(o, [['kind', str],
     ['criteria', (x, k) => Array.isArray(x[k]) && (x[k] as unknown[]).length > 0 && (x[k] as unknown[]).every((c) => isObj(c) && str(c, 'id') && num(c, 'weight') && (c.weight as number) > 0 && str(c, 'question'))],
     ['caps', (x, k) => Array.isArray(x[k]) && (x[k] as unknown[]).every((c) => isObj(c) && str(c, 'when') && num(c, 'max') && (c.max as number) >= 0 && (c.max as number) <= 10)]]) } as Shape<Rubric>,

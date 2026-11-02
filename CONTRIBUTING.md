@@ -20,6 +20,8 @@ local convenience, not an extra check.)
 
 CI runs exactly those four, in that order, and then runs the built binary.
 
+Before a push, `npm run check:private` searches every tracked file for the terms listed one per line in your own untracked `~/.atelier-private-terms` (or `ATELIER_PRIVATE_TERMS`), and exits 1 on a hit.
+
 `npm test` builds the plugin trees first, because two tests read them.
 
 Security issues go to [`SECURITY.md`](SECURITY.md), and behaviour changes to
