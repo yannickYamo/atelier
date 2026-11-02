@@ -23,6 +23,12 @@ describe('chooseDraft', () => {
     expect((await chooseDraft(SHORT, LONG, ctx(k.c))).winner).toBe('a');
     expect(k.calls).toHaveLength(4);
   });
+  it('a comparison that cannot be read says why on its reason', async () => {
+    const failing: InferenceClient = { complete: async () => { throw new Error('upstream 529 overloaded'); } };
+    const r = await chooseDraft(SHORT, LONG, ctx(failing));
+    expect(r.winner).toBe('tie');
+    expect(r.reasons[0]).toContain('upstream 529 overloaded');
+  });
   it('a model that always picks the first position yields a tie', async () => {
     const k = client(() => 'first');
     const r = await chooseDraft(SHORT, LONG, ctx(k.c));

@@ -71,7 +71,10 @@ export async function chooseDraft(a: string, b: string, ctx: ChooseContext): Pro
   const ab = await readContext(pairwiseReading, { ctx, first: a, second: b }, client, ctx.model, ctx.budget, 'other');
   const ba = await readContext(pairwiseReading, { ctx, first: b, second: a }, client, ctx.model, ctx.budget, 'other');
   const one = ab.value, two = ba.value;
-  if (!one || !two) return { winner: 'tie', reasons: ['a comparison could not be read: the caller ranks'], calls };
+  if (!one || !two) {
+    const why = [ab, ba].map((x) => (x.value ? null : x.why ?? 'no reading')).filter((x): x is string => x !== null);
+    return { winner: 'tie', reasons: [`a comparison could not be read (${[...new Set(why)].join('; ')}): the caller ranks`], calls };
+  }
   const first: 'a' | 'b' | null = one.better === 'first' ? 'a' : one.better === 'second' ? 'b' : null;
   const second: 'a' | 'b' | null = two.better === 'first' ? 'b' : two.better === 'second' ? 'a' : null;
   if (first !== null && first === second) return { winner: first, reasons: [...one.reasons, ...two.reasons], calls };
