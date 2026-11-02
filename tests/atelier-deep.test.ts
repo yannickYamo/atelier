@@ -8,8 +8,8 @@ import { describe, it, expect } from 'vitest';
 import { mkdtempSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { normalisedRubric, kindFor, readBandsAt, bandsFor, readRenditionAt, renditionFor, reviewNote, DEFAULT_KIND } from '../cli/deep.js';
-import { withDeepChoice } from '../cli/commands/invoke.js';
+import { normalisedRubric, kindFor, readBandsAt, bandsFor, readRenditionAt, renditionFor, reviewNote, reviewEnrichment, REVIEW_PAGE_CHARS, DEFAULT_KIND } from '../cli/deep.js';
+import { withDeepChoice, storySpans, STORY_SPANS } from '../cli/commands/invoke.js';
 import { loadLibrary } from '../core/library/loader.js';
 import type { InferenceClient, InferenceRequest } from '../core/inference/client.js';
 import type { VerifyReport } from '../core/observers/verify.js';
@@ -115,5 +115,41 @@ describe('of two drafts, the checks first and the reviewer where they tie', () =
     const r = await withDeepChoice(ranking, c).choose(['A', 'B']);
     expect(r.index).toBe(1);
     expect(c.trace).toMatchObject({ choice: { winner: 'b', decidedBy: 'the reviewer' } });
+  });
+});
+
+describe('what the reviewer reads from the web pass', () => {
+  const page = { url: 'https://example.com/study', title: 'A study', text: 'x'.repeat(6000), readAt: '2026-11-02' };
+  const inv = (facts: { text: string; quote: string; source: 'material' | 'enriched' | 'sample'; sourceRef: string }[]) => ({ value: { facts }, by: 'model' as const, reader: 'inventory' });
+  it('the facts listed from the web, with quote and URL, never the whole pages', () => {
+    const out = reviewEnrichment({ enrichment: { docs: [page] } as never,
+      inventory: inv([{ text: 'Odds fall after five minutes.', quote: 'odds fall', source: 'enriched', sourceRef: page.url }, { text: 'Ours: 11.4%.', quote: '11.4%', source: 'material', sourceRef: 'notes' }]) });
+    expect(out).toEqual([`Odds fall after five minutes. (${page.url})\nquote: "odds fall"`]);
+    expect(out.join('').length).toBeLessThan(200);
+  });
+  it('nothing listed from the web: the start of each page, capped', () => {
+    const out = reviewEnrichment({ enrichment: { docs: [page] } as never, inventory: inv([]) });
+    expect(out).toHaveLength(1);
+    expect(out[0].length).toBeLessThanOrEqual(page.title.length + page.url.length + 4 + REVIEW_PAGE_CHARS);
+  });
+  it('no web pass: nothing', () => {
+    expect(reviewEnrichment({ enrichment: null, inventory: inv([]) })).toEqual([]);
+  });
+});
+
+describe('the story spans written again in place', () => {
+  it('a target wider than the share of the piece is left out and counted (72% and 100% were cut off on the dev run)', () => {
+    const r = storySpans(1000, [{ kind: 'dead-air', repair: 'r', span: { start: 0, end: 720 } }, { kind: 'and-then-run', repair: 'r', span: { start: 800, end: 900 } }]);
+    expect(r.wide).toBe(1);
+    expect(r.spans.map((x) => x.kind)).toEqual(['and-then-run']);
+  });
+  it('the first spans that do not overlap, at most the cap, in piece order', () => {
+    const t = [500, 0, 100, 50, 300, 700].map((at, i) => ({ kind: `k${i}`, repair: 'r', span: { start: at, end: at + 80 } }));
+    const r = storySpans(1000, t);
+    expect(r.spans.map((x) => x.start)).toEqual([0, 100, 300].slice(0, STORY_SPANS));
+    expect(r.wide).toBe(0);
+  });
+  it('a target with no span is never written', () => {
+    expect(storySpans(1000, [{ kind: 'dead-air', repair: 'r', span: null }]).spans).toEqual([]);
   });
 });

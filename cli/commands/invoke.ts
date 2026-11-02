@@ -29,7 +29,7 @@ const READ_CALLS_DEFAULT = 4;
 import { readContext } from '../../core/inference/reading.js';
 import { needsNote, needsNothing } from '../../core/loop/task-needs.js';
 import { beforeTheDraft, questionsJson } from '../prewrite.js';
-import { deepAsked, deepFacts, deepDirection, bandsFor, goldenOf, excerptsOf, reviewKit, deepRunId, enricherFor, deepRecord, deepLines, reviewNote, regatherNote, DEEP_USD, DEEP_CALLS, type DeepBands, type DeepReader, type DeepTrace } from '../deep.js';
+import { deepAsked, deepFacts, deepDirection, bandsFor, goldenOf, excerptsOf, reviewKit, reviewEnrichment, deepRunId, enricherFor, deepRecord, deepLines, reviewNote, regatherNote, DEEP_USD, DEEP_CALLS, type DeepBands, type DeepReader, type DeepTrace } from '../deep.js';
 import { readLoops } from '../../core/story/loops.js';
 import { readNovelty, thinTargets } from '../../core/story/novelty.js';
 import { storyTargets } from '../../core/story/checks.js';
@@ -994,14 +994,14 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
       situating ? { judge: situating, request: asked, material: checks.evidence ?? '' } : null),
       // A DEEP RUN AFTER THE CHAIN: the story and thin targets, then the isolated review and the one pass its verdict asks for.
       deepF && deepB ? { client, budget, writerModel: binding.requestedModel, reader: deepReader, bands: deepB, kit: deepKit, trace: deepTrace,
-        review: { request: asked, material: materialText, enrichment: deepDocs.map((x) => `${x.title} (${x.url})\n${x.text}`), goldenExcerpts: excerptsOf(goldenOf(L)), contract: `${deepD?.note ?? ''}\n\n${before?.note ?? ''}`.trim() },
+        review: { request: asked, material: materialText, enrichment: reviewEnrichment(deepF), goldenExcerpts: excerptsOf(goldenOf(L)), contract: `${deepD?.note ?? ''}\n\n${before?.note ?? ''}`.trim() },
         recheck: (text: string) => checkDraftAsync(name, refining, text, checks), paramsOf: ruleParamsOf(refining), steps: runSteps,
         deepRedraft: async (note: string) => (await spendOneWithResult(client, budget, servedForRun, taskForRun, null, note, {}, 'writing')).piece,
         regather: (missing: readonly string[]) => regatherNote({ facts: deepF, missing, request: asked, material, reader: deepReader, budget }) } : null)) : null,
     std && nDrafts > 1 ? withSections(withDeepChoice(selectDraft({ n: nDrafts, onDemand: draftsOnDemand, name, std, checks, taste, ownBand, signals: store.getSignals(L), profile: steerProfile, trace, ledger, sampling, ...(diverse ? { variant: variantOf, retrievedFor } : {}) }),
       deepF && deepKit ? { kit: deepKit, trace: deepTrace, check: (text: string) => checkDraft(name, std, text, { ...checks, claimSensor: undefined }),
         model: { client: readingAs('reviewer', client), model: binding.requestedModel, budget }, request: asked, material: materialText,
-        enrichment: deepDocs.map((x) => `${x.title} (${x.url})\n${x.text}`), goldenExcerpts: excerptsOf(goldenOf(L)) } : null), sectionWriter)
+        enrichment: reviewEnrichment(deepF), goldenExcerpts: excerptsOf(goldenOf(L)) } : null), sectionWriter)
       : sectionWriter ? { n: 1, write: sectionWriter, choose: () => ({ index: 0, why: '' }) } : null,
     std && checks.guardClaims !== false ? async (text: string) => {
       const r = await checkDraftAsync(name, std, text, checks);
@@ -2426,6 +2426,12 @@ export interface DeepGate {
 
 /** The most spans the story and thin checks send to repair on one draft. */
 export const STORY_SPANS = 3;
+/**
+ * The widest span a story target is written again in place, as a share of the piece. Wider is a verdict on the piece's
+ * shape, not a span: on the dev run "nothing in question for 72% (and 100%) of the piece" was sent to the span writer
+ * whole and cut off at its token limit both times. It stays on the record, unrepaired.
+ */
+export const STORY_SPAN_SHARE = 0.4;
 
 /** The delivered text changed by a deep step, its record kept: the model's own text stays on it, as the grounding keeps it. */
 function deepChanged(d: Delivered, text: string, report: VerifyReport, why: string): Delivered {
@@ -2457,18 +2463,29 @@ export function withDeep(refine: (draft: string) => Promise<Delivered>, c: DeepG
   };
 }
 
+/**
+ * The story spans written again in place: the first ones in the piece that do not overlap, at most STORY_SPANS, none
+ * wider than STORY_SPAN_SHARE of the piece. `wide` counts the targets left out for their width.
+ */
+export function storySpans(length: number, targets: readonly { readonly kind: string; readonly repair: string; readonly span?: { readonly start: number; readonly end: number } | null }[]):
+  { spans: { kind: string; repair: string; start: number; end: number }[]; wide: number } {
+  const widest = length * STORY_SPAN_SHARE;
+  const wide = targets.filter((x) => x.span && x.span.end - x.span.start > widest).length;
+  const spans: { kind: string; repair: string; start: number; end: number }[] = [];
+  for (const t of targets.flatMap((x) => (x.span && x.span.end - x.span.start <= widest ? [{ kind: x.kind, repair: x.repair, start: x.span.start, end: x.span.end }] : [])).sort((a, b) => a.start - b.start)) {
+    if (spans.length < STORY_SPANS && !spans.some((q) => t.start < q.end && q.start < t.end)) spans.push(t);
+  }
+  return { spans, wide };
+}
+
 async function deepStory(d: Delivered, c: DeepGate, ledger: StepLedger): Promise<Delivered> {
   const reader = c.reader.client ? readingAs('story reader', c.reader.client) : null;
   const loops = await readLoops(d.output, reader, c.reader.model, c.budget);
   const novelty = await readNovelty(d.output, reader, c.reader.model, c.budget);
   const targets = [...(loops.graph ? storyTargets(d.output, loops.graph, c.bands.story) : []), ...(novelty.map ? thinTargets(d.output, novelty.map, c.bands.novelty) : [])];
   const read = [loops.graph ? 'loops read' : `loops not read (${loops.why ?? ''})`, novelty.map ? 'novelty read' : `novelty not read (${novelty.why ?? ''})`].join('; ');
-  // the first spans in the piece that do not overlap, at most STORY_SPANS
-  const spans: { kind: string; repair: string; start: number; end: number }[] = [];
-  for (const t of targets.flatMap((x) => (x.span ? [{ kind: x.kind, repair: x.repair, ...x.span }] : [])).sort((a, b) => a.start - b.start)) {
-    if (spans.length < STORY_SPANS && !spans.some((s) => t.start < s.end && s.start < t.end)) spans.push(t);
-  }
-  c.trace.story = { targets: targets.map((t) => ({ kind: t.kind, repair: t.repair, quotes: t.quotes })), read, repaired: 0, kept: null };
+  const { spans, wide } = storySpans(d.output.length, targets);
+  c.trace.story = { targets: targets.map((t) => ({ kind: t.kind, repair: t.repair, quotes: t.quotes })), read, repaired: 0, kept: null, ...(wide ? { why: `${wide} target(s) span more than ${Math.round(STORY_SPAN_SHARE * 100)}% of the piece: the piece's shape, listed and not written again in place` } : {}) };
   if (!spans.length) return d;
   const held = new Set(brokenIn(d.report));
   type Told = Proposed & { readonly n: number };

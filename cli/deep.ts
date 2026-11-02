@@ -112,6 +112,21 @@ export async function deepFacts(o: { readonly runId: string; readonly request: s
     wording: lib.questions.map((q) => ({ gap: q.gap, ask: q.ask, unlocks: q.unlocks })) };
 }
 
+/** The longest stretch of a web page the reviewer reads when no fact was listed from it. */
+export const REVIEW_PAGE_CHARS = 800;
+
+/**
+ * WHAT THE REVIEWER AND THE DRAFT COMPARISON READ FROM THE WEB PASS: the facts the inventory listed from it (each with
+ * its quote and URL), which is what the writer was served. Whole pages (up to 30,000 characters) went into every review
+ * and both comparison calls on the writer's model, about a tenth of a deep run's cost for text no draft was written from.
+ * Where the inventory listed nothing from the web, the start of each page stands in, capped.
+ */
+export function reviewEnrichment(f: Pick<DeepFacts, 'enrichment' | 'inventory'>): string[] {
+  const listed = f.inventory.value.facts.filter((x) => x.source === 'enriched');
+  if (listed.length) return listed.map((x) => `${x.text} (${x.sourceRef})${x.quote ? `\nquote: "${x.quote}"` : ''}`);
+  return (f.enrichment?.docs ?? []).map((x) => `${x.title} (${x.url})\n${x.text.slice(0, REVIEW_PAGE_CHARS)}`);
+}
+
 // ── BEFORE THE DRAFT: THE DIRECTION AND WHAT THE WRITER IS TOLD ────────────────────────────────────────────────────
 
 export interface DeepDirection {
