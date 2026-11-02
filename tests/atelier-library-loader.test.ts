@@ -72,8 +72,8 @@ describe('user mistakes are left out and said, never thrown', () => {
     expect(lib.cards).toEqual([]);
     expect(lib.tells).toEqual([]);
     expect(lib.problems).toHaveLength(2);
-    expect(lib.problems[0]).toMatch(/core\/cards\.json: not readable as JSON/);
-    expect(lib.problems[1]).toMatch(/core\/tells\.json: not a list/);
+    expect(lib.problems[0]).toMatch(/^core\/cards\.json at .* is not valid JSON.* Left out\.$/);
+    expect(lib.problems[1]).toMatch(/^core\/tells\.json at .* should be a JSON array.* Left out\.$/);
   });
   it('an entry of the wrong shape is left out by name, the rest of its file stands', () => {
     const bad = [card('ok'), { ...card('no-call'), theCall: '' }, { ...card('bad-ev'), evidence: 'hearsay' }, 'text', card('ok')];
@@ -106,5 +106,17 @@ describe('user mistakes are left out and said, never thrown', () => {
     const lib = loadLibrary({ coreDir: empty, packDir: pack });
     expect(lib.sources).toEqual([pack]);
     expect(lib.problems).toEqual(['the public core library was not found; only a pack is read']);
+  });
+});
+
+describe('through the binary: atelier library', () => {
+  it('says what the core and a pack hold, and what was left out', async () => {
+    const { spawnSync } = await import('node:child_process');
+    const pack = dir({ 'cards.json': [card('blog-one-idea'), card('extra'), { id: 'broken' }] });
+    const r = spawnSync(process.execPath, [resolve('dist/cli/atelier.mjs'), 'library'], { encoding: 'utf8', env: { ...process.env, ATELIER_LIBRARY: pack } });
+    expect(r.status).toBe(0);
+    expect(r.stdout).toContain(`Library: core + ${pack}`);
+    expect(r.stdout).toContain('blog: 4 card(s), 6 angle(s)');   // three in the core, one replaced, one added
+    expect(r.stdout).toContain('pack/cards.json: broken left out');
   });
 });

@@ -6,7 +6,8 @@
 // leave the rest. A library is user data: a file that is missing, unreadable or malformed, or an entry of the wrong
 // shape, is left out and said in `problems`, never thrown.
 
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, statSync } from 'node:fs';
+import { readJson } from '../state/read-json.js';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { type LIBRARY_FILES, type Angle, type BeatPrior, type Card, type Library, type PieceKind, type QuestionWording, type Rubric, type Tell } from './schema.js';
@@ -23,7 +24,7 @@ export function packageRoot(from: string = dirname(fileURLToPath(import.meta.url
   for (let dir = from, i = 0; i < 8; i++, dir = dirname(dir)) {
     const p = join(dir, 'package.json');
     if (existsSync(p)) {
-      try { if ((JSON.parse(readFileSync(p, 'utf8')) as { name?: unknown }).name === PACKAGE_NAME) return dir; } catch { /* not ours */ }
+      try { if (readJson<{ name?: unknown }>(p, { what: 'package.json' }).name === PACKAGE_NAME) return dir; } catch { /* not ours */ }
     }
     if (dirname(dir) === dir) break;
   }
@@ -61,12 +62,12 @@ const SHAPES = {
 function readLayer<T>(dir: string, file: keyof typeof SHAPES, label: string, problems: string[]): T[] {
   const path = join(dir, file);
   if (!existsSync(path)) return [];
-  let raw: unknown;
-  try { raw = JSON.parse(readFileSync(path, 'utf8')); } catch (e) {
-    problems.push(`${label}/${file}: not readable as JSON (${(e as Error).message.split('\n')[0]}); left out`);
+  let raw: unknown[];
+  try { raw = readJson<unknown[]>(path, { kind: 'array', what: `${label}/${file}` }); } catch (e) {
+    // Unreadable, not JSON, or not a list: the reader's message says which, and the file is left out.
+    problems.push(`${(e as Error).message.split('\n')[0]} Left out.`);
     return [];
   }
-  if (!Array.isArray(raw)) { problems.push(`${label}/${file}: not a list of entries; left out`); return []; }
   const shape = SHAPES[file] as unknown as Shape<T>;
   const out: T[] = [];
   const seen = new Set<string>();
