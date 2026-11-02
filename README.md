@@ -10,7 +10,7 @@ Atelier is a tool that learns how you write from the pieces you'd sign, then wri
 
 ## How it learns your taste
 
-You point it at finished work you're happy with. Ten blog posts, a folder of product requirement docs, a stack of past contracts. It reads what all of them have in common.
+You point it at finished work you're happy with. Ten blog posts, a year of newsletters, the essays you still link to. It reads what all of them have in common.
 
 Some of that is countable: how long your paragraphs run, how your pieces open, which words never appear, how often you ask the reader a question. Some of it isn't. Where you commit and where you hedge. How you close. What you always cut before sending.
 
@@ -20,7 +20,7 @@ What you approve is fixed. A model can't quietly reword it later.
 
 ## Your voice on every piece
 
-Every new piece gets written against those rules, for that specific request: what you asked for, the material you attached, and which of your rules apply to this kind of writing. A contract and a newsletter don't get the same set.
+Every new piece gets written against those rules, for that specific request: what you asked for, the material you attached, and which of your rules apply to this kind of writing. A release note and a long essay don't get the same set.
 
 Then every piece gets read before it reaches you. The counted habits get checked. Any figure or name that isn't in the material you provided gets flagged. Any paragraph lifted out of your own examples gets flagged too, because a story of yours it wasn't given isn't yours to retell back at you.
 
@@ -28,10 +28,11 @@ The same rules run on every piece. So the tenth one sounds like the first, not l
 
 ## Where it works
 
-- **Blog posts and newsletters:** your voice, your openings, no invented anecdotes or numbers.
-- **Product requirement docs:** the sections your team expects, with every figure traced back to the data you attached.
-- **Contracts:** the clauses you always include, your defined terms, nothing added that wasn't in the deal notes.
-- **Release notes, design reviews, support replies, internal memos:** anything your team writes often and wants to sound like itself.
+- **Blog posts and essays:** your voice, your openings, no invented anecdotes or numbers.
+- **Newsletters:** the same voice issue after issue, every figure traced back to the notes you attached.
+- **Release notes, announcements, internal memos:** anything your team writes often and wants to sound like itself.
+
+Decision documents (PRDs, positioning, strategy) aren't covered yet: Atelier keeps their voice and checks their facts, but doesn't yet make the call well. See [EVALS](EVALS.md).
 
 You still read it. You still sign it. The judgment moved earlier in the loop, not out of it.
 
