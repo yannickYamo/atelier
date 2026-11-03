@@ -62,7 +62,7 @@ const MARK = {
   example: /=== REFERENCE MATERIAL — PRIVATE CONTEXT, NOT PART OF YOUR OUTPUT ===|(?:^|\n)<example(?:\s|>)/g,
   plan: /(?:^|\n)The plan for this piece \(write the piece from it/,
   answers: /(?:^|\n)Before writing I settled these \(my answers; write from them\):/,
-  assumed: /(?:^|\n)Not settled: nobody answered these, so each is a working assumption/,
+  assumed: /(?:^|\n)Decided for this piece \(write from them as the piece's own position\):/,
   brief: /(?:^|\n)For this request, my method's steps that apply: /,
   points: /(?:^|\n)(?:The notes (?:below|above) are points|These points are the material for this piece)/,
   latitude: /(?:^|\n)(?:Latitude|How strictly this is held)\b/,

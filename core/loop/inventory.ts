@@ -123,18 +123,19 @@ export function readInventory(input: InventoryInput, client: InferenceClient | n
 
 /**
  * The inventory as the writer is shown it. Empty when there is nothing: no heading over an empty list. A sample is
- * marked so it is never stated as true: the writer states the gap in one line instead, or leaves the point out.
+ * marked so it is never stated as true: the writer makes the point without it, or leaves the point out, and never says
+ * in the piece that it is missing (the gap is listed beside the draft, core/loop/inferred.ts).
  */
 export function renderInventory(inv: FactInventory): string {
   if (!inv.facts.length) return '';
   const line = (f: InventoryFact, i: number): string => {
-    if (f.source === 'sample') return `${i + 1}. [SAMPLE, not a fact: the person has not given this] ${f.text}`;
+    if (f.source === 'sample') return `${i + 1}. [NOT GIVEN: no value for this] ${f.text}`;
     const from = f.source === 'material' ? `from your material, ${f.sourceRef}` : `from the web, ${f.sourceRef}`;
     return `${i + 1}. ${f.text} (${from}: "${flat(f.quote)}")`;
   };
   const samples = inv.facts.some((f) => f.source === 'sample');
   return ['FACTS ONLY THIS SUBJECT HAS. Stand the piece on these, in their own figures and names:',
     ...inv.facts.map(line),
-    ...(samples ? ['A SAMPLE line names a fact the piece needs and nobody gave. Never state it, never invent a value for it: say in one plain line that it is not known yet, or leave the point out.'] : []),
+    ...(samples ? ['A NOT GIVEN line names a fact nobody gave. Never state a value for it: make the point with the facts above and the reasoning, or leave it out. The piece speaks to its reader and never mentions what it was not given.'] : []),
   ].join('\n');
 }

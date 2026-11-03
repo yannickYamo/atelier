@@ -10,7 +10,7 @@ import type { InvocationRecord } from '../core/state/canonical-state.js';
 
 const PLAN_NOTE = 'The plan for this piece (write the piece from it; the plan is not part of the piece, so never write it out):\n\n- Angle: the cost of a rewrite';
 const ANSWERS_NOTE = 'Before writing I settled these (my answers; write from them):\n\n- What is the angle? the cost';
-const ASSUMED_NOTE = 'Not settled: nobody answered these, so each is a working assumption, not my position. Write from it as an assumption:\n\n- News? none';
+const ASSUMED_NOTE = "Decided for this piece (write from them as the piece's own position):\n\n- Why now? the jobs";
 const BRIEF_NOTE = "For this request, my method's steps that apply: 1, 3.";
 const PERSONA = 'How I sound (each point is quoted from my own pieces, and holds across them):\n\n- I open from a position of my own.';
 const SKILL = `# post-voice\n\nWrite like these.\n\n${PERSONA}\n\n<example name="a">\nOne piece.\n</example>\n\n<example name="b">\nAnother.\n</example>`;

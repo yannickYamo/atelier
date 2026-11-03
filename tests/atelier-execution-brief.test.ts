@@ -41,14 +41,18 @@ describe('the brief as a value', () => {
     // a contradiction stands only on the request's words, and the step it names still applies
     expect(g.contradicted).toEqual([{ id: 'r1', quote: 'renames a CSS class' }]);
     expect(applyingSteps(g, steps).map((s) => s.n)).toEqual([1, 3]);
-    expect(briefNote(g, steps, [])).toContain('The request says "renames a CSS class", which is against step 1: my method stands; follow it, and say in one line that the request asked otherwise.');
+    expect(briefNote(g, steps, [])).toContain('The request says "renames a CSS class", which is against step 1: my method stands; follow it.');
+    // the writer is never told to say the request asked otherwise: that is said to the person, in the report
+    expect(briefNote(g, steps, [])).not.toMatch(/say (so|in one line)/);
     expect(g.placed.r1.applies).toBe('applies');
     expect(g.unsupported).toEqual([{ id: 'r3', missing: 'which verdict the author would give' }]);
     expect(setAsideSteps(g, steps).map((s) => s.n)).toEqual([2]);
     const note = briefNote(g, steps, [{ name: 'change.diff' }]);
     expect(note).toContain("steps that apply: 1, 3. Set aside, not this case: 2 (the request says \"touches nothing else\").");
-    expect(note).toContain('- Step 3: decide the verdict — a specific this needs is not given (which verdict the author would give): say so in one line, and decide on what is given');
-    expect(note).toContain('Given: the request and change.diff. A specific not given is said to be missing, never invented; every decision is still made, on what is given, in the shape my method asks for.');
+    expect(note).toContain('- Step 3: decide the verdict — decide it on what is given and on my pieces');
+    // what is missing is listed beside the draft (core/loop/inferred.ts), never served as something to say
+    expect(note).not.toContain('which verdict the author would give');
+    expect(note).toContain('Given: the request and change.diff. Every decision is made on what is given, in the shape my method asks for; the piece states no specific it was not given, and speaks only to its reader.');
     const invented = EXECUTION_BRIEF.ground({ placed: [{ n: 2, holds: 'DOES_NOT_HOLD', quote: 'the change touches billing' }], unsupported: [], contradicted: [] }, input);
     // the quote is in the step, not the request: unresolved, and unresolved applies, and the note says so
     expect(invented?.placed.r2.applies ?? 'applies').toBe('unresolved');

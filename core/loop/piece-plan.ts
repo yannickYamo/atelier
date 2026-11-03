@@ -94,13 +94,13 @@ const heldBy = (t: string, source: string): boolean => {
 };
 
 export const PIECE_PLAN: Reading<PlanInput, PiecePlan | null> = {
-  id: 'piece-plan', version: '2',
+  id: 'piece-plan', version: '3',
   system: PLAN_SYSTEM, schema: PLAN_SCHEMA,
   toolName: 'emit_plan', toolDescription: 'The plan of the piece: angle, pain, turn, answer, the points from the material (every one it must say, or at most three chosen from a pool), one image, the close, and what is left out.',
   maxTokens: 3000, estimateUsd: 0.025,
   prompt(input) {
     return [`The request:\n${input.request.slice(0, 4000)}`,
-      input.answers.length ? `Their answers before writing (a line marked assumed is a default nobody answered):\n${input.answers.map((a) => `- ${a.ask} ${a.answer}${a.assumed ? ' (assumed: no answer was given; plan with it as an assumption, never as something they said)' : ''}`).join('\n')}` : '',
+      input.answers.length ? `Their answers before writing (a line marked inferred is a position decided for them, nobody having answered):\n${input.answers.map((a) => `- ${a.ask} ${a.answer}${a.assumed ? ' (inferred: plan from it as the piece\'s position, never as something they said)' : ''}`).join('\n')}` : '',
       input.method.length ? `The method:\n${input.method.map((s, i) => `${i + 1}. ${s}`).join('\n')}` : '',
       ...input.examples.slice(0, 3).map((e, i) => `Piece ${i + 1} (head):\n${e.slice(0, 800)}`),
       input.material.length ? `The material:\n${input.material.map((m) => `[${m.name}]\n${m.text.slice(0, 6000)}`).join('\n\n')}` : 'No material came with it.',

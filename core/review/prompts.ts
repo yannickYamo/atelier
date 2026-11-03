@@ -43,7 +43,9 @@ are missing, if any.
 
 Then give at most 8 fixes, the most important first. Each fix quotes the exact span of the draft it is about (copied \
 character for character) and says in one instruction what to change in that span; a fix whose quote is not in the \
-draft is discarded. Finish with one line naming what the next version must keep.
+draft is discarded. A fix never asks the piece to mention its notes, its brief or what it was not given, or to \
+apologise for a missing fact: where a fact is missing, the fix makes the point with what is given, or cuts it, and the \
+missing fact goes in the list above. Finish with one line naming what the next version must keep.
 
 ${CONTENT_NOT_LENGTH}`;
 

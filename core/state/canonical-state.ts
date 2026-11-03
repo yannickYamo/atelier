@@ -789,6 +789,13 @@ export interface InvocationRecord {
   /** WHAT A DEEP RUN DID (cli/deep.ts): absent from every other run. */
   readonly deep?: DeepRecord;
   /**
+   * WHAT WAS INFERRED FOR THIS PIECE, BESIDE IT (core/loop/inferred.ts): each decision nobody gave and the run made (an
+   * unanswered question, a specific the method needed and nothing gave, a claim with no proof given), how it was settled,
+   * and what the person could add. Also each sentence that talked about the piece's own making and how it was written
+   * again. Never in the work. Absent where nothing was inferred.
+   */
+  readonly inferred?: readonly InferredItem[];
+  /**
    * STRETCHES COPIED FROM MATERIAL WRITTEN AS SENTENCES (core/loop/material-points.ts), read on the delivered work: every
    * run of 5 words or more it shares with the material, the longest, and the length a run is repaired at. Absent where the
    * material was not written as sentences.
@@ -910,10 +917,23 @@ export interface RepairRecord {
  * Two more are held to the same rule and recorded, never counted against the limit: a later shape round judged against
  * the best so far ('shape': a round is a draft attempt with a limit of its own) and the grounding of an example's fact
  * on the delivered text ('ground'). A deep run adds two more of that kind: the spans a story or thin target names, written
- * again ('story'), and what the isolated reviewer asked for ('review').
+ * again ('story'), and what the isolated reviewer asked for ('review'). Every piece adds one more of that kind: a sentence
+ * that talked about the piece's own making, written again to speak to the reader ('own-words', core/loop/own-words.ts).
  */
+/** One thing a run inferred for a piece, kept beside it (core/loop/inferred.ts). */
+export interface InferredItem {
+  /** what kind of thing: a question nobody answered, a specific nothing gave, a claim with no proof given, a sentence fixed */
+  readonly kind: 'decision' | 'specific' | 'proof' | 'own-words';
+  /** what it is about, in the run's words */
+  readonly what: string;
+  /** how the run settled it */
+  readonly settled: string;
+  /** what the person can give to change or strengthen it (an --answers id, or material to add) */
+  readonly add?: string;
+}
+
 export type ControllerAction = 'cut' | 'mechanical' | 'rewrite' | 'operators' | 'carrier-rewrite' | 'redraft' | 'grammar' | 'trim'
-  | 'coverage' | 'steer' | 'voice' | 'taste' | 'claim-redraft' | 'shape' | 'ground' | 'story' | 'review';
+  | 'coverage' | 'steer' | 'voice' | 'taste' | 'claim-redraft' | 'shape' | 'ground' | 'story' | 'review' | 'own-words';
 
 /**
  * A DEEP RUN, AS ITS RECORD KEEPS IT (`atelier run --deep`, cli/deep.ts): the library it read, the facts listed and where each

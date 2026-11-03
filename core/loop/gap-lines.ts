@@ -1,17 +1,23 @@
-// atelier/core/loop/gap-lines.ts — A CLAIM WITHOUT PROOF BECOMES ONE HONEST LINE, OR GOES. NEVER FILLER.
+// atelier/core/loop/gap-lines.ts — A CLAIM WITHOUT PROOF IS ARGUED AT THE STRENGTH WHAT IS GIVEN SUPPORTS, OR GOES.
 //
 // A writer short of a fact fills: a plausible figure, a story that could have happened, a vague "many teams". The
 // claim gate cuts what it can trace to nothing (./run-repair.ts, `enforceClaims`), and a cut is right for a sentence
-// the piece can lose. A sentence the piece stands on is different: cut, it leaves a hole the reader feels and nobody
-// names. Here such a sentence is replaced by one line that says what is not known, so the gap is in plain view.
+// the piece can lose. A sentence the piece stands on is different: cut, it leaves a hole the reader feels.
+//
+// An earlier version put a line in its place that said what was not known ("How long setup takes is not measured
+// yet."), and told the writer to do the same. On a blind test the drafts then talked about their own gaps in 21 of 25
+// posts, and lost to a plain self-review every time: a reader never asked what the writer was not given. Now the line
+// makes the same point without the unsupported specific (the mechanism, the reasoning, the author's view, plainly
+// held), and what was missing is listed beside the draft (./inferred.ts), never in it.
 //
 // Two parts:
-//   - the writer's contract (`GAP_LINE_RULE`): state the gap in one line, or drop the claim; never fill;
-//   - in repair, with the option on (`gapLines`), a flagged sentence that is load-bearing is replaced by a gap line
-//     instead of cut. Which sentences are load-bearing, and the line's words, are a reading (a small model, in a fixed
-//     shape); code grounds the line (one sentence, short, no figure, no name the request and material do not hold, none
-//     of the removed sentence's figures). With no model, or a line that does not hold, the floor decides: a sentence is
-//     load-bearing when it stands alone in its paragraph or opens a section, and its line is a plain one by kind.
+//   - the writer's contract (`GAP_LINE_RULE`): every specific comes from what is given; a point with no specific given
+//     is made by reasoning, or left out; the piece never mentions what it was not given;
+//   - in repair, with the option on (`gapLines`), a flagged sentence that is load-bearing is written again without the
+//     unsupported specific instead of cut. Which sentences are load-bearing, and the line, are a reading (a small model,
+//     in a fixed shape); code grounds the line (one sentence, short, no figure, no name the request and material do not
+//     hold, none of the removed sentence's figures). With no model, or a line that does not hold, the sentence is cut
+//     as before: there is no stock line to put in its place.
 
 import type { Budget, InferenceClient } from '../inference/client.js';
 import { readContext, type Decision, type Reading } from '../inference/reading.js';
@@ -19,22 +25,14 @@ import { numbersIn, namesIn } from './integrity.js';
 import { sentencesOf } from '../observers/text.js';
 
 /** The writer's contract on proof. Served before the draft. */
-export const GAP_LINE_RULE = `WHEN A CLAIM NEEDS PROOF YOU DO NOT HAVE. Every figure, name, date, quotation and story must come from the request, the material or the facts listed for you. Where the piece needs one that none of them gives, do not fill it: no plausible number, no story that could have happened, no "many" or "most" standing in for a count. Either say in one plain line what is not known yet ("How long setup takes for a team this size is not measured yet."), or leave the claim out. One line per gap, never a paragraph about it.`;
+export const GAP_LINE_RULE = `EVERY SPECIFIC FROM WHAT IS GIVEN. Every figure, name, date, quotation and story comes from the request, the material or the facts listed for you. Where a point wants one that none of them gives, make the point with what is given (the reasoning, the mechanism, your view stated as yours), or leave it out. The piece speaks to its reader: it never mentions its notes, its sources or what it was not given.`;
 
-/** The contract as the writer is shown it; with a count of sample facts, the gap line is tied to them. */
-export function renderGapLineRule(opts: { readonly samples?: number } = {}): string {
-  const n = opts.samples ?? 0;
-  return n > 0 ? `${GAP_LINE_RULE} ${n} of the facts listed for you ${n === 1 ? 'is a SAMPLE' : 'are SAMPLES'}: each is such a gap.` : GAP_LINE_RULE;
+/** The contract as the writer is shown it. */
+export function renderGapLineRule(_opts: { readonly samples?: number } = {}): string {
+  return GAP_LINE_RULE;
 }
 
 export type GapKind = 'FIGURE' | 'SOURCE' | 'EXPERIENCE';
-
-/** The floor's line, by kind: plain, short, no figure and no name. */
-export const GAP_FLOOR: Readonly<Record<GapKind, string>> = {
-  FIGURE: 'The exact figure for this is not known yet.',
-  SOURCE: 'The source for this has not been confirmed yet.',
-  EXPERIENCE: 'There is no first-hand account of this to draw on yet.',
-};
 
 export interface GapSpan { readonly start: number; readonly end: number; readonly text: string; readonly kind?: string }
 export interface GapInput {
@@ -46,8 +44,6 @@ export interface GapInput {
 }
 /** Per span, in order: the line to put in its place, or null to cut it as before. */
 export type GapPlan = readonly (string | null)[];
-
-const kindOf = (k: string | undefined): GapKind => (k === 'SOURCE' || k === 'EXPERIENCE' ? k : 'FIGURE');
 
 /** Where a sentence sits, by code: alone in its paragraph (headings aside), or the first sentence under a heading. */
 export function standsAlone(text: string, start: number, end: number): boolean {
@@ -81,22 +77,22 @@ export function gapLineProblem(line: string, sentence: string, given: string): s
   return null;
 }
 
-/** The floor: load-bearing by position, the plain line by kind. */
+/** The floor: no line is written without a reading, so every flagged sentence is cut as before. */
 export function gapFloor(input: GapInput): GapPlan {
-  return input.spans.map((s) => (standsAlone(input.text, s.start, s.end) ? GAP_FLOOR[kindOf(s.kind)] : null));
+  return input.spans.map(() => null);
 }
 
 const SYSTEM = `Each numbered sentence below was taken out of a draft because it states something (a figure, a source, a story) nobody supplied. For each, decide whether the piece stands on it: would the paragraph or the argument around it lose its point without it?
 
 - If it does not, answer loadBearing false: it will simply be cut.
-- If it does, answer loadBearing true and write "line": ONE short sentence, in the draft's voice, that says plainly what is not known yet, in place of the claim ("How many teams switched is not measured yet."). No number, no name the draft did not already use, no hedge stacked on a hedge, and never a new claim.`;
+- If it does, answer loadBearing true and write "line": ONE short sentence, in the draft's voice, that makes the same point without the unsupported specific: the mechanism, the reasoning, or the author's view stated as theirs. No number, no name the draft did not already use, and never a word about what is missing, not known or not given: the reader never saw the notes.`;
 const SCHEMA = { type: 'object', additionalProperties: false, required: ['items'], properties: { items: { type: 'array', items: {
   type: 'object', additionalProperties: false, required: ['id', 'loadBearing', 'line'],
   properties: { id: { type: 'integer' }, loadBearing: { type: 'boolean' }, line: { type: 'string' } } } } } };
 
 export const GAP_LINES: Reading<GapInput, GapPlan> = {
-  id: 'gap-lines', version: '1', system: SYSTEM, schema: SCHEMA,
-  toolName: 'emit_gap_lines', toolDescription: 'Say for each sentence whether the piece stands on it, and the one line that names the gap.',
+  id: 'gap-lines', version: '2', system: SYSTEM, schema: SCHEMA,
+  toolName: 'emit_gap_lines', toolDescription: 'Say for each sentence whether the piece stands on it, and the one line that makes its point without the unsupported specific.',
   maxTokens: 1200, estimateUsd: 0.01,
   prompt: (i) => `<draft>\n${i.text.trim()}\n</draft>\n\n${i.spans.map((s, n) => `[${n + 1}] ${s.text.trim()}`).join('\n')}`,
   decide: (i) => (i.spans.length ? null : []),
@@ -109,8 +105,8 @@ export const GAP_LINES: Reading<GapInput, GapPlan> = {
       if (!it || typeof it.loadBearing !== 'boolean') return floor[n];
       if (!it.loadBearing) return null;
       const line = typeof it.line === 'string' ? it.line.trim() : '';
-      // a line that does not hold falls back to the floor's plain line, for a sentence the model called load-bearing
-      return gapLineProblem(line, s.text, i.given) === null ? line : GAP_FLOOR[kindOf(s.kind)];
+      // a line that does not hold is no line: the sentence is cut, as it would be without the option
+      return gapLineProblem(line, s.text, i.given) === null ? line : null;
     });
   },
   floor: gapFloor,

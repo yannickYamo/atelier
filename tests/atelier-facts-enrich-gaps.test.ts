@@ -12,7 +12,7 @@ import { FACT_INVENTORY, groundInventory, readInventory, renderInventory, quoted
 import { decideSpecifics, patternSensor, enrichedSourceOf, type ExtractedSpecific } from '../core/loop/claim-extract.js';
 import { factLedger, factCoverage, enrichedLedger } from '../core/loop/fact-ledger.js';
 import { groundCarried } from '../core/loop/grounding.js';
-import { GAP_LINE_RULE, GAP_FLOOR, renderGapLineRule, gapLineProblem, standsAlone, GAP_LINES, planGapLines, withGapLine } from '../core/loop/gap-lines.js';
+import { GAP_LINE_RULE, renderGapLineRule, gapLineProblem, standsAlone, GAP_LINES, planGapLines, withGapLine } from '../core/loop/gap-lines.js';
 import { enforceClaims } from '../core/loop/run-repair.js';
 import type { ClaimSensor, ClaimReading } from '../core/loop/claim-extract.js';
 import type { StandardVersion } from '../core/state/canonical-state.js';
@@ -151,7 +151,7 @@ describe('the fact inventory keeps only what its source says', () => {
     expect(d.value.facts.map((f) => f.text)).toEqual(['nine days']);
     expect(FACT_INVENTORY.prompt(input)).toContain('<web url="https://w.example/rule" title="Rule">');
   });
-  it('the writer is shown each fact with its source; a sample is marked and tied to the gap line', () => {
+  it('the writer is shown each fact with its source; a fact nobody gave is marked, never as something to say', () => {
     expect(renderInventory({ facts: [] })).toBe('');
     const r = renderInventory({ facts: [
       { text: 'Exports were capped', quote: 'capped files\nat 50 MB', source: 'material', sourceRef: 'notes' },
@@ -162,9 +162,10 @@ describe('the fact inventory keeps only what its source says', () => {
       'FACTS ONLY THIS SUBJECT HAS. Stand the piece on these, in their own figures and names:',
       '1. Exports were capped (from your material, notes: "capped files at 50 MB")',
       '2. Rule date (from the web, https://w.example/rule: "on 1 March 2027")',
-      '3. [SAMPLE, not a fact: the person has not given this] a figure for setup time',
-      'A SAMPLE line names a fact the piece needs and nobody gave. Never state it, never invent a value for it: say in one plain line that it is not known yet, or leave the point out.',
+      '3. [NOT GIVEN: no value for this] a figure for setup time',
+      'A NOT GIVEN line names a fact nobody gave. Never state a value for it: make the point with the facts above and the reasoning, or leave it out. The piece speaks to its reader and never mentions what it was not given.',
     ]);
+    expect(r).not.toMatch(/not known yet|say in one/);
   });
 });
 
@@ -236,12 +237,12 @@ describe('a specific found in an enriched document is grounded as enriched, with
 });
 
 // ── GAP LINES ───────────────────────────────────────────────────────────────────────────────────
-describe('a claim without proof becomes one honest line, only when asked', () => {
-  it('the writer contract, rendered with or without samples', () => {
+describe('a claim without proof is argued from what is given, or cut; never a line about the gap', () => {
+  it('the writer contract: every specific from what is given, the point made without one, never a word about the gap', () => {
     expect(renderGapLineRule()).toBe(GAP_LINE_RULE);
-    expect(renderGapLineRule({ samples: 1 })).toBe(`${GAP_LINE_RULE} 1 of the facts listed for you is a SAMPLE: each is such a gap.`);
-    expect(renderGapLineRule({ samples: 2 })).toMatch(/2 of the facts listed for you are SAMPLES/);
-    expect(GAP_LINE_RULE).not.toContain('—');
+    expect(renderGapLineRule({ samples: 2 })).toBe(GAP_LINE_RULE);
+    expect(GAP_LINE_RULE).toBe('EVERY SPECIFIC FROM WHAT IS GIVEN. Every figure, name, date, quotation and story comes from the request, the material or the facts listed for you. Where a point wants one that none of them gives, make the point with what is given (the reasoning, the mechanism, your view stated as yours), or leave it out. The piece speaks to its reader: it never mentions its notes, its sources or what it was not given.');
+    expect(GAP_LINE_RULE).not.toMatch(/not known yet|say in one|—/);
   });
   it('code holds the line: one sentence, short, no figure, no new name, not the sentence again', () => {
     const s = 'Acme cut setup to 12 minutes.';
@@ -262,18 +263,21 @@ describe('a claim without proof becomes one honest line, only when asked', () =>
     const t2 = '## Why\n\nFirst under it. Second.\n';
     expect(standsAlone(t2, t2.indexOf('First'), t2.indexOf('First') + 15)).toBe(true);
   });
-  it('the reading: not load-bearing is a cut; a line that fails code falls back to the plain line; with no model, the floor', async () => {
+  it('the reading: not load-bearing is a cut; a line that fails code is a cut; with no model, every one is cut', async () => {
     const text = 'Intro sentence here. Acme cut setup to 12 minutes.\n\nThirty teams switched last year.\n';
     const spans = [
       { start: text.indexOf('Acme'), end: text.indexOf('minutes.') + 8, text: 'Acme cut setup to 12 minutes.', kind: 'FIGURE' },
       { start: text.indexOf('Thirty'), end: text.indexOf('year.') + 5, text: 'Thirty teams switched last year.', kind: 'FIGURE' },
     ];
     const input = { text, spans, given: 'Acme notes' };
-    expect(GAP_LINES.ground({ items: [{ id: 1, loadBearing: false, line: '' }, { id: 2, loadBearing: true, line: 'How many teams switched is not counted yet.' }] }, input))
-      .toEqual([null, 'How many teams switched is not counted yet.']);
-    expect(GAP_LINES.ground({ items: [{ id: 1, loadBearing: true, line: 'About 10 minutes.' }] }, input)).toEqual([GAP_FLOOR.FIGURE, GAP_FLOOR.FIGURE]);
+    expect(GAP_LINES.ground({ items: [{ id: 1, loadBearing: false, line: '' }, { id: 2, loadBearing: true, line: 'Teams that switch do it because setup stops being a project.' }] }, input))
+      .toEqual([null, 'Teams that switch do it because setup stops being a project.']);
+    // a line with a figure fails code, and a span the reading left out is decided by the floor: both are cut
+    expect(GAP_LINES.ground({ items: [{ id: 1, loadBearing: true, line: 'About 10 minutes.' }] }, input)).toEqual([null, null]);
     const floor = await planGapLines(input);
-    expect(floor).toMatchObject({ by: 'floor', value: [null, GAP_FLOOR.FIGURE] });
+    expect(floor).toMatchObject({ by: 'floor', value: [null, null] });
+    // the reading is told the line makes the point, never says what is missing
+    expect(GAP_LINES.system).toContain('never a word about what is missing, not known or not given');
     expect(withGapLine(text, spans[1].start, spans[1].end, ' Not counted yet. ')).toBe('Intro sentence here. Acme cut setup to 12 minutes.\n\nNot counted yet.\n');
   });
 
@@ -293,18 +297,19 @@ describe('a claim without proof becomes one honest line, only when asked', () =>
     expect(e.text).not.toContain('Thirty teams');
     expect(e.text).not.toContain('not known yet');
   });
-  it('with gap lines on and no model: the load-bearing sentence becomes the plain line, the other is cut', async () => {
+  it('with gap lines on and no model: both flagged sentences are cut, and no line about the gap is written', async () => {
     const e = await enforceClaims('s', STD, piece, { claimSensor: reader(flagged), gapLines: {} });
-    expect(e.text).toBe(`Our setup is simple and it works for small teams that do not have an operator on call.\n\n${GAP_FLOOR.FIGURE}\n\nThe docs walk through it in order.\n`);
-    expect(e.gapped).toEqual([{ sentence: flagged[0], line: GAP_FLOOR.FIGURE }]);
+    expect(e.text).toBe('Our setup is simple and it works for small teams that do not have an operator on call.\n\nThe docs walk through it in order.\n');
+    expect(e.gapped).toEqual([]);
+    expect(e.text).not.toMatch(/not known|not measured/);
     expect(e.report.failed).toBe(false);
   });
   it('with a model: its line is used where code holds it; under placeholders the slot wins', async () => {
-    const client = scripted({ items: [{ id: 1, loadBearing: true, line: 'How long setup takes is not measured yet.' }, { id: 2, loadBearing: false, line: '' }] });
+    const client = scripted({ items: [{ id: 1, loadBearing: true, line: 'Setup is short because the docs walk through it in order.' }, { id: 2, loadBearing: false, line: '' }] });
     // spans arrive last first: id 1 is the later sentence
     const e = await enforceClaims('s', STD, piece, { claimSensor: reader(flagged), gapLines: { client, model: 'small', budget: budget() } });
-    expect(e.gapped).toEqual([{ sentence: flagged[1], line: 'How long setup takes is not measured yet.' }]);
-    expect(e.text).toContain('The docs walk through it in order. How long setup takes is not measured yet.\n');
+    expect(e.gapped).toEqual([{ sentence: flagged[1], line: 'Setup is short because the docs walk through it in order.' }]);
+    expect(e.text).toContain('The docs walk through it in order. Setup is short because the docs walk through it in order.\n');
     expect(e.text).not.toContain('Thirty teams');
     const slotted = await enforceClaims('s', STD, piece, { claimSensor: reader(flagged), gapLines: {}, placeholders: true });
     expect(slotted.gapped).toEqual([]);

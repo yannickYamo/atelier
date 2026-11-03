@@ -230,9 +230,12 @@ describe('2. static: no model call and no ledger in the chain outside the listed
       for (const a of ALLOWED[file] ?? []) expect(found.some((x) => a.line.test(x.l)), a.why).toBe(true);
     });
   }
-  it('no wrapper of the chain makes a ledger: four sites, the round\'s and the rounds\' in `withShape`, and the run\'s continued from its record in `withGrounding` and in `withDeep` after the chain', () => {
+  it('no wrapper of the chain makes a ledger: five sites, the round\'s and the rounds\' in `withShape`, and the run\'s continued from its record in `withGrounding`, in `withDeep` and in `withOwnWordsStep` after the chain', () => {
     const src = readFileSync(join(ROOT, 'cli/commands/invoke.ts'), 'utf8');
-    expect(src.match(/stepLedger\(/g)?.length).toBe(4);
+    expect(src.match(/stepLedger\(/g)?.length).toBe(5);
+    // the own-words step continues the run's ledger from the delivered text's record, as the grounding does
+    const own = src.slice(src.indexOf('export function withOwnWordsStep'), src.indexOf('export async function ownWordsAlone'));
+    expect(own).toContain("stepLedger(c.steps?.settings ?? null, c.steps?.budget ?? null, d.repair?.controller?.decisions ?? [], c.steps?.source ?? '')");
     // and only the one step helper begins or settles a step outside the ledger's own module and the claim cut's record
     for (const file of ['cli/commands/invoke.ts', 'core/taste/repair.ts']) expect(readFileSync(join(ROOT, file), 'utf8')).not.toMatch(/ledger\.(begin|settle)\(/);
   });

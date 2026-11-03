@@ -146,7 +146,7 @@ never what the request, material, method or examples settle, at most three, each
 default, and none when the request carries it. The angle and news of your own work are asked wherever the request, the
 material and what you said before do not state them in so many words: a reaction post with no stated angle asks for it. At a terminal you answer with a letter, your own words, or "just write
 it". Elsewhere (`--json`, a pipe, the MCP server, an agent) nothing waits: the questions come back as
-`questions: [{id, ask, options, default}]`, the work is written with the defaults (served to the writer as assumptions, never as your answers), said in one line, and
+`questions: [{id, ask, options, default}]`, the work is written with the defaults (a position such as the angle as decided for this piece; a fact about you, such as news of your work, never served), said in one line, and
 `--answers "angle=b,naming=only the product, never its staff"` answers them on the next call (an answer may hold
 commas; a kind not asked this run, `naming=...` say, still applies and replaces what you said before). Your answers are
 the next run's defaults ("last time you said …"); what may be named, once said, is not asked again. Then the run makes a plan: the angle, the
@@ -606,6 +606,16 @@ run is exactly what it was.
 `--json` keeps the piece in `output`, and adds a `deep` object: the facts and where they came from, the questions
 asked, the direction chosen and why, what the story and review steps changed, which draft won and why, and what the
 extra steps cost.
+
+### What is missing goes beside the piece, never in it
+
+A run never refuses for what it was not given, and the piece never talks about its own making: no "the brief doesn't
+say", no "I won't invent a figure". What the request, your material and your pieces settle, the piece uses; a decision
+nobody made is taken from your pieces and the request; a point with no figure given is argued from what is given. The
+last step of every run reads the finished piece for any sentence about its notes or its gaps and writes it again to
+speak to the reader, or drops it. Everything the run decided for you, each specific it was not given and each sentence
+it wrote again is listed under the work ("Inferred for this piece") and in `--json` as `inferred`, each with what to
+add (`--answers`, `--with`) to change it.
 
 ### Voice, and other registers (opt-in)
 

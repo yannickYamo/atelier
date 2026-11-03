@@ -156,7 +156,7 @@ export async function deepDirection(o: { readonly L: store.StoreLayout; readonly
   const samples = inv.facts.filter((f) => f.source === 'sample').length;
   const blocks: [string, string][] = [
     ['facts', renderInventory(inv)],
-    ['gap-line rule', renderGapLineRule({ samples })],
+    ['proof rule', renderGapLineRule({ samples })],
     ['direction', directionNote(angle ?? CANON)],
     ['habits to avoid', renditionNote(rendition.prior)],
   ];
