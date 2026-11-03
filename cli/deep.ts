@@ -153,10 +153,9 @@ export async function deepDirection(o: { readonly L: store.StoreLayout; readonly
   o.say(`Direction: ${angle ? angle.idea : 'the conventional way for this kind'} (dealt ${chosen.dealt.join(', ') || 'nothing'}; ${chosen.by === 'model' ? `chosen: ${chosen.reason}` : chosen.reason}).`);
   const rendition = await renditionFor(o.L, facts.kind, o.reader, o.budget);
   const inv = facts.inventory.value;
-  const samples = inv.facts.filter((f) => f.source === 'sample').length;
   const blocks: [string, string][] = [
     ['facts', renderInventory(inv)],
-    ['proof rule', renderGapLineRule({ samples })],
+    ['proof rule', renderGapLineRule()],
     ['direction', directionNote(angle ?? CANON)],
     ['habits to avoid', renditionNote(rendition.prior)],
   ];
@@ -276,7 +275,7 @@ export async function regatherNote(o: { readonly facts: DeepFacts; readonly miss
   const again = await readInventory({ request: asked, material: o.material, ...(docs.length ? { enriched: docs } : {}) }, o.reader.client, o.reader.model, o.budget);
   const inv = again.value.facts.length ? again.value : o.facts.inventory.value;
   return [`A reader who read the draft apart from you found it short of facts. Write the piece again from the start, in the same voice, standing it on these.`,
-    renderInventory(inv), renderGapLineRule({ samples: inv.facts.filter((f) => f.source === 'sample').length })].filter(Boolean).join('\n\n');
+    renderInventory(inv), renderGapLineRule()].filter(Boolean).join('\n\n');
 }
 
 // ── THE RECORD ─────────────────────────────────────────────────────────────────────────────────────────────────────

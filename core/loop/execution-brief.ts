@@ -48,7 +48,7 @@ export interface Brief {
   readonly unsupported: readonly { readonly id: string; readonly missing: string }[];
   /**
    * steps the request asks against ("skip the Risks section"), with the request's words: surfaced, never set aside.
-   * An unconditional step the request contradicts stands; the writer is told the method stands and to say so.
+   * An unconditional step the request contradicts stands; the writer is told the method stands and to follow it.
    */
   readonly contradicted: readonly { readonly id: string; readonly quote: string }[];
   readonly by: 'code' | 'model' | 'floor';

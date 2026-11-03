@@ -8,3 +8,4 @@ Atelier learns how you write from the pieces you would sign, writes new pieces t
 - `atelier verify` checks any text for invented specifics, passages copied from your examples and broken rules; as a Claude Code hook it blocks the break and hands the agent the reason.
 - `atelier setup` lets the agents in a project call it through an MCP server, for Claude Code and Codex.
 - It also writes to the standard: `atelier run`, then `atelier fix` in your own words.
+- A run never stops or leaves a gap for what it was not given: it decides on what you gave, and lists beside the piece what it decided, what it was not given and what to add (`inferred`). The piece itself never talks about its notes or its gaps.

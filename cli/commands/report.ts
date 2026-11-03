@@ -13,6 +13,7 @@
 // release with its N and interval. Nothing else in Atelier is a measure of satisfaction.
 
 import { planLines } from '../../core/loop/piece-plan.js';
+import { inferredLines } from '../../core/loop/inferred.js';
 import { describeController } from '../../core/loop/controller.js';
 import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
@@ -182,6 +183,8 @@ export function traceOf(rec: InvocationRecord): [string, string[]][] {
     ...(pw.planChanges ? [`the plan was made again ${pw.planChanges} time(s) with your changes`] : [])]]);
   if (rec.copied) out.push(['copied from the material', [`${rec.copied.runs} stretch(es) of 5 words or more${rec.copied.runs ? `, the longest ${rec.copied.longest} words` : ''}; one of ${rec.copied.repairAt} or more is rewritten`,
     ...rec.copied.shown.map((x) => `"${x.slice(0, 100)}"`)]]);
+  // BESIDE THE WORK: what the run decided for the person, what it was not given, and each sentence it wrote again
+  if (rec.inferred?.length) out.push(['inferred', inferredLines(rec.inferred).slice(1).map((l) => l.replace(/^\s+- /, ''))]);
   // A FIX MADE IN PLACE (cli/fix-in-place.ts): what was asked, the sentences named, the diff, and every span before and after
   if (rec.fix) out.push(['fixed in place', [`"${rec.fix.instruction.slice(0, 100)}" · sentences ${rec.fix.sentences.join(', ')} (${rec.fix.by === 'model' ? 'read' : rec.fix.by})`,
     `changed ${rec.fix.diff.changed} of ${rec.fix.diff.total} sentences; ${rec.fix.diff.outside} outside the sentences named`,

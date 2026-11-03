@@ -240,7 +240,6 @@ describe('a specific found in an enriched document is grounded as enriched, with
 describe('a claim without proof is argued from what is given, or cut; never a line about the gap', () => {
   it('the writer contract: every specific from what is given, the point made without one, never a word about the gap', () => {
     expect(renderGapLineRule()).toBe(GAP_LINE_RULE);
-    expect(renderGapLineRule({ samples: 2 })).toBe(GAP_LINE_RULE);
     expect(GAP_LINE_RULE).toBe('EVERY SPECIFIC FROM WHAT IS GIVEN. Every figure, name, date, quotation and story comes from the request, the material or the facts listed for you. Where a point wants one that none of them gives, make the point with what is given (the reasoning, the mechanism, your view stated as yours), or leave it out. The piece speaks to its reader: it never mentions its notes, its sources or what it was not given.');
     expect(GAP_LINE_RULE).not.toMatch(/not known yet|say in one|—/);
   });

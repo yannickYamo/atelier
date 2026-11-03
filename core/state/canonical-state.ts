@@ -920,10 +920,14 @@ export interface RepairRecord {
  * again ('story'), and what the isolated reviewer asked for ('review'). Every piece adds one more of that kind: a sentence
  * that talked about the piece's own making, written again to speak to the reader ('own-words', core/loop/own-words.ts).
  */
+export type ControllerAction = 'cut' | 'mechanical' | 'rewrite' | 'operators' | 'carrier-rewrite' | 'redraft' | 'grammar' | 'trim'
+  | 'coverage' | 'steer' | 'voice' | 'taste' | 'claim-redraft' | 'shape' | 'ground' | 'story' | 'review' | 'own-words';
+
 /** One thing a run inferred for a piece, kept beside it (core/loop/inferred.ts). */
 export interface InferredItem {
-  /** what kind of thing: a question nobody answered, a specific nothing gave, a claim with no proof given, a sentence fixed */
-  readonly kind: 'decision' | 'specific' | 'proof' | 'own-words';
+  /** what kind of thing: a question nobody answered, a specific nothing gave, a claim with no proof given, a sentence
+   * about the piece's own making, a slot written again, a name nothing gave */
+  readonly kind: 'decision' | 'specific' | 'proof' | 'own-words' | 'slot' | 'name';
   /** what it is about, in the run's words */
   readonly what: string;
   /** how the run settled it */
@@ -931,9 +935,6 @@ export interface InferredItem {
   /** what the person can give to change or strengthen it (an --answers id, or material to add) */
   readonly add?: string;
 }
-
-export type ControllerAction = 'cut' | 'mechanical' | 'rewrite' | 'operators' | 'carrier-rewrite' | 'redraft' | 'grammar' | 'trim'
-  | 'coverage' | 'steer' | 'voice' | 'taste' | 'claim-redraft' | 'shape' | 'ground' | 'story' | 'review' | 'own-words';
 
 /**
  * A DEEP RUN, AS ITS RECORD KEEPS IT (`atelier run --deep`, cli/deep.ts): the library it read, the facts listed and where each

@@ -36,14 +36,23 @@ import { isConfirmed } from '../../core/architecture/compile.js';
  */
 export const FACTS_BELONG = `Facts in my examples, and in my method's examples, belong to their case. Say of this request only what it
 and its material show; give anything else as an assumption you state, or as a check for the person to run.`;
+/**
+ * The same roles for a piece of writing: a piece is read by someone who never saw the request, so what it needs and was
+ * not given is decided on what is given and argued as the author's view, never stated as an assumption in the piece.
+ */
+export const FACTS_BELONG_PIECE = `Facts in my examples, and in my method's examples, belong to their case. State as fact of this piece only what
+the request and its material give; decide anything else on what is given and argue it as my view, never as a fact of
+this case and never as an assumption the piece says aloud.`;
+/** Which of the two a skill carries: replies state their assumptions to the person; a piece speaks only to its reader. */
+const factsBelong = (answers: boolean): string => (answers ? FACTS_BELONG : FACTS_BELONG_PIECE);
 
 /**
  * THE ONE FRAME AROUND THE AUTHOR'S PIECES, FOR WORK THAT WRITES. Four layers used to say what not to take from them
  * ("never reuse its topic, facts, names…", "never take my topics…", "say of this request only what it shows", the
  * fence's "do not reproduce…"), and a writer told four times to keep its distance wrote abstractly where the author
  * writes in links, named products, figures and scenes: the posts had none. The pieces are the standard for how a
- * piece is written; the facts come from the request; what the piece needs and the request did not give is written
- * in the author's shape and marked as a slot for the person to fill, never invented and never left out.
+ * piece is written; the facts come from the request; what the piece needs and the request did not give is decided on
+ * what is given, never invented, and listed beside the piece (a slot for the person only when they ask for one).
  */
 export const WRITE_LIKE_THESE = `Write the way my pieces are written: who is speaking, the register, the hedging, the rhythm and the spelling; how
 a piece opens, moves and closes; and how concrete it is, with the links, named things, figures, quoted lines and
@@ -53,7 +62,7 @@ its material, never from my pieces (a story of mine you were not given is not yo
 /**
  * THE SLOT, SAID FOR THE RUN THAT WANTS ONE, NEVER IN THE SKILL. Shown in the skill, the slot shape was taken as the safe
  * answer on every run: a code review with the diff bound named "[person: who owns the shipping policy]" as a Must fix.
- * `invoke` serves this line in the request's own notes only where slots are on (a document, no material bound).
+ * `invoke` serves this line in the request's own notes only where the person asked for slots (`--placeholders`).
  */
 /** The author's short passages, served as a reference file beside SKILL.md. */
 export const PASSAGES_FILE = 'examples/voice-passages.md';
@@ -595,7 +604,7 @@ project, a file or a result you have not seen.`
     : composite ? `Take from each writer only what is named for them above. Never take their topics, facts, names, figures,
 sentences, coined terms or stories: a story you were not given is not yours to tell.`
       : WRITE_LIKE_THESE}
-${answers || composite || method ? `\n${FACTS_BELONG}\n` : ''}` : '';
+${answers || composite || method ? `\n${factsBelong(answers)}\n` : ''}` : '';
   // ── MOVES I SOMETIMES MAKE ───────────────────────────────────────────────────────────────────────
   //
   // A move the author makes in some pieces, instructed as a rule, is made in every piece, and several
@@ -668,7 +677,7 @@ description: ${yamlScalar(description)}
 # ${skillId}
 ${methodSection}
 ${method ? `Everything below my method is secondary: examples of finished work, how I sound, and rules read from my
-pieces. Apply those as judgment, including knowing when one does not apply. None of them overrides the method.${!voiceSection && !exemplar ? `\n\n${FACTS_BELONG}` : ''}`
+pieces. Apply those as judgment, including knowing when one does not apply. None of them overrides the method.${!voiceSection && !exemplar ? `\n\n${factsBelong(answers)}` : ''}`
   : `Apply the standard below as judgment, not as a checklist — including knowing when a rule does not
 apply.`}
 ${exemplar ? `
@@ -677,7 +686,7 @@ ${exemplar ? `
 \`examples/exemplar.md\` is one complete piece by the author. Read it before drafting and take its
 voice from it: how it opens, how its sentences and paragraphs run, how it moves from point to point.
 Not its length: the request sets that. Never take its topic, facts, names, figures or sentences.
-${voiceSection ? '' : `\n${FACTS_BELONG}\n`}` : ''}${voiceSection}${sometimesSection}${contrast.length ? `
+${voiceSection ? '' : `\n${factsBelong(answers)}\n`}` : ''}${voiceSection}${sometimesSection}${contrast.length ? `
 ## Write this, not that
 
 \`examples/contrast.md\` has ${contrast.length} sentence(s) written for this skill that broke one of its rules, each

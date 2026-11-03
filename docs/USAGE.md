@@ -51,9 +51,10 @@ material, the numbers must be there, and the specific must really be where the r
 doesn't trace meets the skill's latitude (below): on a strict skill a figure, date or citation not in your material
 stops the work, on a grounded one it is flagged for your review, on a creative one it is listed for you. Nothing is
 deleted unless you choose it (`atelier material --skill <name> --cut`), and then only where a reader qualified on
-that kind of work found it. With no material bound, a document's invented story, figure or source is replaced by a slot
-for your own (`--no-placeholders` lists it instead), a reply lists every specific as unverifiable, and a check that looks
-things up in your material says it was not checked.
+that kind of work found it. With no material bound, the piece is written whole from what is given and never leaves a
+slot for you to fill: an invented story, figure or source stays in it and is listed beside it for you to check, and a name of your own world (a customer,
+a colleague) that nothing you gave holds is written out of it (`--placeholders` asks for marked slots instead). A reply
+lists every specific as unverifiable, and a check that looks things up in your material says it was not checked.
 
 ### How strictly the work is held
 

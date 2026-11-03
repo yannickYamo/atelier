@@ -49,7 +49,7 @@ describe('a piece that talks about its own making, through the binary', () => {
     port = await new Promise<number>((ok) => { backend.stdout!.on('data', (d: Buffer) => { const m = /PORT (\d+)/.exec(d.toString()); if (m) ok(Number(m[1])); }); });
   });
   afterAll(() => { backend.kill(); });
-  const setup = () => {
+  const setup = (notesBound = true) => {
     const data = mkdtempSync(join(tmpdir(), 'atelier-own-data-')); const proj = mkdtempSync(join(tmpdir(), 'atelier-own-proj-'));
     const notes = join(proj, 'notes.md'); writeFileSync(notes, NOTES);
     const env = { ...process.env, ATELIER_DATA: data, ATELIER_PROJECT_DIR: proj, ATELIER_PRICE_IN: '1', ATELIER_PRICE_OUT: '1', ATELIER_CONTEXT_READER: 'scripted', ATELIER_LIBRARY: '' };
@@ -57,14 +57,14 @@ describe('a piece that talks about its own making, through the binary', () => {
     run('add', '--statement', 'Open on the news.', '--kind', 'GENERATIVE', '--applies-when', 'GENERAL', '--materiality', 'REQUIRED');
     run('ratify-close', '--work-type', 'writing');
     run('build', '--name', 'quay');
-    return { data, run, be: ['--with', `notes=${notes}`, '--provider', 'openai-compatible', '--base-url', `http://127.0.0.1:${port}`, '--model', 'scripted', '--claims', 'pattern'] };
+    return { data, run, be: [...(notesBound ? ['--with', `notes=${notes}`] : []), '--provider', 'openai-compatible', '--base-url', `http://127.0.0.1:${port}`, '--model', 'scripted', '--claims', 'pattern'] };
   };
   const set = (body: unknown) => fetch(`http://127.0.0.1:${port}/__set`, { method: 'POST', body: JSON.stringify(body) });
-  const script = (rewrite: string | null = REWRITE) => set({ byTool: {
-    emit_piece: { piece: `<work>${PIECE}</work>` }, emit_questions: QUESTIONS, emit_plan: PLAN, emit_facts: FACTS, emit_gaps: GAPS,
+  const script = (rewrite: string | null = REWRITE, piece = PIECE, found: unknown[] | null = null) => set({ byTool: {
+    emit_piece: { piece: `<work>${piece}</work>` }, emit_questions: QUESTIONS, emit_plan: PLAN, emit_facts: FACTS, emit_gaps: GAPS,
     emit_choice: { choice: 'canon', reason: 'The notes carry the piece.' }, emit_loops: { loops: [], stakes: [], beats: [] }, emit_novelty: { novel: [], claims: [] },
     list_claims: { claims: [] }, review_draft: VERDICT, choose_draft: { better: 'first', reasons: ['the first opens on the news'] },
-    emit_own_words: { found: [{ sentence: CONFESSION, about: 'the brief and a date', rewrite }] } } });
+    emit_own_words: { found: found ?? [{ sentence: CONFESSION, about: 'the brief and a date', rewrite }] } } });
   const log = async (): Promise<string[]> => ((await (await fetch(`http://127.0.0.1:${port}/__log`)).json()) as { bodies: string[] }).bodies;
   const toolOf = (b: string): string => (JSON.parse(b) as { tools?: { function?: { name?: string } }[] }).tools?.[0]?.function?.name ?? '';
   /** The text of every message a call carried (system and user), as the model read it. */
@@ -84,6 +84,8 @@ describe('a piece that talks about its own making, through the binary', () => {
     // beside the work: the sentence and what it became; the unanswered angle decided; the news nobody gave never served
     expect(j.inferred).toContainEqual({ kind: 'own-words', what: CONFESSION, settled: `written again: ${REWRITE}` });
     expect(j.inferred).toContainEqual({ kind: 'decision', what: 'Why does the terminal matter to you now?', settled: 'decided: My daily crossing', add: '--answers "angle=<your answer>"' });
+    expect(j.inferred).toContainEqual({ kind: 'specific', what: 'Any news of your own work to carry?', settled: 'not served: the piece is written without it', add: '--answers "news=<your answer>"' });
+    expect(JSON.stringify(j.inferred)).not.toContain('ticket office');
     expect(j.ownWords).toEqual({ checked: true });
     expect((j.report as string[]).join('\n')).toContain('The piece talked about its own making in 1 sentence(s) (the brief and a date): 1 written again to speak to the reader. What was missing is listed beside the draft, never in it.');
     expect((j.report as string[]).join('\n')).toContain('Inferred for this piece');
@@ -159,5 +161,61 @@ describe('a piece that talks about its own making, through the binary', () => {
     expect(String(j.output)).not.toContain('14 April');
     expect(String(j.output)).toContain(CONFESSION);
     expect(j.inferred).toContainEqual({ kind: 'own-words', what: CONFESSION, settled: 'left as written (the rewrite states 14, which nothing given holds)', add: 'edit or remove this sentence' });
+  }, 120_000);
+
+  const SLOTTED = 'The crossing takes [figure: minutes, quay to quay] on a calm day.';
+  const WHOLE = 'The crossing is short enough to make on a calm day.';
+  it('no material: the writer is told to leave no slot, and a slot it leaves anyway is written whole', async () => {
+    await script(null, `${PIECE.split('\n\n')[0]}\n\n${SLOTTED}`, [{ kind: 'slot', sentence: SLOTTED, about: 'a slot', name: null, rewrite: WHOLE }]);
+    const { run, be } = setup(false);
+    const seen = (await log()).length;
+    const j = JSON.parse(run('invoke', '--skill', 'quay', 'Write a post on the new terminal.', '--json', ...be)) as Record<string, any>;
+    expect(String(j.output)).not.toMatch(/\[[^\]]+\]/);
+    expect(String(j.output)).toContain(WHOLE);
+    expect(j.inferred).toContainEqual({ kind: 'slot', what: SLOTTED, settled: `written again: ${WHOLE}`, add: 'the specific, as material (--with)' });
+    const bodies = (await log()).slice(seen);
+    for (const t of writes(bodies)) {
+      expect(t).toContain('Leave no bracketed slot for me to fill');
+      expect(t).not.toContain('mark it as a slot for me to fill');
+    }
+    expect(bodies.filter((b) => toolOf(b) === 'emit_own_words').map(textOf).join('\n')).toContain('Slots are not wanted');
+  }, 120_000);
+
+  it('--placeholders: slots are served and the last read leaves them as they stand', async () => {
+    await script(null, `${PIECE.split('\n\n')[0]}\n\n${SLOTTED}`, [{ kind: 'slot', sentence: SLOTTED, about: 'a slot', name: null, rewrite: WHOLE }]);
+    const { run, be } = setup(false);
+    const seen = (await log()).length;
+    const j = JSON.parse(run('invoke', '--skill', 'quay', 'Write a post on the new terminal.', '--placeholders', '--json', ...be)) as Record<string, any>;
+    expect(String(j.output)).toContain(SLOTTED);
+    const bodies = (await log()).slice(seen);
+    expect(writes(bodies).some((t) => t.includes('mark it as a slot for me to fill'))).toBe(true);
+    expect(bodies.filter((b) => toolOf(b) === 'emit_own_words').map(textOf).join('\n')).toContain('The person asked for slots to fill');
+  }, 120_000);
+
+  it('a name nothing given holds is written out of the piece and listed; the read sees what was given', async () => {
+    const NAMED = 'Our skipper Tomas Varga has waited years for this change.';
+    const PLAIN = 'Our skippers have waited years for this change.';
+    await script(null, `${PIECE.split('\n\n')[0]}\n\n${NAMED}`, [{ kind: 'name', sentence: NAMED, about: 'a skipper', name: 'Tomas Varga', rewrite: PLAIN }]);
+    const { run, be } = setup();
+    const seen = (await log()).length;
+    const j = JSON.parse(run('invoke', '--skill', 'quay', 'Write a post on the new terminal.', '--json', ...be)) as Record<string, any>;
+    expect(String(j.output)).not.toContain('Varga');
+    expect(String(j.output)).toContain(PLAIN);
+    expect(j.inferred).toContainEqual({ kind: 'name', what: NAMED, settled: `written again: ${PLAIN}`, add: 'the real name, as material (--with)' });
+    expect((j.report as string[]).join('\n')).toContain('It named someone nothing given holds in 1 sentence(s) (Tomas Varga)');
+    const read = (await log()).slice(seen).filter((b) => toolOf(b) === 'emit_own_words').map(textOf).join('\n');
+    expect(read).toContain('<given>');
+    expect(read).toContain('Ferries to the islands will leave every hour');
+  }, 120_000);
+
+  it('atelier run shows what was decided and fixed beside the work, and atelier report shows it again', async () => {
+    await script();
+    const { data, run, be } = setup();
+    const shown = run('run', 'Write a post on the new terminal.', '--skill', 'quay', ...be);
+    expect(shown).toContain('Inferred for this piece');
+    expect(shown).toContain(`about its own making: ${CONFESSION} → written again: ${REWRITE}`);
+    expect(shown).toContain('decided for you: Why does the terminal matter to you now? → decided: My daily crossing');
+    const [rec] = store.listInvocations({ root: data, skillName: 'quay' });
+    expect(run('report', rec.invocationId, '--skill', 'quay')).toContain(`about its own making: ${CONFESSION}`);
   }, 120_000);
 });

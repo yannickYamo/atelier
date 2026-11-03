@@ -13,7 +13,7 @@ import { checksFor, claimInstrumentOf, contextJudgeFor, contextJudgeModel, small
 import { regressions, readAtLength, featureParamsOf, ruleParamsOf, applyStep, unmeasuredIn, type ParamsOf, type Proposed, type Vetoes } from '../../core/loop/repair.js';
 import { answerSentences, judgedSituations } from '../../core/loop/answer-claims.js';
 import { groundCarried, carriedClaims, groundingNote, type GroundingResult } from '../../core/loop/grounding.js';
-import { readOwnWords, withOwnWords, ownWordsNote, type OwnWordsFix } from '../../core/loop/own-words.js';
+import { readOwnWords, withOwnWords, ownWordsNote, listable, type OwnWordsFix } from '../../core/loop/own-words.js';
 import { inferredItems, inferredLines } from '../../core/loop/inferred.js';
 import { withoutServedNotes } from '../../core/loop/echo.js';
 import { profileOf, asksParts, type Profile } from '../../core/loop/profile.js';
@@ -102,7 +102,7 @@ import { composeServed, forThisRequest, withoutPersonaBlocks } from '../served.j
 import { servedLayersOf } from '../../core/eval/stages.js';
 import { findOwnershipBreaches, describeBreaches } from '../../core/state/output-ownership.js';
 import { assertHistoryNotServed, foldRepairs } from '../../core/architecture/repair-memory.js';
-import type { SkillVersion, InvocationSettings } from '../../core/state/canonical-state.js';
+import type { SkillVersion, InvocationSettings, InferredItem } from '../../core/state/canonical-state.js';
 import * as store from '../../core/state/store.js';
 import { copyGuardPieces } from '../../core/compiler/voice.js';
 import { formatOf } from '../../core/observers/formats.js';
@@ -605,14 +605,12 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
 
   // ASKED FOR, NOT INVENTED. A story, a named source or a figure the person did not supply is cut from
   // the output (core/loop/claims.ts). Said before anything is spent, with how to supply the real ones.
-  // SLOTS BY DEFAULT FOR WRITING WITH NO MATERIAL. An invented story, source or figure in a document written from a
-  // title alone becomes a marked slot for the person's own ("[your story: …]"), never a cut that leaves the piece
-  // abstract. Where material is bound (a diff, a term sheet) the facts are the material's: a specific not in it is
-  // listed for the reader, never slotted (a Must fix finding became "[your own story, figure or source goes here]").
-  // Replies list too. `--placeholders` asks for slots anywhere; `--no-placeholders` asks for cuts on a document.
-  // A skill built before the form was read is a document: no word of its name decides.
-  const placeholdersOn = argv.includes('--placeholders') || (!argv.includes('--no-placeholders') && material.length === 0
-    && (store.getWorkForm(L) ?? 'DOCUMENT') === 'DOCUMENT');
+  // NO SLOTS UNLESS ASKED FOR. A piece with a bracketed slot in it ("[Your own story, figure or source goes here.]")
+  // shows its reader a gap, and a person who gave only a title is better served by a piece written whole from what is
+  // given, wrong where it must be, than by a piece that waits on them. So an invented story, source or figure is listed
+  // for them, beside the work (by the skill's latitude where material is bound), and the last read writes again any slot
+  // a writer leaves (core/loop/own-words.ts). `--placeholders` asks for slots; `--no-placeholders` is the default.
+  const placeholdersOn = argv.includes('--placeholders');
   const needsLine = materialLine(satisfiable, material.length > 0, !argv.includes('--allow-unsourced'), name, placeholdersOn);
   if (needsLine) report.say(needsLine);
   if (nDrafts > 1 && (!std || contractFile !== null)) {
@@ -984,7 +982,10 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const ownKept: OwnWordsFix[] = [];
   const ownLeft: { sentence: string; why: string }[] = [];
   const ownGate: OwnWordsGate | null = contractFile === null && !argv.includes('--no-repair')
-    ? { client: deepReader.client, model: deepReader.model, budget: { spentUsd: 0, capUsd: 0.05, maxCalls: 2 }, given: materialText, kept: ownKept, left: ownLeft, notes: completions, state: ownState,
+    ? { client: deepReader.client, model: deepReader.model, budget: { spentUsd: 0, capUsd: 0.05, maxCalls: 2 },
+      // what was given: the request and material, the person's answers, the research a deep run read, and the author's own
+      // pieces and voice the skill serves (a name of theirs is theirs)
+      given: [materialText, before?.note ?? '', ...deepDocs.map((d) => d.text)].filter(Boolean).join('\n\n'), own: servedText, slots: placeholdersOn, kept: ownKept, left: ownLeft, notes: completions, state: ownState,
       ...(std ? { recheck: (text: string) => checkDraftAsync(name, std, text, checks), paramsOf: ruleParamsOf(std) } : {}), steps: runSteps } : null;
   if (!ownGate) ownState.why = contractFile !== null ? 'a structured output' : '--no-repair';
   const ownAlone = ownGate ? async (draft: string): Promise<{ output: string; repair: null }> => ({ output: await ownWordsAlone(draft, ownGate), repair: null }) : null;
@@ -1068,8 +1069,12 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   if (adoptedCarry && !methodCarry) report.say(store.CARRY_RETIRED);
   for (const c of completions) report.say(c);
   for (const l of deepLines(deepTrace)) report.say(l);
-  for (const l of inferredLines(rec.inferred ?? [])) report.say(l);
-  if (!ownState.checked && ownState.why && contractFile === null) report.detail(`Not read for sentences about the piece's own making: ${ownState.why}.`);
+  // A SPECIFIC LEFT IN FOR THE PERSON TO CHECK (nothing of theirs to check it against, or the latitude lists it) stays in
+  // the piece, wrong where it must be rather than missing, and is listed beside it with what to give to settle it
+  const inferredAll = [...(rec.inferred ?? []), ...(rec.repair?.claimsToCheck ?? []).filter((t) => rec.output.includes(t.slice(0, 60)))
+    .map((t): InferredItem => ({ kind: 'specific', what: t.slice(0, 160), settled: 'left in the piece for you to check', add: 'your source for it, as material (--with)' }))];
+  for (const l of inferredLines(inferredAll)) report.say(l);
+  if (!ownState.checked && ownState.why) report.detail(`Not read for sentences about the piece's own making: ${ownState.why}.`);
   reportChecks(report, rec, std, checks);
   if (lineCiting && material.length) report.say(lineCitationsLine(rec.output, material));
   const tasteMonitor = taste ? await taste.report(report, rec, name) : null;
@@ -1161,7 +1166,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
       questions: questionsJson(before?.questions ?? []), answers: before?.record?.answers ?? [], plan: before?.plan ?? null,
       // WHAT WAS INFERRED FOR THE PIECE, BESIDE IT (core/loop/inferred.ts): every decision the run made for the person, every
       // specific it was not given, every sentence about the piece's own making it wrote again; never in `output`
-      inferred: rec.inferred ?? [], ownWords: { checked: ownState.checked, ...(ownState.why ? { why: ownState.why } : {}) },
+      inferred: inferredAll, ownWords: { checked: ownState.checked, ...(ownState.why ? { why: ownState.why } : {}) },
       // stretches copied from material written as sentences (core/loop/material-points.ts), read on the delivered work
       ...(rec.copied ? { copied: rec.copied } : {}),
       // the text this request works on (core/loop/task-needs.ts): served whole, no plan, and quoting it is no copy
@@ -1193,6 +1198,8 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
 
 /** Said to the writer wherever material is bound: nothing is missing, so no slot is left for the person to fill. */
 export const NO_SLOTS = '\n\n(The material holds every specific this piece names. Leave no bracketed slot for me to fill: what the material does not give, the piece does without.)';
+/** Said to the writer of a piece with no material and no slots asked for: write it whole from what is given. */
+export const NO_SLOTS_BARE = '\n\n(Leave no bracketed slot for me to fill. Where the piece wants a specific nobody gave, make the point with the reasoning, or with an example plainly framed as one ("say a team ships weekly"), never as a story, figure or name of mine.)';
 
 /**
  * The task as served: what was asked, plus the person's standing material for this skill (`atelier
@@ -1208,7 +1215,7 @@ export function taskWithMaterial(L: store.StoreLayout, asked: string, lineCiting
   // writer how to leave a slot ([link: …]) for a specific no one gave; with material bound, nothing is missing,
   // and a code review once named "[person: who owns the shipping policy]" as a Must fix. So the writer is told.
   const noSlots = slots ? '' : NO_SLOTS;
-  const task = !material.length ? asked
+  const task = !material.length ? `${asked}${slots ? '' : NO_SLOTS_BARE}`
     : lineCiting ? `${asked}\n\n${material.map((m) => `<material name="${m.name}" lines="numbered">\n${numbered(m.name, m.text)}\n</material>`).join('\n\n')}\n\n`
       + '(Each line of the material is shown with its line number in front of it. When you cite a line, use that number; do not count.)' + noSlots
       : `${asked}\n\n${material.map((m) => `<material name="${m.name}">\n${m.text}\n</material>`).join('\n\n')}${noSlots}`;
@@ -1398,8 +1405,11 @@ function selectDraft(c: DraftContext & { readonly n: number; readonly onDemand?:
   const checks = c.checks.claimSensor?.candidates ? { ...c.checks, claimSensor: c.checks.claimSensor.candidates } : c.checks;
   // THE FIRST DRAFT NEEDS NO RIVAL when nothing at the top of the drafts' order could be bettered: no REQUIRED rule broken,
   // no rule the reader acts on read as missed (core/loop/run-once.ts, `enough`).
+  // A specific left in for the person to check (nothing of theirs to check it against) is no broken rule, and still wants a
+  // rival: a draft that invents a survey is the one a second draft can better.
   const enough = async (draft: string): Promise<boolean> => {
-    if (brokenIn(await checkDraftAsync(c.name, c.std, draft, checks)).length) return false;
+    const r = await checkDraftAsync(c.name, c.std, draft, checks);
+    if (brokenIn(r).length || listedClaims(r).length) return false;
     if (c.taste?.acts && (await c.taste.misses([draft]))[0] > 0) return false;
     return true;
   };
@@ -2440,6 +2450,10 @@ export interface OwnWordsGate {
   readonly client: InferenceClient | null; readonly model: string | null; readonly budget: Budget;
   /** the request and its material: the only figures and names a rewrite may add */
   readonly given: string;
+  /** the author's own words, as the skill serves them: their names count as given, their figures never do */
+  readonly own?: string;
+  /** the person asked for slots (`--placeholders`): a slot is theirs to fill, left as it stands */
+  readonly slots?: boolean;
   readonly recheck?: (text: string) => Promise<VerifyReport>; readonly paramsOf?: ParamsOf; readonly steps?: RunSteps | null;
   /** what the step did, for the record and the list beside the draft (`inferred`); lines said in the report */
   readonly kept: OwnWordsFix[]; readonly notes?: string[];
@@ -2462,10 +2476,10 @@ export function withOwnWordsStep(refine: (draft: string) => Promise<Delivered>, 
   return async (draft: string) => {
     const d = await refine(draft);
     if (!c.client || !c.model) { c.state.checked = false; c.state.why = 'no small reader is set up'; return d; }
-    const read = await readOwnWords({ text: d.output, given: c.given }, readingAs('own-words', c.client), c.model, c.budget);
+    const read = await readOwnWords({ text: d.output, given: c.given, own: c.own ?? '', slots: c.slots ?? false }, readingAs('own-words', c.client), c.model, c.budget);
     c.state.checked = read.by === 'model'; if (read.by !== 'model') c.state.why = read.why ?? 'the reading could not be made';
     // a sentence found and left as written (its rewrite did not hold) is listed beside the work, never dropped in silence
-    c.left.push(...read.value.dropped.filter((x) => x.why !== 'the sentence is not in the piece as written'));
+    c.left.push(...listable(read.value.dropped));
     const fixes = read.value.fixes;
     if (!fixes.length) return d;
     const violatedBefore = brokenIn(d.report);
@@ -2493,7 +2507,11 @@ export function withOwnWordsStep(refine: (draft: string) => Promise<Delivered>, 
         if ('text' in one) { ({ text, report } = one); kept.push(f); } else c.left.push({ sentence: f.sentence, why: one.why });
       }
     } else c.left.push({ sentence: fixes[0].sentence, why: all.why });
-    const recorded = (x: Delivered): Delivered => withSteps(x, ledger.entries);
+    // WHAT IS LISTED TO CHECK IS WHAT THE PIECE STILL SAYS: a sentence written again or dropped is never quoted back under the
+    // work (`markUnsupported` appends what it cannot find), and what the new text holds to check is added
+    const recorded = (x: Delivered): Delivered => withSteps(x.repair ? { ...x, repair: { ...x.repair, claimsToCheck: (() => {
+      const still = [...new Set([...(x.repair.claimsToCheck ?? []).filter((t) => x.output.includes(t.slice(0, 60))), ...listedClaims(x.report)])];
+      return still.length ? still : undefined; })() } } : x, ledger.entries);
     const leftLine = (n: number): string => `The piece talked about its own making in ${n} sentence(s) left as written (listed beside the work).`;
     if (!kept.length) { const why = leftLine(fixes.length); c.notes?.push(why); return recorded(noted(d, why, violatedBefore)); }
     c.kept.push(...kept);
@@ -2509,9 +2527,9 @@ export function withOwnWordsStep(refine: (draft: string) => Promise<Delivered>, 
  */
 export async function ownWordsAlone(draft: string, c: OwnWordsGate): Promise<string> {
   if (!c.client || !c.model) { c.state.checked = false; c.state.why = 'no small reader is set up'; return draft; }
-  const read = await readOwnWords({ text: draft, given: c.given }, readingAs('own-words', c.client), c.model, c.budget);
+  const read = await readOwnWords({ text: draft, given: c.given, own: c.own ?? '', slots: c.slots ?? false }, readingAs('own-words', c.client), c.model, c.budget);
   c.state.checked = read.by === 'model'; if (read.by !== 'model') c.state.why = read.why ?? 'the reading could not be made';
-  c.left.push(...read.value.dropped.filter((x) => x.why !== 'the sentence is not in the piece as written'));
+  c.left.push(...listable(read.value.dropped));
   if (!read.value.fixes.length) return draft;
   c.kept.push(...read.value.fixes); c.notes?.push(ownWordsNote(read.value.fixes));
   return withOwnWords(draft, read.value.fixes);

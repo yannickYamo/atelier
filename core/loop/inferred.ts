@@ -9,6 +9,7 @@
 
 import type { InferredItem } from '../state/canonical-state.js';
 import type { OwnWordsFix } from './own-words.js';
+import { POSITION_IDS } from './questions.js';
 
 export interface InferredFrom {
   /** the questions the run considered, and how each was answered */
@@ -30,19 +31,30 @@ export function inferredItems(f: InferredFrom): InferredItem[] {
   for (const q of f.questions ?? []) {
     const a = f.answers?.find((x) => x.id === q.id);
     if (a && a.by !== 'default') continue;
-    out.push({ kind: q.id === 'proof' ? 'proof' : 'decision', what: q.ask, settled: q.id === 'proof' ? 'argued from what is given, with no figure of yours' : `decided: ${a?.answer ?? q.default}`, add: `--answers "${q.id}=<your answer>"` });
+    const add = `--answers "${q.id}=<your answer>"`;
+    // a position is decided for the piece; a fact about the person (their news, what may be named) is never served from a
+    // default, so it is listed as not given, never as decided
+    if (q.id === 'proof') out.push({ kind: 'proof', what: q.ask, settled: 'argued from what is given, with no figure of yours', add });
+    else if (POSITION_IDS.has(q.id)) out.push({ kind: 'decision', what: q.ask, settled: `decided: ${a?.answer ?? q.default}`, add });
+    else out.push({ kind: 'specific', what: q.ask, settled: 'not served: the piece is written without it', add });
   }
   for (const p of f.proofs ?? []) if (!out.some((x) => x.kind === 'proof' && x.what.includes(p))) out.push({ kind: 'proof', what: p, settled: 'argued from what is given, with no figure of yours', add: 'a figure, case or source of yours (--with)' });
   for (const s of f.specifics ?? []) out.push({ kind: 'specific', what: `step ${s.step}: ${s.missing}`, settled: 'decided on what is given', add: 'the specific, as material (--with)' });
   for (const w of f.ownWordsLeft ?? []) out.push({ kind: 'own-words', what: w.sentence.slice(0, 160), settled: `left as written (${w.why})`, add: 'edit or remove this sentence' });
-  for (const w of f.ownWords ?? []) out.push({ kind: 'own-words', what: w.sentence.slice(0, 160), settled: w.rewrite === null ? 'dropped: it talked about the piece\'s own making' : `written again: ${w.rewrite.slice(0, 160)}` });
+  for (const w of f.ownWords ?? []) {
+    const kind = w.kind === 'slot' ? 'slot' : w.kind === 'name' ? 'name' : 'own-words';
+    const why = kind === 'slot' ? 'it left a slot to fill' : kind === 'name' ? `it named ${w.name ?? 'someone'}, which nothing given holds` : 'it talked about the piece\'s own making';
+    out.push({ kind, what: w.sentence.slice(0, 160), settled: w.rewrite === null ? `dropped: ${why}` : `written again: ${w.rewrite.slice(0, 160)}`,
+      ...(kind === 'name' ? { add: 'the real name, as material (--with)' } : kind === 'slot' ? { add: 'the specific, as material (--with)' } : {}) });
+  }
   return out;
 }
 
 /** The lines the report says, beside the work. */
 export function inferredLines(items: readonly InferredItem[]): string[] {
   if (!items.length) return [];
-  const label: Record<InferredItem['kind'], string> = { decision: 'decided for you', specific: 'not given', proof: 'no proof given', 'own-words': 'about its own making' };
+  const label: Record<InferredItem['kind'], string> = { decision: 'decided for you', specific: 'not given', proof: 'no proof given', 'own-words': 'about its own making',
+    slot: 'a slot, written whole', name: 'a name nothing gave' };
   return [`Inferred for this piece (${items.length}), beside it and never in it:`,
     ...items.map((i) => `  - ${label[i.kind]}: ${i.what} → ${i.settled}${i.add ? ` (to change: ${i.add})` : ''}`)];
 }

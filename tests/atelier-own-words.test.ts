@@ -1,7 +1,7 @@
 // tests/atelier-own-words.test.ts — WHAT CODE HOLDS THE OWN-WORDS READING TO, AND WHAT IS LISTED BESIDE THE WORK.
 // Expected values written out by hand from the inputs.
 import { describe, it, expect } from 'vitest';
-import { OWN_WORDS, ownWordsProblem, withOwnWords, ownWordsNote, readOwnWords, MAX_FIXES } from '../core/loop/own-words.js';
+import { OWN_WORDS, ownWordsProblem, withOwnWords, ownWordsNote, readOwnWords, MAX_FIXES, OUTSIDE, givenHoldsName, placesOf } from '../core/loop/own-words.js';
 import { inferredItems, inferredLines } from '../core/loop/inferred.js';
 
 const TEXT = 'Setup is quick for a small team.\n\nThe brief doesn\'t say how quick, and I won\'t invent a number. Acme moved in a week.\n';
@@ -32,11 +32,11 @@ describe('the own-words reading, grounded by code', () => {
     expect(OWN_WORDS.ground({ found: [] }, input)).toEqual({ fixes: [], dropped: [] });
     expect(OWN_WORDS.decide({ text: '  ', given: '' })).toEqual({ fixes: [], dropped: [] });
   });
-  it('at most six sentences are rewritten in one read', () => {
-    const sentences = Array.from({ length: MAX_FIXES + 1 }, (_, i) => `Line ${'abcdefg'[i]} talks about the notes.`);
+  it('at most ten sentences are rewritten in one read', () => {
+    const sentences = Array.from({ length: MAX_FIXES + 1 }, (_, i) => `Line ${'abcdefghijk'[i]} talks about the notes.`);
     const r = OWN_WORDS.ground({ found: sentences.map((s) => ({ sentence: s, about: 'notes', rewrite: null })) }, { text: sentences.join(' '), given: '' });
-    expect(r?.fixes).toHaveLength(6);
-    expect(r?.dropped).toEqual([{ sentence: sentences[6], why: 'at most 6 sentences are rewritten in one read' }]);
+    expect(r?.fixes).toHaveLength(10);
+    expect(r?.dropped).toEqual([{ sentence: sentences[10], why: 'at most 10 sentences are rewritten in one read' }]);
   });
   it('with no model, nothing is read and the text stands', async () => {
     const d = await readOwnWords({ text: TEXT, given: GIVEN }, null, null, { spentUsd: 0, capUsd: 0.05 });
@@ -86,20 +86,60 @@ describe('the own-words reading holds against what it missed', () => {
     expect(ownWordsProblem(BAD, 'We hit this when Kubernetes ran the jobs.', GIVEN, 'Our Kubernetes cluster ran the jobs.')).toBeNull();
     expect(ownWordsProblem(BAD, 'We hit this when Kubernetes ran the jobs.', GIVEN, 'Our cluster ran the jobs.')).toBe('the rewrite names Kubernetes, which nothing given holds');
   });
-  it('a slot for the author is never the reading\'s to drop; a sentence across a line break is found', () => {
+  it('a slot is written whole unless the person asked for slots; a sentence across a line break is found', () => {
     const text = 'Setup is quick. The gain was [figure: what it measures] in the first month.\n\nThe brief doesn\'t say\nhow quick, sadly.\n';
+    const found = [
+      { kind: 'slot', sentence: 'The gain was [figure: what it measures] in the first month.', about: 'a slot', name: null, rewrite: 'The gain shows in the first month.' },
+      { kind: 'making', sentence: 'The brief doesn\'t say how quick, sadly.', about: 'the brief', name: null, rewrite: null },
+    ];
+    const r = OWN_WORDS.ground({ found }, { text, given: '' });
+    expect(r?.fixes.map((f) => [f.kind, f.rewrite])).toEqual([['slot', 'The gain shows in the first month.'], [undefined, null]]);
+    expect(withOwnWords(text, r!.fixes)).toBe('Setup is quick. The gain shows in the first month.\n');
+    // asked for (--placeholders): the slot is theirs, left as it stands
+    const asked = OWN_WORDS.ground({ found }, { text, given: '', slots: true });
+    expect(asked?.fixes.map((f) => f.sentence)).toEqual(['The brief doesn\'t say how quick, sadly.']);
+    expect(asked?.dropped).toEqual([]);
+    // a rewrite that leaves a slot is no rewrite; a "slot" with no bracket in it is not one
+    const still = OWN_WORDS.ground({ found: [{ ...found[0], rewrite: 'The gain was [figure] in that month.' }, { kind: 'slot', sentence: 'Setup is quick.', about: 'x', name: null, rewrite: 'Setup is fast.' }] }, { text, given: '' });
+    expect(still?.fixes).toEqual([]);
+    expect(still?.dropped.map((d) => d.why)).toEqual(['the rewrite leaves a slot to fill', 'it holds no slot']);
+  });
+  it('a name nothing given holds is written out; a name the person gave is never touched', () => {
+    const text = 'Our customer Brightwell cut its close from ten days to two. Sarah Chen on our team saw it first. Stripe made the same point years ago.\n';
+    const given = 'Write about faster month-end close. Notes: a customer cut close from ten days to two. Sarah noticed it.';
     const r = OWN_WORDS.ground({ found: [
-      { sentence: 'The gain was [figure: what it measures] in the first month.', about: 'gap', rewrite: null },
-      { sentence: 'The brief doesn\'t say how quick, sadly.', about: 'the brief', rewrite: null },
-    ] }, { text, given: '' });
-    expect(r?.fixes.map((f) => f.sentence)).toEqual(['The brief doesn\'t say how quick, sadly.']);
-    expect(r?.dropped).toEqual([{ sentence: 'The gain was [figure: what it measures] in the first month.', why: 'it holds a slot for the author to fill' }]);
-    expect(withOwnWords(text, r!.fixes)).toBe('Setup is quick. The gain was [figure: what it measures] in the first month.\n');
+      { kind: 'name', sentence: 'Our customer Brightwell cut its close from ten days to two.', about: 'a customer', name: 'Brightwell', rewrite: 'One customer cut its close from ten days to two.' },
+      { kind: 'name', sentence: 'Sarah Chen on our team saw it first.', about: 'a colleague', name: 'Sarah Chen', rewrite: 'Someone on our team saw it first.' },
+      { kind: 'name', sentence: 'Stripe made the same point years ago.', about: 'x', name: 'Acme', rewrite: 'A payments firm made the same point.' },
+    ] }, { text, given });
+    expect(r?.fixes).toEqual([{ kind: 'name', name: 'Brightwell', sentence: 'Our customer Brightwell cut its close from ten days to two.', about: 'a customer', rewrite: 'One customer cut its close from ten days to two.' }]);
+    // Sarah is given: nothing wrong, nothing listed; a name not in its sentence is no finding
+    expect(r?.dropped).toEqual([{ sentence: 'Stripe made the same point years ago.', why: 'the name is not in the sentence' }]);
+    expect(givenHoldsName('Sarah Chen', given)).toBe(true);
+    expect(givenHoldsName('The Brightwell Group', given)).toBe(false);
+  });
+  it('no rewrite keeps a name the read found invented, at the start of a sentence included', () => {
+    const text = 'Brightwell moved fast. The brief doesn\'t say how fast.\n';
+    const r = OWN_WORDS.ground({ found: [
+      { kind: 'name', sentence: 'Brightwell moved fast.', about: 'a customer', name: 'Brightwell', rewrite: 'One customer moved fast.' },
+      { kind: 'making', sentence: 'The brief doesn\'t say how fast.', about: 'the brief', name: null, rewrite: 'Brightwell moved faster than anyone expected.' },
+    ] }, { text, given: 'Write about speed.' });
+    expect(r?.fixes.map((f) => f.sentence)).toEqual(['Brightwell moved fast.']);
+    expect(r?.dropped).toEqual([{ sentence: 'The brief doesn\'t say how fast.', why: 'the rewrite keeps Brightwell, which nothing given holds' }]);
+  });
+  it('a fix in place opens only the sentences it wrote', () => {
+    const text = 'The brief doesn\'t say. I won\'t invent a date.\n';
+    const r = OWN_WORDS.ground({ found: [
+      { kind: 'making', sentence: 'The brief doesn\'t say.', about: 'b', name: null, rewrite: null },
+      { kind: 'making', sentence: 'I won\'t invent a date.', about: 'd', name: null, rewrite: null },
+    ] }, { text, given: '', within: ['I won\'t invent a date.'] });
+    expect(r?.fixes.map((f) => f.sentence)).toEqual(['I won\'t invent a date.']);
+    expect(r?.dropped).toEqual([{ sentence: 'The brief doesn\'t say.', why: OUTSIDE }]);
   });
   it('every place a sentence stands is fixed; a drop leaves no empty list marker or emphasis', () => {
     const fix = [{ sentence: 'I won\'t invent one.', about: 'x', rewrite: null }];
     expect(withOwnWords('A. I won\'t invent one.\n\nB. I won\'t invent one.\n', fix)).toBe('A.\n\nB.\n');
-    expect(withOwnWords('- First point.\n- I won\'t invent one.\n- Last point.\n', fix)).toBe('- First point.\n\n- Last point.\n');
+    expect(withOwnWords('- First point.\n- I won\'t invent one.\n- Last point.\n', fix)).toBe('- First point.\n- Last point.\n');
     expect(withOwnWords('Lead in. **I won\'t invent one.** Then more.\n', fix)).toBe('Lead in. Then more.\n');
   });
 });
@@ -136,5 +176,48 @@ describe('the own-words step, as the run takes it', () => {
     const none = gate(null);
     expect(await ownWordsAlone(PIECE, none)).toBe(PIECE);
     expect(none.state).toEqual({ checked: false, why: 'no small reader is set up' });
+  });
+});
+
+describe('the own-words splice touches only what it changes', () => {
+  const drop = (sentence: string) => [{ sentence, about: 'x', rewrite: null }];
+  it('hard line breaks, quote blank lines, code and emphasis elsewhere stand as they were', () => {
+    const text = 'Line one  \nline two.\n\n> Quote one.\n>\n> Quote two.\n\nThe brief is thin. A **bold** **more** word.\n\n```\nx = a**  **b\n\n\n\ny\n```\n';
+    expect(withOwnWords(text, drop('The brief is thin.'))).toBe(text.replace('The brief is thin. ', ''));
+  });
+  it('a sentence inside fenced code is never changed', () => {
+    const text = 'Intro.\n\n```\nThe brief is thin.\n```\n';
+    expect(withOwnWords(text, drop('The brief is thin.'))).toBe(text);
+  });
+  it('a place starts and ends on a word, and a sentence copied without its mark stands only where a sentence ends', () => {
+    expect(placesOf('I cannot say.', 'not say.')).toEqual([]);
+    expect(withOwnWords('The brief does not say. The brief does not say more here.', [{ sentence: 'The brief does not say', about: 'b', rewrite: 'X' }]))
+      .toBe('X. The brief does not say more here.');
+  });
+  it('with `within`, a sentence repeated outside those stretches stands', () => {
+    expect(withOwnWords('Ship it. The brief is thin. Ship it.', drop('Ship it.'), ['Ship it. The brief is thin.'])).toBe('The brief is thin. Ship it.');
+  });
+  it('a drop in emphasis at the start leaves no stray space', () => {
+    expect(withOwnWords('**The brief does not say.** Next.', drop('The brief does not say.'))).toBe('Next.');
+  });
+  it('a name the person gave is found through a possessive, a hyphen, or one word written as a name', () => {
+    expect(givenHoldsName("Acme's", 'our customer Acme')).toBe(true);
+    expect(givenHoldsName('Acme', "Acme's team")).toBe(true);
+    expect(givenHoldsName('Jean-Luc', 'Jean Luc wrote it')).toBe(true);
+    expect(givenHoldsName('Bright Path Labs', 'the path is bright')).toBe(false);
+    expect(givenHoldsName('Northwind Systems', 'our systems team')).toBe(false);
+  });
+  it('the author\'s own words give their names, never their figures', () => {
+    const own = 'At Quayside we cut the wait to 14 minutes.';
+    expect(ownWordsProblem('The brief is thin.', 'Quayside sees it every week.', '', '', own)).toBeNull();
+    expect(ownWordsProblem('The brief is thin.', 'The wait fell to 14 minutes.', '', '', own)).toMatch(/14/);
+    const r = OWN_WORDS.ground({ found: [{ kind: 'name', sentence: 'Quayside saw it first.', about: 'x', name: 'Quayside', rewrite: 'We saw it first.' }] },
+      { text: 'Quayside saw it first.', given: 'Write about waits.', own });
+    expect(r?.fixes).toEqual([]);
+  });
+  it('figures in words: teens, -fold and ordinals are figures', () => {
+    expect(ownWordsProblem('The brief is thin.', 'Most teams see a threefold gain.', '')).toMatch(/threefold/);
+    expect(ownWordsProblem('The brief is thin.', 'It took seventeen weeks.', '')).toMatch(/seventeen/);
+    expect(ownWordsProblem('The brief is thin.', 'It came fifth.', '')).toMatch(/fifth/);
   });
 });

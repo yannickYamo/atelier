@@ -28,11 +28,9 @@ import { sentencesOf } from '../observers/text.js';
 export const GAP_LINE_RULE = `EVERY SPECIFIC FROM WHAT IS GIVEN. Every figure, name, date, quotation and story comes from the request, the material or the facts listed for you. Where a point wants one that none of them gives, make the point with what is given (the reasoning, the mechanism, your view stated as yours), or leave it out. The piece speaks to its reader: it never mentions its notes, its sources or what it was not given.`;
 
 /** The contract as the writer is shown it. */
-export function renderGapLineRule(_opts: { readonly samples?: number } = {}): string {
+export function renderGapLineRule(): string {
   return GAP_LINE_RULE;
 }
-
-export type GapKind = 'FIGURE' | 'SOURCE' | 'EXPERIENCE';
 
 export interface GapSpan { readonly start: number; readonly end: number; readonly text: string; readonly kind?: string }
 export interface GapInput {

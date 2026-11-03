@@ -7,6 +7,10 @@
 // (sentences changed of total, every span's before and after). Where the reading says the words are about the whole
 // piece, or no model can read them, nothing happens here and the run writes the piece again whole, as it always did.
 //
+// THE SENTENCES IT WROTE ARE READ AS A RUN'S ARE (core/loop/own-words.ts): one that talks about the piece's own making,
+// leaves a slot or names someone nothing given holds is written again or dropped, and listed beside the piece
+// (`inferred`). Only the sentences the fix wrote are open to it: every other sentence stays word for word.
+//
 // What each fix removes is kept on its record (core/loop/corrections.ts): the next fix of the piece, or a run that writes
 // it again whole, may not bring it back.
 
@@ -17,6 +21,10 @@ import type { InvocationRecord, SkillVersion, StandardVersion } from '../core/st
 import type { InferenceClient } from '../core/inference/client.js';
 import { processSpentUsd } from '../core/inference/client.js';
 import { readContext } from '../core/inference/reading.js';
+import { readingAs } from '../core/inference/step-guard.js';
+import { readOwnWords, withOwnWords, ownWordsNote, listable, type OwnWordsFix } from '../core/loop/own-words.js';
+import { inferredItems, inferredLines } from '../core/loop/inferred.js';
+import { acts, type VerifyReport } from '../core/observers/verify.js';
 import { sentencesOf } from '../core/observers/text.js';
 import { FIX_SCOPE, askedBack, fixSpans, sentenceDiff, unchangedWhy } from '../core/loop/surgical-fix.js';
 import { removedStretches, reintroducedRuns } from '../core/loop/corrections.js';
@@ -64,6 +72,37 @@ export interface FixInPlace {
   readonly settings: readonly string[];
 }
 
+/**
+ * The own-words read on a fixed piece, open only to the sentences the fix wrote (`written`): what changed, what was found
+ * and left, and whether it was read. Kept on the run's acceptance rule: the fixes together, then one by one, never one
+ * that breaks a rule the fixed piece held. Not on --no-repair, and nothing read without a small reader, said.
+ */
+async function ownWordsOfFix(text: string, written: readonly string[], from: { given: string; own: string }, model: string | null,
+  recheck: (t: string) => Promise<VerifyReport | null>): Promise<{ text: string; fixes: OwnWordsFix[]; left: { sentence: string; why: string }[]; note: string; checked: boolean; why?: string }> {
+  const none = (why: string) => ({ text, fixes: [], left: [], note: '', checked: false, why });
+  if (argv.includes('--no-repair')) return none('--no-repair');
+  if (!written.length) return none('the fix wrote no sentence');
+  const client = model ? contextReaderClient() : null;
+  if (!model || !client) return none('no small reader is set up');
+  const read = await readOwnWords({ text, given: from.given, own: from.own, slots: argv.includes('--placeholders'), within: written }, readingAs('own-words', client), model,
+    { spentUsd: 0, capUsd: 0.05, maxCalls: 1 });
+  if (read.by !== 'model') return none(read.why ?? 'the reading could not be made');
+  const left = listable(read.value.dropped);
+  const found = read.value.fixes;
+  if (!found.length) return { text, fixes: [], left, note: '', checked: true };
+  const broken = (r: VerifyReport | null): Set<string> => new Set((r?.checked ?? []).filter((x) => acts(x) && x.result.verdict === 'VIOLATED').map((x) => x.requirementId));
+  const held = broken(await recheck(text));
+  const holds = async (t: string): Promise<boolean> => [...broken(await recheck(t))].every((id) => held.has(id));
+  let out = text; const fixes: OwnWordsFix[] = [];
+  const all = withOwnWords(out, found, written);
+  if (await holds(all)) { out = all; fixes.push(...found); }
+  else for (const f of found) {
+    const one = withOwnWords(out, [f], written);
+    if (one !== out && await holds(one)) { out = one; fixes.push(f); } else left.push({ sentence: f.sentence, why: 'the text with the rewrite breaks a rule that held before' });
+  }
+  return { text: out, fixes, left, note: fixes.length ? ownWordsNote(fixes) : '', checked: true };
+}
+
 /** Two short lines a person reads of one span changed. */
 const shown = (s: string): string => { const one = s.replace(/\s+/g, ' ').trim(); return one.length > 160 ? `${one.slice(0, 157)}…` : one || '(cut)'; };
 
@@ -88,18 +127,27 @@ export async function fixInPlace(c: FixInPlace): Promise<{ output: string; json:
     return null;
   }
   const ids = scope.value.ids;
-  const own = ownWordsOf(c.L, c.std);
+  const ownText = ownWordsOf(c.L, c.std);
   // WHAT THE PERSON ASKS BACK, quoting it, is theirs again: no longer kept out of this fix or any later one.
-  const kept = removedOfPiece(c.L, of); const restored = askedBack(instruction, kept, piece, own);
+  const kept = removedOfPiece(c.L, of); const restored = askedBack(instruction, kept, piece, ownText);
   const removed = kept.filter((x) => !restored.includes(x));
   const budget = { spentUsd: 0, capUsd: numericFlag('--cap', 1), maxCalls: numericFlag('--max-calls', 2 * ids.length + 2) };
-  const r = await fixSpans(c.writer(), budget, piece, ids, instruction, removed, { material: c.materialText, own });
+  const r = await fixSpans(c.writer(), budget, piece, ids, instruction, removed, { material: c.materialText, own: ownText });
   // A PROVIDER OR BUDGET ERROR on the spans: nothing was spliced, and the piece is written again whole, said.
   if (r.error) { c.say(`The sentences you named could not be written (${r.error}), so the piece is written again whole.`); return null; }
-  const diff = sentenceDiff(piece, r.text, ids);
   // A span given back word for word changed nothing: it is not shown or recorded as a change (it is said below, with why).
-  const spans = r.applied.filter((a) => a.before.trim() !== a.after.trim()).map((a) => ({ before: a.before, after: a.after })).reverse();
-  const removedNow = removedStretches(spans, r.text);
+  const written = r.applied.filter((a) => a.before.trim() !== a.after.trim());
+  // THE CHECKS, made once: the own-words step is kept on them, and the whole piece is checked on them after
+  const checks = { ...checksFor(c.L, { material: c.materialText, task: c.asked, context: { request: c.asked, material: c.material }, guardClaims: !argv.includes('--allow-unsourced') }),
+    ...(removed.length ? { removed: { phrases: removed, previous: piece, own: ownText } } : {}) };
+  // what was given: what the person asked of this fix, the request the piece was written for, its material, and the
+  // author's own words (a name the person used in any of them is theirs)
+  const given = [instruction, prev.input, c.materialText].filter(Boolean).join('\n\n');
+  const own = await ownWordsOfFix(r.text, written.map((a) => a.after), { given, own: ownText }, model, (t) => checkDraftAsync(c.name, c.std, t, checks).catch(() => null));
+  const text = own.text;
+  const diff = sentenceDiff(piece, text, ids);
+  const spans = written.map((a) => ({ before: a.before, after: own.fixes.length ? withOwnWords(a.after, own.fixes) : a.after })).reverse();
+  const removedNow = removedStretches(spans, text);
   const named = ids.length === 1 ? `sentence ${ids[0]}` : `sentences ${ids.join(', ')}`;
   const lines: string[] = [`Changed ${diff.changed} of ${diff.total} sentences (${scope.by === 'code' ? 'you named' : 'your words were read as about'} ${named}); ${diff.outside === 0 ? 'nothing outside them changed' : `${diff.outside} outside them changed`}.`];
   for (const s of spans) lines.push(`  - ${shown(s.before)}`, `  + ${shown(s.after)}`);
@@ -109,25 +157,27 @@ export async function fixInPlace(c: FixInPlace): Promise<{ output: string; json:
   if (restored.length) lines.push(`You asked for wording an earlier fix took out, so it may come back: ${restored.map((x) => `"${shown(x)}"`).join(', ')}.`);
   if (r.reintroduced.found.length) lines.push(`Wording an earlier fix took out came back in ${r.reintroduced.rewritten} span(s) and was written again${r.reintroduced.keptAsItWas ? `; ${r.reintroduced.keptAsItWas} span(s) brought it back again and were kept as they were` : ''}: ${r.reintroduced.found.map((x) => `"${shown(x)}"`).join(', ')}.`);
   else if (removed.length) lines.push(`Nothing earlier fixes of this piece took out (${removed.length} stretch(es)) came back.`);
+  if (own.note) lines.push(own.note);
+  lines.push(...inferredLines(inferredItems({ ownWords: own.fixes, ownWordsLeft: own.left })));
+  if (!own.checked && own.why && own.why !== 'the fix wrote no sentence') lines.push(`The sentences written were not read for talk about the piece's own making: ${own.why}.`);
   if (r.work.some((w) => w.outside)) lines.push('(What the writer said outside its work field is kept on the record, never in the piece.)');
   // THE WHOLE PIECE, CHECKED AGAIN: the standard, and the author's range where the skill has one.
-  const checks = { ...checksFor(c.L, { material: c.materialText, task: c.asked, context: { request: c.asked, material: c.material }, guardClaims: !argv.includes('--allow-unsourced') }),
-    ...(removed.length ? { removed: { phrases: removed, previous: piece, own } } : {}) };
-  const report = await checkDraftAsync(c.name, c.std, r.text, checks).catch(() => null);
+  const report = await checkDraftAsync(c.name, c.std, text, checks).catch(() => null);
   const profile = fstore.getProfile(c.L);
   if (profile) {
-    const a = readFidelity(piece, profile); const b = readFidelity(r.text, profile);
+    const a = readFidelity(piece, profile); const b = readFidelity(text, profile);
     lines.push(b.measured ? `Your range: ${b.inBand} of ${b.measured} of your counted features inside it (before the fix: ${a.inBand} of ${a.measured}).` : 'Your range: none of your counted features steer on this skill yet.');
   }
   const at = new Date().toISOString();
-  const back = removed.length ? reintroducedRuns(r.text, removed, piece, own).map((x) => x.text) : [];
+  const back = removed.length ? reintroducedRuns(text, removed, piece, ownText).map((x) => x.text) : [];
   const rec: InvocationRecord = { ...prev, invocationId: `i${sha(`${c.sv.skillVersionHash}|fix|${prev.invocationId}|${instruction}|${at}`).slice(0, 10)}`, at,
-    provenance: 'FIX_EVALUATION', outputHash: sha(r.text), output: r.text, repair: undefined, selection: undefined,
+    provenance: 'FIX_EVALUATION', outputHash: sha(text), output: text, repair: undefined, selection: undefined,
     // A fix composes no repair chain: the invoking run's profile and route (core/loop/route.ts) are that run's, not this record's.
     settings: prev.settings ? (({ profile: _profile, route: _route, ...kept }) => kept)(prev.settings) : undefined,
     work: r.work.every((w) => w.delimited) ? { delimited: true, ...(r.work.some((w) => w.outside) ? { outside: r.work.map((w) => w.outside ?? '').filter(Boolean).join('\n\n').slice(0, 2000) } : {}) } : { delimited: false },
     fix: { of, from: prev.invocationId, instruction, by: scope.by, sentences: ids, diff: { total: diff.total, changed: diff.changed, outside: diff.outside }, spans, removed: removedNow, reintroduced: r.reintroduced, ...(unchanged.length ? { unchanged } : {}), ...(restored.length ? { restored } : {}) },
-    ...(removed.length ? { corrections: { removed: removed.length, reintroduced: back } } : {}) };
+    ...(removed.length ? { corrections: { removed: removed.length, reintroduced: back } } : {}),
+    ...(own.fixes.length || own.left.length ? { inferred: inferredItems({ ownWords: own.fixes, ownWordsLeft: own.left }) } : {}) };
   store.putInvocation(c.L, rec);
   const spent = Math.max(budget.spentUsd, processSpentUsd() - spentBefore);
   let evaluation: ReturnType<typeof buildRunEval> | null = null;
@@ -144,7 +194,8 @@ export async function fixInPlace(c: FixInPlace): Promise<{ output: string; json:
   writeAtomic(runFile('last-invocation.json'), JSON.stringify({ invocationId: rec.invocationId, skillName: c.name, input: rec.input, at, asked: c.asked,
     with: boundMaterial().filter((m) => m.path).map((m) => ({ name: m.name, path: resolvePath(m.path) })), settings: c.settings, skillVersion: c.sv.skillVersionHash }, null, 1));
   const json = { ...recordHead({ state: record?.state ?? null, standardVersionHash: c.sv.standardVersionHash, skillVersion: c.sv.skillVersionHash, certificate: rec.settings?.certificate ?? null, record }),
-    output: r.text, answer: r.text, invocationId: rec.invocationId, skillVersion: c.sv.skillVersionHash, costUsd: Number(spent.toFixed(4)),
-    rulesBroken: [], cut: [], toCheck: [], work: rec.work ?? null, report: lines, eval: evaluation, fix: { ...rec.fix, lines } };
-  return { output: r.text, json, record, conformant: evaluation?.result.conformant ?? false };
+    output: text, answer: text, invocationId: rec.invocationId, skillVersion: c.sv.skillVersionHash, costUsd: Number(spent.toFixed(4)),
+    rulesBroken: [], cut: [], toCheck: [], work: rec.work ?? null, report: lines, eval: evaluation, fix: { ...rec.fix, lines },
+    inferred: rec.inferred ?? [], ownWords: { checked: own.checked, ...(own.why ? { why: own.why } : {}) } };
+  return { output: text, json, record, conformant: evaluation?.result.conformant ?? false };
 }
