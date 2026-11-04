@@ -194,7 +194,13 @@ export function describeTable(std: Pick<StandardVersion, 'latitude' | 'consequen
 }
 
 /** One line for the work as delivered: the decision and the rows that sent it there. */
-export function deliveryLine(d: Delivery): string {
+export function deliveryLine(d: Delivery, state?: string | null): string {
   const rows = d.why.filter((w) => w.action !== 'ship').map((w) => `${w.finding}${w.entries.length ? ` (${w.entries.join(', ')})` : ''}: ${w.action}`);
-  return `Delivery: ${d.decision.replace('_', ' ').toLowerCase()}${rows.length ? `; ${rows.join('; ')}` : ''}`;
+  // TWO WORDS THAT READ AS A CONTRADICTION, SAID AS ONE THING. The state says what the checks saw (BLOCKED: a required
+  // rule was seen to fail); the delivery says what this skill's consequence table does with that. "BLOCKED" beside "ship
+  // labelled" read as the tool disagreeing with itself: the line now says the work goes out, marked, despite the failure.
+  const despite = state === 'BLOCKED' && d.decision !== 'BLOCK'
+    ? `, though a required rule failed: this skill's consequence table sends such work out ${d.decision === 'PERSON' ? 'to you for review' : 'marked'} (atelier amend --consequence changes that)`
+    : '';
+  return `Delivery: ${d.decision.replace('_', ' ').toLowerCase()}${despite}${rows.length ? `; ${rows.join('; ')}` : ''}`;
 }

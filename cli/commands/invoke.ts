@@ -494,7 +494,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
     // `answer` is the piece with the specifics left for the person to check listed under it, as on the compiled path
     const lists = d.claimAct !== 'cut' || formatOf(flag('--class') ?? store.getDocClass(L))?.claims === 'list';
     const bound = store.getMaterial(L).length > 0 || boundMaterial().length > 0;
-    const shipped = markUnsupported(d.rec.output, lists && bound && !argv.includes('--no-unsourced-note') ? d.rec.repair?.claimsToCheck ?? [] : []);
+    const shipped = markUnsupported(d.rec.output, markAsked() && lists && bound ? d.rec.repair?.claimsToCheck ?? [] : []);
     if (machine === 'json') {
       jsonWritten = true;
       process.stdout.write(`${JSON.stringify({ ...d.json, answer: shipped, costUsd: Number(spent.toFixed(4)), report: report.lines }, null, 1)}\n`);
@@ -506,7 +506,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
     if (exit) process.exitCode = exit;
     if (machine === 'answer') process.stdout.write(`${shipped}\n`);
     else if (!machine) console.log(`\n${head}${d.rec.output}\n`);
-    if (decided && !machine) console.error(`atelier: ${deliveryLine(decided)}.`);
+    if (decided && !machine) console.error(`atelier: ${deliveryLine(decided, d.evaluation?.record?.state)}.`);
     if (decided?.decision === 'PERSON') {
       const toRead = decided.why.filter((w) => w.action === 'person').flatMap((w) => w.entries);
       console.error(`atelier: sent to a person: read ${toRead.join(', ') || 'the entries named above'}. It waits in atelier report --pending; rule on it with atelier rate ${d.rec.invocationId} yes|no [--rule <id>].`);
@@ -1093,16 +1093,16 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   // WHAT A HOST READS IS THE TEXT, NOT THE REPORT. Where material is bound and the claim check lists and never
   // cuts, the sentences it could not find in the material close the delivered text, after everything the checks
   // read; the record keeps the text without them. With nothing bound the list is every specific the writer chose,
-  // which tells a reader nothing: it stays in the report. --no-unsourced-note leaves it there in every case.
-  // MARKED WHERE IT STANDS. A finding the material does not support is labelled in place as one to verify, so the
-  // person reading the review or the answer sees which claims rest on what they gave and which do not; a list after
-  // the text left the unsupported finding reading as fact where it stood. Any kind of work, once material is bound.
+  // which tells a reader nothing: it stays in the report.
+  // MARKED WHERE IT STANDS ONLY WHEN ASKED (--mark-unverified, `markAsked`): a finding the material does not support is
+  // then labelled in place as one to verify, for a draft the person reads. By default the text stays clean: what a run
+  // hands back is what gets published, and a mark in it reached a live site once. The list beside the text carries it.
   // A sentence that cannot be found as written is listed after the text, as before.
   // Only where the claim check lists and does not cut (a kind nobody measured, or one that lists by design): where it
   // cuts, what it leaves is what a qualified reading kept, and marks in finished prose are noise.
   const lists = checks.claimAct !== 'cut'
     || formatOf(flag('--class') ?? store.getDocClass(L))?.claims === 'list';
-  const listed = lists && materialBound && !argv.includes('--no-unsourced-note') ? rec.repair?.claimsToCheck ?? [] : [];
+  const listed = markAsked() && lists && materialBound ? rec.repair?.claimsToCheck ?? [] : [];
   const shipped = markUnsupported(rec.output, listed);
   // The work is printed once its delivery is decided (core/eval/consequence.ts), below: marked where it goes to a person.
   if (adoptedCarry && !methodCarry) report.say(store.CARRY_RETIRED);
@@ -1175,7 +1175,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const { refused, exit, head } = deliveryOutcome(strict, decided, evaluation?.result.conformant ?? false, argv.includes('--allow-nonconformant'));
   if (exit) process.exitCode = exit;
   if (!machine && !refused) console.log(`\n${head}${strict ? rec.output : shipped}\n`);
-  if (decided && !machine) console.error(`atelier: ${deliveryLine(decided)}.`);
+  if (decided && !machine) console.error(`atelier: ${deliveryLine(decided, evaluation?.record?.state)}.`);
   if (decided?.decision === 'PERSON' && !refused) {
     const toRead = decided.why.filter((w) => w.action === 'person').flatMap((w) => w.entries);
     console.error(`atelier: sent to a person: read ${toRead.join(', ') || 'the entries named above'}. It waits in atelier report --pending; rule on it with atelier rate ${rec.invocationId} yes|no [--rule <id>].`);
@@ -3684,6 +3684,14 @@ export function presentationRules(requirements: readonly { requirementId: string
  * Found in the text as delivered, before any label is added: as written, or (where its code spans were blanked for the
  * reader) by its words in order inside one line, each word whole. Linear in the text: no pattern is built from it.
  */
+/**
+ * WHETHER A SPECIFIC TO CHECK IS MARKED IN THE TEXT (`--mark-unverified`), and not only listed beside it. Off by default:
+ * the text a run hands back is what gets published, and a "[needs verification]" note in it reached a live site once.
+ * What is missing belongs beside the piece (`inferred`, `toCheck`), never in it. (`--no-unsourced-note`, the old way to
+ * turn the mark off, is still accepted, and changes nothing now.)
+ */
+export const markAsked = (): boolean => argv.includes('--mark-unverified') && !argv.includes('--no-unsourced-note');
+
 export function markUnsupported(text: string, listed: readonly string[]): string {
   const MARK = ' [needs verification: not shown in what you supplied]';
   const ends: number[] = []; const rest: string[] = [];

@@ -220,7 +220,7 @@ export async function verify(): Promise<void> {
   } else {
     console.log(describeVerify(report, partlyChecked(record)));
     console.log(`\n${record.state.replace('_', ' ')} · ${stateLine(record)}`);
-    if (record.delivery) console.log(deliveryLine(record.delivery));
+    if (record.delivery) console.log(deliveryLine(record.delivery, record.state));
     // WHAT FAILED, BY NAME: a check the record holds beyond the rule lines above (copying from an example, the request's
     // own checks) is named here, so the text output says what blocked the work, not only --json.
     for (const e of record.entries.filter(blocks)) console.log(`  ✗ ${e.statement.replace(/[.]$/, '')}${e.observation.evidence ? `: ${e.observation.evidence}` : ''}`);

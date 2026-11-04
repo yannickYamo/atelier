@@ -25,8 +25,7 @@ import { readingAs } from '../core/inference/step-guard.js';
 import { readOwnWords, withOwnWords, ownWordsNote, listable, type OwnWordsFix } from '../core/loop/own-words.js';
 import { inferredItems, inferredLines } from '../core/loop/inferred.js';
 import { acts, type VerifyReport } from '../core/observers/verify.js';
-import { sentencesOf } from '../core/observers/text.js';
-import { FIX_SCOPE, askedBack, fixSpans, sentenceDiff, unchangedWhy } from '../core/loop/surgical-fix.js';
+import { FIX_SCOPE, askedBack, fixSpans, fixUnitsOf, sentenceDiff, unchangedWhy } from '../core/loop/surgical-fix.js';
 import { removedStretches, reintroducedRuns } from '../core/loop/corrections.js';
 import { checkDraftAsync } from '../core/loop/run-repair.js';
 import { readFidelity } from '../core/fidelity/profile.js';
@@ -118,7 +117,8 @@ export async function fixInPlace(c: FixInPlace): Promise<{ output: string; json:
   const instruction = (flag('--complaint') ?? flag('--correcting') ?? '').trim();
   const of = flag('--corrections-of') ?? prev.fix?.of ?? prev.invocationId;
   const piece = prev.output;
-  const sentences = sentencesOf(piece).map((s) => s.text);
+  // every sentence and every table row: a cell is something a person asks to change
+  const sentences = fixUnitsOf(piece).map((s) => s.text);
   const model = contextJudgeModel();
   const scope = await readContext(FIX_SCOPE, { instruction, sentences }, model ? contextReaderClient() : null, model, { spentUsd: 0, capUsd: 0.05, maxCalls: 1 });
   if (scope.value.kind === 'WHOLE') {
@@ -188,7 +188,7 @@ export async function fixInPlace(c: FixInPlace): Promise<{ output: string; json:
     putEval(c.L, evaluation);
   } catch (e) { lines.push(`(the evaluation of the fixed piece could not be built: ${(e as Error).message.split('\n')[0]})`); }
   const record = evaluation?.record ?? null;
-  if (record) lines.push(`${record.state.replace('_', ' ')} · ${stateLine(record)}${record.delivery ? ` · ${deliveryLine(record.delivery)}` : ''}`);
+  if (record) lines.push(`${record.state.replace('_', ' ')} · ${stateLine(record)}${record.delivery ? ` · ${deliveryLine(record.delivery, record.state)}` : ''}`);
   for (const l of lines) c.say(l);
   // What `atelier fix` needs to change this piece again: this version, what was asked, and the files given with it.
   writeAtomic(runFile('last-invocation.json'), JSON.stringify({ invocationId: rec.invocationId, skillName: c.name, input: rec.input, at, asked: c.asked,

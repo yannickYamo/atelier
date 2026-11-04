@@ -176,29 +176,54 @@ const termRe = (term: string): RegExp => new RegExp(
 
 /**
  * A term may carry its replacement — `leverage=>use` — which is how a substitution table is written:
- * the left side is what must not appear, the right side is what the owner writes instead.
+ * the left side is what must not appear, the right side is what the owner writes instead. It may also carry how
+ * often it is allowed — `MCP<=1` — when the owner's rule allows a word a number of times ("MCP once at most"):
+ * the uses past that are the ones on the list.
  */
-export const splitTerm = (term: string): { avoid: string; prefer: string | null } => {
-  const i = term.indexOf('=>');
-  return i === -1 ? { avoid: term.trim(), prefer: null } : { avoid: term.slice(0, i).trim(), prefer: term.slice(i + 2).trim() || null };
+export const splitTerm = (term: string): { avoid: string; prefer: string | null; allow: number } => {
+  const cap = /<=\s*(\d+)\s*$/.exec(term);
+  const body = cap ? term.slice(0, cap.index) : term;
+  const allow = cap ? Number(cap[1]) : 0;
+  const i = body.indexOf('=>');
+  return i === -1 ? { avoid: body.trim(), prefer: null, allow } : { avoid: body.slice(0, i).trim(), prefer: body.slice(i + 2).trim() || null, allow };
 };
 
-/** Every occurrence of any term, in prose only. Each pattern is compiled once, not once per line. */
-export function findTerms(text: string, terms: readonly string[]): Span[] {
+/** A link address, blanked to spaces at the same offsets: a word inside a URL is part of an address, not a choice. */
+const LINK = /\]\([^)\s]*\)|<(?:https?:\/\/|mailto:)[^>\s]*>|\b(?:https?:\/\/|www\.)[^\s<>()\]]+/gi;
+const withoutLinks = (s: string): string => s.replace(LINK, (m) => (m.startsWith('](') ? `]${' '.repeat(m.length - 1)}` : ' '.repeat(m.length)));
+
+/** Does the request itself use this term? Then it is the person's word for this piece (see `findTerms`). */
+const namedBy = (request: string | undefined, avoid: string): boolean => !!request && termRe(avoid).test(withoutLinks(request));
+
+/**
+ * Every occurrence of any term, in prose only. Each pattern is compiled once, not once per line.
+ *
+ * Not on the list: a word inside a link address or inline code, the uses a term's own allowance permits (`MCP<=1`:
+ * the first one), and, given `request`, a term the request itself uses. That last one is the person's word for this
+ * piece ("call the section Hands on"): it is left where it stands and said in `kept`, never sent to be rewritten.
+ * Whether the request used the word or banned it is not decided here: either way the person reads it in `kept`.
+ */
+export function findTerms(text: string, terms: readonly string[], opts: { request?: string; kept?: Span[] } = {}): Span[] {
   const spans: Span[] = [];
-  const compiled = terms.map((raw) => ({ ...splitTerm(raw), re: termRe(splitTerm(raw).avoid) })).filter((c) => c.avoid);
+  const compiled = terms.map((raw) => { const t = splitTerm(raw); return { ...t, re: termRe(t.avoid), named: namedBy(opts.request, t.avoid), seen: 0 }; }).filter((c) => c.avoid);
   for (const b of blocksOf(text)) {
     const j = join(b);
+    const prose = withoutLinks(j.text);
     for (const c of compiled) {
       c.re.lastIndex = 0;
       let m: RegExpExecArray | null;
-      while ((m = c.re.exec(j.text)) !== null) {
+      while ((m = c.re.exec(prose)) !== null) {
         const start = j.at[m.index]; const end = j.at[m.index + m[0].length - 1] + 1;
-        spans.push({ start, end, text: text.slice(start, end),
-          why: c.prefer ? `"${c.avoid}" is on the list; write "${c.prefer}"` : `"${c.avoid}" is on the list` });
+        const span = { start, end, text: text.slice(start, end),
+          why: c.prefer ? `"${c.avoid}" is on the list; write "${c.prefer}"` : `"${c.avoid}" is on the list` };
+        c.seen += 1;
+        if (c.named) { opts.kept?.push({ ...span, why: `"${c.avoid}" is on the list, and the request uses it: left as the person's word` }); continue; }
+        if (c.seen <= c.allow) continue;
+        spans.push(span);
       }
     }
   }
+  opts.kept?.sort((a, b) => a.start - b.start);
   return spans.sort((a, b) => a.start - b.start);
 }
 

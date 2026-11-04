@@ -33,6 +33,8 @@ import { PIECE_ROUTE, type Route } from '../core/direct/route.js';
 import { piecesBlock, taskBlock, DRAFT_ASK, reviewAsk, EDITS_SHOWN } from '../core/direct/prompt.js';
 import { correctionsOf } from '../core/direct/kept.js';
 import { checkDraftAsync, refineToStandard, REPAIR_PASSES, CLAIMS_TO_CHECK, INCONCLUSIVE, PUBLIC_FACTS } from '../core/loop/run-repair.js';
+import { supportIsIn, numbersIn } from '../core/loop/claim-extract.js';
+import type { Span } from '../core/observers/registry.js';
 import { planFor } from '../core/plan/execution-plan.js';
 import { buildRunEval } from './eval-run.js';
 import { putEval } from '../core/state/eval-store.js';
@@ -143,9 +145,31 @@ const brokenOf = (report: VerifyReport): string[] =>
   report.checked.filter((x) => acts(x) && x.result.verdict === 'VIOLATED' && !x.requirementId.startsWith('UNSOURCED')).map((x) => x.requirementId);
 
 /** Every specific the claim check left for the person to check, read off the report's claim lines. */
-const toCheckOf = (report: Awaited<ReturnType<typeof checkDraftAsync>>): string[] =>
-  report.checked.filter((c) => ['UNSOURCED', CLAIMS_TO_CHECK, INCONCLUSIVE, PUBLIC_FACTS].includes(c.requirementId) && c.result.verdict === 'VIOLATED')
-    .flatMap((c) => c.result.spans.map((s) => s.text.trim())).filter(Boolean);
+/** One sentence listed for the person, and the words in it a reader found untraced, where it named them. */
+export interface ToCheck { readonly sentence: string; readonly specific: string | null }
+
+/**
+ * WHAT IS LISTED BESIDE THE PIECE, FROM WHAT THE CHECKS FOUND. A sentence that is itself in what the person gave (its
+ * words in one passage of the material or the request, and every number of it there) is never listed as not given,
+ * whichever check raised it: "The CRM holds the deals", copied from the notes, was listed once as a specific to check.
+ * Where a reader named the part of the sentence it could not trace, that part is said, so the person reads which words.
+ */
+export const toCheckOf = (report: Awaited<ReturnType<typeof checkDraftAsync>>, known: string): ToCheck[] => {
+  const knownNumbers = new Set(numbersIn(known));
+  const given = (t: string): boolean => supportIsIn(t, known) && numbersIn(t).every((n) => knownNumbers.has(n));
+  const out: ToCheck[] = [];
+  for (const c of report.checked) {
+    if (![...LISTED_IDS].includes(c.requirementId) || c.result.verdict !== 'VIOLATED') continue;
+    for (const sp of c.result.spans as readonly (Span & { specific?: string })[]) {
+      const sentence = sp.text.trim();
+      if (!sentence || given(sentence) || out.some((x) => x.sentence === sentence)) continue;
+      const specific = sp.specific?.trim();
+      out.push({ sentence, specific: specific && specific !== sentence ? specific : null });
+    }
+  }
+  return out;
+};
+const LISTED_IDS: ReadonlySet<string> = new Set(['UNSOURCED', CLAIMS_TO_CHECK, INCONCLUSIVE, PUBLIC_FACTS]);
 
 /** The direct run, recorded. Returns the record and the JSON a `--json` run prints. */
 export async function runDirect(c: DirectContext) {
@@ -177,6 +201,8 @@ export async function runDirect(c: DirectContext) {
   let repaired: string[] = [];
   // set inside the refine step; a holder, so the type is not narrowed to its first value
   const seen: { report: VerifyReport | null; checks: ReturnType<typeof checksFor> | null } = { report: null, checks: null };
+  // what the last check listed, with the words each reader named: the record keeps the sentences, the person reads both
+  const listedHere: ToCheck[] = [];
   const refine = async (draft: string): Promise<{ output: string; repair: RepairRecord | null }> => {
     draftText = draft;
     let output = draft;
@@ -192,7 +218,7 @@ export async function runDirect(c: DirectContext) {
     // never at the cost of another rule. Everything else the checks find (a specific not in what was given, a habit
     // missed) is listed beside the piece and changes nothing. `--no-repair` changes nothing; the piece is still read, so
     // its evaluation rests on the checks, never on nothing.
-    let violatedBefore: string[] = []; let violated: string[] = []; let toCheck: string[] = []; let passes = 0;
+    let violatedBefore: string[] = []; let violated: string[] = []; let toCheck: ToCheck[] = []; let passes = 0;
     let more: Partial<RepairRecord> = {};
     {
       try {
@@ -207,11 +233,12 @@ export async function runDirect(c: DirectContext) {
         }
         seen.report = report; seen.checks = checks;
         violated = brokenOf(report);
-        toCheck = toCheckOf(report);
+        toCheck = toCheckOf(report, checks.evidence ?? '');
+        listedHere.splice(0, listedHere.length, ...toCheck);
       } catch (e) { c.say(`(the checks could not read the piece: ${(e as Error).message.split('\n')[0]}; it is delivered unchecked)`); }
     }
     repaired = violatedBefore.filter((id) => !violated.includes(id));
-    return { output, repair: { ...more, passes, violatedBefore, violatedAfter: violated, originalOutputHash: sha(draft), draft, claimsToCheck: toCheck,
+    return { output, repair: { ...more, passes, violatedBefore, violatedAfter: violated, originalOutputHash: sha(draft), draft, claimsToCheck: toCheck.map((t) => t.sentence),
       why: passes ? `written directly from the author's pieces and reviewed once; the sentences breaking ${violatedBefore.join(', ')} were rewritten` : 'written directly from the author\'s pieces, reviewed once; the checks are listed beside the piece, nothing was changed by them' } };
   };
   const direct = (): DirectRecord => ({ version: DIRECT_VERSION, asked: c.asked, from: catalogue.length,
@@ -230,8 +257,9 @@ export async function runDirect(c: DirectContext) {
   if (violated.length) c.say(`Beside the piece: ${violated.length} required rule(s) of the standard still not held: ${violated.join(', ')}. atelier fix "<what was wrong>" changes the sentences you name.`);
   // Each specific the checks left in the piece, listed beside it as every run lists them (core/loop/inferred.ts): what
   // `atelier run` shows, and what --json carries as `inferred`.
+  const named = new Map(listedHere.map((t) => [t.sentence, t.specific]));
   const inferred: InferredItem[] = toCheck.filter((t) => rec.output.includes(t.slice(0, 60)))
-    .map((t) => ({ kind: 'specific', what: t.slice(0, 160), settled: 'left in the piece for you to check', add: 'your source for it, as material (--with)' }));
+    .map((t) => { const sp = named.get(t); return { kind: 'specific', what: sp ? `"${sp.slice(0, 100)}", in: ${t.slice(0, 160)}` : t.slice(0, 160), settled: 'left in the piece for you to check', add: 'your source for it, as material (--with)' }; });
   for (const l of inferredLines(inferred)) c.say(l);
   if (!review.ran && review.why) c.detail(`Self-review: not run (${review.why}).`);
   if (draftText && draftText !== rec.output) c.detail('The self-review revised the first draft; the first draft is kept on the record.');

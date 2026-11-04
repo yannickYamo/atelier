@@ -125,7 +125,7 @@ export const BOOLEAN_OPTIONS: readonly string[] = [
   // the run stage by stage (cli/commands/report.ts, core/eval/stages.ts)
   'stages',
   'cut', 'no-cut', 'draft-examples',
-  'reflect', 'no-reflect', 'report', 'phrase', 'calibrate', 'placeholders', 'no-placeholders', 'no-unsourced-note', 'no-redraft', 'no-model', 'always', 'evaluation', 'learn', 'include-reserved', 'taste', 'no-taste', 'no-brief', 'examples-first', 'no-infer-method', 'voices', 'setup', 'auto', 'no-fidelity', 'fidelity', 'rollback', 'distill', 'next', 'sections', 'panel', 'quiet', 'label', 'typicality', 'read-subjects', 'strict', 'allow-nonconformant', 'full', 'no-index', 'test-run',
+  'reflect', 'no-reflect', 'report', 'phrase', 'calibrate', 'placeholders', 'no-placeholders', 'no-unsourced-note', 'mark-unverified', 'no-redraft', 'no-model', 'always', 'evaluation', 'learn', 'include-reserved', 'taste', 'no-taste', 'no-brief', 'examples-first', 'no-infer-method', 'voices', 'setup', 'auto', 'no-fidelity', 'fidelity', 'rollback', 'distill', 'next', 'sections', 'panel', 'quiet', 'label', 'typicality', 'read-subjects', 'strict', 'allow-nonconformant', 'full', 'no-index', 'test-run',
   // before the draft: no questions, no plan (cli/prewrite.ts)
   'no-questions', 'no-plan',
   // a deep run (cli/deep.ts), and its web pass turned off

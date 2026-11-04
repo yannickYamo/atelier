@@ -372,12 +372,15 @@ describe('through the binary: atelier method, then a run held to the method', ()
     expect(existsSync(join(data, 'skills', 'analysis', 'class.txt'))).toBe(false);
   });
 
-  it('a sentence the claim check cannot find is delivered, never cut, and marked where it stands as one to verify', async () => {
+  it('a sentence the claim check cannot find is delivered, never cut, never marked in the text unless asked (--mark-unverified)', async () => {
     const story = 'Last week I interviewed 40 of our customers and 31 of them said they would switch.';
     await script(NEW_PIECE.replace('## Risks\n\n', `## Risks\n\n${story} `));
+    // the text handed back is what gets published: clean by default
     const r = atelier('invoke', '--skill', 'analysis', '--task=Compare Cygnus and Dorado on price for a small team.', '--with', 'prices=new-prices.md', '--answer-only', ...BACKEND());
     expect(r.out).toContain(story);
-    expect(r.out).toContain(`${story} [needs verification: not shown in what you supplied]`);
+    expect(r.out).not.toContain('needs verification');
+    const marked = atelier('invoke', '--skill', 'analysis', '--task=Compare Cygnus and Dorado on price for a small team.', '--with', 'prices=new-prices.md', '--answer-only', '--mark-unverified', ...BACKEND());
+    expect(marked.out).toContain(`${story} [needs verification: not shown in what you supplied]`);
     const quiet = atelier('invoke', '--skill', 'analysis', '--task=Compare Cygnus and Dorado on price for a small team.', '--with', 'prices=new-prices.md', '--answer-only', '--no-unsourced-note', ...BACKEND());
     expect(quiet.out).toContain(story);
     expect(quiet.out).not.toContain('needs verification');

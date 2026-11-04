@@ -82,10 +82,10 @@ describe('what the writer and the review are sent', () => {
     const edits = Array.from({ length: EDITS_SHOWN + 2 }, (_, i) => ({ before: `Old ${i}.`, after: i === 0 ? '' : `New ${i}.` }));
     const r = reviewAsk(' the draft ', { material: [{ name: 'n', text: 't' }], edits });
     expect(r).toContain('<draft>\nthe draft\n</draft>');
-    expect(r).toContain('against the material and the task (every figure, name and story must come from them)');
+    expect(r).toContain('against the material and the task (every figure, name and story must come from them, and so must every small detail');
     expect(r).toContain('- "Old 0." was cut'); expect(r).toContain('- "Old 1." became "New 1."');
     expect(r).not.toContain(`Old ${EDITS_SHOWN}.`);
-    expect(reviewAsk('d', { material: [] })).toContain('against the task (every figure, name and story must come from it)');
+    expect(reviewAsk('d', { material: [] })).toContain('against the task (every figure, name and story must come from it, and so must every small detail');
   });
 });
 
@@ -324,7 +324,8 @@ describe('what the direct path must not lose (found in review)', () => {
     // the specifics not in what was given: listed as `inferred`, and under the answer
     expect(j.toCheck.length).toBeGreaterThan(0);
     expect(j.inferred.some((i) => i.kind === 'specific')).toBe(true);
-    expect(j.answer).not.toBe(j.output); expect(j.answer.startsWith(j.output)).toBe(true);
+    // the text handed back is the piece itself: a note in it would be published
+    expect(j.answer).toBe(j.output);
     // `atelier run`, the person's command, shows them
     await setBackend({ byTool: { __plain: [DRAFT, INVENTED] } });
     const shown = s.run('run', 'Compare Logseq and Craft.', '--skill', 'posts', '--with', 'notes=notes.md', '--claims', 'pattern', ...BACKEND());

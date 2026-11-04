@@ -91,12 +91,18 @@ const nums = (p: Measurement['params'], k: string): readonly number[] | null => 
 const OBSERVERS: Readonly<Record<ObserverId, Observer>> = {
   LEXICON: {
     id: 'LEXICON',
-    describe: (p) => `none of: ${(list(p, 'terms') ?? []).map((t) => { const x = splitTerm(t); return x.prefer ? `${x.avoid} (write ${x.prefer})` : x.avoid; }).join(', ')}`,
+    describe: (p) => `none of: ${(list(p, 'terms') ?? []).map((t) => {
+      const x = splitTerm(t);
+      const allowed = x.allow ? ` (${x.allow === 1 ? 'once' : `${x.allow} times`} at most)` : '';
+      return x.prefer ? `${x.avoid}${allowed} (write ${x.prefer})` : `${x.avoid}${allowed}`;
+    }).join(', ')}`,
     validate: (p) => ((list(p, 'terms') ?? []).length ? null : 'a lexicon needs at least one term'),
-    observe(text, p) {
-      const spans = findTerms(text, list(p, 'terms') ?? []);
+    observe(text, p, context?: CheckContext) {
+      const kept: Span[] = [];
+      const spans = findTerms(text, list(p, 'terms') ?? [], { request: context?.request, kept });
+      const keptNote = kept.length ? `; left as the request's own word: ${[...new Set(kept.map((s) => s.text.toLowerCase()))].join(', ')}` : '';
       return { verdict: spans.length ? 'VIOLATED' : 'MET', spans, value: spans.length,
-        detail: spans.length ? `${spans.length} use(s): ${[...new Set(spans.map((s) => s.text.toLowerCase()))].join(', ')}` : 'none used' };
+        detail: `${spans.length ? `${spans.length} use(s): ${[...new Set(spans.map((s) => s.text.toLowerCase()))].join(', ')}` : 'none used'}${keptNote}` };
     },
   },
   SENTENCE_LENGTH: {

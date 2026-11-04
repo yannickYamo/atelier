@@ -129,7 +129,11 @@ const LINKED = /\]\(https?:|https?:\/\//;
 const STOP = new Set(['the', 'and', 'that', 'with', 'this', 'from', 'were', 'was', 'have', 'had', 'into', 'about', 'their', 'there', 'then', 'than', 'when', 'what', 'which', 'would', 'could', 'because', 'years', 'ago', 'last', 'later', 'months', 'weeks']);
 
 /** An unsupported claim: a first-person or second-hand story, a figure presented as a finding, or an anonymous quotation. */
-export interface Claim extends Span { readonly kind: 'EXPERIENCE' | 'FIGURE' | 'SOURCE' }
+export interface Claim extends Span {
+  readonly kind: 'EXPERIENCE' | 'FIGURE' | 'SOURCE';
+  /** the words of the sentence a reader found untraced, where it named them: the sentence may hold more that was given */
+  readonly specific?: string;
+}
 
 const contentWords = (s: string): string[] => wordsOf(s).map((w) => w.toLowerCase()).filter((w) => w.length >= 4 && !STOP.has(w));
 

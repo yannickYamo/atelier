@@ -300,7 +300,7 @@ describe('through the binary: the reader runs on the person\'s own backend when 
     // It fails the check; on a standard held as grounded (it has no latitude) an untraced specific goes to a person: exit 0.
     expect(gated.code).toBe(0);
     expect(gated.out).toMatch(/FAIL {2}UNSOURCED {2}Never/);
-    expect(gated.out).toMatch(/Delivery: person; untraced-specific \(specifics\): person/);
+    expect(gated.out).toMatch(/Delivery: person, though a required rule failed: this skill's consequence table sends such work out to you for review \(atelier amend --consequence changes that\); untraced-specific \(specifics\): person/);
     expect(gated.out).toMatch(/ATELIER_CLAIMS_GATE=reader: claim reader \(my-small-model, prompt \w+\) is NOT QUALIFIED/);
   });
 

@@ -154,7 +154,7 @@ export async function run(): Promise<void> {
   for (const l of card ? renderRunCard(card, process.stdout.columns || 100) : ['── Evaluation ──', without]) console.log(l);
   // WHAT WAS DONE WITH IT (core/eval/consequence.ts), and where it waits when it went to a person.
   const delivery = result.eval?.record?.delivery;
-  if (delivery) console.log(`\n${deliveryLine(delivery)}${delivery.decision === 'PERSON' ? `\nSent to a person: it waits in atelier report --pending; rule on it with atelier rate ${result.invocationId} yes|no [--rule <id>].` : ''}`);
+  if (delivery) console.log(`\n${deliveryLine(delivery, result.eval?.record?.state)}${delivery.decision === 'PERSON' ? `\nSent to a person: it waits in atelier report --pending; rule on it with atelier rate ${result.invocationId} yes|no [--rule <id>].` : ''}`);
   if (typed.report) console.log(`\n${result.report.join('\n')}`);
   process.exitCode = engine.code !== 0 ? engine.code : exitFor(result.eval);
 }

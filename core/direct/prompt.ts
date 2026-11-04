@@ -68,7 +68,7 @@ export function reviewAsk(draft: string, x: Pick<DirectInput, 'material' | 'edit
 ${draft.trim()}
 </draft>
 
-Check the draft against the pieces above (voice, structure, how they argue)${rulesBlock(x.rules) ? ', against the author\'s rules (each one must hold)' : ''} and against ${sources} (every figure, name and story must come from ${x.material.length ? 'them' : 'it'}).${corrections}
+Check the draft against the pieces above (voice, structure, how they argue)${rulesBlock(x.rules) ? ', against the author\'s rules (each one must hold)' : ''} and against ${sources} (every figure, name and story must come from ${x.material.length ? 'them' : 'it'}, and so must every small detail of when, how often, how many or who: "two months ago", "every discovery call", "ask whoever answers support". A detail nobody gave is written out of the sentence, which then says only what was given; never guess one to make a sentence concrete).${corrections}
 
 Then revise it. Return only the full revised piece, in Markdown, starting with its title if it has one.`;
 }
