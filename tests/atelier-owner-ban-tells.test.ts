@@ -86,5 +86,33 @@ describe('the case-shaped fixture through the binary', () => {
     expect(findPattern(j.output, 'MACHINE_TELL').map((s) => s.family)).toEqual([]);
     const bodies = ((await (await fetch(`http://127.0.0.1:${port}/__log`)).json()) as { bodies: string[] }).bodies;
     expect(bodies.filter((b) => b.includes('emit_piece')).some((b) => b.includes('as the examples do'))).toBe(false);
+    // the writer was shown the owner's rules, in their words, beside the task (cli/direct.ts): the bans among them
+    const writer = bodies.filter((b) => !(JSON.parse(b) as { tools?: unknown[] }).tools?.length).at(-1) ?? '';
+    expect(writer).toContain('<rules>');
+    expect(writer).toContain('- No em dashes.');
+  });
+
+  it('a ban the rewrite could not bring back, where the owner made a failed check block: headed BLOCKED, exit 1', async () => {
+    const checks = { checks: [
+      { id: '1', how: 'judgement', measure: null, source: null, quote: 'No AI tells', means: 'yours to judge' },
+      { id: '2', how: 'measure', measure: 'PATTERN_RATE:pattern=EM_DASH,maxPer1000=0', source: null, quote: 'No em dashes', means: 'no em dash' },
+      { id: '3', how: 'measure', measure: 'PATTERN_RATE:pattern=NOT_X_ITS_Y,maxPer1000=0', source: null, quote: 'not X, it\'s Y', means: 'no "not X, it\'s Y"' },
+      { id: '4', how: 'judgement', measure: null, source: null, quote: 'No named sources', means: 'yours to judge' }] };
+    // a rewriter that gives nothing back: the contrast stays
+    await fetch(`http://127.0.0.1:${port}/__set`, { method: 'POST', body: JSON.stringify({ byTool: { emit_step_checks: checks, emit_piece: { piece: `<work>${DRAFT}</work>` }, emit_draft: { text: DRAFT }, emit_replacements: { rewriteSpans: [] } } }) });
+    const data = mkdtempSync(join(tmpdir(), 'atelier-ban-data-')); const proj = mkdtempSync(join(tmpdir(), 'atelier-ban-proj-'));
+    const env = { ...process.env, ATELIER_DATA: data, ATELIER_PROJECT_DIR: proj, ATELIER_PRICE_IN: '1', ATELIER_PRICE_OUT: '1', ANTHROPIC_API_KEY: '', ANTHROPIC_AUTH_TOKEN: '', ATELIER_CONTEXT_READER: 'scripted' };
+    const be = ['--provider', 'openai-compatible', '--base-url', `http://127.0.0.1:${port}`, '--model', 'scripted'];
+    const cli = (...a: string[]): { code: number; out: string; err: string } => {
+      try { return { code: 0, out: execFileSync('node', [CLI, ...a], { encoding: 'utf8', cwd: proj, env, stdio: ['ignore', 'pipe', 'pipe'] }), err: '' }; }
+      catch (e) { const x = e as { status: number; stdout: string; stderr: string }; return { code: x.status, out: x.stdout, err: x.stderr }; }
+    };
+    expect(cli('new', join(FX, 'voice'), '--method', join(FX, 'rules.md'), '--name', 'post-voice', '--yes', '--latitude', 'creative', ...be).code).toBe(0);
+    const a = cli('amend', '--skill', 'post-voice', '--consequence', 'trusted-fail=block,untrusted-fail=block', '--reason', 'a broken ban is not for use');
+    expect(a.code, a.out + a.err).toBe(0);
+    const r = cli('invoke', '--skill', 'post-voice', 'Write a long post on X reacting to this week\'s news about the wharf, about 450 to 700 words.', '--with', `notes=${join(FX, 'points.md')}`, '--claims', 'pattern', ...be);
+    expect(r.code, r.out + r.err).toBe(1);
+    expect(r.out).toContain('BLOCKED (not for use as it is):');
+    expect(r.err).toMatch(/atelier: .*block/i);
   });
 });

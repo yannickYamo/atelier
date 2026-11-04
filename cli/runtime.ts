@@ -82,6 +82,10 @@ export const VALUED_OPTIONS: readonly string[] = ['correcting', 'moves', 'set-as
   // `atelier evolve`: the briefs to work on, how many rounds, and (to a run) what earlier drafts left out
   'briefs', 'rounds', 'carry-note',
   'with',
+  // the direct writer (cli/direct.ts): which path writes, at what effort, and how many characters of the author's pieces it is shown
+  'pipeline', 'effort', 'piece-chars',
+  // `atelier keep`: the request a kept piece answered, when no run is behind it
+  'request',
   'api-key-env', 'applies-when', 'arm-set', 'backend', 'base-url', 'brief',
   'candidate', 'cap', 'complaint', 'context', 'decision',
   'declare-viewed', 'decisions', 'description', 'drafts', 'discovery-backend', 'discovery-base-url', 'discovery-model',
@@ -112,7 +116,7 @@ export const VALUED_OPTIONS: readonly string[] = ['correcting', 'moves', 'set-as
 
 export const BOOLEAN_OPTIONS: readonly string[] = [
   'accept', 'accept-new-binding', 'fix-grammar', 'profile', 'auto-reserve', 'cluster-per-file', 'drop', 'dry-run', 'indifferent',
-  'allow-unsourced', 'answer-only', 'bare', 'clear', 'holdout', 'json', 'list', 'loop', 'no-contrast', 'no-repair', 'no-coverage', 'repair', 'hook', 'never-this-transition', 'no-negative-probe', 'none', 'public-source',
+  'allow-unsourced', 'answer-only', 'bare', 'clear', 'holdout', 'json', 'list', 'loop', 'no-contrast', 'no-repair', 'no-coverage', 'no-review', 'remove', 'repair', 'hook', 'never-this-transition', 'no-negative-probe', 'none', 'public-source',
   'ai-assisted', 'blind-expert', 'delivery-proven', 'no-ai-assist', 'per-passage',
   'regenerate',
   'review', 'score', 'skip', 'skip-methods', 'yes', 'baseline', 'qualify', 'promote',

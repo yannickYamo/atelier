@@ -155,20 +155,20 @@ describeWithEngine('through the binary', () => {
     const { data, all } = seed('run');
     const piece = 'He are late to the meeting. The plan still holds.';
     await script(piece);
-    const out = all('run', 'a short note', ...model());
+    const out = all('run', '--pipeline', 'legacy', 'a short note', ...model());
     expect(out).toContain(piece);
     expect(out).toMatch(/NEEDS REVIEW/);
     expect(out).not.toMatch(/BLOCKED/);
     expect(out.replace(/\s+/g, ' ')).toMatch(/listed for you to check: \d+ possible slips?: "are" \(subject–verb agreement: "are" → "is"\)/);
     await script(piece);
-    const fixedOut = all('invoke', 'a short note', ...model(), '--fix-grammar', '--json');
+    const fixedOut = all('invoke', '--pipeline', 'legacy', 'a short note', ...model(), '--fix-grammar', '--json');
     const shown = JSON.parse(fixedOut.slice(fixedOut.indexOf('{'))) as { output: string; invocationId: string };
     expect(shown.output).toContain('He is late to the meeting.');
     const rec = JSON.parse(readFileSync(join(data, 'skills', 'posts', 'invocations', `${shown.invocationId}.json`), 'utf8')) as { repair?: { why: string } };
     expect(rec.repair?.why).toMatch(/fixed without a model: \w+: 1 mechanical error\(s\) corrected: "are" → "is"/);
     // The change is shown on the run itself, too.
     await script(piece);
-    const said = all('run', 'a short note', ...model(), '--fix-grammar', '--report');
+    const said = all('run', '--pipeline', 'legacy', 'a short note', ...model(), '--fix-grammar', '--report');
     expect(said).toContain('He is late to the meeting.');
     expect(said).toMatch(/"are" → "is"/);
     expect(readdirSync(join(data, 'skills', 'posts', 'invocations')).length).toBe(3);
@@ -177,7 +177,7 @@ describeWithEngine('through the binary', () => {
   it('a clean run reads the grammar rule met', async () => {
     const { all } = seed('clean');
     await script('He is late to the meeting. The plan still holds.');
-    const json = all('invoke', 'a short note', ...model(), '--json');
+    const json = all('invoke', '--pipeline', 'legacy', 'a short note', ...model(), '--json');
     const shown = JSON.parse(json.slice(json.indexOf('{'))) as { rules: { checked: { statement: string; verdict: string; detail: string }[] } };
     expect(shown.rules.checked.find((c) => c.statement.startsWith('No mechanical errors'))).toMatchObject({ verdict: 'MET', detail: 'no possible slip found' });
   }, 240_000);

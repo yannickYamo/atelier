@@ -10,6 +10,7 @@
 // No telemetry. No network. Corpus and outputs stay where the user put them; this stores metadata,
 // standards and events.
 
+import type { KeptPiece } from '../direct/kept.js';
 import type { StoredSignal } from '../observers/selection.js';
 import type { Voice } from '../compiler/voice.js';
 import type { CompositeRecord } from '../composite/selection.js';
@@ -236,6 +237,16 @@ export function restoreCarry(l: StoreLayout): StoredCarry | null {
   keepCarry(l, now);
   if (now.before) writeAtomic(carryFile(l), `${JSON.stringify(now.before, null, 1)}\n`); else rmSync(carryFile(l));
   return now.before;
+}
+
+/** The pieces the person kept from runs (`atelier keep`, core/direct/kept.ts), oldest first. */
+export function getKept(l: StoreLayout): KeptPiece[] {
+  const p = join(dirs(l).base, 'kept.json');
+  return existsSync(p) ? readJson<KeptPiece[]>(p, { kind: 'array', what: 'the pieces you kept' }) : [];
+}
+export function setKept(l: StoreLayout, kept: readonly KeptPiece[]): void {
+  mkdirSync(dirs(l).base, { recursive: true });
+  writeAtomic(join(dirs(l).base, 'kept.json'), JSON.stringify(kept, null, 1));
 }
 
 /** The author's passages a skill serves (core/compiler/voice.ts), chosen at build; null when off or never chosen. */

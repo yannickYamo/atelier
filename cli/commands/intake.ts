@@ -62,7 +62,7 @@ export function autoReserveIds(ids: readonly string[], rank: (id: string) => num
   return [...ids].sort((a, b) => rank(a) - rank(b) || sha(a).localeCompare(sha(b))).slice(0, k);
 }
 
-export async function intake(path: string, workType: string, mode?: 'GENERATE' | 'GUARD' | 'RESPOND', opts: { readonly voices?: VoiceGrouping | null } = {}): Promise<void> {
+export async function intake(path: string, workType: string, mode?: 'GENERATE' | 'GUARD' | 'RESPOND', opts: { readonly voices?: VoiceGrouping | null; readonly apart?: boolean } = {}): Promise<void> {
   let minChars = minCharsFor(mode);
   const dir = resolve(path);
   if (!existsSync(dir)) die(`no such path: ${dir}`);
@@ -271,7 +271,9 @@ export async function intake(path: string, workType: string, mode?: 'GENERATE' |
   // NONE DECLARED: the voices `atelier new` found in the writing itself (core/composite/voices.ts), when it found more
   // than one; a piece it did not group is said to be unattributed, never guessed into a voice.
   const declared = detectAuthors(goldenFiles.map((r) => ({ id: r.file, text: r.text })), flagAll('--authors'));
-  const voices = !declared && opts.voices && opts.voices.groups.length > 1 ? opts.voices : null;
+  // BUILT APART ONLY WHEN ASKED (`atelier new --voices`): one folder is one voice. The grouping is still recorded, so a
+  // later run can see the kinds of piece the folder holds, but it never turns one author's folder into a composite.
+  const voices = !declared && opts.apart && opts.voices && opts.voices.groups.length > 1 ? opts.voices : null;
   const inferredMap = voices ? voicesAsAuthors(voices) : null;
   const inferredOf = inferredMap ? Object.fromEntries(goldenFiles.map((r) => [r.file, inferredMap.of[r.file] ?? UNATTRIBUTED])) : null;
   const authors = declared ?? (inferredMap && inferredOf ? { ...inferredMap, names: [...inferredMap.names, ...(Object.values(inferredOf).includes(UNATTRIBUTED) ? [UNATTRIBUTED] : [])], of: inferredOf } : null);

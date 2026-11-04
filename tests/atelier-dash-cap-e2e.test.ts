@@ -65,7 +65,7 @@ describe('the dash cap and the plan, through the binary', () => {
     const { cli } = project();
     const built = cli('new', join(FX, 'voice'), '--method', join(FX, 'rules.md'), '--name', 'post-voice', '--latitude', 'creative', ...be());
     expect(built).toContain('blocks nothing until you');
-    const out = cli('invoke', '--skill', 'post-voice', 'Write a post about the wharf, about 450 to 700 words.', '--json', '--claims', 'pattern', '--no-questions', '--no-plan', '--no-repair', ...be());
+    const out = cli('invoke', '--pipeline', 'legacy', '--skill', 'post-voice', 'Write a post about the wharf, about 450 to 700 words.', '--json', '--claims', 'pattern', '--no-questions', '--no-plan', '--no-repair', ...be());
     const j = JSON.parse(out.slice(out.indexOf('{'))) as Record<string, unknown>;
     const writer = (await log()).filter((b) => b.includes('emit_piece')).pop() ?? '';
     expect(writer).toContain('Keep em dashes (—) to at most 20.5 per 1,000 words, as the examples do.');
@@ -81,7 +81,7 @@ describe('the dash cap and the plan, through the binary', () => {
     // a writer that uses what it is served: the exact figure where it was given one, a guess where it was not
     await fetch(`http://127.0.0.1:${port}/__set`, { method: 'POST', body: JSON.stringify({ byTool: { emit_piece: { piece: `<work>${UNSERVED}</work>` }, emit_plan: PLAN },
       when: [{ containsAll: ['emit_piece', '$4.27 million'], answer: { piece: `<work>${SERVED}</work>` } }] }) });
-    const out = cli('invoke', '--skill', 'quay', 'Write a post on the harbour works.', '--with', `notes=${notes}`, '--json', '--claims', 'pattern', '--no-questions', '--no-repair', ...be());
+    const out = cli('invoke', '--pipeline', 'legacy', '--skill', 'quay', 'Write a post on the harbour works.', '--with', `notes=${notes}`, '--json', '--claims', 'pattern', '--no-questions', '--no-repair', ...be());
     const j = JSON.parse(out.slice(out.indexOf('{'))) as { output: string; plan: unknown };
     expect(j.plan).not.toBeNull();
     const writer = (await log()).filter((b) => b.includes('emit_piece')).pop() ?? '';

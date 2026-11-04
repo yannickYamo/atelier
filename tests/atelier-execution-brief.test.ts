@@ -128,7 +128,7 @@ describe('through a run', () => {
       catch (e) { const x = e as { status: number; stdout: string; stderr: string }; return { code: x.status, out: x.stdout + x.stderr }; }
     };
     expect(run('new', 'examples', '--method', 'method.md', '--name', 'review', '--yes', ...BACKEND()).code).toBe(0);
-    const r = run('invoke', '--skill', 'review', request, '--with', 'change=change.diff', '--json', ...BACKEND());
+    const r = run('invoke', '--pipeline', 'legacy', '--skill', 'review', request, '--with', 'change=change.diff', '--json', ...BACKEND());
     expect(r.code, r.out).toBe(0);
     const json = JSON.parse(r.out.slice(r.out.indexOf('\n{') + 1)) as { output: string | null; invocationId: string; schema: string; state: string; record: unknown; certificate: { errorBound: null } | null };
     // THE ONE RECORD HEAD (core/eval/certificate.ts): the keys `atelier verify --json` prints too
@@ -152,11 +152,11 @@ describe('through a run', () => {
     expect(r.out).toMatch(/set aside for this request: the request says/);
     // THE NEED FOR THE METHOD DECIDES, NOT THE WORD COUNT: three words with the diff bound get the brief; a bare thank-you does not
     const before = (await promptsFor('emit_execution_brief')).length;
-    const terse = run('invoke', '--skill', 'review', 'Review this change.', '--with', 'change=change.diff', '--json', ...BACKEND());
+    const terse = run('invoke', '--pipeline', 'legacy', '--skill', 'review', 'Review this change.', '--with', 'change=change.diff', '--json', ...BACKEND());
     expect(terse.code, terse.out).toBe(0);
     expect((await promptsFor('emit_execution_brief')).length).toBe(before + 1);
     expect((await promptsFor('emit_piece')).at(-1) ?? '').toContain("For this request, my method's steps that apply");
-    const short = run('invoke', '--skill', 'review', 'Thanks, done.', '--json', ...BACKEND());
+    const short = run('invoke', '--pipeline', 'legacy', '--skill', 'review', 'Thanks, done.', '--json', ...BACKEND());
     expect(short.code, short.out).toBe(0);
     expect((await promptsFor('emit_execution_brief')).length).toBe(before + 1);
     const shortRec = store.listInvocations(L).find((i) => i.invocationId === (JSON.parse(short.out.slice(short.out.indexOf('\n{') + 1)) as { invocationId: string }).invocationId)!;

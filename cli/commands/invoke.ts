@@ -60,7 +60,7 @@ import { isGeneralScope } from '../../core/state/canonical-state.js';
 import type { RepairRecord, RepairEdits, GradedRecord, Requirement, ControllerRecord, ControllerDecisionRecord, ShapeRoundSteps, StandardVersion } from '../../core/state/canonical-state.js';
 import { askedForRedraft, redraftHandOff, controllerRecord, recordTarget, stepLedger, stepsTaken, stepWords, type StepLedger, DEFAULT_COST, DEFAULT_EFFECT, ENFORCED_WEIGHT, SETTLED_ERROR, TARGETS_PER_STEP } from '../../core/loop/controller.js';
 import { releaseFor, implementationBlock } from '../fidelity.js';
-import { buildRunEval, copyLimit } from '../eval-run.js';
+import { buildRunEval, copyLimit, guardPiecesOf } from '../eval-run.js';
 import { fixInPlace, removedOfPiece, ownWordsOf } from '../fix-in-place.js';
 import { reintroducedRuns } from '../../core/loop/corrections.js';
 import { needsReview } from '../../core/eval/record.js';
@@ -104,13 +104,13 @@ import { findOwnershipBreaches, describeBreaches } from '../../core/state/output
 import { assertHistoryNotServed, foldRepairs } from '../../core/architecture/repair-memory.js';
 import type { SkillVersion, InvocationSettings, InferredItem } from '../../core/state/canonical-state.js';
 import * as store from '../../core/state/store.js';
-import { copyGuardPieces } from '../../core/compiler/voice.js';
 import { formatOf } from '../../core/observers/formats.js';
 import { planFor } from '../../core/plan/execution-plan.js';
 import { checkSatisfiable, describeSatisfiability, type SatisfiabilityVerdict, describeAssumed } from '../../core/state/prerequisite.js';
 import { resolveProvenance } from '../../core/fidelity/provenance.js';
 
 import { runOnce, draftMaxTokens } from '../../core/loop/run-once.js';
+import { runDirect, directWhyNot, directMaxTokens } from '../direct.js';
 import { version } from '../help.js';
 import { writeAtomic } from '../../core/state/fs-atomic.js';
 import { compareBindings, describeMismatch, describeNewSurface, detectResolvedModelDrift, bindingHash } from '../../core/runtime/binding.js';
@@ -476,6 +476,45 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const strict = (argv.includes('--strict') || runSettings?.delivery === 'strict') && std !== null && contractFile === null;
   if (argv.includes('--strict') && argv.includes('--no-repair')) die('--strict delivers only a checked output, and --no-repair turns the checks off: drop one of them.');
   const redraws = strict && !argv.includes('--no-repair') ? Math.max(0, Math.floor(numericFlag('--redraws', 2))) : 0;
+  // THE DIRECT WRITER (cli/direct.ts): a skill that writes documents from the author's pieces writes from those pieces, the
+  // material and the task, with one self-review, and the checks listed beside the piece. The compiled path below is for
+  // what that does not cover (a contract, strict delivery, replies, a deep run) and for `--pipeline legacy`.
+  // HOW STRICTLY THIS RUN IS HELD, read once here (cli/latitude.ts): a request that tightens the skill to strict takes the
+  // compiled path, and the compiled path below reuses this reading rather than paying for it again.
+  const spentAtRoute = processSpentUsd();
+  const heldFirst = std?.latitude ? await runLatitude(std, asked, contextJudgeModel()) : null;
+  // what that reading cost: counted in this run's cost on either path
+  const latitudeUsd = processSpentUsd() - spentAtRoute;
+  const directNot = directWhyNot({ voice: store.getVoice(L), std, contract: contractFile !== null, strict, held: heldFirst?.level ?? null, shortForm: transfer !== null });
+  if (directNot === null && std) {
+    const { client, binding } = checkedBinding(L, sv);
+    const spentBefore = spentAtRoute;
+    const d = await runDirect({ L, sv, std, name, asked, material, client, binding, spentBefore, settings: (checks) => ({ ...settingsFor(checks, null, 1, '', null, std, heldFirst), maxTokens: directMaxTokens() }), say: (l) => { report.say(l); }, detail: (l) => { report.detail(l); }, started });
+    const spent = finish(report, { rec: d.rec, sv, name, task: d.rec.input, asked, budget: d.budget, spentBefore });
+    // `answer` is the piece with the specifics left for the person to check listed under it, as on the compiled path
+    const lists = d.claimAct !== 'cut' || formatOf(flag('--class') ?? store.getDocClass(L))?.claims === 'list';
+    const bound = store.getMaterial(L).length > 0 || boundMaterial().length > 0;
+    const shipped = markUnsupported(d.rec.output, lists && bound && !argv.includes('--no-unsourced-note') ? d.rec.repair?.claimsToCheck ?? [] : []);
+    if (machine === 'json') {
+      jsonWritten = true;
+      process.stdout.write(`${JSON.stringify({ ...d.json, answer: shipped, costUsd: Number(spent.toFixed(4)), report: report.lines }, null, 1)}\n`);
+    }
+    // WHAT IS DONE WITH THE WORK IS THE RECORD'S DELIVERY, as on every run: a run never strict here, so nothing is refused;
+    // a BLOCK exits 1 and is headed as such, a PERSON run is said and waits in report --pending.
+    const decided = d.evaluation?.record?.delivery ?? null;
+    const { exit, head } = deliveryOutcome(false, decided, d.evaluation?.result.conformant ?? false, false);
+    if (exit) process.exitCode = exit;
+    if (machine === 'answer') process.stdout.write(`${shipped}\n`);
+    else if (!machine) console.log(`\n${head}${d.rec.output}\n`);
+    if (decided && !machine) console.error(`atelier: ${deliveryLine(decided)}.`);
+    if (decided?.decision === 'PERSON') {
+      const toRead = decided.why.filter((w) => w.action === 'person').flatMap((w) => w.entries);
+      console.error(`atelier: sent to a person: read ${toRead.join(', ') || 'the entries named above'}. It waits in atelier report --pending; rule on it with atelier rate ${d.rec.invocationId} yes|no [--rule <id>].`);
+    }
+    if (d.evaluation && !argv.includes('--quiet') && (argv.includes('--panel') || (!machine && process.stdout.isTTY))) console.log(`\n${renderPanel(d.evaluation, { width: process.stdout.columns || 110, color: !process.env.NO_COLOR && process.stdout.isTTY && !machine })}\n`);
+    return;
+  }
+  if (directNot) report.detail(`Written by the compiled path: ${directNot}.`);
   // STRICT DELIVERY AND THE CLAIM CHECK. What an untraced specific meets is the skill's latitude (core/loop/claim-extract.ts,
   // `claimAction`): on a strict skill it blocks, and strict delivery refuses it; on a grounded or creative one it is
   // flagged or listed, and the verdict says so. The run is never stopped before it starts for it.
@@ -559,7 +598,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   // draw on it: the reading of the request and the grading of its subject are paid for before any draft, and a
   // snapshot taken at the first draft left them out of the lines by purpose, and out of the total whenever the claim
   // reader, on a meter of its own, cost more than they did.
-  const spentBefore = processSpentUsd();
+  const spentBefore = processSpentUsd() - latitudeUsd;
   const ledgerBefore = processSpendByPurpose();
   if (nDrafts * 0.2 > budget.capUsd) die(`--drafts ${nDrafts} needs roughly $${(nDrafts * 0.2).toFixed(2)} and the cap is $${budget.capUsd.toFixed(2)}. Nothing was spent. Raise --cap or ask for fewer drafts.`);
   taste?.bind(budget);
@@ -751,7 +790,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   // HOW STRICTLY THIS RUN IS HELD (cli/latitude.ts): the skill's latitude, tightened by the request where the reading quotes
   // it, never loosened. Said to the writer in this request's notes, recorded on the run's certificate, and the level the
   // claim check acts by. A standard minted before latitude existed is held as it always was, and told nothing new.
-  const held = std?.latitude ? await runLatitude(std, asked, contextJudgeModel()) : null;
+  const held = heldFirst;
   if (held && held.level !== held.skill) report.say(`Held ${held.level.toLowerCase()} for this request (the skill is ${held.skill.toLowerCase()}): "${held.quote ?? ''}".`);
   const briefText = briefNoteText && inferredMethod ? `(My usual steps, named below, were read from my own pieces and are not rules I wrote: follow them as my habit, not as requirements.)\n${briefNoteText}` : briefNoteText;
   if (selection && profile && placement) report.say(`Moves of mine for this request: ${selection.placed.length} placed (${movesMode === 'serve' ? 'served to the writer' : 'observed, not served'}; about ${selection.budget} a piece), ${selection.standing.length} standing (how I always am, in the skill), ${selection.notPlaced.length} not this case, ${selection.unresolved.length} unresolved and never served; read by ${placement.by === 'model' ? 'the context reader' : placement.by}; profile ${profile.hash}.`);
@@ -3566,7 +3605,7 @@ function reportIntegrity(report: RunReport, rec: Invocation, classNote: string |
   // THE AUTHOR'S PIECES ARE FOR VOICE, NOT FOR COPYING. The skill serves some of the author's own
   // writing (core/compiler/voice.ts); an output that repeats a long run of it verbatim has lifted it.
   const voice = store.getVoice(L);
-  const served = copyGuardPieces(voice);
+  const served = guardPiecesOf(L);
   if (served.length) {
     const overlap = overlapIndex(served, voice?.standardWording ?? [])(formTokensOut(rec.output, served, '')); const lifted = overlap.longestShared;
     if (overlap.standard) report.detail(`(${overlap.standard} six-word run(s) shared with three or more of your pieces: your standard wording, not counted as copying)`);

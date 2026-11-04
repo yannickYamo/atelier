@@ -375,7 +375,33 @@ atelier verify --skill posts draft.md --repair           # guard any text
 atelier material --skill posts notes.md                  # your real stories and figures
 atelier fix "the close was a summary, not a turn"        # correct it in your words
 atelier tend --skill posts --auto                        # look after it, from cron
+atelier keep --skill posts published.md                   # keep the piece you published: the next runs write from it
 ```
+
+### How a run is written
+
+A skill built from your pieces writes from your pieces. The writer is shown your pieces of the kind asked for, whole,
+then the material and the task, and it writes the piece. Then it reads its draft against the same pieces and the material, and writes it again. Which pieces it is shown
+is a small reading of the request against a list of them by title, opening and the request each answered, so a comparison
+is written from your comparisons and an essay from your essays. With no model to read, the pieces that share the most rare
+words with the request are used, and the run says so. The draft is prose at high effort (`--effort low|medium|high|xhigh|max`).
+
+A rule you stated and required ("No em dashes.") is shown to the writer in your words. A sentence of the reviewed piece
+that still breaks one is rewritten, that sentence only, as `atelier verify --repair` does. Everything else the checks find
+(a figure or a name not in what you gave, a habit read off your pieces) is listed beside the piece and changes nothing. What
+the run's record decides is done with the work, as on every run: a blocked piece is headed so and exits 1.
+
+`atelier keep` is how a skill learns from use. Keep a run's piece as delivered (`atelier keep --skill posts`), or as you
+edited and published it (`atelier keep --skill posts <run> published.md`). The kept piece joins the pieces the next requests
+are written from, ahead of the ones the skill was built from, and each sentence you changed or cut is shown to the next
+runs' self-review as your correction. `--list` shows what is kept and `--remove <id>` takes one out. A run nobody kept
+teaches the skill nothing.
+
+Some runs take the compiled path, which serves the rules, a plan and your method steps and repairs against them: an output
+contract, strict delivery or a request read as strict, a strict skill, a skill that answers, a deep run, a short piece
+(`--limit`, a short `--class`), a fix written as a whole new piece, a `--candidate` run, and any of its
+own options (`--moves`, `--drafts`, `--sections`, `--fidelity`, `--taste`, `--answers`, `--placeholders` and the rest).
+`--pipeline legacy` asks for it, and the run's report says why a run went that way.
 
 **Build with the model you will run it on.** A skill is built against the model you configure: it asks that
 model for drafts on your topics and learns where its habits differ from yours. Claude, GPT, Grok through an

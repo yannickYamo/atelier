@@ -612,18 +612,25 @@ ${answers || composite || method ? `\n${factsBelong(answers)}\n` : ''}` : '';
   // standard holds but does not require are stated with how often the author makes them, and one piece
   // may use about as many as the author's own pieces carry on average, never all of them.
   const rateOf = (r: StandardVersion['requirements'][number]): number | null => (r.observedRate && r.observedRate.applicable > 0 ? r.observedRate.present / r.observedRate.applicable : null);
-  const expected = stated.reduce((n, r) => n + (rateOf(r) ?? 0.5), 0);
-  const perPiece = Math.max(1, Math.min(stated.length, Math.round(expected)));
+  // A MOVE THE AUTHOR NEVER MADE IS NOT THEIRS. Counted 0 of N where it could apply, it was still served ("in 0 of 2 of
+  // my pieces"), and the writer made it: a frame the author does not use. It stays in the standard, and is not served.
+  const served = stated.filter((r) => rateOf(r) !== 0);
+  // HOW MANY IN ONE PIECE, FROM WHAT WAS COUNTED. A move with no count was taken as one piece in two, and 32 moves
+  // became "use about 18 of them": a quota that made a template. The number is said only when most moves were counted,
+  // and from those counts alone; otherwise the writer is told to use few, where the piece calls for one.
+  const measured = served.filter((r) => rateOf(r) !== null);
+  const perPiece = measured.length * 2 >= served.length && measured.length
+    ? Math.max(1, Math.min(served.length, Math.round(measured.reduce((n, r) => n + (rateOf(r) ?? 0), 0) * served.length / measured.length))) : null;
   const counted = (r: StandardVersion['requirements'][number]): string => (r.observedRate ? ` (in ${r.observedRate.present} of ${r.observedRate.applicable} of my pieces where it could apply)` : '');
-  const sometimesSection = stated.length ? `
+  const sometimesSection = served.length ? `
 ## Moves I sometimes make
 
 ${answers
     ? 'Not rules: things I do in some answers and not others. Use one only where the request calls for it, and never in place of giving what was asked.'
-    : `Not rules: things I do in some pieces and not others. Use about ${perPiece} of them in one piece, only where the piece
+    : `Not rules: things I do in some pieces and not others. ${perPiece === null ? 'Use few of them in one piece' : `Use about ${perPiece} of them in one piece`}, only where the piece
 calls for one, and never the same set every time.`}
 
-${stated.map((r) => `- ${moveCarriers.get(r.requirementId)?.carrier === 'general' || always(r) ? r.statement.trim() : conditionalLine(r.statement, r.appliesWhen)}${counted(r)}`).join('\n')}
+${served.map((r) => `- ${moveCarriers.get(r.requirementId)?.carrier === 'general' || always(r) ? r.statement.trim() : conditionalLine(r.statement, r.appliesWhen)}${counted(r)}`).join('\n')}
 ` : '';
 
   // THE METHOD, WHOLE. Its headings move down two levels so they sit under this one; nothing else is touched.
@@ -887,7 +894,7 @@ mintedAt:        ${v.mintedAt}
     // Which moves a reading covered is the build's own bookkeeping, like the budget: it shaped no file. So is whether
     // the pieces are served whole (`servedWhole`): it tells the next build not to spread them, and the same files
     // are served with or without it.
-    const { pieceBudget: _budget, holdsBackOf: _covered, standardWording: _standard, lengthSpan: _span, lengthPieces: _pieces, sharedAmong: _shared, guardPieces: _guard, servedWhole: _whole, pieceForm, ...rest } = voice;
+    const { pieceBudget: _budget, holdsBackOf: _covered, standardWording: _standard, lengthSpan: _span, lengthPieces: _pieces, sharedAmong: _shared, guardPieces: _guard, wholePieces: _all, servedWhole: _whole, pieceForm, ...rest } = voice;
     void _budget; void _covered; void _standard; void _span; void _pieces; void _guard; void _whole;
     return { ...rest, ...(pieceForm === 'excerpts' && cutPieces.some(Boolean) ? { pieceForm } : {}) };
   })() : null;

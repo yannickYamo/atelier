@@ -38,6 +38,13 @@ export interface InferenceRequest {
    * claim reader gave pass, one flag and two flags on one text. Absent, the client's own setting applies.
    */
   readonly temperature?: number;
+  /**
+   * WRITE IT AS PROSE, NOT AS A TOOL CALL (the direct writer, cli/direct.ts). The piece comes back as the reply's own
+   * text, with no tool forced and no thinking field sent, at this effort: how the paste-and-review baseline that beat
+   * every compiled path writes. A backend returns it as `json: { piece: <text> }`, so every caller reads it the same way.
+   * `toolName`, `toolDescription` and `schema` are not sent; they still name the call on the ledger.
+   */
+  readonly plain?: { readonly effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max' };
 }
 
 /**

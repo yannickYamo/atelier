@@ -116,7 +116,7 @@ describe('through the build and a run', () => {
     expect(again.code, again.out).toBe(0);
     expect((await promptsFor('emit_method_infer')).length).toBe(1);
     // A RUN IS BRIEFED FROM THEM: the conditional step placed on the request's words, said as a habit, recorded as inferred
-    const r = run('invoke', '--skill', 'pricing', REQUEST, '--json', '--with', 'price-list=price-list.txt', ...BACKEND());
+    const r = run('invoke', '--pipeline', 'legacy', '--skill', 'pricing', REQUEST, '--json', '--with', 'price-list=price-list.txt', ...BACKEND());
     expect(r.code, r.out).toBe(0);
     const briefPrompt = (await promptsFor('emit_execution_brief')).at(-1) ?? '';
     expect(briefPrompt).toContain('Close on the risks when the price list leaves terms out');

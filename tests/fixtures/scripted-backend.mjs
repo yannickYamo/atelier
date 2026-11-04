@@ -31,6 +31,8 @@ let failNext = 0;
 // `emptyNext: { <tool>: k }` answers the next k calls of that tool with an empty object: a model that returned no
 // usable answer, where `failNext` is a server that returned an error.
 let emptyNext = {};
+// how many prose calls the current script has answered (`byTool.__plain`)
+let plainServed = 0;
 
 const server = createServer((req, res) => {
   let body = '';
@@ -47,12 +49,27 @@ const server = createServer((req, res) => {
       failNext = typeof parsed.failNext === 'number' ? parsed.failNext : 0;
       emptyNext = parsed.emptyNext && typeof parsed.emptyNext === 'object' ? { ...parsed.emptyNext } : {};
       if (parsed.byTool) { byTool = parsed.byTool; } else { payload = parsed; byTool = null; }
+      plainServed = 0;
       res.end('{"ok":true}'); return;
     }
     if (req.url === '/__count') { res.end(JSON.stringify({ count })); return; }
     if (req.url === '/__log') { res.end(JSON.stringify({ bodies })); return; }
     count += 1; bodies.push(body);
     if (failNext > 0) { failNext -= 1; res.statusCode = 500; res.end('{"error":"scripted failure"}'); return; }
+    // A CALL WITH NO TOOL IS A PIECE WRITTEN AS PROSE (the direct writer, `plain` requests): answered with text. Scripted
+    // with `byTool: { __plain: [text, text, ...] }` (the first call gets the first text, and so on, the last repeating), or
+    // a `when` whose answer is `{ text }`.
+    if (!JSON.parse(body || '{}')?.tools?.length) {
+      const hitPlain = when.find((w) => (w.contains === undefined || body.includes(w.contains)) && (w.containsAll ?? []).every((x) => body.includes(x)) && typeof w.answer?.text === 'string');
+      // with no prose scripted, the piece the test scripted for the writer's tool call (`emit_piece`), so a test that scripts
+      // the writer drives either path the same way
+      const writer = (byTool?.emit_piece ?? payload)?.piece;
+      const list = Array.isArray(byTool?.__plain) ? byTool.__plain : [typeof writer === 'string' ? writer : 'A piece.'];
+      const content = hitPlain ? hitPlain.answer.text : list[Math.min(plainServed, list.length - 1)];
+      if (!hitPlain) plainServed += 1;
+      res.end(JSON.stringify({ choices: [{ finish_reason: 'stop', message: { content } }], usage: { prompt_tokens: 10, completion_tokens: 10 } }));
+      return;
+    }
     let answer = payload;
     if (byTool) {
       const tool = JSON.parse(body || '{}')?.tools?.[0]?.function?.name;

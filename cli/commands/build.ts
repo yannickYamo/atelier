@@ -757,7 +757,12 @@ export async function build(nameArg?: string, opts: { closing?: boolean } = {}):
   // And how much those pieces share with one another: the most a new piece may share with one of them.
   const among = everyPiece.length ? sharedAmong(everyPiece, standardWording) : voice?.sharedAmong ?? null;
   const { standardWording: _was, lengthSpan: _span, lengthPieces: _n, sharedAmong: _among, ...voiceWithout } = voice ?? {}; void _was; void _span; void _n; void _among;
-  const storedVoice = voice ? { ...(voiceWithout as typeof voice), ...(standardWording.length ? { standardWording } : {}), ...(span ? { lengthSpan: span, lengthPieces } : {}), ...(among !== null ? { sharedAmong: among } : {}) } : voice;
+  // AND EVERY PIECE, WHOLE, for the direct writer to choose from per request (cli/direct.ts): the readable pieces only,
+  // never one held back. Where the pieces cannot be read, what an earlier build kept is kept.
+  const pairs = sessionPairs().map((p) => ({ text: withoutFrontMatter(p.text), request: p.request }));
+  const wholePieces = pairs.length ? pairs : voice?.wholePieces ?? [];
+  const storedVoice = voice ? { ...(voiceWithout as typeof voice), ...(standardWording.length ? { standardWording } : {}), ...(span ? { lengthSpan: span, lengthPieces } : {}), ...(among !== null ? { sharedAmong: among } : {}),
+    ...(wholePieces.length ? { wholePieces } : {}) } : voice;
   // The composite the owner chose (core/composite), kept with the skill as data; null for a skill of one author.
   if (s.evidence) store.setComposite(L, s.composite ?? null);
   store.setExemplar(L, exemplar?.text ?? null, exemplar?.request ?? null); store.setMethod(L, methodText?.text ?? null); store.setVoice(L, storedVoice); store.setDocClass(L, docClass); store.setContrast(L, { off: contrastOff, pairs: chosenPairs });

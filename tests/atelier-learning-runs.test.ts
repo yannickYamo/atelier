@@ -17,6 +17,7 @@ const HISTORY: Readonly<Record<string, string>> = {
   'core/runtime/record.ts': 'numbers a run among every run of the same input',
   'cli/commands/invoke.ts': 'compares the model that answered with the one that answered before, on any run',
   'cli/commands/fix.ts': 'looks one named run up',
+  'cli/commands/keep.ts': 'looks one named run up, or the last one, to keep the piece the person chose',
   'cli/commands/promote.ts': 'reads the runs of a candidate the owner named for a comparison',
   'cli/commands/eval.ts': 'names the test runs so that they can be left out of its counts',
   'cli/fix-in-place.ts': 'reads the fixes of one piece, by the run first fixed: what they took out stays out of it',

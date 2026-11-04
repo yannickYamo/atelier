@@ -708,6 +708,24 @@ export interface InvocationSettings {
   readonly route?: Route;
 }
 
+/** The direct writer's account of one run (cli/direct.ts). */
+export interface DirectRecord {
+  readonly version: string;
+  /** the request as the person typed it */
+  readonly asked: string;
+  /** the pieces the writer was shown, in order: their catalogue id, title, and whether the person kept it from a run */
+  readonly pieces: readonly { readonly id: string; readonly title: string; readonly kept: boolean }[];
+  /** how many pieces the skill holds to choose from */
+  readonly from: number;
+  /** who chose them: a reading of the request (`model`), or the shared-words floor (`floor`), and why the floor */
+  readonly route: { readonly by: 'code' | 'model' | 'floor'; readonly reader: string; readonly kind: string | null; readonly why?: string };
+  readonly effort: string;
+  /** whether the self-review ran and its revision was kept; why not, when it was not */
+  readonly review: { readonly ran: boolean; readonly why?: string };
+  /** how many of the person's corrections the review was shown */
+  readonly corrections: number;
+}
+
 export interface InvocationRecord {
   readonly invocationId: string;
   readonly skillName: string;
@@ -788,6 +806,8 @@ export interface InvocationRecord {
   };
   /** WHAT A DEEP RUN DID (cli/deep.ts): absent from every other run. */
   readonly deep?: DeepRecord;
+  /** what the direct writer did (cli/direct.ts): the pieces it was shown and who chose them, the review, the corrections shown */
+  readonly direct?: DirectRecord;
   /**
    * WHAT WAS INFERRED FOR THIS PIECE, BESIDE IT (core/loop/inferred.ts): each decision nobody gave and the run made (an
    * unanswered question, a specific the method needed and nothing gave, a claim with no proof given), how it was settled,
