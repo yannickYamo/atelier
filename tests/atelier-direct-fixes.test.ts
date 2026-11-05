@@ -5,7 +5,7 @@
 // 2. `atelier fix` could not reach a table cell (0 of 65 sentences changed), and the run said BLOCKED beside "ship labelled";
 // 3. a sentence copied from the notes listed as not given, with nothing saying which words of it were untraced;
 // 4. the word list flagging a word inside a link, a word the request asked for, and a word allowed once;
-// 5. small invented details of when, how often and who ("two months ago", "every discovery call").
+// 5. small invented details: left to the review's own wording (the smallest revision); a writing change is measured, not added.
 // Expected values are written out by hand.
 import { describe, it, expect } from 'vitest';
 import { findTerms, splitTerm } from '../core/observers/text.js';
@@ -49,12 +49,13 @@ describe('4. the word list reads prose, the request and the owner\'s allowance',
   });
 });
 
-describe('5. the review is told to write out small details nobody gave', () => {
-  it('names when, how often, how many and who', () => {
+describe('the review asks for the smallest revision, with no list of banned moves', () => {
+  it('fixes what the author would not write and leaves the rest', () => {
     const r = reviewAsk('d', { material: [{ name: 'notes', text: 'n' }] });
-    expect(r).toContain('every small detail of when, how often, how many or who');
-    expect(r).toContain('"two months ago"');
-    expect(r).toContain('A detail nobody gave is written out of the sentence');
+    expect(r).toContain('Read it as the author of the pieces above would.');
+    expect(r).toContain('leave the rest of the draft as it is');
+    expect(r).not.toContain('Then revise it.');
+    expect(r).not.toMatch(/maxim|metaphor|staccato/);
   });
 });
 

@@ -55,7 +55,9 @@ export const CLAIMS_MODEL_DEFAULT = 'claude-haiku-4-5';
  */
 export function claimSensorFor(evidence: string, task: string, placeholders: boolean, strict = false, bound = true, rules = '',
   /** documents a deep run's web pass fetched: a specific traced to one is grounded and marked enriched, never the person's own */
-  enriched: readonly EnrichedSource[] = []): ClaimSensor {
+  enriched: readonly EnrichedSource[] = [],
+  /** reads of each text: two where a finding may cut (a cut never acts on one reading), one where findings are only listed */
+  reads: 1 | 2 = 2): ClaimSensor {
   // the figure-only pattern check may repeat a rule's figure as written; the reader's evidence is the request and its material alone
   const material = withRules(evidence, rules);
   const mode = flag('--claims') ?? process.env.ATELIER_CLAIMS ?? 'model';
@@ -78,7 +80,7 @@ export function claimSensorFor(evidence: string, task: string, placeholders: boo
   // Two reads per new text (the gate below), so twice the calls of a single-read reader.
   const budget = { spentUsd: 0, capUsd: Number.isFinite(cap) && cap > 0 ? cap : 0.5, maxCalls: 48 };
   return modelSensor(clientAndBinding('discovery', model).client, budget, model,
-    { material: evidence, rules, task, placeholders, strict, gateAnyway: process.env.ATELIER_CLAIMS_GATE === 'reader', cacheDir: join(DATA, 'cache', 'claims'), reads: 2, ...(enriched.length ? { enriched } : {}) });
+    { material: evidence, rules, task, placeholders, strict, gateAnyway: process.env.ATELIER_CLAIMS_GATE === 'reader', cacheDir: join(DATA, 'cache', 'claims'), reads, ...(enriched.length ? { enriched } : {}) });
 }
 
 /**
@@ -159,6 +161,12 @@ export function checksFor(L: store.StoreLayout, opts: {
   readonly level?: LatitudeLevel;
   /** documents a deep run's web pass fetched (cli/deep.ts): a specific found in one is grounded there, marked enriched */
   readonly enriched?: readonly EnrichedSource[];
+  /**
+   * How many times the claim reader reads each text. Two by default: a sentence is cut only where both reads agree.
+   * One where nothing is ever cut (the direct writer lists every finding beside the piece): the second read bought
+   * nothing there, and it was a third of a run's check calls.
+   */
+  readonly claimReads?: 1 | 2;
 }): CheckOptions {
   const guardClaims = opts.guardClaims ?? true;
   const placeholders = opts.placeholders ?? false;
@@ -183,7 +191,7 @@ export function checksFor(L: store.StoreLayout, opts: {
   // Where a deletion is not earned (no material bound, or a kind of work nobody measured), findings are listed.
   const bound = opts.bound ?? (store.getMaterial(L).length > 0 || boundMaterial().length > 0);
   const sensor = (): ClaimSensor => (opts.offline ? patternSensor(material, placeholders, 'pattern check (offline)')
-    : claimSensorFor(evidence, opts.task ?? '', placeholders, format?.strictSpecifics ?? false, bound, own, opts.enriched ?? []));
+    : claimSensorFor(evidence, opts.task ?? '', placeholders, format?.strictSpecifics ?? false, bound, own, opts.enriched ?? [], opts.claimReads ?? 2));
   // WHAT AN UNTRACED SPECIFIC MEETS, by the latitude (core/loop/claim-extract.ts, `claimAction`): cut only where the owner
   // chose it and a qualified reader found it; otherwise blocked, sent to review or listed.
   const action = claimAction({ level: opts.level ?? latitudeOf(activeStandard(L)), bound, ownerCut: store.getClaimsCut(L), cls: opts.cls ?? flag('--class') ?? store.getDocClass(L), slots: placeholders });

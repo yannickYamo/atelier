@@ -1,6 +1,6 @@
 # Atelier
 
-Atelier is a tool that learns how you write from the pieces you'd sign, then writes new pieces that way and reads each one before you see it.
+Atelier learns the standard in the pieces you'd sign, then holds every draft to it: yours, a model's or an agent's. It writes from your pieces too, and reads each one before you see it.
 
 [![CI](https://github.com/yannickYamo/atelier/actions/workflows/ci.yml/badge.svg)](https://github.com/yannickYamo/atelier/actions/workflows/ci.yml)
 [![license](https://img.shields.io/badge/license-source--available-blue)](LICENSE)
@@ -18,13 +18,13 @@ Most of this was never written down anywhere. People know good when they see it 
 
 What you approve is fixed. A model can't quietly reword it later.
 
-## Your voice on every piece
+## Every draft held to it
 
-Every new piece gets written against those rules, for that specific request: what you asked for, the material you attached, and which of your rules apply to this kind of writing. A release note and a long essay don't get the same set.
+A new piece is written from your own pieces of the kind you asked for, whole, with the material you attached and the task, then reviewed once: anything you wouldn't write is fixed, and the rest is left alone. The rules you stated yourself are shown to the writer in your words, and a sentence that still breaks one is rewritten, that sentence only.
 
-Then every piece gets read before it reaches you. The counted habits get checked. Any figure or name that isn't in the material you provided gets flagged. Any paragraph lifted out of your own examples gets flagged too, because a story of yours it wasn't given isn't yours to retell back at you.
+Then every piece gets read before it reaches you, whoever wrote it. The counted habits get checked. Any figure or name that isn't in the material you provided is listed beside the piece for you to check, and never written into it. Any paragraph lifted out of your own examples gets flagged too, because a story of yours it wasn't given isn't yours to retell back at you.
 
-The same rules run on every piece. So the tenth one sounds like the first, not like a model that drifted over a long afternoon.
+Not happy with a piece? Say what was wrong in your own words, and only the sentences you mean change. Every run is recorded: what it was written from, what was checked, and what was found.
 
 ## Where it works
 
@@ -44,9 +44,9 @@ And the failure isn't only stylistic. Fluent drafts invent. They attribute, they
 
 ## What's shown so far
 
-- **Blind readers ranked Atelier's pieces first** on a single read, ahead of the same model given the author's own posts as examples.
-- **0 invented specifics across 60 pieces.** Plain prompting and pasted examples produced between 37 and 67 per corpus.
-- **46 of 46 planted inventions caught.**
+- **46 of 46 planted inventions caught** in drafts the check had never seen.
+- **Your counted rules held:** 31% of answers broke one, against 76% for a hand-written skill.
+- **Writing level with pasting your own posts** into the same model, on 25 blind-judged briefs, and ahead of asking it bare on 24 of them. The writing is not where Atelier pulls ahead; the checks, the fixes and the record are.
 
 How each was measured, and what isn't established yet, is in [EVALS](EVALS.md).
 
@@ -74,7 +74,7 @@ Here is what comes back when an agent's draft invents a source and lifts a parag
 | What you'd reach for | What you get | What Atelier adds |
 |---|---|---|
 | **A system prompt** | A request the model may or may not honour | Your habits read from your own work, held on every piece |
-| **Pasting your examples** | The look, plus whatever it invents | The look, with every figure traced to your material and your own paragraphs left yours |
+| **Pasting your examples** | The look, plus whatever it invents | Writing as good, with every figure checked against your material, your rules held and your own paragraphs left yours |
 | **A model judge** | 7 out of 10 | The sentence, and the habit it broke |
 | **Reading every draft yourself** | Your evenings | Your attention, spent only where a call is yours to make |
 

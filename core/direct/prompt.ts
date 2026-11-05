@@ -55,7 +55,12 @@ export const DRAFT_ASK = 'Write the piece now. Return only the piece, in Markdow
 /** The person's corrections, as the review reads them: at most this many, newest first. */
 export const EDITS_SHOWN = 8;
 
-/** The user turn that asks for the review and the revision of `draft`. */
+/**
+ * The user turn that asks for the review and the revision of `draft`. THE SMALLEST REVISION: the arm that beat this one
+ * on the same briefs asked the model only to fix what the author would not write, and kept the plainer voice. A review
+ * asked to "check against the pieces, then revise" rewrote a median 77% of the lines and added the polish, maxims and
+ * extra sections the judges named. No list of banned moves: what is wrong is what the author would not write.
+ */
 export function reviewAsk(draft: string, x: Pick<DirectInput, 'material' | 'edits' | 'rules'>): string {
   const sources = x.material.length ? 'the material and the task' : 'the task';
   const edits = (x.edits ?? []).slice(0, EDITS_SHOWN);
@@ -68,7 +73,7 @@ export function reviewAsk(draft: string, x: Pick<DirectInput, 'material' | 'edit
 ${draft.trim()}
 </draft>
 
-Check the draft against the pieces above (voice, structure, how they argue)${rulesBlock(x.rules) ? ', against the author\'s rules (each one must hold)' : ''} and against ${sources} (every figure, name and story must come from ${x.material.length ? 'them' : 'it'}, and so must every small detail of when, how often, how many or who: "two months ago", "every discovery call", "ask whoever answers support". A detail nobody gave is written out of the sentence, which then says only what was given; never guess one to make a sentence concrete).${corrections}
+Read it as the author of the pieces above would. Fix anything they would not write${rulesBlock(x.rules) ? ', anything that breaks one of the author\'s rules (each one must hold)' : ''}, and any figure, name or story that does not come from ${sources}. Change only what needs changing; leave the rest of the draft as it is.${corrections}
 
-Then revise it. Return only the full revised piece, in Markdown, starting with its title if it has one.`;
+Return only the full revised piece, in Markdown, starting with its title if it has one.`;
 }

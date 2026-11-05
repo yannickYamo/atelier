@@ -75,17 +75,17 @@ describe('what the writer and the review are sent', () => {
     const b = rulesBlock(many);
     expect(b).toContain('- Rule 1.'); expect(b).toContain(`- Rule ${RULES_SHOWN}.`); expect(b).not.toContain(`- Rule ${RULES_SHOWN + 1}.`);
     expect(taskBlock({ material: [], task: 't', rules: ['No em dashes.'] })).toContain('<rules>\n- No em dashes.\n</rules>');
-    expect(reviewAsk('d', { material: [], rules: ['No em dashes.'] })).toContain('against the author\'s rules');
+    expect(reviewAsk('d', { material: [], rules: ['No em dashes.'] })).toContain('anything that breaks one of the author\'s rules');
     expect(reviewAsk('d', { material: [] })).not.toContain('rules');
   });
   it('the review sees the draft, what it must come from, and the person\'s corrections as theirs, at most EDITS_SHOWN', () => {
     const edits = Array.from({ length: EDITS_SHOWN + 2 }, (_, i) => ({ before: `Old ${i}.`, after: i === 0 ? '' : `New ${i}.` }));
     const r = reviewAsk(' the draft ', { material: [{ name: 'n', text: 't' }], edits });
     expect(r).toContain('<draft>\nthe draft\n</draft>');
-    expect(r).toContain('against the material and the task (every figure, name and story must come from them, and so must every small detail');
+    expect(r).toContain('Fix anything they would not write, and any figure, name or story that does not come from the material and the task. Change only what needs changing; leave the rest of the draft as it is.');
     expect(r).toContain('- "Old 0." was cut'); expect(r).toContain('- "Old 1." became "New 1."');
     expect(r).not.toContain(`Old ${EDITS_SHOWN}.`);
-    expect(reviewAsk('d', { material: [] })).toContain('against the task (every figure, name and story must come from it, and so must every small detail');
+    expect(reviewAsk('d', { material: [] })).toContain('that does not come from the task.');
   });
 });
 
@@ -192,6 +192,19 @@ describe('a run through the binary, written the direct way', () => {
     port = await new Promise<number>((ok) => { backend.stdout!.on('data', (d: Buffer) => { const m = /PORT (\d+)/.exec(d.toString()); if (m) ok(Number(m[1])); }); });
   }, 60_000);
   afterAll(() => { backend.kill(); });
+
+  it('the claim reader reads the delivered piece once: nothing is cut on this path, so a second read buys nothing', async () => {
+    await setBackend({ byTool: { emit_persona: PERSONA, emit_holds_back: { ids: [] }, __plain: [DRAFT, REVIEWED] } });
+    const s = seed(FILES, { ATELIER_CLAIMS: 'model', ATELIER_CLAIMS_MODEL: 'scripted' });
+    expect(s.run('new', 'posts', 'write posts in my voice', '--name', 'posts', ...BACKEND()).code).toBe(0);
+    await setBackend({ byTool: { __plain: [DRAFT, REVIEWED], emit_specifics: { specifics: [] } } });
+    const m0 = await mark();
+    const r = s.run('invoke', '--skill', 'posts', 'Compare Logseq and Craft for my notes.', '--with', 'notes=notes.md', '--json', ...BACKEND());
+    expect([0, 1], r.out).toContain(r.code);
+    expect(jsonOf(r.out).direct).toBeTruthy();
+    const reads = (await bodies()).slice(m0).filter((b) => b.tools?.some((t) => t.function?.name === 'emit_specifics'));
+    expect(reads.length).toBe(1);
+  }, 120_000);
 
   it('the draft and the review are prose with no tool; the pieces travel whole; the reviewed piece is delivered; the record says so', async () => {
     await setBackend({ byTool: { emit_persona: PERSONA, emit_holds_back: { ids: [] }, __plain: [DRAFT, REVIEWED] } });

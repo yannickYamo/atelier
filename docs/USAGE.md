@@ -381,7 +381,7 @@ atelier keep --skill posts published.md                   # keep the piece you p
 ### How a run is written
 
 A skill built from your pieces writes from your pieces. The writer is shown your pieces of the kind asked for, whole,
-then the material and the task, and it writes the piece. Then it reads its draft against the same pieces and the material, and writes it again. Which pieces it is shown
+then the material and the task, and it writes the piece. Then it reads its draft as you would, and fixes only what you would not write and any figure, name or story not in what you gave; the rest stays as it was. Which pieces it is shown
 is a small reading of the request against a list of them by title, opening and the request each answered, so a comparison
 is written from your comparisons and an essay from your essays. With no model to read, the pieces that share the most rare
 words with the request are used, and the run says so. The draft is prose at high effort (`--effort low|medium|high|xhigh|max`).
