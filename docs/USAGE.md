@@ -386,6 +386,20 @@ is a small reading of the request against a list of them by title, opening and t
 is written from your comparisons and an essay from your essays. With no model to read, the pieces that share the most rare
 words with the request are used, and the run says so. The draft is prose at high effort (`--effort low|medium|high|xhigh|max`).
 
+Your method, where the skill has one, is shown to the writer whole and in your words, and the review holds the draft to it.
+
+Before the draft, an editor's three questions are read: the one idea the reader should leave with, what the reader lives
+with that the piece speaks to, and what shows it (a case, a figure, something the reader can try). Each is asked only
+where your request, your material, your method and what you told the skill before do not state it, quoted. At a terminal
+they are asked (a letter, your own words, enter for the suggested answer, "just write it" for none). Everywhere else they
+come back with their options (`--json`: `questions`), and the piece is written without them: nothing you did not answer
+reaches the writer. Answer next time with `--answers "idea=b,proof=<your words>"`; your answers are next time's
+suggestion. `--no-questions` reads nothing.
+
+A skill built from one example writes from that example. A request that holds the run strict ("use only these figures")
+stays on this path: the claim check is held at that level, so a figure nothing you gave holds has its sentence rewritten
+and, if it stays, blocks the piece.
+
 A rule you stated and required ("No em dashes.") is shown to the writer in your words. A sentence of the reviewed piece
 that still breaks one is rewritten, that sentence only, as `atelier verify --repair` does. Everything else the checks find
 (a figure or a name not in what you gave, a habit read off your pieces) is listed beside the piece and changes nothing. What
@@ -398,9 +412,9 @@ runs' self-review as your correction. `--list` shows what is kept and `--remove 
 teaches the skill nothing.
 
 Some runs take the compiled path, which serves the rules, a plan and your method steps and repairs against them: an output
-contract, strict delivery or a request read as strict, a strict skill, a skill that answers, a deep run, a short piece
+contract, strict delivery, a strict skill, a skill that answers, a note `atelier evolve` adopted, a deep run, a short piece
 (`--limit`, a short `--class`), a fix written as a whole new piece, a `--candidate` run, and any of its
-own options (`--moves`, `--drafts`, `--sections`, `--fidelity`, `--taste`, `--answers`, `--placeholders` and the rest).
+own options (`--moves`, `--drafts`, `--sections`, `--fidelity`, `--taste`, `--placeholders` and the rest).
 `--pipeline legacy` asks for it, and the run's report says why a run went that way.
 
 **Build with the model you will run it on.** A skill is built against the model you configure: it asks that

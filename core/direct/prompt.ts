@@ -21,6 +21,10 @@ export interface DirectInput {
   readonly task: string;
   /** the author's own rules, in their words, that every piece holds: only what they stated and required, never a rule read off their pieces */
   readonly rules?: readonly string[];
+  /** the author's method for their pieces, in their words, where the skill has one: shown whole, never a reading of it */
+  readonly method?: string;
+  /** what the person settled before the draft (./questions.ts, `editorNote`): only their answers, never a suggestion */
+  readonly settled?: string;
   /** changes the person made to earlier drafts of this skill, before and after: their corrections */
   readonly edits?: readonly { readonly before: string; readonly after: string }[];
 }
@@ -41,12 +45,28 @@ export function rulesBlock(rules: readonly string[] | undefined): string {
   return shown.length ? `The author's own rules for their writing, in their words. Each one holds in this piece wherever it applies:\n\n<rules>\n${shown.map((r) => `- ${r}`).join('\n')}\n</rules>\n\n` : '';
 }
 
-/** The material, the author's own rules where they stated some, and the task. */
-export function taskBlock(x: Pick<DirectInput, 'material' | 'task' | 'rules'>): string {
+/** The most of the author's method the writer is shown, in characters. */
+export const METHOD_SHOWN = 12_000;
+
+/** The author's method, whole, as the writer and the review read it; empty where the skill has none. */
+export function methodBlock(method: string | undefined): string {
+  const m = (method ?? '').trim();
+  return m ? `The author's method for their pieces, in their words. Follow it wherever it applies to this piece:\n\n<method>\n${m.slice(0, METHOD_SHOWN)}\n</method>\n\n` : '';
+}
+
+/**
+ * The material, the author's method and their own rules where they have them, what they settled before the draft, and
+ * the task. A rule whose words are already in the method is not said twice.
+ */
+export function taskBlock(x: Pick<DirectInput, 'material' | 'task' | 'rules' | 'method' | 'settled'>): string {
   const material = x.material.length
     ? `The material for this piece:\n\n${x.material.map((m) => `<material name="${m.name}">\n${m.text.trim()}\n</material>`).join('\n\n')}\n\n`
     : '';
-  return `${material}${rulesBlock(x.rules)}The task:\n\n<task>\n${x.task.trim()}\n</task>`;
+  const flat = (s: string): string => s.replace(/\s+/g, ' ').trim().toLowerCase();
+  const inMethod = flat(x.method ?? '');
+  const rules = (x.rules ?? []).filter((r) => !inMethod.includes(flat(r)) || !inMethod);
+  const settled = x.settled?.trim() ? `${x.settled.trim()}\n\n` : '';
+  return `${material}${methodBlock(x.method)}${rulesBlock(rules)}${settled}The task:\n\n<task>\n${x.task.trim()}\n</task>`;
 }
 
 /** The user turn that asks for the first draft. */
@@ -61,7 +81,7 @@ export const EDITS_SHOWN = 8;
  * asked to "check against the pieces, then revise" rewrote a median 77% of the lines and added the polish, maxims and
  * extra sections the judges named. No list of banned moves: what is wrong is what the author would not write.
  */
-export function reviewAsk(draft: string, x: Pick<DirectInput, 'material' | 'edits' | 'rules'>): string {
+export function reviewAsk(draft: string, x: Pick<DirectInput, 'material' | 'edits' | 'rules' | 'method'>): string {
   const sources = x.material.length ? 'the material and the task' : 'the task';
   const edits = (x.edits ?? []).slice(0, EDITS_SHOWN);
   const corrections = edits.length
@@ -73,7 +93,7 @@ export function reviewAsk(draft: string, x: Pick<DirectInput, 'material' | 'edit
 ${draft.trim()}
 </draft>
 
-Read it as the author of the pieces above would. Fix anything they would not write${rulesBlock(x.rules) ? ', anything that breaks one of the author\'s rules (each one must hold)' : ''}, and any figure, name or story that does not come from ${sources}. Change only what needs changing; leave the rest of the draft as it is.${corrections}
+Read it as the author of the pieces above would. Fix anything they would not write${x.method?.trim() ? ', anything that goes against their method' : ''}${rulesBlock(x.rules) ? ', anything that breaks one of the author\'s rules (each one must hold)' : ''}, and any figure, name or story that does not come from ${sources}. Change only what needs changing; leave the rest of the draft as it is.${corrections}
 
 Return only the full revised piece, in Markdown, starting with its title if it has one.`;
 }

@@ -88,8 +88,10 @@ describe('the case-shaped fixture through the binary', () => {
     expect(bodies.filter((b) => b.includes('emit_piece')).some((b) => b.includes('as the examples do'))).toBe(false);
     // the writer was shown the owner's rules, in their words, beside the task (cli/direct.ts): the bans among them
     const writer = bodies.filter((b) => !(JSON.parse(b) as { tools?: unknown[] }).tools?.length).at(-1) ?? '';
-    expect(writer).toContain('<rules>');
-    expect(writer).toContain('- No em dashes.');
+    // here every rule is a line of the method, so the method shows them, once, in the owner's words
+    expect(writer).toContain('<method>');
+    expect(writer).toContain('No em dashes.');
+    expect(writer).not.toContain('<rules>');
   });
 
   it('a ban the rewrite could not bring back, where the owner made a failed check block: headed BLOCKED, exit 1', async () => {

@@ -485,11 +485,13 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const heldFirst = std?.latitude ? await runLatitude(std, asked, contextJudgeModel()) : null;
   // what that reading cost: counted in this run's cost on either path
   const latitudeUsd = processSpentUsd() - spentAtRoute;
-  const directNot = directWhyNot({ voice: store.getVoice(L), std, contract: contractFile !== null, strict, held: heldFirst?.level ?? null, shortForm: transfer !== null });
+  const directNot = directWhyNot({ voice: store.getVoice(L), std, contract: contractFile !== null, strict, held: heldFirst?.level ?? null, shortForm: transfer !== null, exemplar: store.getExemplar(L),
+    carried: store.getCarry(L) !== null });
   if (directNot === null && std) {
     const { client, binding } = checkedBinding(L, sv);
     const spentBefore = spentAtRoute;
-    const d = await runDirect({ L, sv, std, name, asked, material, client, binding, spentBefore, settings: (checks) => ({ ...settingsFor(checks, null, 1, '', null, std, heldFirst), maxTokens: directMaxTokens() }), say: (l) => { report.say(l); }, detail: (l) => { report.detail(l); }, started });
+    const d = await runDirect({ L, sv, std, name, asked, material, client, binding, spentBefore, settings: (checks) => ({ ...settingsFor(checks, null, 1, '', null, std, heldFirst), maxTokens: directMaxTokens() }), say: (l) => { report.say(l); }, detail: (l) => { report.detail(l); }, started,
+      held: heldFirst?.level ?? null, interactive: machine === null && process.stdin.isTTY && process.stdout.isTTY });
     const spent = finish(report, { rec: d.rec, sv, name, task: d.rec.input, asked, budget: d.budget, spentBefore });
     // `answer` is the piece with the specifics left for the person to check listed under it, as on the compiled path
     const lists = d.claimAct !== 'cut' || formatOf(flag('--class') ?? store.getDocClass(L))?.claims === 'list';

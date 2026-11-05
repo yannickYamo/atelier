@@ -14,7 +14,7 @@ import { catalogueOf, withinBudget, lexicalOrder, titleOf } from '../core/direct
 import { PIECE_ROUTE } from '../core/direct/route.js';
 import { piecesBlock, taskBlock, reviewAsk, rulesBlock, EDITS_SHOWN, RULES_SHOWN } from '../core/direct/prompt.js';
 import { editPairs, correctionsOf, sentencesOf, MAX_PAIRS, type KeptPiece } from '../core/direct/kept.js';
-import { directWhyNot } from '../cli/direct.js';
+import { directWhyNot, builtPieces } from '../cli/direct.js';
 import { argv } from '../cli/runtime.js';
 import type { StandardVersion } from '../core/state/canonical-state.js';
 import type { Voice } from '../core/compiler/voice.js';
@@ -128,7 +128,12 @@ describe('which path a run takes (directWhyNot), with no flag on the command lin
     expect(directWhyNot({ ...base, std: null })).toMatch(/no standard/);
     expect(directWhyNot({ ...base, strict: true })).toMatch(/strict delivery/);
     expect(directWhyNot({ ...base, shortForm: true })).toMatch(/short piece/);
-    expect(directWhyNot({ ...base, held: 'STRICT' })).toMatch(/request holds this run strict/);
+    // a request held strict ("use only these figures") stays direct: its figures are held by the claim check at that level
+    expect(directWhyNot({ ...base, held: 'STRICT' })).toBeNull();
+    // a skill built from one example writes from it
+    expect(directWhyNot({ ...base, voice: null, exemplar: { text: '# Memo\n\nbody' } })).toBeNull();
+    expect(builtPieces(null, { text: '# Memo\n\nbody', request: 'Write the pricing memo.' })).toEqual([{ text: '# Memo\n\nbody', request: 'Write the pricing memo.' }]);
+    expect(builtPieces(voice, { text: 'ignored' })).toEqual([{ text: '# A\n\nbody', request: null }]);
     expect(directWhyNot({ ...base, std: { ...std, latitude: { level: 'STRICT' } } as unknown as StandardVersion })).toMatch(/strict skill/);
     expect(directWhyNot({ ...base, voice: { ...voice, form: 'REPLY' } as unknown as Voice })).toMatch(/answers/);
     expect(directWhyNot({ ...base, voice: null })).toMatch(/none of the author's pieces/);
@@ -145,6 +150,7 @@ describe('which path a run takes (directWhyNot), with no flag on the command lin
     withArgs(['--pipeline', 'fast'], () => { expect(() => directWhyNot({ ...base, contract: true })).toThrow(/--pipeline takes direct or legacy/); });
     withArgs(['--pipeline', 'legacy'], () => { expect(directWhyNot(base)).toMatch(/--pipeline legacy/); });
     for (const f of ['--candidate', '--correcting', '--fix-of', '--corrections-of', '--moves', '--deep']) withArgs([f], () => { expect(directWhyNot(base), f).not.toBeNull(); });
+    withArgs(['--drafts=3'], () => { expect(directWhyNot(base)).toMatch(/--drafts is read by the compiled path/); });
   });
 });
 
@@ -265,6 +271,66 @@ describe('a run through the binary, written the direct way', () => {
     const floor = jsonOf(s.run('invoke', '--skill', 'posts', 'Write an essay on why I stopped changing tools.', '--json', '--claims', 'pattern', ...BACKEND()).out);
     expect(floor.direct?.route.by).toBe('floor'); expect(floor.direct?.pieces.length).toBe(3);
     expect(essayId(floor)).toBeDefined();
+  }, 180_000);
+
+  it('a request held strict ("use only these figures") stays direct, and a figure the notes lack blocks the piece', async () => {
+    await setBackend({ byTool: { emit_persona: PERSONA, emit_holds_back: { ids: [] }, __plain: [DRAFT, REVIEWED] } });
+    const s = seed(FILES, { ATELIER_CONTEXT_READER: 'scripted' });
+    expect(s.run('new', 'posts', 'write posts in my voice', '--name', 'posts', ...BACKEND()).code).toBe(0);
+    const INVENTED = `${REVIEWED} Craft costs 40 dollars a month.`;
+    const task = 'Compare Logseq and Craft for my notes. Use only the figures in the notes.';
+    // held at the skill's own level: the invented figure is listed beside the piece, and the piece goes out
+    await setBackend({ byTool: { __plain: [DRAFT, INVENTED], emit_request_latitude: { level: 'NONE', quote: null } } });
+    const free = s.run('invoke', '--skill', 'posts', task, '--with', 'notes=notes.md', '--json', '--claims', 'pattern', ...BACKEND());
+    expect(free.code, free.out.slice(-1500)).toBe(0);
+    expect(jsonOf(free.out).direct).toBeTruthy();
+    // held strict by the request: still direct, and the figure nothing given holds blocks the piece (exit 1)
+    await setBackend({ byTool: { __plain: [DRAFT, INVENTED], emit_request_latitude: { level: 'STRICT', quote: 'Use only the figures in the notes' } } });
+    const held = s.run('invoke', '--skill', 'posts', task, '--with', 'notes=notes.md', '--json', '--claims', 'pattern', ...BACKEND());
+    // a run that exits 1 carries its stderr after the JSON
+    const j = JSON.parse(held.out.slice(held.out.indexOf('\n{') + 1, held.out.lastIndexOf('\n}') + 2)) as Out & { record?: { latitude?: string } };
+    expect(j.direct).toBeTruthy();
+    expect(j.record?.latitude).toBe('STRICT');
+    expect(held.code, held.out).toBe(1);
+  }, 180_000);
+
+  it('the editor\'s questions: asked where nothing states them, unanswered they change nothing, answered they reach the writer; the method is shown whole', async () => {
+    await setBackend({ byTool: { emit_persona: PERSONA, emit_holds_back: { ids: [] }, __plain: [DRAFT, REVIEWED] } });
+    const s = seed(FILES, { ATELIER_CONTEXT_READER: 'scripted' });
+    expect(s.run('new', 'posts', 'write posts in my voice', '--name', 'posts', ...BACKEND()).code).toBe(0);
+    const METHOD = 'Open on the pain the reader lives with. Give every feature its reason. End on the idea, never an ask.';
+    writeFileSync(join(s.data, 'skills', 'posts', 'method.md'), METHOD);
+    const EDITOR = {
+      idea: { statedIn: 'NONE', quote: null, ask: 'What one idea should the reader leave with?', options: ['Local files outlive any app', 'Paying buys sync, not freedom'], default: 'Local files outlive any app' },
+      pain: { statedIn: 'material', quote: 'Craft is paid and syncs through its own cloud', ask: null, options: [], default: null },
+      proof: { statedIn: 'NONE', quote: null, ask: 'What shows it?', options: ['A week of my own notes', 'An export test'], default: 'A week of my own notes' },
+    };
+    await setBackend({ byTool: { __plain: [DRAFT, REVIEWED], emit_editor_questions: EDITOR } });
+    let m0 = await mark();
+    const quiet = s.run('invoke', '--skill', 'posts', 'Compare Logseq and Craft for my notes.', '--with', 'notes=notes.md', '--json', '--claims', 'pattern', ...BACKEND());
+    const j = jsonOf(quiet.out) as Out & { questions: { id: string }[]; answers: unknown[] };
+    // the pain is stated in the notes, so only the idea and the proof are asked
+    expect(j.questions.map((q) => q.id)).toEqual(['idea', 'proof']);
+    expect(j.answers).toEqual([]);
+    expect((j.direct as unknown as { questions: unknown }).questions).toEqual({ by: 'model', asked: ['idea', 'proof'], answered: [] });
+    let plain = await plainSince(m0);
+    // nobody answered: the writer reads no suggestion, and the method whole
+    expect(textOf(plain[0])).not.toContain('Before writing, the author settled');
+    expect(textOf(plain[0])).not.toContain('Local files outlive any app');
+    expect(textOf(plain[0])).toContain(`<method>\n${METHOD}\n</method>`);
+    expect(textOf(plain[1])).toContain('anything that goes against their method');
+    expect(JSON.stringify(JSON.parse(quiet.out.slice(quiet.out.indexOf('\n{') + 1)))).toContain('--answers \\"idea=<letter or your words>,proof=<letter or your words>\\"');
+    // answered (a letter, and the person's own words): the direct path still writes it, and the writer reads the answers
+    await setBackend({ byTool: { __plain: [DRAFT, REVIEWED], emit_editor_questions: EDITOR } });
+    m0 = await mark();
+    const answered = jsonOf(s.run('invoke', '--skill', 'posts', 'Compare Logseq and Craft for my notes.', '--with', 'notes=notes.md', '--json', '--claims', 'pattern',
+      '--answers', 'idea=b,proof=I exported 400 notes from both last spring', ...BACKEND()).out);
+    expect(answered.direct).toBeTruthy();
+    plain = await plainSince(m0);
+    expect(textOf(plain[0])).toContain('- The one idea the reader should leave with: Paying buys sync, not freedom');
+    expect(textOf(plain[0])).toContain('- What shows it (a case, a figure, or something the reader can try): I exported 400 notes from both last spring');
+    // kept as next time's suggestion
+    expect(store.getTold({ root: s.data, skillName: 'posts' }).map((t) => t.id)).toEqual(['idea', 'proof']);
   }, 180_000);
 
   it('atelier keep: a kept piece is written from first, and what the person changed is shown to the next review as theirs', async () => {

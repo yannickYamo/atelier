@@ -231,9 +231,11 @@ const PAIR_BREAK = /,(?=\s*[a-z][a-z0-9_-]*\s*=)/i;
  * is the person's own answer, kept as written. An id that is a question kind answers that kind, asked this run or not;
  * one that is no kind is said in one line and ignored. Never fails.
  */
-export function readAnswers(s: string | undefined, questions: readonly Question[]): { readonly answers: Map<string, string>; readonly said: string[] } {
+export function readAnswers(s: string | undefined, questions: readonly Question[],
+  /** ids a caller asks beside the kinds here (the direct writer's editor questions, ../direct/questions.ts) */
+  extraIds: readonly string[] = []): { readonly answers: Map<string, string>; readonly said: string[] } {
   const answers = new Map<string, string>(); const said: string[] = [];
-  const kinds = [...QUESTION_KINDS, ...GAP_KINDS].map((k) => k.toLowerCase());
+  const kinds = [...[...QUESTION_KINDS, ...GAP_KINDS].map((k) => k.toLowerCase()), ...extraIds];
   const gapIds = new Set<string>(GAP_KINDS.map((k) => k.toLowerCase()));
   for (const part of (s ?? '').split(PAIR_BREAK)) {
     const eq = part.indexOf('=');

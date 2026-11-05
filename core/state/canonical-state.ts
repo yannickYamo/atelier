@@ -724,6 +724,10 @@ export interface DirectRecord {
   readonly review: { readonly ran: boolean; readonly why?: string };
   /** how many of the person's corrections the review was shown */
   readonly corrections: number;
+  /** whether the author's method was shown to the writer, whole */
+  readonly method?: true;
+  /** the editor's questions (core/direct/questions.ts): who read them, which were asked, which the person answered */
+  readonly questions?: { readonly by: string; readonly asked: readonly string[]; readonly answered: readonly string[] };
 }
 
 export interface InvocationRecord {

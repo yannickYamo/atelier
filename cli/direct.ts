@@ -32,6 +32,10 @@ import { catalogueOf, titleOf, withinBudget, PIECE_BUDGET_CHARS, type Piece } fr
 import { PIECE_ROUTE, type Route } from '../core/direct/route.js';
 import { piecesBlock, taskBlock, DRAFT_ASK, reviewAsk, EDITS_SHOWN } from '../core/direct/prompt.js';
 import { correctionsOf } from '../core/direct/kept.js';
+import { EDITOR_QUESTIONS, EDITOR_KINDS, editorNote, askOf } from '../core/direct/questions.js';
+import { readAnswers, questionLines, materialShown, type Question } from '../core/loop/questions.js';
+import { typedAnswer, JUST_WRITE, questionsJson } from './prewrite.js';
+import { createInterface } from 'node:readline/promises';
 import { checkDraftAsync, refineToStandard, REPAIR_PASSES, CLAIMS_TO_CHECK, INCONCLUSIVE, PUBLIC_FACTS } from '../core/loop/run-repair.js';
 import { supportIsIn, numbersIn } from '../core/loop/claim-extract.js';
 import type { Span } from '../core/observers/registry.js';
@@ -56,13 +60,18 @@ export const directMaxTokens = (): number => (flag('--max-tokens') !== undefined
 /** What one prose call is held to before it is sent: a long piece at high effort, not the cap of a run. */
 const PROSE_ESTIMATE_USD = 0.25;
 
-/** The pieces a skill holds to write from: every piece it was built from, else the pieces it serves. */
-export function builtPieces(voice: Voice | null): { text: string; request: string | null }[] {
+/**
+ * The pieces a skill holds to write from: every piece it was built from, else the pieces it serves, else the one example
+ * it was built from. A skill built from a single example (a pricing memo, a launch brief) stores it as its exemplar and no
+ * pieces: the direct writer refused it ("holds none of the author's pieces") and every such run took the compiled path.
+ */
+export function builtPieces(voice: Voice | null, exemplar: { text: string; request?: string } | null = null): { text: string; request: string | null }[] {
   if (voice?.wholePieces?.length) return [...voice.wholePieces];
   const served = voice?.pieces ?? [];
   const req = voice?.pieceRequests ?? [];
   const guard = (voice?.guardPieces ?? []).filter((g) => !served.includes(g));
-  return [...served.map((t, i) => ({ text: t, request: req[i] ?? null })), ...guard.map((t) => ({ text: t, request: null }))];
+  const held = [...served.map((t, i) => ({ text: t, request: req[i] ?? null })), ...guard.map((t) => ({ text: t, request: null }))];
+  return held.length || !exemplar?.text.trim() ? held : [{ text: exemplar.text, request: exemplar.request?.trim() ? exemplar.request : null }];
 }
 
 /**
@@ -70,6 +79,10 @@ export function builtPieces(voice: Voice | null): { text: string; request: strin
  * and not asked for another path. `null` when it does; otherwise why not, said on the record of the compiled run.
  */
 export function directWhyNot(x: { voice: Voice | null; std: StandardVersion | null; contract: boolean; strict: boolean; held?: LatitudeLevel | null;
+  /** the one example a skill was built from, where it holds no pieces */
+  exemplar?: { text: string; request?: string } | null;
+  /** a note `atelier evolve` adopted: only the compiled path serves it, or says it no longer applies */
+  carried?: boolean;
   /** a short piece from a long-form standard (`--limit`, a short `--class`): its limit and bands are the compiled path's */
   shortForm?: boolean }): string | null {
   const asked = flag('--pipeline');
@@ -79,21 +92,22 @@ export function directWhyNot(x: { voice: Voice | null; std: StandardVersion | nu
   if (x.contract) return 'the skill has an output contract';
   if (!x.std) return 'the skill has no standard';
   const forced = asked === 'direct';
-  const compiledOnly = COMPILED_FLAGS.find((f) => argv.includes(f));
+  if (x.carried && !forced) return 'a note atelier evolve adopted for this skill is served by the compiled path';
+  // as typed either way: `--drafts 3` and `--drafts=3` (the second was missed, and such a run went direct)
+  const compiledOnly = COMPILED_FLAGS.find((f) => argv.some((a) => a === f || a.startsWith(`${f}=`)));
   if (compiledOnly) return `${compiledOnly} is read by the compiled path`;
   // Strict delivery refuses what does not conform; the direct path never refuses, so not even --pipeline direct takes it.
   if (x.strict) return 'strict delivery holds the compiled path';
   if (x.shortForm) return 'a short piece from a long-form standard takes the compiled path';
   if (!forced && x.std.latitude?.level === 'STRICT') return 'a strict skill holds the compiled path';
-  if (!forced && x.held === 'STRICT') return 'the request holds this run strict, and a strict run takes the compiled path';
   if (!forced && x.voice?.form === 'REPLY') return 'a skill that answers takes the compiled path';
-  if (builtPieces(x.voice).length < 1) return 'the skill holds none of the author\'s pieces';
+  if (builtPieces(x.voice, x.exemplar ?? null).length < 1) return 'the skill holds none of the author\'s pieces';
   return null;
 }
 
 /** Flags only the compiled path reads: given one, a run takes that path, and says so. */
 export const COMPILED_FLAGS = ['--voice', '--register', '--structure', '--until-typical', '--until-author', '--shape-rounds', '--fidelity', '--try-release',
-  '--drafts', '--sections', '--select', '--context', '--nearness', '--moves', '--taste', '--answers', '--placeholders', '--strict', '--graded', '--set-aside',
+  '--drafts', '--sections', '--select', '--context', '--nearness', '--moves', '--taste', '--placeholders', '--strict', '--graded', '--set-aside',
   // a fix replayed as a whole new piece (`atelier fix`): the complaint and what earlier fixes took out are the compiled path's
   '--correcting', '--corrections-of', '--fix-of',
   // a candidate release is measured against the package it was compiled to, which the direct writer never serves
@@ -116,6 +130,62 @@ export interface DirectContext {
   readonly settings: (checks: ReturnType<typeof checksFor>) => InvocationSettings;
   /** what the process had spent when the run began: the run's cost is everything after it */
   readonly spentBefore: number;
+  /**
+   * The level the request holds this run at, where it is stricter than the skill's ("use only these figures"): the run
+   * stays direct, and the claim check is held at that level, so a figure nothing given holds has its sentence rewritten
+   * and, if it stays, blocks the piece. Read twice there, as a check that can act always is.
+   */
+  readonly held?: LatitudeLevel | null;
+  /** a person at a terminal: the editor's questions are asked there; everywhere else they are returned, unanswered */
+  readonly interactive: boolean;
+  /** how a line is read from the person (a test passes its own) */
+  readonly read?: (prompt: string) => Promise<string>;
+}
+
+/** A line read from the person at the terminal; the prompt goes to stderr, so stdout stays the work. */
+async function askLine(prompt: string): Promise<string> {
+  const rl = createInterface({ input: process.stdin, output: process.stderr });
+  try { return (await rl.question(prompt)).trim(); } finally { rl.close(); }
+}
+
+/** What the editor's questions settled: the note the writer reads, the questions, and the person's answers. */
+export interface Asked { readonly note: string; readonly questions: readonly Question[]; readonly answers: readonly { readonly id: string; readonly answer: string }[]; readonly by: string }
+
+/**
+ * THE EDITOR'S QUESTIONS (core/direct/questions.ts): the one idea, the reader's pain and the proof, asked only where
+ * nothing given states them. At a terminal each is asked (a letter, the person's own words, enter for the suggested one,
+ * "just write it" for none); elsewhere they are returned and the piece is written without them: nothing the person did
+ * not answer reaches the writer. Answers given with --answers count, now or for a kind this run did not ask, and are
+ * kept as next time's suggestion. --no-questions reads nothing.
+ */
+export async function editorQuestions(c: Pick<DirectContext, 'L' | 'asked' | 'material' | 'interactive' | 'read' | 'say'>, method: string): Promise<Asked> {
+  if (argv.includes('--no-questions')) return { note: '', questions: [], answers: [], by: 'off' };
+  const told = store.getTold(c.L);
+  const decided = await readContext(EDITOR_QUESTIONS, { request: c.asked, material: materialShown(c.material), method, told }, contextReaderClient(), contextReaderModel(), { spentUsd: 0, capUsd: 0.03, maxCalls: 1 }, 'other');
+  const questions = decided.value.questions;
+  const { answers: given, said } = readAnswers(flag('--answers'), questions, [...EDITOR_KINDS]);
+  for (const s of said) c.say(s);
+  const answers: { id: string; answer: string }[] = [];
+  let rest = false;
+  for (const q of questions) {
+    const g = given.get(q.id);
+    if (g !== undefined) { answers.push({ id: q.id, answer: g }); continue; }
+    if (!c.interactive || rest) continue;
+    process.stderr.write(`\n${questionLines([q]).join('\n')}\n`);
+    const typed = await (c.read ?? askLine)('Your answer (a letter, your own words, enter for the suggested one, or "just write it"): ');
+    if (JUST_WRITE.test(typed)) { rest = true; continue; }
+    answers.push({ id: q.id, answer: typedAnswer(q, typed) });
+  }
+  for (const [id, answer] of given) if (!questions.some((q) => q.id === id) && askOf(id) !== null) answers.push({ id, answer });
+  const at = new Date().toISOString();
+  store.addTold(c.L, answers.map((a) => ({ id: a.id, ask: questions.find((q) => q.id === a.id)?.ask ?? askOf(a.id) ?? a.id, answer: a.answer, at })));
+  const open = questions.filter((q) => !answers.some((a) => a.id === q.id));
+  if (answers.length) c.say(`Settled before writing, in your words: ${answers.map((a) => a.id).join(', ')}.`);
+  if (open.length) {
+    c.say(`An editor would ask (${open.length}), and the piece was written without ${open.length === 1 ? 'it' : 'them'}: ${open.map((q) => `${q.id}: ${q.ask}`).join(' ')}`);
+    c.say(`  To answer, run again with --answers "${open.map((q) => `${q.id}=<letter or your words>`).join(',')}"${open.map((q) => ` (${q.id}: ${q.options.map((o, i) => `${String.fromCharCode(97 + i)}) ${o}`).join('; ')})`).join('')}.`);
+  }
+  return { note: editorNote(answers), questions, answers, by: decided.by };
 }
 
 const asEffort = (x: string | undefined): Effort => {
@@ -177,7 +247,7 @@ export async function runDirect(c: DirectContext) {
   const budget: Budget = { spentUsd: 0, capUsd: numericFlag('--cap', 3), maxCalls: numericFlag('--max-calls', 6) };
   const voice = store.getVoice(c.L);
   const kept = store.getKept(c.L);
-  const catalogue = catalogueOf(builtPieces(voice), kept.map((k) => ({ text: k.text, request: k.request })));
+  const catalogue = catalogueOf(builtPieces(voice, store.getExemplar(c.L)), kept.map((k) => ({ text: k.text, request: k.request })));
   const materialText = c.material.map((m) => m.text).join('\n\n');
 
   // 1. WHICH PIECES: a reading of the request, grounded; the shared-words floor when no model can read.
@@ -189,11 +259,16 @@ export async function runDirect(c: DirectContext) {
   const stable = piecesBlock(shown);
   // The author's own rules, in their words: what they stated and required (a ban they wrote), never a rule read off their pieces.
   const rules = planFor(c.std).rules.filter((r) => r.stated && r.role !== 'HABIT').map((r) => r.statement);
-  const variable = taskBlock({ material: c.material, task: c.asked, rules });
+  // The author's method, whole and in their words, where the skill has one: what they wrote down is theirs, like their pieces.
+  const method = store.getMethod(c.L)?.text ?? '';
+  // What an editor would ask before the draft: only the person's answers reach the writer.
+  const asking = await editorQuestions(c, method);
+  const variable = taskBlock({ material: c.material, task: c.asked, rules, method, settled: asking.note });
   c.detail(`Written from ${shown.length} of ${catalogue.length} piece(s) of the author's${route.kind ? `, as ${route.kind}` : ''} (${decided.by === 'model' ? 'chosen by a reading of the request' : `chosen by shared words: ${decided.why ?? 'no reading'}`}): ${shown.map((p) => titleOf(p.text)).join('; ')}.`);
 
   // What the delivered text is checked by, set up once: the record's settings are read from it too.
-  const checks = checksFor(c.L, { material: [c.asked, materialText].filter(Boolean).join('\n\n'), task: c.asked, context: { request: c.asked, material: c.material.map((m) => ({ name: m.name, text: m.text })) }, guardClaims: !argv.includes('--allow-unsourced'), placeholders: false, claimReads: 1 });
+  const checks = checksFor(c.L, { material: [c.asked, materialText].filter(Boolean).join('\n\n'), task: c.asked, context: { request: c.asked, material: c.material.map((m) => ({ name: m.name, text: m.text })) }, guardClaims: !argv.includes('--allow-unsourced'), placeholders: false,
+    ...(c.held ? { level: c.held } : {}), claimReads: c.held === 'STRICT' ? 2 : 1 });
 
   // 2-3. THE DRAFT, THEN ONE SELF-REVIEW. A review that fails costs the review, never the piece: the draft is delivered, said.
   let review: DirectRecord['review'] = { ran: false };
@@ -209,7 +284,7 @@ export async function runDirect(c: DirectContext) {
     if (argv.includes('--no-review')) review = { ran: false, why: 'turned off (--no-review)' };
     else {
       try {
-        const again = await prose(c.client, budget, stable, variable, reviewAsk(draft, { material: c.material, edits: corrections, rules }), effort, 'emit_review');
+        const again = await prose(c.client, budget, stable, variable, reviewAsk(draft, { material: c.material, edits: corrections, rules, method }), effort, 'emit_review');
         output = again.piece; review = { ran: true };
       } catch (e) { review = { ran: false, why: `the review could not run: ${(e as Error).message.split('\n')[0]}` }; c.say(`(the self-review could not run, so the first draft is delivered: ${review.why})`); }
     }
@@ -243,7 +318,8 @@ export async function runDirect(c: DirectContext) {
   };
   const direct = (): DirectRecord => ({ version: DIRECT_VERSION, asked: c.asked, from: catalogue.length,
     pieces: shown.map((p) => ({ id: p.id, title: titleOf(p.text), kept: p.kept })),
-    route: { by: decided.by, reader: decided.reader, kind: route.kind, ...(decided.why ? { why: decided.why } : {}) }, effort, review, corrections: corrections.length });
+    route: { by: decided.by, reader: decided.reader, kind: route.kind, ...(decided.why ? { why: decided.why } : {}) }, effort, review, corrections: corrections.length,
+    ...(method.trim() ? { method: true } : {}), questions: { by: asking.by, asked: asking.questions.map((q) => q.id), answered: asking.answers.map((a) => a.id) } });
   const servedHash = sha(stable);
   const rec = await runOnce(c.L, c.sv, stable, servedHash, { expectedPackageHash: servedHash, servedPackageHash: servedHash, matched: true, servedFiles: ['direct:pieces'] },
     variable, c.client, budget, c.binding, resolveProvenance(flag('--provenance'), process.env), null, flag('--task') ? 'FLAG' : 'POSITIONAL', refine,
@@ -278,7 +354,7 @@ export async function runDirect(c: DirectContext) {
     ...recordHead({ state: evaluation?.record?.state ?? null, standardVersionHash: c.sv.standardVersionHash, skillVersion: c.sv.skillVersionHash, certificate: rec.settings?.certificate ?? null, record: evaluation?.record ?? null }),
     eval: evaluation,
     output: rec.output, answer: rec.output, invocationId: rec.invocationId, skillVersion: c.sv.skillVersionHash, costUsd: Number(spent.toFixed(4)),
-    rulesBroken: violated, cut: rec.repair?.storiesCut ?? [], toCheck, questions: [], answers: [], plan: null, inferred, work: rec.work ?? null,
+    rulesBroken: violated, cut: rec.repair?.storiesCut ?? [], toCheck, questions: questionsJson(asking.questions), answers: asking.answers, plan: null, inferred, work: rec.work ?? null,
     direct: rec.direct ?? null, model: rec.observedRuntime?.resolvedModel ?? c.binding.requestedModel, maxTokens: directMaxTokens(),
   };
   return { rec, json, spent, budget, evaluation, claimAct: checks.claimAct };
