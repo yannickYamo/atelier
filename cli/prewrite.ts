@@ -75,7 +75,8 @@ export const JUST_WRITE = /^just write(?: it)?\.?$/i;
 export async function beforeTheDraft(o: PrewriteInput): Promise<Prewrite> {
   const said: string[] = [];
   const read = o.read ?? ask;
-  const told = store.getTold(o.L);
+  // An editor's answer given on the direct path belongs to the request it was given for (cli/direct.ts): not this path's.
+  const told = store.getTold(o.L).filter((t) => t.for === undefined);
   // each reading its own budget of one call
   const tiny = (capUsd = 0.03): { spentUsd: number; capUsd: number; maxCalls: number } => ({ spentUsd: 0, capUsd, maxCalls: 1 });
   // ── THE QUESTIONS ──────────────────────────────────────────────────────────────────────────

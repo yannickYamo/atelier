@@ -149,6 +149,15 @@ async function askLine(prompt: string): Promise<string> {
   try { return (await rl.question(prompt)).trim(); } finally { rl.close(); }
 }
 
+/** A kept editor reading, only where every question in it is whole: anything else is read again. */
+export const keptReading = (x: unknown): { value: EditorReading; by: string } | null => {
+  const r = x as { value?: { decisions?: unknown; questions?: unknown }; by?: unknown } | null;
+  const qs = r?.value?.questions;
+  if (!r || typeof r.by !== 'string' || !Array.isArray(r.value?.decisions) || !Array.isArray(qs)) return null;
+  const whole = (q: unknown): boolean => { const o = q as Record<string, unknown> | null; return !!o && typeof o.id === 'string' && typeof o.ask === 'string' && typeof o.default === 'string' && Array.isArray(o.options) && o.options.every((v) => typeof v === 'string'); };
+  return qs.every(whole) ? { value: r.value as EditorReading, by: r.by } : null;
+};
+
 /** What the editor's questions settled: the note the writer reads, the questions, and the person's answers. */
 export interface Asked { readonly note: string; readonly questions: readonly Question[]; readonly answers: readonly { readonly id: string; readonly answer: string }[]; readonly by: string }
 
@@ -168,10 +177,10 @@ export async function editorQuestions(c: Pick<DirectContext, 'L' | 'asked' | 'ma
   const told = store.getTold(c.L).filter((t) => !editorKind(t.id) || t.for === forRequest);
   const input = { request: c.asked, material: materialShown(c.material), method, told };
   // THE SAME INPUT ASKS THE SAME QUESTIONS: a model's reading is kept under the hash of what it read (store.ts, getEditorReading).
-  const key = sha(JSON.stringify([EDITOR_QUESTIONS.version, input.request, input.material, input.method, told.map((t) => [t.id, t.answer])]));
-  const kept = store.getEditorReading(c.L, key) as { value: EditorReading; by: string } | null;
-  const decided = kept?.value && Array.isArray(kept.value.questions) ? kept
-    : await readContext(EDITOR_QUESTIONS, input, contextReaderClient(), contextReaderModel(), { spentUsd: 0, capUsd: 0.03, maxCalls: 1 }, 'other');
+  const key = sha(JSON.stringify([EDITOR_QUESTIONS.version, contextReaderModel(), input.request, input.material, input.method, told.map((t) => [t.id, t.answer])]));
+  const kept = keptReading(store.getEditorReading(c.L, key));
+  const decided = kept ??
+    await readContext(EDITOR_QUESTIONS, input, contextReaderClient(), contextReaderModel(), { spentUsd: 0, capUsd: 0.03, maxCalls: 1 }, 'other');
   if (!kept && decided.by === 'model') store.putEditorReading(c.L, key, { value: decided.value, by: decided.by });
   const questions = decided.value.questions;
   const { answers: given, said } = readAnswers(flag('--answers'), questions, [...EDITOR_KINDS]);
@@ -270,13 +279,17 @@ export function rulesLines(entries: readonly Entry[]): string[] {
   const own = entries.filter((e) => e.dimension === 'STANDARD');
   if (!own.length) return [];
   const name = (e: Entry): string => { const t = e.statement.replace(/\s+/g, ' ').trim(); return `"${t.length > 60 ? `${t.slice(0, 57)}...` : t}"`; };
+  const unq = (e: Entry): boolean => e.reason === 'OBSERVER_UNQUALIFIED';
   const groups: [string, Entry[]][] = [
     ['held', own.filter((e) => e.result === 'PASS')],
     ['not held', own.filter((e) => e.result === 'FAIL')],
-    ['a check not yet qualified found it broken (blocks nothing)', own.filter((e) => e.reason === 'OBSERVER_UNQUALIFIED' && e.observation.found === 'VIOLATED')],
-    ['a check not yet qualified found it held', own.filter((e) => e.reason === 'OBSERVER_UNQUALIFIED' && e.observation.found !== 'VIOLATED')],
+    ['a check not yet qualified found it broken (blocks nothing)', own.filter((e) => unq(e) && e.observation.found === 'VIOLATED')],
+    ['a check not yet qualified found it held', own.filter((e) => unq(e) && e.observation.found === 'MET')],
+    ['a check not yet qualified could not read it', own.filter((e) => unq(e) && e.observation.found === undefined)],
     ['partly checked', own.filter((e) => e.reason === 'PARTLY_CHECKED')],
+    ['listed for you to read', own.filter((e) => e.reason === 'LISTED_FOR_YOU')],
     ['no check reads it: yours to judge', own.filter((e) => e.reason === 'NOT_MACHINE_CHECKABLE')],
+    ['does not apply to this piece', own.filter((e) => e.result === 'NOT_APPLICABLE')],
   ];
   return [`Your rules on this piece (${own.length}):`, ...groups.filter(([, es]) => es.length).map(([what, es]) => `  ${what} (${es.length}): ${es.map(name).join('; ')}`)];
 }

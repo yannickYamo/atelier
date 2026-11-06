@@ -478,24 +478,43 @@ const EACH = 'each';
 
 /**
  * THE PARAGRAPHS OF A TEXT, AS A READER COUNTS THEM: blocks between blank lines, a list or a quote counted as one block,
- * a heading, a table and code counted as none. "Three paragraphs per section" was read as three sentences per paragraph,
- * the only paragraph count the checks had, and a piece written exactly to the step was flagged.
+ * a heading (and a setext underline), a table, code and front matter counted as none. "Three paragraphs per section" was
+ * read as three sentences per paragraph, the only paragraph count the checks had, and a piece written to the step was flagged.
  */
 export function paragraphsIn(text: string): number {
-  return blankFences(visible(text)).split(/\n\s*\n/).map((b) => b.split('\n').filter((l) => l.trim() && !/^\s*#{1,6}\s/.test(l) && !TABLE_ROW.test(l)))
+  const body = text.replace(/^\uFEFF?---\r?\n[\s\S]*?\r?\n---\r?\n?/, (m) => m.replace(/[^\n]/g, ' '));
+  return blankFences(visible(body)).split(/\n\s*\n/)
+    .map((b) => b.split('\n').filter((l) => l.trim() && !/^\s*#{1,6}\s/.test(l) && !TABLE_ROW.test(l) && !/^\s*(?:=+|-{2,})\s*$/.test(l) && /[\p{L}\p{N}]/u.test(l)))
     .filter((ls) => ls.length > 0).length;
 }
 
-/** The paragraphs of every section (a heading and what runs to the next heading), each held to the range; the text before the first heading is no section. */
+/**
+ * The paragraphs of every section held to the range. A section is a heading and what runs to the next heading; its body
+ * starts on the line after the heading's own (a setext underline and what is left of a label's line are the heading's).
+ * A heading with subsections under it is not itself a section: its parts are, each counted. The text before the first
+ * heading is no section. The value is how many paragraphs the sections are off by, in all: a repair is closer as it falls.
+ */
 function paragraphsPerSection(whole: string, lo: number | null, hi: number | null, labels: boolean): ObserverResult {
   const text = visible(whole);
   const heads = sectionHeadsOf(whole, labels);
-  const sections = heads.map((h, i) => ({ h, n: paragraphsIn(text.slice(h.end, heads[i + 1]?.start ?? text.length)) })).filter((x) => x.n > 0);
+  const bodyStart = (end: number): number => {
+    const eol = text.indexOf('\n', end); if (eol === -1) return text.length;
+    const under = /^[ \t]*(?:=+|-{2,})[ \t]*(?:\n|$)/.exec(text.slice(eol + 1));
+    return eol + 1 + (under ? under[0].length : 0);
+  };
+  const sections = heads.flatMap((h, i) => {
+    const next = heads[i + 1];
+    if (next && next.level > h.level) return [];
+    const n = paragraphsIn(text.slice(Math.min(bodyStart(h.end), next?.start ?? text.length), next?.start ?? text.length));
+    return n > 0 ? [{ h, n }] : [];
+  });
   if (!sections.length) return { verdict: 'NOT_APPLICABLE', spans: [], value: null, detail: 'no section to count' };
-  const off = sections.filter((x) => (lo !== null && x.n < lo) || (hi !== null && x.n > hi));
+  const by = (n: number): number => Math.max(0, lo !== null ? lo - n : 0, hi !== null ? n - hi : 0);
+  const off = sections.filter((x) => by(x.n) > 0);
   const asked = lo !== null && hi !== null ? (lo === hi ? `${lo}` : `${lo} to ${hi}`) : hi !== null ? `at most ${hi}` : `at least ${lo}`;
+  const total = off.reduce((t, x) => t + by(x.n), 0);
   return off.length
-    ? { verdict: 'VIOLATED', value: off.length, detail: `${off.length} of ${sections.length} section(s) not at ${asked} paragraphs: ${off.map((x) => `"${x.h.text.trim()}" has ${x.n}`).join(', ')}`,
+    ? { verdict: 'VIOLATED', value: total, detail: `${off.length} of ${sections.length} section(s) not at ${asked} paragraphs: ${off.map((x) => `"${x.h.text.trim()}" has ${x.n}`).join(', ')}`,
       spans: off.map((x) => ({ start: x.h.start, end: x.h.end, text: text.slice(x.h.start, x.h.end), why: `${x.n} paragraphs, where each section has ${asked}` })) }
     : { verdict: 'MET', spans: [], value: 0, detail: `all ${sections.length} section(s) at ${asked} paragraphs` };
 }
@@ -532,7 +551,7 @@ export const LENGTH: Observer = {
     // THE LENGTH OF ONE SECTION (`in`), where the owner stated it of a section or their pieces keep one: what the
     // section holds is counted, and a text without the section is another rule's to fail.
     const where = list(p, 'in')[0];
-    if (where?.toLowerCase() === EACH) return paragraphsPerSection(whole, lo, hi, Boolean(num(p, 'labels')));
+    if (where?.toLowerCase() === EACH && unit === 'paragraphs') return paragraphsPerSection(whole, lo, hi, Boolean(num(p, 'labels')));
     const text = where ? sectionBodyOf(whole, where, Boolean(num(p, 'labels')), list(p, 'sections')) : whole;
     // A length the owner stated of a section (`need`) is not met by leaving the section out.
     if (text === null) return { verdict: num(p, 'need') ? 'VIOLATED' : 'NOT_APPLICABLE', spans: [], value: null, detail: `no "${where}" section to measure` };

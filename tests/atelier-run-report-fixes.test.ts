@@ -13,8 +13,9 @@ import { parseMeasureSpec } from '../core/measurement/spec.js';
 import { paragraphsIn } from '../core/observers/obligations.js';
 import { spelledCounts } from '../core/loop/numbers.js';
 import { checkDraft, CLAIMS_TO_CHECK } from '../core/loop/run-repair.js';
+import { distanceOf } from '../core/loop/repair.js';
 import type { ClaimSensor } from '../core/loop/claim-extract.js';
-import { toCheckOf, rulesLines } from '../cli/direct.js';
+import { toCheckOf, rulesLines, keptReading } from '../cli/direct.js';
 import type { Entry } from '../core/eval/record.js';
 
 const para = (n: number, tag: string): string => Array.from({ length: n }, (_, i) => `${tag} paragraph ${i + 1} says one thing. It says it plainly.`).join('\n\n');
@@ -49,6 +50,26 @@ describe('1. paragraphs per section are counted as paragraphs, in every section'
   });
 });
 
+describe('1b. what a section is, for that count', () => {
+  const three = 'A one.\n\nA two.\n\nA three.';
+  it('a setext underline and a label\'s line belong to the heading, never a paragraph', () => {
+    expect(observe(`Intro.\n\nOne\n---\n\n${three}\n\nTwo\n---\n\n${three}\n`, EACH3()).verdict).toBe('MET');
+    const m = parseMeasureSpec('LENGTH:unit=PARAGRAPHS,min=3,max=3,in=each,labels=1').measurement;
+    expect(m && observe(`Summary:\n\n${three}\n\nRisks:\n\n${three}\n`, m).detail).toBe('all 2 section(s) at 3 paragraphs');
+  });
+  it('a heading with parts under it is not itself a section, intro or not', () => {
+    expect(observe(`## Part\n\nAn intro.\n\n### Sub one\n\n${three}\n\n### Sub two\n\n${three}\n`, EACH3()).detail).toBe('all 2 section(s) at 3 paragraphs');
+  });
+  it('front matter is no paragraph', () => {
+    expect(paragraphsIn(`---\ntitle: x\n---\n\n${three}`)).toBe(3);
+  });
+  it('the value is how far off the sections are, so a repair that puts more off reads further', () => {
+    expect(observe(PIECE([3, 4, 3]), EACH3()).value).toBe(1);
+    expect(observe(PIECE([1, 5, 3]), EACH3()).value).toBe(4);
+    expect(distanceOf({ requirementId: 'r', observer: 'LENGTH', result: observe(PIECE([1, 5, 3]), EACH3()) } as never, () => EACH3().params)).toEqual({ kind: 'value', d: 4 });
+  });
+});
+
 describe('2. each of the author\'s rules is said with the piece', () => {
   const e = (statement: string, result: Entry['result'], reason: Entry['reason'], found?: 'MET' | 'VIOLATED'): Entry => ({
     id: statement.slice(0, 4), dimension: 'STANDARD', source: 'METHOD', statement, required: false, result, reason,
@@ -67,6 +88,9 @@ describe('2. each of the author\'s rules is said with the piece', () => {
       '  no check reads it: yours to judge (1): "Give every feature its reason."',
     ]);
     expect(rulesLines([])).toEqual([]);
+    // every rule is under one line, so the count adds up
+    expect(rulesLines([e('Open on the pain.', 'NOT_APPLICABLE', 'DOES_NOT_APPLY'), e('Plain words.', 'UNVERIFIED', 'OBSERVER_UNQUALIFIED')]))
+      .toEqual(['Your rules on this piece (2):', '  a check not yet qualified could not read it (1): "Plain words."', '  does not apply to this piece (1): "Open on the pain."']);
   });
 });
 
@@ -74,6 +98,9 @@ describe('3. small invented details are listed', () => {
   it('a range in words is a count when its second number is', () => {
     expect(spelledCounts('We onboarded five or six teams last year.').sort()).toEqual(['5', '6']);
     expect(spelledCounts('It takes three to four weeks.')).toEqual([]);
+    expect(spelledCounts('We hired one or two engineers.').sort()).toEqual(['1', '2']);
+    expect(spelledCounts('Two or three or four teams joined.').sort()).toEqual(['2', '3', '4']);
+    expect(spelledCounts('Three or four in ten developers agree.').sort()).toEqual(['10', '3', '4']);
   });
   it('where nothing is cut, a count in words a qualified reader passed is listed all the same', () => {
     const sensor: ClaimSensor = { instrument: 'reader', read: () => Promise.resolve(), reading: () => ({ claims: [], publicFacts: [], instrument: 'reader' }),
@@ -96,5 +123,15 @@ describe('3. small invented details are listed', () => {
     // the same line with nothing named, or with a named part the notes hold, is given
     expect(toCheckOf(report([{ text: s }]), notes)).toEqual([]);
     expect(toCheckOf(report([{ text: s, specific: 'every morning' }]), notes)).toEqual([]);
+  });
+});
+
+describe('4. a kept editor reading is served only whole', () => {
+  it('a question missing its options, or a reading of another shape, is read again', () => {
+    const q = { id: 'idea', ask: 'What idea?', options: ['a', 'b'], default: 'a' };
+    expect(keptReading({ value: { decisions: [], questions: [q] }, by: 'model' })).toEqual({ value: { decisions: [], questions: [q] }, by: 'model' });
+    expect(keptReading({ value: { decisions: [], questions: [{ ...q, options: undefined }] }, by: 'model' })).toBeNull();
+    expect(keptReading({ value: { questions: [q] }, by: 'model' })).toBeNull();
+    expect(keptReading(null)).toBeNull();
   });
 });

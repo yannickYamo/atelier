@@ -507,6 +507,8 @@ export function distanceOf(c: RuleCheck, paramsOf?: ParamsOf): { readonly kind: 
   if (c.observer === 'LEXICON' || c.observer === 'HEDGE_RATE') return { kind: 'value', d: v };
   if (c.observer === 'LENGTH') {
     if (((p.unit as readonly string[] | undefined)?.[0] ?? '').toLowerCase() === 'sentence') return { kind: 'value', d: v };
+    // every section's paragraphs (in=each): the value is already how far off they are, in all
+    if (((p.in as readonly string[] | undefined)?.[0] ?? '').toLowerCase() === 'each') return { kind: 'value', d: v };
     const lo = num('min'); const hi = num('max');
     if (lo === null && hi === null) { const m = /: (?:long|short) by (\d+)/.exec(c.result.detail); return m ? { kind: 'value', d: Number(m[1]) } : places; }
     return { kind: 'value', d: Math.max(0, hi !== null ? v - hi : 0, lo !== null ? lo - v : 0) };
@@ -824,9 +826,11 @@ async function takeStep<T extends Proposed>(ledger: StepLedger, plan: StepPlan, 
   // for the person, which is the truthful outcome (no repair delivers less than was asked).
   // A SHAPE target is a length only when it counts characters or words; removing a link, a tag or an emoji is not a
   // length cut and is held to the share like any edit.
+  // Paragraphs per section move paragraphs between and within sections, never the piece's length: held to the share.
+  const perSection = (c: RuleCheck): boolean => { const w = rule.paramsOf?.(c)?.in ?? (c as { params?: Record<string, unknown> }).params?.in; const first: unknown = Array.isArray(w) ? (w as unknown[])[0] : w; return typeof first === 'string' && first.toLowerCase() === 'each'; };
   const lengthShape = (c: RuleCheck): boolean => { const sh = rule.paramsOf?.(c)?.shape ?? (c as { params?: Record<string, unknown> }).params?.shape; const first: unknown = Array.isArray(sh) ? (sh as unknown[])[0] : sh; return first === 'characters' || first === 'words'; };
   const lengthCut = plan.action === 'claim-redraft' || plan.targets.some((id) => id === 'request-length' || id === 'length'
-    || [...b.report.checked, ...after.report.checked].some((c) => c.requirementId === id && (c.observer === 'LENGTH' || (c.observer === 'SHAPE' && lengthShape(c)))));
+    || [...b.report.checked, ...after.report.checked].some((c) => c.requirementId === id && ((c.observer === 'LENGTH' && !perSection(c)) || (c.observer === 'SHAPE' && lengthShape(c)))));
   const lost = survivalLoss(b.text, after.text, lengthCut) ?? belowAsked(b.text, after.text, rule.floorWords ?? null)
     ?? workLost(b.text, after.text, plan.action);
   const unreadable = enforced.size ? [...enforced].filter((id) => lostToLength(b.report.checked.find((c) => c.requirementId === id), after.report.checked.find((c) => c.requirementId === id))) : [];

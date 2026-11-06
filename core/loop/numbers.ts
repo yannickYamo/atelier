@@ -127,9 +127,18 @@ export function spelledCounts(s: string): string[] {
   const quoted = [...s.matchAll(/["“][^"”]*["”]|(?<![A-Za-z0-9])['‘][^'’\n]*?['’](?![A-Za-z])/g)].map((m) => [m.index, m.index + m[0].length] as const);
   const phrases = numberPhrases(s);
   const ranged = new Set<number>();
+  // a count, and every number of a range that runs into it ("two or three or four teams")
+  const take = (k: number): void => {
+    out.push(phrases[k].value); let j = k - 1; for (; ranged.has(j); j--) out.push(phrases[j].value);
+    // a lone "one" is no phrase of its own (numberPhrases): "one or two teams" says it before the range's first number
+    if (/\bone\s+(?:or|to)\s+$/i.test(s.slice(0, phrases[j + 1].index))) out.push('1');
+  };
   phrases.forEach((p, k) => {
     const phrase = s.slice(p.index, p.index + p.length).toLowerCase();
-    if (/^\d/.test(phrase) || phrase === 'one' || quoted.some(([a, b]) => p.index > a && p.index < b)) return;
+    const nextP = phrases[k + 1];
+    const range = nextP !== undefined && RANGE.test(s.slice(p.index + p.length, nextP.index));
+    if (/^\d/.test(phrase) || quoted.some(([a, b]) => p.index > a && p.index < b)) return;
+    if (phrase === 'one') { if (range) ranged.add(k); return; }
     const before = /([A-Za-z]+)[\s-]+$/.exec(s.slice(0, p.index));
     if (before && ONE_AFTER_NOT_A_FIGURE.has(before[1].toLowerCase())) return;
     const after = s.slice(p.index + p.length);
@@ -138,18 +147,17 @@ export function spelledCounts(s: string): string[] {
     if (twin === phrase) return;
     // "Three in ten developers", "seven out of ten readers": a ratio states both of its numbers.
     const ratio = /^\s+(?:in|out\s+of)\s+$/i;
-    const nextP = phrases[k + 1];
-    if (nextP && ratio.test(s.slice(p.index + p.length, nextP.index))) { out.push(p.value); return; }
+    if (nextP && ratio.test(s.slice(p.index + p.length, nextP.index))) { take(k); return; }
     const rest = after.replace(/^(?:[\s-]*plus\b|\s*\+)/i, '');
     const plus = rest.length < after.length;
-    if (/^\s*%/.test(rest)) { out.push(p.value); return; }
+    if (/^\s*%/.test(rest)) { take(k); return; }
     const m = /^[\s-]+(?:of\s+(?:([A-Za-z]+)\s+)?)?([A-Za-z]+)(?:[\s-]+([A-Za-z]+))?/.exec(rest);
     if (!m) return;
     // "two of the": the determiner is consumed only when a word follows it; "two of the" at the end counts nothing.
     const ofDet = m[1] !== undefined && OF_DETERMINERS.test(m[1].toLowerCase());
     const words = (m[1] !== undefined && !ofDet ? [m[1], m[2]] : [m[2], m[3]]).filter((w): w is string => w !== undefined).map((w) => w.toLowerCase());
     // "Five or six teams", "three to four weeks": a range is a count when its second number is, and is said whole.
-    if (nextP && RANGE.test(s.slice(p.index + p.length, nextP.index))) { ranged.add(k); return; }
+    if (range) { ranged.add(k); return; }
     if (ONE_BEFORE_NOT_A_FIGURE.has(words[0])) return;
     // "Seven figures", "six figures": the size of a sum, said as an idiom.
     if (/^figures?$/.test(words[0])) return;
@@ -159,8 +167,7 @@ export function spelledCounts(s: string): string[] {
       if (words.some((w) => FAMILY.test(w)) && (FIRST_PERSON.test(s) || (before && POSSESSIVE.test(before[1])))) return;
       if (phrase.startsWith('a ') && Number(p.value) >= 100 && !words.some((w) => MEASURED.test(w))) return;
     }
-    out.push(p.value);
-    if (ranged.has(k - 1)) out.push(phrases[k - 1].value);
+    take(k);
   });
   return out;
 }
