@@ -32,7 +32,7 @@ import { catalogueOf, titleOf, withinBudget, PIECE_BUDGET_CHARS, type Piece } fr
 import { PIECE_ROUTE, type Route } from '../core/direct/route.js';
 import { piecesBlock, taskBlock, DRAFT_ASK, reviewAsk, EDITS_SHOWN } from '../core/direct/prompt.js';
 import { correctionsOf } from '../core/direct/kept.js';
-import { EDITOR_QUESTIONS, EDITOR_KINDS, editorNote, askOf } from '../core/direct/questions.js';
+import { EDITOR_QUESTIONS, EDITOR_KINDS, editorNote, askOf, type EditorReading } from '../core/direct/questions.js';
 import { readAnswers, questionLines, materialShown, type Question } from '../core/loop/questions.js';
 import { typedAnswer, JUST_WRITE, questionsJson } from './prewrite.js';
 import { createInterface } from 'node:readline/promises';
@@ -43,6 +43,7 @@ import { planFor } from '../core/plan/execution-plan.js';
 import { buildRunEval } from './eval-run.js';
 import { putEval } from '../core/state/eval-store.js';
 import type { EvalSummary } from '../core/eval/summary.js';
+import type { Entry } from '../core/eval/record.js';
 import { acts, type VerifyReport } from '../core/observers/verify.js';
 import { recordHead } from '../core/eval/certificate.js';
 import { checksFor } from './checks.js';
@@ -160,15 +161,28 @@ export interface Asked { readonly note: string; readonly questions: readonly Que
  */
 export async function editorQuestions(c: Pick<DirectContext, 'L' | 'asked' | 'material' | 'interactive' | 'read' | 'say'>, method: string): Promise<Asked> {
   if (argv.includes('--no-questions')) return { note: '', questions: [], answers: [], by: 'off' };
-  const told = store.getTold(c.L);
-  const decided = await readContext(EDITOR_QUESTIONS, { request: c.asked, material: materialShown(c.material), method, told }, contextReaderClient(), contextReaderModel(), { spentUsd: 0, capUsd: 0.03, maxCalls: 1 }, 'other');
+  // AN EDITOR'S ANSWER BELONGS TO THE PIECE IT WAS GIVEN FOR. The one idea of last week's post is not this one's: read
+  // across requests, an answer counted as "stated" for the next piece, which was then neither asked nor told it.
+  const forRequest = sha(c.asked.trim());
+  const editorKind = (id: string): boolean => (EDITOR_KINDS as readonly string[]).includes(id);
+  const told = store.getTold(c.L).filter((t) => !editorKind(t.id) || t.for === forRequest);
+  const input = { request: c.asked, material: materialShown(c.material), method, told };
+  // THE SAME INPUT ASKS THE SAME QUESTIONS: a model's reading is kept under the hash of what it read (store.ts, getEditorReading).
+  const key = sha(JSON.stringify([EDITOR_QUESTIONS.version, input.request, input.material, input.method, told.map((t) => [t.id, t.answer])]));
+  const kept = store.getEditorReading(c.L, key) as { value: EditorReading; by: string } | null;
+  const decided = kept?.value && Array.isArray(kept.value.questions) ? kept
+    : await readContext(EDITOR_QUESTIONS, input, contextReaderClient(), contextReaderModel(), { spentUsd: 0, capUsd: 0.03, maxCalls: 1 }, 'other');
+  if (!kept && decided.by === 'model') store.putEditorReading(c.L, key, { value: decided.value, by: decided.by });
   const questions = decided.value.questions;
   const { answers: given, said } = readAnswers(flag('--answers'), questions, [...EDITOR_KINDS]);
   for (const s of said) c.say(s);
   const answers: { id: string; answer: string }[] = [];
   let rest = false;
+  // WHAT THE PERSON ANSWERED FOR THIS SAME REQUEST ON AN EARLIER RUN IS STILL THEIRS: it reaches the writer again, asked
+  // or found stated in it, and is never asked twice. Their answer now, where they give one, is the one that counts.
+  const before = new Map(told.filter((t) => editorKind(t.id)).map((t) => [t.id, t.answer]));
   for (const q of questions) {
-    const g = given.get(q.id);
+    const g = given.get(q.id) ?? before.get(q.id);
     if (g !== undefined) { answers.push({ id: q.id, answer: g }); continue; }
     if (!c.interactive || rest) continue;
     process.stderr.write(`\n${questionLines([q]).join('\n')}\n`);
@@ -176,9 +190,10 @@ export async function editorQuestions(c: Pick<DirectContext, 'L' | 'asked' | 'ma
     if (JUST_WRITE.test(typed)) { rest = true; continue; }
     answers.push({ id: q.id, answer: typedAnswer(q, typed) });
   }
-  for (const [id, answer] of given) if (!questions.some((q) => q.id === id) && askOf(id) !== null) answers.push({ id, answer });
+  for (const [id, answer] of [...given, ...before]) if (!questions.some((q) => q.id === id) && askOf(id) !== null && !answers.some((a) => a.id === id)) answers.push({ id, answer });
   const at = new Date().toISOString();
-  store.addTold(c.L, answers.map((a) => ({ id: a.id, ask: questions.find((q) => q.id === a.id)?.ask ?? askOf(a.id) ?? a.id, answer: a.answer, at })));
+  store.addTold(c.L, answers.filter((a) => before.get(a.id) !== a.answer).map((a) => ({ id: a.id, ask: questions.find((q) => q.id === a.id)?.ask ?? askOf(a.id) ?? a.id, answer: a.answer, at, ...(editorKind(a.id) ? { for: forRequest } : {}) })));
+
   const open = questions.filter((q) => !answers.some((a) => a.id === q.id));
   if (answers.length) c.say(`Settled before writing, in your words: ${answers.map((a) => a.id).join(', ')}.`);
   if (open.length) {
@@ -224,6 +239,7 @@ export interface ToCheck { readonly sentence: string; readonly specific: string 
  * whichever check raised it: "The CRM holds the deals", copied from the notes, was listed once as a specific to check.
  * Where a reader named the part of the sentence it could not trace, that part is said, so the person reads which words.
  */
+const norm = (t: string): string => t.toLowerCase().replace(/[‘’]/g, "'").replace(/\s+/g, ' ').trim();
 export const toCheckOf = (report: Awaited<ReturnType<typeof checkDraftAsync>>, known: string): ToCheck[] => {
   const knownNumbers = new Set(numbersIn(known));
   const given = (t: string): boolean => supportIsIn(t, known) && numbersIn(t).every((n) => knownNumbers.has(n));
@@ -232,13 +248,38 @@ export const toCheckOf = (report: Awaited<ReturnType<typeof checkDraftAsync>>, k
     if (![...LISTED_IDS].includes(c.requirementId) || c.result.verdict !== 'VIOLATED') continue;
     for (const sp of c.result.spans as readonly (Span & { specific?: string })[]) {
       const sentence = sp.text.trim();
-      if (!sentence || given(sentence) || out.some((x) => x.sentence === sentence)) continue;
       const specific = sp.specific?.trim();
+      // A SENTENCE MOSTLY COPIED FROM THE NOTES CAN STILL CARRY A DETAIL THEY LACK: "this afternoon", "every time" added
+      // to a line of the notes left most of its words there, and the line was dropped as given. Where the reader named
+      // the untraced words, the sentence goes only when those words are in the notes too.
+      const namedIsGiven = !specific || specific === sentence || given(specific) || norm(known).includes(norm(specific));
+      if (!sentence || (given(sentence) && namedIsGiven) || out.some((x) => x.sentence === sentence)) continue;
       out.push({ sentence, specific: specific && specific !== sentence ? specific : null });
     }
   }
   return out;
 };
+/**
+ * HOW EACH OF THE AUTHOR'S RULES WENT ON THIS PIECE, SAID WITH THE PIECE. The direct run said only the required rules
+ * still broken, so a rule held, a check that failed without blocking and a step no check reads were all silent: the
+ * method's own checks ("no ask at the end", the headings) looked as though they had never run. Each rule of the standard
+ * is said under what was found: held, not held, found by a check not yet qualified on the examples (it blocks nothing),
+ * and the steps no check reads, which are the person's to judge.
+ */
+export function rulesLines(entries: readonly Entry[]): string[] {
+  const own = entries.filter((e) => e.dimension === 'STANDARD');
+  if (!own.length) return [];
+  const name = (e: Entry): string => { const t = e.statement.replace(/\s+/g, ' ').trim(); return `"${t.length > 60 ? `${t.slice(0, 57)}...` : t}"`; };
+  const groups: [string, Entry[]][] = [
+    ['held', own.filter((e) => e.result === 'PASS')],
+    ['not held', own.filter((e) => e.result === 'FAIL')],
+    ['a check not yet qualified found it broken (blocks nothing)', own.filter((e) => e.reason === 'OBSERVER_UNQUALIFIED' && e.observation.found === 'VIOLATED')],
+    ['a check not yet qualified found it held', own.filter((e) => e.reason === 'OBSERVER_UNQUALIFIED' && e.observation.found !== 'VIOLATED')],
+    ['partly checked', own.filter((e) => e.reason === 'PARTLY_CHECKED')],
+    ['no check reads it: yours to judge', own.filter((e) => e.reason === 'NOT_MACHINE_CHECKABLE')],
+  ];
+  return [`Your rules on this piece (${own.length}):`, ...groups.filter(([, es]) => es.length).map(([what, es]) => `  ${what} (${es.length}): ${es.map(name).join('; ')}`)];
+}
 const LISTED_IDS: ReadonlySet<string> = new Set(['UNSOURCED', CLAIMS_TO_CHECK, INCONCLUSIVE, PUBLIC_FACTS]);
 
 /** The direct run, recorded. Returns the record and the JSON a `--json` run prints. */
@@ -350,11 +391,14 @@ export async function runDirect(c: DirectContext) {
       durationMs: Date.now() - c.started, drafts: 1, applicability: [], report: seen.report, contract: false });
     putEval(c.L, evaluation);
   } catch (e) { c.say(`(the evaluation of this run could not be built: ${(e as Error).message.split('\n')[0]})`); }
+  for (const l of evaluation?.record ? rulesLines(evaluation.record.entries) : []) c.say(l);
   const json = {
     ...recordHead({ state: evaluation?.record?.state ?? null, standardVersionHash: c.sv.standardVersionHash, skillVersion: c.sv.skillVersionHash, certificate: rec.settings?.certificate ?? null, record: evaluation?.record ?? null }),
     eval: evaluation,
+    // the questions were asked before the piece was written, and are listed before it
+    questions: questionsJson(asking.questions), answers: asking.answers,
     output: rec.output, answer: rec.output, invocationId: rec.invocationId, skillVersion: c.sv.skillVersionHash, costUsd: Number(spent.toFixed(4)),
-    rulesBroken: violated, cut: rec.repair?.storiesCut ?? [], toCheck, questions: questionsJson(asking.questions), answers: asking.answers, plan: null, inferred, work: rec.work ?? null,
+    rulesBroken: violated, cut: rec.repair?.storiesCut ?? [], toCheck, plan: null, inferred, work: rec.work ?? null,
     direct: rec.direct ?? null, model: rec.observedRuntime?.resolvedModel ?? c.binding.requestedModel, maxTokens: directMaxTokens(),
   };
   return { rec, json, spent, budget, evaluation, claimAct: checks.claimAct };

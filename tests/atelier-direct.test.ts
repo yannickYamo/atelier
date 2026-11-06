@@ -212,6 +212,17 @@ describe('a run through the binary, written the direct way', () => {
     expect(reads.length).toBe(1);
   }, 120_000);
 
+  it('a count in words the claim reader missed is still listed beside the piece', async () => {
+    await setBackend({ byTool: { emit_persona: PERSONA, emit_holds_back: { ids: [] }, __plain: [DRAFT, REVIEWED] } });
+    const s = seed(FILES, { ATELIER_CLAIMS: 'model', ATELIER_CLAIMS_MODEL: 'scripted' });
+    expect(s.run('new', 'posts', 'write posts in my voice', '--name', 'posts', ...BACKEND()).code).toBe(0);
+    const COUNTED = `${REVIEWED} We moved eleven or twelve teams over to it.`;
+    await setBackend({ byTool: { __plain: [DRAFT, COUNTED], emit_specifics: { specifics: [] } } });
+    const r = s.run('invoke', '--skill', 'posts', 'Compare Logseq and Craft for my notes.', '--with', 'notes=notes.md', '--json', ...BACKEND());
+    const j = jsonOf(r.out) as Out & { toCheck: unknown };
+    expect(JSON.stringify(j.toCheck)).toContain('We moved eleven or twelve teams over to it.');
+  }, 120_000);
+
   it('the draft and the review are prose with no tool; the pieces travel whole; the reviewed piece is delivered; the record says so', async () => {
     await setBackend({ byTool: { emit_persona: PERSONA, emit_holds_back: { ids: [] }, __plain: [DRAFT, REVIEWED] } });
     const s = seed(FILES);
@@ -331,6 +342,38 @@ describe('a run through the binary, written the direct way', () => {
     expect(textOf(plain[0])).toContain('- What shows it (a case, a figure, or something the reader can try): I exported 400 notes from both last spring');
     // kept as next time's suggestion
     expect(store.getTold({ root: s.data, skillName: 'posts' }).map((t) => t.id)).toEqual(['idea', 'proof']);
+  }, 180_000);
+
+  it('the editor\'s questions are the same on the same notes, and an answer belongs to the request it was given for', async () => {
+    await setBackend({ byTool: { emit_persona: PERSONA, emit_holds_back: { ids: [] }, __plain: [DRAFT, REVIEWED] } });
+    const s = seed(FILES, { ATELIER_CONTEXT_READER: 'scripted' });
+    expect(s.run('new', 'posts', 'write posts in my voice', '--name', 'posts', ...BACKEND()).code).toBe(0);
+    const ask = (idea: string): Record<string, unknown> => ({
+      idea: { statedIn: 'NONE', quote: null, ask: idea, options: ['Local files outlive any app', 'Paying buys sync, not freedom'], default: 'Local files outlive any app' },
+      pain: { statedIn: 'NONE', quote: null, ask: 'What do they live with?', options: ['Lost notes', 'A bill'], default: 'Lost notes' },
+      proof: { statedIn: 'NONE', quote: null, ask: 'What shows it?', options: ['A week of my notes', 'An export test'], default: 'A week of my notes' },
+    });
+    const T = 'Compare Logseq and Craft for my notes.';
+    type Q = Out & { questions: { id: string; ask: string }[]; answers: { id: string; answer: string }[] };
+    const run = async (task: string, editor: Record<string, unknown>, ...more: string[]): Promise<Q> => {
+      await setBackend({ byTool: { __plain: [DRAFT, REVIEWED], emit_editor_questions: editor } });
+      return jsonOf(s.run('invoke', '--skill', 'posts', task, '--with', 'notes=notes.md', '--json', '--claims', 'pattern', ...more, ...BACKEND()).out) as Q;
+    };
+    // the second draw of the reader words its question otherwise: the same input asks what it asked the first time
+    const first = await run(T, ask('What one idea should the reader leave with?'));
+    const again = await run(T, ask('Which single idea matters most here?'));
+    expect(again.questions).toEqual(first.questions);
+    expect(again.questions[0].ask).toBe('What one idea should the reader leave with?');
+    // answered once for this request: on the next run of it, the answer reaches the writer again and is not asked
+    await run(T, ask('x'), '--answers', 'idea=b');
+    const m0 = await mark();
+    const later = await run(T, ask('What one idea should the reader leave with?'));
+    expect(later.answers).toEqual([{ id: 'idea', answer: 'Paying buys sync, not freedom' }]);
+    expect(textOf((await plainSince(m0))[0])).toContain('- The one idea the reader should leave with: Paying buys sync, not freedom');
+    // another request is another piece: last request's idea is neither its answer nor its suggestion
+    const other = await run('Why I keep my notes in plain files.', ask('What one idea should the reader leave with?'));
+    expect(other.answers).toEqual([]);
+    expect((other.questions as unknown as { id: string; default: string }[]).find((q) => q.id === 'idea')?.default).toBe('Local files outlive any app');
   }, 180_000);
 
   it('atelier keep: a kept piece is written from first, and what the person changed is shown to the next review as theirs', async () => {

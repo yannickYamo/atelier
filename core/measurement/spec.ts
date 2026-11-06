@@ -106,7 +106,7 @@ export const MEASURE_MENU = [
   'PRESENCE:starts=phrase|phrase,in=first            how a part starts (in=first, in=last, in=<section name>)',
   'HEADINGS:case=SENTENCE|TITLE,maxWords=N,avoid=... section headings: case, length, phrases to avoid',
   'TABLE:columns=name|name,minRows=N                 a table whose header holds these columns',
-  'LENGTH:unit=WORDS|SENTENCES|PARAGRAPHS,min=N,max=N[,in=<section name>]   the length of the whole, or of one section',
+  'LENGTH:unit=WORDS|SENTENCES|PARAGRAPHS,min=N,max=N[,in=<section name>|in=each]   the length of the whole, of one section, or (paragraphs, in=each) of every section',
   'LINES:min=N[,perItem=1][,sections=name]            every path:line cited is a line of the material; perItem: every finding cites one',
   'CITED:allow=0                                     every figure is in the request or the material',
   'NAMES_TEST                                        the work names a test (a test file, or a test function in backticks)',

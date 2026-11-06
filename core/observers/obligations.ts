@@ -16,6 +16,7 @@ import { workedFromMaterial } from '../loop/derived.js';
 import { citedLines, citationSpans } from '../loop/locators.js';
 import { proseWords } from './style.js';
 import { sentencesOf } from './text.js';
+import { visible } from './visible.js';
 import { sectionBodyOf, sectionHeadsOf, headingsOf } from './structure.js';
 
 /** Observers that read a ban: a word, a hedge, a counted move or term. Their spans are the places to fix, whatever kind of thing a method called the rule. */
@@ -472,6 +473,33 @@ export const NAMES_TEST: Observer = {
   },
 };
 
+/** `in=each`: the rule is held by every section, not by one named one. */
+const EACH = 'each';
+
+/**
+ * THE PARAGRAPHS OF A TEXT, AS A READER COUNTS THEM: blocks between blank lines, a list or a quote counted as one block,
+ * a heading, a table and code counted as none. "Three paragraphs per section" was read as three sentences per paragraph,
+ * the only paragraph count the checks had, and a piece written exactly to the step was flagged.
+ */
+export function paragraphsIn(text: string): number {
+  return blankFences(visible(text)).split(/\n\s*\n/).map((b) => b.split('\n').filter((l) => l.trim() && !/^\s*#{1,6}\s/.test(l) && !TABLE_ROW.test(l)))
+    .filter((ls) => ls.length > 0).length;
+}
+
+/** The paragraphs of every section (a heading and what runs to the next heading), each held to the range; the text before the first heading is no section. */
+function paragraphsPerSection(whole: string, lo: number | null, hi: number | null, labels: boolean): ObserverResult {
+  const text = visible(whole);
+  const heads = sectionHeadsOf(whole, labels);
+  const sections = heads.map((h, i) => ({ h, n: paragraphsIn(text.slice(h.end, heads[i + 1]?.start ?? text.length)) })).filter((x) => x.n > 0);
+  if (!sections.length) return { verdict: 'NOT_APPLICABLE', spans: [], value: null, detail: 'no section to count' };
+  const off = sections.filter((x) => (lo !== null && x.n < lo) || (hi !== null && x.n > hi));
+  const asked = lo !== null && hi !== null ? (lo === hi ? `${lo}` : `${lo} to ${hi}`) : hi !== null ? `at most ${hi}` : `at least ${lo}`;
+  return off.length
+    ? { verdict: 'VIOLATED', value: off.length, detail: `${off.length} of ${sections.length} section(s) not at ${asked} paragraphs: ${off.map((x) => `"${x.h.text.trim()}" has ${x.n}`).join(', ')}`,
+      spans: off.map((x) => ({ start: x.h.start, end: x.h.end, text: text.slice(x.h.start, x.h.end), why: `${x.n} paragraphs, where each section has ${asked}` })) }
+    : { verdict: 'MET', spans: [], value: 0, detail: `all ${sections.length} section(s) at ${asked} paragraphs` };
+}
+
 /**
  * A LENGTH THE OWNER STATED, IN THE UNIT THEY STATED IT: "between 150 and 230 words", "under 280 characters", "two or
  * three sentences", "no sentence longer than 25 words". Counted the way a person counts: words of prose, characters
@@ -486,11 +514,13 @@ export const LENGTH: Observer = {
     const unit = (list(p, 'unit')[0] ?? 'words').toLowerCase(); const lo = num(p, 'min'); const hi = num(p, 'max');
     const range = lo !== null && hi !== null ? `${lo} to ${hi}` : hi !== null ? `at most ${hi}` : `at least ${lo}`;
     const where = list(p, 'in')[0];
+    if (where?.toLowerCase() === EACH) return `every section: ${range} paragraphs`;
     return unit === 'sentence' ? `no sentence over ${hi} words` : `${where ? `the "${where}" section: ` : ''}${range} ${unit}`;
   },
   validate: (p) => {
     const unit = (list(p, 'unit')[0] ?? 'words').toLowerCase(); const lo = num(p, 'min'); const hi = num(p, 'max');
-    if (!['words', 'characters', 'sentences', 'sentence'].includes(unit)) return 'unit is words, characters, sentences or sentence';
+    if (!['words', 'characters', 'sentences', 'sentence', 'paragraphs'].includes(unit)) return 'unit is words, characters, sentences, sentence or paragraphs';
+    if (list(p, 'in')[0]?.toLowerCase() === EACH && unit !== 'paragraphs') return 'in=each counts the paragraphs of every section';
     if (lo === null && hi === null) return 'needs min or max';
     if (unit === 'sentence' && hi === null) return 'the longest sentence needs max';
     if (unit === 'sentence' && list(p, 'in').length) return 'the longest sentence is read over the whole work, not one section';
@@ -502,6 +532,7 @@ export const LENGTH: Observer = {
     // THE LENGTH OF ONE SECTION (`in`), where the owner stated it of a section or their pieces keep one: what the
     // section holds is counted, and a text without the section is another rule's to fail.
     const where = list(p, 'in')[0];
+    if (where?.toLowerCase() === EACH) return paragraphsPerSection(whole, lo, hi, Boolean(num(p, 'labels')));
     const text = where ? sectionBodyOf(whole, where, Boolean(num(p, 'labels')), list(p, 'sections')) : whole;
     // A length the owner stated of a section (`need`) is not met by leaving the section out.
     if (text === null) return { verdict: num(p, 'need') ? 'VIOLATED' : 'NOT_APPLICABLE', spans: [], value: null, detail: `no "${where}" section to measure` };
@@ -512,7 +543,8 @@ export const LENGTH: Observer = {
         : { verdict: 'MET', spans: [], value: 0, detail: `no sentence over ${hi} words` };
     }
     // Characters of the text as a reader has it: front matter is not part of a post.
-    const n = unit === 'characters' ? text.replace(/^\uFEFF?---\r?\n[\s\S]*?\r?\n---\r?\n?/, '').trim().length : unit === 'sentences' ? sentencesOf(text).length : proseWords(text);
+    const n = unit === 'characters' ? text.replace(/^\uFEFF?---\r?\n[\s\S]*?\r?\n---\r?\n?/, '').trim().length : unit === 'sentences' ? sentencesOf(text).length
+      : unit === 'paragraphs' ? paragraphsIn(text) : proseWords(text);
     const off = lo !== null && n < lo ? 'short' : hi !== null && n > hi ? 'long' : null;
     const asked = lo !== null && hi !== null ? `${lo} to ${hi}` : hi !== null ? `at most ${hi}` : `at least ${lo}`;
     // How far off, said as a number: told only "long", a writer asked for at most 420 words came back at 469.

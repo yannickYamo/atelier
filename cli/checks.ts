@@ -197,7 +197,7 @@ export function checksFor(L: store.StoreLayout, opts: {
   const action = claimAction({ level: opts.level ?? latitudeOf(activeStandard(L)), bound, ownerCut: store.getClaimsCut(L), cls: opts.cls ?? flag('--class') ?? store.getDocClass(L), slots: placeholders });
   return { material, evidence, ...(examples ? { examples } : {}), ...(approved ? { approved } : {}), guardClaims, placeholders, format, ...(action.why ? { listsBecause: action.why } : {}), claimAct: action.act, ...(opts.level ? { level: opts.level } : {}), ...(action.otherwise ? { cutOtherwise: action.otherwise } : {}), ...(opts.context ? { context: opts.context } : {}), ...(judge ? { judge } : {}),
     learnedTells: store.activeTells(store.getTells(L)),
-    ...(guardClaims ? { claimSensor: sensor() } : {}) };
+    ...(guardClaims ? { claimSensor: sensor() } : {}), ...(opts.claimReads === 1 ? { listWordCounts: true } : {}) };
 }
 
 /** The examples the skill is served: the author's pieces with the requests they answered, and the exemplar. The method is the owner's, not an example. Empty before a build. */

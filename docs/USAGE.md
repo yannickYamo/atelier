@@ -390,11 +390,16 @@ Your method, where the skill has one, is shown to the writer whole and in your w
 
 Before the draft, an editor's three questions are read: the one idea the reader should leave with, what the reader lives
 with that the piece speaks to, and what shows it (a case, a figure, something the reader can try). Each is asked only
-where your request, your material, your method and what you told the skill before do not state it, quoted. At a terminal
+where your request, your material and your method do not state it, quoted. The same request and notes ask the same
+questions every time. At a terminal
 they are asked (a letter, your own words, enter for the suggested answer, "just write it" for none). Everywhere else they
 come back with their options (`--json`: `questions`), and the piece is written without them: nothing you did not answer
-reaches the writer. Answer next time with `--answers "idea=b,proof=<your words>"`; your answers are next time's
-suggestion. `--no-questions` reads nothing.
+reaches the writer. Answer next time with `--answers "idea=b,proof=<your words>"`. An answer belongs to the request it
+was given for: run that request again and it reaches the writer without being asked; another request is asked afresh.
+`--no-questions` reads nothing.
+
+Under the piece, each of your rules is said under what was found: held, not held, found by a check not yet qualified on
+your examples (it blocks nothing), and the steps no check reads, which are yours to judge.
 
 A skill built from one example writes from that example. A request that holds the run strict ("use only these figures")
 stays on this path: the claim check is held at that level, so a figure nothing you gave holds has its sentence rewritten

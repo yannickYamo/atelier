@@ -126,6 +126,7 @@ export function spelledCounts(s: string): string[] {
   // (an apostrophe inside a word, "it's", opens nothing).
   const quoted = [...s.matchAll(/["“][^"”]*["”]|(?<![A-Za-z0-9])['‘][^'’\n]*?['’](?![A-Za-z])/g)].map((m) => [m.index, m.index + m[0].length] as const);
   const phrases = numberPhrases(s);
+  const ranged = new Set<number>();
   phrases.forEach((p, k) => {
     const phrase = s.slice(p.index, p.index + p.length).toLowerCase();
     if (/^\d/.test(phrase) || phrase === 'one' || quoted.some(([a, b]) => p.index > a && p.index < b)) return;
@@ -147,6 +148,8 @@ export function spelledCounts(s: string): string[] {
     // "two of the": the determiner is consumed only when a word follows it; "two of the" at the end counts nothing.
     const ofDet = m[1] !== undefined && OF_DETERMINERS.test(m[1].toLowerCase());
     const words = (m[1] !== undefined && !ofDet ? [m[1], m[2]] : [m[2], m[3]]).filter((w): w is string => w !== undefined).map((w) => w.toLowerCase());
+    // "Five or six teams", "three to four weeks": a range is a count when its second number is, and is said whole.
+    if (nextP && RANGE.test(s.slice(p.index + p.length, nextP.index))) { ranged.add(k); return; }
     if (ONE_BEFORE_NOT_A_FIGURE.has(words[0])) return;
     // "Seven figures", "six figures": the size of a sum, said as an idiom.
     if (/^figures?$/.test(words[0])) return;
@@ -157,6 +160,8 @@ export function spelledCounts(s: string): string[] {
       if (phrase.startsWith('a ') && Number(p.value) >= 100 && !words.some((w) => MEASURED.test(w))) return;
     }
     out.push(p.value);
+    if (ranged.has(k - 1)) out.push(phrases[k - 1].value);
   });
   return out;
 }
+const RANGE = /^\s+(?:or|to)\s+$/i;
