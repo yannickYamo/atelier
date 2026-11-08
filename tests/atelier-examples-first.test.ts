@@ -86,6 +86,10 @@ describe('through a run', () => {
     // the skill a host loads is the pieces, the method and the rules: no description of the author
     const hosted = readFileSync(join(proj, '.claude', 'skills', 'review', 'SKILL.md'), 'utf8');
     expect(hosted).not.toContain('How I sound ('); expect(hosted).not.toContain('Moves I make in some pieces'); expect(hosted).toContain('## How I sound');
+    // and an export goes to a host the same way; --whole keeps the description, as the compiled path serves it
+    const ex = run('export', '--skill', 'review'); expect(ex.code, ex.out).toBe(0);
+    expect(ex.out).not.toContain('How I sound ('); expect(ex.out).toContain('## How I sound');
+    expect(run('export', '--skill', 'review', '--whole').out).toContain('How I sound (');
     const idOf = (out: string): string => (JSON.parse(out.slice(out.indexOf('\n{') + 1)) as { invocationId: string }).invocationId;
     const recOf = (out: string) => store.listInvocations(L).find((i) => i.invocationId === idOf(out))!;
     // EXAMPLES FIRST, with --moves serve asked for as well: the flag wins, nothing of the author's description reaches the writer

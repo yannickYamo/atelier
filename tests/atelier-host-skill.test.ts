@@ -5,7 +5,7 @@
 // package keeps them for the compiled path. The install verifies against what it wrote, and a skill installed before
 // still verifies. Expected values are written out by hand.
 import { describe, it, expect } from 'vitest';
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { hostFiles } from '../renderers/agent-skill/host.js';
@@ -43,5 +43,13 @@ describe('what a host is given', () => {
     writeFileSync(join(dir, 'SKILL.md'), SKILL + 'edited\n');
     expect(verifyTree(dir, pkg)).toMatchObject({ matchesPackage: false });
     expect(JSON.parse(readFileSync(join(dir, MARKER), 'utf8'))).toMatchObject({ packageHash: pkg.packageHash, hostHash: packageHashOf(hostFiles(files)) });
+  });
+  it('a rebuild over an install made before (the whole package, a marker with no host hash) keeps nothing aside', () => {
+    const dir = join(mkdtempSync(join(tmpdir(), 'atelier-host-old-')), '.claude', 'skills', 'posts');
+    mkdirSync(join(dir, 'examples'), { recursive: true });
+    for (const [rel, text] of Object.entries(files)) writeFileSync(join(dir, rel), text);
+    writeFileSync(join(dir, MARKER), JSON.stringify({ packageHash: pkg.packageHash, files: Object.keys(files).sort() }));
+    expect(installTree(dir, pkg)).toMatchObject({ ok: true, backedUp: null });
+    expect(readFileSync(join(dir, 'SKILL.md'), 'utf8')).not.toContain('Opens on a stance');
   });
 });

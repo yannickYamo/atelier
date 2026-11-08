@@ -408,9 +408,10 @@ blocks nothing. With `--style-review` it is also read on the first draft, and wh
 self-review, each habit with your sentence; the piece the review returns is read again, and one line says how many the
 review fixed. That is the setting to compare against a plain run before it becomes the default. `--no-style` reads nothing.
 
-The skill installed for Claude Code (`/<name>`) follows the same design: your pieces, your method and your rules, with no
-description of how you sound and no moves read off your pieces, which the writer would follow as rules. The compiled path
-(`--pipeline legacy`) still serves the skill whole. A release set to more than two drafts (`atelier fidelity --set
+The skill installed for a host (Claude Code's `/<name>`, or Codex) and `atelier export` follow the same design: your
+pieces, your method and your rules, with no description of how you sound and no moves read off your pieces, which the
+writer would follow as rules. The compiled path (`--pipeline legacy`) still serves the skill whole, and so does
+`atelier export --whole`. A release set to more than two drafts (`atelier fidelity --set
 drafts=4`) runs on the compiled path, which writes them; the direct writer writes one and reviews it.
 
 A skill built from one example writes from that example. A request that holds the run strict ("use only these figures")

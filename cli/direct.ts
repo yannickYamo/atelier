@@ -361,7 +361,7 @@ export async function runDirect(c: DirectContext) {
   let style: DirectRecord['style'] | undefined;
   const readStyle = async (text: string, on: 'draft' | 'piece'): Promise<StyleReading> => {
     const d = await readContext(STYLE_READ, { items: styleOf, piece: text }, contextReaderClient(), contextReaderModel(), styleBudget, 'other');
-    style = { by: d.by, reader: d.reader, on, steered: steer, ...(d.why ? { why: d.why } : {}),
+    style = { by: d.by, reader: d.reader, on, steered: false, ...(d.why ? { why: d.why } : {}),
       found: styleOf.map((i) => { const f = d.value.found.find((x) => x.id === i.id); return { id: i.id, kind: i.kind, text: i.text, held: f?.held ?? null, ...(f?.quote ? { quote: f.quote } : {}) }; }) };
     return d.value;
   };
@@ -388,6 +388,7 @@ export async function runDirect(c: DirectContext) {
         const styleNoteNow = styleOn && steer ? styleNote(styleOf, (await readStyle(draft, 'draft')).found) : '';
         const again = await prose(c.client, budget, stable, variable, reviewAsk(draft, { material: c.material, edits: corrections, rules, method, style: styleNoteNow }), effort, 'emit_review');
         output = again.piece; review = { ran: true };
+        if (styleNoteNow && style) style = { ...style, steered: true };
       } catch (e) { review = { ran: false, why: `the review could not run: ${(e as Error).message.split('\n')[0]}` }; c.say(`(the self-review could not run, so the first draft is delivered: ${review.why})`); }
     }
     // 4. THE CHECKS. A rule the owner required that the reviewed piece still breaks has the sentences that break it
@@ -422,7 +423,9 @@ export async function runDirect(c: DirectContext) {
       if (first && output === draft) style = { ...first, on: 'piece', draft: first.found.map((f) => ({ id: f.id, held: f.held })) };
       else {
         await readStyle(output, 'piece');
-        if (first && style) style = { ...style, draft: first.found.map((f) => ({ id: f.id, held: f.held })) };
+        // the piece read again: kept beside the draft's only where it was read, else the draft's reading stands as it was
+        if (first && style?.by === 'model') style = { ...style, steered: first.steered, draft: first.found.map((f) => ({ id: f.id, held: f.held })) };
+        else if (first) style = first;
       }
     }
     return { output, repair: { ...more, passes, violatedBefore, violatedAfter: violated, originalOutputHash: sha(draft), draft, claimsToCheck: toCheck.map((t) => t.sentence),

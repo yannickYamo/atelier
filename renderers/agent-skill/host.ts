@@ -1,6 +1,6 @@
 // atelier/renderers/agent-skill/host.ts — THE SKILL A HOST LOADS: THE AUTHOR'S PIECES, METHOD AND RULES, NOT A DESCRIPTION OF THEM.
 //
-// A host (Claude Code's /skill) hands SKILL.md to its own model as instructions. Served that way, the description of how
+// A host (Claude Code's /skill, Codex) hands SKILL.md to its own model as instructions. Served that way, the description of how
 // the author sounds and the moves read off their pieces were rules the writer followed in place of the voice: measured on
 // `atelier run`, which stopped serving them (cli/direct.ts). The installed skill follows the same design: the pieces, the
 // method and the rules the author stated reach the host; how they sound is read on the piece afterwards
@@ -21,7 +21,11 @@ export function withoutPersonaBlocks(skillMd: string): string {
   return out.join('\n\n');
 }
 
-/** SKILL.md without the moves read off the pieces ("## Moves I sometimes make"): rules the author never stated. */
+/**
+ * SKILL.md without the moves read off the pieces ("## Moves I sometimes make"): rules the standard holds and does not
+ * require, which the direct writer is never shown either. Their example files stay, listed as instances under
+ * "Reference material", never as instructions.
+ */
 export function withoutMovesSection(skillMd: string): string {
   return skillMd.split(/\n(?=## )/).filter((s) => !/^## Moves I sometimes make\s*$/m.test(s.split('\n')[0] ?? '')).join('\n');
 }
