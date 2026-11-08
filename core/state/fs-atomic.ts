@@ -18,6 +18,7 @@
 // scratch file. They can still race on the rename, and that is the correct outcome: last writer
 // wins with a whole file, rather than both writers producing a torn one.
 
+import { traceWrite } from './trace.js';
 import { mkdirSync, writeFileSync, renameSync, unlinkSync } from 'node:fs';
 import { dirname, join, basename } from 'node:path';
 
@@ -30,6 +31,7 @@ import { dirname, join, basename } from 'node:path';
  * is written to survive exactly that (see `readEvents` in `store.ts`).
  */
 export function writeAtomic(path: string, text: string): void {
+  traceWrite(path);
   mkdirSync(dirname(path), { recursive: true });
   const tmp = join(dirname(path), `.${basename(path)}.${process.pid}.tmp`);
   try {

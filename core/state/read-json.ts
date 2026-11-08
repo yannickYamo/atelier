@@ -19,6 +19,7 @@
 // was read. Field-level truth is still the caller's problem.
 
 import { readFileSync } from 'node:fs';
+import { traceRead, traceFields } from './trace.js';
 
 /** A file exists and is not the kind of thing the reader asked for. */
 export class MalformedStoreFile extends Error {}
@@ -47,6 +48,7 @@ interface Expect {
 export function readJson<T>(path: string, expect: Expect = {}): T {
   const what = expect.what ?? 'file';
   let text: string;
+  traceRead(path);
   try {
     text = readFileSync(path, 'utf8');
   } catch (e) {
@@ -81,7 +83,7 @@ export function readJson<T>(path: string, expect: Expect = {}): T {
       throw new MalformedStoreFile(`${what} at ${path} is missing "${k}", so it is not a complete record.`);
     }
   }
-  return value as T;
+  return traceFields(path, value as T);
 }
 
 /** What was found instead, said in a way that identifies the mistake rather than the type system. */

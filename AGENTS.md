@@ -76,3 +76,5 @@ npm run lint
 ```
 
 Read `CONTRIBUTING.md` first. The end-to-end tests drive `dist/`, so run `npm run build` before `npm test`.
+
+Every artifact a build writes has a named reader: the default run, or another reader named in `tests/atelier-consumers.test.ts`. A change that stops a run reading something moves its entry, gives it a new reader, or stops building it; the test fails until it does.
