@@ -305,7 +305,7 @@ describe('through the binary: every output is read, labels earn authority, and t
     const bad = join(proj, 'bad.md'); writeFileSync(bad, draft);
     const checked = run(data, proj, 'verify', '--skill', 'voice', bad, '--taste');
     expect(checked).not.toMatch(/^EXIT/);
-    expect(checked).toMatch(/BLOCKED · [\s\S]*Delivery: person; judgement-missed \(x1\): person/);
+    expect(checked).toMatch(/BLOCKED · [\s\S]*Delivery: person, though a required rule failed: [^;]*; judgement-missed \(x1\): person/);
   }, 180_000);
 
   it('verify --taste fails on a miss only where the reader holds VETO; MCP returns the verdicts', async () => {

@@ -54,6 +54,7 @@ import { verify } from './commands/verify.js';
 import { score } from './commands/score.js';
 import { mcp } from './commands/mcp.js';
 import { material } from './commands/material.js';
+import { keep } from './commands/keep.js';
 import { existsSync } from 'node:fs';
 import { USAGE, wantsHelp, version } from './help.js';
 import { enrol, terminate, type Run } from '../core/state/run-state.js';
@@ -77,6 +78,7 @@ export const COMMANDS: readonly string[] = [
   'score',
   'mcp',
   'material',
+  'keep',
   'abort',
   'skill',
   'plan',
@@ -151,7 +153,7 @@ export const FRONT_DOOR: readonly string[] = [
 
 /** The commands a newcomer does not need, by what they are for. Nothing is hidden: it is one command away. */
 const LAB: readonly (readonly [string, readonly string[]])[] = [
-  ['write to the standard', ['run', 'fix', 'invoke']],
+  ['write to the standard', ['run', 'fix', 'keep', 'invoke']],
   ['check and correct', ['score', 'material', 'amend', 'add', 'status', 'report', 'rate', 'export', 'mcp']],
   ['build, the long way', ['method', 'skill', 'review', 'pending', 'ratify', 'ratify-one', 'ratify-close', 'build', 'confirm', 'plan', 'abort', 'check']],
   ['measure a skill', ['reproduce', 'evolve', 'eval', 'qualify', 'floor', 'reference', 'history', 'inspect']],
@@ -198,6 +200,7 @@ const main = async (): Promise<void> => {
     case 'score': return score();
     case 'mcp': return mcp();
     case 'material': { material(); return; }
+    case 'keep': { keep(); return; }
     case 'create': return create(argv[1] ?? die('usage: atelier create <path-to-your-work>'));
     case 'intake': { await intake(argv[1] ?? die('usage: atelier intake <path> [--work-type <type>]'), process.argv.includes('--work-type') ? process.argv[process.argv.indexOf('--work-type') + 1] : 'writing'); return; }
     case 'discover': return discover();

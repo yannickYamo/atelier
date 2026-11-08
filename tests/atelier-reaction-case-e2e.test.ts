@@ -54,7 +54,7 @@ describe('the case-shaped fixture, through the binary', () => {
     const cli = (...a: string[]): string => { try { return execFileSync('node', [CLI, ...a], { encoding: 'utf8', cwd: proj, env, stdio: ['ignore', 'pipe', 'pipe'] }); } catch (e) { return (e as { stdout?: string }).stdout ?? ''; } };
     const build = cli('new', join(FX, 'voice'), '--method', join(FX, 'rules.md'), '--name', 'post-voice', '--yes', ...be);
     const invoke = (request: string, ...more: string[]): Record<string, unknown> => {
-      const out = cli('invoke', '--skill', 'post-voice', request, '--with', `notes=${join(FX, 'points.md')}`, '--json', '--claims', 'pattern', ...more, ...be);
+      const out = cli('invoke', '--pipeline', 'legacy', '--skill', 'post-voice', request, '--with', `notes=${join(FX, 'points.md')}`, '--json', '--claims', 'pattern', ...more, ...be);
       return JSON.parse(out.slice(out.indexOf('{'))) as Record<string, unknown>;
     };
     return { data, build, invoke };

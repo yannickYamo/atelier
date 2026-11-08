@@ -34,7 +34,7 @@ describe('the author\'s rates on a run', () => {
     const cli = (...a: string[]): string => execFileSync('node', [CLI, ...a], { encoding: 'utf8', cwd: proj, env, stdio: ['ignore', 'pipe', 'pipe'] });
     cli('new', pieces, 'long posts in my voice', '--name', 'tides');
     await fetch(`http://127.0.0.1:${port}/__set`, { method: 'POST', body: JSON.stringify({ byTool: { emit_piece: { piece: `<work>${OFF}</work>` }, emit_draft: { text: OFF } } }) });
-    cli('run', 'Write a long post about the tide tables.', '--skill', 'tides', '--provider', 'openai-compatible', '--base-url', `http://127.0.0.1:${port}`, '--model', 'scripted', '--claims', 'pattern', '--no-questions', '--no-plan', '--no-taste');
+    cli('run', '--pipeline', 'legacy', 'Write a long post about the tide tables.', '--skill', 'tides', '--provider', 'openai-compatible', '--base-url', `http://127.0.0.1:${port}`, '--model', 'scripted', '--claims', 'pattern', '--no-questions', '--no-plan', '--no-taste');
     const writer = ((await (await fetch(`http://127.0.0.1:${port}/__log`)).json()) as { bodies: string[] }).bodies.find((b) => b.includes('emit_piece')) ?? '';
     expect(writer).toContain('How I write, counted over my own pieces: sentences around 15 words; about 1 in 8 under 6 words; at most about 9 \\"I\\", \\"my\\" or \\"me\\" per 1,000 words. Write at these rates.');
     const [rec] = store.listInvocations({ root: data, skillName: 'tides' });

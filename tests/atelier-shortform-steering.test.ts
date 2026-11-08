@@ -125,7 +125,7 @@ describe.skipIf(!existsSync(CLI))('five tweets, through the binary, on the scrip
   };
   interface Invoked { output: string; eval: { record: { state: string } }; graded?: { features: string[]; redrafts: number; values: Record<string, { before: number | null; after: number | null }> };
     controller?: { decisions: { action: string; outcome: string; targets: string[] }[] } }
-  const invoke = (...extra: string[]): { code: number; j: Invoked } => { const r = run('invoke', '--skill', 'tw', 'write a tweet', '--json', '--allow-unsourced', ...extra, ...model()); return { code: r.code, j: JSON.parse(r.out) as Invoked }; };
+  const invoke = (...extra: string[]): { code: number; j: Invoked } => { const r = run('invoke', '--pipeline', 'legacy', '--skill', 'tw', 'write a tweet', '--json', '--allow-unsourced', ...extra, ...model()); return { code: r.code, j: JSON.parse(r.out) as Invoked }; };
 
   // The owner's ruling: being outside the length the author's pieces run is not, alone, a reason to write a draft again,
   // for any kind of work. A limit the owner states (--limit) is held; a length learned from five pieces is guidance.

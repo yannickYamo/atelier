@@ -68,6 +68,11 @@ describe('the latitude through the commands', () => {
     const json = JSON.parse(r.out.slice(r.out.indexOf('\n{') + 1)) as { certificate: { latitude: unknown; acceptedUnmeasured: unknown }; record: { latitude?: string } };
     expect(json.certificate.latitude).toEqual({ skill: 'CREATIVE', run: 'STRICT', tightenedBy: 'Announce our quarterly revenue', setBy: 'model' });
     expect(json.record.latitude).toBe('STRICT');
+    // held strict by the request, the run still writes the direct way: its figures are held by the claim check at that level
+    expect((json as unknown as { direct?: unknown }).direct).toBeTruthy();
+    // the compiled path, asked for, tells its writer so
+    const legacy = run('invoke', '--skill', 'letter', 'Announce our quarterly revenue to the team.', '--json', '--pipeline', 'legacy', ...BACKEND());
+    expect(legacy.code === 0 || legacy.code === 1, legacy.out).toBe(true);
     expect((await promptsFor('emit_piece')).at(-1) ?? '').toContain('How free this piece is: not free.');
 
     // THE OWNER CHANGES IT: amend, with a reason, a new version

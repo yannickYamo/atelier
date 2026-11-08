@@ -3,7 +3,7 @@
 // `atelier run --deep` against the scripted backend, with the scripted model as the small reader: the library is read, the
 // web pass says why it did not run (no search on this provider), the facts are listed with their sources, the questions
 // come from the gaps as well as the decisions (at most three, every one logged), three directions are dealt and one is
-// chosen, the writer is served the facts, the gap-line rule and the direction (never a card), the story checks send two
+// chosen, the writer is served the facts, the proof rule and the direction (never a card), the story checks send two
 // spans to repair, the two drafts are compared by the reviewer, the reviewer's verdict 'fix' writes its fix where it stands,
 // and the record says all of it while `output` stays the piece alone. Then a run without --deep: no deep reading is made,
 // nothing of it is served or recorded. Expected values are the fixture's own strings, written out by hand.
@@ -102,14 +102,14 @@ describe('a deep run, through the binary', () => {
     expect(deep.direction.choice).toBe('canon');
     expect(deep.direction.by).toBe('model');
     expect(deep.direction.seed).toBe(deep.runId);
-    expect(deep.served).toEqual(['facts', 'gap-line rule', 'direction']);
-    // the writer was served the facts, the gap-line rule and the direction, never a card; the reviewer read the cards
+    expect(deep.served).toEqual(['facts', 'proof rule', 'direction']);
+    // the writer was served the facts, the proof rule and the direction, never a card; the reviewer read the cards
     const bodies = (await log()).slice(seen);
     const writer = bodies.filter((b) => toolOf(b) === 'emit_piece');
     expect(writer).toHaveLength(2);
     for (const w of writer) {
       expect(w).toContain('FACTS ONLY THIS SUBJECT HAS');
-      expect(w).toContain('WHEN A CLAIM NEEDS PROOF YOU DO NOT HAVE');
+      expect(w).toContain('EVERY SPECIFIC FROM WHAT IS GIVEN');
       expect(w).toContain('Direction for this piece');
       expect(w).not.toContain('near miss');
       expect(w).not.toContain('blog-one-idea');
@@ -157,8 +157,8 @@ describe('a deep run, through the binary', () => {
     const seen = (await log()).length;
     const j = JSON.parse(run('invoke', '--skill', 'quay', 'Write a post on the new terminal.', '--json', ...be)) as Record<string, unknown>;
     const tools = (await log()).slice(seen).map(toolOf);
-    // the calls a plain run made before deep runs existed, in order: the questions, the plan, one draft
-    expect(tools).toEqual(['emit_questions', 'emit_plan', 'emit_piece']);
+    // the calls a plain run makes, in order: the questions, the plan, one draft, and the read for sentences about its own making
+    expect(tools).toEqual(['emit_questions', 'emit_plan', 'emit_piece', 'emit_own_words']);
     expect(j.deep).toBeUndefined();
     expect((j.questions as { id: string }[]).map((q) => q.id)).toEqual(['angle']);
     expect(String(j.output)).toBe(PIECE);

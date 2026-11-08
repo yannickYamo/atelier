@@ -111,13 +111,13 @@ describe('through a run', () => {
     const long = 'Review this change: it renames a CSS class in the docs site and touches nothing else, so weigh each point as you would.';
     const before = (await readingCalls()).length;
     // UNASKED, A READER THAT CAN CHANGE NOTHING IS NOT RUN: no reading, and the run says how to run it
-    const quiet = run('run', long, '--skill', 'review', '--report', ...BACKEND());
+    const quiet = run('run', '--pipeline', 'legacy', long, '--skill', 'review', '--report', ...BACKEND());
     expect(quiet.code, quiet.out).toBe(0);
     expect((await readingCalls()).slice(before)).toEqual([]);
     expect(quiet.out).toContain('Judgement reader: not run (reporting only until your labels qualify it; --taste reads this run and records readings to label: atelier taste --skill review --calibrate).');
     expect(quiet.out).toMatch(/NEEDS REVIEW/);
     // `run --taste` prints the work and its evaluation card, which opens with where the work stands
-    const r = run('run', long, '--skill', 'review', '--report', '--taste', ...BACKEND());
+    const r = run('run', '--pipeline', 'legacy', long, '--skill', 'review', '--report', '--taste', ...BACKEND());
     expect(r.code, r.out).toBe(0);
     const calls = (await readingCalls()).slice(before);
     expect(calls).toEqual([12, 12, 4, 4]);
@@ -127,11 +127,11 @@ describe('through a run', () => {
     expect(r.out).not.toMatch(/\bVERIFIED\b/);
     // a short request: no reading
     const b2 = (await readingCalls()).length;
-    expect(run('invoke', '--skill', 'review', 'Thanks, approve it.', ...BACKEND()).code).toBe(0);
+    expect(run('invoke', '--pipeline', 'legacy', '--skill', 'review', 'Thanks, approve it.', ...BACKEND()).code).toBe(0);
     expect((await readingCalls()).length).toBe(b2);
     // off: no reading; and the reporting reader changed nothing: the delivered text is the same with it and without it
-    const on = run('invoke', '--skill', 'review', long, '--taste', '--json', ...BACKEND());
-    const off = run('invoke', '--skill', 'review', long, '--no-taste', '--json', ...BACKEND());
+    const on = run('invoke', '--pipeline', 'legacy', '--skill', 'review', long, '--taste', '--json', ...BACKEND());
+    const off = run('invoke', '--pipeline', 'legacy', '--skill', 'review', long, '--no-taste', '--json', ...BACKEND());
     expect(on.code, on.out).toBe(0); expect(off.code, off.out).toBe(0);
     const textOf = (o: string): string | null => (JSON.parse(o.slice(o.indexOf('\n{') + 1)) as { output: string | null }).output;
     expect(textOf(on.out)).toBe(textOf(off.out));

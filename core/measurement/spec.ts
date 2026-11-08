@@ -92,7 +92,7 @@ export function parseMeasureSpec(spec: string): ParsedMeasure {
 
 /** The menu of measurements a reading may name: each observer, what it counts, and the line that declares it. */
 export const MEASURE_MENU = [
-  'LEXICON:word|phrase|...                           none of these words or phrases anywhere (a banned list)',
+  'LEXICON:word|phrase|...                           none of these words or phrases anywhere (a banned list); word<=N allows it N times',
   'TERM_RATE:terms=a|b,maxPer1000=N  (or minPer1000)   how often any of a word list occurs per 1,000 words',
   'PATTERN_RATE:pattern=ID,maxPer1000=N              a named construction per 1,000 words; IDs: EM_DASH, SPACED_HYPHEN, SEMICOLON, NOT_X_ITS_Y, THAT_OPENER, HERES_OPENER, SIGNPOST, INTENSIFIER, SHORT_VERDICT, BOLD_SPAN, ONE_LINE_PARAGRAPH, RHETORICAL_QUESTION, REPEATED_OPENER',
   'SENTENCE_LENGTH:medianMax=N,p90Max=N              sentence length',
@@ -106,7 +106,7 @@ export const MEASURE_MENU = [
   'PRESENCE:starts=phrase|phrase,in=first            how a part starts (in=first, in=last, in=<section name>)',
   'HEADINGS:case=SENTENCE|TITLE,maxWords=N,avoid=... section headings: case, length, phrases to avoid',
   'TABLE:columns=name|name,minRows=N                 a table whose header holds these columns',
-  'LENGTH:unit=WORDS|SENTENCES|PARAGRAPHS,min=N,max=N[,in=<section name>]   the length of the whole, or of one section',
+  'LENGTH:unit=WORDS|SENTENCES|PARAGRAPHS,min=N,max=N[,in=<section name>|in=each]   the length of the whole, of one section, or (paragraphs, in=each) of every section',
   'LINES:min=N[,perItem=1][,sections=name]            every path:line cited is a line of the material; perItem: every finding cites one',
   'CITED:allow=0                                     every figure is in the request or the material',
   'NAMES_TEST                                        the work names a test (a test file, or a test function in backticks)',

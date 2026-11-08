@@ -197,7 +197,7 @@ export function thinTargets(text: string, map: NoveltyMap, band: Band): ThinTarg
     const inP = ss.filter((x) => x.paragraph === p);
     const claims = map.claims.filter((c) => c.proofSentence === null && ss[c.sentence].paragraph === p).map((c) => c.claimQuote);
     out.push({ kind: 'unproved-claim', quotes: claims, span: { start: inP[0].start, end: inP[inP.length - 1].end },
-      repair: 'This paragraph asks the reader to accept a claim nothing in the piece backs. Add the figure, case or source that shows it, from the material, or say it as your view.' });
+      repair: 'This paragraph asks the reader to accept a claim nothing in the piece backs. Add the figure, case or source that shows it, from the material, or carry it with the reasoning that shows it, as your view.' });
   }
   return out;
 }

@@ -213,6 +213,20 @@ describe('round 5 design: describe the voice, guard the edges, never displace', 
     expect(md).toContain('I state the case against my own position. (in 2 of 5 of my pieces where it could apply)');
     expect(md).toMatch(/Use about 1 of them in one piece/);   // 0.4 + 0.6 + 0.25 moves per piece, on the author's own rates
   });
+  it('a move counted in none of the pieces where it could apply is not served; uncounted moves get no quota', () => {
+    const std = (requirements: StandardVersion['requirements']): StandardVersion => ({ standardVersionHash: 's', evidenceId: 'e', workType: 'writing', requirements, authorityState: 'RATIFIED', mintedAt: '2026-09-27T00:00:00Z' } as unknown as StandardVersion);
+    const md = (requirements: StandardVersion['requirements']): string => { const v = std(requirements); return renderAgentSkill(v, compileArchitecture(v), 'x', 'd').files['SKILL.md']; };
+    const never = aRequirement({ requirementId: 'p1', statement: 'I open on a rhetorical question.', materiality: 'PREFERRED', observedRate: { present: 0, applicable: 2 } });
+    const some = aRequirement({ requirementId: 'p2', statement: 'I name what would change my mind.', materiality: 'PREFERRED', observedRate: { present: 3, applicable: 5 } });
+    const withNever = md([never, some]);
+    expect(withNever).toContain('I name what would change my mind.');
+    expect(withNever).not.toContain('rhetorical question');
+    // most moves with no count: "use few", never a number made up from the few that were counted
+    const uncounted = Array.from({ length: 6 }, (_, i) => aRequirement({ requirementId: `u${i}`, statement: `I make uncounted move ${i}.`, materiality: 'PREFERRED' }));
+    const few = md([some, ...uncounted]);
+    expect(few).toContain('Use few of them in one piece');
+    expect(few).not.toMatch(/Use about \d+ of them/);
+  });
   it('the persona keeps only points proven by a verbatim quote, with how often', async () => {
     const { groundPersona, describePersona } = await import('../core/compiler/persona.js');
     const corpus = ["I'll be honest: I don't know yet. My 2c is that you should start small."];

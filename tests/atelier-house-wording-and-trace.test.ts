@@ -5,7 +5,7 @@
 //   a code review named "[person: who owns the shipping policy]" as a Must fix → with material bound, the writer is told to leave no slot;
 //   the length line hedged ("not how long an answer must be") beside a required cap → under a cap, the span is the target.
 import { describe, it, expect } from 'vitest';
-import { applyCuts, taskWithMaterial } from '../cli/commands/invoke.js';
+import { applyCuts, taskWithMaterial, NO_SLOTS_BARE } from '../cli/commands/invoke.js';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -80,7 +80,9 @@ describe('with material bound, the writer is told to leave no slot', () => {
   it('the task carries the material and the no-slot line; asked for slots, the line is absent; with no material, nothing is added', () => {
     const L = { root: mkdtempSync(join(tmpdir(), 'atelier-slots-')), skillName: 'review' };
     store.initStore(L);
-    expect(taskWithMaterial(L, 'Review this change.', false, false).task).toBe('Review this change.');
+    // with no material, the writer is told to write it whole: no slot, the point made with what is given
+    expect(taskWithMaterial(L, 'Review this change.', false, false).task).toBe(`Review this change.${NO_SLOTS_BARE}`);
+    expect(taskWithMaterial(L, 'Review this change.', false, true).task).toBe('Review this change.');
     store.addMaterial(L, 'change.diff', 'diff --git a/x b/x\n+1\n');
     const t = taskWithMaterial(L, 'Review this change.', false, false).task;
     expect(t).toContain('<material name="change">');

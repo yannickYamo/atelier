@@ -62,7 +62,7 @@ describe('a document skill with material: a golden\'s term is rewritten out, the
     const built = run('new', 'posts', 'write posts in my voice', '--name', 'posts', ...BACKEND());
     expect(built.code, built.out).toBe(0);
     expect(readFileSync(join(proj, '.claude', 'skills', 'posts', 'SKILL.md'), 'utf8')).toContain('<!-- form: documents -->');
-    const r = run('invoke', '--skill', 'posts', 'Write a post on why I switched notes apps.', '--with', 'notes=notes.md', '--json', ...BACKEND());
+    const r = run('invoke', '--pipeline', 'legacy', '--skill', 'posts', 'Write a post on why I switched notes apps.', '--with', 'notes=notes.md', '--json', ...BACKEND());
     expect(r.code, r.out).toBe(0);
     const json = jsonOf(r.out);
     expect(json.output, r.out.slice(0, 500)).not.toBeNull();
@@ -115,7 +115,7 @@ describe('a reply skill: no false rewrite when the request names the term; the t
     expect(built.code, built.out).toBe(0);
     expect(readFileSync(join(proj, '.claude', 'skills', 'support', 'SKILL.md'), 'utf8')).toContain('<!-- form: replies -->');
     // the precision side: the person's own request names the PDF, so a reply about the PDF states nothing borrowed
-    const on = run('invoke', '--skill', 'support', 'The PDF import still stalls at 40% on a scanned file. Same fix?', '--json', ...BACKEND());
+    const on = run('invoke', '--pipeline', 'legacy', '--skill', 'support', 'The PDF import still stalls at 40% on a scanned file. Same fix?', '--json', ...BACKEND());
     expect(on.code, on.out).toBe(0);
     const j1 = jsonOf(on.out);
     expect(j1.output).toContain('PDF');
@@ -123,10 +123,10 @@ describe('a reply skill: no false rewrite when the request names the term; the t
     expect(JSON.stringify(rec1)).not.toMatch(/Grounded: /);
     // the counterfactual: the same carried reply with grounding off keeps the PDF, so the rewrite above was grounding's
     await setBackend({ byTool: { emit_piece: { piece: CARRIED }, emit_rewrites: REWRITES } });
-    const off = run('invoke', '--skill', 'support', 'Thanks, that solved it.', '--allow-unsourced', '--json', ...BACKEND());
+    const off = run('invoke', '--pipeline', 'legacy', '--skill', 'support', 'Thanks, that solved it.', '--allow-unsourced', '--json', ...BACKEND());
     expect(off.code, off.out).toBe(0);
     expect(jsonOf(off.out).output).toContain('PDF');
-    const onAgain = run('invoke', '--skill', 'support', 'Thanks, that solved it.', '--json', ...BACKEND());
+    const onAgain = run('invoke', '--pipeline', 'legacy', '--skill', 'support', 'Thanks, that solved it.', '--json', ...BACKEND());
     expect(onAgain.code, onAgain.out).toBe(0);
     expect(jsonOf(onAgain.out).output).not.toMatch(/PDF/);
     // the writer was served the reply frame

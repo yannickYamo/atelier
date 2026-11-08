@@ -6,13 +6,13 @@ What has been measured, how, and what has not. The run records are not in this r
 
 | Claim | Result | How it was measured |
 |---|---|---|
-| Nothing invented | Specifics with no source in the supplied material: 0 in 60 Atelier outputs across two corpora; 37 to 67 per corpus for plain prompting and for pasted examples | One grounded reading of every output, the same for every arm, tracing each specific to the material; the analysis was fixed before the outputs were read |
+| The writing | Against the model asked bare: 24 of 25 briefs won, 1 tied. Against the author's posts pasted into one call: level (6 won, 12 tied, 7 lost). Against the posts pasted, then one review: 4 won, 11 tied, 10 lost | 25 briefs of one blog, the same model and settings for every arm, each pair read blind by model judges in both orders; a pair counts only when both orders agree |
 | Invented specifics caught | 46 of 46 planted inventions caught; 39 of 48 clean drafts left untouched (about one in five falsely flagged); a pattern check on the same drafts caught 11 of 46 | Inventions planted in known-clean drafts; the check ran blind to which were planted |
 | Counted rules hold | 31% of answers broke a counted rule, against 76% for a hand-written skill never shown Atelier's rule list | Code counts on every output; one development run |
 
 ## What it does not do
 
-- **Rhythm from a few pieces.** Blind readers ranked Atelier's pieces first on single reads, but reproducing an author's rhythm from a handful of pieces is not established.
+- **Write better than a paste.** On the writing itself, Atelier is level with pasting the author's posts into the same model, not ahead of it. What it adds is the check of every draft, your rules held, fixes of only what you name, and the record.
 - **Argument and decision quality.** The checks count what a standard says the output must contain; they do not make a diagnosis sharper or a call more right. On strategy documents (pricing, positioning, market entry) built from long worksheet methods, a model judge preferred the same method and one example pasted into a single call (21 to 11). An earlier independent run on structured documents had Atelier ahead of two hand-written skills (24 to 1 and 27 to 0); against pasting the method itself, it did not hold. Decision documents are outside what this release is for.
 - **Short one-off work.** On short pieces the checking roughly doubles the cost of a plain call and adds little.
 

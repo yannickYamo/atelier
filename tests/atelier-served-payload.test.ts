@@ -294,7 +294,7 @@ describe('the source roles reach the writer', () => {
     const files = skill('plain');
     const md = files['SKILL.md'];
     expect(md.split('belong to their case').length - 1).toBe(1);
-    expect(composeServed(files, '').servedText).toContain('Say of this request only what it\nand its material show');
+    expect(composeServed(files, '').servedText).toContain('State as fact of this piece only what\nthe request and its material give');
     const served = Object.entries(files).filter(([n]) => /^examples\/(?:exemplar|voice-\d+)\.md$/.test(n));
     // every one of the four pieces carries a request; each piece served says what it was written from
     expect(served.length).toBeGreaterThanOrEqual(2);

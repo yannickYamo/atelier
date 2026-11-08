@@ -376,7 +376,7 @@ describe('through the binary', () => {
     PIECES.forEach((p, i) => { writeFileSync(join(proj, 'posts', `p${i + 1}.md`), p); });
     run('new', 'posts', '--no-model', '--name', 'posts');
     await fetch(`http://127.0.0.1:${port}/__set`, { method: 'POST', body: JSON.stringify({ byTool: { emit_piece: { piece: 'He are late to the meeting. The plan still holds.' } } }) });
-    const out = run('invoke', '--skill', 'posts', 'a short note', '--allow-unsourced', '--fix-grammar', '--provider', 'openai-compatible', '--base-url', `http://127.0.0.1:${port}`, '--model', 'scripted', '--json');
+    const out = run('invoke', '--pipeline', 'legacy', '--skill', 'posts', 'a short note', '--allow-unsourced', '--fix-grammar', '--provider', 'openai-compatible', '--base-url', `http://127.0.0.1:${port}`, '--model', 'scripted', '--json');
     const shown = JSON.parse(out.slice(out.indexOf('{'))) as { output: string; invocationId: string };
     expect(shown.output).toContain('He is late to the meeting.');
     // The stored invocation carries the repair: what was broken before, and how it was fixed.

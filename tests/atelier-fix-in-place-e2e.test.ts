@@ -138,4 +138,26 @@ describe('atelier fix, in place, through the binary', () => {
     expect(whole.corrections).toEqual({ removed: 3, reintroduced: [] });
     expect(whole.repair?.violatedBefore).toEqual(['REMOVED']);
   });
+
+  it('a sentence the fix wrote about its own making is written again; a sentence it did not write is never touched', async () => {
+    const { L, cli, be } = setup();
+    await set({ byTool: { emit_piece: { piece: `<work>${PIECE}</work>` } } });
+    cli('run', 'Write the barge log for the month.', ...be);
+    const CONFESS = 'Barge 5 now waits at the lock, though the brief doesn\'t say until when.';
+    const AGAIN = 'Barge 5 now waits at the lock until the lock keeper lets it through.';
+    await set({ byTool: { emit_fix_scope: { sentences: [5], whole: false },
+      emit_own_words: { found: [{ kind: 'making', sentence: CONFESS, about: 'the brief', name: null, rewrite: AGAIN }, { kind: 'making', sentence: S[0], about: 'x', name: null, rewrite: null }] } },
+      when: [{ contains: passage(S[4]), answer: { reply: `<work>${CONFESS}</work>` } }] });
+    const shown = cli('fix', 'barge 5 should wait at the lock', ...be);
+    const fixed = latest(L);
+    const after = sentencesOf(fixed.output).map((x) => x.text);
+    expect(after[4]).toBe(AGAIN);
+    expect(after[0]).toBe(S[0]);
+    expect(fixed.output).not.toContain('brief');
+    expect(shown).toContain('The piece talked about its own making in 1 sentence(s) (the brief): 1 written again to speak to the reader.');
+    // the sentence it did not write was found, and is neither changed nor listed
+    expect(fixed.inferred).toEqual([{ kind: 'own-words', what: CONFESS, settled: `written again: ${AGAIN}` }]);
+    expect(fixed.fix?.spans).toEqual([{ before: S[4], after: AGAIN }]);
+    expect(fixed.fix?.diff).toEqual({ total: 30, changed: 1, outside: 0 });
+  });
 });

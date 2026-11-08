@@ -117,6 +117,8 @@ export const DEFAULT_COST: Readonly<Record<ControllerAction, number>> = {
   shape: 0.2, ground: 0.02,
   // a deep run's span rewrites for its story and thin targets, and what its reviewer asked for (a few spans, or one draft)
   story: 0.15, review: 0.4,
+  // the own-words fix applies what its reader already wrote: no call of its own
+  'own-words': 0,
 };
 /** Steps that need a model call to run. The structural edits ('steer') may run on the free operators alone. */
 const MODEL_ACTIONS: ReadonlySet<ControllerAction> = new Set(['rewrite', 'carrier-rewrite', 'redraft', 'trim', 'coverage', 'voice', 'taste', 'claim-redraft', 'shape', 'ground', 'story', 'review']);
@@ -139,7 +141,7 @@ export const stepsTaken = (history: readonly ControllerDecisionRecord[]): number
 export const stepWords = (a: ControllerAction): string => ({ cut: 'cut of invented claims', mechanical: 'fix without a model', rewrite: 'rewrite', operators: 're-punctuation',
   'carrier-rewrite': 'carrier rewrite', redraft: 'redraft', grammar: 'grammar fix', trim: 'cut for length', coverage: 'draft written again for what the request asks',
   steer: 'structural edit', voice: 'voice pass', taste: 'taste rewrite', 'claim-redraft': 'draft written again around a cut claim',
-  shape: 'shape round', ground: 'grounding of an example\'s fact', story: 'rewrite of a story or thin target', review: 'change the reviewer asked for' } satisfies Record<ControllerAction, string>)[a];
+  shape: 'shape round', ground: 'grounding of an example\'s fact', story: 'rewrite of a story or thin target', review: 'change the reviewer asked for', 'own-words': 'rewrite of a sentence about the piece\'s own making' } satisfies Record<ControllerAction, string>)[a];
 
 /** The stop said when the step limit is reached. */
 export const capStop = (maxActions: number): string => `the controller took its ${maxActions} steps`;

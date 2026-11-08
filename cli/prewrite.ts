@@ -15,7 +15,7 @@
 import { createInterface } from 'node:readline/promises';
 import { readContext, type DecidedBy } from '../core/inference/reading.js';
 import type { InferenceClient } from '../core/inference/client.js';
-import { QUESTIONS, GAPS, chooseQuestions, readAnswers, questionLines, defaultsLine, answersNote, materialShown, STANDING_KINDS, QUESTION_KINDS, KIND_ASK, type Question, type QuestionKind } from '../core/loop/questions.js';
+import { QUESTIONS, GAPS, POSITION_IDS, chooseQuestions, readAnswers, questionLines, defaultsLine, answersNote, materialShown, STANDING_KINDS, QUESTION_KINDS, KIND_ASK, type Question, type QuestionKind } from '../core/loop/questions.js';
 import { PIECE_PLAN, planLines, planNote, type PiecePlan, type PlanInput } from '../core/loop/piece-plan.js';
 import * as store from '../core/state/store.js';
 import type { InvocationRecord } from '../core/state/canonical-state.js';
@@ -75,7 +75,8 @@ export const JUST_WRITE = /^just write(?: it)?\.?$/i;
 export async function beforeTheDraft(o: PrewriteInput): Promise<Prewrite> {
   const said: string[] = [];
   const read = o.read ?? ask;
-  const told = store.getTold(o.L);
+  // An editor's answer given on the direct path belongs to the request it was given for (cli/direct.ts): not this path's.
+  const told = store.getTold(o.L).filter((t) => t.for === undefined);
   // each reading its own budget of one call
   const tiny = (capUsd = 0.03): { spentUsd: number; capUsd: number; maxCalls: number } => ({ spentUsd: 0, capUsd, maxCalls: 1 });
   // ── THE QUESTIONS ──────────────────────────────────────────────────────────────────────────
@@ -115,8 +116,11 @@ export async function beforeTheDraft(o: PrewriteInput): Promise<Prewrite> {
   store.addTold(o.L, answers.filter((a) => a.by === 'person').map((a) => ({ id: a.id, ask: questions.find((x) => x.id === a.id)?.ask ?? askOf(a.id), answer: a.answer, at })));
   // what was settled beyond this run's questions: a kind answered without being asked, or what may be named, told before
   const beyond = answers.filter((a) => !questions.some((x) => x.id === a.id)).map((a) => ({ id: a.id, ask: askOf(a.id), options: [] as string[], default: a.answer }));
-  // A DEFAULT NOBODY ANSWERED IS AN ASSUMPTION, to the planner and to the writer alike: never the person's answer.
-  const asked = [...questions.map((x) => { const a = answers.find((y) => y.id === x.id); return { ask: x.ask, answer: a?.answer ?? x.default, ...(a?.by === 'default' || !a ? { assumed: true as const } : {}) }; }), ...beyond.map((b) => ({ ask: b.ask, answer: b.default }))];
+  // A DEFAULT NOBODY ANSWERED IS A DECISION THE RUN MADE, to the planner and to the writer alike: never the person's answer,
+  // and listed for the person beside the draft (core/loop/inferred.ts).
+  // A fact nobody gave (news, naming, proof) reaches neither: only a position is decided for the person.
+  const asked = [...questions.flatMap((x) => { const a = answers.find((y) => y.id === x.id); const assumed = a?.by === 'default' || !a;
+    return assumed && !POSITION_IDS.has(x.id) ? [] : [{ ask: x.ask, answer: a?.answer ?? x.default, ...(assumed ? { assumed: true as const } : {}) }]; }), ...beyond.map((b) => ({ ask: b.ask, answer: b.default }))];
   const answerText = answersNote([...questions, ...beyond], new Map(answers.filter((a) => a.by !== 'default').map((a) => [a.id, a.answer])));
   // ── THE PLAN ───────────────────────────────────────────────────────────────────────────────
   let plan: PiecePlan | null = null; let planBy: DecidedBy | 'off' = 'off'; const typedChanges: string[] = [];

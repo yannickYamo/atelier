@@ -113,19 +113,19 @@ describe('before the draft, outside a terminal: returned as choices, written wit
     const p = await beforeTheDraft({ ...base, L: l, answers: undefined, client: reader() });
     expect(p.questions.map((q) => q.id)).toEqual(['angle']);
     expect(p.said[0]).toBe('Questions before writing (1): written with the defaults (angle: The town\'s jobs); to answer, run again with --answers "angle=<letter or your words>".');
-    // a default nobody answered is served as an assumption, never as the person's answer
-    expect(p.note).toContain('- Why does this matter to you now? assumed, no answer given (change with --answers): The town\'s jobs');
+    // a position nobody answered is served as decided, never as the person's answer and never as an assumption to say
+    expect(p.note).toBe('Decided for this piece (write from them as the piece\'s own position):\n\n- Why does this matter to you now? The town\'s jobs');
+    expect(p.note).not.toMatch(/assum/i);
     expect(p.note).not.toContain('my answers');
     expect(p.record?.answers).toEqual([{ id: 'angle', answer: 'The town\'s jobs', by: 'default' }]);
     expect(store.getTold(l)).toEqual([]);
   });
-  it('an answer the person gave is served as theirs; a default beside it is served as assumed, apart', async () => {
+  it('an answer the person gave is served as theirs; a fact nobody gave (news) is not served at all', async () => {
     const l = L();
     const two = (): InferenceClient => ({ complete: async () => anInferenceResult({ json: { decisions: [ANGLE, d('NEWS', 'UNKNOWN', 'DIFFERENT', { ask: 'Any news of your own work to carry?', options: ['None', 'A new berth opened'], default: 'None' })] } }) });
     const p = await beforeTheDraft({ ...base, L: l, answers: 'angle=a', client: two() });
-    expect(p.note).toBe('Before writing I settled these (my answers; write from them):\n\n- Why does this matter to you now? The ferry I take\n\n'
-      + 'Not settled: nobody answered these, so each is a working assumption, not my position. Write from it as an assumption (never state it as a fact about me, my work or my company) and keep what rests on it easy to change:\n\n'
-      + '- Any news of your own work to carry? assumed, no answer given (change with --answers): None');
+    // news is a fact about the person: a default for it would state news they never gave (the misreport this guards)
+    expect(p.note).toBe('Before writing I settled these (my answers; write from them):\n\n- Why does this matter to you now? The ferry I take');
   });
   it('--answers answers it; the answer is remembered, and is the default the next time it is asked', async () => {
     const l = L();

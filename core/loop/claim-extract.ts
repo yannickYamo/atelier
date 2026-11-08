@@ -408,7 +408,7 @@ export function decideSpecifics(text: string, specifics: readonly ExtractedSpeci
     return m !== null && known.includes(m[1]) && Number(m[2]) <= lastShownLine;
   };
   const bySentence = new Map<number, Claim>();
-  const publicFacts: { start: number; end: number; text: string; why: string }[] = [];
+  const publicFacts: { start: number; end: number; text: string; why: string; specific?: string }[] = [];
   const traced: EnrichedTrace[] = [];
   const rank: Readonly<Record<Claim['kind'], number>> = { EXPERIENCE: 3, SOURCE: 2, FIGURE: 1 };
   // WHERE IS IT, REALLY. The sentence number the reader gives is its word like any other; trusting it
@@ -470,7 +470,7 @@ export function decideSpecifics(text: string, specifics: readonly ExtractedSpeci
       const overlapOk = !lived || cw.length === 0 || cw.filter((w) => sup.has(w)).length / cw.length >= 0.4;
       supported = inSource && numbersOk && overlapOk;
     } else if (sp.source === 'PUBLIC' && !lived && !strict) {
-      publicFacts.push({ start: s.start, end: s.end, text: s.text, why: `"${sp.text}": stated as general knowledge; check it before you publish` });
+      publicFacts.push({ start: s.start, end: s.end, text: s.text, specific: sp.text, why: `"${sp.text}": stated as general knowledge; check it before you publish` });
       continue;
     } else {
       supported = false;
@@ -479,7 +479,7 @@ export function decideSpecifics(text: string, specifics: readonly ExtractedSpeci
     const kind = KIND_TO_CLAIM[sp.kind] ?? 'FIGURE';
     const had = bySentence.get(at);
     if (!had || rank[kind] > rank[had.kind]) {
-      bySentence.set(at, { start: s.start, end: s.end, text: s.text, kind, why: placeholders ? WHY[kind].slot : WHY[kind].cut });
+      bySentence.set(at, { start: s.start, end: s.end, text: s.text, kind, specific: sp.text, why: placeholders ? WHY[kind].slot : WHY[kind].cut });
     }
   }
   const claims = [...bySentence.entries()].sort((a, b) => a[0] - b[0]).map(([, c]) => c);

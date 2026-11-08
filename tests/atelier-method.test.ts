@@ -330,7 +330,7 @@ describe('through the binary: atelier method, then a run held to the method', ()
 
   it('a new piece on new material that carries the method out is conformant, and the run says what was held', async () => {
     await script(NEW_PIECE);
-    const r = atelier('invoke', '--skill', 'analysis', '--task=Compare Cygnus and Dorado on price for a small team.', '--with', 'prices=new-prices.md', '--json', ...BACKEND());
+    const r = atelier('invoke', '--skill', 'analysis', '--task=Compare Cygnus and Dorado on price for a small team.', '--with', 'prices=new-prices.md', '--json', '--pipeline', 'legacy', ...BACKEND());
     expect(r.code, `${r.err}${r.out.slice(0, 600)}`).toBe(0);
     const j = JSON.parse(r.out.slice(r.out.indexOf('{'))) as { output: string; report: string[]; eval: { result: { conformant: boolean; reasons: string[] } } };
     expect(j.eval.result, JSON.stringify(j.eval.result.reasons)).toMatchObject({ conformant: true });
@@ -340,7 +340,7 @@ describe('through the binary: atelier method, then a run held to the method', ()
 
   it('an output that follows the easy rules and says nothing is not conformant: it lacks what the work must contain', async () => {
     await script(BLAND);
-    const r = atelier('invoke', '--skill', 'analysis', '--task=Compare Cygnus and Dorado on price for a small team.', '--with', 'prices=new-prices.md', '--json', ...BACKEND());
+    const r = atelier('invoke', '--skill', 'analysis', '--task=Compare Cygnus and Dorado on price for a small team.', '--with', 'prices=new-prices.md', '--json', '--pipeline', 'legacy', ...BACKEND());
     const j = JSON.parse(r.out.slice(r.out.indexOf('{'))) as { report: string[]; eval: { result: { conformant: boolean; reasons: string[] } } };
     expect(j.eval.result.conformant).toBe(false);
     expect(j.eval.result.reasons.join(' ')).toMatch(/3 required rules broken/);
@@ -350,7 +350,7 @@ describe('through the binary: atelier method, then a run held to the method', ()
 
   it('what a draft left out is written again with it named, and the piece that then holds it is the one delivered', async () => {
     await script(BLAND, [{ contains: 'An earlier draft did not hold what this work requires', answer: { piece: NEW_PIECE } }]);
-    const r = atelier('invoke', '--skill', 'analysis', '--task=Compare Cygnus and Dorado on price for a small team.', '--with', 'prices=new-prices.md', '--json', ...BACKEND());
+    const r = atelier('invoke', '--skill', 'analysis', '--task=Compare Cygnus and Dorado on price for a small team.', '--with', 'prices=new-prices.md', '--json', '--pipeline', 'legacy', ...BACKEND());
     const j = JSON.parse(r.out.slice(r.out.indexOf('{'))) as { output: string; report: string[]; eval: { result: { conformant: boolean } } };
     expect(j.report.join('\n')).toMatch(/Written again: the first draft left out 3 thing\(s\) the method requires \(x\d+: "[^"]+"; x\d+: "[^"]+"; x\d+: "[^"]+"\); it now leaves out 0\./);
     expect(j.output).toContain('## Verdict');
@@ -359,7 +359,7 @@ describe('through the binary: atelier method, then a run held to the method', ()
 
   it('a figure the material does not hold is never delivered as sourced: with the claim check off, the method\'s own check decides', async () => {
     await script(`${NEW_PIECE}\nCygnus has 4,200 paying customers today.`);
-    const r = atelier('invoke', '--skill', 'analysis', '--task=Compare Cygnus and Dorado on price for a small team.', '--with', 'prices=new-prices.md', '--allow-unsourced', '--json', ...BACKEND());
+    const r = atelier('invoke', '--skill', 'analysis', '--task=Compare Cygnus and Dorado on price for a small team.', '--with', 'prices=new-prices.md', '--allow-unsourced', '--json', '--pipeline', 'legacy', ...BACKEND());
     const j = JSON.parse(r.out.slice(r.out.indexOf('{'))) as { output: string; report: string[]; eval: { result: { conformant: boolean } } };
     expect(j.output).toContain('4,200');
     expect(j.eval.result.conformant).toBe(false);
@@ -372,12 +372,15 @@ describe('through the binary: atelier method, then a run held to the method', ()
     expect(existsSync(join(data, 'skills', 'analysis', 'class.txt'))).toBe(false);
   });
 
-  it('a sentence the claim check cannot find is delivered, never cut, and marked where it stands as one to verify', async () => {
+  it('a sentence the claim check cannot find is delivered, never cut, never marked in the text unless asked (--mark-unverified)', async () => {
     const story = 'Last week I interviewed 40 of our customers and 31 of them said they would switch.';
     await script(NEW_PIECE.replace('## Risks\n\n', `## Risks\n\n${story} `));
+    // the text handed back is what gets published: clean by default
     const r = atelier('invoke', '--skill', 'analysis', '--task=Compare Cygnus and Dorado on price for a small team.', '--with', 'prices=new-prices.md', '--answer-only', ...BACKEND());
     expect(r.out).toContain(story);
-    expect(r.out).toContain(`${story} [needs verification: not shown in what you supplied]`);
+    expect(r.out).not.toContain('needs verification');
+    const marked = atelier('invoke', '--skill', 'analysis', '--task=Compare Cygnus and Dorado on price for a small team.', '--with', 'prices=new-prices.md', '--answer-only', '--mark-unverified', ...BACKEND());
+    expect(marked.out).toContain(`${story} [needs verification: not shown in what you supplied]`);
     const quiet = atelier('invoke', '--skill', 'analysis', '--task=Compare Cygnus and Dorado on price for a small team.', '--with', 'prices=new-prices.md', '--answer-only', '--no-unsourced-note', ...BACKEND());
     expect(quiet.out).toContain(story);
     expect(quiet.out).not.toContain('needs verification');

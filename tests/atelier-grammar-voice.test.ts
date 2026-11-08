@@ -237,7 +237,7 @@ describe('through the binary', () => {
     const { data, both, run } = seed('list');
     const piece = 'It don\'t matter now. We spent the arvo fixing the build. The plan still holds.';
     await script(piece);
-    const out = both('invoke', '--skill', 'posts', 'a short note', ...model());
+    const out = both('invoke', '--pipeline', 'legacy', '--skill', 'posts', 'a short note', ...model());
     expect(out).toContain(piece);
     expect(out).toMatch(/Grammar, listed for you to check and never changed \(2\): "don't" \(.*\); "arvo" \(a word the checker does not know/);
     const id = readdirSync(join(data, 'skills', 'posts', 'invocations'))[0].replace(/\.json$/, '');
@@ -245,7 +245,7 @@ describe('through the binary', () => {
     expect(report.replace(/\s+/g, ' ')).toMatch(/listed for you to check: 2 possible slips: "don't"/);
     expect(report.replace(/\s+/g, ' ')).toContain('"arvo" (a word the checker does not know');
     await script(piece);
-    const json = run('invoke', '--skill', 'posts', 'a short note', ...model(), '--json');
+    const json = run('invoke', '--pipeline', 'legacy', '--skill', 'posts', 'a short note', ...model(), '--json');
     const shown = JSON.parse(json.slice(json.indexOf('{'))) as { output: string; rules: { checked: { id: string; detail: string; listed?: { text: string; why: string }[] }[] } };
     expect(shown.output).toBe(piece);
     const note = shown.rules.checked.find((c) => c.listed);
@@ -256,7 +256,7 @@ describe('through the binary', () => {
   it('switched off, a run does not say every REQUIRED rule holds, and verify says "not checked"', async () => {
     const { proj, both } = seed('off', 'off');
     await script('They were late to the meeting. The plan still holds.');
-    const out = both('invoke', '--skill', 'posts', 'a short note', ...model());
+    const out = both('invoke', '--pipeline', 'legacy', '--skill', 'posts', 'a short note', ...model());
     expect(out).not.toMatch(/Checked: every REQUIRED measured rule holds\b(?! that)/);
     expect(out).toMatch(/Checked: every REQUIRED measured rule that could be checked holds; not checked: \S+ \(the grammar check could not run: switched off/);
     writeFileSync(join(proj, 'clean.md'), 'They were late to the meeting. The plan still holds.');

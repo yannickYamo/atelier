@@ -48,7 +48,7 @@ export interface Brief {
   readonly unsupported: readonly { readonly id: string; readonly missing: string }[];
   /**
    * steps the request asks against ("skip the Risks section"), with the request's words: surfaced, never set aside.
-   * An unconditional step the request contradicts stands; the writer is told the method stands and to say so.
+   * An unconditional step the request contradicts stands; the writer is told the method stands and to follow it.
    */
   readonly contradicted: readonly { readonly id: string; readonly quote: string }[];
   readonly by: 'code' | 'model' | 'floor';
@@ -225,6 +225,10 @@ export function selectMoves(placement: Readonly<Record<string, Placement>>, b: B
  * THE BRIEF AS THE WRITER READS IT, after the cached skill (cli/served.ts, `forThisRequest`): step numbers and one line
  * each, in the method's order with what depends on what first; what was given; what to leave open. Empty when every
  * step applies and nothing is open: then the method as served says it all.
+ *
+ * WHAT IS MISSING IS NEVER SERVED AS SOMETHING TO SAY. Told "a specific is not given: say so in one line", the writer
+ * said so in the piece ("the brief doesn't say..."), in 10 of 25 plain posts on a blind test where no baseline did. The
+ * missing specific goes beside the draft (core/loop/inferred.ts); the writer is told only to decide on what is given.
  */
 export function briefNote(b: Brief, steps: readonly BriefStep[], material: readonly { name: string }[], served: MoveSelection | null = null): string {
   const on = applyingSteps(b, steps); const off = setAsideSteps(b, steps); const unresolved = unresolvedSteps(b, steps);
@@ -240,7 +244,7 @@ export function briefNote(b: Brief, steps: readonly BriefStep[], material: reado
   const decisions = order(on).flatMap((s) => {
     const u = s.unit;
     if (!u?.decision) return [];
-    return [`- Step ${s.n}: decide ${u.decision}${u.inputs.length ? ` (from ${u.inputs.join(', ')})` : ''}${open.has(s.id) ? ` — a specific this needs is not given (${open.get(s.id)}): say so in one line, and decide on what is given` : ''}`];
+    return [`- Step ${s.n}: decide ${u.decision}${u.inputs.length ? ` (from ${u.inputs.join(', ')})` : ''}${open.has(s.id) ? ' — decide it on what is given and on my pieces' : ''}`];
   });
   const lines = [
     `For this request, my method's steps that apply: ${on.map((s) => s.n).join(', ') || 'none'}.${off.length ? ` Set aside, not this case: ${off.map((s) => `${s.n} (${b.placed[s.id].why ?? 'not this case'})`).join('; ')}.` : ''}${unresolved.length ? ` Not decided by the request, so held as applying: ${unresolved.map((s) => s.n).join(', ')}.` : ''}`,
@@ -250,8 +254,8 @@ export function briefNote(b: Brief, steps: readonly BriefStep[], material: reado
     ...(moves.length ? ['How I would make this, as myself:', ...moves.map((u) => { const link = u.link; const step = link ? steps.find((s) => String(s.n) === link.step) : undefined;
       const where = u.situation ? `${u.situation.in.k} of the ${u.situation.in.n} of my pieces in this situation` : `${u.pieces} of ${u.corpus} of my pieces`;
       return `- ${step ? `at step ${step.n}: ` : ''}${u.trigger.text}: ${u.realisation}, as in "${u.evidence[0]?.quote ?? u.observed}" (${where}).${u.forbidden ? ` Not: ${u.forbidden}.` : ''}`; })] : []),
-    ...b.contradicted.map((c) => { const s = steps.find((x) => x.id === c.id); return `The request says "${c.quote}", which is against step ${s?.n ?? '?'}: my method stands; follow it, and say in one line that the request asked otherwise.`; }),
-    `Given: the request${material.length ? ` and ${material.map((m) => m.name).join(', ')}` : ', and nothing else'}.${open.size ? ' A specific not given is said to be missing, never invented; every decision is still made, on what is given, in the shape my method asks for.' : ''}`,
+    ...b.contradicted.map((c) => { const s = steps.find((x) => x.id === c.id); return `The request says "${c.quote}", which is against step ${s?.n ?? '?'}: my method stands; follow it.`; }),
+    `Given: the request${material.length ? ` and ${material.map((m) => m.name).join(', ')}` : ', and nothing else'}.${open.size ? ' Every decision is made on what is given, in the shape my method asks for; the piece states no specific it was not given, and speaks only to its reader.' : ''}`,
   ];
   return lines.join('\n');
 }

@@ -194,10 +194,12 @@ export class OpenAICompatibleInferenceClient implements InferenceClient {
       ...(req.wantLogprobs ? { logprobs: true, top_logprobs: 20 } : {}),
     };
     const strict = this.cfg.strictSchema !== false;
-    if (this.mode === 'FORCED_TOOL_CALL') {
+    // A PIECE AS PROSE (`req.plain`, the direct writer): no function and no response format; the message is the piece.
+    // The effort is not sent: this protocol has no one field every backend takes for it.
+    if (!req.plain && this.mode === 'FORCED_TOOL_CALL') {
       body.tools = [{ type: 'function', function: { name: req.toolName, description: req.toolDescription, parameters: req.schema, ...(strict ? { strict: true } : {}) } }];
       body.tool_choice = { type: 'function', function: { name: req.toolName } };
-    } else {
+    } else if (!req.plain) {
       body.response_format = { type: 'json_schema', json_schema: { name: req.toolName, description: req.toolDescription, schema: req.schema, ...(strict ? { strict: true } : {}) } };
     }
 
@@ -235,9 +237,13 @@ export class OpenAICompatibleInferenceClient implements InferenceClient {
         `${this.backend} filtered the response (finish_reason: content_filter). Nothing was recorded.`);
     }
 
-    const raw = this.mode === 'FORCED_TOOL_CALL'
-      ? choice?.message?.tool_calls?.[0]?.function?.arguments
-      : choice?.message?.content;
+    if (req.plain && termination.kind === 'COMPLETE' && !choice?.message?.content?.trim()) {
+      throw new Error(`${this.backend} returned no text for the piece (finish_reason: ${finish}). Nothing was recorded.`);
+    }
+    const raw = req.plain ? JSON.stringify({ piece: choice?.message?.content ?? '' })
+      : this.mode === 'FORCED_TOOL_CALL'
+        ? choice?.message?.tool_calls?.[0]?.function?.arguments
+        : choice?.message?.content;
 
     if (raw === undefined || raw === null || raw === '') {
       throw new CapabilityUnsupported(

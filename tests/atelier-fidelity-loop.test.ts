@@ -358,7 +358,7 @@ describe('through the binary: discovery builds the profile, invoke steers and re
   }, 60_000);
 
   it('invoke --fidelity writes four drafts, steers toward the range, and records the reading, every application and the manifest', () => {
-    const out = run('invoke', '--skill', 'posts', '--no-taste', '--json', '--fidelity', 'write about the cache incident');
+    const out = run('invoke', '--pipeline', 'legacy', '--skill', 'posts', '--no-taste', '--json', '--fidelity', 'write about the cache incident');
     const j = JSON.parse(out) as { output: string; fidelity: { release: string; inBand: number; measured: number; edits: { target: string; kept: boolean }[]; applicability: { status: string }[] } };
     // --fidelity overrides the release's settings for this run, so the run is not that release's evidence
     expect(j.fidelity.release).toBeNull();
@@ -379,7 +379,7 @@ describe('through the binary: discovery builds the profile, invoke steers and re
   }, 120_000);
 
   it('invoke --sections plans the piece, writes it section by section, and records the plan', () => {
-    const out = run('invoke', '--skill', 'posts', '--no-taste', '--json', '--sections', 'write the long version of the cache incident');
+    const out = run('invoke', '--pipeline', 'legacy', '--skill', 'posts', '--no-taste', '--json', '--sections', 'write the long version of the cache incident');
     const j = JSON.parse(out) as { output: string };
     expect(j.output).toMatch(/^## What happened\n\n[\s\S]*\n\n## What we changed\n\n/);
     const invDir = join(data, 'skills', 'posts', 'invocations');
@@ -400,14 +400,14 @@ describe('through the binary: discovery builds the profile, invoke steers and re
   }, 120_000);
 
   it('every run is evaluated: the panel with --panel, an eval object in --json, and report, rate and eval read it back', () => {
-    const shown = run('invoke', '--skill', 'posts', '--no-taste', '--panel', 'write a short note about the rollback');
+    const shown = run('invoke', '--pipeline', 'legacy', '--skill', 'posts', '--no-taste', '--panel', 'write a short note about the rollback');
     expect(shown).toMatch(/── Atelier · posts · release [0-9a-f]{8}/);
     expect(shown).toMatch(/ {2}RESULT {2}(VERIFIED|NEEDS REVIEW|BLOCKED)/);
     // the strict bar is said beside it, as what it is
     expect(shown).toMatch(/ {2}strict delivery: would (deliver|refuse)/);
     expect(shown).toMatch(/GATES {2}binary, every run/);
     expect(shown).toMatch(/not measured: /);
-    const j = JSON.parse(run('invoke', '--skill', 'posts', '--no-taste', '--json', 'write a short note about the flag')) as { invocationId: string; eval: { schema: number; result: { conformant: boolean } } };
+    const j = JSON.parse(run('invoke', '--pipeline', 'legacy', '--skill', 'posts', '--no-taste', '--json', 'write a short note about the flag')) as { invocationId: string; eval: { schema: number; result: { conformant: boolean } } };
     expect(j.eval.schema).toBe(1);
     expect(typeof j.eval.result.conformant).toBe('boolean');
     const rep = run('report', j.invocationId);
@@ -429,18 +429,18 @@ describe('through the binary: discovery builds the profile, invoke steers and re
     expect(out).toMatch(/HIGH {2}.*paragraph/);
   }, 60_000);
   it('every run says how typical of you it is; --until-typical writes more rounds toward a target and keeps the best', () => {
-    const out = run('invoke', '--skill', 'posts', 'Write a post about the outage', '--until-typical', '0.99', '--shape-rounds', '2', '--panel');
+    const out = run('invoke', '--pipeline', 'legacy', '--skill', 'posts', 'Write a post about the outage', '--until-typical', '0.99', '--shape-rounds', '2', '--panel');
     expect(out).not.toMatch(/^EXIT:(?!1\n)/);   // the scripted drafts break c1 by design: a blocked delivery exits 1
     // A text farther than every piece says so instead of a share that cannot go below 1/(n+1).
     expect(out).toMatch(/typical of you {4}(?:as typical as \d+% of your own pieces|beyond every piece of yours: distance)/);
     expect(out).toMatch(/shape rounds {6}3 written toward 99% typical; kept round \d/);
-    expect(run('invoke', '--skill', 'posts', 'x', '--until-typical', '2')).toMatch(/--until-typical takes a share between 0 and 1/);
+    expect(run('invoke', '--pipeline', 'legacy', '--skill', 'posts', 'x', '--until-typical', '2')).toMatch(/--until-typical takes a share between 0 and 1/);
     const report = run('fidelity', '--skill', 'posts', '--typicality');
     expect(report).toMatch(/output\(s\) against \d+ of your pieces/);
   }, 180_000);
 
   it('--until-author steers on the style detector, and --select sample draws a tied draft and records the draw', () => {
-    const out = run('invoke', '--skill', 'posts', 'Write a post about the outage', '--until-author', '0.99', '--shape-rounds', '1', '--select', 'sample', '--drafts', '3', '--panel', '--json');
+    const out = run('invoke', '--pipeline', 'legacy', '--skill', 'posts', 'Write a post about the outage', '--until-author', '0.99', '--shape-rounds', '1', '--select', 'sample', '--drafts', '3', '--panel', '--json');
     expect(out).not.toMatch(/^EXIT:/);
     const j = JSON.parse(out.slice(out.indexOf('{'))) as { invocationId: string };
     const rec = JSON.parse(readFileSync(join(data, 'skills', 'posts', 'invocations', `${j.invocationId}.json`), 'utf8')) as { fidelity: { shape?: { authorTarget?: number; rounds: { author?: number | null }[] }; settings?: { selection?: string } } };
@@ -448,13 +448,13 @@ describe('through the binary: discovery builds the profile, invoke steers and re
     expect(rec.fidelity.shape?.rounds.length).toBe(2);
     expect(typeof rec.fidelity.shape?.rounds[0].author).toBe('number');
     expect(rec.fidelity.settings?.selection).toBe('sample');
-    expect(run('invoke', '--skill', 'posts', 'x', '--select', 'random')).toMatch(/--select is sample or best/);
-    expect(run('invoke', '--skill', 'posts', 'x', '--until-author', '0.5', '--no-repair')).toMatch(/--no-repair turns the checks off/);
-    expect(run('invoke', '--skill', 'posts', 'x', '--until-author', '0.5', '--shape-rounds', '0')).toMatch(/--shape-rounds must be at least 1/);
+    expect(run('invoke', '--pipeline', 'legacy', '--skill', 'posts', 'x', '--select', 'random')).toMatch(/--select is sample or best/);
+    expect(run('invoke', '--pipeline', 'legacy', '--skill', 'posts', 'x', '--until-author', '0.5', '--no-repair')).toMatch(/--no-repair turns the checks off/);
+    expect(run('invoke', '--pipeline', 'legacy', '--skill', 'posts', 'x', '--until-author', '0.5', '--shape-rounds', '0')).toMatch(/--shape-rounds must be at least 1/);
   }, 180_000);
 
   it('--context local holds drafts to the range on the request\'s subject, records the target or says why there is none, and is a setting', () => {
-    const out = run('invoke', '--skill', 'posts', 'Write a post about the cache that never expired and the rollback', '--context', 'local', '--panel', '--json');
+    const out = run('invoke', '--pipeline', 'legacy', '--skill', 'posts', 'Write a post about the cache that never expired and the rollback', '--context', 'local', '--panel', '--json');
     expect(out).not.toMatch(/^EXIT:/);
     const j = JSON.parse(out.slice(out.indexOf('{'))) as { invocationId: string };
     const rec = JSON.parse(readFileSync(join(data, 'skills', 'posts', 'invocations', `${j.invocationId}.json`), 'utf8')) as { fidelity: { settings?: { context?: string }; context?: { lambda: number; nEff: number }; reading: { bandsFrom: string } } };
@@ -466,13 +466,13 @@ describe('through the binary: discovery builds the profile, invoke steers and re
     } else {
       expect(out).toMatch(/near too few of your pieces to set a range of its own/);
     }
-    expect(run('invoke', '--skill', 'posts', 'x', '--context', 'global')).toMatch(/--context is local or off/);
+    expect(run('invoke', '--pipeline', 'legacy', '--skill', 'posts', 'x', '--context', 'global')).toMatch(/--context is local or off/);
     expect(run('fidelity', '--skill', 'posts', '--set', 'context=near')).toMatch(/"context" is local or off/);
   }, 180_000);
 
   it('strict delivery: an output that does not conform is written again, then refused with a failing exit; a flag delivers it marked', () => {
     // The `posts` skill's scripted drafts always break a REQUIRED rule, so every round fails.
-    const refused = run('invoke', '--skill', 'posts', '--no-taste', '--strict', '--redraws', '1', 'write about the rollback');
+    const refused = run('invoke', '--pipeline', 'legacy', '--skill', 'posts', '--no-taste', '--strict', '--redraws', '1', 'write about the rollback');
     expect(refused).toMatch(/^EXIT:3\n/);
     expect(refused).toMatch(/atelier: not delivered \(strict delivery\): .*required rule/);
     expect(refused).toMatch(/atelier report i[0-9a-f]+/);
@@ -486,21 +486,21 @@ describe('through the binary: discovery builds the profile, invoke steers and re
     // the record keeps the text, and the run is not credited to a release that does not deliver strictly
     expect(rec.output.length).toBeGreaterThan(0);
     expect(rec.fidelity).toMatchObject({ release: null, settings: { delivery: 'strict' } });
-    const json = run('invoke', '--skill', 'posts', '--no-taste', '--strict', '--redraws', '0', '--json', 'write about the rollback');
+    const json = run('invoke', '--pipeline', 'legacy', '--skill', 'posts', '--no-taste', '--strict', '--redraws', '0', '--json', 'write about the rollback');
     expect(json).toMatch(/^EXIT:3\n/);
     expect(JSON.parse(json.slice(json.indexOf('{'))) as { output: string | null; delivered: boolean }).toMatchObject({ output: null, delivered: false });
-    const allowed = run('invoke', '--skill', 'posts', '--no-taste', '--strict', '--redraws', '0', '--allow-nonconformant', 'write about the rollback');
+    const allowed = run('invoke', '--pipeline', 'legacy', '--skill', 'posts', '--no-taste', '--strict', '--redraws', '0', '--allow-nonconformant', 'write about the rollback');
     expect(allowed).toMatch(/^EXIT:3\n/);
     expect(allowed).toMatch(/NOT CONFORMANT, delivered because --allow-nonconformant was given/);
-    expect(run('invoke', '--skill', 'posts', 'x', '--strict', '--no-repair')).toMatch(/--strict delivers only a checked output/);
+    expect(run('invoke', '--pipeline', 'legacy', '--skill', 'posts', 'x', '--strict', '--no-repair')).toMatch(/--strict delivers only a checked output/);
     // and it is a setting, with a parent to roll back to; without it, delivery is as 1.0 delivers
     expect(run('fidelity', '--skill', 'posts', '--set', 'delivery=strict')).toMatch(/strict delivery \(only a conformant output is delivered\)/);
-    expect(run('invoke', '--skill', 'posts', '--no-taste', 'write about the rollback')).toMatch(/^EXIT:3\n/);
+    expect(run('invoke', '--pipeline', 'legacy', '--skill', 'posts', '--no-taste', 'write about the rollback')).toMatch(/^EXIT:3\n/);
     expect(run('fidelity', '--skill', 'posts', '--set', 'delivery=maybe')).toMatch(/"delivery" is strict or open/);
     run('fidelity', '--skill', 'posts', '--rollback');
     // NOT STRICT: the broken rule is a threshold learned from twelve pieces, not proven enough to block within the
     // false-stop budget (core/delivery/budget.ts), so the draft ships labelled and exits 0 (never 3).
-    const open = run('invoke', '--skill', 'posts', '--no-taste', 'write about the rollback');
+    const open = run('invoke', '--pipeline', 'legacy', '--skill', 'posts', '--no-taste', 'write about the rollback');
     expect(open).not.toMatch(/^EXIT:/);   // exit 0: delivered, with its label on the record
     expect(open).toContain('The cause was a cache that never expired.');
   }, 300_000);
@@ -545,13 +545,13 @@ describe('through the binary: discovery builds the profile, invoke steers and re
     const json = (out: string): Out => JSON.parse(out.slice(out.indexOf('{'))) as Out;
     // a version number and a figure the request never gave: general knowledge in an answer, listed at most, never a refusal
     await script('Use Node 22.4 or later. The default timeout is 30 seconds, so raise it to 120.');
-    const general = cli('invoke', '--skill', 'ans', '--no-taste', '--strict', '--json', 'How do I stop the build timing out?');
+    const general = cli('invoke', '--pipeline', 'legacy', '--skill', 'ans', '--no-taste', '--strict', '--json', 'How do I stop the build timing out?');
     expect(general).not.toMatch(/^EXIT:/);
     expect(json(general)).toMatchObject({ delivered: true, eval: { result: { conformant: true }, gates: { claims: { answers: true, delivered: 0, unconfirmed: 0 } } } });
     expect(json(general).output).toContain('Node 22.4');
     // work nobody did: cut before delivery, and what is delivered does not carry it
     await script('I ran the tests and they pass. The fix is in place.');
-    const work = cli('invoke', '--skill', 'ans', '--no-taste', '--strict', '--json', 'Fix the failing test.');
+    const work = cli('invoke', '--pipeline', 'legacy', '--skill', 'ans', '--no-taste', '--strict', '--json', 'Fix the failing test.');
     const w = json(work);
     expect(w.cut).toContain('I ran the tests and they pass.');
     expect(w.output ?? '').not.toContain('I ran the tests');
@@ -586,7 +586,7 @@ describe('through the binary: discovery builds the profile, invoke steers and re
     const json = (out: string): Out => JSON.parse(out.slice(out.indexOf('{'))) as Out;
     const recOf = (out: string): Rec => JSON.parse(readFileSync(join(data, 'skills', 'essays', 'invocations', `${json(out).invocationId}.json`), 'utf8')) as Rec;
     // by default, by shared words: recorded with the run, carried by --json, and said on the panel
-    const plain = run2('invoke', '--skill', 'essays', 'Write about the cache that never expired and the rollback', '--json');
+    const plain = run2('invoke', '--pipeline', 'legacy', '--skill', 'essays', 'Write about the cache that never expired and the rollback', '--json');
     expect(plain).not.toMatch(/^EXIT:/);
     expect(recOf(plain).fidelity.nearness).toMatchObject({ source: 'lexical', thin: false });
     expect(recOf(plain).fidelity.nearness?.usedFor).toContain('passages');
@@ -597,16 +597,16 @@ describe('through the binary: discovery builds the profile, invoke steers and re
     expect(shown).toMatch(/subject {11}\d+ of your \d+ pieces are near this request/);
     expect(shown).toMatch(/found by shared words/);
     // by subject needs the cards first
-    expect(run2('invoke', '--skill', 'essays', 'x', '--nearness', 'reader')).toMatch(/--nearness reader needs your pieces read for their subjects first: atelier fidelity --skill essays --read-subjects/);
-    expect(run2('invoke', '--skill', 'essays', 'x', '--nearness', 'far')).toMatch(/--nearness is reader or lexical/);
+    expect(run2('invoke', '--pipeline', 'legacy', '--skill', 'essays', 'x', '--nearness', 'reader')).toMatch(/--nearness reader needs your pieces read for their subjects first: atelier fidelity --skill essays --read-subjects/);
+    expect(run2('invoke', '--pipeline', 'legacy', '--skill', 'essays', 'x', '--nearness', 'far')).toMatch(/--nearness is reader or lexical/);
     expect(run('fidelity', '--skill', 'posts', '--read-subjects')).toMatch(/no paragraph long enough to be a passage/);
     const read = run2('fidelity', '--skill', 'essays', '--read-subjects', '--cap', '1');
     expect(read).toMatch(/Read (\d+) of \1 piece\(s\) \(reader subject-1:/);
     // a title that shares no word with any piece is near nothing by words
-    const words = run2('invoke', '--skill', 'essays', 'Outage', '--json');
+    const words = run2('invoke', '--pipeline', 'legacy', '--skill', 'essays', 'Outage', '--json');
     expect(recOf(words).fidelity.nearness).toMatchObject({ source: 'lexical', pieces: [], thin: true });
     // with no small model (offline) the words are the floor, and the run says so
-    const floor = run2('invoke', '--skill', 'essays', 'Outage', '--nearness', 'reader', '--json');
+    const floor = run2('invoke', '--pipeline', 'legacy', '--skill', 'essays', 'Outage', '--nearness', 'reader', '--json');
     expect(json(floor).eval.context?.subject?.fellBack).toMatch(/no small model to read the subject/);
     expect(recOf(floor).fidelity).toMatchObject({ settings: { nearness: 'reader' }, release: null, nearness: { source: 'lexical' } });
     // with one, the same title is near the pieces the reader graded, and their passages are shown to the writer
@@ -638,11 +638,11 @@ describe('through the binary: discovery builds the profile, invoke steers and re
     // this one failed once in a full run with "no active version for posts" and passed on every rerun. A missing
     // skill is named here, by the test that needs it, instead of surfacing three assertions later as a wrong message.
     expect(run('status', '--skill', 'posts'), 'the posts skill must be built and active before the plan-first steps').not.toMatch(/^EXIT:|no active version/);
-    expect(run('invoke', '--skill', 'posts', 'x', '--structure', 'plan')).toMatch(/--structure plan needs your pieces read for structure first/);
+    expect(run('invoke', '--pipeline', 'legacy', '--skill', 'posts', 'x', '--structure', 'plan')).toMatch(/--structure plan needs your pieces read for structure first/);
     const readOut = run('fidelity', '--skill', 'posts', '--read-structure-from', join(proj, 'posts'), '--cap', '1');
     expect(readOut).not.toMatch(/^EXIT:/);
     expect(readOut).toMatch(/Read \d+ piece\(s\) \(reader [0-9a-f]{8}\); the two reads agreed at a median kappa of 1/);
-    const out = run('invoke', '--skill', 'posts', 'Write a post about the outage', '--structure', 'plan', '--drafts', '2', '--panel', '--json');
+    const out = run('invoke', '--pipeline', 'legacy', '--skill', 'posts', 'Write a post about the outage', '--structure', 'plan', '--drafts', '2', '--panel', '--json');
     expect(out).not.toMatch(/^EXIT:/);
     const j = JSON.parse(out.slice(out.indexOf('{'))) as { invocationId: string };
     const rec = JSON.parse(readFileSync(join(data, 'skills', 'posts', 'invocations', `${j.invocationId}.json`), 'utf8')) as { fidelity: { structure?: { plans: string[][]; read: (string | null)[] | null; followed: number | null } } };
@@ -654,22 +654,22 @@ describe('through the binary: discovery builds the profile, invoke steers and re
     for (const plan of rec.fidelity.structure?.plans ?? []) for (const move of plan) expect(MOVES, move).toContain(move.toLowerCase());
     expect(rec.fidelity.structure?.read?.length).toBeGreaterThan(3);
     expect(typeof rec.fidelity.structure?.followed).toBe('number');
-    expect(run('invoke', '--skill', 'posts', 'x', '--structure', 'plan', '--sections')).toMatch(/use one/);
-    expect(run('invoke', '--skill', 'posts', 'x', '--structure', 'plan', '--no-repair')).toMatch(/drop one of them/);
+    expect(run('invoke', '--pipeline', 'legacy', '--skill', 'posts', 'x', '--structure', 'plan', '--sections')).toMatch(/use one/);
+    expect(run('invoke', '--pipeline', 'legacy', '--skill', 'posts', 'x', '--structure', 'plan', '--no-repair')).toMatch(/drop one of them/);
     // a request that states its own length gets no skeleton, and says so
-    const short = run('invoke', '--skill', 'posts', 'In one line, what broke?', '--structure', 'plan', '--json');
+    const short = run('invoke', '--pipeline', 'legacy', '--skill', 'posts', 'In one line, what broke?', '--structure', 'plan', '--json');
     const sj = JSON.parse(short.slice(short.indexOf('{'))) as { invocationId: string };
     const srec = JSON.parse(readFileSync(join(data, 'skills', 'posts', 'invocations', `${sj.invocationId}.json`), 'utf8')) as { fidelity: { structure?: { note?: string; plans: unknown[] } } };
     expect(srec.fidelity.structure?.note).toMatch(/asks for something short, or states its own format/);
   }, 180_000);
 
   it('amending a rule keeps the author: a new release line carries the profile, the passages and the calibration', () => {
-    const before = run('invoke', '--skill', 'posts', 'Write a post about the outage', '--panel');
+    const before = run('invoke', '--pipeline', 'legacy', '--skill', 'posts', 'Write a post about the outage', '--panel');
     expect(before).toMatch(/FIDELITY {2}descriptive/);
     const plan = run('plan', '--skill', 'posts');
     const rule = /^\s{2}(c\d+|p\d+|m\d+)\b/m.exec(plan)?.[1] ?? 'p1';
     expect(run('amend', '--skill', 'posts', '--rule', rule, '--materiality', 'PREFERRED', '--reason', 'test: an owner reweighs a rule')).not.toMatch(/^EXIT:/);
-    const after = run('invoke', '--skill', 'posts', 'Write a post about the outage', '--panel');
+    const after = run('invoke', '--pipeline', 'legacy', '--skill', 'posts', 'Write a post about the outage', '--panel');
     expect(after).not.toMatch(/^EXIT:(?!1\n)/);   // the scripted drafts break c1 by design: a blocked delivery exits 1
     expect(after).toMatch(/FIDELITY {2}descriptive/);
     expect(after).toMatch(/typical of you/);
@@ -678,13 +678,13 @@ describe('through the binary: discovery builds the profile, invoke steers and re
 
   it('the voice layer does nothing until a register is declared; out of register only what the owner marked carries', () => {
     expect(run('voice', 'status', '--skill', 'posts')).toMatch(/no register declared, so nothing of the voice layer runs/);
-    const before = run('invoke', '--skill', 'posts', 'Draft the contract for the pilot', '--panel');
+    const before = run('invoke', '--pipeline', 'legacy', '--skill', 'posts', 'Draft the contract for the pilot', '--panel');
     expect(before).not.toMatch(/VOICE {2}below the standard/);
     expect(run('voice', 'register', '--skill', 'posts', 'blog post')).toMatch(/written in one register: post\.\nOne register: nothing can be shown to transfer/);
     // in register: nothing is withheld, and the panel says which register
-    expect(run('invoke', '--skill', 'posts', 'Write a blog post about the outage', '--panel')).toMatch(/register {10}in register \(post\)/);
+    expect(run('invoke', '--pipeline', 'legacy', '--skill', 'posts', 'Write a blog post about the outage', '--panel')).toMatch(/register {10}in register \(post\)/);
     // out of register: every rule is withheld until the owner marks one
-    const out = run('invoke', '--skill', 'posts', 'Draft the contract for the pilot', '--panel');
+    const out = run('invoke', '--pipeline', 'legacy', '--skill', 'posts', 'Draft the contract for the pilot', '--panel');
     expect(out).not.toMatch(/^EXIT:/);
     expect(out).toMatch(/out of register \(contract vs post\): 0 trait\(s\) carried by your policy, \d+ unknown/);
     expect(out).toMatch(/voice pass {8}off/);
@@ -695,7 +695,7 @@ describe('through the binary: discovery builds the profile, invoke steers and re
     // the card says it, live
     expect(run('report', '--skill', 'posts')).toMatch(/VOICE {2}written in: post\n {4}out of register {3}1 trait\(s\) carry \(0 measured across registers, 1 by your ruling\)/);
     // the voice pass is refused without a bank, and a bank whose pairs fail their checks is not stored
-    expect(run('invoke', '--skill', 'posts', 'Write a blog post', '--voice', 'incontext')).toMatch(/needs a pair bank of at least 12 pairs/);
+    expect(run('invoke', '--pipeline', 'legacy', '--skill', 'posts', 'Write a blog post', '--voice', 'incontext')).toMatch(/needs a pair bank of at least 12 pairs/);
     expect(run('fidelity', '--skill', 'posts', '--set', 'voice=incontext')).toMatch(/the voice pass on \(in-context pairs\)/);
     expect(run('fidelity', '--skill', 'posts', '--rollback')).toMatch(/Active implementation release is now/);
   }, 180_000);
@@ -716,18 +716,18 @@ describe('through the binary: discovery builds the profile, invoke steers and re
     // the release's two drafts, the first in the author's own shape and clean: one written, one spared, said on the record
     await scriptDraft(authorPiece(13));
     const before = await pieceCalls();
-    const clean = recordOf(run('invoke', '--skill', 'posts', '--no-taste', '--json', 'write about the cache incident'));
+    const clean = recordOf(run('invoke', '--pipeline', 'legacy', '--skill', 'posts', '--no-taste', '--json', 'write about the cache incident'));
     const cleanCalls = await pieceCalls() - before;
     expect(clean.selection, `${JSON.stringify(clean.selection)} broken: ${brokenOf(clean.invocationId)}`).toMatchObject({ drafts: 2, chosen: 0, written: 1, spared: 1 });
     expect(clean.selection!.why).toContain('the first draft held every rule the drafts are chosen by; 1 planned draft(s) not written');
     // the same request with the drafts asked for by name: both written, chosen among
-    const asked = recordOf(run('invoke', '--skill', 'posts', '--no-taste', '--json', '--drafts', '2', 'write about the cache incident'));
+    const asked = recordOf(run('invoke', '--pipeline', 'legacy', '--skill', 'posts', '--no-taste', '--json', '--drafts', '2', 'write about the cache incident'));
     expect(await pieceCalls() - before - cleanCalls).toBe(cleanCalls + 1);
     expect(asked.selection).toMatchObject({ drafts: 2 }); expect(asked.selection!.spared).toBeUndefined();
     expect(asked.selection!.why).toContain('the best of 2');
     // a first draft that invents a source breaks a REQUIRED rule: it wants a rival, and two are written
     await scriptDraft(`${authorPiece(13)}\n\nAccording to a 2021 Gartner survey, 73% of platform teams had cut their cache budget by a third.`);
-    const invents = recordOf(run('invoke', '--skill', 'posts', '--no-taste', '--json', 'write about the cache incident'));
+    const invents = recordOf(run('invoke', '--pipeline', 'legacy', '--skill', 'posts', '--no-taste', '--json', 'write about the cache incident'));
     expect(invents.selection).toMatchObject({ drafts: 2 }); expect(invents.selection!.spared).toBeUndefined();
     expect(invents.selection!.why).toContain('the best of 2');
   }, 180_000);
@@ -735,14 +735,14 @@ describe('through the binary: discovery builds the profile, invoke steers and re
   it('--set-aside leaves the rules named out of this run and records each as set aside; an unknown id is refused', () => {
     interface Out { invocationId: string; fidelity: { applicability: { requirementId: string; status: string; why?: string }[] } }
     const served = (id: string): number => (JSON.parse(readFileSync(join(data, 'skills', 'posts', 'invocations', `${id}.json`), 'utf8')) as { served: { bytes: number } }).served.bytes;
-    const plain = JSON.parse(run('invoke', '--skill', 'posts', '--no-taste', '--json', 'write about the cache incident')) as Out;
+    const plain = JSON.parse(run('invoke', '--pipeline', 'legacy', '--skill', 'posts', '--no-taste', '--json', 'write about the cache incident')) as Out;
     const id = plain.fidelity.applicability.find((a) => a.status === 'APPLIED')?.requirementId;
     expect(id).toBeDefined();
-    const aside = JSON.parse(run('invoke', '--skill', 'posts', '--no-taste', '--json', '--set-aside', id!, 'write about the cache incident')) as Out;
+    const aside = JSON.parse(run('invoke', '--pipeline', 'legacy', '--skill', 'posts', '--no-taste', '--json', '--set-aside', id!, 'write about the cache incident')) as Out;
     expect(aside.fidelity.applicability.find((a) => a.requirementId === id)).toMatchObject({ status: 'WAIVED', why: 'set aside by you for this run' });
     // left out of the prompt, not named there: the served bytes shrink by the rule
     expect(served(aside.invocationId)).toBeLessThan(served(plain.invocationId));
-    expect(run('invoke', '--skill', 'posts', '--no-taste', '--json', '--set-aside', 'zz9', 'write about the cache incident')).toMatch(/--set-aside zz9: not a rule of this skill/);
+    expect(run('invoke', '--pipeline', 'legacy', '--skill', 'posts', '--no-taste', '--json', '--set-aside', 'zz9', 'write about the cache incident')).toMatch(/--set-aside zz9: not a rule of this skill/);
   }, 180_000);
 });
 

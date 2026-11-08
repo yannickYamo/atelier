@@ -79,15 +79,23 @@ export interface Voice {
    * is copying, served or not. Kept with the stored voice, never in a package.
    */
   readonly guardPieces?: readonly string[];
+  /**
+   * EVERY PIECE THE SKILL WAS BUILT FROM, WHOLE, with the request each one answered where its file carried one: what the
+   * direct writer chooses from for each request (cli/direct.ts). Never a piece held back for testing. Kept with the stored
+   * voice, never in a package.
+   */
+  readonly wholePieces?: readonly { readonly text: string; readonly request: string | null }[];
 }
 
 /**
  * WHAT AN OUTPUT IS CHECKED FOR COPYING AGAINST: the passages and pieces the skill serves and, for a composite, every
  * piece of every author it was combined from, served or not. A sentence lifted from any of them is copying.
  */
-export const copyGuardPieces = (voice: Pick<Voice, 'passages' | 'pieces' | 'guardPieces'> | null | undefined): string[] => {
+export const copyGuardPieces = (voice: Pick<Voice, 'passages' | 'pieces' | 'guardPieces' | 'wholePieces'> | null | undefined): string[] => {
   const served = [...(voice?.passages ?? []), ...(voice?.pieces ?? [])];
-  return [...served, ...(voice?.guardPieces ?? []).filter((p) => !served.includes(p))];
+  // every piece the direct writer may be shown (`wholePieces`) is the author's too: a run lifted from any of them is copying
+  const all = [...(voice?.guardPieces ?? []), ...(voice?.wholePieces ?? []).map((p) => p.text)];
+  return [...served, ...[...new Set(all)].filter((p) => !served.includes(p))];
 };
 
 export interface CompositeVoice {

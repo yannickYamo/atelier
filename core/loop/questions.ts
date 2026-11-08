@@ -53,7 +53,7 @@ export const KIND_UNLOCKS: Readonly<Record<QuestionKind | GapKind, string>> = {
   NAMING: 'Which names the piece may carry, for this skill from now on.',
   NEWS: 'Whether the piece can carry news of your own work.',
   EMPHASIS: 'Which part of the piece gets the most room.',
-  PROOF: 'The claim can stand as a fact instead of as your view.',
+  PROOF: 'The claim can stand on your own figure, case or source.',
   READER: 'What the piece explains and what it takes as known.',
   STAKES: 'What the opening puts in front of the reader.',
 };
@@ -231,9 +231,11 @@ const PAIR_BREAK = /,(?=\s*[a-z][a-z0-9_-]*\s*=)/i;
  * is the person's own answer, kept as written. An id that is a question kind answers that kind, asked this run or not;
  * one that is no kind is said in one line and ignored. Never fails.
  */
-export function readAnswers(s: string | undefined, questions: readonly Question[]): { readonly answers: Map<string, string>; readonly said: string[] } {
+export function readAnswers(s: string | undefined, questions: readonly Question[],
+  /** ids a caller asks beside the kinds here (the direct writer's editor questions, ../direct/questions.ts) */
+  extraIds: readonly string[] = []): { readonly answers: Map<string, string>; readonly said: string[] } {
   const answers = new Map<string, string>(); const said: string[] = [];
-  const kinds = [...QUESTION_KINDS, ...GAP_KINDS].map((k) => k.toLowerCase());
+  const kinds = [...[...QUESTION_KINDS, ...GAP_KINDS].map((k) => k.toLowerCase()), ...extraIds];
   const gapIds = new Set<string>(GAP_KINDS.map((k) => k.toLowerCase()));
   for (const part of (s ?? '').split(PAIR_BREAK)) {
     const eq = part.indexOf('=');
@@ -269,21 +271,26 @@ export function defaultsLine(qs: readonly Question[]): string {
   return `Questions before writing (${qs.length}): written with the defaults (${qs.map((q) => `${q.id}: ${q.default}`).join('; ')}); to answer, run again with --answers "${qs.map((q) => `${q.id}=<letter or your words>`).join(',')}".`;
 }
 
-/** How a default nobody answered is served to the writer: as an assumption, with the way to change it. */
-export const ASSUMED = 'assumed, no answer given (change with --answers):';
+/**
+ * The questions whose answer is a POSITION the piece takes (its angle, what it stresses, who it is for, what is at
+ * stake). Nobody answering, the run takes the position its reading gave as the default: served to the writer as decided,
+ * listed for the person beside the draft (./inferred.ts). The others (news of the person's work, what it may name, the
+ * proof of a claim) are facts about the person: a default for one is never served, so nothing about them is stated
+ * that they did not give (an assumed news item served as fact once misreported the person's own work).
+ */
+export const POSITION_IDS: ReadonlySet<string> = new Set(['angle', 'emphasis', 'reader', 'stakes']);
 
 /**
  * What the writer is told of the answers, after the skill. `answers` holds only what the person gave (now, or told
- * before): those settle the decisions in the person's own words. A question none of them answers is served with its
- * default as an assumption, apart and said so: the writer never takes a default as the person's position, and never
- * states what rests on it as a fact of theirs (an assumed angle or news served as fact was the person's own work
- * misreported).
+ * before): those settle the decisions in the person's own words. A position nobody answered is served as decided, with
+ * the default the reading gave; a fact nobody gave is not served at all. Never "an assumption to say": told a default
+ * was a working assumption, the writer hedged in the piece and said what it had not been told.
  */
 export function answersNote(qs: readonly Question[], answers: ReadonlyMap<string, string>): string {
   const mine = qs.filter((q) => answers.has(q.id)).map((q) => `- ${q.ask} ${answers.get(q.id) ?? ''}`);
-  const assumed = qs.filter((q) => !answers.has(q.id)).map((q) => `- ${q.ask} ${ASSUMED} ${q.default}`);
+  const decided = qs.filter((q) => !answers.has(q.id) && POSITION_IDS.has(q.id)).map((q) => `- ${q.ask} ${q.default}`);
   return [mine.length ? `Before writing I settled these (my answers; write from them):\n\n${mine.join('\n')}` : '',
-    assumed.length ? `Not settled: nobody answered these, so each is a working assumption, not my position. Write from it as an assumption (never state it as a fact about me, my work or my company) and keep what rests on it easy to change:\n\n${assumed.join('\n')}` : ''].filter(Boolean).join('\n\n');
+    decided.length ? `Decided for this piece (write from them as the piece's own position):\n\n${decided.join('\n')}` : ''].filter(Boolean).join('\n\n');
 }
 
 // ── QUESTIONS FROM GAPS ──────────────────────────────────────────────────────────────────────
@@ -315,8 +322,11 @@ export interface GapsReading { readonly candidates: readonly GapCandidate[] }
 export const MAX_CLAIMS = 4;
 /** Where a proof, the reader or the stakes are stated: a closed field, NONE where nothing states it. */
 export const GAP_STATED_IN = ['request', 'material', 'inventory', 'told', 'NONE'] as const;
-/** The default for a proof nobody gives: never invented, said as the author's view. */
-export const PROOF_DEFAULT = 'No proof to hand: say it as my view, not as a fact';
+/**
+ * The default for a proof nobody gives: the claim is argued from what is given. Never served to the writer as an answer
+ * (`answersNote` serves no fact nobody gave): it is what the person sees as the default, and the ledger beside the draft.
+ */
+export const PROOF_DEFAULT = 'Argue it from what is given, with no figure';
 export const PROOF_OPTIONS = [PROOF_DEFAULT, 'Leave the claim out'] as const;
 /** The house wording of the frame questions; a library's wording for the same gap replaces it. */
 export const GAP_WORDING: Readonly<Record<'READER' | 'STAKES', { readonly ask: string; readonly unlocks: string }>> = {

@@ -16,7 +16,7 @@ describe('proof: asked only where nothing given holds it, never for the position
     const proof = g?.candidates.find((c) => c.kind === 'PROOF');
     expect(proof?.question?.id).toBe('proof');
     expect(proof?.question?.ask).toContain('"Trade fell while it was closed."');
-    expect(proof?.question?.default).toBe('No proof to hand: say it as my view, not as a fact');
+    expect(proof?.question?.default).toBe('Argue it from what is given, with no figure');
     expect(proof?.question?.unlocks).toBe('The middle section can carry a figure.');
     expect(g?.candidates.filter((c) => c.question).map((c) => c.kind)).toEqual(['PROOF']);
   });

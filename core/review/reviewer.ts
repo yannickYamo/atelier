@@ -165,7 +165,7 @@ const renderInventory = (claims: readonly InventoryClaim[]): string => claims.le
   : '(no claims could be listed)';
 
 export const verdictReading: Reading<VerdictIn, VerdictOut> = {
-  id: 'review-verdict', version: '1', system: VERDICT_SYSTEM,
+  id: 'review-verdict', version: '2', system: VERDICT_SYSTEM,
   toolName: 'review_draft', toolDescription: 'Score the draft against the rubric, name the caps that hold, and list fixes.',
   maxTokens: 4000, estimateUsd: 0.08,
   schema: {

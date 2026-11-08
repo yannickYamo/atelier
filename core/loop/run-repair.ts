@@ -14,7 +14,7 @@ import { acts, isOmission, verifyText, type VerifyReport, type RuleCheck } from 
 import { runsToRepair } from './material-points.js';
 import { REPAIR_RUN_WORDS } from '../observers/copied-runs.js';
 import { planFor } from '../plan/execution-plan.js';
-import { unsourcedClaims, wordCountClaims, claimUnitsOf, statedFigureClaims, bracketCitations, type Claim } from './claims.js';
+import { unsourcedClaims, wordCountClaims, timeAnchorClaims, claimUnitsOf, statedFigureClaims, bracketCitations, type Claim } from './claims.js';
 import { derivedFromKnown, derivedArithmetic } from './derived.js';
 import { answerWorkClaims, answerSentences, judgedOnly, judgedSituations, agreedWorkClaims } from './answer-claims.js';
 import { assertMayCut, type CutAuthority } from './cut-authority.js';
@@ -82,6 +82,12 @@ function cutClaim(text: string, start: number, end: number): string {
 export interface Refined { readonly output: string; readonly repair: RepairRecord | null; readonly report: VerifyReport }
 
 export interface CheckOptions {
+  /**
+   * Counts written in words are listed beside the work even where a model reads the claims: where nothing is ever cut (the
+   * direct writer), one read of the claims missed "five or six" and "fifty", which the count pattern finds; listing both
+   * costs a line, never a sentence.
+   */
+  readonly listWordCounts?: boolean;
   /**
    * The bound material, where it is written as finished sentences (./material-points.ts): a stretch of the text 8 words or
    * more long copied from it is a finding the repair rewrites (`COPIED_LINE`). Absent: nothing is read for copying.
@@ -339,7 +345,12 @@ export function checkDraft(skill: string, v: StandardVersion, text: string, opts
   // reads a spelled-out count with less confidence than a figure in digits (./claims.ts, wordCountClaims), and a
   // review found it in true sentences. Whatever the kind of work, these join the list for the person to check
   // and never fail the draft. A qualified reader's reading carries none: it types such counts itself.
-  const words = (gating?.listed ?? (opts.claimSensor ? [] : wordCountClaims(text, opts.material ?? '')))
+  // Held to the request and its material only: a rule is an instruction, so "5 to 6 sentences" in the method never made
+  // "five or six teams" in the piece a count the person gave.
+  // A moment in time the notes never gave ("this afternoon", "two months ago") is listed with them (./claims.ts).
+  const given = opts.evidence ?? opts.material ?? '';
+  const words = [...(gating?.listed ?? []), ...(!opts.claimSensor || opts.listWordCounts ? [...wordCountClaims(text, given), ...timeAnchorClaims(text, given)] : [])]
+    .filter((w, i, all) => all.findIndex((x) => x.start === w.start) === i)
     .filter((w) => !toCut.some((c) => c.start === w.start) && !toList.some((c) => c.start === w.start));
   // A FIGURE STATED AS FACT IS LISTED THERE TOO, finding word or not (./claims.ts, statedFigureClaims): where nobody
   // measured the check on the kind of work and material is bound, "95% of callers hit the retry path" is what the

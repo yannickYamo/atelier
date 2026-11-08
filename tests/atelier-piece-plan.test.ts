@@ -124,22 +124,22 @@ describe('before the draft: the plan is made from the answers and returned', () 
     expect(p.record?.planBy).toBe('model');
     expect(p.said).toEqual(['Planned before writing: 3 point(s) from the material, 1 left out; the plan is on the record, never in the work (atelier report <run>).']);
   });
-  it('an answer the person gave reaches the planner as theirs; a default nobody answered is marked assumed', () => {
+  it('an answer the person gave reaches the planner as theirs; a position nobody answered is marked inferred', () => {
     const prompt = PIECE_PLAN.prompt({ ...INPUT, answers: [{ ask: 'Why now?', answer: 'The ferry I take' }, { ask: 'Any news?', answer: 'None', assumed: true }] });
     expect(prompt).toContain('- Why now? The ferry I take\n');
-    expect(prompt).toContain('- Any news? None (assumed: no answer was given; plan with it as an assumption, never as something they said)');
-    expect(prompt).not.toContain('The ferry I take (assumed');
+    expect(prompt).toContain("- Any news? None (inferred: plan from it as the piece's position, never as something they said)");
+    expect(prompt).not.toContain('The ferry I take (inferred');
   });
-  it('before the draft, the planner is told which answers were given and which assumed', async () => {
+  it('before the draft, the planner is told which answers were given and which inferred', async () => {
     const seen: string[] = [];
     const ANGLE_Q = { kind: 'ANGLE', status: 'UNKNOWN', spread: 'DIFFERENT', settledBy: 'author-only', what: 'angle', ask: 'Why now?', options: ['The ferry I take', 'The jobs'], default: 'The jobs', statedIn: 'NONE', quote: null };
     const client = { complete: async (r: InferenceRequest) => { seen.push(r.userMessage); return anInferenceResult({ json: r.toolName === 'emit_plan' ? PLAN : { decisions: [ANGLE_Q] } }); } };
     const L = { root: mkdtempSync(join(tmpdir(), 'atelier-plan-a-')), skillName: 'quay' } as unknown as store.StoreLayout;
     await beforeTheDraft({ L, request: INPUT.request, material: INPUT.material, method: [], examples: [], questions: true, plan: true, answers: undefined, interactive: false, client, model: 'reader' });
-    expect(seen[1]).toContain('- Why now? The jobs (assumed: no answer was given');
+    expect(seen[1]).toContain('- Why now? The jobs (inferred: plan from it');
     await beforeTheDraft({ L, request: INPUT.request, material: INPUT.material, method: [], examples: [], questions: true, plan: true, answers: 'angle=a', interactive: false, client, model: 'reader' });
     expect(seen[3]).toContain('- Why now? The ferry I take\n');
-    expect(seen[3]).not.toContain('(assumed');
+    expect(seen[3]).not.toContain('(inferred');
   });
 });
 

@@ -2,7 +2,7 @@
 // qualification and all, and reads only what changed. Rewording one step changes that step's key and no other; changing
 // the examples changes every key; a check no model read is never frozen.
 import { describe, it, expect } from 'vitest';
-import { examplesKey, freezeKey, frozenFor, toFreeze } from '../core/method/freeze.js';
+import { examplesKey, freezeKey, frozenFor, toFreeze, READER_KEY } from '../core/method/freeze.js';
 import type { StepCheck, ExampleCase } from '../core/method/step-check.js';
 
 const cases: ExampleCase[] = [{ id: 'e1', task: 'Draft the memo.', material: [{ name: 'policy', text: 'Clause 4.2' }], reference: '## Summary\nCovered.\n' }];
@@ -20,6 +20,16 @@ describe('the key', () => {
     expect(freezeKey('Cite the policy clause.', k)).not.toBe(freezeKey('Cite the clause.', k));
     expect(examplesKey([{ ...cases[0], reference: '## Summary\nDeclined.\n' }])).not.toBe(k);
     expect(examplesKey([{ ...cases[0], material: [{ name: 'policy', text: 'Clause 4.5' }] }])).not.toBe(k);
+  });
+});
+
+describe('a check read by an earlier reader', () => {
+  it('is read again at a rebuild: the reader is in the key', () => {
+    const k = examplesKey(cases);
+    const old = { [freezeKey('Cite the clause.', k, [], 'an earlier reader')]: measured };
+    expect(frozenFor(steps, k, old).size).toBe(0);
+    expect(freezeKey('Cite the clause.', k)).toBe(freezeKey('Cite the clause.', k, [], READER_KEY));
+    expect(frozenFor(steps, k, toFreeze(steps, { 2: measured }, k)).size).toBe(1);
   });
 });
 

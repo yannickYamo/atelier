@@ -149,7 +149,7 @@ describe('through the binary: material, and several drafts chosen by count', () 
   });
   afterAll(() => { backend.kill(); });
 
-  it('an invented story becomes a slot, in code; material added to the skill is served and stored', () => {
+  it('an invented story is listed, never a slot unless asked for; material added to the skill is served and stored', () => {
     const data = mkdtempSync(join(tmpdir(), 'atelier-ag-data-')); const proj = mkdtempSync(join(tmpdir(), 'atelier-ag-proj-'));
     const env = { ...process.env, ATELIER_DATA: data, ATELIER_PROJECT_DIR: proj, ATELIER_PRICE_IN: '1', ATELIER_PRICE_OUT: '1' };
     const run = (...a: string[]): string => execFileSync('node', [CLI, ...a], { encoding: 'utf8', cwd: proj, env });
@@ -157,20 +157,18 @@ describe('through the binary: material, and several drafts chosen by count', () 
     run('ratify-close', '--work-type', 'writing');
     run('build', '--name', 'inc');
     const be = ['--provider', 'openai-compatible', '--base-url', `http://127.0.0.1:${port}`, '--model', 'scripted'];
-    // A document written with no material bound gets the slot by default: no flag needed. `--no-placeholders` asks for
-    // what was there before: with nothing of the person's to check against, the story is listed for them, not cut.
+    // A document written with no material bound is written whole, never with a slot: with nothing of the person's to
+    // check against, the story stays in the piece and is listed for them, not cut. `--no-placeholders` is the same run.
     const byDefault = run('invoke', '--skill', 'inc', 'write it', ...be);
-    expect(byDefault).toContain(CLAIM_SLOT);
-    expect(byDefault).not.toContain('broke production');
-    // the evidence row says what was done with the specific: a slot, never "all found"
-    const j = JSON.parse(run('invoke', '--skill', 'inc', 'write it', '--json', ...be).replace(/^[^{]*/, '')) as { record: { entries: { id: string; observation: { evidence: string } }[] } };
-    const specifics = j.record.entries.find((e) => e.id === 'specifics')!;
-    expect(specifics.observation.evidence).toContain('2 not found in it: replaced by a slot for your own before delivery');
-    expect(specifics.observation.evidence).not.toContain('all found');
+    expect(byDefault).not.toContain(CLAIM_SLOT);
+    expect(byDefault).toContain('broke production');
+    expect(byDefault).toContain('is listed for you, not cut');
+    // beside the work: the specific left in for them to check, with what to give
+    const j = JSON.parse(run('invoke', '--skill', 'inc', 'write it', '--json', ...be).replace(/^[^{]*/, '')) as { inferred: { kind: string; what: string; settled: string }[] };
+    expect(j.inferred.some((i) => i.kind === 'specific' && i.what.includes('broke production') && i.settled === 'left in the piece for you to check')).toBe(true);
     const listedInstead = run('invoke', '--skill', 'inc', 'write it', '--no-placeholders', ...be);
     expect(listedInstead).not.toContain(CLAIM_SLOT);
     expect(listedInstead).toContain('broke production');
-    expect(listedInstead).toContain('is listed for you, not cut');
     const out = run('invoke', '--skill', 'inc', 'write it', '--drafts', '2', '--placeholders', ...be);
     expect(out).toContain(CLAIM_SLOT);
     expect(out).not.toContain('broke production');

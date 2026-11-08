@@ -28,6 +28,27 @@ import { applyRepair, type RepairTarget, type Applied, type Reverted } from './r
 import { workField, WORK_FIELD_ASK, type WorkField } from './work-field.js';
 import { reintroducedRuns } from './corrections.js';
 
+/**
+ * WHAT A FIX CAN NAME: every sentence of the prose, and every row of a table, in the order they stand. A table row is
+ * not prose, so the sentences alone left a cell out of reach: asked to change one cell, a fix changed 0 of 65 sentences.
+ * A row is one unit; a table's separator row and anything inside a code fence are not.
+ */
+export function fixUnitsOf(text: string): { start: number; end: number; text: string }[] {
+  const units = sentencesOf(text).map((x) => ({ start: x.start, end: x.end, text: x.text }));
+  let off = 0; let fence: string | null = null;
+  for (const line of text.split('\n')) {
+    const t = line.trim(); const at = off + line.length - line.trimStart().length;
+    const f = /^(```|~~~)/.exec(t);
+    if (f) fence = fence ? (t.startsWith(fence) ? null : fence) : f[1];
+    else if (!fence && t.startsWith('|') && !/^\|[\s:|-]*$/.test(t) && !units.some((u) => u.start < at + t.length && at < u.end)) units.push({ start: at, end: at + t.length, text: t });
+    off += line.length + 1;
+  }
+  return units.sort((a, b) => a.start - b.start);
+}
+
+/** A table row's cells, by its pipes: a row written again must keep their number. */
+export const cellsOf = (row: string): number => row.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').length;
+
 /** What the reading is shown: the person's words and the piece's sentences, in order (numbered from 1). */
 export interface FixScopeInput { readonly instruction: string; readonly sentences: readonly string[] }
 /** What the instruction is about: the sentences named, or the whole piece. */
@@ -73,7 +94,7 @@ export const FIX_SCOPE: Reading<FixScopeInput, FixScope> = {
  */
 export type FixTarget = RepairTarget & { readonly sentenceIds: readonly number[] };
 export function fixTargets(text: string, ids: readonly number[], instruction: string, traced = ''): FixTarget[] {
-  const ss = sentencesOf(text);
+  const ss = fixUnitsOf(text);
   const wanted = [...new Set(ids)].filter((i) => i >= 1 && i <= ss.length).sort((a, b) => a - b);
   const groups: number[][] = [];
   for (const i of wanted) {
@@ -89,7 +110,7 @@ export function fixTargets(text: string, ids: readonly number[], instruction: st
 
 export const FIX_WRITER_SYSTEM = `You change one passage of a finished piece, as the person who wrote it asked, and nothing else.
 
-You are given the whole piece for context, the passage to change, and what the person wants. Write the passage again so that their instruction is carried out for it, in the voice of the piece around it. The text immediately before and after the passage will not change: your passage must read naturally between them. Do not repeat what comes just before or just after it.
+You are given the whole piece for context, the passage to change, and what the person wants. Write the passage again so that their instruction is carried out for it, in the voice of the piece around it. The text immediately before and after the passage will not change: your passage must read naturally between them. Do not repeat what comes just before or just after it. A passage that is a row of a table comes back as that one row, in the same form: its pipes kept and the same number of cells.
 
 ${WORK_FIELD_ASK}`;
 
@@ -126,8 +147,8 @@ export interface SentenceDiff { readonly total: number; readonly changed: number
  * word (each one matched once). `outside` counts the changed ones that are not among the sentences named.
  */
 export function sentenceDiff(before: string, after: string, named: readonly number[]): SentenceDiff {
-  const b = sentencesOf(before).map((s) => s.text.trim()); const left = new Map<string, number>();
-  for (const s of sentencesOf(after)) left.set(s.text.trim(), (left.get(s.text.trim()) ?? 0) + 1);
+  const b = fixUnitsOf(before).map((s) => s.text.trim()); const left = new Map<string, number>();
+  for (const s of fixUnitsOf(after)) left.set(s.text.trim(), (left.get(s.text.trim()) ?? 0) + 1);
   const keep = new Set(named); let changed = 0; let outside = 0; const unchangedNamed: number[] = [];
   // The sentences not named are matched first: a named sentence the piece also carries elsewhere, word for word, is the
   // one that changed, never the unnamed copy.
@@ -204,6 +225,10 @@ export async function fixSpans(client: InferenceClient, budget: Budget, text: st
         if (f.missing) { reverted.push({ id: t.id, kind: 'CUT', lost: ['nothing: the writer returned no text for it'] }); continue; }
         back = reintroducedRuns(f.text, removed, text, given.own);
         if (back.length) { keptAsItWas += 1; reverted.push({ id: t.id, kind: 'MEANING', lost: [`${NOTHING}each rewrite brought back wording an earlier fix took out: ${[...new Set(back.map((x) => `"${x.text}"`))].join(', ')}`] }); continue; }
+      }
+      // A TABLE ROW STAYS A ROW: a reply that is not one row with the same cells would break the table, so it is not spliced.
+      if (t.text.trim().startsWith('|') && (!f.text.trim().startsWith('|') || f.text.trim().includes('\n') || cellsOf(f.text) !== cellsOf(t.text))) {
+        reverted.push({ id: t.id, kind: 'MEANING', lost: [`${NOTHING}the rewrite of a table row did not come back as one row with the same ${cellsOf(t.text)} cells`] }); continue;
       }
       replies.push({ id: t.id, text: f.text });
     }

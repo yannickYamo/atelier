@@ -461,7 +461,7 @@ describe('a fix changes the piece in place, and what it took out stays out', () 
   it('fix hands the run the piece to change; the run changes it in place; the whole-piece run reads what was taken out', () => {
     expect(cli).toMatch(/\.\.\.fixInPlaceArgs\(last, inv\.invocationId, complaint\)/);
     expect(cli).toMatch(/const fixed = await fixInPlace\(\{/);
-    expect(cli).toMatch(/fixSpans\(c\.writer\(\), budget, piece, ids, instruction, removed, \{ material: c\.materialText, own \}\)/);
+    expect(cli).toMatch(/fixSpans\(c\.writer\(\), budget, piece, ids, instruction, removed, \{ material: c\.materialText, own: ownText \}\)/);
     expect(cli).toMatch(/readContext\(FIX_SCOPE, \{ instruction, sentences \}/);
     expect(cli).toMatch(/removedOfPiece\(L, correctionsOf\)/);
     expect(cli).toMatch(/\.\.\.\(removed \? \{ removed \} : \{\}\)/);
@@ -472,7 +472,7 @@ describe('a fix changes the piece in place, and what it took out stays out', () 
     expect(cli).toMatch(/deliveryOutcome\(strict, decided, evaluation\?\.result\.conformant \?\? false/);
     expect(cli).toMatch(/if \(r\.error\) \{ c\.say\(/);
     expect(cli).toMatch(/own: ownWordsOf\(L, std\)/);
-    expect(cli).toMatch(/reintroducedRuns\(r\.text, removed, piece, own\)/);
+    expect(cli).toMatch(/reintroducedRuns\(text, removed, piece, ownText\)/);
     expect(cli).toMatch(/authorRatesNote\(carried, ruledFeatures\(std\)\)/);
     expect(cli).toMatch(/signalChecks\(d\.output, profile, ruledFeatures\(std\)\)/);
   });

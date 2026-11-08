@@ -204,7 +204,7 @@ describe.skipIf(!existsSync(CLI))('end to end: a draft that runs long after two 
     await fetch(`http://127.0.0.1:${port}/__set`, { method: 'POST', body: readFileSync(join(BAKE, 'runs-long.json'), 'utf8') });
     const log = async (): Promise<string[]> => ((await (await fetch(`http://127.0.0.1:${port}/__log`)).json()) as { bodies: string[] }).bodies;
     const before = (await log()).length;
-    const out = JSON.parse(run('invoke', '--skill', 'bake', 'a bake note on brioche', '--json', '--provider', 'openai-compatible', '--base-url', `http://127.0.0.1:${port}`, '--model', 'scripted')) as
+    const out = JSON.parse(run('invoke', '--pipeline', 'legacy', '--skill', 'bake', 'a bake note on brioche', '--json', '--provider', 'openai-compatible', '--base-url', `http://127.0.0.1:${port}`, '--model', 'scripted')) as
       { controller: ControllerRecord; report: string[] };
     // the repair calls the backend answered: span rewrites, cuts named, and drafts written shorter
     const sent = (await log()).slice(before).filter((b) => b.includes('emit_replacements') || b.includes('<earlier-draft>')).length;

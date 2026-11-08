@@ -10,6 +10,7 @@
 // No telemetry. No network. Corpus and outputs stay where the user put them; this stores metadata,
 // standards and events.
 
+import type { KeptPiece } from '../direct/kept.js';
 import type { StoredSignal } from '../observers/selection.js';
 import type { Voice } from '../compiler/voice.js';
 import type { CompositeRecord } from '../composite/selection.js';
@@ -238,6 +239,16 @@ export function restoreCarry(l: StoreLayout): StoredCarry | null {
   return now.before;
 }
 
+/** The pieces the person kept from runs (`atelier keep`, core/direct/kept.ts), oldest first. */
+export function getKept(l: StoreLayout): KeptPiece[] {
+  const p = join(dirs(l).base, 'kept.json');
+  return existsSync(p) ? readJson<KeptPiece[]>(p, { kind: 'array', what: 'the pieces you kept' }) : [];
+}
+export function setKept(l: StoreLayout, kept: readonly KeptPiece[]): void {
+  mkdirSync(dirs(l).base, { recursive: true });
+  writeAtomic(join(dirs(l).base, 'kept.json'), JSON.stringify(kept, null, 1));
+}
+
 /** The author's passages a skill serves (core/compiler/voice.ts), chosen at build; null when off or never chosen. */
 export function getVoice(l: StoreLayout): Voice | null {
   const p = join(dirs(l).base, 'voice.json');
@@ -356,21 +367,41 @@ export function setComposite(l: StoreLayout, c: CompositeRecord | null): void {
  * The last answer of a kind is the default the next time it is asked ("last time you said …"); an answer about what may
  * be named stands, and that question is not asked again. Only answers the person gave are kept, never a default.
  */
-export function getTold(l: StoreLayout): { id: string; ask: string; answer: string; at: string }[] {
+export function getTold(l: StoreLayout): { id: string; ask: string; answer: string; at: string; for?: string }[] {
   const p = join(dirs(l).base, 'told.json');
   if (!existsSync(p)) return [];
-  interface Told { id: string; ask: string; answer: string; at: string }
+  interface Told { id: string; ask: string; answer: string; at: string; for?: string }
   // A file that cannot be read is no answer told: the run asks again rather than stopping.
   try {
     return readJson<(Partial<Told> | null)[]>(p, { kind: 'array', what: 'the answers told to this skill' }).filter((t): t is Told => typeof t?.id === 'string' && typeof t.answer === 'string');
   } catch { return []; }
 }
-export function addTold(l: StoreLayout, told: readonly { id: string; ask: string; answer: string; at: string }[]): void {
+export function addTold(l: StoreLayout, told: readonly { id: string; ask: string; answer: string; at: string; for?: string }[]): void {
   if (!told.length) return;
   const p = join(dirs(l).base, 'told.json');
   mkdirSync(dirs(l).base, { recursive: true });
   // the last 50 answers are kept: what a question's default is read from
   writeAtomic(p, JSON.stringify([...getTold(l), ...told].slice(-50), null, 1));
+}
+
+/**
+ * THE EDITOR'S READING, KEPT BY WHAT IT READ (core/direct/questions.ts). A reading drawn again on the same request,
+ * material, method and answers can word its questions differently, or find a point stated one time and missing the next:
+ * the same notes gave different questions on three runs. A reading a model gave is kept under the hash of its input, so
+ * the same input asks the same questions; anything changed in the input is read again. The last 20 are kept.
+ */
+export function getEditorReading(l: StoreLayout, key: string): unknown {
+  const p = join(dirs(l).base, 'editor-readings.json');
+  if (!existsSync(p)) return null;
+  try { return (readJson<Record<string, unknown>>(p, { what: 'the editor readings kept' }))[key] ?? null; } catch { return null; }
+}
+export function putEditorReading(l: StoreLayout, key: string, value: unknown): void {
+  const p = join(dirs(l).base, 'editor-readings.json');
+  let kept: Record<string, unknown> = {};
+  try { if (existsSync(p)) kept = readJson<Record<string, unknown>>(p, { what: 'the editor readings kept' }); } catch { kept = {}; }
+  const next = Object.entries({ ...Object.fromEntries(Object.entries(kept).filter(([k]) => k !== key)), [key]: value }).slice(-20);
+  mkdirSync(dirs(l).base, { recursive: true });
+  writeAtomic(p, JSON.stringify(Object.fromEntries(next), null, 1));
 }
 
 export function getWorkForm(l: StoreLayout): 'REPLY' | 'DOCUMENT' | null {

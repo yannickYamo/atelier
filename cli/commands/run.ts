@@ -16,7 +16,8 @@ import { renderRunCard, type RunCard } from '../../core/eval/run-card.js';
 import { planFor } from '../../core/plan/execution-plan.js';
 import type { EvalSummary } from '../../core/eval/summary.js';
 import { listEvals } from '../../core/state/eval-store.js';
-import type { StandardVersion } from '../../core/state/canonical-state.js';
+import type { StandardVersion, InferredItem } from '../../core/state/canonical-state.js';
+import { inferredLines } from '../../core/loop/inferred.js';
 
 export interface EngineRun { readonly output: string | null; readonly invocationId: string; readonly costUsd: number; readonly cut?: readonly string[]; readonly toCheck: readonly string[];
   readonly report: readonly string[]; readonly eval: EvalSummary | null;
@@ -24,7 +25,11 @@ export interface EngineRun { readonly output: string | null; readonly invocation
   readonly rules?: { readonly checked: readonly { readonly id: string; readonly statement: string; readonly materiality: string | null; readonly verdict: string; readonly detail: string }[];
     readonly unchecked: readonly { readonly id: string; readonly statement: string }[] } | null;
   /** a fix made in place (cli/fix-in-place.ts): what changed, said as the terminal shows it */
-  readonly fix?: { readonly lines: readonly string[] } }
+  readonly fix?: { readonly lines: readonly string[] };
+  /** what the run decided for the person and what it was not given, beside the work (core/loop/inferred.ts) */
+  readonly inferred?: readonly InferredItem[];
+  /** whether the delivered text was read for talk about its own making, and why not */
+  readonly ownWords?: { readonly checked: boolean; readonly why?: string } }
 
 /**
  * WHAT THE PERSON TYPED, SORTED BY WHERE IT STANDS, never by what it says: the task is the first word that is no
@@ -137,13 +142,19 @@ export async function run(): Promise<void> {
   // A FIX MADE IN PLACE SAYS WHAT CHANGED: sentences changed of total, and each span before and after.
   for (const l of result.fix?.lines ?? []) console.log(l);
   if (result.fix) console.log('');
+  // BESIDE THE WORK, NEVER IN IT: what the run decided for the person and what it was not given, with what to add (a fix in
+  // place says its own, in its lines above)
+  if (!result.fix) {
+    const beside = [...inferredLines(result.inferred ?? []), ...(result.ownWords && !result.ownWords.checked && result.ownWords.why ? [`Not read for sentences about the piece's own making: ${result.ownWords.why}.`] : [])];
+    if (beside.length) console.log(`${beside.join('\n')}\n`);
+  }
   // THE EVALUATION IS PART OF WHAT A RUN RETURNS, not a report behind a flag: every rule, as it fared.
   const card = cardFor(result);
   const without = result.eval ? `  A structured output, held by its contract: ${result.eval.result.conformant ? 'it conforms' : `it does not conform (${result.eval.result.reasons.join('; ')})`}.` : '  This run was not evaluated: nothing is known about whether it holds your rules. See why: add --report';
   for (const l of card ? renderRunCard(card, process.stdout.columns || 100) : ['── Evaluation ──', without]) console.log(l);
   // WHAT WAS DONE WITH IT (core/eval/consequence.ts), and where it waits when it went to a person.
   const delivery = result.eval?.record?.delivery;
-  if (delivery) console.log(`\n${deliveryLine(delivery)}${delivery.decision === 'PERSON' ? `\nSent to a person: it waits in atelier report --pending; rule on it with atelier rate ${result.invocationId} yes|no [--rule <id>].` : ''}`);
+  if (delivery) console.log(`\n${deliveryLine(delivery, result.eval?.record?.state)}${delivery.decision === 'PERSON' ? `\nSent to a person: it waits in atelier report --pending; rule on it with atelier rate ${result.invocationId} yes|no [--rule <id>].` : ''}`);
   if (typed.report) console.log(`\n${result.report.join('\n')}`);
   process.exitCode = engine.code !== 0 ? engine.code : exitFor(result.eval);
 }

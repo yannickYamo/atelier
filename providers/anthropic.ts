@@ -66,6 +66,8 @@ export function accountRefusal(status: number | undefined, body: string, request
 const noForcedChoice = new Set<string>();
 /** Models that rejected a `temperature` setting: asked once, then called without one. */
 const noTemperature = new Set<string>();
+/** Models that refused `output_config.effort`: a prose call to them is sent without it, once known. */
+const noEffort = new Set<string>();
 /**
  * Endpoints that rejected `thinking: disabled`: asked once, then called without it. Every call forces a tool call,
  * which extended thinking does not take; a gateway that turns thinking on unless told otherwise answered with
@@ -97,6 +99,12 @@ export const refusesThinking = (e: unknown): boolean => {
 };
 
 /** Whether an error is the API refusing a temperature setting for this model (a 400 that names it). */
+/** Whether an error is the API refusing the effort setting for this model: a 400 that names `effort` or `output_config`. */
+export const refusesEffort = (e: unknown): boolean => {
+  const f = statusAndBody(e);
+  return f?.status === 400 && /effort|output_config/i.test(f.body);
+};
+
 export const refusesTemperature = (e: unknown): boolean => {
   const f = statusAndBody(e);
   return f?.status === 400 && /temperature/i.test(f.body);
@@ -152,6 +160,7 @@ export class AnthropicInferenceClient implements InferenceClient {
   }
 
   async complete(req: InferenceRequest): Promise<InferenceResult> {
+    if (req.plain) return this.completePlain(req, req.plain);
     let res: Anthropic.Message;
     // What THIS call was sent with, read before it leaves. Calls made side by side (the taste reader's, a claim
     // reader's) are all refused for the same reason at once: the first to come back records it, and the others must
@@ -188,6 +197,46 @@ export class AnthropicInferenceClient implements InferenceClient {
     }
     // what THIS call was sent with, not what the shared set says on return
     return { ...this.read(req, res), thinkingSent: withThinking ? 'disabled' : null };
+  }
+
+  /**
+   * ONE PIECE AS PROSE (`req.plain`): no tool, no thinking field, the effort asked for, streamed so a long piece is never
+   * cut by a request timeout. The reply's text is the piece. A model that takes no temperature is remembered as above.
+   */
+  private async completePlain(req: InferenceRequest, plain: NonNullable<InferenceRequest['plain']>): Promise<InferenceResult> {
+    const temperature = noTemperature.has(this.modelId) ? undefined : req.temperature ?? this.defaultTemperature;
+    let res: Anthropic.Message;
+    try {
+      res = await this.client.messages.stream({
+        model: this.modelId,
+        max_tokens: req.maxTokens,
+        ...(temperature === undefined ? {} : { temperature }),
+        ...(plain.effort && !noEffort.has(this.modelId) ? { output_config: { effort: plain.effort } } : {}),
+        system: [
+          ...(req.stableBlock ? [{ type: 'text' as const, text: req.stableBlock, cache_control: { type: 'ephemeral' as const } }] : []),
+          ...(req.variableBlock ? [{ type: 'text' as const, text: req.variableBlock }] : []),
+        ],
+        messages: [{ role: 'user', content: req.userMessage }],
+      }, { timeout: inferenceTimeoutMs(req.maxTokens) }).finalMessage();
+    } catch (e) {
+      if (refusesTemperature(e) && temperature !== undefined) { noTemperature.add(this.modelId); return this.completePlain(req, plain); }
+      // A model that takes no effort setting: remembered, and the piece asked for again without it.
+      if (refusesEffort(e) && plain.effort && !noEffort.has(this.modelId)) { noEffort.add(this.modelId); return this.completePlain(req, plain); }
+      throw plainFailure(e, this.modelId) ?? e;
+    }
+    const u = res.usage as { input_tokens: number; output_tokens: number; cache_read_input_tokens?: number; cache_creation_input_tokens?: number };
+    const termination = anthropicTermination(res.stop_reason);
+    if (termination.kind !== 'COMPLETE') {
+      throw new GenerationIncomplete(termination, termination.kind === 'MAX_TOKENS'
+        ? `the model stopped at the ${req.maxTokens}-token limit before finishing the piece. Nothing was recorded.`
+        : `${this.modelId} stopped for "${termination.kind === 'OTHER' ? termination.providerValue : termination.kind}" before finishing the piece (call: ${req.toolName}). Nothing was recorded.`, u.output_tokens);
+    }
+    const text = res.content.filter((c): c is Anthropic.TextBlock => c.type === 'text').map((c) => c.text).join('');
+    const usage = { inputTokens: u.input_tokens, cacheReadTokens: u.cache_read_input_tokens ?? 0, cacheWriteTokens: u.cache_creation_input_tokens ?? 0, outputTokens: u.output_tokens };
+    const cost = costOf(this.pricing, usage, false);
+    const thinkingBlocks = res.content.filter((c) => c.type === 'thinking' || c.type === 'redacted_thinking').length;
+    return { json: { piece: text }, modelId: res.model, ...usage, cost, costUsd: budgetUsd(cost), logprobs: null, termination,
+      temperatureSent: temperature ?? null, thinkingBlocks, thinkingSent: null };
   }
 
   /** One request. `forced`: the tool call is required; otherwise it is asked for in words. */

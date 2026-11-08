@@ -129,7 +129,11 @@ const LINKED = /\]\(https?:|https?:\/\//;
 const STOP = new Set(['the', 'and', 'that', 'with', 'this', 'from', 'were', 'was', 'have', 'had', 'into', 'about', 'their', 'there', 'then', 'than', 'when', 'what', 'which', 'would', 'could', 'because', 'years', 'ago', 'last', 'later', 'months', 'weeks']);
 
 /** An unsupported claim: a first-person or second-hand story, a figure presented as a finding, or an anonymous quotation. */
-export interface Claim extends Span { readonly kind: 'EXPERIENCE' | 'FIGURE' | 'SOURCE' }
+export interface Claim extends Span {
+  readonly kind: 'EXPERIENCE' | 'FIGURE' | 'SOURCE';
+  /** the words of the sentence a reader found untraced, where it named them: the sentence may hold more that was given */
+  readonly specific?: string;
+}
 
 const contentWords = (s: string): string[] => wordsOf(s).map((w) => w.toLowerCase()).filter((w) => w.length >= 4 && !STOP.has(w));
 
@@ -208,6 +212,28 @@ export function wordCountClaims(text: string, material: string): Claim[] {
     if (counts.length && !counts.every((n) => matNumbers.has(n))) out.push({ ...s, kind: 'FIGURE', why: WORD_COUNT_WHY });
   }
   return out;
+}
+
+/**
+ * A MOMENT IN TIME, LISTED AND NEVER CUT. "This afternoon", "last week", "two months ago": a piece that dates what happened
+ * to a moment the notes never gave invents when it happened, and no count reads it (a span of time is not a figure,
+ * `spelledCounts`). FORM only: a moment said relative to the writing (this morning, last night, yesterday, earlier
+ * today, last week or a weekday, N units ago), outside quotation marks. Supported where the request or the material says
+ * the same moment, in the same words.
+ */
+export const TIME_ANCHOR_WHY = 'a moment in time that is not in your material or your request: listed for you to check, never cut; if it is yours, add it to your material (atelier material)';
+const DAYPART = '(?:morning|afternoon|evening|night)';
+const PERIOD = '(?:night|week|weekend|month|quarter|year|spring|summer|autumn|fall|winter|monday|tuesday|wednesday|thursday|friday|saturday|sunday)';
+const AMOUNT = '(?:a|an|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|a\\s+few|a\\s+couple\\s+of|several|\\d+)';
+const TIME_ANCHOR = new RegExp(`\\b(?:(?:this|yesterday|tomorrow)\\s+${DAYPART}|(?:last|this\\s+past)\\s+${PERIOD}|yesterday|earlier\\s+today|${AMOUNT}\\s+(?:minutes?|hours?|days?|weeks?|months?|years?)\\s+ago)\\b`, 'gi');
+/** The moments in time in `s`, lower-cased, outside quotation marks. */
+export function timeAnchors(s: string): string[] {
+  const quoted = [...s.matchAll(/["“][^"”]*["”]/g)].map((m) => [m.index, m.index + m[0].length] as const);
+  return [...s.matchAll(TIME_ANCHOR)].filter((m) => !quoted.some(([a, b]) => m.index > a && m.index < b)).map((m) => m[0].toLowerCase().replace(/\s+/g, ' '));
+}
+export function timeAnchorClaims(text: string, material: string): Claim[] {
+  const given = material.toLowerCase().replace(/\s+/g, ' ');
+  return claimUnitsOf(text).flatMap((u) => (timeAnchors(u.text).some((a) => !given.includes(a)) ? [{ ...u, kind: 'FIGURE' as const, why: TIME_ANCHOR_WHY }] : []));
 }
 
 /**

@@ -93,7 +93,7 @@ describe('atelier new on ten pieces by five unnamed voices, with a model', () =>
   let out = ''; let inf: Inference;
   const id = (statement: string): string => inf.weights.find((w) => w.statement === statement)?.id ?? `(no rule "${statement}")`;
   beforeAll(() => {
-    out = viaModel(data, proj, 'new', folder(proj, FIVE_VOICES), PURPOSE, '--name', 'mix');
+    out = viaModel(data, proj, 'new', folder(proj, FIVE_VOICES), PURPOSE, '--name', 'mix', '--voices');
     inf = JSON.parse(readFileSync(runsFile(data, 'composite-inference.json'), 'utf8')) as Inference;
     if (process.env.INFER_DUMP) writeFileSync(process.env.INFER_DUMP, out);
   }, 300_000);
@@ -174,7 +174,7 @@ describe('atelier new on ten pieces by five unnamed voices, with a model', () =>
 
   it('a sentence of liking in the request weighs the rules it names up, by one and a half', () => {
     const d2 = mkdtempSync(join(tmpdir(), 'atelier-infer-data-')); const p2 = mkdtempSync(join(tmpdir(), 'atelier-infer-proj-'));
-    const out2 = viaModel(d2, p2, 'new', folder(p2, FIVE_VOICES), `${PURPOSE}. I love the imagery.`, '--name', 'mix');
+    const out2 = viaModel(d2, p2, 'new', folder(p2, FIVE_VOICES), `${PURPOSE}. I love the imagery.`, '--name', 'mix', '--voices');
     expect(out2).not.toMatch(QUESTIONS);
     const inf2 = JSON.parse(readFileSync(runsFile(d2, 'composite-inference.json'), 'utf8')) as Inference;
     const before = inf.weights.find((w) => w.statement === TALE_FIGURE); const after = inf2.weights.find((w) => w.statement === TALE_FIGURE);
@@ -182,6 +182,15 @@ describe('atelier new on ten pieces by five unnamed voices, with a model', () =>
     expect(after?.weight).toBeCloseTo((before?.weight ?? 0) * 1.5, 3);
     // nothing else it does not name moves
     expect(inf2.weights.find((w) => w.statement === ASK_OPEN)?.weight).toBe(inf.weights.find((w) => w.statement === ASK_OPEN)?.weight);
+  }, 300_000);
+
+  it('with a model set up too, one folder is one voice unless asked: no blend is built, and --voices is named', () => {
+    const d3 = mkdtempSync(join(tmpdir(), 'atelier-infer-data-')); const p3 = mkdtempSync(join(tmpdir(), 'atelier-infer-proj-'));
+    const one = viaModel(d3, p3, 'new', folder(p3, FIVE_VOICES), PURPOSE, '--name', 'one');
+    expect(one).not.toMatch(/^EXIT/);
+    expect(one).not.toMatch(/Combined 5 voices/);
+    expect(one).toMatch(/--voices/);
+    expect(existsSync(runsFile(d3, 'composite-inference.json'))).toBe(false);
   }, 300_000);
 });
 

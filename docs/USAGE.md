@@ -51,9 +51,10 @@ material, the numbers must be there, and the specific must really be where the r
 doesn't trace meets the skill's latitude (below): on a strict skill a figure, date or citation not in your material
 stops the work, on a grounded one it is flagged for your review, on a creative one it is listed for you. Nothing is
 deleted unless you choose it (`atelier material --skill <name> --cut`), and then only where a reader qualified on
-that kind of work found it. With no material bound, a document's invented story, figure or source is replaced by a slot
-for your own (`--no-placeholders` lists it instead), a reply lists every specific as unverifiable, and a check that looks
-things up in your material says it was not checked.
+that kind of work found it. With no material bound, the piece is written whole from what is given and never leaves a
+slot for you to fill: an invented story, figure or source stays in it and is listed beside it for you to check, and a name of your own world (a customer,
+a colleague) that nothing you gave holds is written out of it (`--placeholders` asks for marked slots instead). A reply
+lists every specific as unverifiable, and a check that looks things up in your material says it was not checked.
 
 ### How strictly the work is held
 
@@ -146,7 +147,7 @@ never what the request, material, method or examples settle, at most three, each
 default, and none when the request carries it. The angle and news of your own work are asked wherever the request, the
 material and what you said before do not state them in so many words: a reaction post with no stated angle asks for it. At a terminal you answer with a letter, your own words, or "just write
 it". Elsewhere (`--json`, a pipe, the MCP server, an agent) nothing waits: the questions come back as
-`questions: [{id, ask, options, default}]`, the work is written with the defaults (served to the writer as assumptions, never as your answers), said in one line, and
+`questions: [{id, ask, options, default}]`, the work is written with the defaults (a position such as the angle as decided for this piece; a fact about you, such as news of your work, never served), said in one line, and
 `--answers "angle=b,naming=only the product, never its staff"` answers them on the next call (an answer may hold
 commas; a kind not asked this run, `naming=...` say, still applies and replaces what you said before). Your answers are
 the next run's defaults ("last time you said …"); what may be named, once said, is not asked again. Then the run makes a plan: the angle, the
@@ -374,7 +375,52 @@ atelier verify --skill posts draft.md --repair           # guard any text
 atelier material --skill posts notes.md                  # your real stories and figures
 atelier fix "the close was a summary, not a turn"        # correct it in your words
 atelier tend --skill posts --auto                        # look after it, from cron
+atelier keep --skill posts published.md                   # keep the piece you published: the next runs write from it
 ```
+
+### How a run is written
+
+A skill built from your pieces writes from your pieces. The writer is shown your pieces of the kind asked for, whole,
+then the material and the task, and it writes the piece. Then it reads its draft as you would, and fixes only what you would not write and any figure, name or story not in what you gave; the rest stays as it was. Which pieces it is shown
+is a small reading of the request against a list of them by title, opening and the request each answered, so a comparison
+is written from your comparisons and an essay from your essays. With no model to read, the pieces that share the most rare
+words with the request are used, and the run says so. The draft is prose at high effort (`--effort low|medium|high|xhigh|max`).
+
+Your method, where the skill has one, is shown to the writer whole and in your words, and the review holds the draft to it.
+
+Before the draft, an editor's three questions are read: the one idea the reader should leave with, what the reader lives
+with that the piece speaks to, and what shows it (a case, a figure, something the reader can try). Each is asked only
+where your request, your material and your method do not state it, quoted. The same request and notes ask the same
+questions every time. At a terminal
+they are asked (a letter, your own words, enter for the suggested answer, "just write it" for none). Everywhere else they
+come back with their options (`--json`: `questions`), and the piece is written without them: nothing you did not answer
+reaches the writer. Answer next time with `--answers "idea=b,proof=<your words>"`. An answer belongs to the request it
+was given for: run that request again and it reaches the writer without being asked; another request is asked afresh.
+`--no-questions` reads nothing.
+
+Under the piece, each of your rules is said under what was found: held, not held, found by a check not yet qualified on
+your examples (it blocks nothing), and the steps no check reads, which are yours to judge.
+
+A skill built from one example writes from that example. A request that holds the run strict ("use only these figures")
+stays on this path: the claim check is held at that level, so a figure nothing you gave holds has its sentence rewritten
+and, if it stays, blocks the piece.
+
+A rule you stated and required ("No em dashes.") is shown to the writer in your words. A sentence of the reviewed piece
+that still breaks one is rewritten, that sentence only, as `atelier verify --repair` does. Everything else the checks find
+(a figure or a name not in what you gave, a habit read off your pieces) is listed beside the piece and changes nothing. What
+the run's record decides is done with the work, as on every run: a blocked piece is headed so and exits 1.
+
+`atelier keep` is how a skill learns from use. Keep a run's piece as delivered (`atelier keep --skill posts`), or as you
+edited and published it (`atelier keep --skill posts <run> published.md`). The kept piece joins the pieces the next requests
+are written from, ahead of the ones the skill was built from, and each sentence you changed or cut is shown to the next
+runs' self-review as your correction. `--list` shows what is kept and `--remove <id>` takes one out. A run nobody kept
+teaches the skill nothing.
+
+Some runs take the compiled path, which serves the rules, a plan and your method steps and repairs against them: an output
+contract, strict delivery, a strict skill, a skill that answers, a note `atelier evolve` adopted, a deep run, a short piece
+(`--limit`, a short `--class`), a fix written as a whole new piece, a `--candidate` run, and any of its
+own options (`--moves`, `--drafts`, `--sections`, `--fidelity`, `--taste`, `--placeholders` and the rest).
+`--pipeline legacy` asks for it, and the run's report says why a run went that way.
 
 **Build with the model you will run it on.** A skill is built against the model you configure: it asks that
 model for drafts on your topics and learns where its habits differ from yours. Claude, GPT, Grok through an
@@ -606,6 +652,16 @@ run is exactly what it was.
 `--json` keeps the piece in `output`, and adds a `deep` object: the facts and where they came from, the questions
 asked, the direction chosen and why, what the story and review steps changed, which draft won and why, and what the
 extra steps cost.
+
+### What is missing goes beside the piece, never in it
+
+A run never refuses for what it was not given, and the piece never talks about its own making: no "the brief doesn't
+say", no "I won't invent a figure". What the request, your material and your pieces settle, the piece uses; a decision
+nobody made is taken from your pieces and the request; a point with no figure given is argued from what is given. The
+last step of every run reads the finished piece for any sentence about its notes or its gaps and writes it again to
+speak to the reader, or drops it. Everything the run decided for you, each specific it was not given and each sentence
+it wrote again is listed under the work ("Inferred for this piece") and in `--json` as `inferred`, each with what to
+add (`--answers`, `--with`) to change it.
 
 ### Voice, and other registers (opt-in)
 
