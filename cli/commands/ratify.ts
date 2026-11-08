@@ -445,6 +445,11 @@ export function addOne(): void {
   }
 }
 
+/** The reason a close records: the one given; else, for a close a build command makes over a standard, that command. */
+export function supersessionReason(supersedes: string | null, given: string | null, command: string | undefined): string | null {
+  return given ?? (supersedes && command && command !== 'ratify-close' ? `built again with atelier ${command}` : null);
+}
+
 export function ratifyClose(): void {
   let s = loadSession();
   // NO EVIDENCE IS A LEGITIMATE STATE, NOT A MISSING PRECONDITION.
@@ -499,7 +504,10 @@ export function ratifyClose(): void {
       + '\n  Add a rule (atelier add) or change one before closing again; to build it, atelier build --name <name>.');
   }
   const supersedes = flag('--supersedes') ?? (prior && prior !== hash ? prior : null);
-  const reason = flag('--reason') ?? null;
+  // A BUILD THE PERSON RAN AGAIN SUPERSEDES WHAT IT BUILT BEFORE, AND ITS REASON IS THAT COMMAND. `atelier new` run again
+  // stopped here for a reason, and the skill kept its old checks, unsaid, until two more commands. A close a build command
+  // makes records the command as its reason, unless `--reason` gives another; only a close typed by hand is asked.
+  const reason = supersessionReason(supersedes, flag('--reason') ?? null, process.argv[2]);
   if (supersedes && !reason) {
     die(`this closes a standard that supersedes ${supersedes}. A supersession needs its reason recorded:`
       + '\n  atelier ratify-close --reason "<why the standard changed>"'

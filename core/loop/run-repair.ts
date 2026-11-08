@@ -14,7 +14,7 @@ import { acts, isOmission, verifyText, type VerifyReport, type RuleCheck } from 
 import { runsToRepair } from './material-points.js';
 import { REPAIR_RUN_WORDS } from '../observers/copied-runs.js';
 import { planFor } from '../plan/execution-plan.js';
-import { unsourcedClaims, wordCountClaims, claimUnitsOf, statedFigureClaims, bracketCitations, type Claim } from './claims.js';
+import { unsourcedClaims, wordCountClaims, timeAnchorClaims, claimUnitsOf, statedFigureClaims, bracketCitations, type Claim } from './claims.js';
 import { derivedFromKnown, derivedArithmetic } from './derived.js';
 import { answerWorkClaims, answerSentences, judgedOnly, judgedSituations, agreedWorkClaims } from './answer-claims.js';
 import { assertMayCut, type CutAuthority } from './cut-authority.js';
@@ -347,7 +347,9 @@ export function checkDraft(skill: string, v: StandardVersion, text: string, opts
   // and never fail the draft. A qualified reader's reading carries none: it types such counts itself.
   // Held to the request and its material only: a rule is an instruction, so "5 to 6 sentences" in the method never made
   // "five or six teams" in the piece a count the person gave.
-  const words = [...(gating?.listed ?? []), ...(!opts.claimSensor || opts.listWordCounts ? wordCountClaims(text, opts.evidence ?? opts.material ?? '') : [])]
+  // A moment in time the notes never gave ("this afternoon", "two months ago") is listed with them (./claims.ts).
+  const given = opts.evidence ?? opts.material ?? '';
+  const words = [...(gating?.listed ?? []), ...(!opts.claimSensor || opts.listWordCounts ? [...wordCountClaims(text, given), ...timeAnchorClaims(text, given)] : [])]
     .filter((w, i, all) => all.findIndex((x) => x.start === w.start) === i)
     .filter((w) => !toCut.some((c) => c.start === w.start) && !toList.some((c) => c.start === w.start));
   // A FIGURE STATED AS FACT IS LISTED THERE TOO, finding word or not (./claims.ts, statedFigureClaims): where nobody

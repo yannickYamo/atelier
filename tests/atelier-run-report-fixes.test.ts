@@ -12,10 +12,12 @@ import { measure as observe, validateMeasurement } from '../core/observers/regis
 import { parseMeasureSpec } from '../core/measurement/spec.js';
 import { paragraphsIn } from '../core/observers/obligations.js';
 import { spelledCounts } from '../core/loop/numbers.js';
+import { timeAnchors } from '../core/loop/claims.js';
 import { checkDraft, CLAIMS_TO_CHECK } from '../core/loop/run-repair.js';
 import { distanceOf } from '../core/loop/repair.js';
 import type { ClaimSensor } from '../core/loop/claim-extract.js';
 import { toCheckOf, rulesLines, keptReading } from '../cli/direct.js';
+import { supersessionReason } from '../cli/commands/ratify.js';
 import type { Entry } from '../core/eval/record.js';
 
 const para = (n: number, tag: string): string => Array.from({ length: n }, (_, i) => `${tag} paragraph ${i + 1} says one thing. It says it plainly.`).join('\n\n');
@@ -144,5 +146,44 @@ describe('4. a kept editor reading is served only whole', () => {
     expect(keptReading({ value: { decisions: [], questions: [{ ...q, options: undefined }] }, by: 'model' })).toBeNull();
     expect(keptReading({ value: { questions: [q] }, by: 'model' })).toBeNull();
     expect(keptReading(null)).toBeNull();
+  });
+});
+
+describe('5. a skill built again is one command', () => {
+  it('a close a build makes over a standard records the build as its reason; one typed by hand is asked', () => {
+    expect(supersessionReason('old', null, 'new')).toBe('built again with atelier new');
+    expect(supersessionReason('old', 'my reason', 'new')).toBe('my reason');
+    expect(supersessionReason('old', null, 'ratify-close')).toBeNull();
+    expect(supersessionReason(null, null, 'new')).toBeNull();
+  });
+});
+
+describe('6. the three phrases a replay of stored drafts found unlisted', () => {
+  const v = { standardVersionHash: 'h', requirements: [] } as never;
+  const listed = (text: string, o: Record<string, unknown> = {}): string[] => checkDraft('s', v, text, { material: 'notes about the tool', evidence: 'notes about the tool', ...o })
+    .checked.filter((c) => c.requirementId === CLAIMS_TO_CHECK).flatMap((c) => c.result.spans.map((sp) => sp.text));
+  const A = 'Start from the five or six pieces you are proud of.';
+  const B = 'I read across fifty pieces before I wrote a word.';
+  const C = 'I rewrote the opening this afternoon.';
+  it('all three are listed, in the pattern check and beside a model reader', () => {
+    expect(listed(`${A} ${B} ${C}`)).toEqual([A, B, C]);
+    const sensor: ClaimSensor = { instrument: 'reader', read: () => Promise.resolve(), reading: () => ({ claims: [], publicFacts: [], instrument: 'reader' }),
+      notes: [], version: 'v', qualified: true, gate: 'reader', degraded: false, spentUsd: 0 };
+    expect(listed(`${A} ${B} ${C}`, { claimSensor: sensor, listWordCounts: true })).toEqual([A, B, C]);
+  });
+  it('a moment or a count the notes give is theirs', () => {
+    expect(listed(C, { material: 'I rewrote the opening this afternoon.', evidence: 'I rewrote the opening this afternoon.' })).toEqual([]);
+    expect(listed(B, { material: 'I read 50 pieces.', evidence: 'I read 50 pieces.' })).toEqual([]);
+  });
+  it('a piece\'s own structure, a span of time and hyperbole stay unlisted', () => {
+    expect(spelledCounts('Here are three reasons it works.')).toEqual([]);
+    expect(spelledCounts('Ten tips follow.')).toEqual([]);
+    expect(spelledCounts('It takes three to four weeks.')).toEqual([]);
+    expect(spelledCounts('A hundred small decisions make a product.')).toEqual([]);
+    expect(timeAnchors('This week we look at the queue. Today teams plan in it.')).toEqual([]);
+  });
+  it('the moments read', () => {
+    expect(timeAnchors('Last week, and two months ago, and yesterday morning, and a few days ago; not "this afternoon" quoted.'))
+      .toEqual(['last week', 'two months ago', 'yesterday morning', 'a few days ago']);
   });
 });

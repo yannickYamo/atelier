@@ -108,7 +108,7 @@ export const numbersIn = (s: string): string[] => {
  * WHAT PROSE COUNTS WITHOUT ASSERTING A FIGURE is left alone, because the pattern check cannot tell it from
  * one and a review found it in true sentences: a span of time or an age ("two weeks", "ten minutes later",
  * "three years old"), the writer's own family ("I have two kids"), the structure of the piece itself ("three
- * reasons", "two things", "a hundred small decisions") and the "a hundred"/"a thousand" of hyperbole, which
+ * reasons", "two things", ten at most and never a range) and the "a hundred"/"a thousand" of hyperbole, which
  * counts only when the thing it counts is one a figure measures (people, customers, dollars, percent...). An
  * "N-plus" form is always a count. "A few weeks" has no number and is never a figure. Returns each count's
  * value, in order.
@@ -139,6 +139,8 @@ export function spelledCounts(s: string): string[] {
     const range = nextP !== undefined && RANGE.test(s.slice(p.index + p.length, nextP.index));
     if (/^\d/.test(phrase) || quoted.some(([a, b]) => p.index > a && p.index < b)) return;
     if (phrase === 'one') { if (range) ranged.add(k); return; }
+    // "Five or six teams", "the five or six pieces": a range is a count when its second number is, and is said whole.
+    if (range) { ranged.add(k); return; }
     const before = /([A-Za-z]+)[\s-]+$/.exec(s.slice(0, p.index));
     if (before && ONE_AFTER_NOT_A_FIGURE.has(before[1].toLowerCase())) return;
     const after = s.slice(p.index + p.length);
@@ -156,13 +158,14 @@ export function spelledCounts(s: string): string[] {
     // "two of the": the determiner is consumed only when a word follows it; "two of the" at the end counts nothing.
     const ofDet = m[1] !== undefined && OF_DETERMINERS.test(m[1].toLowerCase());
     const words = (m[1] !== undefined && !ofDet ? [m[1], m[2]] : [m[2], m[3]]).filter((w): w is string => w !== undefined).map((w) => w.toLowerCase());
-    // "Five or six teams", "three to four weeks": a range is a count when its second number is, and is said whole.
-    if (range) { ranged.add(k); return; }
     if (ONE_BEFORE_NOT_A_FIGURE.has(words[0])) return;
     // "Seven figures", "six figures": the size of a sum, said as an idiom.
     if (/^figures?$/.test(words[0])) return;
     if (!plus) {
-      if (words.some((w) => TIME_OR_AGE.test(w) || STRUCTURE.test(w))) return;
+      // A piece's own structure is a handful said once ("three reasons"): never an estimate ("five or six pieces")
+      // and never more than ten of them ("fifty pieces").
+      const own = !ranged.has(k - 1) && Number(p.value) <= 10;
+      if (words.some((w) => TIME_OR_AGE.test(w) || (own && STRUCTURE.test(w)))) return;
       // Family is family whoever's it is: "I have two kids", "their two kids".
       if (words.some((w) => FAMILY.test(w)) && (FIRST_PERSON.test(s) || (before && POSSESSIVE.test(before[1])))) return;
       if (phrase.startsWith('a ') && Number(p.value) >= 100 && !words.some((w) => MEASURED.test(w))) return;

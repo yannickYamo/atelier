@@ -215,6 +215,28 @@ export function wordCountClaims(text: string, material: string): Claim[] {
 }
 
 /**
+ * A MOMENT IN TIME, LISTED AND NEVER CUT. "This afternoon", "last week", "two months ago": a piece that dates what happened
+ * to a moment the notes never gave invents when it happened, and no count reads it (a span of time is not a figure,
+ * `spelledCounts`). FORM only: a moment said relative to the writing (this morning, last night, yesterday, earlier
+ * today, last week or a weekday, N units ago), outside quotation marks. Supported where the request or the material says
+ * the same moment, in the same words.
+ */
+export const TIME_ANCHOR_WHY = 'a moment in time that is not in your material or your request: listed for you to check, never cut; if it is yours, add it to your material (atelier material)';
+const DAYPART = '(?:morning|afternoon|evening|night)';
+const PERIOD = '(?:night|week|weekend|month|quarter|year|spring|summer|autumn|fall|winter|monday|tuesday|wednesday|thursday|friday|saturday|sunday)';
+const AMOUNT = '(?:a|an|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|a\\s+few|a\\s+couple\\s+of|several|\\d+)';
+const TIME_ANCHOR = new RegExp(`\\b(?:(?:this|yesterday|tomorrow)\\s+${DAYPART}|(?:last|this\\s+past)\\s+${PERIOD}|yesterday|earlier\\s+today|${AMOUNT}\\s+(?:minutes?|hours?|days?|weeks?|months?|years?)\\s+ago)\\b`, 'gi');
+/** The moments in time in `s`, lower-cased, outside quotation marks. */
+export function timeAnchors(s: string): string[] {
+  const quoted = [...s.matchAll(/["“][^"”]*["”]/g)].map((m) => [m.index, m.index + m[0].length] as const);
+  return [...s.matchAll(TIME_ANCHOR)].filter((m) => !quoted.some(([a, b]) => m.index > a && m.index < b)).map((m) => m[0].toLowerCase().replace(/\s+/g, ' '));
+}
+export function timeAnchorClaims(text: string, material: string): Claim[] {
+  const given = material.toLowerCase().replace(/\s+/g, ' ');
+  return claimUnitsOf(text).flatMap((u) => (timeAnchors(u.text).some((a) => !given.includes(a)) ? [{ ...u, kind: 'FIGURE' as const, why: TIME_ANCHOR_WHY }] : []));
+}
+
+/**
  * A FIGURE STATED AS FACT, LISTED AND NEVER CUT. In a code review over a diff, "One risk: 95% of callers hit the retry
  * path on line 40" is the sentence a reader most needs to check, and `unsourcedClaims` passed it: it reads a figure
  * only beside a finding word. Where the claim check was not measured on the kind of work (./claim-extract.ts,
