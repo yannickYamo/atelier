@@ -22,7 +22,7 @@ import { METHOD_UNITS, unitFloor, describeUnit, type DecisionUnit } from '../../
 import { STEP_CHECK, STEP_CHECK_REPAIR, planOf, stepCheckInput, heldByPolarity, floorFor, ledgerOf, type StepPlan, type StepToCheck, type StepCheck, type ExampleCase } from '../../core/method/step-check.js';
 import { measure } from '../../core/observers/registry.js';
 import { STEP_MUTANTS, mutate, qualifyCheck, describeQualification } from '../../core/method/mutants.js';
-import { examplesKey, frozenFor, toFreeze, frozenKinds } from '../../core/method/freeze.js';
+import { examplesKey, frozenFor, toFreeze, frozenKinds, READER_KEY } from '../../core/method/freeze.js';
 import { latestRatings } from '../../core/state/eval-store.js';
 import { countWords } from '../../core/eval/size.js';
 import { skillNameFrom } from '../../renderers/agent-skill/render.js';
@@ -339,6 +339,8 @@ export async function method(): Promise<void> {
   // (a project copied with its store takes a copy of the run that built the skill: cli/runtime.ts, `adoptMovedRun`); its
   // decisions and their standing are the previous version's, and the steps are decided again below, every one of them.
   if (again) { archiveSession(); s = { ...loadSession(), proposals: [], decided: [], qualifications: {} }; }
+  // The run set aside held the link to the standard this one replaces: kept, so the new version says what it supersedes.
+  if (again && stored && flag('--supersedes') === undefined) argv.push('--supersedes', stored);
 
   // ── THE OWNER'S STEPS AS THEIR OWN, WHAT THE EXAMPLE SHOWS AS APPROVED AND SHOWN ──────
   // WHAT EACH STEP IS, READ ONCE: a prohibition or a thing to do. The reader sees every step in one call; without a
@@ -411,7 +413,7 @@ export async function method(): Promise<void> {
   await settleLatitude({ purpose, method: notePath === null ? null : note, examples: cases.map((c) => c.reference) });
   // THE LEDGER OF THE CHECKS, for the receipt's method stage (core/method/step-check.ts, `ledgerOf`): how many steps are
   // checked, which written check failed and why, what was settled; kept by the note's hash, so a plain rebuild says the same.
-  if (checksPlan) store.putStepLedger(LN, { methodHash: sha(note), ...ledgerOf(planSteps, checksPlan, conflicts) });
+  if (checksPlan) store.putStepLedger(LN, { methodHash: sha(note), reader: READER_KEY, ...ledgerOf(planSteps, checksPlan, conflicts) });
   const said: string[] = []; const log = console.log;
   if (!whole) console.log = (...a: unknown[]) => { said.push(a.map(String).join(' ')); };
   try { ratifyClose(); await build(name); } catch (e) { console.log = log; for (const l of said) console.log(l); throw e; } finally { console.log = log; }

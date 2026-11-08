@@ -23,6 +23,7 @@ import { sha } from '../core/state/receipt.js';
 import { readContext } from '../core/inference/reading.js';
 import { spend, processSpentUsd, type Budget, type InferenceClient } from '../core/inference/client.js';
 import { resolveProvenance } from '../core/fidelity/provenance.js';
+import type { ImplementationSettings } from '../core/fidelity/types.js';
 import { inferredLines } from '../core/loop/inferred.js';
 import type { RuntimeBinding } from '../core/runtime/binding.js';
 import type { SkillVersion, StandardVersion, DirectRecord, RepairRecord, InvocationSettings, LatitudeLevel, InferredItem } from '../core/state/canonical-state.js';
@@ -85,11 +86,18 @@ export function directWhyNot(x: { voice: Voice | null; std: StandardVersion | nu
   /** a note `atelier evolve` adopted: only the compiled path serves it, or says it no longer applies */
   carried?: boolean;
   /** a short piece from a long-form standard (`--limit`, a short `--class`): its limit and bands are the compiled path's */
-  shortForm?: boolean }): string | null {
+  shortForm?: boolean;
+  /** the skill's release settings (`atelier fidelity --set`): what the owner turned on that only the compiled path runs */
+  settings?: Partial<ImplementationSettings> | null }): string | null {
   const asked = flag('--pipeline');
   if (asked !== undefined && asked !== 'direct' && asked !== 'legacy') throw new Error(`--pipeline takes direct or legacy; got "${asked}".`);
   if (asked === 'legacy') return 'asked for the compiled path (--pipeline legacy)';
   if (argv.includes('--deep')) return 'a deep run takes the compiled path';
+  // A SETTING THE OWNER TURNED ON FOR THE SKILL IS ASKED AS THE FLAG IS. Read only from the typed flag, a skill set to
+  // mode=deep ran plain on every run, said nowhere. Only what is off until turned on routes: the release's default
+  // drafts are the compiled path's own, not a choice.
+  const set = releaseOnly(x.settings ?? null);
+  if (set) return `the skill's release sets ${set}, which the compiled path runs`;
   if (x.contract) return 'the skill has an output contract';
   if (!x.std) return 'the skill has no standard';
   const forced = asked === 'direct';
@@ -104,6 +112,14 @@ export function directWhyNot(x: { voice: Voice | null; std: StandardVersion | nu
   if (!forced && x.voice?.form === 'REPLY') return 'a skill that answers takes the compiled path';
   if (builtPieces(x.voice, x.exemplar ?? null).length < 1) return 'the skill holds none of the author\'s pieces';
   return null;
+}
+
+/** The first setting of a release that is off until the owner turns it on and that only the compiled path runs, as `key=value`. */
+export function releaseOnly(s: Partial<ImplementationSettings> | null): string | null {
+  if (!s) return null;
+  const on: [string, unknown][] = [['mode', s.mode], ['voice', s.voice], ['selection', s.selection], ['context', s.context], ['nearness', s.nearness], ['moves', s.moves === 'serve' ? 'serve' : undefined]];
+  const hit = on.find(([, v]) => v !== undefined && v !== null);
+  return hit ? `${hit[0]}=${String(hit[1])}` : null;
 }
 
 /** Flags only the compiled path reads: given one, a run takes that path, and says so. */

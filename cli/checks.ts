@@ -7,6 +7,7 @@
 
 import type { CheckContext } from '../core/observers/registry.js';
 import * as store from '../core/state/store.js';
+import { READER_KEY } from '../core/method/freeze.js';
 import type { CheckOptions } from '../core/loop/run-repair.js';
 import { modelSensor, patternSensor, claimAction, withRules, type ClaimSensor, type EnrichedSource } from '../core/loop/claim-extract.js';
 import { modelJudge, type ContextJudge } from '../core/loop/context-judge.js';
@@ -201,10 +202,25 @@ export function checksFor(L: store.StoreLayout, opts: {
 }
 
 /** The examples the skill is served: the author's pieces with the requests they answered, and the exemplar. The method is the owner's, not an example. Empty before a build. */
+/**
+ * WHETHER THIS SKILL'S RULE CHECKS WERE READ BY AN EARLIER CHECK READER (core/method/freeze.ts, READER_KEY). A skill built
+ * before a fix to the reader kept its old checks, and said nothing, until it was built again: said on every run and on
+ * the dashboard until then. Only where a model read the checks (a check no model read is the floor, read at any build).
+ */
+export function staleChecks(L: store.StoreLayout): string | null {
+  const ledger = store.getStepLedger(L);
+  if (ledger?.by !== 'model' || ledger.reader === READER_KEY) return null;
+  return 'your rules\' checks were read by an earlier version of the check reader; they run as they were until the skill is built again with atelier new';
+}
+
 export function servedExamples(L: store.StoreLayout): string {
   const voice = store.getVoice(L); const ex = store.getExemplar(L);
-  return [...(voice?.pieces ?? []), ...(voice?.pieceRequests ?? []).filter((r): r is string => typeof r === 'string'),
-    ...(ex ? [ex.text, ex.request ?? ''] : [])].filter((t) => t.trim()).join('\n\n');
+  // Every piece a writer can be shown: the direct writer is shown the whole pieces and the kept ones, and a name from one
+  // of those was never flagged while only the budgeted pieces were read here.
+  const whole = (voice?.wholePieces ?? []).flatMap((p) => [p.text, p.request ?? '']);
+  const kept = store.getKept(L).flatMap((k) => [k.text, k.request ?? '']);
+  return [...new Set([...(voice?.pieces ?? []), ...(voice?.pieceRequests ?? []).filter((r): r is string => typeof r === 'string'),
+    ...whole, ...kept, ...(ex ? [ex.text, ex.request ?? ''] : [])].filter((t) => t.trim()))].join('\n\n');
 }
 
 /** The active skill's standard, or null when the skill is not built yet. */

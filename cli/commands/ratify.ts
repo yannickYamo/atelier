@@ -503,7 +503,9 @@ export function ratifyClose(): void {
     die(`nothing changed: these decisions are exactly StandardVersion ${prior}, which this run already closed.`
       + '\n  Add a rule (atelier add) or change one before closing again; to build it, atelier build --name <name>.');
   }
-  const supersedes = flag('--supersedes') ?? (prior && prior !== hash ? prior : null);
+  // a standard never supersedes itself: a build run again with nothing changed mints the same one
+  const named = flag('--supersedes') ?? (prior && prior !== hash ? prior : null);
+  const supersedes = named === hash ? null : named;
   // A BUILD THE PERSON RAN AGAIN SUPERSEDES WHAT IT BUILT BEFORE, AND ITS REASON IS THAT COMMAND. `atelier new` run again
   // stopped here for a reason, and the skill kept its old checks, unsaid, until two more commands. A close a build command
   // makes records the command as its reason, unless `--reason` gives another; only a close typed by hand is asked.

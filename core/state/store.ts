@@ -446,11 +446,11 @@ export function putFrozenChecks(l: StoreLayout, checks: Readonly<Record<string, 
  * THE LEDGER OF THE METHOD'S CHECKS AT THE LAST METHOD BUILD (core/method/step-check.ts, `ledgerOf`), keyed by the note it
  * was read for: the build stage reads it for the receipt, on the method build and on a plain rebuild of the same note alike.
  */
-export function getStepLedger(l: StoreLayout): (StepLedger & { readonly methodHash: string }) | null {
+export function getStepLedger(l: StoreLayout): (StepLedger & { readonly methodHash: string; readonly reader?: string }) | null {
   const p = join(dirs(l).base, 'step-ledger.json');
   return existsSync(p) ? readJson<StepLedger & { readonly methodHash: string }>(p, { what: 'the ledger of the method\'s checks' }) : null;
 }
-export function putStepLedger(l: StoreLayout, ledger: StepLedger & { readonly methodHash: string }): void {
+export function putStepLedger(l: StoreLayout, ledger: StepLedger & { readonly methodHash: string; readonly reader?: string }): void {
   mkdirSync(dirs(l).base, { recursive: true });
   writeAtomic(join(dirs(l).base, 'step-ledger.json'), JSON.stringify(ledger, null, 1));
 }
