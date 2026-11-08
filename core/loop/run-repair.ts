@@ -345,7 +345,9 @@ export function checkDraft(skill: string, v: StandardVersion, text: string, opts
   // reads a spelled-out count with less confidence than a figure in digits (./claims.ts, wordCountClaims), and a
   // review found it in true sentences. Whatever the kind of work, these join the list for the person to check
   // and never fail the draft. A qualified reader's reading carries none: it types such counts itself.
-  const words = [...(gating?.listed ?? []), ...(!opts.claimSensor || opts.listWordCounts ? wordCountClaims(text, opts.material ?? '') : [])]
+  // Held to the request and its material only: a rule is an instruction, so "5 to 6 sentences" in the method never made
+  // "five or six teams" in the piece a count the person gave.
+  const words = [...(gating?.listed ?? []), ...(!opts.claimSensor || opts.listWordCounts ? wordCountClaims(text, opts.evidence ?? opts.material ?? '') : [])]
     .filter((w, i, all) => all.findIndex((x) => x.start === w.start) === i)
     .filter((w) => !toCut.some((c) => c.start === w.start) && !toList.some((c) => c.start === w.start));
   // A FIGURE STATED AS FACT IS LISTED THERE TOO, finding word or not (./claims.ts, statedFigureClaims): where nobody

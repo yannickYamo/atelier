@@ -6,23 +6,28 @@
 // frozen when the skill is built: keyed by the step's own words and the examples it was read and qualified on, a
 // rebuild reuses it, qualification and all, and reads only the steps whose wording or examples changed. Rewording one
 // step changes that step's check and no other. A check no model read (the floor) is never frozen: a later build with a
-// model reads it.
+// model reads it. The reader is in the key too: a check read by an earlier version of the check reader is read again,
+// or a rebuild would serve back a check the reader no longer gives (three paragraphs per section, once read as sentences
+// per paragraph).
 
 import { createHash } from 'node:crypto';
-import type { StepCheck, StepToCheck, ExampleCase } from './step-check.js';
+import { STEP_CHECK, STEP_CHECK_REPAIR, type StepCheck, type StepToCheck, type ExampleCase } from './step-check.js';
 
 const sha = (s: string): string => createHash('sha256').update(s).digest('hex').slice(0, 16);
+
+/** The reader that reads a step's check, and the one that repairs it: their words and versions. */
+export const READER_KEY = sha(JSON.stringify([STEP_CHECK.version, STEP_CHECK.system, STEP_CHECK_REPAIR.version, STEP_CHECK_REPAIR.system]));
 
 /** The examples a check was read and qualified on, as one key: each one's text, request and material, in order. */
 export const examplesKey = (cases: readonly ExampleCase[]): string =>
   sha(JSON.stringify(cases.map((c) => [c.reference, c.task ?? null, c.material.map((m) => [m.name, m.text])])));
 
 /**
- * The key a step's check is frozen under: the step's own words, the examples, and the outputs the owner rejected naming the
+ * The key a step's check is frozen under: the reader, the step's own words, the examples, and the outputs the owner rejected naming the
  * step (a check must catch those to qualify, so a new rejection reads the step again). With none, the key is as it was.
  */
-export const freezeKey = (stepText: string, examples: string, rejected: readonly string[] = []): string =>
-  sha(`${stepText.trim()}\u0000${examples}${rejected.length ? `\u0000${sha(JSON.stringify(rejected))}` : ''}`);
+export const freezeKey = (stepText: string, examples: string, rejected: readonly string[] = [], reader: string = READER_KEY): string =>
+  sha(`${reader}\u0000${stepText.trim()}\u0000${examples}${rejected.length ? `\u0000${sha(JSON.stringify(rejected))}` : ''}`);
 
 /** Rejected outputs, by the words of the step each breaks (cli/commands/method.ts, `rejectedOutputs`). */
 type Rejected = ReadonlyMap<string, readonly string[]>;

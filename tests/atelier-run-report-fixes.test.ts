@@ -113,6 +113,17 @@ describe('3. small invented details are listed', () => {
     // where a qualified reader's reading decides alone (the compiled path), it is as before
     expect(listed({})).toEqual([]);
   });
+  it('a count in the method\'s rules is no source for the same count in the piece', () => {
+    const v = { standardVersionHash: 'h', requirements: [] } as never;
+    const text = 'We tried it. We moved five or six teams over to it.';
+    const listed = (o: Record<string, unknown>): string[] => checkDraft('s', v, text, o)
+      .checked.filter((c) => c.requirementId === CLAIMS_TO_CHECK).flatMap((c) => c.result.spans.map((sp) => sp.text));
+    const evidence = 'notes about the tool';
+    const rules = 'Write each paragraph in 5 to 6 sentences.';
+    expect(listed({ material: `${evidence}\n\n\`\`\`\n${rules}\n\`\`\``, evidence })).toEqual(['We moved five or six teams over to it.']);
+    // a count the notes hold is theirs
+    expect(listed({ material: 'We moved 5 or 6 teams.', evidence: 'We moved 5 or 6 teams.' })).toEqual([]);
+  });
   const notes = 'Why it matters: Agents read the CRM every morning before the stand-up and plan the day from it.';
   const report = (spans: { text: string; specific?: string }[]): never => ({ checked: [
     { requirementId: 'UNSOURCED·check', result: { verdict: 'VIOLATED', spans: spans.map((s, i) => ({ start: i, end: i + 1, why: 'x', ...s })) } },

@@ -135,7 +135,7 @@ export function dashBan(step: StepToCheck): StepCheck | null {
 export const floorFor = (step: StepToCheck, means?: string): StepCheck => dashBan(step) ?? judgement(step, 'floor', means);
 
 export const STEP_CHECK: Reading<StepCheckInput, StepCheckOutput> = {
-  id: 'step-check', version: '7',
+  id: 'step-check', version: '8',
   system: STEP_CHECK_SYSTEM, schema: STEP_CHECK_SCHEMA,
   toolName: 'emit_step_checks', toolDescription: 'For every numbered step: how code checks it (a listed measurement, a written check, or judgement), with a quote from the step and what the check reads.',
   maxTokens: 8000, estimateUsd: 0.04,
