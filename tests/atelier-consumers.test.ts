@@ -42,9 +42,8 @@ const ELSEWHERE: Readonly<Record<string, string>> = {
   'skills/*/form.txt': 'the compiled path (what form a reply takes)',
   'skills/*/method-inferred.json': 'the compiled path and `atelier fix` (a skill built with no method note)',
 };
-/** Voice fields written at build and read elsewhere. */
+/** Voice fields written at build and read elsewhere. (The persona is read on the default run by core/direct/style.ts.) */
 const VOICE_ELSEWHERE: Readonly<Record<string, string>> = {
-  persona: 'the compiled path and SKILL.md for a host',
   lengthSpan: 'the compiled path and SKILL.md\'s length line',
   lengthWords: 'SKILL.md\'s length line',
   servedWhole: 'SKILL.md for a host',

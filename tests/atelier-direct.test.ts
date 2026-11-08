@@ -305,6 +305,34 @@ describe('a run through the binary, written the direct way', () => {
     expect(held.code, held.out).toBe(1);
   }, 180_000);
 
+  it('how the author writes is read after the draft: beside the piece by default; with --style-review only the misses reach the review; never the writer', async () => {
+    await setBackend({ byTool: { emit_persona: { points: [{ ...PERSONA.points[0], quote: 'That is the whole trade' }] }, emit_holds_back: { ids: [] }, __plain: [DRAFT, REVIEWED] } });
+    const s = seed(FILES, { ATELIER_CONTEXT_READER: 'scripted' });
+    expect(s.run('new', 'posts', 'write posts in my voice', '--name', 'posts', ...BACKEND()).code).toBe(0);
+    const go = (...more: string[]): Out => jsonOf(s.run('invoke', '--skill', 'posts', 'Compare Logseq and Craft for my notes.', '--with', 'notes=notes.md', '--json', '--claims', 'pattern', '--no-questions', ...more, ...BACKEND()).out);
+    type Styled = Out & { direct: { style?: { on: string; steered: boolean; by: string; found: { id: string; held: boolean | null; quote?: string }[] } } };
+    // report only: read on the delivered piece, held with the piece's own words; the review and the writer are told nothing
+    await setBackend({ byTool: { __plain: [DRAFT, REVIEWED], emit_style_read: { items: [{ id: 'h1', held: true, quote: 'That is the whole trade.' }] } } });
+    let m0 = await mark();
+    const r = go() as Styled;
+    expect(r.output).toBe(REVIEWED);
+    expect(r.direct.style).toMatchObject({ on: 'piece', steered: false, by: 'model', found: [{ id: 'h1', kind: 'habit', text: 'Closes on a short plain sentence.', held: true, quote: 'That is the whole trade.' }] });
+    let plain = await plainSince(m0);
+    expect(plain.map(textOf).join('\n')).not.toContain('Where the draft does not yet write as the author does');
+    expect(textOf(plain[0])).not.toContain('Closes on a short plain sentence');
+    // --style-review: read on the first draft; what it does not hold is told to the review, with the author's sentence
+    await setBackend({ byTool: { __plain: [DRAFT, REVIEWED], emit_style_read: { items: [{ id: 'h1', held: false, quote: null }] } } });
+    m0 = await mark();
+    const st = go('--style-review') as Styled;
+    expect(st.direct.style).toMatchObject({ on: 'draft', steered: true, found: [{ id: 'h1', held: false }] });
+    plain = await plainSince(m0);
+    expect(textOf(plain[1])).toContain('Where the draft does not yet write as the author does:\n- Closes on a short plain sentence (theirs: "That is the whole trade"): the draft does not.');
+    expect(textOf(plain[0])).not.toContain('Closes on a short plain sentence');
+    // --no-style: nothing read
+    await setBackend({ byTool: { __plain: [DRAFT, REVIEWED] } });
+    expect((go('--no-style') as Styled).direct.style).toBeUndefined();
+  }, 180_000);
+
   it('the editor\'s questions: asked where nothing states them, unanswered they change nothing, answered they reach the writer; the method is shown whole', async () => {
     await setBackend({ byTool: { emit_persona: PERSONA, emit_holds_back: { ids: [] }, __plain: [DRAFT, REVIEWED] } });
     const s = seed(FILES, { ATELIER_CONTEXT_READER: 'scripted' });

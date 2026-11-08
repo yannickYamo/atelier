@@ -81,7 +81,7 @@ export const EDITS_SHOWN = 8;
  * asked to "check against the pieces, then revise" rewrote a median 77% of the lines and added the polish, maxims and
  * extra sections the judges named. No list of banned moves: what is wrong is what the author would not write.
  */
-export function reviewAsk(draft: string, x: Pick<DirectInput, 'material' | 'edits' | 'rules' | 'method'>): string {
+export function reviewAsk(draft: string, x: Pick<DirectInput, 'material' | 'edits' | 'rules' | 'method'> & { readonly style?: string }): string {
   const sources = x.material.length ? 'the material and the task' : 'the task';
   const edits = (x.edits ?? []).slice(0, EDITS_SHOWN);
   const corrections = edits.length
@@ -93,7 +93,7 @@ export function reviewAsk(draft: string, x: Pick<DirectInput, 'material' | 'edit
 ${draft.trim()}
 </draft>
 
-Read it as the author of the pieces above would. Fix anything they would not write${x.method?.trim() ? ', anything that goes against their method' : ''}${rulesBlock(x.rules) ? ', anything that breaks one of the author\'s rules (each one must hold)' : ''}, and any figure, name or story that does not come from ${sources}. Change only what needs changing; leave the rest of the draft as it is.${corrections}
+Read it as the author of the pieces above would. Fix anything they would not write${x.method?.trim() ? ', anything that goes against their method' : ''}${rulesBlock(x.rules) ? ', anything that breaks one of the author\'s rules (each one must hold)' : ''}, and any figure, name or story that does not come from ${sources}. Change only what needs changing; leave the rest of the draft as it is.${corrections}${x.style?.trim() ? `\n\n${x.style.trim()}` : ''}
 
 Return only the full revised piece, in Markdown, starting with its title if it has one.`;
 }

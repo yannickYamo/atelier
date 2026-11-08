@@ -18,6 +18,7 @@
 // The record is the one every run writes (core/loop/run-once.ts, `runOnce`), with `direct` saying what was shown and
 // who chose it, so `atelier report`, `rate`, `fix` and `keep` read it as any other run.
 
+import { STYLE_READ, styleItems, styleNote, styleLines, type StyleReading } from '../core/direct/style.js';
 import * as store from '../core/state/store.js';
 import { sha } from '../core/state/receipt.js';
 import { readContext } from '../core/inference/reading.js';
@@ -336,6 +337,20 @@ export async function runDirect(c: DirectContext) {
   const variable = taskBlock({ material: c.material, task: c.asked, rules, method, settled: asking.note });
   c.detail(`Written from ${shown.length} of ${catalogue.length} piece(s) of the author's${route.kind ? `, as ${route.kind}` : ''} (${decided.by === 'model' ? 'chosen by a reading of the request' : `chosen by shared words: ${decided.why ?? 'no reading'}`}): ${shown.map((p) => titleOf(p.text)).join('; ')}.`);
 
+  // HOW THE AUTHOR WRITES, read on the text after the draft (core/direct/style.ts): the habits the build read from their
+  // pieces that they show always or often, and the steps of their method no check reads. Never shown to the writer.
+  const styleOf = styleItems(voice?.persona?.points ?? [], planFor(c.std).rules.filter((r) => r.stated && r.check === null && r.role !== 'HABIT').map((r) => r.statement));
+  const steer = argv.includes('--style-review');
+  const styleOn = !argv.includes('--no-style') && styleOf.length > 0;
+  const styleBudget: Budget = { spentUsd: 0, capUsd: 0.1, maxCalls: 1 };
+  let style: DirectRecord['style'] | undefined;
+  const readStyle = async (text: string, on: 'draft' | 'piece'): Promise<StyleReading> => {
+    const d = await readContext(STYLE_READ, { items: styleOf, piece: text }, contextReaderClient(), contextReaderModel(), styleBudget, 'other');
+    style = { by: d.by, reader: d.reader, on, steered: on === 'draft', ...(d.why ? { why: d.why } : {}),
+      found: styleOf.map((i) => { const f = d.value.found.find((x) => x.id === i.id); return { id: i.id, kind: i.kind, text: i.text, held: f?.held ?? null, ...(f?.quote ? { quote: f.quote } : {}) }; }) };
+    return d.value;
+  };
+
   // What the delivered text is checked by, set up once: the record's settings are read from it too.
   const checks = checksFor(c.L, { material: [c.asked, materialText].filter(Boolean).join('\n\n'), task: c.asked, context: { request: c.asked, material: c.material.map((m) => ({ name: m.name, text: m.text })) }, guardClaims: !argv.includes('--allow-unsourced'), placeholders: false,
     ...(c.held ? { level: c.held } : {}), claimReads: c.held === 'STRICT' ? 2 : 1 });
@@ -354,10 +369,14 @@ export async function runDirect(c: DirectContext) {
     if (argv.includes('--no-review')) review = { ran: false, why: 'turned off (--no-review)' };
     else {
       try {
-        const again = await prose(c.client, budget, stable, variable, reviewAsk(draft, { material: c.material, edits: corrections, rules, method }), effort, 'emit_review');
+        // with --style-review, what the draft does not hold of how the author writes reaches the review, and only that
+        const styleNoteNow = styleOn && steer ? styleNote(styleOf, (await readStyle(draft, 'draft')).found) : '';
+        const again = await prose(c.client, budget, stable, variable, reviewAsk(draft, { material: c.material, edits: corrections, rules, method, style: styleNoteNow }), effort, 'emit_review');
         output = again.piece; review = { ran: true };
       } catch (e) { review = { ran: false, why: `the review could not run: ${(e as Error).message.split('\n')[0]}` }; c.say(`(the self-review could not run, so the first draft is delivered: ${review.why})`); }
     }
+    // report only: read on the piece the review delivered (or the draft, where the review did not run), said beside it
+    if (styleOn && !style) await readStyle(output, 'piece');
     // 4. THE CHECKS. A rule the owner required that the reviewed piece still breaks has the sentences that break it
     // rewritten, as `atelier verify --repair` does (core/loop/run-repair.ts, `refineToStandard`): only those spans, and
     // never at the cost of another rule. Everything else the checks find (a specific not in what was given, a habit
@@ -389,7 +408,8 @@ export async function runDirect(c: DirectContext) {
   const direct = (): DirectRecord => ({ version: DIRECT_VERSION, asked: c.asked, from: catalogue.length,
     pieces: shown.map((p) => ({ id: p.id, title: titleOf(p.text), kept: p.kept })),
     route: { by: decided.by, reader: decided.reader, kind: route.kind, ...(decided.why ? { why: decided.why } : {}) }, effort, review, corrections: corrections.length,
-    ...(method.trim() ? { method: true } : {}), questions: { by: asking.by, asked: asking.questions.map((q) => q.id), answered: asking.answers.map((a) => a.id) } });
+    ...(method.trim() ? { method: true } : {}), questions: { by: asking.by, asked: asking.questions.map((q) => q.id), answered: asking.answers.map((a) => a.id) },
+    ...(style ? { style } : {}) });
   const servedHash = sha(stable);
   const rec = await runOnce(c.L, c.sv, stable, servedHash, { expectedPackageHash: servedHash, servedPackageHash: servedHash, matched: true, servedFiles: ['direct:pieces'] },
     variable, c.client, budget, c.binding, resolveProvenance(flag('--provenance'), process.env), null, flag('--task') ? 'FLAG' : 'POSITIONAL', refine,
@@ -409,7 +429,7 @@ export async function runDirect(c: DirectContext) {
   for (const l of inferredLines(inferred)) c.say(l);
   if (!review.ran && review.why) c.detail(`Self-review: not run (${review.why}).`);
   if (draftText && draftText !== rec.output) c.detail('The self-review revised the first draft; the first draft is kept on the record.');
-  const spent = Math.max(budget.spentUsd + routeBudget.spentUsd, processSpentUsd() - c.spentBefore);
+  const spent = Math.max(budget.spentUsd + routeBudget.spentUsd + styleBudget.spentUsd, processSpentUsd() - c.spentBefore);
   // THE EVALUATION OF THIS RUN, as every run has one (cli/eval-run.ts): stored beside the record, carried by --json, read
   // by report, rate, eval and reproduce. Fault-isolated: it never costs the person the piece.
   let evaluation: EvalSummary | null = null;
@@ -421,6 +441,7 @@ export async function runDirect(c: DirectContext) {
     putEval(c.L, evaluation);
   } catch (e) { c.say(`(the evaluation of this run could not be built: ${(e as Error).message.split('\n')[0]})`); }
   for (const l of evaluation?.record ? rulesLines(evaluation.record.entries) : []) c.say(l);
+  if (style) { const st = style; for (const l of styleLines(styleOf, st.found, st.on)) c.say(l); if (st.by !== 'model') c.detail(`(how you write was not read: ${st.why ?? 'no model'})`); }
   const json = {
     ...recordHead({ state: evaluation?.record?.state ?? null, standardVersionHash: c.sv.standardVersionHash, skillVersion: c.sv.skillVersionHash, certificate: rec.settings?.certificate ?? null, record: evaluation?.record ?? null }),
     eval: evaluation,
