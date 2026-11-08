@@ -29,6 +29,8 @@ import { MOVE_READER, countOutcomes } from '../../core/taste/move-reader.js';
 /** Reading calls a run makes by default on a long request: two batches of twelve rules, each read twice. */
 const READ_CALLS_DEFAULT = 4;
 import { readContext } from '../../core/inference/reading.js';
+import { METHOD_UNITS, type DecisionUnit } from '../../core/method/decision-units.js';
+import { stepsOf } from '../../core/method/standard.js';
 import { needsNote, needsNothing } from '../../core/loop/task-needs.js';
 import { beforeTheDraft, questionsJson } from '../prewrite.js';
 import { deepAsked, deepFacts, deepDirection, bandsFor, goldenOf, excerptsOf, reviewKit, reviewEnrichment, deepRunId, enricherFor, deepRecord, deepLines, reviewNote, regatherNote, DEEP_USD, DEEP_CALLS, type DeepBands, type DeepReader, type DeepTrace } from '../deep.js';
@@ -115,7 +117,7 @@ import { version } from '../help.js';
 import { writeAtomic } from '../../core/state/fs-atomic.js';
 import { compareBindings, describeMismatch, describeNewSurface, detectResolvedModelDrift, bindingHash } from '../../core/runtime/binding.js';
 import { resolve as resolvePath } from 'node:path';
-import { sha, DATA, VALUED_OPTIONS, die, argv, flag, flagEach, clientAndBinding, describeBinding, numericFlag, positional, boundResources, boundMaterial, assertSkillName, runFile, clientFor, callsSeen, thinkingOfCalls, thinkingBlocksOfCalls, contextReaderClient, canReach } from '../runtime.js';
+import { sha, DATA, VALUED_OPTIONS, die, argv, flag, flagEach, clientAndBinding, describeBinding, numericFlag, positional, boundResources, boundMaterial, assertSkillName, runFile, clientFor, callsSeen, thinkingOfCalls, thinkingBlocksOfCalls, contextReaderClient, contextReaderModel, canReach } from '../runtime.js';
 
 /**
  * What a skill serves, resolved once and shared.
@@ -744,27 +746,30 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   // Whether a step is enforced is the plan's to say (core/plan/execution-plan.ts), never read off the rule's own field.
   const enforcedSteps = new Set(std ? planFor(std).rules.filter((p) => p.enforced).map((p) => p.id) : []);
   const unitsOf = store.getUnits(L, sv.standardVersionHash);
-  const statedSteps: BriefStep[] = (std?.requirements ?? []).filter((q) => q.provenance === 'EXPERT_STATED' && q.authority !== 'EXPERT_REJECTED' && !waived.has(q.requirementId))
+  const statedBare: BriefStep[] = (std?.requirements ?? []).filter((q) => q.provenance === 'EXPERT_STATED' && q.authority !== 'EXPERT_REJECTED' && !waived.has(q.requirementId))
     .map((q, i) => ({ id: q.requirementId, n: i + 1, statement: q.statement, required: enforcedSteps.has(q.requirementId), unit: unitsOf[q.requirementId] ?? null }));
   // WITH NO NOTE OF THE OWNER'S, the steps read off the pieces at build (core/method/infer.ts) brief the run instead: a habit
   // of the pieces, none of them required, said to the writer as not confirmed; the standard holds none of them.
-  const inferredRecord = statedSteps.length ? null : store.getInferredMethod(L);
+  const inferredRecord = statedBare.length ? null : store.getInferredMethod(L);
   const inferredMethod = inferredRecord?.steps.length ? inferredRecord : null;
-  const methodSteps: BriefStep[] = statedSteps.length ? statedSteps : (inferredMethod?.steps ?? []).map((st, i) => ({ id: st.id, n: i + 1, statement: st.text, required: false, unit: st.unit }));
+  const methodBare: BriefStep[] = statedBare.length ? statedBare : (inferredMethod?.steps ?? []).map((st, i) => ({ id: st.id, n: i + 1, statement: st.text, required: false, unit: st.unit }));
   // THE STANDARD'S OWN CONDITIONAL RULES ARE PLACED BY THE SAME READING. A rule read off the pieces that applies under a
   // case in its own words ("the proposal names a metric for a rollback signal") was served on every request that bound a
   // text, and the writer decided alone whether this was the case: on review work that pulled the review toward questions
   // nobody asked. The brief reads its case against this request and its material and sets it aside where the case is
   // not shown (core/loop/execution-brief.ts, `readFromPieces`). Nothing here names a kind of work: the case is the
   // rule's own words, and the owner's stated steps are placed as they always were.
-  const learnedRules = conditionalRuleSteps(std, waived, enforcedSteps, methodSteps.length);
-  const briefSteps: BriefStep[] = [...methodSteps, ...learnedRules];
+  const learnedRules = conditionalRuleSteps(std, waived, enforcedSteps, methodBare.length);
   // WHETHER THE REQUEST NEEDS THE METHOD decides the brief, not its word count: "Review this change" with a diff bound is
   // the method's work, and so is "The import stalls. Why?"; "Thanks, that solved it." is not. Material bound is need;
   // otherwise what the request asks for, as the intent reading quoted it from the request (core/loop/task-needs.ts);
   // with no reading, a request long enough to ask for parts.
   const needsMethod = material.length > 0 || (intent?.needs ? !needsNothing(intent.needs) : lengthAsked !== 'SHORT' && asksParts(asked));
-  const briefOn = briefSteps.length > 0 && contractFile === null && needsMethod && !argv.includes('--no-brief');
+  const briefOn = methodBare.length + learnedRules.length > 0 && contractFile === null && needsMethod && !argv.includes('--no-brief');
+  // WHAT EACH STEP ASKS THE WRITER TO DECIDE (core/method/decision-units.ts) is read here, on the first run whose brief
+  // needs it, and kept beside the standard: the default run never reads it, so a build no longer pays for it.
+  const methodSteps = briefOn ? await withUnits(L, sv.standardVersionHash, methodBare, statedBare.length > 0) : methodBare;
+  const briefSteps: BriefStep[] = [...methodSteps, ...learnedRules];
   // THE AUTHOR'S MOVES (core/compiler/moves.ts), read with the brief: the profile of the persona this skill serves, the
   // eligible moves (never unknown, never provisional) placed by the same reading, selected by code. Under 'observe' (the
   // default, or the release's setting) the selection is recorded and nothing is served; under 'serve' (--moves serve,
@@ -3743,4 +3748,24 @@ export function shapeOff(text: string, shape: 'line' | 'sentence'): { detail: st
   if (shape === 'line') return lines.length > 1 ? { detail: `${lines.length} lines, asked for one`, off: lines.length - 1 } : null;
   const sentences = text.replace(/`[^`]*`/g, 'x').split(/(?<=[.!?])\s+(?=\S)/).filter((x) => x.trim());
   return sentences.length > 1 || lines.length > 1 ? { detail: `${sentences.length} sentences, asked for one`, off: Math.max(sentences.length, lines.length) - 1 } : null;
+}
+
+/**
+ * The steps with what each asks the writer to decide, read once where none was kept: under the standard's hash for the
+ * owner's steps, in the inferred method's record for steps read off the pieces. No model, or a reading that did not
+ * ground, leaves a step's unit empty, which the brief serves whole (core/method/decision-units.ts, `unitFloor`).
+ */
+async function withUnits(L: store.StoreLayout, standardHash: string, steps: readonly BriefStep[], stated: boolean): Promise<BriefStep[]> {
+  const missing = steps.filter((st) => st.unit === null);
+  if (!missing.length || argv.includes('--no-model') || !canReach('discovery')) return [...steps];
+  const under = new Map(stepsOf(store.getMethod(L)?.text ?? '').map((st) => [st.text.trim(), st.under]));
+  // numbered as the build numbered them, in the method's order
+  const d = await readContext(METHOD_UNITS, { steps: missing.map((st, i) => ({ id: String(i + 1), text: st.statement, under: under.get(st.statement.trim()) ?? null })) },
+    contextReaderClient(), contextReaderModel(), { spentUsd: 0, capUsd: 0.2, maxCalls: 1 });
+  if (d.by !== 'model') return [...steps];
+  const n = new Map(missing.map((st, i) => [st.id, String(i + 1)]));
+  const read = (id: string): DecisionUnit | null => { const k = n.get(id); return k === undefined ? null : d.value[k] ?? null; };
+  if (stated) store.putUnits(L, standardHash, { ...store.getUnits(L, standardHash), ...Object.fromEntries(missing.flatMap((st) => { const u = read(st.id); return u ? [[st.id, u]] : []; })) });
+  else { const m = store.getInferredMethod(L); if (m) store.setInferredMethod(L, { ...m, steps: m.steps.map((st) => ({ ...st, unit: st.unit ?? read(st.id) })) }); }
+  return steps.map((st) => ({ ...st, unit: st.unit ?? read(st.id) }));
 }

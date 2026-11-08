@@ -24,7 +24,7 @@ import { sha } from '../core/state/receipt.js';
 import { readContext } from '../core/inference/reading.js';
 import { spend, processSpentUsd, type Budget, type InferenceClient } from '../core/inference/client.js';
 import { resolveProvenance } from '../core/fidelity/provenance.js';
-import type { ImplementationSettings } from '../core/fidelity/types.js';
+import { DEFAULT_SETTINGS, type ImplementationSettings } from '../core/fidelity/types.js';
 import { inferredLines } from '../core/loop/inferred.js';
 import type { RuntimeBinding } from '../core/runtime/binding.js';
 import type { SkillVersion, StandardVersion, DirectRecord, RepairRecord, InvocationSettings, LatitudeLevel, InferredItem } from '../core/state/canonical-state.js';
@@ -123,7 +123,9 @@ export function directWhyNot(x: { voice: Voice | null; std: StandardVersion | nu
 /** The first setting of a release that is off until the owner turns it on and that only the compiled path runs, as `key=value`. */
 export function releaseOnly(s: Partial<ImplementationSettings> | null): string | null {
   if (!s) return null;
-  const on: [string, unknown][] = [['mode', s.mode], ['voice', s.voice], ['selection', s.selection], ['context', s.context], ['nearness', s.nearness], ['moves', s.moves === 'serve' ? 'serve' : undefined]];
+  // more drafts than the compiled path's default of two are a choice the direct writer (one draft, one review) cannot run
+  const on: [string, unknown][] = [['mode', s.mode], ['voice', s.voice], ['selection', s.selection], ['context', s.context], ['nearness', s.nearness], ['moves', s.moves === 'serve' ? 'serve' : undefined],
+    ['drafts', typeof s.drafts === 'number' && s.drafts > DEFAULT_SETTINGS.drafts ? s.drafts : undefined]];
   const hit = on.find(([, v]) => v !== undefined && v !== null);
   return hit ? `${hit[0]}=${String(hit[1])}` : null;
 }
@@ -345,16 +347,21 @@ export async function runDirect(c: DirectContext) {
 
   // HOW THE AUTHOR WRITES, read on the text after the draft (core/direct/style.ts): the habits the build read from their
   // pieces that they show always or often, and the steps of their method no check reads. Never shown to the writer.
-  const styleOf = styleItems(voice?.persona?.points ?? [], planFor(c.std).rules.filter((r) => r.stated && r.check === null && r.role !== 'HABIT').map((r) => r.statement));
+  // With no method of the author's, the steps the build read off their pieces (core/method/infer.ts) are their method.
+  const statedRules = planFor(c.std).rules.filter((r) => r.stated);
+  const unchecked = statedRules.length ? statedRules.filter((r) => r.check === null && r.role !== 'HABIT').map((r) => r.statement)
+    : (store.getInferredMethod(c.L)?.steps ?? []).map((st) => st.text);
+  const styleOf = styleItems(voice?.persona?.points ?? [], unchecked);
   const steer = argv.includes('--style-review');
   const styleOn = !argv.includes('--no-style') && styleOf.length > 0;
   // its own call, held inside what is left of the run's cap
-  const styleBudget: Budget = { spentUsd: 0, capUsd: Math.max(0, Math.min(0.1, budget.capUsd - budget.spentUsd - routeBudget.spentUsd)), maxCalls: 1 };
+  // with --style-review it reads twice: the first draft, to steer the review, then the piece the review returned
+  const styleBudget: Budget = { spentUsd: 0, capUsd: Math.max(0, Math.min(0.1, budget.capUsd - budget.spentUsd - routeBudget.spentUsd)), maxCalls: steer ? 2 : 1 };
   if (steer && argv.includes('--no-review')) c.say('(--style-review tells the self-review what the draft misses; with --no-review there is none, so how you write is read on the piece, report only.)');
   let style: DirectRecord['style'] | undefined;
   const readStyle = async (text: string, on: 'draft' | 'piece'): Promise<StyleReading> => {
     const d = await readContext(STYLE_READ, { items: styleOf, piece: text }, contextReaderClient(), contextReaderModel(), styleBudget, 'other');
-    style = { by: d.by, reader: d.reader, on, steered: on === 'draft', ...(d.why ? { why: d.why } : {}),
+    style = { by: d.by, reader: d.reader, on, steered: steer, ...(d.why ? { why: d.why } : {}),
       found: styleOf.map((i) => { const f = d.value.found.find((x) => x.id === i.id); return { id: i.id, kind: i.kind, text: i.text, held: f?.held ?? null, ...(f?.quote ? { quote: f.quote } : {}) }; }) };
     return d.value;
   };
@@ -408,8 +415,16 @@ export async function runDirect(c: DirectContext) {
       } catch (e) { c.say(`(the checks could not read the piece: ${(e as Error).message.split('\n')[0]}; it is delivered unchecked)`); }
     }
     repaired = violatedBefore.filter((id) => !violated.includes(id));
-    // report only: read on the piece as delivered, after the sentences that broke a rule were rewritten, said beside it
-    if (styleOn && !style) await readStyle(output, 'piece');
+    // read on the piece as delivered, after the sentences that broke a rule were rewritten, said beside it. With
+    // --style-review the first draft was read too: the record keeps both, so what the review fixed is shown.
+    if (styleOn && (!style || style.on === 'draft')) {
+      const first = style;
+      if (first && output === draft) style = { ...first, on: 'piece', draft: first.found.map((f) => ({ id: f.id, held: f.held })) };
+      else {
+        await readStyle(output, 'piece');
+        if (first && style) style = { ...style, draft: first.found.map((f) => ({ id: f.id, held: f.held })) };
+      }
+    }
     return { output, repair: { ...more, passes, violatedBefore, violatedAfter: violated, originalOutputHash: sha(draft), draft, claimsToCheck: toCheck.map((t) => t.sentence),
       why: passes ? `written directly from the author's pieces and reviewed once; the sentences breaking ${violatedBefore.join(', ')} were rewritten` : 'written directly from the author\'s pieces, reviewed once; the checks are listed beside the piece, nothing was changed by them' } };
   };
@@ -449,7 +464,7 @@ export async function runDirect(c: DirectContext) {
     putEval(c.L, evaluation);
   } catch (e) { c.say(`(the evaluation of this run could not be built: ${(e as Error).message.split('\n')[0]})`); }
   for (const l of evaluation?.record ? rulesLines(evaluation.record.entries, style?.by === 'model') : []) c.say(l);
-  if (style) { const st = style; for (const l of styleLines(styleOf, st.found, st.on)) c.say(l); if (st.by !== 'model') c.detail(`(how you write was not read: ${st.why ?? 'no model'})`); }
+  if (style) { const st = style; for (const l of styleLines(styleOf, st.found, st.on, st.draft)) c.say(l); if (st.by !== 'model') c.detail(`(how you write was not read: ${st.why ?? 'no model'})`); }
   const json = {
     ...recordHead({ state: evaluation?.record?.state ?? null, standardVersionHash: c.sv.standardVersionHash, skillVersion: c.sv.skillVersionHash, certificate: rec.settings?.certificate ?? null, record: evaluation?.record ?? null }),
     eval: evaluation,

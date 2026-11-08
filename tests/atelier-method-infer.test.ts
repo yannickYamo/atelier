@@ -106,7 +106,8 @@ describe('through the build and a run', () => {
     expect(b.out).toMatch(/Stages: method ✓ \(4 step\(s\) read from your pieces, not confirmed: the brief follows them as your habit, no rule is made of them\) ·/);
     const m = store.getInferredMethod(L)!;
     expect(m.steps.map((s) => [s.id, s.quote])).toEqual([['i1', '## Verdict'], ['i2', '## Vendor pricing'], ['i3', '## Cost at this size'], ['i4', '## Risks']]);
-    expect(m.steps[3].unit).toMatchObject({ condition: 'when the price list leaves terms out' }); expect(m.reader).toBe('scripted');
+    // what each step asks the writer to decide is not paid for at build: the compiled path reads it on its first run
+    expect(m.steps.every((st) => st.unit === null)).toBe(true); expect(m.reader).toBe('scripted');
     // THE STANDARD HOLDS NONE OF THEM: no stated requirement, nothing required by the steps
     const sv = store.getSkillVersion(L, store.getActive(L)!)!;
     expect(store.getStandard(L, sv.standardVersionHash)!.requirements.filter((q) => q.provenance === 'EXPERT_STATED')).toEqual([]);
@@ -120,6 +121,8 @@ describe('through the build and a run', () => {
     expect(r.code, r.out).toBe(0);
     const briefPrompt = (await promptsFor('emit_execution_brief')).at(-1) ?? '';
     expect(briefPrompt).toContain('Close on the risks when the price list leaves terms out');
+    // read on that first run, and kept for the next
+    expect(store.getInferredMethod(L)!.steps[3].unit).toMatchObject({ condition: 'when the price list leaves terms out' });
     const pieceP = (await promptsFor('emit_piece')).at(-1) ?? '';
     expect(pieceP).toContain('(My usual steps, named below, were read from my own pieces and are not rules I wrote: follow them as my habit, not as requirements.)');
     expect(pieceP).toContain("For this request, my method's steps that apply: 1, 2, 3, 4.");

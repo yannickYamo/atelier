@@ -402,10 +402,16 @@ Under the piece, each of your rules is said under what was found: held, not held
 your examples (it blocks nothing), and the steps no check reads, which are yours to judge (read below when how you write is read).
 
 Then how you write, read on the piece: the habits the build read from your pieces that you show always or often, each
-with a sentence of yours, and the steps of your method no check reads. Each is held (with the piece's own words), not
-held, or not read. It is never shown to the writer and blocks nothing. With `--style-review` it is read on the first
-draft instead, and what the draft does not hold is told to the self-review, each habit with your sentence; that is the
-setting to compare against a plain run before it becomes the default. `--no-style` reads nothing.
+with a sentence of yours, and the steps of your method no check reads (with no method of yours, the steps the build read
+off your pieces). Each is held (with the piece's own words), not held, or not read. It is never shown to the writer and
+blocks nothing. With `--style-review` it is also read on the first draft, and what the draft does not hold is told to the
+self-review, each habit with your sentence; the piece the review returns is read again, and one line says how many the
+review fixed. That is the setting to compare against a plain run before it becomes the default. `--no-style` reads nothing.
+
+The skill installed for Claude Code (`/<name>`) follows the same design: your pieces, your method and your rules, with no
+description of how you sound and no moves read off your pieces, which the writer would follow as rules. The compiled path
+(`--pipeline legacy`) still serves the skill whole. A release set to more than two drafts (`atelier fidelity --set
+drafts=4`) runs on the compiled path, which writes them; the direct writer writes one and reviews it.
 
 A skill built from one example writes from that example. A request that holds the run strict ("use only these figures")
 stays on this path: the claim check is held at that level, so a figure nothing you gave holds has its sentence rewritten

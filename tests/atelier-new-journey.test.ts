@@ -97,7 +97,8 @@ describe('atelier new: a folder and a sentence', () => {
     // bands read from short pieces are preferences, so they are listed among the patterns watched, not enforced)
     expect(second.replace(card, '').split(/\s+/).length, second).toBeLessThan(340);
     const md = readFileSync(join(proj, '.claude', 'skills', 'voice', 'SKILL.md'), 'utf8');
-    expect(md).toMatch(/Lead with the decision/);
+    // a rule read off the pieces and not required is the compiled path's (the stored package), not the host's
+    expect(storedSkill(data, 'voice')).toMatch(/Lead with the decision/); expect(md).not.toMatch(/Lead with the decision/);
     // the rule that needs material says so in the skill a host reads
     expect(md).toMatch(/Needs: the actual figures for the period\. If you were not given it, ask for it\. Never invent it\./);
     // and the purpose is how a host decides to load it
@@ -174,6 +175,12 @@ describe('the suggestion is computed from evidence, never decided', () => {
 
 // ── Gaps found end to end ─────────────────────────────────────────────────────────────
 import { readdirSync } from 'node:fs';
+
+/** SKILL.md as the compiled path serves it: the stored package (a host is given it without the description: renderers/agent-skill/host.ts). */
+const storedSkill = (data: string, name: string): string => {
+  const L0 = { root: data, skillName: name }; const sv = store.getSkillVersion(L0, store.getActive(L0)!)!;
+  return store.getPackage(L0, sv.materializedHash)!.files['SKILL.md'] ?? '';
+};
 
 describe('re-entry is the same run, or a refusal — never a silent switch', () => {
   it('a second call naming a different folder is refused, and the built skill is untouched', () => {

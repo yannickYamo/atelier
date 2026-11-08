@@ -323,11 +323,19 @@ describe('a run through the binary, written the direct way', () => {
     // --style-review: read on the first draft; what it does not hold is told to the review, with the author's sentence
     await setBackend({ byTool: { __plain: [DRAFT, REVIEWED], emit_style_read: { items: [{ id: 'h1', held: false, quote: null }] } } });
     m0 = await mark();
-    const st = go('--style-review') as Styled;
-    expect(st.direct.style).toMatchObject({ on: 'draft', steered: true, found: [{ id: 'h1', held: false }] });
+    const st = go('--style-review') as Styled & { direct: { style?: { draft?: unknown } } };
+    // then read again on the piece the review returned: the record keeps both, so what the review fixed is shown
+    expect(st.direct.style).toMatchObject({ on: 'piece', steered: true, found: [{ id: 'h1', held: false }], draft: [{ id: 'h1', held: false }] });
+    expect((await bodies()).slice(m0).filter((b) => b.tools?.[0]?.function?.name === 'emit_style_read')).toHaveLength(2);
     plain = await plainSince(m0);
     expect(textOf(plain[1])).toContain('Where the draft does not yet write as the author does:\n- Closes on a short plain sentence (theirs: "That is the whole trade"): the draft does not.');
     expect(textOf(plain[0])).not.toContain('Closes on a short plain sentence');
+    // with no method of the author's, the steps the build read off their pieces are read on the piece as their method
+    store.setInferredMethod({ root: s.data, skillName: 'posts' }, { schema: 1, reader: 'scripted', reading: 'x', builtAt: '2026-11-08', steps: [{ id: 'i1', text: 'End on the trade-off, in one line.', piece: 'piece-1', quote: 'That is the whole trade', unit: null }] });
+    await setBackend({ byTool: { __plain: [DRAFT, REVIEWED], emit_style_read: { items: [{ id: 's1', held: true, quote: 'That is the whole trade.' }] } } });
+    m0 = await mark();
+    expect((go() as Styled).direct.style?.found).toMatchObject([{ id: 'h1' }, { id: 's1', kind: 'step', text: 'End on the trade-off, in one line.', held: true }]);
+    expect(textOf((await bodies()).slice(m0).find((b) => b.tools?.[0]?.function?.name === 'emit_style_read')!)).toContain('- [s1] End on the trade-off, in one line.');
     // --no-style: nothing read
     await setBackend({ byTool: { __plain: [DRAFT, REVIEWED] } });
     expect((go('--no-style') as Styled).direct.style).toBeUndefined();

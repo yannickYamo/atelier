@@ -155,11 +155,17 @@ describe('the reading as a value', () => {
 
 // ── THROUGH THE BUILD ──────────────────────────────────────────────────────────────────────────────────────────
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, existsSync, readFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { beforeAll, afterAll } from 'vitest';
 import * as store from '../core/state/store.js';
+
+/** SKILL.md as the compiled path serves it: the stored package (a host is given it without the description: renderers/agent-skill/host.ts). */
+const storedSkill = (data: string, name: string): string => {
+  const L0 = { root: data, skillName: name }; const sv = store.getSkillVersion(L0, store.getActive(L0)!)!;
+  return store.getPackage(L0, sv.materializedHash)!.files['SKILL.md'] ?? '';
+};
 
 const CLI = resolve('dist/cli/atelier.mjs');
 const NOTE = 'How we review a change\n\n1. Open with a Summary section.\n2. Then a Must fix section.\n3. End with a Verdict section that holds one of: Approve, Request changes, Comment.\n';
@@ -246,7 +252,7 @@ describe('through the build', () => {
     expect(without.run('method', 'method.md', '--golden', 'examples', '--name', 'code-review', '--yes', '--report').code).toBe(0);
     expect(store.getReceipt(L(without.data), activeOf(without.data).skillVersionHash)!.movesHash).toBeNull();
     // THE PACKAGE CARRIES NOTHING OF IT: the profile is beside the voice, not in the skill
-    const skillMd = readFileSync(join(withModel.proj, '.claude', 'skills', 'code-review', 'SKILL.md'), 'utf8');
+    const skillMd = storedSkill(withModel.data, 'code-review');
     expect(skillMd).not.toContain('never a summary first'); expect(skillMd).not.toContain('What my moves');
     // THE SKILL WORDS EACH POINT BY ITS COUNT, never by the reading's word: "always" seen in 3 of 4, "often" seen in 1 of 4 (a repertoire line)
     expect(skillMd).toContain('- (in 4 of 4 pieces) Opens from a position of my own, not a summary. e.g. "I would start with the riskiest line."');

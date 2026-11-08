@@ -27,6 +27,10 @@ describe('1. a setting the owner turned on is asked as its flag is', () => {
     expect(directWhyNot({ ...base, settings: { ...DEFAULT_SETTINGS, mode: 'deep' } })).toBe('the skill\'s release sets mode=deep, which the compiled path runs');
     expect(releaseOnly({ ...DEFAULT_SETTINGS, voice: 'incontext' })).toBe('voice=incontext');
     expect(releaseOnly({ ...DEFAULT_SETTINGS, moves: 'serve' })).toBe('moves=serve');
+    // more drafts than two: the direct writer writes one and reviews it, so the compiled path runs the choice
+    expect(releaseOnly({ ...DEFAULT_SETTINGS, drafts: 4 })).toBe('drafts=4');
+    expect(directWhyNot({ ...base, settings: { ...DEFAULT_SETTINGS, drafts: 3 } })).toBe('the skill\'s release sets drafts=3, which the compiled path runs');
+    expect(releaseOnly({ ...DEFAULT_SETTINGS, drafts: 1 })).toBeNull();
   });
   it('--pipeline direct wins over a release setting; a rule the judgement reader earned the right to hold takes the compiled path', () => {
     argv.push('--pipeline', 'direct');

@@ -30,7 +30,6 @@ import { WORK_FORM, type WorkForm } from '../../core/observers/work-form.js';
 import { formatOf } from '../../core/observers/formats.js';
 import { readContext } from '../../core/inference/reading.js';
 import { METHOD_INFER, noteOf, type InferredMethod } from '../../core/method/infer.js';
-import { METHOD_UNITS } from '../../core/method/decision-units.js';
 import { PERSONA_MOVES, PERSONA_TABLE, cellsToAsk, habitsPerCall, pointsPerCall, inferMoves, profileOf, currentReading, personaHashOf, describeMoves, describeMove, pointsWithRates, type MoveProfile, type MoveDraft, type TableCell } from '../../core/compiler/moves.js';
 import { isGeneralScope } from '../../core/state/canonical-state.js';
 import { moveEvidence, readHoldsBack, ownerWrote, HOLDS_BACK } from '../../core/compiler/applicability.js';
@@ -439,7 +438,7 @@ async function movesFor(L: store.StoreLayout, voice: Voice | null, methodText: {
 
 /**
  * THE METHOD READ OFF THE PIECES (core/method/infer.ts), when the owner wrote none: the steps in the pieces' order, each
- * shown by a quote, then what each asks the writer to decide (core/method/decision-units.ts), as the owner's steps get.
+ * shown by a quote. It is read on the piece by the style reading (core/direct/style.ts) and briefs the compiled path.
  * Kept per corpus: read again only when the pieces changed or no model had read them. An owner's note replaces it.
  */
 async function inferredMethodFor(L: store.StoreLayout, methodText: { text: string } | null, purpose: string | null): Promise<InferredMethod | null> {
@@ -457,9 +456,9 @@ async function inferredMethodFor(L: store.StoreLayout, methodText: { text: strin
     const none: InferredMethod = { schema: 1, reader: contextReaderModel() ?? 'model', reading, steps: [], builtAt: new Date().toISOString() };
     store.setInferredMethod(L, none); return none;
   }
-  const units = await readContext(METHOD_UNITS, { steps: d.value.map((st, i) => ({ id: String(i + 1), text: st.text, under: null })) }, contextReaderClient(), contextReaderModel(), { spentUsd: 0, capUsd: 0.2, maxCalls: 1 });
+  // what each step asks the writer to decide is read by the compiled path, on its first run (cli/commands/invoke.ts, `withUnits`)
   const m: InferredMethod = { schema: 1, reader: contextReaderModel() ?? 'model', reading,
-    steps: d.value.map((st, i) => ({ ...st, id: `i${i + 1}`, unit: units.value[String(i + 1)] ?? null })), builtAt: new Date().toISOString() };
+    steps: d.value.map((st, i) => ({ ...st, id: `i${i + 1}`, unit: null })), builtAt: new Date().toISOString() };
   store.setInferredMethod(L, m);
   console.log(`Method, read from your pieces (you wrote none): ${m.steps.length} step(s), followed as your habit on every run and made a rule of nothing; write them yourself with atelier method <file> to make them yours. ${argv.includes('--report') ? `\n${m.steps.map((st) => `  ${st.id.slice(1)}. ${st.text}  (as in "${st.quote.slice(0, 80)}")`).join('\n')}` : ''}`);
   return m;
