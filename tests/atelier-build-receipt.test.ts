@@ -185,4 +185,31 @@ describe('the receipt of a method build', () => {
     expect(receipt.stages.find((s) => s.id === 'profile')).toMatchObject({ ran: true });
     expect(receipt.stages.find((s) => s.id === 'signals')).toMatchObject({ ran: false });
   }, 120_000);
+  it('a method changed and built again is one command, and the new standard says which it supersedes and why', async () => {
+    await setBackend({ byTool: { emit_persona: PERSONA, emit_holds_back: { ids: [] } } });
+    const { data, proj, run } = seed(4);
+    expect(run('new', 'examples', '--method', 'method.md', '--name', 'code-review', '--yes', ...BACKEND()).code).toBe(0);
+    const before = store.getSkillVersion(L(data), store.getActive(L(data))!)!.standardVersionHash;
+    writeFileSync(join(proj, 'method.md'), `${NOTE}4. Keep every finding to one paragraph.\n`);
+    const again = run('new', 'examples', '--method', 'method.md', '--name', 'code-review', '--yes', ...BACKEND());
+    expect(again.code, again.out).toBe(0);
+    const now = store.getStandard(L(data), store.getSkillVersion(L(data), store.getActive(L(data))!)!.standardVersionHash)!;
+    expect(now.standardVersionHash).not.toBe(before);
+    expect(now.supersedes).toBe(before);
+    expect(now.reason).toBe('built again with atelier new');
+    // built again with nothing changed, it supersedes nothing: the same standard
+    const same = run('new', 'examples', '--method', 'method.md', '--name', 'code-review', '--yes', ...BACKEND());
+    expect(same.code, same.out).toBe(0);
+    expect(store.getSkillVersion(L(data), store.getActive(L(data))!)!.standardVersionHash).toBe(now.standardVersionHash);
+  }, 120_000);
+  it('a skill whose release the owner set to mode=deep takes the compiled path on a plain run, and says why', async () => {
+    await setBackend({ byTool: { emit_persona: PERSONA, emit_holds_back: { ids: [] } } });
+    const { run } = seed(4);
+    expect(run('new', 'examples', '--method', 'method.md', '--name', 'code-review', '--yes', ...BACKEND()).code).toBe(0);
+    const set = run('fidelity', '--skill', 'code-review', '--set', 'mode=deep');
+    expect(set.code, set.out).toBe(0);
+    const r = run('invoke', '--skill', 'code-review', 'Review this change.', '--no-questions', '--report', ...BACKEND());
+    // the deep run's own steps ran, with no --deep typed (before, such a skill ran plain, said nowhere)
+    expect(r.out).toContain('Facts listed before writing:');
+  }, 120_000);
 });

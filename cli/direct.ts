@@ -18,11 +18,13 @@
 // The record is the one every run writes (core/loop/run-once.ts, `runOnce`), with `direct` saying what was shown and
 // who chose it, so `atelier report`, `rate`, `fix` and `keep` read it as any other run.
 
+import { STYLE_READ, styleItems, styleNote, styleLines, type StyleReading } from '../core/direct/style.js';
 import * as store from '../core/state/store.js';
 import { sha } from '../core/state/receipt.js';
 import { readContext } from '../core/inference/reading.js';
 import { spend, processSpentUsd, type Budget, type InferenceClient } from '../core/inference/client.js';
 import { resolveProvenance } from '../core/fidelity/provenance.js';
+import type { ImplementationSettings } from '../core/fidelity/types.js';
 import { inferredLines } from '../core/loop/inferred.js';
 import type { RuntimeBinding } from '../core/runtime/binding.js';
 import type { SkillVersion, StandardVersion, DirectRecord, RepairRecord, InvocationSettings, LatitudeLevel, InferredItem } from '../core/state/canonical-state.js';
@@ -85,14 +87,26 @@ export function directWhyNot(x: { voice: Voice | null; std: StandardVersion | nu
   /** a note `atelier evolve` adopted: only the compiled path serves it, or says it no longer applies */
   carried?: boolean;
   /** a short piece from a long-form standard (`--limit`, a short `--class`): its limit and bands are the compiled path's */
-  shortForm?: boolean }): string | null {
+  shortForm?: boolean;
+  /** the skill's release settings (`atelier fidelity --set`): what the owner turned on that only the compiled path runs */
+  settings?: Partial<ImplementationSettings> | null;
+  /** the judgement reader holds VETO on some rule, earned on the owner's labels (core/taste/calibration.ts) */
+  vetoEarned?: boolean }): string | null {
   const asked = flag('--pipeline');
   if (asked !== undefined && asked !== 'direct' && asked !== 'legacy') throw new Error(`--pipeline takes direct or legacy; got "${asked}".`);
   if (asked === 'legacy') return 'asked for the compiled path (--pipeline legacy)';
   if (argv.includes('--deep')) return 'a deep run takes the compiled path';
+  // A SETTING THE OWNER TURNED ON FOR THE SKILL IS ASKED AS THE FLAG IS. Read only from the typed flag, a skill set to
+  // mode=deep ran plain on every run, said nowhere. Only what is off until turned on routes: the release's default
+  // drafts are the compiled path's own, not a choice.
+  const forced = asked === 'direct';
+  const set = forced ? null : releaseOnly(x.settings ?? null);
+  if (set) return `the skill's release sets ${set}, which the compiled path runs`;
   if (x.contract) return 'the skill has an output contract';
   if (!x.std) return 'the skill has no standard';
-  const forced = asked === 'direct';
+  // A RULE YOUR LABELS QUALIFIED THE JUDGEMENT READER TO BLOCK blocks where that reader runs: the compiled path. On the
+  // direct path it was read by nothing that could act, and nothing said so.
+  if (x.vetoEarned && !forced) return 'a rule your labels qualified the judgement reader to hold is read on the compiled path';
   if (x.carried && !forced) return 'a note atelier evolve adopted for this skill is served by the compiled path';
   // as typed either way: `--drafts 3` and `--drafts=3` (the second was missed, and such a run went direct)
   const compiledOnly = COMPILED_FLAGS.find((f) => argv.some((a) => a === f || a.startsWith(`${f}=`)));
@@ -104,6 +118,14 @@ export function directWhyNot(x: { voice: Voice | null; std: StandardVersion | nu
   if (!forced && x.voice?.form === 'REPLY') return 'a skill that answers takes the compiled path';
   if (builtPieces(x.voice, x.exemplar ?? null).length < 1) return 'the skill holds none of the author\'s pieces';
   return null;
+}
+
+/** The first setting of a release that is off until the owner turns it on and that only the compiled path runs, as `key=value`. */
+export function releaseOnly(s: Partial<ImplementationSettings> | null): string | null {
+  if (!s) return null;
+  const on: [string, unknown][] = [['mode', s.mode], ['voice', s.voice], ['selection', s.selection], ['context', s.context], ['nearness', s.nearness], ['moves', s.moves === 'serve' ? 'serve' : undefined]];
+  const hit = on.find(([, v]) => v !== undefined && v !== null);
+  return hit ? `${hit[0]}=${String(hit[1])}` : null;
 }
 
 /** Flags only the compiled path reads: given one, a run takes that path, and says so. */
@@ -275,7 +297,8 @@ export const toCheckOf = (report: Awaited<ReturnType<typeof checkDraftAsync>>, k
  * is said under what was found: held, not held, found by a check not yet qualified on the examples (it blocks nothing),
  * and the steps no check reads, which are the person's to judge.
  */
-export function rulesLines(entries: readonly Entry[]): string[] {
+/** `styleRead`: the steps no check reads were read this run, after the draft (core/direct/style.ts), and are said there. */
+export function rulesLines(entries: readonly Entry[], styleRead = false): string[] {
   const own = entries.filter((e) => e.dimension === 'STANDARD');
   if (!own.length) return [];
   const name = (e: Entry): string => { const t = e.statement.replace(/\s+/g, ' ').trim(); return `"${t.length > 60 ? `${t.slice(0, 57)}...` : t}"`; };
@@ -288,7 +311,7 @@ export function rulesLines(entries: readonly Entry[]): string[] {
     ['a check not yet qualified could not read it', own.filter((e) => unq(e) && e.observation.found === undefined)],
     ['partly checked', own.filter((e) => e.reason === 'PARTLY_CHECKED')],
     ['listed for you to read', own.filter((e) => e.reason === 'LISTED_FOR_YOU')],
-    ['no check reads it: yours to judge', own.filter((e) => e.reason === 'NOT_MACHINE_CHECKABLE')],
+    [styleRead ? 'no check reads it: read below, under how you write' : 'no check reads it: yours to judge', own.filter((e) => e.reason === 'NOT_MACHINE_CHECKABLE')],
     ['does not apply to this piece', own.filter((e) => e.result === 'NOT_APPLICABLE')],
   ];
   return [`Your rules on this piece (${own.length}):`, ...groups.filter(([, es]) => es.length).map(([what, es]) => `  ${what} (${es.length}): ${es.map(name).join('; ')}`)];
@@ -320,6 +343,22 @@ export async function runDirect(c: DirectContext) {
   const variable = taskBlock({ material: c.material, task: c.asked, rules, method, settled: asking.note });
   c.detail(`Written from ${shown.length} of ${catalogue.length} piece(s) of the author's${route.kind ? `, as ${route.kind}` : ''} (${decided.by === 'model' ? 'chosen by a reading of the request' : `chosen by shared words: ${decided.why ?? 'no reading'}`}): ${shown.map((p) => titleOf(p.text)).join('; ')}.`);
 
+  // HOW THE AUTHOR WRITES, read on the text after the draft (core/direct/style.ts): the habits the build read from their
+  // pieces that they show always or often, and the steps of their method no check reads. Never shown to the writer.
+  const styleOf = styleItems(voice?.persona?.points ?? [], planFor(c.std).rules.filter((r) => r.stated && r.check === null && r.role !== 'HABIT').map((r) => r.statement));
+  const steer = argv.includes('--style-review');
+  const styleOn = !argv.includes('--no-style') && styleOf.length > 0;
+  // its own call, held inside what is left of the run's cap
+  const styleBudget: Budget = { spentUsd: 0, capUsd: Math.max(0, Math.min(0.1, budget.capUsd - budget.spentUsd - routeBudget.spentUsd)), maxCalls: 1 };
+  if (steer && argv.includes('--no-review')) c.say('(--style-review tells the self-review what the draft misses; with --no-review there is none, so how you write is read on the piece, report only.)');
+  let style: DirectRecord['style'] | undefined;
+  const readStyle = async (text: string, on: 'draft' | 'piece'): Promise<StyleReading> => {
+    const d = await readContext(STYLE_READ, { items: styleOf, piece: text }, contextReaderClient(), contextReaderModel(), styleBudget, 'other');
+    style = { by: d.by, reader: d.reader, on, steered: on === 'draft', ...(d.why ? { why: d.why } : {}),
+      found: styleOf.map((i) => { const f = d.value.found.find((x) => x.id === i.id); return { id: i.id, kind: i.kind, text: i.text, held: f?.held ?? null, ...(f?.quote ? { quote: f.quote } : {}) }; }) };
+    return d.value;
+  };
+
   // What the delivered text is checked by, set up once: the record's settings are read from it too.
   const checks = checksFor(c.L, { material: [c.asked, materialText].filter(Boolean).join('\n\n'), task: c.asked, context: { request: c.asked, material: c.material.map((m) => ({ name: m.name, text: m.text })) }, guardClaims: !argv.includes('--allow-unsourced'), placeholders: false,
     ...(c.held ? { level: c.held } : {}), claimReads: c.held === 'STRICT' ? 2 : 1 });
@@ -338,7 +377,9 @@ export async function runDirect(c: DirectContext) {
     if (argv.includes('--no-review')) review = { ran: false, why: 'turned off (--no-review)' };
     else {
       try {
-        const again = await prose(c.client, budget, stable, variable, reviewAsk(draft, { material: c.material, edits: corrections, rules, method }), effort, 'emit_review');
+        // with --style-review, what the draft does not hold of how the author writes reaches the review, and only that
+        const styleNoteNow = styleOn && steer ? styleNote(styleOf, (await readStyle(draft, 'draft')).found) : '';
+        const again = await prose(c.client, budget, stable, variable, reviewAsk(draft, { material: c.material, edits: corrections, rules, method, style: styleNoteNow }), effort, 'emit_review');
         output = again.piece; review = { ran: true };
       } catch (e) { review = { ran: false, why: `the review could not run: ${(e as Error).message.split('\n')[0]}` }; c.say(`(the self-review could not run, so the first draft is delivered: ${review.why})`); }
     }
@@ -367,13 +408,16 @@ export async function runDirect(c: DirectContext) {
       } catch (e) { c.say(`(the checks could not read the piece: ${(e as Error).message.split('\n')[0]}; it is delivered unchecked)`); }
     }
     repaired = violatedBefore.filter((id) => !violated.includes(id));
+    // report only: read on the piece as delivered, after the sentences that broke a rule were rewritten, said beside it
+    if (styleOn && !style) await readStyle(output, 'piece');
     return { output, repair: { ...more, passes, violatedBefore, violatedAfter: violated, originalOutputHash: sha(draft), draft, claimsToCheck: toCheck.map((t) => t.sentence),
       why: passes ? `written directly from the author's pieces and reviewed once; the sentences breaking ${violatedBefore.join(', ')} were rewritten` : 'written directly from the author\'s pieces, reviewed once; the checks are listed beside the piece, nothing was changed by them' } };
   };
   const direct = (): DirectRecord => ({ version: DIRECT_VERSION, asked: c.asked, from: catalogue.length,
     pieces: shown.map((p) => ({ id: p.id, title: titleOf(p.text), kept: p.kept })),
     route: { by: decided.by, reader: decided.reader, kind: route.kind, ...(decided.why ? { why: decided.why } : {}) }, effort, review, corrections: corrections.length,
-    ...(method.trim() ? { method: true } : {}), questions: { by: asking.by, asked: asking.questions.map((q) => q.id), answered: asking.answers.map((a) => a.id) } });
+    ...(method.trim() ? { method: true } : {}), questions: { by: asking.by, asked: asking.questions.map((q) => q.id), answered: asking.answers.map((a) => a.id) },
+    ...(style ? { style } : {}) });
   const servedHash = sha(stable);
   const rec = await runOnce(c.L, c.sv, stable, servedHash, { expectedPackageHash: servedHash, servedPackageHash: servedHash, matched: true, servedFiles: ['direct:pieces'] },
     variable, c.client, budget, c.binding, resolveProvenance(flag('--provenance'), process.env), null, flag('--task') ? 'FLAG' : 'POSITIONAL', refine,
@@ -393,7 +437,7 @@ export async function runDirect(c: DirectContext) {
   for (const l of inferredLines(inferred)) c.say(l);
   if (!review.ran && review.why) c.detail(`Self-review: not run (${review.why}).`);
   if (draftText && draftText !== rec.output) c.detail('The self-review revised the first draft; the first draft is kept on the record.');
-  const spent = Math.max(budget.spentUsd + routeBudget.spentUsd, processSpentUsd() - c.spentBefore);
+  const spent = Math.max(budget.spentUsd + routeBudget.spentUsd + styleBudget.spentUsd, processSpentUsd() - c.spentBefore);
   // THE EVALUATION OF THIS RUN, as every run has one (cli/eval-run.ts): stored beside the record, carried by --json, read
   // by report, rate, eval and reproduce. Fault-isolated: it never costs the person the piece.
   let evaluation: EvalSummary | null = null;
@@ -404,7 +448,8 @@ export async function runDirect(c: DirectContext) {
       durationMs: Date.now() - c.started, drafts: 1, applicability: [], report: seen.report, contract: false });
     putEval(c.L, evaluation);
   } catch (e) { c.say(`(the evaluation of this run could not be built: ${(e as Error).message.split('\n')[0]})`); }
-  for (const l of evaluation?.record ? rulesLines(evaluation.record.entries) : []) c.say(l);
+  for (const l of evaluation?.record ? rulesLines(evaluation.record.entries, style?.by === 'model') : []) c.say(l);
+  if (style) { const st = style; for (const l of styleLines(styleOf, st.found, st.on)) c.say(l); if (st.by !== 'model') c.detail(`(how you write was not read: ${st.why ?? 'no model'})`); }
   const json = {
     ...recordHead({ state: evaluation?.record?.state ?? null, standardVersionHash: c.sv.standardVersionHash, skillVersion: c.sv.skillVersionHash, certificate: rec.settings?.certificate ?? null, record: evaluation?.record ?? null }),
     eval: evaluation,

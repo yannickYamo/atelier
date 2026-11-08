@@ -18,6 +18,9 @@ import type { ContrastPair } from '../compiler/contrast-examples.js';
 import type { Recurrence, VersionBreakRates } from '../mining/recurrence.js';
 import type { QualityFloorContract, FloorQualification, FrozenBaselineEntry } from '../distinctiveness/floor.js';
 import { mkdirSync, readFileSync, existsSync, readdirSync, appendFileSync, rmSync } from 'node:fs';
+import { traceRead } from './trace.js';
+/** The path, its read traced (./trace.ts). */
+const traced = (p: string): string => { traceRead(p); return p; };
 import { writeAtomic } from './fs-atomic.js';
 import { packageHashOf, type BuildReceipt } from './receipt.js';
 import type { MoveProfile } from '../compiler/moves.js';
@@ -131,7 +134,7 @@ export function getExemplar(l: StoreLayout): { text: string; request?: string } 
   const p = join(dirs(l).base, 'exemplar.md');
   if (!existsSync(p)) return null;
   const q = join(dirs(l).base, 'exemplar-request.txt');
-  return { text: readFileSync(p, 'utf8'), ...(existsSync(q) ? { request: readFileSync(q, 'utf8') } : {}) };
+  return { text: readFileSync(traced(p), 'utf8'), ...(existsSync(q) ? { request: readFileSync(traced(q), 'utf8') } : {}) };
 }
 /** The exemplar, and the request it answered when it carried one: kept apart, so a rebuild serves the same pair. */
 export function setExemplar(l: StoreLayout, text: string | null, request: string | null = null): void {
@@ -150,7 +153,7 @@ export function setExemplar(l: StoreLayout, text: string | null, request: string
  */
 export function getMethod(l: StoreLayout): { text: string } | null {
   const p = join(dirs(l).base, 'method.md');
-  return existsSync(p) ? { text: readFileSync(p, 'utf8') } : null;
+  return existsSync(p) ? { text: readFileSync(traced(p), 'utf8') } : null;
 }
 export function setMethod(l: StoreLayout, text: string | null): void {
   const p = join(dirs(l).base, 'method.md');
@@ -406,7 +409,7 @@ export function putEditorReading(l: StoreLayout, key: string, value: unknown): v
 
 export function getWorkForm(l: StoreLayout): 'REPLY' | 'DOCUMENT' | null {
   const p = join(dirs(l).base, 'form.txt');
-  const x = existsSync(p) ? readFileSync(p, 'utf8').trim() : '';
+  const x = existsSync(p) ? readFileSync(traced(p), 'utf8').trim() : '';
   return x === 'REPLY' || x === 'DOCUMENT' ? x : null;
 }
 export function setWorkForm(l: StoreLayout, form: 'REPLY' | 'DOCUMENT' | null): void {
@@ -446,11 +449,11 @@ export function putFrozenChecks(l: StoreLayout, checks: Readonly<Record<string, 
  * THE LEDGER OF THE METHOD'S CHECKS AT THE LAST METHOD BUILD (core/method/step-check.ts, `ledgerOf`), keyed by the note it
  * was read for: the build stage reads it for the receipt, on the method build and on a plain rebuild of the same note alike.
  */
-export function getStepLedger(l: StoreLayout): (StepLedger & { readonly methodHash: string }) | null {
+export function getStepLedger(l: StoreLayout): (StepLedger & { readonly methodHash: string; readonly reader?: string }) | null {
   const p = join(dirs(l).base, 'step-ledger.json');
   return existsSync(p) ? readJson<StepLedger & { readonly methodHash: string }>(p, { what: 'the ledger of the method\'s checks' }) : null;
 }
-export function putStepLedger(l: StoreLayout, ledger: StepLedger & { readonly methodHash: string }): void {
+export function putStepLedger(l: StoreLayout, ledger: StepLedger & { readonly methodHash: string; readonly reader?: string }): void {
   mkdirSync(dirs(l).base, { recursive: true });
   writeAtomic(join(dirs(l).base, 'step-ledger.json'), JSON.stringify(ledger, null, 1));
 }
@@ -472,7 +475,7 @@ export function setDrafted(l: StoreLayout, drafted: readonly DraftedExample[]): 
 }
 export function getDocClass(l: StoreLayout): string | null {
   const p = join(dirs(l).base, 'class.txt');
-  return existsSync(p) ? readFileSync(p, 'utf8').trim() || null : null;
+  return existsSync(p) ? readFileSync(traced(p), 'utf8').trim() || null : null;
 }
 export function setDocClass(l: StoreLayout, cls: string | null): void {
   const p = join(dirs(l).base, 'class.txt');
@@ -488,7 +491,7 @@ export function setDocClass(l: StoreLayout, cls: string | null): void {
 export function getMaterial(l: StoreLayout): { name: string; text: string }[] {
   const d = join(dirs(l).base, 'material');
   if (!existsSync(d)) return [];
-  return readdirSync(d).filter((f) => !f.startsWith('.')).sort().map((f) => ({ name: materialName(f), text: readFileSync(join(d, f), 'utf8') }));
+  return readdirSync(d).filter((f) => !f.startsWith('.')).sort().map((f) => ({ name: materialName(f), text: readFileSync(traced(join(d, f)), 'utf8') }));
 }
 export function addMaterial(l: StoreLayout, name: string, text: string): void {
   const d = join(dirs(l).base, 'material');
@@ -793,7 +796,7 @@ export function appendEvent(l: StoreLayout, e: EvidenceEvent | Record<string, un
 export function readEvents(l: StoreLayout): readonly Record<string, unknown>[] {
   const p = join(dirs(l).base, 'events.jsonl');
   if (!existsSync(p)) return [];
-  const lines = readFileSync(p, 'utf8').split('\n').filter(Boolean);
+  const lines = readFileSync(traced(p), 'utf8').split('\n').filter(Boolean);
   const out: Record<string, unknown>[] = [];
   lines.forEach((line, i) => {
     try {

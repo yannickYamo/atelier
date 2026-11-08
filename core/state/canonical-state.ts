@@ -728,6 +728,13 @@ export interface DirectRecord {
   readonly method?: true;
   /** the editor's questions (core/direct/questions.ts): who read them, which were asked, which the person answered */
   readonly questions?: { readonly by: string; readonly asked: readonly string[]; readonly answered: readonly string[] };
+  /**
+   * How the author writes, read on the text (core/direct/style.ts): their always-or-often habits and the steps of their
+   * method no check reads, each held, not held or not read. `on` is the text read (the first draft when `steered`, the
+   * delivered piece otherwise); `steered`: what the draft did not hold was told to the self-review.
+   */
+  readonly style?: { readonly by: string; readonly reader: string; readonly on: 'draft' | 'piece'; readonly steered: boolean;
+    readonly found: readonly { readonly id: string; readonly kind: 'habit' | 'step'; readonly text: string; readonly held: boolean | null; readonly quote?: string }[]; readonly why?: string };
 }
 
 export interface InvocationRecord {

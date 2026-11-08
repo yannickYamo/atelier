@@ -21,6 +21,7 @@
 //
 //   0 9 * * 1  cd /path/to/project && atelier tend --skill house-style --cap 5 --auto >> ~/.atelier/tend.log 2>&1
 
+import { staleChecks } from '../checks.js';
 import * as store from '../../core/state/store.js';
 import { degradedStages, describeStages } from '../../core/state/receipt.js';
 import { findRecurrences, ruleBreakRates, regressedRules, type VersionBreakRates } from '../../core/mining/recurrence.js';
@@ -120,6 +121,8 @@ export function skillDashboard(name: string): void {
   // `--persona auto` reads the persona, its moves and the scope again; a method stage lost part of its checks is repaired by building from the method again.
   const repair = lost.some((x) => x.id === 'persona' || x.id === 'moves' || x.id === 'scope') ? `. Repair: atelier build --name ${name} --persona auto` : '';
   console.log(`  build          ${receipt ? `receipt ${receipt.receiptHash}${lost.length ? `; built without: ${lost.map((x) => `${x.id} (${x.why})`).join(', ')}${repair}` : receipt.stages.length ? '; complete' : ''}${rebuilt}` : 'no receipt (built before receipts were kept)'}`);
+  const stale = staleChecks(L);
+  if (stale) console.log(`  checks         ${stale}`);
   console.log(`  rules          ${live.length}: ${live.filter((r) => r.measurement).length} counted, ${rules.length} read by the taste reader`);
   // WHAT THE ONE HUMAN ACT WAS. Pressing Enter accepts every suggested ruling, so "you approved every rule"
   // and "you took the machine's suggestions" can be the same act. The ledger records which; say it.
