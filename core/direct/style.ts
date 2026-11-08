@@ -32,6 +32,8 @@ export interface StyleReading { readonly found: readonly StyleFound[] }
 
 /** The most items one reading is asked: the habits first, then the steps. */
 export const STYLE_ITEMS_MAX = 16;
+/** Of those, the most the habits take, so a long persona never crowds out the author's own steps. */
+export const STYLE_HABITS_MAX = 10;
 
 export const STYLE_SYSTEM = `You read one piece of writing against how its author writes. You are given the author's habits, each with a sentence of theirs that shows it, and steps of the author's method. For each one, say whether the piece holds it.
 
@@ -49,7 +51,7 @@ export const STYLE_READ: Reading<StyleInput, StyleReading> = {
   id: 'style-read', version: '1',
   system: STYLE_SYSTEM, schema: STYLE_SCHEMA,
   toolName: 'emit_style_read', toolDescription: 'For each of the author\'s habits and steps: whether the piece holds it, with the piece\'s own words.',
-  maxTokens: 1500, estimateUsd: 0.02,
+  maxTokens: 3000, estimateUsd: 0.02,
   prompt(input) {
     const habits = input.items.filter((i) => i.kind === 'habit');
     const steps = input.items.filter((i) => i.kind === 'step');
@@ -86,8 +88,11 @@ interface Habit { readonly description: string; readonly frequency: string; read
  */
 export function styleItems(habits: readonly Habit[], steps: readonly string[]): StyleItem[] {
   const standing = habits.filter((h) => h.quote.trim() && (h.kind ? h.kind === 'standing' : h.frequency === 'ALWAYS' || h.frequency === 'OFTEN'));
-  return [...standing.map((h, i) => ({ id: `h${i + 1}`, kind: 'habit' as const, text: h.description.trim(), theirs: h.quote.trim().slice(0, 200) })),
-    ...steps.filter((s) => s.trim()).map((s, i) => ({ id: `s${i + 1}`, kind: 'step' as const, text: s.trim() }))].slice(0, STYLE_ITEMS_MAX);
+  const own = steps.filter((s) => s.trim());
+  // the steps keep their room: the habits take at most STYLE_HABITS_MAX, and whatever the steps leave of the rest
+  const nHabits = Math.min(standing.length, Math.max(STYLE_HABITS_MAX, STYLE_ITEMS_MAX - own.length));
+  return [...standing.slice(0, nHabits).map((h, i) => ({ id: `h${i + 1}`, kind: 'habit' as const, text: h.description.trim(), theirs: h.quote.trim().slice(0, 200) })),
+    ...own.map((s, i) => ({ id: `s${i + 1}`, kind: 'step' as const, text: s.trim() }))].slice(0, STYLE_ITEMS_MAX);
 }
 
 /** What the review is told, with --style-review: only what the draft does not hold, each habit with the author's sentence. */

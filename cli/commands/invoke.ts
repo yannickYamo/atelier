@@ -486,7 +486,8 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   // what that reading cost: counted in this run's cost on either path
   const latitudeUsd = processSpentUsd() - spentAtRoute;
   const directNot = directWhyNot({ voice: store.getVoice(L), std, contract: contractFile !== null, strict, held: heldFirst?.level ?? null, shortForm: transfer !== null, exemplar: store.getExemplar(L),
-    carried: store.getCarry(L) !== null, settings: runSettings });
+    carried: store.getCarry(L) !== null, settings: runSettings,
+    vetoEarned: std !== null && !argv.includes('--no-taste') && tastePermissions(tasteRules(std), store.readEvents(L), readerModel()).veto.size > 0 });
   // A SKILL WHOSE CHECKS AN EARLIER CHECK READER READ is said on every run, on either path, until it is built again.
   const stale = std ? staleChecks(L) : null;
   if (stale) report.say(`Note: ${stale}.`);

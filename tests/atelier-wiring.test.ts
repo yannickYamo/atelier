@@ -12,6 +12,7 @@ import { join } from 'node:path';
 import { directWhyNot, releaseOnly } from '../cli/direct.js';
 import { servedExamples, staleChecks } from '../cli/checks.js';
 import { DEFAULT_SETTINGS } from '../core/fidelity/types.js';
+import { argv, sha } from '../cli/runtime.js';
 import { READER_KEY } from '../core/method/freeze.js';
 import * as store from '../core/state/store.js';
 import type { StandardVersion } from '../core/state/canonical-state.js';
@@ -26,6 +27,15 @@ describe('1. a setting the owner turned on is asked as its flag is', () => {
     expect(directWhyNot({ ...base, settings: { ...DEFAULT_SETTINGS, mode: 'deep' } })).toBe('the skill\'s release sets mode=deep, which the compiled path runs');
     expect(releaseOnly({ ...DEFAULT_SETTINGS, voice: 'incontext' })).toBe('voice=incontext');
     expect(releaseOnly({ ...DEFAULT_SETTINGS, moves: 'serve' })).toBe('moves=serve');
+  });
+  it('--pipeline direct wins over a release setting; a rule the judgement reader earned the right to hold takes the compiled path', () => {
+    argv.push('--pipeline', 'direct');
+    try {
+      expect(directWhyNot({ ...base, settings: { ...DEFAULT_SETTINGS, mode: 'deep' } })).toBeNull();
+      expect(directWhyNot({ ...base, vetoEarned: true })).toBeNull();
+    } finally { argv.splice(argv.length - 2, 2); }
+    expect(directWhyNot({ ...base, vetoEarned: true })).toBe('a rule your labels qualified the judgement reader to hold is read on the compiled path');
+    expect(directWhyNot({ ...base, vetoEarned: false })).toBeNull();
   });
   it('the release\'s own defaults stay direct: two drafts are the compiled path\'s default, not a choice', () => {
     expect(directWhyNot({ ...base, settings: DEFAULT_SETTINGS })).toBeNull();
@@ -47,15 +57,24 @@ describe('2. the example-names check reads what the writer can be shown', () => 
 });
 
 describe('3. checks read by an earlier check reader are said', () => {
-  const ledger = { methodHash: 'm', steps: 3, checked: 2, by: 'model' as const, failed: [], conflicts: [] };
-  it('a ledger with no reader, or another, is stale; the current reader\'s is not', () => {
+  const METHOD = '1. Open on the problem.\n2. End on an idea.';
+  const ledger = { methodHash: sha(METHOD), steps: 3, checked: 2, by: 'model' as const, failed: [], conflicts: [] };
+  it('another reader\'s checks are stale; ones with no reader recorded may be; the current reader\'s are not', () => {
     const L = layout();
+    store.setMethod(L, METHOD);
     expect(staleChecks(L)).toBeNull();
-    store.putStepLedger(L, ledger);
-    expect(staleChecks(L)).toBe('your rules\' checks were read by an earlier version of the check reader; they run as they were until the skill is built again with atelier new');
     store.putStepLedger(L, { ...ledger, reader: 'an earlier reader' });
-    expect(staleChecks(L)).not.toBeNull();
+    expect(staleChecks(L)).toBe('your rules\' checks were read by an earlier version of the check reader; they run as they were until the skill is built again with atelier new');
+    store.putStepLedger(L, ledger);
+    expect(staleChecks(L)).toBe('your rules\' checks were read before Atelier recorded which check reader read them; if this skill was built before 8 November 2026, build it again with atelier new to read them with the current one');
     store.putStepLedger(L, { ...ledger, reader: READER_KEY });
+    expect(staleChecks(L)).toBeNull();
+  });
+  it('the ledger of a method the skill no longer holds says nothing: built again from its pieces alone, it is not stale', () => {
+    const L = layout();
+    store.putStepLedger(L, { ...ledger, reader: 'an earlier reader' });
+    expect(staleChecks(L)).toBeNull();
+    store.setMethod(L, 'another method');
     expect(staleChecks(L)).toBeNull();
   });
   it('checks no model read are read at any build: never stale', () => {

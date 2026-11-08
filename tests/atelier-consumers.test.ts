@@ -25,7 +25,7 @@ const setBackend = (b: unknown): Promise<Response> => fetch(`http://127.0.0.1:${
 /** Read on the default run (`atelier run`, the direct writer). */
 const DEFAULT = ['skills/*/active.json', 'skills/*/versions/*.json', 'skills/*/standards/*.json', 'skills/*/packages/*.json', 'skills/*/ledgers/*.json',
   'skills/*/voice.json', 'skills/*/method.md', 'skills/*/exemplar.md', 'skills/*/exemplar-request.txt', 'skills/*/step-ledger.json',
-  'skills/*/fidelity/active.json', 'skills/*/fidelity/releases/*.json', 'skills/*/fidelity/profiles/*.json'];
+  'skills/*/fidelity/active.json', 'skills/*/fidelity/releases/*.json', 'skills/*/fidelity/profiles/*.json', 'skills/*/fidelity/retrieval/*.json'];
 /** Written at build and read elsewhere, by the reader named. */
 const ELSEWHERE: Readonly<Record<string, string>> = {
   'runs/*': 'the build\'s own run folder: read by the build steps that follow and by `atelier inspect`',
@@ -41,12 +41,18 @@ const ELSEWHERE: Readonly<Record<string, string>> = {
   'skills/*/frozen-checks.json': 'the next method build: checks kept while their step and examples are unchanged',
   'skills/*/form.txt': 'the compiled path (what form a reply takes)',
   'skills/*/method-inferred.json': 'the compiled path and `atelier fix` (a skill built with no method note)',
+  // a build that reads the pieces with a model
+  'skills/*/evidence.json': 'the skill card (`atelier status --skill`)',
+  'skills/*/signals.json': 'the compiled path\'s draft choice and `atelier verify`',
+  'skills/*/fidelity/retrieval.json': 'the compiled path, `atelier voice` and `fidelity`',
+  'skills/*/floor/state.json': '`atelier floor`, `tend`, `fix`, `optimize`, `tells` and the next build',
 };
 /** Voice fields written at build and read elsewhere. (The persona is read on the default run by core/direct/style.ts.) */
 const VOICE_ELSEWHERE: Readonly<Record<string, string>> = {
   lengthSpan: 'the compiled path and SKILL.md\'s length line',
   lengthWords: 'SKILL.md\'s length line',
   servedWhole: 'SKILL.md for a host',
+  pieceBudget: 'the next build (the piece budget the owner chose is kept) and the compiled path\'s answer examples',
 };
 
 const PERSONA = { points: [
@@ -58,9 +64,12 @@ const post = (i: number): string => `---\nrequest: Write about tool ${i}.\n---\n
 const glob = (p: string): RegExp => new RegExp(`^${p.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*')}$`);
 
 interface Traced { readonly written: Set<string>; readonly read: Set<string>; readonly voiceRead: Set<string>; readonly voiceWritten: string[] }
-async function traced(withMethod: boolean): Promise<Traced> {
+type Build = 'method' | 'examples' | 'discovery';
+const factor = (description: string) => ({ description, appliesWhen: [{ id: 'w', describe: 'GENERAL' }], readFrom: ['p1.md'], wouldBeAbsentIf: 'the opposite shows', needsFromUser: '', quote: '' });
+async function traced(how: Build): Promise<Traced> {
+  const withMethod = how === 'method';
   const data = mkdtempSync(join(tmpdir(), 'atelier-consumers-data-')); const proj = mkdtempSync(join(tmpdir(), 'atelier-consumers-proj-'));
-  mkdirSync(join(proj, 'posts')); for (let i = 1; i <= (withMethod ? 4 : 3); i++) writeFileSync(join(proj, 'posts', `p${i}.md`), post(i));
+  mkdirSync(join(proj, 'posts')); for (let i = 1; i <= ({ method: 4, examples: 3, discovery: 8 } as const)[how]; i++) writeFileSync(join(proj, 'posts', `p${i}.md`), post(i));
   writeFileSync(join(proj, 'method.md'), NOTE);
   const trace = (n: string): string => join(data, `trace-${n}.txt`);
   const run = (t: string, ...a: string[]): void => {
@@ -68,8 +77,16 @@ async function traced(withMethod: boolean): Promise<Traced> {
     delete env.ANTHROPIC_API_KEY; delete env.ANTHROPIC_AUTH_TOKEN; delete env.ATELIER_CONTEXT_READER;
     execFileSync('node', [CLI, ...a, '--provider', 'openai-compatible', '--base-url', `http://127.0.0.1:${port}`, '--model', 'scripted'], { encoding: 'utf8', cwd: proj, env, stdio: ['ignore', 'pipe', 'pipe'] });
   };
-  await setBackend({ byTool: { emit_persona: PERSONA, emit_holds_back: { ids: [] } } });
-  run(trace('build'), 'new', 'posts', ...(withMethod ? ['--method', 'method.md'] : ['write posts like these']), '--name', 'posts', '--yes');
+  await setBackend({ byTool: { emit_persona: PERSONA, emit_holds_back: { ids: [] },
+    // discovery: the rules read off the pieces, matched and observed on the pieces held back, then accepted
+    emit_factors: { factors: [factor('Lead with the decision, then the reasoning.'), factor('Close on a plain instruction.')] },
+    emit_matches: { matches: [{ leftIndex: 0, matchedRightIndex: 0 }, { leftIndex: 1, matchedRightIndex: 1 }] },
+    emit_observation: { applicable: true, present: true, why: 'seen' },
+    emit_piece: { piece: 'I would start with the riskiest line. The tool keeps notes local. Tests first, then the rest.' } } });
+  if (how === 'discovery') {
+    run(trace('read'), 'new', 'posts', 'write posts like these', '--name', 'posts');
+    run(trace('build'), 'new', 'posts', 'write posts like these', '--name', 'posts', '--accept');
+  } else run(trace('build'), 'new', 'posts', ...(withMethod ? ['--method', 'method.md'] : ['write posts like these']), '--name', 'posts', '--yes');
   await setBackend({ byTool: { __plain: ['# Tool\n\nA draft.', '# Tool\n\nI would start with the riskiest line. Reviewed.'] } });
   run(trace('run'), 'invoke', '--skill', 'posts', 'Write about tool 9.', '--json', '--claims', 'pattern', '--no-questions');
   const norm = (p: string): string => p.replace(`${data}/`, '').replace(proj, '<project>').replace(/^runs\/[^/]+\/.*/, 'runs/*').replace(/^sessions\/.*/, 'sessions/*')
@@ -78,7 +95,7 @@ async function traced(withMethod: boolean): Promise<Traced> {
   const of = (n: string, k: string): string[] => lines(n).filter((l) => l.startsWith(`${k} `)).map((l) => l.slice(2));
   const voice = JSON.parse(readFileSync(join(data, 'skills', 'posts', 'voice.json'), 'utf8')) as Record<string, unknown>;
   return {
-    written: new Set(of('build', 'W').map(norm)), read: new Set(of('run', 'R').map(norm)),
+    written: new Set([...of('read', 'W'), ...of('build', 'W')].map(norm)), read: new Set(of('run', 'R').map(norm)),
     voiceRead: new Set(of('run', 'F').filter((f) => f.split('#')[0].endsWith('/voice.json')).map((f) => f.split('#')[1])),
     voiceWritten: Object.keys(voice),
   };
@@ -92,9 +109,9 @@ const declared = (p: string): 'default' | 'elsewhere' | null => {
 };
 
 // Three pieces with no method: built from the pieces as they are (cli/commands/new.ts), the persona read from them.
-describe.each([['a method build', true], ['a build from three examples alone', false]])('%s, then a default run', (_, withMethod) => {
+describe.each([['a method build', 'method'], ['a build from three examples alone', 'examples'], ['a build that reads eight pieces with a model, accepted', 'discovery']] as const)('%s, then a default run', (_, how) => {
   let t: Traced;
-  beforeAll(async () => { t = await traced(withMethod); }, 180_000);
+  beforeAll(async () => { t = await traced(how); }, 240_000);
   it('every file the build wrote is named: read on the default run, or read elsewhere by the reader the table names', () => {
     expect([...t.written].filter((p) => declared(p) === null)).toEqual([]);
   });

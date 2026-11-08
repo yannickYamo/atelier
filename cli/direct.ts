@@ -89,7 +89,9 @@ export function directWhyNot(x: { voice: Voice | null; std: StandardVersion | nu
   /** a short piece from a long-form standard (`--limit`, a short `--class`): its limit and bands are the compiled path's */
   shortForm?: boolean;
   /** the skill's release settings (`atelier fidelity --set`): what the owner turned on that only the compiled path runs */
-  settings?: Partial<ImplementationSettings> | null }): string | null {
+  settings?: Partial<ImplementationSettings> | null;
+  /** the judgement reader holds VETO on some rule, earned on the owner's labels (core/taste/calibration.ts) */
+  vetoEarned?: boolean }): string | null {
   const asked = flag('--pipeline');
   if (asked !== undefined && asked !== 'direct' && asked !== 'legacy') throw new Error(`--pipeline takes direct or legacy; got "${asked}".`);
   if (asked === 'legacy') return 'asked for the compiled path (--pipeline legacy)';
@@ -97,11 +99,14 @@ export function directWhyNot(x: { voice: Voice | null; std: StandardVersion | nu
   // A SETTING THE OWNER TURNED ON FOR THE SKILL IS ASKED AS THE FLAG IS. Read only from the typed flag, a skill set to
   // mode=deep ran plain on every run, said nowhere. Only what is off until turned on routes: the release's default
   // drafts are the compiled path's own, not a choice.
-  const set = releaseOnly(x.settings ?? null);
+  const forced = asked === 'direct';
+  const set = forced ? null : releaseOnly(x.settings ?? null);
   if (set) return `the skill's release sets ${set}, which the compiled path runs`;
   if (x.contract) return 'the skill has an output contract';
   if (!x.std) return 'the skill has no standard';
-  const forced = asked === 'direct';
+  // A RULE YOUR LABELS QUALIFIED THE JUDGEMENT READER TO BLOCK blocks where that reader runs: the compiled path. On the
+  // direct path it was read by nothing that could act, and nothing said so.
+  if (x.vetoEarned && !forced) return 'a rule your labels qualified the judgement reader to hold is read on the compiled path';
   if (x.carried && !forced) return 'a note atelier evolve adopted for this skill is served by the compiled path';
   // as typed either way: `--drafts 3` and `--drafts=3` (the second was missed, and such a run went direct)
   const compiledOnly = COMPILED_FLAGS.find((f) => argv.some((a) => a === f || a.startsWith(`${f}=`)));
@@ -292,7 +297,8 @@ export const toCheckOf = (report: Awaited<ReturnType<typeof checkDraftAsync>>, k
  * is said under what was found: held, not held, found by a check not yet qualified on the examples (it blocks nothing),
  * and the steps no check reads, which are the person's to judge.
  */
-export function rulesLines(entries: readonly Entry[]): string[] {
+/** `styleRead`: the steps no check reads were read this run, after the draft (core/direct/style.ts), and are said there. */
+export function rulesLines(entries: readonly Entry[], styleRead = false): string[] {
   const own = entries.filter((e) => e.dimension === 'STANDARD');
   if (!own.length) return [];
   const name = (e: Entry): string => { const t = e.statement.replace(/\s+/g, ' ').trim(); return `"${t.length > 60 ? `${t.slice(0, 57)}...` : t}"`; };
@@ -305,7 +311,7 @@ export function rulesLines(entries: readonly Entry[]): string[] {
     ['a check not yet qualified could not read it', own.filter((e) => unq(e) && e.observation.found === undefined)],
     ['partly checked', own.filter((e) => e.reason === 'PARTLY_CHECKED')],
     ['listed for you to read', own.filter((e) => e.reason === 'LISTED_FOR_YOU')],
-    ['no check reads it: yours to judge', own.filter((e) => e.reason === 'NOT_MACHINE_CHECKABLE')],
+    [styleRead ? 'no check reads it: read below, under how you write' : 'no check reads it: yours to judge', own.filter((e) => e.reason === 'NOT_MACHINE_CHECKABLE')],
     ['does not apply to this piece', own.filter((e) => e.result === 'NOT_APPLICABLE')],
   ];
   return [`Your rules on this piece (${own.length}):`, ...groups.filter(([, es]) => es.length).map(([what, es]) => `  ${what} (${es.length}): ${es.map(name).join('; ')}`)];
@@ -342,7 +348,9 @@ export async function runDirect(c: DirectContext) {
   const styleOf = styleItems(voice?.persona?.points ?? [], planFor(c.std).rules.filter((r) => r.stated && r.check === null && r.role !== 'HABIT').map((r) => r.statement));
   const steer = argv.includes('--style-review');
   const styleOn = !argv.includes('--no-style') && styleOf.length > 0;
-  const styleBudget: Budget = { spentUsd: 0, capUsd: 0.1, maxCalls: 1 };
+  // its own call, held inside what is left of the run's cap
+  const styleBudget: Budget = { spentUsd: 0, capUsd: Math.max(0, Math.min(0.1, budget.capUsd - budget.spentUsd - routeBudget.spentUsd)), maxCalls: 1 };
+  if (steer && argv.includes('--no-review')) c.say('(--style-review tells the self-review what the draft misses; with --no-review there is none, so how you write is read on the piece, report only.)');
   let style: DirectRecord['style'] | undefined;
   const readStyle = async (text: string, on: 'draft' | 'piece'): Promise<StyleReading> => {
     const d = await readContext(STYLE_READ, { items: styleOf, piece: text }, contextReaderClient(), contextReaderModel(), styleBudget, 'other');
@@ -375,8 +383,6 @@ export async function runDirect(c: DirectContext) {
         output = again.piece; review = { ran: true };
       } catch (e) { review = { ran: false, why: `the review could not run: ${(e as Error).message.split('\n')[0]}` }; c.say(`(the self-review could not run, so the first draft is delivered: ${review.why})`); }
     }
-    // report only: read on the piece the review delivered (or the draft, where the review did not run), said beside it
-    if (styleOn && !style) await readStyle(output, 'piece');
     // 4. THE CHECKS. A rule the owner required that the reviewed piece still breaks has the sentences that break it
     // rewritten, as `atelier verify --repair` does (core/loop/run-repair.ts, `refineToStandard`): only those spans, and
     // never at the cost of another rule. Everything else the checks find (a specific not in what was given, a habit
@@ -402,6 +408,8 @@ export async function runDirect(c: DirectContext) {
       } catch (e) { c.say(`(the checks could not read the piece: ${(e as Error).message.split('\n')[0]}; it is delivered unchecked)`); }
     }
     repaired = violatedBefore.filter((id) => !violated.includes(id));
+    // report only: read on the piece as delivered, after the sentences that broke a rule were rewritten, said beside it
+    if (styleOn && !style) await readStyle(output, 'piece');
     return { output, repair: { ...more, passes, violatedBefore, violatedAfter: violated, originalOutputHash: sha(draft), draft, claimsToCheck: toCheck.map((t) => t.sentence),
       why: passes ? `written directly from the author's pieces and reviewed once; the sentences breaking ${violatedBefore.join(', ')} were rewritten` : 'written directly from the author\'s pieces, reviewed once; the checks are listed beside the piece, nothing was changed by them' } };
   };
@@ -440,7 +448,7 @@ export async function runDirect(c: DirectContext) {
       durationMs: Date.now() - c.started, drafts: 1, applicability: [], report: seen.report, contract: false });
     putEval(c.L, evaluation);
   } catch (e) { c.say(`(the evaluation of this run could not be built: ${(e as Error).message.split('\n')[0]})`); }
-  for (const l of evaluation?.record ? rulesLines(evaluation.record.entries) : []) c.say(l);
+  for (const l of evaluation?.record ? rulesLines(evaluation.record.entries, style?.by === 'model') : []) c.say(l);
   if (style) { const st = style; for (const l of styleLines(styleOf, st.found, st.on)) c.say(l); if (st.by !== 'model') c.detail(`(how you write was not read: ${st.why ?? 'no model'})`); }
   const json = {
     ...recordHead({ state: evaluation?.record?.state ?? null, standardVersionHash: c.sv.standardVersionHash, skillVersion: c.sv.skillVersionHash, certificate: rec.settings?.certificate ?? null, record: evaluation?.record ?? null }),

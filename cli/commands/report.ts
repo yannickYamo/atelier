@@ -181,6 +181,19 @@ export function traceOf(rec: InvocationRecord): [string, string[]][] {
     ...pw.answers.filter((a) => a.by === 'told').map((a) => `told before (${a.id}): ${a.answer}`),
     ...(pw.plan ? planLines({ use: 'choose', ...pw.plan }).map((l) => `plan · ${l}`) : [pw.noPlan ?? `no plan (${pw.planBy === 'off' ? 'not asked for this run' : 'none could be made'})`]),
     ...(pw.planChanges ? [`the plan was made again ${pw.planChanges} time(s) with your changes`] : [])]]);
+  // THE DIRECT WRITER (cli/direct.ts): the pieces it wrote from, whether the review ran, and how the author writes, read
+  const d = rec.direct;
+  if (d) out.push(['written from your pieces', [
+    `${d.pieces.length} of ${d.from} piece(s): ${d.pieces.map((p) => p.title).join('; ').slice(0, 200)} (chosen ${d.route.by === 'model' ? 'by a reading of the request' : 'by shared words'})`,
+    `self-review: ${d.review.ran ? 'ran' : `not run${d.review.why ? ` (${d.review.why})` : ''}`}${d.corrections ? ` · ${d.corrections} correction(s) of yours shown` : ''}`,
+    ...(d.questions?.asked.length ? [`asked before the draft: ${d.questions.asked.join(', ')} · answered: ${d.questions.answered.join(', ') || 'none'}`] : [])]]);
+  if (d?.style) {
+    const st = d.style;
+    const say = (held: boolean | null): string[] => st.found.filter((x) => x.held === held).map((x) => `"${x.text.slice(0, 90)}"${x.quote ? `: "${x.quote.slice(0, 80)}"` : ''}`);
+    out.push(['how you write', [
+      `read on the ${st.on === 'draft' ? 'first draft, and what it missed told to the self-review' : 'piece, report only'} · ${st.by === 'model' ? st.reader : `not read (${st.why ?? st.by})`}`,
+      ...say(true).map((l) => `held · ${l}`), ...say(false).map((l) => `not held · ${l}`), ...(st.by === 'model' ? say(null).map((l) => `not read · ${l}`) : [])]]);
+  }
   if (rec.copied) out.push(['copied from the material', [`${rec.copied.runs} stretch(es) of 5 words or more${rec.copied.runs ? `, the longest ${rec.copied.longest} words` : ''}; one of ${rec.copied.repairAt} or more is rewritten`,
     ...rec.copied.shown.map((x) => `"${x.slice(0, 100)}"`)]]);
   // BESIDE THE WORK: what the run decided for the person, what it was not given, and each sentence it wrote again

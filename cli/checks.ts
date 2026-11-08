@@ -12,7 +12,7 @@ import type { CheckOptions } from '../core/loop/run-repair.js';
 import { modelSensor, patternSensor, claimAction, withRules, type ClaimSensor, type EnrichedSource } from '../core/loop/claim-extract.js';
 import { modelJudge, type ContextJudge } from '../core/loop/context-judge.js';
 import type { Budget, InferenceClient } from '../core/inference/client.js';
-import { argv, flag, providerFor, clientAndBinding, boundMaterial, DATA, CONTEXT_READER_DEFAULT } from './runtime.js';
+import { argv, flag, providerFor, clientAndBinding, boundMaterial, DATA, CONTEXT_READER_DEFAULT, sha } from './runtime.js';
 import { join } from 'node:path';
 import { formatOf, type FormatProfile } from '../core/observers/formats.js';
 import { shortFormOptions, shortFormTransfer, type ShortTransfer } from '../core/observers/short-form.js';
@@ -210,6 +210,11 @@ export function checksFor(L: store.StoreLayout, opts: {
 export function staleChecks(L: store.StoreLayout): string | null {
   const ledger = store.getStepLedger(L);
   if (ledger?.by !== 'model' || ledger.reader === READER_KEY) return null;
+  // the ledger of the method the skill holds now: a skill built again from its pieces alone keeps no method, and an old
+  // method's ledger says nothing about it (as the build's receipt reads it, cli/commands/build.ts)
+  if (ledger.methodHash !== sha(store.getMethod(L)?.text ?? '')) return null;
+  // built before the reader was recorded with the checks: maybe stale, said as maybe
+  if (ledger.reader === undefined) return 'your rules\' checks were read before Atelier recorded which check reader read them; if this skill was built before 8 November 2026, build it again with atelier new to read them with the current one';
   return 'your rules\' checks were read by an earlier version of the check reader; they run as they were until the skill is built again with atelier new';
 }
 

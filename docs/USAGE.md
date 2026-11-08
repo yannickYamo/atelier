@@ -399,7 +399,7 @@ was given for: run that request again and it reaches the writer without being as
 `--no-questions` reads nothing.
 
 Under the piece, each of your rules is said under what was found: held, not held, found by a check not yet qualified on
-your examples (it blocks nothing), and the steps no check reads, which are yours to judge.
+your examples (it blocks nothing), and the steps no check reads, which are yours to judge (read below when how you write is read).
 
 Then how you write, read on the piece: the habits the build read from your pieces that you show always or often, each
 with a sentence of yours, and the steps of your method no check reads. Each is held (with the piece's own words), not
