@@ -658,7 +658,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   // shows its reader a gap, and a person who gave only a title is better served by a piece written whole from what is
   // given, wrong where it must be, than by a piece that waits on them. So an invented story, source or figure is listed
   // for them, beside the work (by the skill's latitude where material is bound), and the last read writes again any slot
-  // a writer leaves (core/loop/own-words.ts). `--placeholders` asks for slots; `--no-placeholders` is the default.
+  // a writer leaves (core/loop/own-words.ts). `--placeholders` asks for slots; without it there are none.
   const placeholdersOn = argv.includes('--placeholders');
   const needsLine = materialLine(satisfiable, material.length > 0, !argv.includes('--allow-unsourced'), name, placeholdersOn);
   if (needsLine) report.say(needsLine);

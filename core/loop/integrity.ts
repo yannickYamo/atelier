@@ -6,7 +6,9 @@
 // optimises what it can see; nothing it could see said what the sentence claimed.
 //
 // So every rewritten span is compared with the span it replaces, deterministically, on what carries a
-// claim's meaning and strength:
+// claim's meaning and strength. These word lists decide on every run, with a model set up or not: there is no model
+// reading of a rewrite's meaning for them to be a floor under. They only ever refuse a rewrite (the original stays), so
+// what they can cost is a repair not taken, never a meaning changed.
 //
 //   numbers      every figure in the original is still there
 //   negation     the count of not / no / never / none / nor / without / -n't is unchanged

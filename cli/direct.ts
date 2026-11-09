@@ -208,28 +208,29 @@ export interface Asked { readonly note: string; readonly questions: readonly Que
  * not answer reaches the writer. Answers given with --answers count, now or for a kind this run did not ask, and are
  * kept as next time's suggestion. --no-questions reads nothing.
  */
-export async function editorQuestions(c: Pick<DirectContext, 'L' | 'asked' | 'material' | 'interactive' | 'read' | 'say'>, method: string): Promise<Asked> {
+export async function editorQuestions(c: Pick<DirectContext, 'L' | 'asked' | 'material' | 'interactive' | 'read' | 'say'>, method: string, kind: string | null = null): Promise<Asked> {
   if (argv.includes('--no-questions')) return { note: '', questions: [], answers: [], by: 'off' };
   // AN EDITOR'S ANSWER BELONGS TO THE PIECE IT WAS GIVEN FOR. The one idea of last week's post is not this one's: read
   // across requests, an answer counted as "stated" for the next piece, which was then neither asked nor told it.
   const forRequest = sha(c.asked.trim());
-  const editorKind = (id: string): boolean => (EDITOR_KINDS as readonly string[]).includes(id);
-  const told = store.getTold(c.L).filter((t) => !editorKind(t.id) || t.for === forRequest);
-  const input = { request: c.asked, material: materialShown(c.material), method, told };
+  // An answer kept for one request (`for`) is this request's only; one with none (the compiled path's) is the skill's.
+  const all = store.getTold(c.L);
+  const told = all.filter((t) => t.for === undefined ? !(EDITOR_KINDS as readonly string[]).includes(t.id) : t.for === forRequest);
+  const input = { request: c.asked, material: materialShown(c.material), method, told, kind };
   // THE SAME INPUT ASKS THE SAME QUESTIONS: a model's reading is kept under the hash of what it read (store.ts, getEditorReading).
-  const key = sha(JSON.stringify([EDITOR_QUESTIONS.version, contextReaderModel(), input.request, input.material, input.method, told.map((t) => [t.id, t.answer])]));
+  const key = sha(JSON.stringify([EDITOR_QUESTIONS.version, contextReaderModel(), input.request, input.kind, input.material, input.method, told.map((t) => [t.id, t.answer])]));
   const kept = keptReading(store.getEditorReading(c.L, key));
   const decided = kept ??
     await readContext(EDITOR_QUESTIONS, input, contextReaderClient(), contextReaderModel(), { spentUsd: 0, capUsd: 0.03, maxCalls: 1 }, 'other');
   if (!kept && decided.by === 'model') store.putEditorReading(c.L, key, { value: decided.value, by: decided.by });
   const questions = decided.value.questions;
-  const { answers: given, said } = readAnswers(flag('--answers'), questions, [...EDITOR_KINDS]);
+  const { answers: given, said } = readAnswers(flag('--answers'), questions, [...new Set([...EDITOR_KINDS, ...questions.map((q) => q.id)])]);
   for (const s of said) c.say(s);
   const answers: { id: string; answer: string }[] = [];
   let rest = false;
   // WHAT THE PERSON ANSWERED FOR THIS SAME REQUEST ON AN EARLIER RUN IS STILL THEIRS: it reaches the writer again, asked
   // or found stated in it, and is never asked twice. Their answer now, where they give one, is the one that counts.
-  const before = new Map(told.filter((t) => editorKind(t.id)).map((t) => [t.id, t.answer]));
+  const before = new Map(told.filter((t) => t.for === forRequest).map((t) => [t.id, t.answer]));
   for (const q of questions) {
     const g = given.get(q.id) ?? before.get(q.id);
     if (g !== undefined) { answers.push({ id: q.id, answer: g }); continue; }
@@ -239,9 +240,13 @@ export async function editorQuestions(c: Pick<DirectContext, 'L' | 'asked' | 'ma
     if (JUST_WRITE.test(typed)) { rest = true; continue; }
     answers.push({ id: q.id, answer: typedAnswer(q, typed) });
   }
+  // an answer for a kind this run did not ask (a field, a compiled-path kind) still counts; a decision of another
+  // reading's naming has no question here to say what it decides, so it is not told
   for (const [id, answer] of [...given, ...before]) if (!questions.some((q) => q.id === id) && askOf(id) !== null && !answers.some((a) => a.id === id)) answers.push({ id, answer });
   const at = new Date().toISOString();
-  store.addTold(c.L, answers.filter((a) => before.get(a.id) !== a.answer).map((a) => ({ id: a.id, ask: questions.find((q) => q.id === a.id)?.ask ?? askOf(a.id) ?? a.id, answer: a.answer, at, ...(editorKind(a.id) ? { for: forRequest } : {}) })));
+  // every answer to this reading's questions belongs to this request; a compiled-path kind given here stays the skill's
+  const ofThisPiece = (id: string): boolean => (EDITOR_KINDS as readonly string[]).includes(id) || questions.some((q) => q.id === id);
+  store.addTold(c.L, answers.filter((a) => before.get(a.id) !== a.answer).map((a) => ({ id: a.id, ask: questions.find((q) => q.id === a.id)?.ask ?? askOf(a.id) ?? a.id, answer: a.answer, at, ...(ofThisPiece(a.id) ? { for: forRequest } : {}) })));
 
   const open = questions.filter((q) => !answers.some((a) => a.id === q.id));
   if (answers.length) c.say(`Settled before writing, in your words: ${answers.map((a) => a.id).join(', ')}.`);
@@ -249,7 +254,7 @@ export async function editorQuestions(c: Pick<DirectContext, 'L' | 'asked' | 'ma
     c.say(`An editor would ask (${open.length}), and the piece was written without ${open.length === 1 ? 'it' : 'them'}: ${open.map((q) => `${q.id}: ${q.ask}`).join(' ')}`);
     c.say(`  To answer, run again with --answers "${open.map((q) => `${q.id}=<letter or your words>`).join(',')}"${open.map((q) => ` (${q.id}: ${q.options.map((o, i) => `${String.fromCharCode(97 + i)}) ${o}`).join('; ')})`).join('')}.`);
   }
-  return { note: editorNote(answers), questions, answers, by: decided.by };
+  return { note: editorNote(answers, questions), questions, answers, by: decided.by };
 }
 
 const asEffort = (x: string | undefined): Effort => {
@@ -365,7 +370,7 @@ export async function runDirect(c: DirectContext) {
   // The author's method, whole and in their words, where the skill has one: what they wrote down is theirs, like their pieces.
   const method = store.getMethod(c.L)?.text ?? '';
   // What an editor would ask before the draft: only the person's answers reach the writer.
-  const asking = await editorQuestions(c, method);
+  const asking = await editorQuestions(c, method, route.kind ?? null);
   const variable = taskBlock({ material: c.material, task: c.asked, rules, method, settled: asking.note });
   c.detail(`Written from ${shown.length} of ${catalogue.length} piece(s) of the author's${route.kind ? `, as ${route.kind}` : ''} (${decided.by === 'model' ? 'chosen by a reading of the request' : `chosen by shared words: ${decided.why ?? 'no reading'}`}): ${shown.map((p) => titleOf(p.text)).join('; ')}.`);
 

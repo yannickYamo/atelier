@@ -454,7 +454,10 @@ function waive(r: VerifyReport, waived?: ReadonlyMap<string, string>, said = 'wi
   return { ...r, checked, failed: checked.some((c) => acts(c) && c.result.verdict === 'VIOLATED') };
 }
 
-/** A sentence that attributes or cites: its source is a claim of its own, whatever its figures. */
+/**
+ * A sentence that attributes or cites: its source is a claim of its own, whatever its figures. A pattern that reads
+ * meaning and decides with a model set up too (it sorts the claims any reader found into cut or listed): recorded.
+ */
 const ATTRIBUTION = /\b(?:according to|(?:a|an|the|this|one)\s+(?:\d{4}\s+)?(?:\w+\s+){0,2}(?:report|study|survey|poll|paper|analysis|benchmark|audit)\b|research (?:shows|found|finds|suggests)|studies (?:show|found)|data from|(?:said|says|told (?:me|us)|reported|estimated|estimates)\b)|["“][^"”]{3,}["”]/i;
 
 /** The line listing public facts to check: informational, never a rule the draft broke. */
@@ -729,7 +732,11 @@ export function emptyHeadings(text: string): number {
   return empty;
 }
 
-/** A sentence that opens by pointing back at what came before it. */
+/**
+ * A sentence that opens by pointing back at what came before it. Not only a floor: where the context judge also reads
+ * what a cut left dangling (`danglingJudged`), this pattern's finds still count beside the judge's (a pattern that
+ * reads meaning and decides with a model set up: recorded).
+ */
 const POINTS_BACK = /^\W*(?:this|that|these|those|it|its|they|them|either|if it|if so|so|but|which|such|here|there|nobody\b[^.!?]*\bthem)\b/i;
 const norm = (t: string): string => t.toLowerCase().replace(/[*_`>#]/g, '').replace(/\s+/g, ' ').trim();
 
@@ -770,7 +777,7 @@ export function redraftPreserves(original: string, redrafted: string, changeable
 /**
  * `danglingAfterCut`, read by the context judge when there is one: every sentence that followed a cut one
  * (or is the new first sentence) is put to it, and those it says no longer stand alone are returned. The
- * word pattern is the floor when there is no judge or it cannot answer.
+ * word pattern answers alone when there is no judge or it cannot answer; with one, the caller still adds the pattern's.
  */
 export async function danglingJudged(before: string, after: string, cut: readonly string[], judge?: ContextJudge): Promise<string[]> {
   if (!judge) return danglingAfterCut(before, after, cut);

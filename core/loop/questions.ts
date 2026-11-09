@@ -70,6 +70,8 @@ export interface Question {
   readonly last?: string;
   /** what an answer unlocks, one line (`chooseQuestions` sets it on every question it returns) */
   readonly unlocks?: string;
+  /** a decision of this piece's own (../direct/questions.ts): what it decides, in a few words, as the writer is told it */
+  readonly about?: string;
 }
 /** An answer the skill was given, kept per skill (../state/store.ts). */
 export interface ToldAnswer { readonly id: string; readonly ask: string; readonly answer: string; readonly at: string }

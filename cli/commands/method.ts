@@ -486,15 +486,17 @@ export function describeFrom(note: string, purpose: string | null): string | nul
  * an instruction (an explanation, a template or a criterion is not a step). The floor reads no meaning, so with no model
  * nothing is kept and the list is the method.
  */
-async function asideKept(note: string): Promise<Set<string>> {
+// null where no model read them: stepsOf then takes its floor
+async function asideKept(note: string): Promise<Set<string> | null> {
   const aside = asideOf(note);
   const noModel = !canReach('discovery') || argv.includes('--no-model');
-  if (!aside.length || noModel) return new Set();
+  if (!aside.length) return new Set();
+  if (noModel) return null;
   const input = { steps: aside.map((st, i) => ({ id: String(i + 1), text: st.text, under: st.under })) };
   const d = await readContext(METHOD_UNITS, input, contextReaderClient(), contextReaderModel(), { spentUsd: 0, capUsd: 0.1, maxCalls: 1 });
-  if (d.by !== 'model') return new Set();
+  if (d.by !== 'model') return null;
   const kept = new Set(input.steps.filter((st) => d.value[st.id]?.kind === 'instruction').map((st) => st.text));
-  if (argv.includes('--report')) console.log(`(sentences beside the list read as instructions, and kept as steps: ${kept.size} of ${aside.length}.)`);
+  if (argv.includes('--report')) console.log(`(sentences beside the list, and a title-shaped first line, read as instructions and kept as steps: ${kept.size} of ${aside.length}.)`);
   return kept;
 }
 

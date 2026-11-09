@@ -22,6 +22,12 @@
 //
 //   EVIDENCE    a first person gathering evidence with nothing shown ("I checked our logs and…", "we
 //               tested this", "a customer told me…"), undated and unnumbered but a claim all the same
+//
+// WITH A MODEL SET UP these patterns still gate, except where a claim reader qualified for that model and kind of
+// writing reads the claims instead (core/loop/claim-extract.ts, QUALIFIED_READERS; or ATELIER_CLAIMS_GATE=reader): an
+// unqualified reader's finds are only a warning beside them. A cited source and a stated figure are always read by
+// these patterns. So they are patterns that read meaning and decide with a model present, until a reader qualifies:
+// recorded as such, not called a floor.
 
 import { sentencesOf, wordsOf, type Sentence } from '../observers/text.js';
 import type { Span } from '../observers/registry.js';
