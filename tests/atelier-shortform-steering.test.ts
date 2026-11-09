@@ -167,8 +167,8 @@ describe.skipIf(!existsSync(CLI))('five tweets, through the binary, on the scrip
   }, 120_000);
 
   // THE DEFAULT RUN (the direct writer): the long paragraph is delivered as written and never blocked for its length,
-  // and hashtags the pieces never carry are said beside it, never removed (graded steering is the compiled path's)
-  it('on the default run: the 384-character paragraph is not blocked for its length, and hashtags the pieces never carry are listed, not removed', async () => {
+  // and hashtags the pieces never carry are removed in code and said (the rest of graded steering is the compiled path's)
+  it('on the default run: the 384-character paragraph is not blocked for its length, and hashtags the pieces never carry are removed and said', async () => {
     const direct = (): { code: number; j: Invoked & { direct?: unknown } } => { const r = run('invoke', '--pipeline', 'direct', '--skill', 'tw', 'write a tweet', '--json', '--allow-unsourced', ...model()); return { code: r.code, j: JSON.parse(r.out) as Invoked & { direct?: unknown } }; };
     await script(CORPORATE);
     const long = direct();
@@ -181,9 +181,14 @@ describe.skipIf(!existsSync(CLI))('five tweets, through the binary, on the scrip
     const t = direct();
     expect(t.j.direct).toBeTruthy();
     expect(t.code).toBe(0);
-    expect(t.j.output).toBe(tagged);
-    const habit = (t.j as unknown as { record: { entries: { statement: string; result: string; observation: { evidence?: string } }[] } }).record.entries.find((e) => e.statement.startsWith('No hashtags'));
-    expect(habit).toMatchObject({ result: 'FAIL', observation: { evidence: 'no hashtags; this has 3' } });
+    expect(t.j.output).toBe(GOOD[16]);
+    expect((t.j.direct as { hashtags?: unknown }).hashtags).toEqual({ max: 0, removed: 3 });
+    const habit = (t.j as unknown as { record: { entries: { statement: string; result: string }[] } }).record.entries.find((e) => e.statement.startsWith('No hashtags'));
+    expect(habit?.result).not.toBe('FAIL');
+    // a request that names its hashtags asks for them: nothing is removed
+    await script(tagged);
+    const asked = JSON.parse(run('invoke', '--pipeline', 'direct', '--skill', 'tw', 'write a tweet, tagged #devops', '--json', '--allow-unsourced', ...model()).out) as Invoked;
+    expect(asked.output).toBe(tagged);
   }, 120_000);
 
   it('the author\'s held-back tweets still pass, and a staccato tweet still fails', () => {

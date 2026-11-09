@@ -52,6 +52,12 @@ describe('which pieces a request is written from: a reading, grounded', () => {
     expect(PIECE_ROUTE.ground({ asks_for: 'x', pieces: ['p9'] }, input)).toBeNull();
     expect(PIECE_ROUTE.ground({ asks_for: 'x' }, input)).toBeNull();
   });
+  it('the length the request states is the reading\'s words, found in the request; a quote not there is no reading of it', () => {
+    const asked = { ...input, request: 'Compare the 500 words I pasted with Bear, in about 2,000 words.' };
+    expect(PIECE_ROUTE.ground({ asks_for: 'x', pieces: ['p1'], length: 'about 2,000 words' }, asked)).toEqual({ order: ['p1'], kind: 'x', length: 'about 2,000 words' });
+    expect(PIECE_ROUTE.ground({ asks_for: 'x', pieces: ['p1'], length: null }, asked)).toEqual({ order: ['p1'], kind: 'x', length: null });
+    expect(PIECE_ROUTE.ground({ asks_for: 'x', pieces: ['p1'], length: 'about 3,000 words' }, asked)).toEqual({ order: ['p1'], kind: 'x' });
+  });
   it('the catalogue it reads names each piece by title, opening and the request it answered; never a piece whole', () => {
     const long = catalogueOf([{ text: `# Long\n\n${'word '.repeat(400)}TAIL`, request: null }, { text: '# Two\n\nb', request: 'a comparison' }]);
     const p = PIECE_ROUTE.prompt({ ...input, pieces: long });

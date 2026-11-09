@@ -39,6 +39,7 @@ import { cardLine, type PurposeCard } from '../core/direct/card.js';
 import { readAnswers, questionLines, materialShown, type Question } from '../core/loop/questions.js';
 import { typedAnswer, JUST_WRITE, questionsJson } from './prewrite.js';
 import { createInterface } from 'node:readline/promises';
+import { learnedShape, steeredShape, removeShapeExtras } from '../core/loop/shape-steer.js';
 import { checkDraftAsync, refineToStandard, REPAIR_PASSES, CLAIMS_TO_CHECK, INCONCLUSIVE, PUBLIC_FACTS } from '../core/loop/run-repair.js';
 import { supportIsIn, numbersIn } from '../core/loop/claim-extract.js';
 import type { Span } from '../core/observers/registry.js';
@@ -411,7 +412,7 @@ export async function runDirect(c: DirectContext) {
   };
 
   // What the delivered text is checked by, set up once: the record's settings are read from it too.
-  const checks = checksFor(c.L, { material: [c.asked, materialText].filter(Boolean).join('\n\n'), task: c.asked, context: { request: c.asked, material: c.material.map((m) => ({ name: m.name, text: m.text })) }, guardClaims: !argv.includes('--allow-unsourced'), placeholders: false,
+  const checks = checksFor(c.L, { material: [c.asked, materialText].filter(Boolean).join('\n\n'), task: c.asked, context: { request: c.asked, material: c.material.map((m) => ({ name: m.name, text: m.text })), ...(decided.by === 'model' && route.length !== undefined ? { lengthQuote: route.length } : {}) }, guardClaims: !argv.includes('--allow-unsourced'), placeholders: false,
     ...(c.held ? { level: c.held } : {}), claimReads: c.held === 'STRICT' ? 2 : 1 });
 
   // 2-3. THE DRAFT, THEN ONE SELF-REVIEW. A review that fails costs the review, never the piece: the draft is delivered, said.
@@ -419,6 +420,7 @@ export async function runDirect(c: DirectContext) {
   let draftText = '';
   let repaired: string[] = [];
   let grounded: DirectRecord['grounded'];
+  let hashtags: DirectRecord['hashtags'];
   let fixedHere = '';
   // set inside the refine step; a holder, so the type is not narrowed to its first value
   const seen: { report: VerifyReport | null; checks: ReturnType<typeof checksFor> | null } = { report: null, checks: null };
@@ -451,6 +453,23 @@ export async function runDirect(c: DirectContext) {
         if (g.note) c.say(`(${g.note})`);
       }
     } catch (e) { c.say(`(a fact carried from one of your pieces could not be rewritten: ${(e as Error).message.split('\n')[0]}; it is listed)`); }
+    // 3c. HASHTAGS THE AUTHOR'S PIECES DO NOT CARRY (core/loop/shape-steer.ts): past the most their pieces carry, removed in
+    // code, no model call; a tag inside a sentence keeps its word. A request or material that itself names hashtags asks
+    // for them, and nothing is removed.
+    {
+      const band = c.std.requirements.find((r) => r.authority !== 'EXPERT_REJECTED' && learnedShape(r) && steeredShape(r.measurement)?.shape === 'hashtags');
+      const max = band?.measurement?.params.max;
+      const asksTags = /(?:^|\s)#\p{L}|hashtag/iu.test(`${c.asked}\n${materialText}`);
+      if (typeof max === 'number' && !asksTags && !argv.includes('--no-repair')) {
+        const tags = (t: string): number => (t.match(/(?<![\w&])#(?=[\p{N}_]*\p{L})[\p{L}\p{N}_]+/gu) ?? []).length;
+        const next = removeShapeExtras(output, 'hashtags', max);
+        const removed = tags(output) - tags(next);
+        if (removed > 0) {
+          hashtags = { max, removed }; output = next;
+          c.say(`Hashtags removed (${removed}): your pieces carry ${max === 0 ? 'none' : `at most ${max}`}; a tag inside a sentence kept its word.`);
+        }
+      }
+    }
     // 4. THE CHECKS. A rule the owner required that the reviewed piece still breaks has the sentences that break it
     // rewritten, as `atelier verify --repair` does (core/loop/run-repair.ts, `refineToStandard`): only those spans, and
     // never at the cost of another rule. Everything else the checks find (a specific not in what was given, a habit
@@ -496,7 +515,7 @@ export async function runDirect(c: DirectContext) {
     pieces: shown.map((p) => ({ id: p.id, title: titleOf(p.text), kept: p.kept })),
     route: { by: decided.by, reader: decided.reader, kind: route.kind, ...(decided.why ? { why: decided.why } : {}) }, effort, review, corrections: corrections.length,
     ...(method.trim() ? { method: true } : {}), questions: { by: asking.by, asked: asking.questions.map((q) => q.id), answered: asking.answers.map((a) => a.id) },
-    ...(style ? { style } : {}), ...(grounded ? { grounded } : {}) });
+    ...(style ? { style } : {}), ...(grounded ? { grounded } : {}), ...(hashtags ? { hashtags } : {}) });
   // HOW TYPICAL OF THE AUTHOR THE PIECE IS (core/fidelity): read on the delivered text against the profile the build
   // installed, for the evaluation's panel. Descriptive only: nothing on this path steers by it, so no release is credited.
   const fid = argv.includes('--no-fidelity') ? null : releaseFor(c.L, c.sv, null);

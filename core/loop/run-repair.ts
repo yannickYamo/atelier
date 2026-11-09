@@ -733,9 +733,9 @@ export function emptyHeadings(text: string): number {
 }
 
 /**
- * A sentence that opens by pointing back at what came before it. Not only a floor: where the context judge also reads
- * what a cut left dangling (`danglingJudged`), this pattern's finds still count beside the judge's (a pattern that
- * reads meaning and decides with a model set up: recorded).
+ * A sentence that opens by pointing back at what came before it: THE FLOOR. Where the context judge answers what a cut
+ * left dangling (`danglingRead`), the judge alone decides; this pattern reads only when there is no judge or it
+ * cannot answer.
  */
 const POINTS_BACK = /^\W*(?:this|that|these|those|it|its|they|them|either|if it|if so|so|but|which|such|here|there|nobody\b[^.!?]*\bthem)\b/i;
 const norm = (t: string): string => t.toLowerCase().replace(/[*_`>#]/g, '').replace(/\s+/g, ' ').trim();
@@ -777,10 +777,10 @@ export function redraftPreserves(original: string, redrafted: string, changeable
 /**
  * `danglingAfterCut`, read by the context judge when there is one: every sentence that followed a cut one
  * (or is the new first sentence) is put to it, and those it says no longer stand alone are returned. The
- * word pattern answers alone when there is no judge or it cannot answer; with one, the caller still adds the pattern's.
+ * word pattern answers alone when there is no judge or it cannot answer. It says who answered.
  */
-export async function danglingJudged(before: string, after: string, cut: readonly string[], judge?: ContextJudge): Promise<string[]> {
-  if (!judge) return danglingAfterCut(before, after, cut);
+export async function danglingRead(before: string, after: string, cut: readonly string[], judge?: ContextJudge): Promise<{ found: string[]; by: 'judge' | 'pattern' }> {
+  if (!judge) return { found: danglingAfterCut(before, after, cut), by: 'pattern' };
   const gone = new Set(cut.map(norm));
   const was = claimUnitsOf(before).map((u) => u.text.trim());
   const now = new Set(claimUnitsOf(after).map((u) => norm(u.text)));
@@ -790,8 +790,8 @@ export async function danglingJudged(before: string, after: string, cut: readonl
     if (gone.has(norm(w)) && next && !gone.has(norm(next)) && now.has(norm(next))) pairs.push({ removed: w, next });
   });
   const verdicts = await judge.standsAlone(pairs);
-  if (!verdicts) return danglingAfterCut(before, after, cut);
-  return pairs.filter((_, i) => !verdicts[i]).map((p) => p.next);
+  if (!verdicts) return { found: danglingAfterCut(before, after, cut), by: 'pattern' };
+  return { found: pairs.filter((_, i) => !verdicts[i]).map((p) => p.next), by: 'judge' };
 }
 
 export const REDRAFT_SYSTEM = `You are given a draft and a numbered list of statements that must go because nothing the author
@@ -1012,7 +1012,10 @@ async function refineOnLedger(client: InferenceClient, budget: Budget, skill: st
    * text is a step through `applyStep` (./repair.ts) instead.
    */
   // The fewest words the request asks for, when it names a length in words: no step takes the text further below it.
-  const asked = opts.context?.request ? statedLength(opts.context.request) : null;
+  // where a reading of the request quoted the words that state it, only those are parsed; the pattern over the whole
+  // request is the floor, with no reading
+  const lengthFrom = opts.context?.lengthQuote !== undefined ? opts.context.lengthQuote : opts.context?.request;
+  const asked = lengthFrom ? statedLength(lengthFrom) : null;
   const askedFloor = asked?.unit === 'words' ? statedBounds(asked)[0] : null;
   const record = (d: PlannedStep, outcome: ControllerDecisionRecord['outcome'], movement: number, note?: string): void => {
     ledger.add({ action: d.action, targets: [...d.targets], why: d.why, expectedGain: d.expectedGain, expectedCostUsd: d.expectedCostUsd, outcome,
@@ -1095,10 +1098,11 @@ async function refineOnLedger(client: InferenceClient, budget: Budget, skill: st
       if (!notes.includes(note)) notes.push(note);
       listedHere.push(...e.kept);
     }
-    // Found by the pattern (may be cut with its parent) or by the judge (may only be redrafted).
-    const patternDangling = e.cut.length ? danglingAfterCut(t, e.text, e.cut) : [];
-    const judgedDangling = e.cut.length && opts.judge ? await danglingJudged(t, e.text, e.cut, opts.judge) : [];
-    const dangling = [...new Set([...patternDangling, ...judgedDangling])];
+    // Read by the judge where one answers (may only be redrafted), or by the pattern, the floor (may be cut with its parent).
+    const read = e.cut.length ? await danglingRead(t, e.text, e.cut, opts.judge) : { found: [], by: 'pattern' as const };
+    const patternDangling = read.by === 'pattern' ? read.found : [];
+    const judgedDangling = read.by === 'judge' ? read.found : [];
+    const dangling = read.found;
     const broke = e.cut.length ? brokenByCut(t, e.text) ?? (dangling.length ? `${dangling.length} sentence(s) pointing at cut text` : null) : null;
     if (!broke) return e;
     // THE DRAFT WRITTEN AGAIN AROUND THE CUT IS A STEP (rule B), held to the one acceptance rule (rule A) besides its own
