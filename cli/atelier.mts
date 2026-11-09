@@ -123,6 +123,7 @@ export const COMMANDS: readonly string[] = [
   'judgements',
   'pending',
   'profiles',
+  'models',
   'promote',
   'ratify',
   'ratify-close',
@@ -148,13 +149,13 @@ export const FRONT_DOOR: readonly string[] = [
   '  atelier setup                                 let the agents in this project call it',
   '',
   '  It writes too: atelier run "<task>", then atelier fix "<what was wrong>". Explain a command: atelier <command> --help',
-  '  Everything else: atelier lab',
+  '  Everything else: atelier lab. Which model it uses: atelier models',
 ];
 
 /** The commands a newcomer does not need, by what they are for. Nothing is hidden: it is one command away. */
 const LAB: readonly (readonly [string, readonly string[]])[] = [
   ['write to the standard', ['run', 'fix', 'keep', 'invoke']],
-  ['check and correct', ['score', 'material', 'amend', 'add', 'status', 'report', 'rate', 'export', 'mcp']],
+  ['check and correct', ['score', 'material', 'amend', 'add', 'status', 'report', 'rate', 'export', 'mcp', 'models']],
   ['build, the long way', ['method', 'skill', 'review', 'pending', 'ratify', 'ratify-one', 'ratify-close', 'build', 'confirm', 'plan', 'abort', 'check']],
   ['measure a skill', ['reproduce', 'evolve', 'eval', 'qualify', 'floor', 'reference', 'history', 'inspect']],
   ['experimental: not shown to help yet', ['fidelity', 'taste', 'tells', 'library', 'tend', 'voice', 'optimize', 'mine', 'sharpen', 'improve', 'compare', 'profiles', 'carriers']],
@@ -245,6 +246,8 @@ const main = async (): Promise<void> => {
     case 'check': return check();
     case 'export': { exportSkill(); return; }
     case 'profiles': { profiles(); return; }
+    // which model a command uses: said, nothing run
+    case 'models': { console.log(`usage: ${USAGE.models}`); return; }
     case 'carriers': { carriers(); return; }
     case 'skill': return skill();
     case 'plan': { plan(); return; }

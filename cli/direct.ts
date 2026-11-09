@@ -51,7 +51,8 @@ import { recordHead } from '../core/eval/certificate.js';
 import { checksFor } from './checks.js';
 import { contextReaderClient, contextReaderModel, flag, numericFlag, argv } from './runtime.js';
 import { asText } from '../core/discovery/text.js';
-import type { Voice } from '../core/compiler/voice.js';
+import type { Voice } from '../core/compiler/voice.js';import { pointsWithRates } from '../core/compiler/moves.js';
+
 
 export const DIRECT_VERSION = '1';
 const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'] as const;
@@ -351,7 +352,11 @@ export async function runDirect(c: DirectContext) {
   const statedRules = planFor(c.std).rules.filter((r) => r.stated);
   const unchecked = statedRules.length ? statedRules.filter((r) => r.check === null && r.role !== 'HABIT').map((r) => r.statement)
     : (store.getInferredMethod(c.L)?.steps ?? []).map((st) => st.text);
-  const styleOf = styleItems(voice?.persona?.points ?? [], unchecked);
+  // which habits stand is the build's count over the pieces where it made one (core/compiler/moves.ts): the profile the
+  // version's receipt names; with none, the reading's own word for how often
+  const movesHash = store.getReceipt(c.L, c.sv.skillVersionHash)?.movesHash;
+  const counted = movesHash ? store.getMovesByHash(c.L, movesHash) : null;
+  const styleOf = styleItems(pointsWithRates(voice?.persona?.points ?? [], counted), unchecked);
   const steer = argv.includes('--style-review');
   const styleOn = !argv.includes('--no-style') && styleOf.length > 0;
   // its own call, held inside what is left of the run's cap

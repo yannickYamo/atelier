@@ -724,3 +724,13 @@ deliver everything the CLI does; `atelier carriers --skill posts --host codex` s
 
 
 [← README](../README.md)
+
+## Choosing the model
+
+Every command takes `--provider` (`anthropic` or `openai-compatible`), `--model`, `--base-url`, `--backend` and
+`--api-key-env` (the variable that holds the key; `ANTHROPIC_API_KEY` by default). `--discovery-provider`,
+`--discovery-model`, `--target-provider` and `--target-model` (and their `-base-url`) set the build's reading and the
+run's writing apart, so a standard learnt with the most capable model you can reach runs on a cheaper one.
+`--price-in` and `--price-out` give the rate in USD per million tokens where the provider reports none, and
+`--token-limit-param` names the field a provider takes for its token limit. `atelier models` says the same;
+docs/PORTABILITY.md has the detail.

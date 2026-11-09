@@ -11,6 +11,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import type { InferenceClient, InferenceRequest, InferenceResult, InferenceTermination } from '../core/inference/client.js';
 import { budgetUsd, inferenceTimeoutMs, INFERENCE_MAX_RETRIES, GenerationIncomplete, ModelUnavailable, isUnknownModel } from '../core/inference/client.js';
 import { ANTHROPIC_PRICING, costOf, priceFor, type Pricing } from './pricing.js';
+import { traceCall } from '../core/state/trace.js';
 
 export type { Pricing } from './pricing.js';
 
@@ -160,6 +161,7 @@ export class AnthropicInferenceClient implements InferenceClient {
   }
 
   async complete(req: InferenceRequest): Promise<InferenceResult> {
+    traceCall(req.toolName);
     if (req.plain) return this.completePlain(req, req.plain);
     let res: Anthropic.Message;
     // What THIS call was sent with, read before it leaves. Calls made side by side (the taste reader's, a claim

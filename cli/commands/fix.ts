@@ -72,7 +72,7 @@ interface LastRun { readonly invocationId: string; readonly skillName: string; r
   readonly correcting?: { readonly of: string; readonly complaints: readonly string[] } }
 export type FixRoute = 'THIS_OUTPUT' | 'EVERY_RUN' | 'EVALUATION';
 /** The words that say the skill itself should change: said outright, or by answering a question an earlier `fix` asked. */
-const ALWAYS = ['--always', '--add', '--pick', '--skip', '--invocation', '--carrier'];
+const ALWAYS = ['--always', '--add', '--pick', '--skip', '--invocation'];
 const said = (args: readonly string[], flags: readonly string[]): boolean => args.some((a) => flags.some((f) => a === f || a.startsWith(`${f}=`)));
 
 /**

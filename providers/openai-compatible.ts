@@ -26,6 +26,7 @@ import type { InferenceClient, InferenceRequest, InferenceResult, InferenceTermi
 import { budgetUsd, inferenceTimeoutMs, GenerationIncomplete, ModelUnavailable, isUnknownModel } from '../core/inference/client.js';
 import { OPENAI_COMPATIBLE_PRICING, costOf, isLocalBackend, priceFor, type Pricing } from './pricing.js';
 import { accountRefusal } from './anthropic.js';
+import { traceCall } from '../core/state/trace.js';
 
 /**
  * How the backend is asked to produce a typed object.
@@ -176,6 +177,7 @@ export class OpenAICompatibleInferenceClient implements InferenceClient {
   }
 
   async complete(req: InferenceRequest): Promise<InferenceResult> {
+    traceCall(req.toolName);
     // STABLE FIRST. There is no cache_control on this protocol, so the only lever is prefix stability,
     // and putting the invariant instructions ahead of the corpus is what a prefix cache can act on.
     const messages = [
