@@ -51,9 +51,19 @@ import { recordHead } from '../core/eval/certificate.js';
 import { checksFor } from './checks.js';
 import { contextReaderClient, contextReaderModel, flag, numericFlag, argv } from './runtime.js';
 import { asText } from '../core/discovery/text.js';
-import type { Voice } from '../core/compiler/voice.js';import { pointsWithRates } from '../core/compiler/moves.js';import { groundCarried, carriedClaims } from '../core/loop/grounding.js';import { releaseFor } from './fidelity.js';import { readFidelity } from '../core/fidelity/profile.js';
+import type { Voice } from '../core/compiler/voice.js';
+import { pointsWithRates } from '../core/compiler/moves.js';
+import { groundCarried, carriedClaims } from '../core/loop/grounding.js';
+import { releaseFor } from './fidelity.js';
+import { readFidelity } from '../core/fidelity/profile.js';
 import { typicalityOf } from '../core/fidelity/typicality.js';
 import type { FidelityRecord } from '../core/fidelity/types.js';
+import { grammarListed, toCheckList } from '../core/observers/grammar.js';
+import { GRAMMAR_NOT_CHECKED } from '../core/eval/record-build.js';import { howHeld } from './how-held.js';
+import { methodReading, methodLine } from '../core/eval/obligations.js';
+
+
+
 
 
 
@@ -306,6 +316,7 @@ export const toCheckOf = (report: Awaited<ReturnType<typeof checkDraftAsync>>, k
  * and the steps no check reads, which are the person's to judge.
  */
 /** `styleRead`: the steps no check reads were read this run, after the draft (core/direct/style.ts), and are said there. */
+const notRunHere = (e: Entry): boolean => (e.observation.evidence ?? '').startsWith(GRAMMAR_NOT_CHECKED);
 export function rulesLines(entries: readonly Entry[], styleRead = false): string[] {
   const own = entries.filter((e) => e.dimension === 'STANDARD');
   if (!own.length) return [];
@@ -318,11 +329,18 @@ export function rulesLines(entries: readonly Entry[], styleRead = false): string
     ['a check not yet qualified found it held', own.filter((e) => unq(e) && e.observation.found === 'MET')],
     ['a check not yet qualified could not read it', own.filter((e) => unq(e) && e.observation.found === undefined)],
     ['partly checked', own.filter((e) => e.reason === 'PARTLY_CHECKED')],
-    ['listed for you to read', own.filter((e) => e.reason === 'LISTED_FOR_YOU')],
+    // a check that could not run is not checked (the grammar engine switched off, say), never "listed"
+    ['not checked: its check could not run', own.filter((e) => e.reason === 'LISTED_FOR_YOU' && notRunHere(e))],
+    ['listed for you to read', own.filter((e) => e.reason === 'LISTED_FOR_YOU' && !notRunHere(e))],
     [styleRead ? 'no check reads it: read below, under how you write' : 'no check reads it: yours to judge', own.filter((e) => e.reason === 'NOT_MACHINE_CHECKABLE')],
     ['does not apply to this piece', own.filter((e) => e.result === 'NOT_APPLICABLE')],
   ];
   return [`Your rules on this piece (${own.length}):`, ...groups.filter(([, es]) => es.length).map(([what, es]) => `  ${what} (${es.length}): ${es.map(name).join('; ')}`)];
+}
+/** Each grammar rule's findings left for the person, named one by one (core/observers/grammar.ts): never changed. */
+export function grammarLines(report: VerifyReport | null | undefined): string[] {
+  return (report?.checked ?? []).filter((c) => c.observer === 'GRAMMAR' && grammarListed(c) && c.result.spans.length)
+    .map((c) => `Grammar, listed for you to check and never changed (${c.result.spans.length}): ${toCheckList(c.result.spans, c.result.spans.length)}.`);
 }
 const LISTED_IDS: ReadonlySet<string> = new Set(['UNSOURCED', CLAIMS_TO_CHECK, INCONCLUSIVE, PUBLIC_FACTS]);
 
@@ -385,6 +403,7 @@ export async function runDirect(c: DirectContext) {
   let draftText = '';
   let repaired: string[] = [];
   let grounded: DirectRecord['grounded'];
+  let fixedHere = '';
   // set inside the refine step; a holder, so the type is not narrowed to its first value
   const seen: { report: VerifyReport | null; checks: ReturnType<typeof checksFor> | null } = { report: null, checks: null };
   // what the last check listed, with the words each reader named: the record keeps the sentences, the person reads both
@@ -422,7 +441,7 @@ export async function runDirect(c: DirectContext) {
     // missed) is listed beside the piece and changes nothing. `--no-repair` changes nothing; the piece is still read, so
     // its evaluation rests on the checks, never on nothing.
     let violatedBefore: string[] = []; let violated: string[] = []; let toCheck: ToCheck[] = []; let passes = 0;
-    let more: Partial<RepairRecord> = {};
+    let more: Partial<RepairRecord> = {}; let fixedHow = '';
     {
       try {
         let report = await checkDraftAsync(c.name, c.std, output, checks);
@@ -431,7 +450,7 @@ export async function runDirect(c: DirectContext) {
           try {
             const r = await refineToStandard(c.client, budget, c.name, c.std, output, REPAIR_PASSES, checks);
             output = r.output; report = r.report; passes = r.repair?.passes ?? 0;
-            if (r.repair) { const { passes: _p, violatedBefore: _b, violatedAfter: _a, originalOutputHash: _h, draft: _d, claimsToCheck: _c, why: _w, ...rest } = r.repair; more = rest; }
+            if (r.repair) { const { passes: _p, violatedBefore: _b, violatedAfter: _a, originalOutputHash: _h, draft: _d, claimsToCheck: _c, why: w, ...rest } = r.repair; more = rest; fixedHow = w; fixedHere = howHeld(r.repair).split('; ').filter((x) => x.includes(' fixed without a model: ')).join('; '); }
           } catch (e) { c.say(`(the sentences that break ${violatedBefore.join(', ')} could not be rewritten: ${(e as Error).message.split('\n')[0]}; the piece is delivered as reviewed)`); }
         }
         seen.report = report; seen.checks = checks;
@@ -454,7 +473,8 @@ export async function runDirect(c: DirectContext) {
       }
     }
     return { output, repair: { ...more, passes, violatedBefore, violatedAfter: violated, originalOutputHash: sha(draft), draft, claimsToCheck: toCheck.map((t) => t.sentence),
-      why: passes ? `written directly from the author's pieces and reviewed once; the sentences breaking ${violatedBefore.join(', ')} were rewritten` : 'written directly from the author\'s pieces, reviewed once; the checks are listed beside the piece, nothing was changed by them' } };
+      // what the repair said it did (a rewrite, or a mechanical fix without a model) is kept in its own words
+      why: fixedHow ? `written directly from the author's pieces and reviewed once; ${fixedHow}` : passes ? `written directly from the author's pieces and reviewed once; the sentences breaking ${violatedBefore.join(', ')} were rewritten` : 'written directly from the author\'s pieces, reviewed once; the checks are listed beside the piece, nothing was changed by them' } };
   };
   const direct = (): DirectRecord => ({ version: DIRECT_VERSION, asked: c.asked, from: catalogue.length,
     pieces: shown.map((p) => ({ id: p.id, title: titleOf(p.text), kept: p.kept })),
@@ -499,6 +519,16 @@ export async function runDirect(c: DirectContext) {
     putEval(c.L, evaluation);
   } catch (e) { c.say(`(the evaluation of this run could not be built: ${(e as Error).message.split('\n')[0]})`); }
   for (const l of evaluation?.record ? rulesLines(evaluation.record.entries, style?.by === 'model') : []) c.say(l);
+  // WHAT THE GRAMMAR CHECKER WAS UNSURE OF, item by item, as the compiled path says it: listed, never changed.
+  for (const l of grammarLines(seen.report)) c.say(l);
+  // what was corrected without a model (--fix-grammar, a qualified check's own correction), each change named
+  if (fixedHere) c.say(`Repaired: ${fixedHere}.`);
+  // HOW MUCH OF THE METHOD THE PIECE CARRIES OUT (core/eval/obligations.ts), the same line the compiled path says
+  const mr = seen.report ? methodReading(c.std.requirements, seen.report) : null;
+  if (mr) c.say(methodLine(mr));
+  // A RULE NO COUNT CHECKS IS NOT READ HERE: the judgement reader runs only on the compiled path (--taste), so say so
+  if (evaluation?.record?.entries.some((e) => e.dimension === 'STANDARD' && e.reason === 'NOT_MACHINE_CHECKABLE'))
+    c.detail(`Judgement reader: not run (reporting only until your labels qualify it; --taste reads this run and records readings to label: atelier taste --skill ${c.name} --calibrate).`);
   if (style) { const st = style; for (const l of styleLines(styleOf, st.found, st.on, st.draft)) c.say(l); if (st.by !== 'model') c.detail(`(how you write was not read: ${st.why ?? 'no model'})`); }
   const json = {
     ...recordHead({ state: evaluation?.record?.state ?? null, standardVersionHash: c.sv.standardVersionHash, skillVersion: c.sv.skillVersionHash, certificate: rec.settings?.certificate ?? null, record: evaluation?.record ?? null }),

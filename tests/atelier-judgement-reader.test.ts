@@ -116,6 +116,13 @@ describe('through a run', () => {
     expect((await readingCalls()).slice(before)).toEqual([]);
     expect(quiet.out).toContain('Judgement reader: not run (reporting only until your labels qualify it; --taste reads this run and records readings to label: atelier taste --skill review --calibrate).');
     expect(quiet.out).toMatch(/NEEDS REVIEW/);
+    // THE DEFAULT RUN (the direct writer) never runs the reader, and says so the same way
+    const atDirect = (await readingCalls()).length;
+    const plain = run('run', '--pipeline', 'direct', long, '--skill', 'review', '--report', ...BACKEND());
+    expect(plain.code, plain.out).toBe(0);
+    expect((await readingCalls()).slice(atDirect)).toEqual([]);
+    expect(plain.out).toContain('Judgement reader: not run (reporting only until your labels qualify it; --taste reads this run and records readings to label: atelier taste --skill review --calibrate).');
+    expect(plain.out).toMatch(/NEEDS REVIEW/);
     // `run --taste` prints the work and its evaluation card, which opens with where the work stands
     const r = run('run', '--pipeline', 'legacy', long, '--skill', 'review', '--report', '--taste', ...BACKEND());
     expect(r.code, r.out).toBe(0);
@@ -138,6 +145,7 @@ describe('through a run', () => {
     expect((await readingCalls()).length).toBe(b2 + 4);
     // the record says the reader was off on that run and on for the first
     const recs = store.listInvocations(L);
-    expect(recs.map((x) => x.settings!.flags.noTaste).sort()).toEqual([false, false, true, true, true]);
+    // the default run (direct) reads no judgement: recorded as the reader off
+    expect(recs.map((x) => x.settings!.flags.noTaste).sort()).toEqual([false, false, true, true, true, true]);
   }, 300_000);
 });
