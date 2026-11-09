@@ -428,6 +428,11 @@ describe('through the binary: discovery builds the profile, invoke steers and re
     expect(out).toMatch(/in range on \d+ of \d+ steering features/);
     expect(out).toMatch(/HIGH {2}.*paragraph/);
   }, 60_000);
+  it('a default run (the direct writer) says how typical of you it is, from the same profile', () => {
+    const out = run('invoke', '--skill', 'posts', 'Write a post about the outage', '--panel');
+    expect(out).not.toMatch(/compiled path/);
+    expect(out).toMatch(/typical of you {4}(?:as typical as \d+% of your own pieces|beyond every piece of yours: distance)/);
+  }, 180_000);
   it('every run says how typical of you it is; --until-typical writes more rounds toward a target and keeps the best', () => {
     const out = run('invoke', '--pipeline', 'legacy', '--skill', 'posts', 'Write a post about the outage', '--until-typical', '0.99', '--shape-rounds', '2', '--panel');
     expect(out).not.toMatch(/^EXIT:(?!1\n)/);   // the scripted drafts break c1 by design: a blocked delivery exits 1

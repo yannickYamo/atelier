@@ -341,6 +341,19 @@ describe('a run through the binary, written the direct way', () => {
     expect((go('--no-style') as Styled).direct.style).toBeUndefined();
   }, 180_000);
 
+  it('a fact only one of the author\'s pieces held is rewritten where it stands to state only what was given', async () => {
+    await setBackend({ byTool: { emit_persona: PERSONA, emit_holds_back: { ids: [] }, __plain: [DRAFT, REVIEWED] } });
+    // one of the author's pieces names a file of its own case
+    const s = seed({ ...FILES, 'posts/compare-1.md': COMPARE(1).replace('Obsidian keeps plain files;', 'Obsidian keeps plain files in `vault.json`;') }, { ATELIER_CONTEXT_READER: 'scripted' });
+    expect(s.run('new', 'posts', 'write posts in my voice', '--name', 'posts', ...BACKEND()).code).toBe(0);
+    const BORROWED = `${REVIEWED}\n\nMy notes sync through vault.json every hour.`;
+    await setBackend({ byTool: { __plain: [DRAFT, BORROWED], emit_rewrites: { rewrites: [{ id: 1, text: 'Sync speed is the one thing I did not measure.' }] } } });
+    const r = jsonOf(s.run('invoke', '--skill', 'posts', 'Compare Logseq and Craft for my notes.', '--with', 'notes=notes.md', '--json', '--claims', 'pattern', '--no-style', ...BACKEND()).out) as Out & { direct: { grounded?: { found: number; rewritten: number } } };
+    expect(r.output).not.toContain('vault.json');
+    expect(r.output).toContain('Sync speed is the one thing I did not measure.');
+    expect(r.direct.grounded).toMatchObject({ found: 1, rewritten: 1 });
+  }, 180_000);
+
   it('the editor\'s questions: asked where nothing states them, unanswered they change nothing, answered they reach the writer; the method is shown whole', async () => {
     await setBackend({ byTool: { emit_persona: PERSONA, emit_holds_back: { ids: [] }, __plain: [DRAFT, REVIEWED] } });
     const s = seed(FILES, { ATELIER_CONTEXT_READER: 'scripted' });

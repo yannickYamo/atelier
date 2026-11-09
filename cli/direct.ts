@@ -51,7 +51,12 @@ import { recordHead } from '../core/eval/certificate.js';
 import { checksFor } from './checks.js';
 import { contextReaderClient, contextReaderModel, flag, numericFlag, argv } from './runtime.js';
 import { asText } from '../core/discovery/text.js';
-import type { Voice } from '../core/compiler/voice.js';import { pointsWithRates } from '../core/compiler/moves.js';
+import type { Voice } from '../core/compiler/voice.js';import { pointsWithRates } from '../core/compiler/moves.js';import { groundCarried, carriedClaims } from '../core/loop/grounding.js';import { releaseFor } from './fidelity.js';import { readFidelity } from '../core/fidelity/profile.js';
+import { typicalityOf } from '../core/fidelity/typicality.js';
+import type { FidelityRecord } from '../core/fidelity/types.js';
+
+
+
 
 
 export const DIRECT_VERSION = '1';
@@ -379,6 +384,7 @@ export async function runDirect(c: DirectContext) {
   let review: DirectRecord['review'] = { ran: false };
   let draftText = '';
   let repaired: string[] = [];
+  let grounded: DirectRecord['grounded'];
   // set inside the refine step; a holder, so the type is not narrowed to its first value
   const seen: { report: VerifyReport | null; checks: ReturnType<typeof checksFor> | null } = { report: null, checks: null };
   // what the last check listed, with the words each reader named: the record keeps the sentences, the person reads both
@@ -396,6 +402,20 @@ export async function runDirect(c: DirectContext) {
         if (styleNoteNow && style) style = { ...style, steered: true };
       } catch (e) { review = { ran: false, why: `the review could not run: ${(e as Error).message.split('\n')[0]}` }; c.say(`(the self-review could not run, so the first draft is delivered: ${review.why})`); }
     }
+    // 3b. A FACT ONLY AN EXAMPLE'S CASE HELD (core/loop/grounding.ts). The writer is shown the author's pieces whole, so
+    // a name or a figure of their case can land in this one as a fact about the person's. Each such sentence is
+    // rewritten where it stands to state only what was given, and kept only where it breaks no rule that held before.
+    try {
+      const examples = shown.map((p) => p.text).join('\n\n');
+      if (carriedClaims(output, examples, `${materialText}\n${c.asked}`).length) {
+        const before = brokenOf(await checkDraftAsync(c.name, c.std, output, checks));
+        const g = await groundCarried(output, { client: c.client, budget, request: c.asked, evidence: materialText, examples,
+          breaksNothing: async (next) => brokenOf(await checkDraftAsync(c.name, c.std, next, checks)).every((id) => before.includes(id)) });
+        grounded = { found: g.found.length, rewritten: g.found.filter((f) => f.kept).length, sentences: g.found.map((f) => f.sentence.slice(0, 160)) };
+        output = g.text;
+        if (g.note) c.say(`(${g.note})`);
+      }
+    } catch (e) { c.say(`(a fact carried from one of your pieces could not be rewritten: ${(e as Error).message.split('\n')[0]}; it is listed)`); }
     // 4. THE CHECKS. A rule the owner required that the reviewed piece still breaks has the sentences that break it
     // rewritten, as `atelier verify --repair` does (core/loop/run-repair.ts, `refineToStandard`): only those spans, and
     // never at the cost of another rule. Everything else the checks find (a specific not in what was given, a habit
@@ -440,12 +460,19 @@ export async function runDirect(c: DirectContext) {
     pieces: shown.map((p) => ({ id: p.id, title: titleOf(p.text), kept: p.kept })),
     route: { by: decided.by, reader: decided.reader, kind: route.kind, ...(decided.why ? { why: decided.why } : {}) }, effort, review, corrections: corrections.length,
     ...(method.trim() ? { method: true } : {}), questions: { by: asking.by, asked: asking.questions.map((q) => q.id), answered: asking.answers.map((a) => a.id) },
-    ...(style ? { style } : {}) });
+    ...(style ? { style } : {}), ...(grounded ? { grounded } : {}) });
+  // HOW TYPICAL OF THE AUTHOR THE PIECE IS (core/fidelity): read on the delivered text against the profile the build
+  // installed, for the evaluation's panel. Descriptive only: nothing on this path steers by it, so no release is credited.
+  const fid = argv.includes('--no-fidelity') ? null : releaseFor(c.L, c.sv, null);
+  const fidelityOf = fid ? (output: string): FidelityRecord => {
+    const t = fid.typicality ? typicalityOf(output, fid.typicality) : null;
+    return { release: null, profileHash: fid.profile.hash, seed: 0, reading: { ...readFidelity(output, fid.profile), ...(t ? { typicality: t } : {}) }, applicability: [] };
+  } : null;
   const servedHash = sha(stable);
   const rec = await runOnce(c.L, c.sv, stable, servedHash, { expectedPackageHash: servedHash, servedPackageHash: servedHash, matched: true, servedFiles: ['direct:pieces'] },
     variable, c.client, budget, c.binding, resolveProvenance(flag('--provenance'), process.env), null, flag('--task') ? 'FLAG' : 'POSITIONAL', refine,
     { n: 1, choose: () => ({ index: 0, why: '' }), write: () => prose(c.client, budget, stable, variable, DRAFT_ASK, effort, 'emit_piece') },
-    null, c.settings(checks), null, () => ({ direct: direct() }));
+    null, c.settings(checks), fidelityOf, () => ({ direct: direct() }));
 
   // WHAT THE PERSON READS BESIDE THE PIECE: what the checks found, never in it.
   const violated = rec.repair?.violatedAfter ?? [];
@@ -467,7 +494,7 @@ export async function runDirect(c: DirectContext) {
   try {
     const ch = seen.checks;
     evaluation = buildRunEval({ L: c.L, rec, std: c.std, sensor: ch?.claimSensor, claimsOff: argv.includes('--allow-unsourced'), answers: false, unmeasured: ch?.listsBecause ?? null,
-      ...(ch?.claimAct ? { claimAct: ch.claimAct } : {}), material: ch?.evidence ?? materialText, profile: null, format: { words: null, shape: null, withheld: 0 }, taste: null, costUsd: spent,
+      ...(ch?.claimAct ? { claimAct: ch.claimAct } : {}), material: ch?.evidence ?? materialText, profile: fid?.profile ?? null, format: { words: null, shape: null, withheld: 0 }, taste: null, costUsd: spent,
       durationMs: Date.now() - c.started, drafts: 1, applicability: [], report: seen.report, contract: false });
     putEval(c.L, evaluation);
   } catch (e) { c.say(`(the evaluation of this run could not be built: ${(e as Error).message.split('\n')[0]})`); }

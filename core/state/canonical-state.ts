@@ -733,6 +733,8 @@ export interface DirectRecord {
    * method no check reads, each held, not held or not read. `on` is the text read (the first draft when `steered`, the
    * delivered piece otherwise); `steered`: what the draft did not hold was told to the self-review.
    */
+  /** sentences that stated a fact only one of the author's pieces held, as a fact of this piece: found, and rewritten */
+  readonly grounded?: { readonly found: number; readonly rewritten: number; readonly sentences: readonly string[] };
   readonly style?: { readonly by: string; readonly reader: string; readonly on: 'draft' | 'piece'; readonly steered: boolean;
     readonly found: readonly { readonly id: string; readonly kind: 'habit' | 'step'; readonly text: string; readonly held: boolean | null; readonly quote?: string }[]; readonly why?: string;
     /** with --style-review: what the first draft held, before the review it steered */
