@@ -6,6 +6,13 @@ import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import * as store from '../core/state/store.js';
+
+/** SKILL.md as the compiled path serves it: the stored package (a host is given it without the description: renderers/agent-skill/host.ts). */
+const storedSkill = (data: string, name: string): string => {
+  const L0 = { root: data, skillName: name }; const sv = store.getSkillVersion(L0, store.getActive(L0)!)!;
+  return store.getPackage(L0, sv.materializedHash)!.files['SKILL.md'] ?? '';
+};
 
 const CLI = resolve('dist/cli/atelier.mjs');
 let backend: ChildProcess; let port = 0;
@@ -203,7 +210,7 @@ describe('atelier new <your-work>, with no method note and no model', () => {
     'Rolled back the flag at 2am. Nobody noticed, which is the point. Boring deploys are a feature.', 'Deleted 4,000 lines today. The tests still pass. Best commit of the month, and it adds nothing.'];
   const seedPosts = () => { const x = seed([]); mkdirSync(join(x.proj, 'posts')); POSTS.forEach((p, i) => { writeFileSync(join(x.proj, 'posts', `p${i + 1}.md`), `${p}\n`); }); return x; };
   it('no key is not a reason to build nothing: the skill is the examples, and says what it is', () => {
-    const { proj, run } = seedPosts();
+    const { data, proj, run } = seedPosts();
     const r = run('new', 'posts');
     expect(r.code, r.out).toBe(0);
     expect(r.out).toContain('No model is set up (ANTHROPIC_API_KEY), so the skill is built from what can be counted in your examples');
@@ -214,7 +221,9 @@ describe('atelier new <your-work>, with no method note and no model', () => {
     expect(r.out).not.toMatch(/and required \(\d+\):\n(?: {2}- [^\n]*\n)*? {2}- No mechanical errors/);
     // the pieces themselves are what the writer is given, and the one rule is the owner's to judge
     const dir = join(proj, '.claude', 'skills', 'posts');
-    expect(readFileSync(join(dir, 'SKILL.md'), 'utf8')).toContain('New work reads like the 3 examples given');
+    // the compiled path serves it; the host is given the pieces and the rules you stated, not a rule read off them
+    expect(storedSkill(data, 'posts')).toContain('New work reads like the 3 examples given');
+    expect(readFileSync(join(dir, 'SKILL.md'), 'utf8')).not.toContain('New work reads like the 3 examples given');
     // each piece once: the worked example is not also a voice piece
     const served = readdirSync(join(dir, 'examples')).filter((f) => /^(?:exemplar|voice-\d+)\.md$/.test(f)).map((f) => readFileSync(join(dir, 'examples', f), 'utf8')).join('\n');
     expect(served).toContain('Boring deploys are a feature.');

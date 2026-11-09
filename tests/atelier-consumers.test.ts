@@ -25,7 +25,9 @@ const setBackend = (b: unknown): Promise<Response> => fetch(`http://127.0.0.1:${
 /** Read on the default run (`atelier run`, the direct writer). */
 const DEFAULT = ['skills/*/active.json', 'skills/*/versions/*.json', 'skills/*/standards/*.json', 'skills/*/packages/*.json', 'skills/*/ledgers/*.json',
   'skills/*/voice.json', 'skills/*/method.md', 'skills/*/exemplar.md', 'skills/*/exemplar-request.txt', 'skills/*/step-ledger.json',
-  'skills/*/fidelity/active.json', 'skills/*/fidelity/releases/*.json', 'skills/*/fidelity/profiles/*.json', 'skills/*/fidelity/retrieval/*.json'];
+  'skills/*/fidelity/active.json', 'skills/*/fidelity/releases/*.json', 'skills/*/fidelity/profiles/*.json', 'skills/*/fidelity/retrieval/*.json',
+  // a skill built with no method note: its steps read off the pieces are read on the piece (core/direct/style.ts)
+  'skills/*/method-inferred.json'];
 /** Written at build and read elsewhere, by the reader named. */
 const ELSEWHERE: Readonly<Record<string, string>> = {
   'runs/*': 'the build\'s own run folder: read by the build steps that follow and by `atelier inspect`',
@@ -40,7 +42,6 @@ const ELSEWHERE: Readonly<Record<string, string>> = {
   'skills/*/fidelity/profile.json': '`atelier verify`, `fidelity`, `score`',
   'skills/*/frozen-checks.json': 'the next method build: checks kept while their step and examples are unchanged',
   'skills/*/form.txt': 'the compiled path (what form a reply takes)',
-  'skills/*/method-inferred.json': 'the compiled path and `atelier fix` (a skill built with no method note)',
   // a build that reads the pieces with a model
   'skills/*/evidence.json': 'the skill card (`atelier status --skill`)',
   'skills/*/signals.json': 'the compiled path\'s draft choice and `atelier verify`',

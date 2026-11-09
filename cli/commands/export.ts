@@ -12,6 +12,7 @@ import * as store from '../../core/state/store.js';
 import { countWords, describeParts, skillSizeOf } from '../../core/eval/size.js';
 import { withoutReferenceIndex } from '../served.js';
 import { argv, flag, skillArg } from '../runtime.js';
+import { withoutPersonaBlocks, withoutMovesSection } from '../../renderers/agent-skill/host.js';
 
 /** The heading an adopted note is served under, on a run and in an export alike. */
 export const CARRY_HEADING = '\n\n## From earlier runs of this skill (not a rule of the standard)\n\n';
@@ -34,7 +35,10 @@ export function exportSkill(): void {
   const carry = store.getCarry(L);
   // A skill that answers in a fixed format is served no note on a run, and none here.
   const note = carry?.standardVersion === sv.standardVersionHash && contractFile === null ? carry.note.trim() : '';
-  const servedText = note ? `${built}${CARRY_HEADING}${note}` : built;
+  // an export goes to a host, which is given the pieces, the method and the rules, as an installed skill is
+  // (renderers/agent-skill/host.ts); `--whole` keeps the description of the author, as the compiled path serves it
+  const hosted = argv.includes('--whole') ? built : withoutMovesSection(withoutPersonaBlocks(built));
+  const servedText = note ? `${hosted}${CARRY_HEADING}${note}` : hosted;
   const out = flag('--out');
   if (!out) { process.stdout.write(`${servedText}\n`); return; }
   writeAtomic(out, `${servedText}\n`);

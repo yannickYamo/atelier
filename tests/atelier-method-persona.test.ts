@@ -12,6 +12,13 @@ import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import * as store from '../core/state/store.js';
+
+/** SKILL.md as the compiled path serves it: the stored package. A host is given it without the description (renderers/agent-skill/host.ts). */
+const storedSkill = (data: string, name: string): string => {
+  const L = { root: data, skillName: name }; const sv = store.getSkillVersion(L, store.getActive(L)!)!;
+  return store.getPackage(L, sv.materializedHash)!.files['SKILL.md'] ?? '';
+};
 
 const CLI = resolve('dist/cli/atelier.mjs');
 const NOTE = 'How we review a change\n\n1. Open with a Summary section.\n2. Then a Must fix section.\n3. End with a Verdict section that holds one of: Approve, Request changes, Comment.\n';
@@ -82,7 +89,8 @@ describe('the persona on the method path and the thin path', () => {
     expect(v.form).toBe('DOCUMENT');
     expect(readFileSync(join(data, 'skills', 'code-review', 'form.txt'), 'utf8')).toBe('DOCUMENT');
     // served to the writer with its count (the moves reading has no scripted answer here, so the count is of the point's own quote, by the words alone), never as "always"
-    const skill = readFileSync(join(proj, '.claude', 'skills', 'code-review', 'SKILL.md'), 'utf8');
+    const skill = storedSkill(data, 'code-review');
+    expect(readFileSync(join(proj, '.claude', 'skills', 'code-review', 'SKILL.md'), 'utf8')).not.toContain('How I sound (');
     expect(skill).toContain('How I sound (each point is quoted from my own pieces, and holds across them; where a count is given, it is how many of my pieces show it):');
     expect(skill).toContain('- (in 4 of 4 pieces) Opens from a position of my own, not a summary. e.g. "I would start with the riskiest line."');
     expect(skill).not.toContain('(always)');
@@ -132,8 +140,9 @@ describe('the persona on the method path and the thin path', () => {
     // the pieces are served whole, not within the compact budget a first build of a writing skill takes with a model
     expect(r.out).not.toMatch(/whole pieces served by default, within/);
     expect(voiceOf(data, 'posts').persona?.points).toHaveLength(2);
-    const skill = readFileSync(join(proj, '.claude', 'skills', 'posts', 'SKILL.md'), 'utf8');
+    const skill = storedSkill(data, 'posts');
     expect(skill).toContain('Closes on a short plain instruction. e.g. "Tests first, then the rest."');
+    expect(readFileSync(join(proj, '.claude', 'skills', 'posts', 'SKILL.md'), 'utf8')).not.toContain('Closes on a short plain instruction.');
     expect((await toolsCalled()).slice(before)).toContain('emit_persona');
   }, 120_000);
 

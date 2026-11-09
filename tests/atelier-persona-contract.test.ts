@@ -5,12 +5,18 @@
 //   7. two goldens: no persona, said so, no moves, said so; the no-model floor is unknown throughout and persisted so.
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, existsSync, readFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import * as store from '../core/state/store.js';
 import { personaHashOf } from '../core/compiler/moves.js';
 import type { PersonaPoint } from '../core/compiler/persona.js';
+
+/** SKILL.md as the compiled path serves it: the stored package (a host is given it without the description: renderers/agent-skill/host.ts). */
+const storedSkill = (data: string, name: string): string => {
+  const L0 = { root: data, skillName: name }; const sv = store.getSkillVersion(L0, store.getActive(L0)!)!;
+  return store.getPackage(L0, sv.materializedHash)!.files['SKILL.md'] ?? '';
+};
 
 const CLI = resolve('dist/cli/atelier.mjs');
 const NOTE = 'How we review a change\n\n1. Open with a Summary section.\n2. Then a Must fix section.\n3. End with a Verdict section that holds one of: Approve, Request changes, Comment.\n';
@@ -45,7 +51,7 @@ const seed = (examples = 4): Seed => {
 };
 const L = (data: string) => ({ root: data, skillName: 'code-review' });
 const activeOf = (data: string) => store.getSkillVersion(L(data), store.getActive(L(data))!)!;
-const skillMd = (proj: string): string => readFileSync(join(proj, '.claude', 'skills', 'code-review', 'SKILL.md'), 'utf8');
+const skillMd = (data: string): string => storedSkill(data, 'code-review');
 
 describe('the persona and moves contract, through the build', () => {
   beforeAll(async () => {
@@ -60,14 +66,14 @@ describe('the persona and moves contract, through the build', () => {
     const s = seed();
     const first = s.run('method', 'method.md', '--golden', 'examples', '--name', 'code-review', '--yes', '--report', '--persona', 'auto', ...BACKEND());
     expect(first.code, first.out).toBe(0);
-    expect(skillMd(s.proj)).toContain('buzzword: leans on the word synergy'); // situational (1 of 4, in its situation): a repertoire line
+    expect(skillMd(s.data)).toContain('buzzword: leans on the word synergy'); // situational (1 of 4, in its situation): a repertoire line
     const p1 = store.getMoves(L(s.data), personaHashOf(PERSONA.points as PersonaPoint[]))!;
     expect(p1.units.map((u) => u.aspect)).toEqual(['stance', 'buzzword']);
     // the owner's method now bans the word; the persona is kept (no --persona auto), and reconciled
     const second = s.run('method', 'method-ban.md', '--golden', 'examples', '--name', 'code-review', '--yes', '--report', ...BACKEND());
     expect(second.code, second.out).toBe(0);
     expect(second.out).toContain('persona ✓ (1 point (1 always))');
-    const md = skillMd(s.proj);
+    const md = skillMd(s.data);
     expect(md).not.toContain('synergy when a change needs several teams'); expect(md).toContain('Opens from a position of my own');
     const receipt = store.getReceipt(L(s.data), activeOf(s.data).skillVersionHash)!;
     const p2 = store.getMovesByHash(L(s.data), receipt.movesHash!)!;
@@ -89,7 +95,7 @@ describe('the persona and moves contract, through the build', () => {
     expect(floor.reader).toBeNull();
     // by the words alone: the first quote is in every piece (4 of 4, it stands), the second in one (1 of 4, occasional); said as a floor, and read again when a model is there
     expect(floor.units.map((u) => [u.kind, u.by, u.trigger.status, u.rate.k, u.tabled])).toEqual([['standing', 'floor', 'none', 4, false], ['occasional', 'floor', 'none', 1, false]]);
-    expect(skillMd(s.proj)).not.toContain('What my moves');
+    expect(skillMd(s.data)).not.toContain('What my moves');
     // now the script answers the moves: the floor profile is read again, not kept
     await fetch(`${url()}/__set`, { method: 'POST', body: JSON.stringify({ byTool: { emit_persona: PERSONA, emit_persona_moves: MOVES, emit_holds_back: { ids: [] } } }) });
     const again = s.run('build', '--name', 'code-review', '--report', ...BACKEND());

@@ -734,7 +734,9 @@ export interface DirectRecord {
    * delivered piece otherwise); `steered`: what the draft did not hold was told to the self-review.
    */
   readonly style?: { readonly by: string; readonly reader: string; readonly on: 'draft' | 'piece'; readonly steered: boolean;
-    readonly found: readonly { readonly id: string; readonly kind: 'habit' | 'step'; readonly text: string; readonly held: boolean | null; readonly quote?: string }[]; readonly why?: string };
+    readonly found: readonly { readonly id: string; readonly kind: 'habit' | 'step'; readonly text: string; readonly held: boolean | null; readonly quote?: string }[]; readonly why?: string;
+    /** with --style-review: what the first draft held, before the review it steered */
+    readonly draft?: readonly { readonly id: string; readonly held: boolean | null }[] };
 }
 
 export interface InvocationRecord {

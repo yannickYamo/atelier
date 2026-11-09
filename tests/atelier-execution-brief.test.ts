@@ -147,7 +147,14 @@ describe('through a run', () => {
     expect(rec.settings!.certificate).toMatchObject({ standardVersionHash: expect.stringMatching(/^[0-9a-f]+$/), checks: { total: expect.any(Number), writtenQualified: 0 }, readers: { taste: { labelledMisses: 0, falseBlockUpper95: null } }, errorBound: null });
     expect(rec.settings!.flags.brief!.applies).toHaveLength(2);
     const L = { root: data, skillName: 'review' };
-    expect(store.getStandard(L, store.getSkillVersion(L, store.getActive(L)!)!.standardVersionHash)!.requirements.filter((q) => q.provenance === 'EXPERT_STATED')).toHaveLength(3);
+    const stdHash = store.getSkillVersion(L, store.getActive(L)!)!.standardVersionHash;
+    const stated = store.getStandard(L, stdHash)!.requirements.filter((q) => q.provenance === 'EXPERT_STATED');
+    expect(stated).toHaveLength(3);
+    // WHAT EACH STEP ASKS THE WRITER TO DECIDE was read on this first run, not at build: kept beside the standard under the
+    // steps' own ids, each the unit of its own place in the method
+    expect(Object.keys(store.getUnits(L, stdHash)).sort()).toEqual(stated.map((q) => q.requirementId).sort());
+    expect(store.getUnits(L, stdHash)[stated[1].requirementId]).toMatchObject({ condition: 'when the change touches billing', dependsOn: ['1'] });
+    const unitsAsked = (await promptsFor('emit_method_units')).length;
     // the run's own report says the step was set aside for this request, with the request's words
     expect(r.out).toMatch(/set aside for this request: the request says/);
     // THE NEED FOR THE METHOD DECIDES, NOT THE WORD COUNT: three words with the diff bound get the brief; a bare thank-you does not
@@ -155,11 +162,26 @@ describe('through a run', () => {
     const terse = run('invoke', '--pipeline', 'legacy', '--skill', 'review', 'Review this change.', '--with', 'change=change.diff', '--json', ...BACKEND());
     expect(terse.code, terse.out).toBe(0);
     expect((await promptsFor('emit_execution_brief')).length).toBe(before + 1);
+    // kept: the next run reads nothing again
+    expect((await promptsFor('emit_method_units')).length).toBe(unitsAsked);
     expect((await promptsFor('emit_piece')).at(-1) ?? '').toContain("For this request, my method's steps that apply");
     const short = run('invoke', '--pipeline', 'legacy', '--skill', 'review', 'Thanks, done.', '--json', ...BACKEND());
     expect(short.code, short.out).toBe(0);
     expect((await promptsFor('emit_execution_brief')).length).toBe(before + 1);
     const shortRec = store.listInvocations(L).find((i) => i.invocationId === (JSON.parse(short.out.slice(short.out.indexOf('\n{') + 1)) as { invocationId: string }).invocationId)!;
     expect(shortRec.settings!.flags.brief).toBeUndefined();
-  }, 240_000);
+    // ONE STEP NOT KEPT (a skill whose kept units lost it): every step is sent in its place in the method, so the reading
+    // numbers it as the build did; one the reading leaves out is kept at the floor, and never read again
+    const kept = store.getUnits(L, stdHash); const second = stated[1].requirementId;
+    store.putUnits(L, stdHash, Object.fromEntries(Object.entries(kept).filter(([id]) => id !== second)));
+    await fetch(`${url()}/__set`, { method: 'POST', body: JSON.stringify({ byTool: { emit_method_units: { units: [UNITS.units[0], UNITS.units[2]] }, emit_holds_back: { ids: [] }, emit_execution_brief: BRIEF, emit_piece: { piece: DRAFT } } }) });
+    expect(run('invoke', '--pipeline', 'legacy', '--skill', 'review', request, '--with', 'change=change.diff', '--json', ...BACKEND()).code).toBe(0);
+    const asked = (await promptsFor('emit_method_units')).at(-1) ?? '';
+    expect(asked).toMatch(/1\. [^\n]*Summary[\s\S]*2\. [^\n]*Risks[\s\S]*3\. [^\n]*Verdict/);
+    expect(store.getUnits(L, stdHash)[second]).toMatchObject({ by: 'floor' });
+    expect(store.getUnits(L, stdHash)[stated[0].requirementId]).toEqual(kept[stated[0].requirementId]);
+    const n = (await promptsFor('emit_method_units')).length;
+    expect(run('invoke', '--pipeline', 'legacy', '--skill', 'review', request, '--with', 'change=change.diff', '--json', ...BACKEND()).code).toBe(0);
+    expect((await promptsFor('emit_method_units')).length).toBe(n);
+  }, 300_000);
 });

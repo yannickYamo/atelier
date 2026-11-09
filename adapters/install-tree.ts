@@ -13,6 +13,7 @@ import { join, dirname, relative, basename } from 'node:path';
 import { writeAtomic } from '../core/state/fs-atomic.js';
 import { readJson } from '../core/state/read-json.js';
 import { sha, packageHashOf } from '../core/state/receipt.js';
+import { hostFiles } from '../renderers/agent-skill/host.js';
 import type { InstallablePackage, InstallResult, VerificationResult } from './host-adapter.js';
 
 /** Written beside the package's files, never part of them: what the next install checks it wrote. */
@@ -50,13 +51,15 @@ export function installTree(dir: string, pkg: InstallablePackage): InstallResult
     // A package is a DIRECTORY TREE, not one file. examples/ and contracts/ are nested, and a flat
     // write silently loses them — the host would hold a skill missing exactly the components that
     // carry PREFERRED and REQUIRED-STRICT behaviour.
-    for (const [rel, content] of Object.entries(pkg.files)) {
+    // what the host loads: SKILL.md as the direct writer is served (renderers/agent-skill/host.ts)
+    const written = hostFiles(pkg.files);
+    for (const [rel, content] of Object.entries(written)) {
       const target = join(staging, rel);
       mkdirSync(dirname(target), { recursive: true });
       writeAtomic(target, content);
     }
     // What this install is, for the NEXT install to recognise as its own.
-    writeAtomic(join(staging, MARKER), JSON.stringify({ packageHash: pkg.packageHash, files: Object.keys(pkg.files).sort() }));
+    writeAtomic(join(staging, MARKER), JSON.stringify({ packageHash: pkg.packageHash, hostHash: packageHashOf(written), files: Object.keys(pkg.files).sort() }));
     mkdirSync(skillsDir, { recursive: true });
     const foreign = existsSync(dir) ? notPristine(dir, Object.keys(pkg.files)) : [];
     if (existsSync(dir)) { renameSync(dir, aside); movedAside = true; }
@@ -97,8 +100,8 @@ function notPristine(dir: string, writingOrder: readonly string[]): string[] {
   const all = walk(dir).filter((rel) => rel !== MARKER);
   const markerPath = join(dir, MARKER);
   if (!existsSync(markerPath)) return all;
-  let marker: { packageHash?: string; files?: string[] };
-  try { marker = readJson<{ packageHash?: string; files?: string[] }>(markerPath, { what: 'an install marker' }); } catch { return all; }
+  let marker: { packageHash?: string; hostHash?: string; files?: string[] };
+  try { marker = readJson<{ packageHash?: string; hostHash?: string; files?: string[] }>(markerPath, { what: 'an install marker' }); } catch { return all; }
   const listed = new Set(marker.files ?? []);
   const extra = all.filter((rel) => !listed.has(rel));
   if (extra.length) return extra;
@@ -108,7 +111,7 @@ function notPristine(dir: string, writingOrder: readonly string[]): string[] {
     onDisk[rel] = readFileSync(join(dir, rel), 'utf8');
   }
   // The one hash the renderer computes (core/state/receipt.ts, `packageHashOf`): by sorted name, as the marker lists them.
-  if (packageHashOf(onDisk) === marker.packageHash) return [];
+  if (packageHashOf(onDisk) === marker.packageHash || (marker.hostHash !== undefined && packageHashOf(onDisk) === marker.hostHash)) return [];
   // A MARKER WRITTEN BEFORE 1.1 carries the hash of the files in the order the renderer wrote them, which it did not
   // record. The order the incoming package was written in is the same order for the files both hold (the renderer
   // writes SKILL.md, then the examples in rule order, then the rest), so it is tried, the files only the previous
@@ -149,6 +152,7 @@ export function verifyTree(root: string, pkg: InstallablePackage): VerificationR
   }
   // A package built before 1.1 was hashed over its files in the order they were rendered, which the stored package
   // keeps; it still verifies by that hash, so a skill built then is not reported edited until it is rebuilt.
-  const matches = packageHashOf(onDisk) === pkg.packageHash || sha(JSON.stringify(onDisk)) === pkg.packageHash;
+  // as installed (SKILL.md as the host is given it), or as a skill installed before that was
+  const matches = packageHashOf(onDisk) === packageHashOf(hostFiles(pkg.files)) || packageHashOf(onDisk) === pkg.packageHash || sha(JSON.stringify(onDisk)) === pkg.packageHash;
   return { present: true, matchesPackage: matches, detail: matches ? 'matches the compiled package' : 'INSTALLED FILES EDITED — they no longer match what was compiled from the standard' };
 }

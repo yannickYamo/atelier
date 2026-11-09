@@ -5,13 +5,19 @@
 // interval. The authority ceiling is unchanged: nothing here raises evidence past observed or permission past monitor.
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, existsSync, readFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { PERSONA_TABLE, PERSONA_MOVES, cellsToAsk, habitsPerCall, inferMoves, describeMove, personaHashOf, type MovesInput } from '../core/compiler/moves.js';
 import { readContext } from '../core/inference/reading.js';
 import type { PersonaPoint } from '../core/compiler/persona.js';
 import * as store from '../core/state/store.js';
+
+/** SKILL.md as the compiled path serves it: the stored package (a host is given it without the description: renderers/agent-skill/host.ts). */
+const storedSkill = (data: string, name: string): string => {
+  const L0 = { root: data, skillName: name }; const sv = store.getSkillVersion(L0, store.getActive(L0)!)!;
+  return store.getPackage(L0, sv.materializedHash)!.files['SKILL.md'] ?? '';
+};
 
 const pieces = [
   { name: 'piece-1', text: 'The loop stops one short. Use a range to the length. Request changes.' },
@@ -138,7 +144,7 @@ describe('through the build', () => {
     expect(store.getMoves(L, personaHashOf(PERSONA.points as PersonaPoint[]))!.hash).toBe(profile.hash);
     expect(store.getStandard(L, sv.standardVersionHash)!.requirements.filter((q) => q.provenance === 'EXPERT_STATED')).toHaveLength(3);
     // the skill words each point by its count, never by the reading's word
-    const md = readFileSync(join(proj, '.claude', 'skills', 'code-review', 'SKILL.md'), 'utf8');
+    const md = storedSkill(data, 'code-review');
     expect(md).toContain('- (in 4 of 4 pieces) Opens from a position of my own, not a summary.');
     expect(md).toContain('- (in 2 of 4 pieces [0.12, 0.88]) close: closes on a short plain instruction.');
     expect(md).not.toContain('(always)'); expect(md).not.toContain('(rarely)');

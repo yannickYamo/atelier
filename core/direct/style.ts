@@ -105,13 +105,16 @@ export function styleNote(items: readonly StyleItem[], found: readonly StyleFoun
 }
 
 /** The lines said beside the piece: what was held, what was not, what could not be read. */
-export function styleLines(items: readonly StyleItem[], found: readonly StyleFound[], on: 'draft' | 'piece'): string[] {
+export function styleLines(items: readonly StyleItem[], found: readonly StyleFound[], on: 'draft' | 'piece', draft?: readonly StyleFound[]): string[] {
   if (!items.length) return [];
+  const missedIn = (xs: readonly StyleFound[]): number => items.filter((i) => xs.find((f) => f.id === i.id)?.held === false).length;
+  const fixed = draft ? items.filter((i) => draft.find((f) => f.id === i.id)?.held === false && found.find((f) => f.id === i.id)?.held === true).length : 0;
   const of = (held: boolean | null): StyleItem[] => items.filter((i) => (found.find((f) => f.id === i.id)?.held ?? null) === held);
   const say = (xs: readonly StyleItem[]): string => xs.map((x) => `"${x.text.slice(0, 90)}"`).join('; ');
   const held = of(true); const missed = of(false); const unread = of(null);
   return [`How you write, read on the ${on === 'draft' ? 'first draft' : 'piece'} (${items.length}; report only, it blocks nothing):`,
     ...(held.length ? [`  held (${held.length}): ${say(held)}`] : []),
     ...(missed.length ? [`  not held (${missed.length}): ${say(missed)}`] : []),
-    ...(unread.length ? [`  not read (${unread.length}): ${say(unread)}`] : [])];
+    ...(unread.length ? [`  not read (${unread.length}): ${say(unread)}`] : []),
+    ...(draft ? [`  the first draft did not hold ${missedIn(draft)}; the review it was told of made ${fixed} of them held, and the piece misses ${missed.length}`] : [])];
 }

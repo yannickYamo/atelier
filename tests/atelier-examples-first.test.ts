@@ -21,6 +21,12 @@ describe('the skill without the description of the author', () => {
 });
 
 // ── THROUGH A RUN ──────────────────────────────────────────────────────────────────────────────────────────────
+/** SKILL.md as the compiled path serves it: the stored package. A host is given it without the description (renderers/agent-skill/host.ts). */
+const storedSkill = (data: string, name: string): string => {
+  const L = { root: data, skillName: name }; const sv = store.getSkillVersion(L, store.getActive(L)!)!;
+  return store.getPackage(L, sv.materializedHash)!.files['SKILL.md'] ?? '';
+};
+
 const CLI = resolve('dist/cli/atelier.mjs');
 const NOTE = 'How we review a change\n\n1. Open with a Summary section.\n2. Add a Risks section when the change touches billing.\n3. End with a Verdict section that holds one of: Approve, Request changes, Comment.\n';
 const body = (n: number): string => `I would start with the riskiest line. ${n <= 2 ? 'A caller can refund more than the order total. ' : ''}${'The change touches the runner and keeps its tests. '.repeat(n)}The handler trusts the caller.`;
@@ -75,8 +81,15 @@ describe('through a run', () => {
     const L = { root: data, skillName: 'review' };
     const b = run('new', 'examples', '--method', 'method.md', '--name', 'review', '--yes', '--persona', 'auto', ...BACKEND());
     expect(b.code, b.out).toBe(0);
-    const skillMd = readFileSync(join(proj, '.claude', 'skills', 'review', 'SKILL.md'), 'utf8');
+    const skillMd = storedSkill(data, 'review');
     expect(skillMd).toContain('How I sound ('); expect(skillMd).toContain('Moves I make in some pieces');
+    // the skill a host loads is the pieces, the method and the rules: no description of the author
+    const hosted = readFileSync(join(proj, '.claude', 'skills', 'review', 'SKILL.md'), 'utf8');
+    expect(hosted).not.toContain('How I sound ('); expect(hosted).not.toContain('Moves I make in some pieces'); expect(hosted).toContain('## How I sound');
+    // and an export goes to a host the same way; --whole keeps the description, as the compiled path serves it
+    const ex = run('export', '--skill', 'review'); expect(ex.code, ex.out).toBe(0);
+    expect(ex.out).not.toContain('How I sound ('); expect(ex.out).toContain('## How I sound');
+    expect(run('export', '--skill', 'review', '--whole').out).toContain('How I sound (');
     const idOf = (out: string): string => (JSON.parse(out.slice(out.indexOf('\n{') + 1)) as { invocationId: string }).invocationId;
     const recOf = (out: string) => store.listInvocations(L).find((i) => i.invocationId === idOf(out))!;
     // EXAMPLES FIRST, with --moves serve asked for as well: the flag wins, nothing of the author's description reaches the writer
@@ -102,6 +115,7 @@ describe('through a run', () => {
     const again = (await promptsFor('emit_piece')).at(-1) ?? '';
     expect(again).toContain('How I sound ('); expect(again).toContain('How I would make this');
     expect(recOf(s.out).settings!.flags.brief!.served).toBeUndefined();
-    expect(readFileSync(join(proj, '.claude', 'skills', 'review', 'SKILL.md'), 'utf8')).toBe(skillMd);
+    expect(storedSkill(data, 'review')).toBe(skillMd);
+    expect(readFileSync(join(proj, '.claude', 'skills', 'review', 'SKILL.md'), 'utf8')).toBe(hosted);
   }, 300_000);
 });

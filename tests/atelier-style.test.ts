@@ -95,3 +95,12 @@ describe('atelier report shows what the run read of how you write', () => {
     expect(blocks['how you write']).toEqual(['read on the piece, report only · style-read-1:m', 'held · "Closes on a plain sentence.": "That is the whole trade"', 'not held · "End on an idea."']);
   });
 });
+
+describe('with --style-review the piece is read again, and the line says what the review fixed', () => {
+  it('missed on the draft, held on the piece: counted as fixed by the review', () => {
+    const items = styleItems([{ description: 'Closes on a plain line.', frequency: 'ALWAYS', quote: 'Tests first.' }, { description: 'Opens on a stance.', frequency: 'OFTEN', quote: 'I would start here.' }], []);
+    const lines = styleLines(items, [{ id: 'h1', held: true, quote: 'Tests first, then the rest.' }, { id: 'h2', held: false }], 'piece', [{ id: 'h1', held: false }, { id: 'h2', held: false }]);
+    expect(lines.at(-1)).toBe('  the first draft did not hold 2; the review it was told of made 1 of them held, and the piece misses 1');
+    expect(styleLines(items, [{ id: 'h1', held: true }, { id: 'h2', held: true }], 'piece').at(-1)).not.toContain('first draft');
+  });
+});

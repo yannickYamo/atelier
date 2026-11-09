@@ -349,7 +349,9 @@ export async function method(): Promise<void> {
   // WHAT EACH STATED STEP ASKS THE WRITER TO DECIDE, read once (core/method/decision-units.ts): kind, decision, inputs,
   // condition in the step's own words, output, exception, dependencies. Said in the whole account; the brief for one
   // request selects by it. With no model the words decide: an instruction, applying always unless they say when.
-  const units = await decisionUnits(read.proposals.filter((p) => p.origin === 'STATED'), stepsOf(note, keep));
+  // Only the compiled path's brief reads them, and it reads them on its first run (cli/commands/invoke.ts, `withUnits`):
+  // a build reads them only where the whole account asks to see them.
+  const units = whole ? await decisionUnits(read.proposals.filter((p) => p.origin === 'STATED'), stepsOf(note, keep)) : new Map<string, DecisionUnit>();
   if (whole && units.size) { console.log('\nWhat each step asks the writer to decide:'); let i = 0; for (const [statement, u] of units) console.log(`  ${++i}. ${statement.slice(0, 90)}\n      ${describeUnit(u)}`); }
   const { decided, ledger, qualifications } = decideSteps(proposals, authoredIdAllocator(s), confirmed, kinds);
   // WHOSE BUILD THIS IS, WRITTEN BEFORE ANYTHING ELSE IS. A build that stops after the standard is stored and before
