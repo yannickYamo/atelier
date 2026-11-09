@@ -3735,7 +3735,8 @@ async function withUnits(L: store.StoreLayout, standardHash: string, steps: read
   if (!missing.length || argv.includes('--no-model') || !canReach('discovery')) return [...steps];
   // every step, numbered by its place in the method as the build numbered them, so a dependency ("after step 2") names
   // the step it means; only the missing ones are kept from the reading
-  const under = new Map(stepsOf(store.getMethod(L)?.text ?? '').map((st) => [st.text.trim(), st.under]));
+  const note = store.getMethod(L)?.text ?? '';
+  const under = new Map(stepsOf(note, store.getMethodKeep(L, note)).map((st) => [st.text.trim(), st.under]));
   const input = steps.map((st) => ({ id: String(st.n), text: st.statement, under: under.get(st.statement.trim()) ?? null }));
   const d = await readContext(METHOD_UNITS, { steps: input }, contextReaderClient(), contextReaderModel(), { spentUsd: 0, capUsd: 0.2, maxCalls: 1 });
   if (d.by !== 'model') return [...steps];

@@ -261,6 +261,23 @@ describe('a run through the binary, written the direct way', () => {
     expect(r.code, r.out).toBe(0);
     expect(r.out).toMatch(/Work form: replies in a conversation, as you said\./);
   }, 180_000);
+  it('what the work is: read at the build and said once, the person\'s card replaces it, and the editor is told it; a total its rows miss is listed', async () => {
+    await setBackend({ byTool: { emit_persona: PERSONA, emit_holds_back: { ids: [] }, __plain: [DRAFT, REVIEWED],
+      emit_purpose_card: { kind: 'a comparison of note apps', kindQuote: 'Obsidian against Bear', reader: null, readerQuote: null, purpose: 'Says which app to pick.', settles: ['which app wins, for whom'] } } });
+    const s = seed(FILES, { ATELIER_CONTEXT_READER: 'scripted' });
+    const built = s.run('new', 'posts', 'write posts in my voice', '--name', 'posts', ...BACKEND());
+    expect(built.code, built.out).toBe(0);
+    expect(built.out).toContain('What this work is, read from your pieces: This work: a comparison of note apps; for: Says which app to pick; each piece settles: which app wins, for whom.');
+    const amended = s.run('amend', '--skill', 'posts', '--card', 'reader=someone leaving an app; settles=which app wins, what leaving costs');
+    expect(amended.out).toContain('What this work is, now yours: This work: a comparison of note apps; read by someone leaving an app; for: Says which app to pick; each piece settles: which app wins; what leaving costs.');
+    const TABLE = `${REVIEWED}\n\n| App | Price |\n|---|---|\n| Logseq | 0 |\n| Craft | 10 |\n| Total | 12 |`;
+    await setBackend({ byTool: { __plain: [DRAFT, TABLE], emit_editor_questions: { decisions: [], fields: {} } } });
+    const m0 = await mark();
+    const r = s.run('invoke', '--skill', 'posts', 'Compare Logseq and Craft for my notes.', '--claims', 'pattern', ...BACKEND());
+    const editor = (await bodies()).slice(m0).find((b) => b.tools?.some((t) => t.function?.name === 'emit_editor_questions'));
+    expect(editor ? textOf(editor) : '').toContain('read by someone leaving an app');
+    expect(r.out).toContain('Arithmetic to check (1): table 1, Price: the total says 12, the rows above it add up to 10.');
+  }, 180_000);
   it('--pieces takes whole or excerpts, and nothing else, before anything is read', () => {
     const s = seed(FILES);
     const r = s.run('new', 'posts', 'write posts in my voice', '--name', 'posts', '--pieces', 'some', '--no-model');
@@ -417,6 +434,11 @@ describe('a run through the binary, written the direct way', () => {
     const m0 = await mark();
     s.run('invoke', '--skill', 'posts', 'Compare Logseq and Craft for my notes.', '--json', '--claims', 'pattern', '--answers', 'who-pays=b', ...BACKEND());
     expect(textOf((await plainSince(m0))[0])).toContain('- whether the comparison counts the cost: No, sync is worth paying for');
+    // the next run of the same request: the reader, told the answer, no longer asks it, and the answer still reaches the writer
+    await setBackend({ byTool: { __plain: [DRAFT, REVIEWED], emit_editor_questions: { ...EDITOR, decisions: [EDITOR.decisions[1]] } } });
+    const m1 = await mark();
+    s.run('invoke', '--skill', 'posts', 'Compare Logseq and Craft for my notes.', '--json', '--claims', 'pattern', ...BACKEND());
+    expect(textOf((await plainSince(m1))[0])).toContain('- whether the comparison counts the cost: No, sync is worth paying for');
   }, 180_000);
 
   it('the editor\'s questions: asked where nothing states them, unanswered they change nothing, answered they reach the writer; the method is shown whole', async () => {

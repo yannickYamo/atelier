@@ -25,7 +25,8 @@
 // never served as though it were the person's: a default told to a writer once came back in the piece as a disclaimer.
 
 import type { Reading } from '../inference/reading.js';
-import { KIND_ASK, type Question, type ToldAnswer, type QuestionKind, type GapKind } from '../loop/questions.js';
+import { cardLine, type PurposeCard } from './card.js';
+import { KIND_ASK, QUESTION_KINDS, GAP_KINDS, type Question, type ToldAnswer, type QuestionKind, type GapKind } from '../loop/questions.js';
 
 /** The five things any argument lands on: the fallback when the reading names no decision of this piece's own. */
 export const EDITOR_KINDS = ['idea', 'reader', 'pain', 'proof', 'next'] as const;
@@ -61,14 +62,16 @@ export interface EditorInput {
   readonly told: readonly ToldAnswer[];
   /** the kind of work this request was read as (the piece route's kind), where one was read */
   readonly kind?: string | null;
+  /** what this skill's work is, read at the build or written by the person (./card.ts), where there is one */
+  readonly card?: PurposeCard | null;
 }
 /** One field or decision as read: stated (and where), or asked with its question. */
 export interface EditorDecision { readonly kind: string; readonly stated: string | null; readonly question: Question | null; readonly why?: string; readonly from?: 'decision' | 'field' }
 export interface EditorReading { readonly decisions: readonly EditorDecision[]; readonly questions: readonly Question[] }
 
-export const EDITOR_SYSTEM = `You prepare a writer the way a good editor does before a first draft. You are shown the person's request, the material that came with it, their method where they have one, the kind of work it is where that was read, and what they told this skill before.
+export const EDITOR_SYSTEM = `You prepare a writer the way a good editor does before a first draft. You are shown the person's request, the material that came with it, their method where they have one, the kind of work it is where that was read, what their work usually is and settles where that was read, and what they told this skill before.
 
-First, decisions: the open decisions that would change this piece's argument most, given what it is and who it is for. At most three, the most important first. A decision is open when nothing you were shown settles it: never ask what the request, the material, the method or what they told you before already decides. Ask what an expert in this kind of work would settle before writing it (for a pricing memo, which price and against what; for a reply to a customer, what is offered; for an essay, the claim it stakes), not questions of voice or form. For each:
+First, decisions: the open decisions that would change this piece's argument most, given what it is and who it is for. At most three, the most important first. A decision is open when nothing you were shown settles it: never ask what the request, the material, the method or what they told you before already decides. What their work usually settles is where to look first, never a reason to ask what this request already decides. Ask what an expert in this kind of work would settle before writing it (for a pricing memo, which price and against what; for a reply to a customer, what is offered; for an essay, the claim it stakes), not questions of voice or form. For each:
 - id: two or three lower-case words joined by hyphens naming the decision ("price-anchor", "what-is-offered").
 - decides: what is to be decided, in a few words.
 - ask: the question you would put to the person (one short sentence, plain words).
@@ -116,7 +119,9 @@ export function statedIn(where: string, quote: unknown, input: EditorInput): boo
 /** A decision's id as --answers names it: lower case, words joined by hyphens, never one of the five fields' own. */
 export const decisionId = (raw: unknown): string => {
   const id = (typeof raw === 'string' ? raw : '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').split('-').slice(0, 4).join('-').slice(0, 40);
-  return id && !(EDITOR_KINDS as readonly string[]).includes(id) ? id : '';
+  // a decision's id never takes a kind's name: an answer to it would be read as that kind's
+  const taken = new Set<string>([...EDITOR_KINDS, ...[...QUESTION_KINDS, ...GAP_KINDS].map((k) => k.toLowerCase())]);
+  return id && !taken.has(id) ? id : '';
 };
 
 /** The question as asked: 2 to 4 options, one picked among them, last time's answer as the suggestion. Null when ill-formed. */
@@ -137,6 +142,7 @@ export const EDITOR_QUESTIONS: Reading<EditorInput, EditorReading> = {
   prompt(input) {
     return [`The request:\n${input.request.slice(0, 4000)}`,
       input.kind ? `The kind of work: ${input.kind}` : '',
+      input.card ? `What this author's work is, read from all their pieces (not a statement about this request): ${cardLine(input.card)}` : '',
       input.material.length ? `The material:\n${input.material.map((m) => `[${m.name}]\n${m.head}`).join('\n\n')}` : 'No material came with it.',
       input.method.trim() ? `Their method:\n${input.method.slice(0, 6000)}` : '',
       input.told.length ? `What they told this skill before:\n${input.told.map((t) => `- ${t.ask} ${t.answer}`).join('\n')}` : ''].filter(Boolean).join('\n\n');
@@ -187,7 +193,7 @@ export const askOf = (id: string): string | null => (EDITOR_KINDS as readonly st
  * What the writer is told: only what the person answered, in their words. Empty where nobody answered, so a run nobody
  * answers is written exactly as it would be with no question step.
  */
-export function editorNote(answers: readonly { readonly id: string; readonly answer: string }[], asked: readonly Question[] = []): string {
+export function editorNote(answers: readonly { readonly id: string; readonly answer: string }[], asked: readonly Pick<Question, 'id' | 'about'>[] = []): string {
   // a decision of this piece's own is told by what it decides; a field or a compiled-path kind by its own words
   const label = (id: string): string | null => askOf(id) ?? (() => { const q = asked.find((x) => x.id === id); return q?.about ? `${q.about.replace(/[.:]$/, '')}:` : null; })();
   const lines = answers.filter((a) => label(a.id) !== null && a.answer.trim()).map((a) => `- ${label(a.id) ?? ''} ${a.answer.trim()}`);

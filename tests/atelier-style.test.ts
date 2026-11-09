@@ -57,8 +57,12 @@ describe('the reading is grounded by code', () => {
 
 describe('what is said and what the review is told', () => {
   const items = styleItems(habits.slice(0, 1), ['End on the idea, never an ask.']);
-  it('the review is told only what the draft does not hold, a habit with the author\'s sentence', () => {
-    expect(styleNote(items, [{ id: 'h1', held: false }, { id: 's1', held: true, quote: 'q' }])).toBe(
+  it('the review is told what the draft does not hold, a habit with the author\'s sentence, and what it holds, in the draft\'s words, to keep', () => {
+    expect(styleNote(items, [{ id: 'h1', held: false }, { id: 's1', held: true, quote: 'the idea it ends on' }])).toBe(
+      'Where the draft does not yet write as the author does:\n- Pairs a claim with its contrast (theirs: "The form is there. The fit is not."): the draft does not.'
+      + '\n\nWhat the draft already does as the author does, to keep as it is while you fix the rest:\n- End on the idea, never an ask: "the idea it ends on"');
+    // a hold with no quote is not said: only the draft's own words are given to keep
+    expect(styleNote(items, [{ id: 'h1', held: false }, { id: 's1', held: null }])).toBe(
       'Where the draft does not yet write as the author does:\n- Pairs a claim with its contrast (theirs: "The form is there. The fit is not."): the draft does not.');
     expect(styleNote(items, [{ id: 'h1', held: true, quote: 'q' }, { id: 's1', held: null }])).toBe('');
   });

@@ -18,6 +18,7 @@ import type { ContrastPair } from '../compiler/contrast-examples.js';
 import type { Recurrence, VersionBreakRates } from '../mining/recurrence.js';
 import type { QualityFloorContract, FloorQualification, FrozenBaselineEntry } from '../distinctiveness/floor.js';
 import { mkdirSync, readFileSync, existsSync, readdirSync, appendFileSync, rmSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { traceRead } from './trace.js';
 /** The path, its read traced (./trace.ts). */
 const traced = (p: string): string => { traceRead(p); return p; };
@@ -25,6 +26,8 @@ import { writeAtomic } from './fs-atomic.js';
 import { packageHashOf, type BuildReceipt } from './receipt.js';
 import type { MoveProfile } from '../compiler/moves.js';
 import type { InferredMethod } from '../method/infer.js';
+import type { PurposeCard } from '../direct/card.js';
+import type { MethodKeep } from '../method/standard.js';
 import type { DecisionUnit } from './canonical-state.js';
 import type { StepCheck, StepLedger } from '../method/step-check.js';
 import { readJson, MalformedStoreFile } from './read-json.js';
@@ -160,6 +163,39 @@ export function setMethod(l: StoreLayout, text: string | null): void {
   if (text === null) { if (existsSync(p)) rmSync(p); return; }
   mkdirSync(dirs(l).base, { recursive: true });
   writeAtomic(p, text);
+}
+/** WHICH LINES OF THE METHOD NOTE THE BUILD'S READING KEPT AS STEPS (core/method/standard.ts, `stepsOf`), under the note's hash. */
+export function getMethodKeep(l: StoreLayout, note: string): ReadonlySet<string> | null {
+  const p = join(dirs(l).base, 'method-keep.json');
+  if (!existsSync(p)) return null;
+  try {
+    const k = readJson<Partial<MethodKeep>>(p, { what: 'the method lines kept as steps', requireKeys: ['keep'] });
+    return k.methodHash === createHash('sha256').update(note).digest('hex') && Array.isArray(k.keep) ? new Set(k.keep.filter((x): x is string => typeof x === 'string')) : null;
+  } catch { return null; }
+}
+export function setMethodKeep(l: StoreLayout, note: string, keep: ReadonlySet<string> | null): void {
+  const p = join(dirs(l).base, 'method-keep.json');
+  if (keep === null) { if (existsSync(p)) rmSync(p); return; }
+  mkdirSync(dirs(l).base, { recursive: true });
+  writeAtomic(p, JSON.stringify({ methodHash: createHash('sha256').update(note).digest('hex'), keep: [...keep] } satisfies MethodKeep, null, 1));
+}
+/** WHAT THIS SKILL'S WORK IS (core/direct/card.ts): read at the build, or the person's (`atelier amend --card`). */
+export function getCard(l: StoreLayout): PurposeCard | null {
+  const p = join(dirs(l).base, 'card.json');
+  if (!existsSync(p)) return null;
+  // a card that cannot be read is no card: the questions read the request alone rather than the run stopping
+  try {
+    const c = readJson<PurposeCard>(p, { what: 'the purpose card', requireKeys: ['settles'] });
+    const str = (x: unknown): string | null => (typeof x === 'string' && x.trim() ? x : null);
+    if (!c || typeof c !== 'object' || !Array.isArray(c.settles)) return null;
+    return { kind: str(c.kind), reader: str(c.reader), purpose: str(c.purpose), settles: c.settles.filter((x): x is string => typeof x === 'string'), by: c.by === 'you' ? 'you' : 'model', ...(typeof c.reading === 'string' ? { reading: c.reading } : {}) };
+  } catch { return null; }
+}
+export function setCard(l: StoreLayout, c: PurposeCard | null): void {
+  const p = join(dirs(l).base, 'card.json');
+  if (c === null) { if (existsSync(p)) rmSync(p); return; }
+  mkdirSync(dirs(l).base, { recursive: true });
+  writeAtomic(p, JSON.stringify(c, null, 1));
 }
 /** THE METHOD READ OFF THE PIECES when the owner wrote none (core/method/infer.ts): a habit of the pieces, never a rule; the brief uses it, the standard never does. */
 export function getInferredMethod(l: StoreLayout): InferredMethod | null {
@@ -370,16 +406,16 @@ export function setComposite(l: StoreLayout, c: CompositeRecord | null): void {
  * The last answer of a kind is the default the next time it is asked ("last time you said …"); an answer about what may
  * be named stands, and that question is not asked again. Only answers the person gave are kept, never a default.
  */
-export function getTold(l: StoreLayout): { id: string; ask: string; answer: string; at: string; for?: string }[] {
+export function getTold(l: StoreLayout): { id: string; ask: string; answer: string; at: string; for?: string; about?: string }[] {
   const p = join(dirs(l).base, 'told.json');
   if (!existsSync(p)) return [];
-  interface Told { id: string; ask: string; answer: string; at: string; for?: string }
+  interface Told { id: string; ask: string; answer: string; at: string; for?: string; about?: string }
   // A file that cannot be read is no answer told: the run asks again rather than stopping.
   try {
     return readJson<(Partial<Told> | null)[]>(p, { kind: 'array', what: 'the answers told to this skill' }).filter((t): t is Told => typeof t?.id === 'string' && typeof t.answer === 'string');
   } catch { return []; }
 }
-export function addTold(l: StoreLayout, told: readonly { id: string; ask: string; answer: string; at: string; for?: string }[]): void {
+export function addTold(l: StoreLayout, told: readonly { id: string; ask: string; answer: string; at: string; for?: string; about?: string }[]): void {
   if (!told.length) return;
   const p = join(dirs(l).base, 'told.json');
   mkdirSync(dirs(l).base, { recursive: true });

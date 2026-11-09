@@ -18,7 +18,7 @@
 // The record is the one every run writes (core/loop/run-once.ts, `runOnce`), with `direct` saying what was shown and
 // who chose it, so `atelier report`, `rate`, `fix` and `keep` read it as any other run.
 
-import { STYLE_READ, styleItems, styleNote, styleLines, type StyleReading } from '../core/direct/style.js';
+import { STYLE_READ, styleItems, answerItems, styleNote, styleLines, type StyleReading } from '../core/direct/style.js';
 import * as store from '../core/state/store.js';
 import { sha } from '../core/state/receipt.js';
 import { readContext } from '../core/inference/reading.js';
@@ -35,6 +35,7 @@ import { PIECE_ROUTE, type Route } from '../core/direct/route.js';
 import { piecesBlock, taskBlock, DRAFT_ASK, reviewAsk, EDITS_SHOWN } from '../core/direct/prompt.js';
 import { correctionsOf } from '../core/direct/kept.js';
 import { EDITOR_QUESTIONS, EDITOR_KINDS, editorNote, askOf, type EditorReading } from '../core/direct/questions.js';
+import { cardLine, type PurposeCard } from '../core/direct/card.js';
 import { readAnswers, questionLines, materialShown, type Question } from '../core/loop/questions.js';
 import { typedAnswer, JUST_WRITE, questionsJson } from './prewrite.js';
 import { createInterface } from 'node:readline/promises';
@@ -59,7 +60,8 @@ import { readFidelity } from '../core/fidelity/profile.js';
 import { typicalityOf } from '../core/fidelity/typicality.js';
 import type { FidelityRecord } from '../core/fidelity/types.js';
 import { grammarListed, toCheckList } from '../core/observers/grammar.js';
-import { GRAMMAR_NOT_CHECKED } from '../core/eval/record-build.js';import { howHeld } from './how-held.js';
+import { GRAMMAR_NOT_CHECKED } from '../core/eval/record-build.js';
+import { totalsOff, totalsLine } from '../core/observers/totals.js';import { howHeld } from './how-held.js';
 import { methodReading, methodLine } from '../core/eval/obligations.js';
 
 
@@ -208,29 +210,36 @@ export interface Asked { readonly note: string; readonly questions: readonly Que
  * not answer reaches the writer. Answers given with --answers count, now or for a kind this run did not ask, and are
  * kept as next time's suggestion. --no-questions reads nothing.
  */
+/** The card told to the editor: one read with nothing grounded tells nothing. */
+const cardOf = (L: store.StoreLayout): PurposeCard | null => { const c = store.getCard(L); return c && cardLine(c) ? c : null; };
+
 export async function editorQuestions(c: Pick<DirectContext, 'L' | 'asked' | 'material' | 'interactive' | 'read' | 'say'>, method: string, kind: string | null = null): Promise<Asked> {
   if (argv.includes('--no-questions')) return { note: '', questions: [], answers: [], by: 'off' };
   // AN EDITOR'S ANSWER BELONGS TO THE PIECE IT WAS GIVEN FOR. The one idea of last week's post is not this one's: read
   // across requests, an answer counted as "stated" for the next piece, which was then neither asked nor told it.
   const forRequest = sha(c.asked.trim());
-  // An answer kept for one request (`for`) is this request's only; one with none (the compiled path's) is the skill's.
+  // An answer kept for one request (`for`) is this request's only. One kept with none is the skill's (the compiled
+  // path's kinds); an editor kind kept with none predates answers per request and is left out.
   const all = store.getTold(c.L);
   const told = all.filter((t) => t.for === undefined ? !(EDITOR_KINDS as readonly string[]).includes(t.id) : t.for === forRequest);
-  const input = { request: c.asked, material: materialShown(c.material), method, told, kind };
+  const input = { request: c.asked, material: materialShown(c.material), method, told, kind, card: cardOf(c.L) };
   // THE SAME INPUT ASKS THE SAME QUESTIONS: a model's reading is kept under the hash of what it read (store.ts, getEditorReading).
-  const key = sha(JSON.stringify([EDITOR_QUESTIONS.version, contextReaderModel(), input.request, input.kind, input.material, input.method, told.map((t) => [t.id, t.answer])]));
+  const key = sha(JSON.stringify([EDITOR_QUESTIONS.version, contextReaderModel(), input.request, input.kind, input.card ?? null, input.material, input.method, told.map((t) => [t.id, t.answer])]));
   const kept = keptReading(store.getEditorReading(c.L, key));
   const decided = kept ??
     await readContext(EDITOR_QUESTIONS, input, contextReaderClient(), contextReaderModel(), { spentUsd: 0, capUsd: 0.03, maxCalls: 1 }, 'other');
   if (!kept && decided.by === 'model') store.putEditorReading(c.L, key, { value: decided.value, by: decided.by });
   const questions = decided.value.questions;
-  const { answers: given, said } = readAnswers(flag('--answers'), questions, [...new Set([...EDITOR_KINDS, ...questions.map((q) => q.id)])]);
+  const { answers: given, said } = readAnswers(flag('--answers'), questions, [...new Set([...EDITOR_KINDS, ...questions.map((q) => q.id)])], false);
   for (const s of said) c.say(s);
   const answers: { id: string; answer: string }[] = [];
   let rest = false;
   // WHAT THE PERSON ANSWERED FOR THIS SAME REQUEST ON AN EARLIER RUN IS STILL THEIRS: it reaches the writer again, asked
   // or found stated in it, and is never asked twice. Their answer now, where they give one, is the one that counts.
-  const before = new Map(told.filter((t) => t.for === forRequest).map((t) => [t.id, t.answer]));
+  const mine = told.filter((t) => t.for === forRequest);
+  const before = new Map(mine.map((t) => [t.id, t.answer]));
+  // what an earlier answer decides, kept with it: a decision answered once is settled, so this reading no longer asks it
+  const aboutBefore = mine.filter((t) => t.about).map((t) => ({ id: t.id, about: t.about }));
   for (const q of questions) {
     const g = given.get(q.id) ?? before.get(q.id);
     if (g !== undefined) { answers.push({ id: q.id, answer: g }); continue; }
@@ -242,11 +251,11 @@ export async function editorQuestions(c: Pick<DirectContext, 'L' | 'asked' | 'ma
   }
   // an answer for a kind this run did not ask (a field, a compiled-path kind) still counts; a decision of another
   // reading's naming has no question here to say what it decides, so it is not told
-  for (const [id, answer] of [...given, ...before]) if (!questions.some((q) => q.id === id) && askOf(id) !== null && !answers.some((a) => a.id === id)) answers.push({ id, answer });
+  for (const [id, answer] of [...given, ...before]) if (!questions.some((q) => q.id === id) && (askOf(id) !== null || aboutBefore.some((b) => b.id === id)) && !answers.some((a) => a.id === id)) answers.push({ id, answer });
   const at = new Date().toISOString();
   // every answer to this reading's questions belongs to this request; a compiled-path kind given here stays the skill's
   const ofThisPiece = (id: string): boolean => (EDITOR_KINDS as readonly string[]).includes(id) || questions.some((q) => q.id === id);
-  store.addTold(c.L, answers.filter((a) => before.get(a.id) !== a.answer).map((a) => ({ id: a.id, ask: questions.find((q) => q.id === a.id)?.ask ?? askOf(a.id) ?? a.id, answer: a.answer, at, ...(ofThisPiece(a.id) ? { for: forRequest } : {}) })));
+  store.addTold(c.L, answers.filter((a) => before.get(a.id) !== a.answer).map((a) => ({ id: a.id, ask: questions.find((q) => q.id === a.id)?.ask ?? askOf(a.id) ?? a.id, answer: a.answer, at, ...(ofThisPiece(a.id) ? { for: forRequest } : {}), ...(questions.find((q) => q.id === a.id)?.about ? { about: questions.find((q) => q.id === a.id)?.about } : {}) })));
 
   const open = questions.filter((q) => !answers.some((a) => a.id === q.id));
   if (answers.length) c.say(`Settled before writing, in your words: ${answers.map((a) => a.id).join(', ')}.`);
@@ -254,7 +263,7 @@ export async function editorQuestions(c: Pick<DirectContext, 'L' | 'asked' | 'ma
     c.say(`An editor would ask (${open.length}), and the piece was written without ${open.length === 1 ? 'it' : 'them'}: ${open.map((q) => `${q.id}: ${q.ask}`).join(' ')}`);
     c.say(`  To answer, run again with --answers "${open.map((q) => `${q.id}=<letter or your words>`).join(',')}"${open.map((q) => ` (${q.id}: ${q.options.map((o, i) => `${String.fromCharCode(97 + i)}) ${o}`).join('; ')})`).join('')}.`);
   }
-  return { note: editorNote(answers, questions), questions, answers, by: decided.by };
+  return { note: editorNote(answers, [...questions, ...aboutBefore]), questions, answers, by: decided.by };
 }
 
 const asEffort = (x: string | undefined): Effort => {
@@ -384,7 +393,9 @@ export async function runDirect(c: DirectContext) {
   // version's receipt names; with none, the reading's own word for how often
   const movesHash = store.getReceipt(c.L, c.sv.skillVersionHash)?.movesHash;
   const counted = movesHash ? store.getMovesByHash(c.L, movesHash) : null;
-  const styleOf = styleItems(pointsWithRates(voice?.persona?.points ?? [], counted), unchecked);
+  // what the person settled before the draft is read on the piece too, in the same call (core/direct/style.ts)
+  const styleOf = [...styleItems(pointsWithRates(voice?.persona?.points ?? [], counted), unchecked),
+    ...answerItems(asking.answers, (id) => askOf(id) ?? asking.questions.find((q) => q.id === id)?.about ?? null)];
   const steer = argv.includes('--style-review');
   const styleOn = !argv.includes('--no-style') && styleOf.length > 0;
   // its own call, held inside what is left of the run's cap
@@ -526,6 +537,9 @@ export async function runDirect(c: DirectContext) {
   for (const l of evaluation?.record ? rulesLines(evaluation.record.entries, style?.by === 'model') : []) c.say(l);
   // WHAT THE GRAMMAR CHECKER WAS UNSURE OF, item by item, as the compiled path says it: listed, never changed.
   for (const l of grammarLines(seen.report)) c.say(l);
+  // A TOTAL THE TABLE'S OWN ROWS DO NOT ADD UP TO (core/observers/totals.ts): arithmetic, listed, never changed
+  const totals = totalsOff(rec.output);
+  if (totals.length) c.say(totalsLine(totals));
   // what was corrected without a model (--fix-grammar, a qualified check's own correction), each change named
   if (fixedHere) c.say(`Repaired: ${fixedHere}.`);
   // HOW MUCH OF THE METHOD THE PIECE CARRIES OUT (core/eval/obligations.ts), the same line the compiled path says
@@ -541,7 +555,7 @@ export async function runDirect(c: DirectContext) {
     // the questions were asked before the piece was written, and are listed before it
     questions: questionsJson(asking.questions), answers: asking.answers,
     output: rec.output, answer: rec.output, invocationId: rec.invocationId, skillVersion: c.sv.skillVersionHash, costUsd: Number(spent.toFixed(4)),
-    rulesBroken: violated, cut: rec.repair?.storiesCut ?? [], toCheck, plan: null, inferred, work: rec.work ?? null,
+    rulesBroken: violated, cut: rec.repair?.storiesCut ?? [], toCheck, totals, plan: null, inferred, work: rec.work ?? null,
     direct: rec.direct ?? null, model: rec.observedRuntime?.resolvedModel ?? c.binding.requestedModel, maxTokens: directMaxTokens(),
   };
   return { rec, json, spent, budget, evaluation, claimAct: checks.claimAct };

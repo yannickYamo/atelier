@@ -83,7 +83,7 @@ export const VALUED_OPTIONS: readonly string[] = ['correcting', 'moves', 'set-as
   'briefs', 'rounds', 'carry-note',
   'with',
   // the direct writer (cli/direct.ts): which path writes, at what effort, and how many characters of the author's pieces it is shown
-  'pipeline', 'effort', 'piece-chars',
+  'pipeline', 'effort', 'piece-chars', 'card',
   // `atelier keep`: the request a kept piece answered, when no run is behind it
   'request',
   'api-key-env', 'applies-when', 'arm-set', 'backend', 'base-url', 'brief',

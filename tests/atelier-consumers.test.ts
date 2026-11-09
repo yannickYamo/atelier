@@ -29,7 +29,9 @@ const DEFAULT = ['skills/*/active.json', 'skills/*/versions/*.json', 'skills/*/s
   // a skill built with no method note: its steps read off the pieces are read on the piece (core/direct/style.ts)
   'skills/*/method-inferred.json',
   // the build's count of each habit over the pieces, named by the version's receipt: which habits the style reading asks
-  'skills/*/moves/h.json', 'skills/*/receipts/*.json'];
+  'skills/*/moves/h.json', 'skills/*/receipts/*.json',
+  // what the work is (core/direct/card.ts): told to the editor's questions
+  'skills/*/card.json'];
 /** Written at build and read elsewhere, by the reader named. */
 const ELSEWHERE: Readonly<Record<string, string>> = {
   'runs/*': 'the build\'s own run folder: read by the build steps that follow and by `atelier inspect`',
@@ -40,6 +42,7 @@ const ELSEWHERE: Readonly<Record<string, string>> = {
   'skills/*/architectures/*.json': '`atelier check`, `fix`, `improve`, `optimize`',
   'skills/*/evals/*.json': '`atelier eval`',
   'skills/*/fidelity/profile.json': '`atelier verify`, `fidelity`, `score`',
+  'skills/*/method-keep.json': 'the build\'s later stages and the next build: which lines of the method note a model read as steps',
   'skills/*/frozen-checks.json': 'the next method build: checks kept while their step and examples are unchanged',
   'skills/*/form.txt': 'the compiled path (what form a reply takes)',
   'skills/*/moves/persona-*.json': 'the next build: the profile kept for this persona, read again only when the pieces or the reading change',
@@ -72,6 +75,7 @@ const READINGS: Readonly<Record<string, readonly ['run' | 'build' | 'command' | 
   latitude: ['build', 'how strictly the skill holds output, read at build'],
   'intent-mode': ['build', 'what the skill is for, on the screen of `atelier new`'],
   'work-form': ['build', 'whether the work is a reply or a document; routes a reply to the compiled path'],
+  'purpose-card': ['build', 'what the work is, read off the pieces: told to the editor\'s questions'],
   'method-infer': ['build', 'the steps read off the pieces with no method: read on the piece by the style reading'],
   'step-check': ['build', 'the check each of the owner\'s steps asks for; the checks run on every default run'],
   'step-check-repair': ['build', 'a written check that failed the owner\'s examples, repaired'],
@@ -137,6 +141,8 @@ async function traced(how: Build): Promise<Traced> {
     execFileSync('node', [CLI, ...a, '--provider', 'openai-compatible', '--base-url', `http://127.0.0.1:${port}`, '--model', 'scripted'], { encoding: 'utf8', cwd: proj, env, stdio: ['ignore', 'pipe', 'pipe'] });
   };
   await setBackend({ byTool: { emit_persona: PERSONA, emit_holds_back: { ids: [] },
+    // what the work is, read at the build and told to the editor's questions on the run
+    emit_purpose_card: { kind: 'a post on a tool', kindQuote: 'I would start with the riskiest line', reader: null, readerQuote: null, purpose: 'Says where to start.', settles: ['where to start'] },
     // discovery: the rules read off the pieces, matched and observed on the pieces held back, then accepted
     emit_factors: { factors: [factor('Lead with the decision, then the reasoning.'), factor('Close on a plain instruction.')] },
     emit_matches: { matches: [{ leftIndex: 0, matchedRightIndex: 0 }, { leftIndex: 1, matchedRightIndex: 1 }] },
@@ -201,5 +207,9 @@ describe('every reading in the source has a place it runs', () => {
   it('the default run asks for the readings the table puts on it', async () => {
     const t = await traced('examples');
     for (const id of ['piece-route', 'editor-questions', 'style-read']) expect(t.runReadings).toContain(id);
+    // what the work is: read at the build, written, and read by the run's editor questions
+    expect(t.buildReadings).toContain('purpose-card');
+    expect(t.written).toContain('skills/*/card.json');
+    expect(t.read).toContain('skills/*/card.json');
   }, 240_000);
 });

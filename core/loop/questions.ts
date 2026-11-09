@@ -235,10 +235,12 @@ const PAIR_BREAK = /,(?=\s*[a-z][a-z0-9_-]*\s*=)/i;
  */
 export function readAnswers(s: string | undefined, questions: readonly Question[],
   /** ids a caller asks beside the kinds here (the direct writer's editor questions, ../direct/questions.ts) */
-  extraIds: readonly string[] = []): { readonly answers: Map<string, string>; readonly said: string[] } {
+  extraIds: readonly string[] = [],
+  /** false where no gap question is asked (the direct writer): a short answer is then the person's, never a decline */
+  gaps = true): { readonly answers: Map<string, string>; readonly said: string[] } {
   const answers = new Map<string, string>(); const said: string[] = [];
   const kinds = [...[...QUESTION_KINDS, ...GAP_KINDS].map((k) => k.toLowerCase()), ...extraIds];
-  const gapIds = new Set<string>(GAP_KINDS.map((k) => k.toLowerCase()));
+  const gapIds = new Set<string>(gaps ? GAP_KINDS.map((k) => k.toLowerCase()) : []);
   for (const part of (s ?? '').split(PAIR_BREAK)) {
     const eq = part.indexOf('=');
     if (eq <= 0) continue;

@@ -67,6 +67,9 @@ export interface MethodStep {
  */
 export function asideOf(note: string): MethodStep[] { const { aside, title } = splitSteps(note); return title ? [title, ...aside] : aside; }
 
+/** A rebuild and a run number the steps as the build did: the lines the build's reading kept, under the note's hash. */
+export interface MethodKeep { readonly methodHash: string; readonly keep: readonly string[] }
+
 /**
  * THE NOTE'S STEPS. `keep` is what the units reading read as instructions among the sentences beside the list and the
  * line shaped like a title (`asideKept`, cli/commands/method.ts): where it ran, it alone decides them. Where it did not
@@ -75,9 +78,12 @@ export function asideOf(note: string): MethodStep[] { const { aside, title } = s
  * used only where no model read the note.
  */
 export function stepsOf(note: string, keep: ReadonlySet<string> | null = null): MethodStep[] {
-  const { steps, aside, title } = splitSteps(note);
-  const titleKept = title && (keep ? keep.has(title.text) : titleIsStepByWords(title.text)) ? [title] : [];
-  return [...titleKept, ...steps, ...(keep ? aside.filter((s) => keep.has(s.text)) : [])];
+  const { steps, aside, title, listed } = splitSteps(note);
+  // WHERE THE TITLE-SHAPED LINE STANDS IS WHERE IT ALWAYS STOOD: beside a list it is the first of the sentences set
+  // aside (appended after the list, kept only by the reading); with no list it is the note's first step. So a note that
+  // built before builds to the same numbered steps.
+  if (listed) return [...(title && keep?.has(title.text) ? [title] : []), ...steps, ...(keep ? aside.filter((s) => keep.has(s.text)) : [])];
+  return [...(title && (keep ? keep.has(title.text) : titleIsStepByWords(title.text)) ? [title] : []), ...steps];
 }
 
 /** THE NO-MODEL FLOOR for a title-shaped first line: a step when it reads as a rule or an instruction by its words. */
@@ -86,7 +92,7 @@ export function titleIsStepByWords(line: string): boolean {
     || /^(?:open|start|begin|lead|end|close|finish|conclude|include|add|write|keep|give|put|use|state|list|name|say|check|make|call|flag|ask|point|prefer|separate|weigh|size|then)\b/i.test(line);
 }
 
-function splitSteps(note: string): { steps: MethodStep[]; aside: MethodStep[]; title: MethodStep | null } {
+function splitSteps(note: string): { steps: MethodStep[]; aside: MethodStep[]; title: MethodStep | null; listed: boolean } {
   const body = (note.charCodeAt(0) === 0xFEFF ? note.slice(1) : note).replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, '').replace(/```[\s\S]*?```/g, '').replace(/<!--[\s\S]*?-->/g, '');
   const lines = body.split(/\r?\n/);
   const items: MethodStep[] = []; const prose: MethodStep[] = [];
@@ -151,7 +157,9 @@ function splitSteps(note: string): { steps: MethodStep[]; aside: MethodStep[]; t
   const blanks = (t: string): boolean => { const left = t.replace(BLANK, ' '); return left !== t && /^(?:\s*>?\s*[\p{L}\p{N}' /-]{1,48}:\s*>?\s*)+$/u.test(left); };
   const tidy = (xs: MethodStep[]): MethodStep[] => xs.filter((s) => !blanks(s.text)).map(clean).filter((s) => s.text.length >= 8 && !seen.has(s.text.toLowerCase()) && Boolean(seen.add(s.text.toLowerCase())));
   const kept = tidy(steps);
-  return { steps: kept, aside: tidy(asideRaw), title: title && title.text.length >= 3 ? title : null };
+  const asideKept = tidy(asideRaw);
+  // the title is held to what every step is held to (cleaned, eight characters or more, never a second copy of a step)
+  return { steps: kept, aside: asideKept, title: title ? tidy([title])[0] ?? null : null, listed: ownItems.length > 0 };
 }
 
 /** A section's name as a rule can carry it: the heading without what is particular to one piece (a bracket, a subtitle). */
