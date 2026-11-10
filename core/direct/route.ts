@@ -23,6 +23,11 @@ export interface Route {
   readonly order: readonly string[];
   /** what the request asks for, in the reader's words; null from the floor */
   readonly kind: string | null;
+  /**
+   * the request's own words that state a length to write to ("about 2,000 words"), copied from it and found there by
+   * code; null where the reading found none; absent from the floor, where the length's word pattern reads the request
+   */
+  readonly length?: string | null;
 }
 
 /** The characters of each piece's opening the catalogue shows. */
@@ -32,7 +37,7 @@ const MATERIAL_CHARS = 2_000;
 
 export const PIECE_ROUTE: Reading<RouteInput, Route> = {
   id: 'piece-route',
-  version: '1',
+  version: '2',
   system: `You choose which of an author's pieces a new piece should be written from.
 
 You are given a request for a new piece and a catalogue of the author's own pieces: each by its id, its title, its
@@ -42,14 +47,19 @@ reply, a launch note) for the same kind of reader, and among those the nearest i
 another kind: its form, its pace and its voice would be copied into the new piece. Name a piece of another kind only
 when no piece is of the kind asked for, and then the nearest in form.
 
-Answer with the ids in order, most like the new piece first, and what the request asks for in a few words.`,
+Answer with the ids in order, most like the new piece first, and what the request asks for in a few words.
+
+If the request states a length for the new piece ("about 2,000 words", "three paragraphs", "under 300 words"), copy
+those words exactly as the length; a number that counts or names something else ("the 500 words I pasted", "chapter
+12", "top 10 tools") is no length. Give null where the request states none.`,
   schema: {
     type: 'object',
     properties: {
       asks_for: { type: 'string', description: 'the kind of piece the request asks for, in a few words' },
       pieces: { type: 'array', items: { type: 'string' }, description: 'ids of the pieces to write from, most like the new piece first' },
+      length: { type: ['string', 'null'], description: 'the request\'s own words stating the length of the new piece, copied exactly; null where it states none' },
     },
-    required: ['asks_for', 'pieces'],
+    required: ['asks_for', 'pieces', 'length'],
     additionalProperties: false,
   },
   toolName: 'emit_piece_route',
@@ -67,12 +77,16 @@ Answer with the ids in order, most like the new piece first, and what the reques
   // One piece, or none, leaves nothing to choose.
   decide: (x) => (x.pieces.length <= 1 ? { order: x.pieces.map((p) => p.id), kind: null } : null),
   ground: (raw, x) => {
-    const r = raw as { asks_for?: unknown; pieces?: unknown } | null;
+    const r = raw as { asks_for?: unknown; pieces?: unknown; length?: unknown } | null;
     if (!r || !Array.isArray(r.pieces)) return null;
     const ids = new Set(x.pieces.map((p) => p.id));
     const order = [...new Set(r.pieces.filter((id): id is string => typeof id === 'string' && ids.has(id)))];
     if (!order.length) return null;
-    return { order, kind: typeof r.asks_for === 'string' && r.asks_for.trim() ? r.asks_for.trim().slice(0, 120) : null };
+    // a length is kept only as words found in the request; a quote not there is no reading of it, and the floor reads it
+    const said = typeof r.length === 'string' ? r.length.trim() : null;
+    const flat = (t: string): string => t.toLowerCase().replace(/\s+/g, ' ');
+    const length = r.length === null ? null : said && flat(x.request).includes(flat(said)) ? said : undefined;
+    return { order, kind: typeof r.asks_for === 'string' && r.asks_for.trim() ? r.asks_for.trim().slice(0, 120) : null, ...(length === undefined ? {} : { length }) };
   },
   floor: (x) => ({ order: lexicalOrder(x.pieces, `${x.request}\n${x.material.slice(0, MATERIAL_CHARS)}`), kind: null }),
 };

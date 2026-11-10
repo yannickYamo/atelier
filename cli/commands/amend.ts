@@ -24,6 +24,7 @@ import { parseConsequences, describeTable } from '../../core/eval/consequence.js
 import { compileArchitecture } from '../../core/architecture/compile.js';
 import { renderAgentSkill, assertPortable, defaultDescription } from '../../renderers/agent-skill/render.js';
 import * as store from '../../core/state/store.js';
+import { amendCard, cardLine } from '../../core/direct/card.js';
 
 import { sha, DATA, die, argv, flag, cmd, projectDir, pickHost, clientFor, numericFlag, skillArg, diagnoserModel, carriedFrom, carryReceipt } from '../runtime.js';
 import { decide } from '../../core/ratification/authority.js';
@@ -47,6 +48,18 @@ import { draftHash, appendDecision, stampVersion } from '../../core/ratification
  */
 export function amend(): void {
   const name = skillArg();
+  // WHAT THE WORK IS (core/direct/card.ts) is no rule: it changes what an editor asks, never what good means, so it is
+  // changed on its own, with no new version and no reason asked; the person's card is never read over again.
+  const cardAsked = flag('--card');
+  if (cardAsked !== undefined && flag('--rule') !== undefined) return void die('--card changes what the work is, on its own; amend a rule (--rule) in a separate call.');
+  if (cardAsked !== undefined) {
+    const L: store.StoreLayout = { root: DATA, skillName: name };
+    let card;
+    try { card = amendCard(store.getCard(L), cardAsked); } catch (e) { return void die((e as Error).message); }
+    store.setCard(L, card);
+    console.log(`What this work is, now yours: ${cardLine(card) || 'nothing'}.`);
+    return;
+  }
   // THE LATITUDE AND THE RULES ACCEPTED AS UNMEASURED ARE THE OWNER'S TOO (core/observers/latitude.ts): changed here, on
   // their own, with no rule named; a new version with the reason, like any amendment.
   const latitudeAsked = flag('--latitude'); const unmeasuredAsked = unmeasuredSaid();

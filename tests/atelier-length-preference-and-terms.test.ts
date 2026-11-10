@@ -80,7 +80,7 @@ describe('provisional length, and terminology that is not evidence', () => {
     const prompts = await promptsFor('emit_piece');
     const prompt = prompts.find((p) => p.includes("For this request, my method's steps that apply")) ?? '';
     const intents = await promptsFor('emit_intent'); const briefs = await promptsFor('emit_execution_brief');
-    expect(prompt, `${prompts.length} writer prompt(s), ${intents.length} intent reading(s), ${briefs.length} brief reading(s); run said: ${r.out.split('\n').filter((l) => /For this request|Read before writing|brief|intent/.test(l)).join(' | ')}; tails: ${prompts.map((p) => p.slice(-200).replace(/\s+/g, ' ')).join(' || ')}`).toContain('- Step 1: decide the cause of the stall (from what the person reports) — decide it on what is given and on my pieces');
+    expect(prompt, `${prompts.length} writer prompt(s), ${intents.length} intent reading(s), ${briefs.length} brief reading(s); run said: ${r.out.split('\n').filter((l) => /For this request|Read before writing|brief|intent/.test(l)).join(' | ')}; tails: ${prompts.map((p) => p.slice(-200).replace(/\s+/g, ' ')).join(' || ')}`).toContain('- Step 1: decide the cause of the stall (from what the person reports): decide it on what is given and on my pieces');
     expect(prompt).toContain('Every decision is made on what is given, in the shape my method asks for; the piece states no specific it was not given, and speaks only to its reader.');
     // the missing specific is never served as something to say; it is listed beside the work, with how to give it
     expect(prompt).not.toContain('what the person saw before the stall');

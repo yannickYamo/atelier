@@ -49,7 +49,7 @@ describe('the brief as a value', () => {
     expect(setAsideSteps(g, steps).map((s) => s.n)).toEqual([2]);
     const note = briefNote(g, steps, [{ name: 'change.diff' }]);
     expect(note).toContain("steps that apply: 1, 3. Set aside, not this case: 2 (the request says \"touches nothing else\").");
-    expect(note).toContain('- Step 3: decide the verdict — decide it on what is given and on my pieces');
+    expect(note).toContain('- Step 3: decide the verdict: decide it on what is given and on my pieces');
     // what is missing is listed beside the draft (core/loop/inferred.ts), never served as something to say
     expect(note).not.toContain('which verdict the author would give');
     expect(note).toContain('Given: the request and change.diff. Every decision is made on what is given, in the shape my method asks for; the piece states no specific it was not given, and speaks only to its reader.');

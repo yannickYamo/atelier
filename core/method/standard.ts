@@ -22,7 +22,9 @@
 // WHICH CHECK A STATED STEP CARRIES IS READ, NOT MATCHED (./step-check.ts): a model names a measurement from the menu or
 // writes a check, code grounds it on the owner's example, and a step the reading cannot ground is a judgement. The plan
 // of those readings is handed in; with none, every stated step is a judgement. No pattern on a step's wording decides
-// anything here.
+// anything here where a model read the note. WHICH LINES ARE STEPS is read the same way (`stepsOf`): the sentences beside a
+// list, a title-shaped first line and a list of inputs go to the units reading; the floor that reads their wording
+// (`titleIsStepByWords`, the inputs heading) runs only where no model read them.
 
 import type { Requirement, Measurement, CheckQualification } from '../state/canonical-state.js';
 import type { GoldenCase } from '../golden/case.js';
@@ -63,14 +65,34 @@ export interface MethodStep {
  * (./decision-units.ts, `asideKept` in cli/commands/method.ts), and only the sentences it read as instructions are kept,
  * passed here as `keep`. With nothing read (no model) the list is the method and its prose is not.
  */
-export function asideOf(note: string): MethodStep[] { return splitSteps(note).aside; }
+export function asideOf(note: string): MethodStep[] { const { aside, title } = splitSteps(note); return title ? [title, ...aside] : aside; }
 
-export function stepsOf(note: string, keep: ReadonlySet<string> = new Set()): MethodStep[] {
-  const { steps, aside } = splitSteps(note);
-  return aside.length ? [...steps, ...aside.filter((s) => keep.has(s.text))] : steps;
+/** A rebuild and a run number the steps as the build did: the lines the build's reading kept, under the note's hash. */
+export interface MethodKeep { readonly methodHash: string; readonly keep: readonly string[] }
+
+/**
+ * THE NOTE'S STEPS. `keep` is what the units reading read as instructions among the sentences beside the list and the
+ * line shaped like a title (`asideKept`, cli/commands/method.ts): where it ran, it alone decides them. Where it did not
+ * (no model, or a caller with no reading), the FLOOR: the prose beside a list is set aside, and a title-shaped first line
+ * is a step only when its words are a rule or an instruction (`titleIsStepByWords`). That floor reads wording, and is
+ * used only where no model read the note.
+ */
+export function stepsOf(note: string, keep: ReadonlySet<string> | null = null): MethodStep[] {
+  const { steps, aside, title, listed } = splitSteps(note);
+  // WHERE THE TITLE-SHAPED LINE STANDS IS WHERE IT ALWAYS STOOD: beside a list it is the first of the sentences set
+  // aside (appended after the list, kept only by the reading); with no list it is the note's first step. So a note that
+  // built before builds to the same numbered steps.
+  if (listed) return [...(title && keep?.has(title.text) ? [title] : []), ...steps, ...(keep ? aside.filter((s) => keep.has(s.text)) : [])];
+  return [...(title && (keep ? keep.has(title.text) : titleIsStepByWords(title.text)) ? [title] : []), ...steps];
 }
 
-function splitSteps(note: string): { steps: MethodStep[]; aside: MethodStep[] } {
+/** THE NO-MODEL FLOOR for a title-shaped first line: a step when it reads as a rule or an instruction by its words. */
+export function titleIsStepByWords(line: string): boolean {
+  return /\b(?:must|never|always|do not|don't|required?|shall|only)\b/i.test(line)
+    || /^(?:open|start|begin|lead|end|close|finish|conclude|include|add|write|keep|give|put|use|state|list|name|say|check|make|call|flag|ask|point|prefer|separate|weigh|size|then)\b/i.test(line);
+}
+
+function splitSteps(note: string): { steps: MethodStep[]; aside: MethodStep[]; title: MethodStep | null; listed: boolean } {
   const body = (note.charCodeAt(0) === 0xFEFF ? note.slice(1) : note).replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, '').replace(/```[\s\S]*?```/g, '').replace(/<!--[\s\S]*?-->/g, '');
   const lines = body.split(/\r?\n/);
   const items: MethodStep[] = []; const prose: MethodStep[] = [];
@@ -87,15 +109,16 @@ function splitSteps(note: string): { steps: MethodStep[]; aside: MethodStep[] } 
   // Not a rule ("Always open with the verdict") and not an instruction ("Open with a Summary section"): those are steps
   // however they are punctuated. And only above something: a note of one line is its one step.
   const first = firstAt === -1 ? '' : lines[firstAt].trim();
+  // Shaped like a title, by layout alone: a line that is no list item and no heading, with no closing punctuation, ten
+  // words or fewer, a blank line under it and more below.
   const titled = firstAt !== -1 && !/^(?:[-*+]|\d+[.)]|#{1,6})\s/.test(first) && !/[.!?:;]$/.test(first) && first.split(/\s+/).length <= 10
-    && !(lines[firstAt + 1] ?? '').trim() && lines.slice(firstAt + 1).some((l) => l.trim())
-    && !/\b(?:must|never|always|do not|don't|required?|shall|only)\b/i.test(first)
-    && !/^(?:open|start|begin|lead|end|close|finish|conclude|include|add|write|keep|give|put|use|state|list|name|say|check|make|call|flag|ask|point|prefer|separate|weigh|size|then)\b/i.test(first);
+    && !(lines[firstAt + 1] ?? '').trim() && lines.slice(firstAt + 1).some((l) => l.trim());
   // A numbered heading waits for what follows it: prose makes it a step (the heading, then its paragraph), a list
   // makes it that list's name, and the next heading or a table drops it.
   let pending: string | null = null;
+  let title: MethodStep | null = null;
   for (const [at, line] of lines.entries()) {
-    if (titled && at === firstAt) continue;
+    if (titled && at === firstAt) { title = { text: first.replace(/\*\*|__|`/g, '').trim(), under: null }; continue; }
     const heading = /^#{1,6}\s+(.+?)\s*#*\s*$/.exec(line);
     const item = /^\s*(?:[-*+]|\d+[.)])\s+(.*)$/.exec(line);
     if (heading) {
@@ -104,8 +127,6 @@ function splitSteps(note: string): { steps: MethodStep[]; aside: MethodStep[] } 
       pending = numbered ? numbered[1].trim() : null;
       continue;
     }
-    // What the work needs before it starts is not a step of it: a list of inputs says what to bind, not what to do.
-    if (under !== null && /^(?:required\s+)?(?:inputs?|prerequisites?)$/i.test(under.trim())) continue;
     if (/^\s*\|/.test(line)) { closeItem(); closePara(); pending = null; continue; }
     if (item) { closeItem(); closePara(); pending = null; open = [item[1]]; continue; }
     if (!line.trim()) { closeItem(); closePara(); continue; }
@@ -119,8 +140,13 @@ function splitSteps(note: string): { steps: MethodStep[]; aside: MethodStep[] } 
   // "must", "never", "always" once decided it, and called "read by a registrar who has never met the patient" a step): each
   // is kept as a step, and what it is (an instruction, an explanation, a template, a criterion) is the units reading's
   // (./decision-units.ts), shown at the build and set aside from the writer's brief where it is no instruction.
-  const steps = items.length ? items : prose;
-  const asideRaw = items.length ? prose : [];
+  // WHAT THE WORK NEEDS BEFORE IT STARTS (a list under "Inputs" or "Prerequisites") says what to bind, not what to do.
+  // Set aside like the prose beside a list: the units reading keeps what it reads as an instruction; with no reading,
+  // the heading's words set it aside (the floor).
+  const needs = (st: MethodStep): boolean => st.under !== null && /^(?:required\s+)?(?:inputs?|prerequisites?)$/i.test(st.under.trim());
+  const ownItems = items.filter((st) => !needs(st)); const ownProse = prose.filter((st) => !needs(st));
+  const steps = ownItems.length ? ownItems : ownProse;
+  const asideRaw = [...(ownItems.length ? ownProse : []), ...items.filter(needs), ...prose.filter(needs)];
   const seen = new Set<string>();
   // A TEMPLATE'S BLANKS ARE NOT STEPS. "> One-line: [What this competitor is, who they serve] > Evidence ceiling:
   // [Decision-grade / Usable]" is a form to fill in: where the bracketed blanks are most of a line, it instructs nobody.
@@ -131,7 +157,9 @@ function splitSteps(note: string): { steps: MethodStep[]; aside: MethodStep[] } 
   const blanks = (t: string): boolean => { const left = t.replace(BLANK, ' '); return left !== t && /^(?:\s*>?\s*[\p{L}\p{N}' /-]{1,48}:\s*>?\s*)+$/u.test(left); };
   const tidy = (xs: MethodStep[]): MethodStep[] => xs.filter((s) => !blanks(s.text)).map(clean).filter((s) => s.text.length >= 8 && !seen.has(s.text.toLowerCase()) && Boolean(seen.add(s.text.toLowerCase())));
   const kept = tidy(steps);
-  return { steps: kept, aside: tidy(asideRaw) };
+  const asideKept = tidy(asideRaw);
+  // the title is held to what every step is held to (cleaned, eight characters or more, never a second copy of a step)
+  return { steps: kept, aside: asideKept, title: title ? tidy([title])[0] ?? null : null, listed: ownItems.length > 0 };
 }
 
 /** A section's name as a rule can carry it: the heading without what is particular to one piece (a bracket, a subtitle). */
@@ -198,7 +226,7 @@ export interface MethodProposal {
  * THE REQUIREMENTS ONE METHOD AND ONE EXAMPLE SUPPORT, in the order a person reads them: the owner's steps first,
  * then what the example shows that no step said.
  */
-export function methodProposals(note: string, example: Pick<GoldenCase, 'task' | 'material' | 'reference'>, plan: StepPlan | null = null, keep: ReadonlySet<string> = new Set()): MethodProposal[] {
+export function methodProposals(note: string, example: Pick<GoldenCase, 'task' | 'material' | 'reference'>, plan: StepPlan | null = null, keep: ReadonlySet<string> | null = null): MethodProposal[] {
   const outline = outlineOf(example.reference);
   const context: CheckContext = { ...(example.task ? { request: example.task } : {}), material: example.material };
   const read = (m: Measurement): { verdict: string; detail: string } => { const r = measure(example.reference, m, context); return { verdict: r.verdict, detail: r.detail }; };
@@ -317,7 +345,7 @@ export function acrossExamples(proposals: readonly MethodProposal[], others: rea
  * all, or broken by some and so put to the owner) is taken; the first by name where several do equally. The owner's steps do not change, only which
  * piece they are read against.
  */
-export function proposalsAcross(note: string, cases: readonly (Pick<GoldenCase, 'task' | 'material' | 'reference'> & { readonly id: string })[], plan: StepPlan | null = null, keep: ReadonlySet<string> = new Set()): { lead: number; proposals: MethodProposal[] } {
+export function proposalsAcross(note: string, cases: readonly (Pick<GoldenCase, 'task' | 'material' | 'reference'> & { readonly id: string })[], plan: StepPlan | null = null, keep: ReadonlySet<string> | null = null): { lead: number; proposals: MethodProposal[] } {
   let best = { lead: 0, proposals: [] as MethodProposal[], held: -Infinity };
   cases.forEach((c, i) => {
     const own = methodProposals(note, c, plan, keep);

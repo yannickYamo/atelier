@@ -415,6 +415,8 @@ export async function method(): Promise<void> {
   await settleLatitude({ purpose, method: notePath === null ? null : note, examples: cases.map((c) => c.reference) });
   // THE LEDGER OF THE CHECKS, for the receipt's method stage (core/method/step-check.ts, `ledgerOf`): how many steps are
   // checked, which written check failed and why, what was settled; kept by the note's hash, so a plain rebuild says the same.
+  // kept for the build's later stages and the compiled path, which read the method's steps without a model
+  store.setMethodKeep(LN, note, keep);
   if (checksPlan) store.putStepLedger(LN, { methodHash: sha(note), reader: READER_KEY, ...ledgerOf(planSteps, checksPlan, conflicts) });
   const said: string[] = []; const log = console.log;
   if (!whole) console.log = (...a: unknown[]) => { said.push(a.map(String).join(' ')); };
@@ -433,7 +435,7 @@ export async function method(): Promise<void> {
   // words, when a model was there to read: what it read, or why it read nothing. With no model set up the screen stays
   // as it was (`atelier new` has said so once already), and what the owner asked for (--persona none) is not said back.
   // Everything the build said is in --report.
-  if (!whole) for (const l of said.filter((x) => /^(Latitude: |Accepted unmeasured: |Work form: |Persona: |Scope: |\(no persona: \d|\(the persona could not be derived|\(the examples could not be read for scope|\(a fidelity profile in this project|\S+ ".*": its check (?:now|no longer) qualifies on your rulings)/.test(x))) console.log(l);
+  if (!whole) for (const l of said.filter((x) => /^(Latitude: |Accepted unmeasured: |Work form: |What this work is, read from your pieces: |Persona: |Scope: |\(no persona: \d|\(the persona could not be derived|\(the examples could not be read for scope|\(a fidelity profile in this project|\S+ ".*": its check (?:now|no longer) qualifies on your rulings)/.test(x))) console.log(l);
   // Required is what a run is held to. What the example showed is checked and reported, and fails nothing: said apart,
   // so that the count of what is enforced is never larger than it is.
   // The screen above already said what is checked and what is theirs: all that is left to say is that it is ready.
@@ -480,24 +482,26 @@ export function describeFrom(note: string, purpose: string | null): string | nul
   return `Use when asked to: ${what}.${paragraph ? ` ${paragraph}` : ''}`;
 }
 
-/** The decision unit of every stated step, read in one call where a model is set up (core/method/decision-units.ts); the words alone where none is. */
 /**
  * WHICH SENTENCES OF THE PROSE BESIDE A LIST INSTRUCT, read by the units reading and kept only where a model read them as
  * an instruction (an explanation, a template or a criterion is not a step). The floor reads no meaning, so with no model
  * nothing is kept and the list is the method.
  */
-async function asideKept(note: string): Promise<Set<string>> {
+// null where no model read them: stepsOf then takes its floor
+async function asideKept(note: string): Promise<Set<string> | null> {
   const aside = asideOf(note);
   const noModel = !canReach('discovery') || argv.includes('--no-model');
-  if (!aside.length || noModel) return new Set();
+  if (!aside.length) return new Set();
+  if (noModel) return null;
   const input = { steps: aside.map((st, i) => ({ id: String(i + 1), text: st.text, under: st.under })) };
   const d = await readContext(METHOD_UNITS, input, contextReaderClient(), contextReaderModel(), { spentUsd: 0, capUsd: 0.1, maxCalls: 1 });
-  if (d.by !== 'model') return new Set();
+  if (d.by !== 'model') return null;
   const kept = new Set(input.steps.filter((st) => d.value[st.id]?.kind === 'instruction').map((st) => st.text));
-  if (argv.includes('--report')) console.log(`(sentences beside the list read as instructions, and kept as steps: ${kept.size} of ${aside.length}.)`);
+  if (argv.includes('--report')) console.log(`(sentences beside the list, and a title-shaped first line, read as instructions and kept as steps: ${kept.size} of ${aside.length}.)`);
   return kept;
 }
 
+/** The decision unit of every stated step, read in one call where a model is set up (core/method/decision-units.ts); the words alone where none is. */
 async function decisionUnits(stated: readonly MethodProposal[], steps: readonly { text: string; under: string | null }[]): Promise<Map<string, DecisionUnit>> {
   const unique = [...new Set(stated.map((p) => p.statement.trim()).filter(Boolean))];
   if (!unique.length) return new Map();

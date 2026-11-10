@@ -8,7 +8,7 @@
 // recorded for `status` to show and for a later build to repair.
 import { createHash } from 'node:crypto';
 
-export type StageId = 'method' | 'persona' | 'moves' | 'work-form' | 'scope' | 'counted' | 'profile' | 'signals' | 'contrast';
+export type StageId = 'method' | 'persona' | 'moves' | 'work-form' | 'scope' | 'counted' | 'profile' | 'signals' | 'contrast' | 'card';
 
 /** Who decided a stage: code on the pieces, a model's reading, the floor (no model, or a reading that failed or could not be grounded), or the owner switching it off. */
 export type StageBy = 'code' | 'model' | 'floor' | 'off';
@@ -87,10 +87,10 @@ export const degradedStages = (r: Pick<BuildReceipt, 'stages'>): BuildStage[] =>
 
 const LABEL: Readonly<Record<StageId, string>> = {
   method: 'method', persona: 'persona', moves: 'moves', 'work-form': 'work form', scope: 'scope', counted: 'counted rules',
-  profile: 'author profile', signals: 'signals', contrast: 'model contrast',
+  profile: 'author profile', signals: 'signals', contrast: 'model contrast', card: 'what the work is',
 };
 
-const ORDER: readonly StageId[] = ['method', 'counted', 'work-form', 'persona', 'moves', 'scope', 'profile', 'signals', 'contrast'];
+const ORDER: readonly StageId[] = ['method', 'counted', 'work-form', 'persona', 'moves', 'scope', 'profile', 'signals', 'contrast', 'card'];
 
 /**
  * One line for the screen, in the order a build reads: each stage, ran with its detail or not with its reason. What the

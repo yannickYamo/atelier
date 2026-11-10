@@ -65,6 +65,7 @@ import { skillCardFor } from '../skill-card.js';
 import { renderSkillCard } from '../../core/eval/skill-card.js';
 import * as store from '../../core/state/store.js';
 import { extract } from '../../core/intake/extract.js';
+import { PURPOSE_CARD, cardLine } from '../../core/direct/card.js';
 
 import { describeMatrix, type Carrier } from '../../core/delivery/carrier-delivery.js';
 import { sha, DATA, die, argv, flag, projectDir, pickHost,
@@ -374,7 +375,7 @@ async function movesFor(L: store.StoreLayout, voice: Voice | null, methodText: {
     else recordStage('moves', { ran: false, why: `by the words alone, kept: ${describeMoves(kept.units)}`, by: 'floor', calls: 0 });
     return kept;
   }
-  const steps = methodText ? stepsOf(methodText.text).map((st, i) => ({ n: i + 1, text: st.text })) : [];
+  const steps = methodText ? stepsOf(methodText.text, store.getMethodKeep(L, methodText.text)).map((st, i) => ({ n: i + 1, text: st.text })) : [];
   const noModel = NO_MODEL();
   const client = noModel ? null : evidenceReaderClient(); const model = noModel ? null : evidenceReaderModel();
   // THE POINTS ARE READ IN BATCHES (core/compiler/moves.ts, `pointsPerCall`). Every point went in one call: on five long
@@ -462,6 +463,28 @@ async function inferredMethodFor(L: store.StoreLayout, methodText: { text: strin
   store.setInferredMethod(L, m);
   console.log(`Method, read from your pieces (you wrote none): ${m.steps.length} step(s), followed as your habit on every run and made a rule of nothing; write them yourself with atelier method <file> to make them yours. ${argv.includes('--report') ? `\n${m.steps.map((st) => `  ${st.id.slice(1)}. ${st.text}  (as in "${st.quote.slice(0, 80)}")`).join('\n')}` : ''}`);
   return m;
+}
+
+/**
+ * THE PURPOSE CARD (core/direct/card.ts): what the pieces are, who reads them, what they are for and what each settles,
+ * read from the pieces and the stated purpose, shown once. Kept per corpus; a card the person wrote is never read over.
+ */
+async function cardFor(L: store.StoreLayout, purpose: string | null): Promise<void> {
+  const was = store.getCard(L);
+  if (was?.by === 'you') return;
+  const pieces = sessionCorpus().map(withoutFrontMatter).map((text, i) => ({ name: `piece-${i + 1}`, text }));
+  const reading = `${PURPOSE_CARD.id}-${PURPOSE_CARD.version}+${sha([purpose ?? '', ...pieces.map((p) => p.text)].join('\n\x00'))}`;
+  if (was?.reading === reading) { recordStage('card', cardLine(was) ? { ran: true, detail: 'kept: the pieces are unchanged', by: 'model', calls: 0 } : { ran: false, why: 'nothing in the pieces grounded it', by: 'floor', calls: 0 }); return; }
+  // a card read from other pieces is said to be so, never passed off as this build's reading
+  if (NO_MODEL() || !pieces.length) { recordStage('card', { ran: false, why: `${NO_MODEL() ? 'no model to read it' : 'no pieces'}${was ? '; the card kept was read from other pieces' : ''}`, by: 'floor', calls: 0 }); return; }
+  const d = await readContext(PURPOSE_CARD, { purpose, pieces }, contextReaderClient(), contextReaderModel(), { spentUsd: 0, capUsd: 0.05, maxCalls: 1 });
+  const card = d.by === 'model' ? d.value.card : null;
+  recordStage('card', card ? { ran: true, detail: cardLine(card), by: 'model', calls: 1 } : { ran: false, why: d.by === 'model' ? 'nothing in the pieces grounded it' : `not read (${d.why ?? 'no model'})`, by: 'floor', calls: d.by === 'model' ? 1 : 0 });
+  // the pieces were read and grounded nothing: a card read from the old pieces no longer stands, and the empty reading is
+  // kept under its key so the same pieces are not read again
+  if (!card) { if (d.by === 'model') store.setCard(L, { kind: null, reader: null, purpose: null, settles: [], by: 'model', reading }); return; }
+  store.setCard(L, { ...card, reading });
+  console.log(`What this work is, read from your pieces: ${cardLine(card)}. It shapes what an editor asks before each piece; change it with atelier amend --skill ${L.skillName} --card "kind=...; reader=...; settles=<one decision>; settles=<another>".`);
 }
 
 function compositeVoice(c: CompositeRecord, v: StandardVersion, budget: number | null, form: PieceForm): Voice | null {
@@ -700,6 +723,8 @@ export async function build(nameArg?: string, opts: { closing?: boolean } = {}):
   // skill for the brief and the moves to use, never a requirement; --no-infer-method leaves it out; a review reads nothing.
   const inferred = argv.includes('--review') ? store.getInferredMethod(L) : await inferredMethodFor(L, methodText, desc);
   const moves = argv.includes('--review') ? null : await movesFor(L, voice, methodText ?? (inferred?.steps.length ? { text: noteOf(inferred.steps) } : null));
+  // WHAT THIS WORK IS (core/direct/card.ts): read once per corpus, for the editor's questions; a review reads nothing
+  if (!argv.includes('--review')) await cardFor(L, desc);
   if (!argv.includes('--review')) reportOwnPieces(v, name, s);
   // THE SKILL WORDS EACH POINT BY ITS COUNT: the persona's points carry the rates the profile measured (never the
   // reading's own word for how often) where a profile was read; the voice on disk is unchanged.
@@ -791,7 +816,7 @@ export async function build(nameArg?: string, opts: { closing?: boolean } = {}):
   // written check that failed is a part of the method the skill is built without: the stage is degraded and says so.
   const ledger = methodText ? store.getStepLedger(L) : null; const checks = ledger?.methodHash === sha(methodText?.text ?? '') ? ledger : null;
   const checksLine = checks ? `; ${checks.checked} of ${checks.steps} checked${checks.failed.length ? `; ${checks.failed.length} written check${checks.failed.length === 1 ? '' : 's'} failed (${checks.failed.join('; ')})` : ''}${checks.conflicts.length ? `; ${checks.conflicts.join('; ')}` : ''}` : '';
-  recordStage('method', methodText ? { ran: true, detail: `${stepsOf(methodText.text).length} step(s) served whole${checksLine}`, ...(checks ? { by: checks.by, failed: checks.failed, conflicts: checks.conflicts, ...(checks.failed.length ? { degraded: true as const, why: `${checks.failed.length} written check${checks.failed.length === 1 ? '' : 's'} failed` } : {}) } : {}) }
+  recordStage('method', methodText ? { ran: true, detail: `${stepsOf(methodText.text, store.getMethodKeep(L, methodText.text)).length} step(s) served whole${checksLine}`, ...(checks ? { by: checks.by, failed: checks.failed, conflicts: checks.conflicts, ...(checks.failed.length ? { degraded: true as const, why: `${checks.failed.length} written check${checks.failed.length === 1 ? '' : 's'} failed` } : {}) } : {}) }
     : inferred?.steps.length ? { ran: true, detail: `${inferred.steps.length} step(s) read from your pieces, not confirmed: the brief follows them as your habit, no rule is made of them`, by: 'model' }
     : { ran: false, why: argv.includes('--no-infer-method') ? 'no method note (--no-infer-method)' : NO_MODEL() ? 'no method note, and no model to read one off the pieces' : 'no method note, and the pieces share no method a reading could show', by: argv.includes('--no-infer-method') ? 'off' : NO_MODEL() ? 'floor' : 'model' });
   const counted = v.requirements.filter((r) => r.wordedFromCheck && r.authority !== 'EXPERT_REJECTED').length;

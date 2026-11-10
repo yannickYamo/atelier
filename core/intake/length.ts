@@ -24,9 +24,11 @@ export interface StatedLength {
 // words", "in 2024 words matter" and "24 pages of the report" each hold a number beside a unit and state no length:
 // read as one, each took the author's usual length out of the prompt and told the writer to write to it. So a bare
 // "N words" counts only with a word before it that introduces a length, or with nothing after it that makes it the
-// subject of something else, and never straight after a word that points at text that already exists. This is a
-// floor, and a deliberately narrow one: a length said some other way is not seen, which costs nothing that was not
-// already so.
+// subject of something else, and never straight after a word that points at text that already exists. It is
+// deliberately narrow: a length said some other way is not seen, which costs nothing that was not already so. On the
+// default run it is THE FLOOR: where the reading of the request (core/direct/route.ts) ran, it quotes the words that
+// state a length, and only that quote is parsed here for its number and unit; these words read the whole request only
+// with no reading.
 const NUMBER = String.raw`(?<![\d.,])(\d{1,3}(?:,\d{3})+|\d+(?:\.\d+)?\s?k|\d+)`;
 const UNIT = String.raw`(words?|pages?|paragraphs?|sentences?)`;
 const toNumber = (s: string): number => (/k$/i.test(s.trim()) ? Math.round(parseFloat(s) * 1000) : Number(s.replace(/,/g, '')));

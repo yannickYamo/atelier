@@ -388,13 +388,16 @@ words with the request are used, and the run says so. The draft is prose at high
 
 Your method, where the skill has one, is shown to the writer whole and in your words, and the review holds the draft to it.
 
-Before the draft, an editor's three questions are read: the one idea the reader should leave with, what the reader lives
-with that the piece speaks to, and what shows it (a case, a figure, something the reader can try). Each is asked only
-where your request, your material and your method do not state it, quoted. The same request and notes ask the same
-questions every time. At a terminal
-they are asked (a letter, your own words, enter for the suggested answer, "just write it" for none). Everywhere else they
-come back with their options (`--json`: `questions`), and the piece is written without them: nothing you did not answer
-reaches the writer. Answer next time with `--answers "idea=b,proof=<your words>"`. An answer belongs to the request it
+Before the draft, an editor reads your request, your material, your method and the kind of work it is, and names the
+open decisions that would change this piece's argument most: at most three, the most important first (for a pricing
+memo, which price and against what; for an essay, the claim it stakes). Nothing your request, material or method
+already settles is asked. Where no such decision is open, the five things any argument lands on are asked instead,
+each only where nothing you gave states it, quoted: the one idea the reader should leave with, who reads it and in what
+situation, what they live with that the piece speaks to, what shows it, and what they do next. The same request and
+notes ask the same questions every time. `atelier run` always writes the piece and lists the open questions beside it,
+with their options. `atelier invoke` at a terminal asks them (a letter, your own words, enter for the suggested answer,
+"just write it" for none). With `--json` they come back as `questions`. Nothing you did not answer reaches the
+writer. Answer next time with `--answers "<id>=b,<id>=<your words>"`, by the id each question shows. An answer belongs to the request it
 was given for: run that request again and it reaches the writer without being asked; another request is asked afresh.
 `--no-questions` reads nothing.
 
@@ -724,3 +727,13 @@ deliver everything the CLI does; `atelier carriers --skill posts --host codex` s
 
 
 [← README](../README.md)
+
+## Choosing the model
+
+Every command takes `--provider` (`anthropic` or `openai-compatible`), `--model`, `--base-url`, `--backend` and
+`--api-key-env` (the variable that holds the key; `ANTHROPIC_API_KEY` by default). `--discovery-provider`,
+`--discovery-model`, `--target-provider` and `--target-model` (and their `-base-url`) set the build's reading and the
+run's writing apart, so a standard learnt with the most capable model you can reach runs on a cheaper one.
+`--price-in` and `--price-out` give the rate in USD per million tokens where the provider reports none, and
+`--token-limit-param` names the field a provider takes for its token limit. `atelier models` says the same;
+docs/PORTABILITY.md has the detail.

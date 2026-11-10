@@ -174,6 +174,35 @@ describeWithEngine('through the binary', () => {
     expect(readdirSync(join(data, 'skills', 'posts', 'invocations')).length).toBe(3);
   }, 240_000);
 
+  // THE DEFAULT RUN (the direct writer): the slip listed, and --fix-grammar's change made and said on the run
+  it('on the default run too: the slip is listed and the text unchanged; --fix-grammar corrects it and says the change', async () => {
+    const { data, all } = seed('run-direct');
+    const piece = 'He are late to the meeting. The plan still holds.';
+    await script(piece);
+    const out = all('run', '--pipeline', 'direct', 'a short note', ...model());
+    expect(out).toContain(piece);
+    expect(out).toMatch(/NEEDS REVIEW/);
+    expect(out.replace(/\s+/g, ' ')).toMatch(/listed for you to check: 1 possible slip: "are" \(subject–verb agreement: "are" → "is"\)/);
+    await script(piece);
+    const fixedOut = all('invoke', '--pipeline', 'direct', 'a short note', ...model(), '--fix-grammar', '--json');
+    const shown = JSON.parse(fixedOut.slice(fixedOut.indexOf('{'))) as { output: string; invocationId: string };
+    expect(shown.output).toContain('He is late to the meeting.');
+    const rec = JSON.parse(readFileSync(join(data, 'skills', 'posts', 'invocations', `${shown.invocationId}.json`), 'utf8')) as { repair?: { why: string; violatedAfter: string[] } };
+    expect(rec.repair?.why).toMatch(/fixed without a model: \w+: 1 mechanical error\(s\) corrected: "are" → "is"/);
+    expect(rec.repair?.violatedAfter).toEqual([]);
+    await script(piece);
+    const said = all('invoke', '--pipeline', 'direct', 'a short note', ...model(), '--fix-grammar');
+    expect(said).toContain('He is late to the meeting.');
+    expect(said).toMatch(/Repaired: \w+ fixed without a model: 1 mechanical error\(s\) corrected: "are" → "is"\./);
+  }, 240_000);
+  it('on the default run, a clean piece reads the grammar rule held', async () => {
+    const { all } = seed('clean-direct');
+    await script('He is late to the meeting. The plan still holds.');
+    const json = all('invoke', '--pipeline', 'direct', 'a short note', ...model(), '--json');
+    const shown = JSON.parse(json.slice(json.indexOf('{'))) as { record: { entries: { statement: string; result: string }[] } };
+    expect(shown.record.entries.find((e) => e.statement.startsWith('No mechanical errors'))?.result).toBe('PASS');
+  }, 240_000);
+
   it('a clean run reads the grammar rule met', async () => {
     const { all } = seed('clean');
     await script('He is late to the meeting. The plan still holds.');

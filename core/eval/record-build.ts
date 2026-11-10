@@ -14,6 +14,9 @@ import { planFor, type PlannedRule } from '../plan/execution-plan.js';
 import { entry, recordOf, type Entry, type EvaluationRecord, type Observation, type Proof } from './record.js';
 import { GRAMMAR_NOT_RUN, GRAMMAR_LISTED } from '../observers/grammar.js';
 import { MATERIAL_UNREAD } from '../observers/written.js';
+/** How the record says a grammar rule whose engine could not run: not checked, though left for the person. */
+export const GRAMMAR_NOT_CHECKED = 'grammar not checked';
+
 
 export interface CheckedLine { readonly id: string; readonly statement?: string; readonly required: boolean; readonly verdict: 'MET' | 'VIOLATED' | 'NOT_APPLICABLE'; readonly detail: string }
 
@@ -197,7 +200,7 @@ function plannedEntry(p: PlannedRule, f: RecordFacts): Entry {
   const editorial = !p.stated;
   if (line.verdict === 'NOT_APPLICABLE' && line.detail.startsWith(GRAMMAR_NOT_RUN)) {
     return editorial
-      ? entry({ ...base, observation: { ...seen(`grammar not checked: ${line.detail.slice(GRAMMAR_NOT_RUN.length).replace(/^:\s*/, '')}`), coverage: 'NONE', listed: true }, verdict: null })
+      ? entry({ ...base, observation: { ...seen(`${GRAMMAR_NOT_CHECKED}: ${line.detail.slice(GRAMMAR_NOT_RUN.length).replace(/^:\s*/, '')}`), coverage: 'NONE', listed: true }, verdict: null })
       : entry({ ...base, observation: { ...seen(line.detail), coverage: 'NONE', incomplete: `not checked: ${p.id} (${line.detail})` }, verdict: null });
   }
   if (line.verdict === 'NOT_APPLICABLE' && line.detail.startsWith(GRAMMAR_LISTED)) {

@@ -77,4 +77,4 @@ npm run lint
 
 Read `CONTRIBUTING.md` first. The end-to-end tests drive `dist/`, so run `npm run build` before `npm test`.
 
-Every artifact a build writes has a named reader: the default run, or another reader named in `tests/atelier-consumers.test.ts`. A change that stops a run reading something moves its entry, gives it a new reader, or stops building it; the test fails until it does.
+Every artifact a build writes has a named reader: the default run, or another reader named in `tests/atelier-consumers.test.ts`. A change that stops a run reading something moves its entry, gives it a new reader, or stops building it; the test fails until it does. Every reading (core/inference/reading.ts) has a place it runs in the same test's table (the default run, a build that feeds it, a named command, or the compiled path), and every model call of the default run is named with what reads it; every flag the code reads is declared (`tests/atelier-flag-census.test.ts`). The compiled path (`--pipeline legacy`, `--deep` and the options that route to it) is frozen: a new feature lands on the default path, and the compiled path takes fixes only.

@@ -117,7 +117,9 @@ import { version } from '../help.js';
 import { writeAtomic } from '../../core/state/fs-atomic.js';
 import { compareBindings, describeMismatch, describeNewSurface, detectResolvedModelDrift, bindingHash } from '../../core/runtime/binding.js';
 import { resolve as resolvePath } from 'node:path';
-import { sha, DATA, VALUED_OPTIONS, die, argv, flag, flagEach, clientAndBinding, describeBinding, numericFlag, positional, boundResources, boundMaterial, assertSkillName, runFile, clientFor, callsSeen, thinkingOfCalls, thinkingBlocksOfCalls, contextReaderClient, contextReaderModel, canReach } from '../runtime.js';
+import { sha, DATA, VALUED_OPTIONS, die, argv, flag, flagEach, clientAndBinding, describeBinding, numericFlag, positional, boundResources, boundMaterial, assertSkillName, runFile, clientFor, callsSeen, thinkingOfCalls, thinkingBlocksOfCalls, contextReaderClient, contextReaderModel, canReach } from '../runtime.js';import { howHeld } from '../how-held.js';
+export { howHeld };
+
 
 /**
  * What a skill serves, resolved once and shared.
@@ -496,7 +498,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   if (directNot === null && std) {
     const { client, binding } = checkedBinding(L, sv);
     const spentBefore = spentAtRoute;
-    const d = await runDirect({ L, sv, std, name, asked, material, client, binding, spentBefore, settings: (checks) => ({ ...settingsFor(checks, null, 1, '', null, std, heldFirst), maxTokens: directMaxTokens() }), say: (l) => { report.say(l); }, detail: (l) => { report.detail(l); }, started,
+    const d = await runDirect({ L, sv, std, name, asked, material, client, binding, spentBefore, settings: (checks) => Object.assign(settingsFor(checks, null, 1, '', null, std, heldFirst), { maxTokens: directMaxTokens() }), say: (l) => { report.say(l); }, detail: (l) => { report.detail(l); }, started,
       held: heldFirst?.level ?? null, interactive: machine === null && process.stdin.isTTY && process.stdout.isTTY });
     const spent = finish(report, { rec: d.rec, sv, name, task: d.rec.input, asked, budget: d.budget, spentBefore });
     // `answer` is the piece with the specifics left for the person to check listed under it, as on the compiled path
@@ -656,7 +658,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   // shows its reader a gap, and a person who gave only a title is better served by a piece written whole from what is
   // given, wrong where it must be, than by a piece that waits on them. So an invented story, source or figure is listed
   // for them, beside the work (by the skill's latitude where material is bound), and the last read writes again any slot
-  // a writer leaves (core/loop/own-words.ts). `--placeholders` asks for slots; `--no-placeholders` is the default.
+  // a writer leaves (core/loop/own-words.ts). `--placeholders` asks for slots; without it there are none.
   const placeholdersOn = argv.includes('--placeholders');
   const needsLine = materialLine(satisfiable, material.length > 0, !argv.includes('--allow-unsourced'), name, placeholdersOn);
   if (needsLine) report.say(needsLine);
@@ -2322,33 +2324,6 @@ export function withRedraft(refine: Refine,
   };
 }
 
-/**
- * HOW EACH RULE BROKEN IN THE DRAFT CAME TO HOLD, named by the step the record kept for it: a fix without a model says
- * what it did ("m2: long paragraphs split"), never that spans were rewritten; a span rewrite says so; invented claims
- * were cut. A record without the controller's steps is said as before, from its passes.
- */
-export function howHeld(r: Pick<RepairRecord, 'violatedBefore' | 'passes' | 'controller' | 'unmeasured'>): string {
-  // a rule the delivered text is too short to read did not come to hold: it is said as not measured, apart
-  const before = r.violatedBefore.filter((id) => !r.unmeasured?.includes(id));
-  if (!before.length) return '';
-  const cutWords = 'held once what could not be traced to your material was cut';
-  if (!r.controller) return `${before.join(', ')} ${r.passes ? 'fixed by rewriting only the spans that broke them' : before.includes('UNSOURCED') ? cutWords : 'held once the draft was corrected'}`;
-  const kept = r.controller.decisions.filter((d) => d.outcome === 'kept');
-  // what a fix without a model did, by rule: its record lists each fix as "<id>: <what>"
-  const noModel = new Map<string, string[]>();
-  for (const d of kept.filter((x) => x.action === 'mechanical' || x.action === 'grammar')) {
-    const list = d.action === 'mechanical' ? d.why.replace(/^fixed without a model: /, '') : d.observed.note ?? '';
-    for (const f of list.split('; ')) { const m = /^([^:]+): (.+)$/.exec(f.trim()); if (m && before.includes(m[1])) noModel.set(m[1], [...(noModel.get(m[1]) ?? []), m[2]]); }
-  }
-  const rewritten = new Set(kept.filter((d) => d.action === 'rewrite').flatMap((d) => d.targets));
-  const spans = before.filter((id) => !noModel.has(id) && rewritten.has(id));
-  const cut = before.filter((id) => !noModel.has(id) && !rewritten.has(id) && id === 'UNSOURCED');
-  const rest = before.filter((id) => !noModel.has(id) && !rewritten.has(id) && id !== 'UNSOURCED');
-  return [...[...noModel].map(([id, what]) => `${id} fixed without a model: ${[...new Set(what)].join(', ')}`),
-    ...(spans.length ? [`${spans.join(', ')} fixed by rewriting only the spans that broke them`] : []),
-    ...(cut.length ? [`${cut.join(', ')} ${cutWords}`] : []),
-    ...(rest.length ? [`${rest.join(', ')} held once the draft was corrected`] : [])].join('; ');
-}
 
 /** The guard every step is held to (core/loop/integrity.ts): exported here for the callers that read it beside the redraft. */
 export { addedFigures } from '../../core/loop/integrity.js';
@@ -3760,7 +3735,8 @@ async function withUnits(L: store.StoreLayout, standardHash: string, steps: read
   if (!missing.length || argv.includes('--no-model') || !canReach('discovery')) return [...steps];
   // every step, numbered by its place in the method as the build numbered them, so a dependency ("after step 2") names
   // the step it means; only the missing ones are kept from the reading
-  const under = new Map(stepsOf(store.getMethod(L)?.text ?? '').map((st) => [st.text.trim(), st.under]));
+  const note = store.getMethod(L)?.text ?? '';
+  const under = new Map(stepsOf(note, store.getMethodKeep(L, note)).map((st) => [st.text.trim(), st.under]));
   const input = steps.map((st) => ({ id: String(st.n), text: st.statement, under: under.get(st.statement.trim()) ?? null }));
   const d = await readContext(METHOD_UNITS, { steps: input }, contextReaderClient(), contextReaderModel(), { spentUsd: 0, capUsd: 0.2, maxCalls: 1 });
   if (d.by !== 'model') return [...steps];

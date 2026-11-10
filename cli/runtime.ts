@@ -83,7 +83,7 @@ export const VALUED_OPTIONS: readonly string[] = ['correcting', 'moves', 'set-as
   'briefs', 'rounds', 'carry-note',
   'with',
   // the direct writer (cli/direct.ts): which path writes, at what effort, and how many characters of the author's pieces it is shown
-  'pipeline', 'effort', 'piece-chars',
+  'pipeline', 'effort', 'piece-chars', 'card',
   // `atelier keep`: the request a kept piece answered, when no run is behind it
   'request',
   'api-key-env', 'applies-when', 'arm-set', 'backend', 'base-url', 'brief',
@@ -125,7 +125,7 @@ export const BOOLEAN_OPTIONS: readonly string[] = [
   // the run stage by stage (cli/commands/report.ts, core/eval/stages.ts)
   'stages',
   'cut', 'no-cut', 'draft-examples',
-  'reflect', 'no-reflect', 'report', 'phrase', 'calibrate', 'placeholders', 'no-placeholders', 'no-unsourced-note', 'mark-unverified', 'no-redraft', 'no-model', 'always', 'evaluation', 'learn', 'include-reserved', 'taste', 'no-taste', 'no-brief', 'examples-first', 'no-infer-method', 'voices', 'setup', 'auto', 'no-fidelity', 'fidelity', 'rollback', 'distill', 'next', 'sections', 'panel', 'quiet', 'label', 'typicality', 'read-subjects', 'strict', 'allow-nonconformant', 'full', 'no-index', 'whole', 'test-run',
+  'reflect', 'no-reflect', 'report', 'phrase', 'calibrate', 'placeholders', 'no-unsourced-note', 'mark-unverified', 'no-redraft', 'no-model', 'always', 'evaluation', 'learn', 'include-reserved', 'taste', 'no-taste', 'no-brief', 'examples-first', 'no-infer-method', 'voices', 'setup', 'auto', 'no-fidelity', 'fidelity', 'rollback', 'distill', 'next', 'sections', 'panel', 'quiet', 'label', 'typicality', 'read-subjects', 'strict', 'allow-nonconformant', 'full', 'no-index', 'whole', 'test-run',
   // before the draft: no questions, no plan (cli/prewrite.ts)
   'no-questions', 'no-plan',
   // a deep run (cli/deep.ts), and its web pass turned off

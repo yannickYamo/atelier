@@ -244,7 +244,7 @@ export function briefNote(b: Brief, steps: readonly BriefStep[], material: reado
   const decisions = order(on).flatMap((s) => {
     const u = s.unit;
     if (!u?.decision) return [];
-    return [`- Step ${s.n}: decide ${u.decision}${u.inputs.length ? ` (from ${u.inputs.join(', ')})` : ''}${open.has(s.id) ? ' — decide it on what is given and on my pieces' : ''}`];
+    return [`- Step ${s.n}: decide ${u.decision}${u.inputs.length ? ` (from ${u.inputs.join(', ')})` : ''}${open.has(s.id) ? ': decide it on what is given and on my pieces' : ''}`];
   });
   const lines = [
     `For this request, my method's steps that apply: ${on.map((s) => s.n).join(', ') || 'none'}.${off.length ? ` Set aside, not this case: ${off.map((s) => `${s.n} (${b.placed[s.id].why ?? 'not this case'})`).join('; ')}.` : ''}${unresolved.length ? ` Not decided by the request, so held as applying: ${unresolved.map((s) => s.n).join(', ')}.` : ''}`,

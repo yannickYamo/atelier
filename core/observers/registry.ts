@@ -61,6 +61,11 @@ export interface CheckContext {
   readonly material?: readonly { readonly name: string; readonly text: string }[];
   /** the text the run works on (a review's proposal), when there is one: what it quotes of it is not its own style (./quoted.ts) */
   readonly worksOn?: string;
+  /**
+   * the words of the request that state a length to write to, as a reading of the request found them (copied from it):
+   * null where it found none; absent where no reading ran, and the length's word pattern is the floor
+   */
+  readonly lengthQuote?: string | null;
 }
 
 export interface Observer {

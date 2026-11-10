@@ -85,10 +85,11 @@ describe('before the draft, through the binary', () => {
     const { run, be } = setup();
     const j = JSON.parse(run('invoke', '--skill', 'quay', 'Write a post on the new terminal.', '--json', '--answers', 'angle=the shops, not the pier,tone=dry', ...be)) as Record<string, unknown>;
     expect(String(j.output)).not.toContain('Angle:');
-    expect(j.answers).toEqual([{ id: 'angle', answer: 'the shops, not the pier', by: 'person' }]);
+    // the person's words are never cut on a guess: what follows a comma under an id no question carries stays in the answer, and is said
+    expect(j.answers).toEqual([{ id: 'angle', answer: 'the shops, not the pier,tone=dry', by: 'person' }]);
     const report = (j.report as string[]).join('\n');
     expect(report).toContain('Removed from the work: 1 line(s) of the plan the writer printed into it');
-    expect(report).toContain('tone matched no question; ignored.');
+    expect(report).toContain('tone names no question, so ",tone=dry" was kept as part of your answer to angle.');
   });
   it('--no-questions --no-plan: nothing is read before the draft', async () => {
     await script();

@@ -253,6 +253,31 @@ describe('through the binary', () => {
     expect(shown.rules.checked.find((c) => c.detail.includes('listed for you to check: 2 possible slips: "don\'t"'))).toBeDefined();
   }, 180_000);
 
+  // THE DEFAULT RUN (the direct writer) lists the same slips, item by item, and changes nothing
+  itWithEngine('on the default run too: each slip is listed on the run and in the --json record, and the text is unchanged', async () => {
+    const { both, run } = seed('list-direct');
+    const piece = 'It don\'t matter now. We spent the arvo fixing the build. The plan still holds.';
+    await script(piece);
+    const out = both('invoke', '--skill', 'posts', 'a short note', '--pipeline', 'direct', ...model());
+    expect(out).toContain(piece);
+    expect(out).toMatch(/Grammar, listed for you to check and never changed \(2\): "don't" \(.*\); "arvo" \(a word the checker does not know/);
+    expect(out).toMatch(/listed for you to read \(1\): "No mechanical errors/);
+    await script(piece);
+    const json = run('invoke', '--skill', 'posts', 'a short note', '--pipeline', 'direct', ...model(), '--json');
+    const shown = JSON.parse(json.slice(json.indexOf('{'))) as { output: string; record: { entries: { statement: string; reason: string; observation: { evidence?: string } }[] } };
+    expect(shown.output).toBe(piece);
+    const g = shown.record.entries.find((e) => e.statement.startsWith('No mechanical errors'));
+    expect(g?.reason).toBe('LISTED_FOR_YOU');
+    expect(g?.observation.evidence).toMatch(/^listed for you to check: 2 possible slips: "don't"/);
+  }, 180_000);
+  it('on the default run, switched off, the grammar rule is said not checked, never held or listed', async () => {
+    const { both } = seed('off-direct', 'off');
+    await script('They were late to the meeting. The plan still holds.');
+    const out = both('invoke', '--skill', 'posts', 'a short note', '--pipeline', 'direct', ...model());
+    expect(out).toMatch(/not checked: its check could not run \(1\): "No mechanical errors/);
+    expect(out).not.toMatch(/(held|listed for you to read) \(\d+\):[^\n]*No mechanical errors/);
+  }, 180_000);
+
   it('switched off, a run does not say every REQUIRED rule holds, and verify says "not checked"', async () => {
     const { proj, both } = seed('off', 'off');
     await script('They were late to the meeting. The plan still holds.');

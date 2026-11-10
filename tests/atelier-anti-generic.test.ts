@@ -158,7 +158,7 @@ describe('through the binary: material, and several drafts chosen by count', () 
     run('build', '--name', 'inc');
     const be = ['--provider', 'openai-compatible', '--base-url', `http://127.0.0.1:${port}`, '--model', 'scripted'];
     // A document written with no material bound is written whole, never with a slot: with nothing of the person's to
-    // check against, the story stays in the piece and is listed for them, not cut. `--no-placeholders` is the same run.
+    // check against, the story stays in the piece and is listed for them, not cut. `--no-placeholders`, an old flag no longer read, is the same run.
     const byDefault = run('invoke', '--skill', 'inc', 'write it', ...be);
     expect(byDefault).not.toContain(CLAIM_SLOT);
     expect(byDefault).toContain('broke production');

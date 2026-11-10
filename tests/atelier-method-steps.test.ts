@@ -93,6 +93,16 @@ describe('three more, written with labels, clauses and bold', () => {
 });
 
 describe('what is and is not a section when nothing marks it', () => {
+  it('where the units reading ran, it alone decides a title-shaped line and a list of inputs; its words decide only with no reading', () => {
+    const note = 'Market entry brief\n\n- Open with a Recommendation section.\n- End with a Next steps section.\n\n## Inputs\n\n- Ask the client for the target market.\n- The analyst notes\n';
+    // no reading (the floor): the title is a name by its words, and the inputs heading sets its list aside
+    expect(stepsOf(note).map((x) => x.text)).toEqual(['Open with a Recommendation section.', 'End with a Next steps section.']);
+    // the reading read the title as no instruction and one input as one: only that is kept
+    expect(stepsOf(note, new Set(['Ask the client for the target market.'])).map((x) => x.text)).toEqual(['Open with a Recommendation section.', 'End with a Next steps section.', 'Ask the client for the target market.']);
+    // a title-shaped line the reading read as an instruction is a step, whatever its words: none of the floor's verbs here
+    expect(stepsOf('Verdict first, then the evidence\n\n- End with a Next steps section.\n', new Set(['Verdict first, then the evidence'])).map((x) => x.text)[0]).toBe('Verdict first, then the evidence');
+    expect(stepsOf('Verdict first, then the evidence\n\n- End with a Next steps section.\n', new Set()).map((x) => x.text)).toEqual(['End with a Next steps section.']);
+  });
   const names = (t: string): string[] => sectionHeadsOf(t, true).map((h) => h.text);
   it('three names each alone on a line with text under them are sections; the sentence that opens one is not', () => {
     expect(names('Verdict\n\nWe win on price.\n\nCompetitors\n\nNotion: ten dollars a seat.\n\nRisks\n\nA price cut.\n')).toEqual(['Verdict', 'Competitors', 'Risks']);

@@ -19,6 +19,7 @@
 
 import type { Budget, InferenceClient, SpendPurpose } from './client.js';
 import { spend, GenerationIncomplete } from './client.js';
+import { traceReading } from '../state/trace.js';
 
 export type DecidedBy = 'code' | 'model' | 'floor';
 
@@ -61,6 +62,7 @@ export interface Decision<T> {
  */
 export async function readContext<I, T>(reading: Reading<I, T>, input: I, client: InferenceClient | null, model: string | null, budget: Budget, purpose: SpendPurpose = 'other'): Promise<Decision<T>> {
   const tag = `${reading.id}-${reading.version}`;
+  traceReading(reading.id);
   const decided = reading.decide(input);
   if (decided !== null) return { value: decided, by: 'code', reader: tag };
   if (!client || !model) return { value: reading.floor(input), by: 'floor', reader: tag, why: 'no model set up' };

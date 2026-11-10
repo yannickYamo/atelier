@@ -733,8 +733,12 @@ export interface DirectRecord {
    * method no check reads, each held, not held or not read. `on` is the text read (the first draft when `steered`, the
    * delivered piece otherwise); `steered`: what the draft did not hold was told to the self-review.
    */
+  /** sentences that stated a fact only one of the author's pieces held, as a fact of this piece: found, and rewritten */
+  readonly grounded?: { readonly found: number; readonly rewritten: number; readonly sentences: readonly string[] };
+  /** hashtags past the most the author's pieces carry, removed in code (core/loop/shape-steer.ts); the most they carry */
+  readonly hashtags?: { readonly max: number; readonly removed: number };
   readonly style?: { readonly by: string; readonly reader: string; readonly on: 'draft' | 'piece'; readonly steered: boolean;
-    readonly found: readonly { readonly id: string; readonly kind: 'habit' | 'step'; readonly text: string; readonly held: boolean | null; readonly quote?: string }[]; readonly why?: string;
+    readonly found: readonly { readonly id: string; readonly kind: 'habit' | 'step' | 'answer'; readonly text: string; readonly held: boolean | null; readonly quote?: string }[]; readonly why?: string;
     /** with --style-review: what the first draft held, before the review it steered */
     readonly draft?: readonly { readonly id: string; readonly held: boolean | null }[] };
 }
@@ -960,7 +964,7 @@ export type ControllerAction = 'cut' | 'mechanical' | 'rewrite' | 'operators' | 
 export interface InferredItem {
   /** what kind of thing: a question nobody answered, a specific nothing gave, a claim with no proof given, a sentence
    * about the piece's own making, a slot written again, a name nothing gave */
-  readonly kind: 'decision' | 'specific' | 'proof' | 'own-words' | 'slot' | 'name';
+  readonly kind: 'decision' | 'specific' | 'proof' | 'own-words' | 'slot' | 'name' | 'length';
   /** what it is about, in the run's words */
   readonly what: string;
   /** how the run settled it */

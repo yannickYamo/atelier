@@ -29,7 +29,24 @@ export interface EngineRun { readonly output: string | null; readonly invocation
   /** what the run decided for the person and what it was not given, beside the work (core/loop/inferred.ts) */
   readonly inferred?: readonly InferredItem[];
   /** whether the delivered text was read for talk about its own making, and why not */
-  readonly ownWords?: { readonly checked: boolean; readonly why?: string } }
+  readonly ownWords?: { readonly checked: boolean; readonly why?: string };
+  /** the editor's questions of a default run and the answers it had (cli/direct.ts); `direct` marks that run */
+  readonly questions?: readonly { readonly id: string; readonly ask: string; readonly options: readonly string[] }[];
+  readonly answers?: readonly { readonly id: string }[];
+  readonly direct?: unknown }
+
+/**
+ * THE QUESTIONS AN EDITOR WOULD ASK, BESIDE THE PIECE. The piece is always written; what nobody answered is listed with
+ * its options and the way to answer, so a run through this command never hides that a question was open.
+ */
+export function openQuestionLines(r: Pick<EngineRun, 'questions' | 'answers' | 'direct'>): string[] {
+  if (!r.direct) return [];
+  const open = (r.questions ?? []).filter((q) => !(r.answers ?? []).some((a) => a.id === q.id));
+  if (!open.length) return [];
+  return [`Written without your answer to ${open.length === 1 ? 'a question' : `${open.length} questions`} an editor would ask:`,
+    ...open.map((q) => `  - ${q.id}: ${q.ask}${q.options.length ? ` (${q.options.map((o, i) => `${String.fromCharCode(97 + i)}) ${o}`).join('; ')})` : ''}`),
+    `  To answer, run again with --answers "${open.map((q) => `${q.id}=<letter or your words>`).join(',')}".`];
+}
 
 /**
  * WHAT THE PERSON TYPED, SORTED BY WHERE IT STANDS, never by what it says: the task is the first word that is no
@@ -147,6 +164,8 @@ export async function run(): Promise<void> {
   if (!result.fix) {
     const beside = [...inferredLines(result.inferred ?? []), ...(result.ownWords && !result.ownWords.checked && result.ownWords.why ? [`Not read for sentences about the piece's own making: ${result.ownWords.why}.`] : [])];
     if (beside.length) console.log(`${beside.join('\n')}\n`);
+    const open = openQuestionLines(result);
+    if (open.length) console.log(`${open.join('\n')}\n`);
   }
   // THE EVALUATION IS PART OF WHAT A RUN RETURNS, not a report behind a flag: every rule, as it fared.
   const card = cardFor(result);

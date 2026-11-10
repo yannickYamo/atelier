@@ -71,6 +71,22 @@ describe('the dash cap and the plan, through the binary', () => {
     expect(writer).toContain('Keep em dashes (—) to at most 20.5 per 1,000 words, as the examples do.');
     expect(JSON.stringify(j)).toContain('Keep em dashes (—) to at most 20.5 per 1,000 words, as the examples do.');
   });
+  it('1b. on the default run the same cap is checked on the work and in its record, never told to the writer', async () => {
+    const draft = readFileSync(join(FX, 'draft-with-tells.md'), 'utf8');
+    await fetch(`http://127.0.0.1:${port}/__set`, { method: 'POST', body: JSON.stringify({ byTool: { emit_step_checks: { checks: [
+      { id: '1', how: 'judgement', measure: null, source: null, quote: 'No AI tells', means: 'yours to judge' },
+      { id: '2', how: 'measure', measure: 'PATTERN_RATE:pattern=EM_DASH,maxPer1000=0', source: null, quote: 'No em dashes', means: 'no em dash' }] },
+    emit_piece: { piece: draft } } }) });
+    const { cli } = project();
+    cli('new', join(FX, 'voice'), '--method', join(FX, 'rules.md'), '--name', 'post-voice', '--latitude', 'creative', ...be());
+    const out = cli('invoke', '--skill', 'post-voice', '--pipeline', 'direct', 'Write a post about the wharf, about 450 to 700 words.', '--json', '--claims', 'pattern', '--no-questions', '--no-repair', ...be());
+    const j = JSON.parse(out.slice(out.indexOf('{'))) as { record: { entries: { statement: string; result: string }[] } };
+    const cap = j.record.entries.find((e) => e.statement === 'Keep em dashes (—) to at most 20.5 per 1,000 words, as the examples do.');
+    expect(cap).toBeDefined();
+    expect(['PASS', 'FAIL']).toContain(cap?.result);
+    const writer = (await log()).filter((b) => b.includes('emit_piece')).pop() ?? '';
+    expect(writer).not.toContain('Keep em dashes (—) to at most 20.5 per 1,000 words');
+  });
 
   it('3. with a plan: each point with its material\'s words and file, the no-slot note, the figures a material rule reads; the rest unserved', async () => {
     const { proj, cli } = project();

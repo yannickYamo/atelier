@@ -12,7 +12,7 @@
 //   judge a small model answers the questions that need context; its answers are validated; the patterns are the floor
 
 import { describe, it, expect } from 'vitest';
-import { checkDraft, checkDraftAsync, refineToStandard, redraftPreserves, danglingAfterCut, danglingJudged } from '../core/loop/run-repair.js';
+import { checkDraft, checkDraftAsync, refineToStandard, redraftPreserves, danglingAfterCut, danglingRead } from '../core/loop/run-repair.js';
 import { modelSensor, READER_VERSION } from '../core/loop/claim-extract.js';
 import { modelJudge, type ContextJudge } from '../core/loop/context-judge.js';
 import { checkSatisfiable } from '../core/state/prerequisite.js';
@@ -145,7 +145,18 @@ describe('P1-2 and P1-3: a redraft keeps what it was not asked to change; nothin
     const judge: ContextJudge = { requestIntent: () => Promise.resolve(null), readAnswer: () => Promise.resolve(), workClaims: () => null,
       standsAlone: (pairs) => Promise.resolve(pairs.map((p) => !p.next.startsWith('Which'))) };
     const before = 'We moved to weekly cycles. Which halved the meeting time. Planning is now 30 minutes.';
-    expect(await danglingJudged(before, 'Which halved the meeting time. Planning is now 30 minutes.', ['We moved to weekly cycles.'], judge)).toEqual(['Which halved the meeting time.']);
+    expect((await danglingRead(before, 'Which halved the meeting time. Planning is now 30 minutes.', ['We moved to weekly cycles.'], judge)).found).toEqual(['Which halved the meeting time.']);
+  });
+  it('where the judge answers, it alone decides: a sentence the pattern would flag that the judge reads as standing is not found', async () => {
+    const stands: ContextJudge = { requestIntent: () => Promise.resolve(null), readAnswer: () => Promise.resolve(), workClaims: () => null,
+      standsAlone: (pairs) => Promise.resolve(pairs.map(() => true)) };
+    const before = 'We moved to weekly cycles. This halved the meeting time. Planning is now 30 minutes.';
+    const after = 'This halved the meeting time. Planning is now 30 minutes.';
+    expect(danglingAfterCut(before, after, ['We moved to weekly cycles.'])).toEqual(['This halved the meeting time.']);
+    expect(await danglingRead(before, after, ['We moved to weekly cycles.'], stands)).toEqual({ found: [], by: 'judge' });
+    // a judge that cannot answer leaves the pattern, the floor
+    const silent: ContextJudge = { ...stands, standsAlone: () => Promise.resolve(null) };
+    expect(await danglingRead(before, after, ['We moved to weekly cycles.'], silent)).toEqual({ found: ['This halved the meeting time.'], by: 'pattern' });
   });
 });
 

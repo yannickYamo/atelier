@@ -283,8 +283,9 @@ describe('through the binary: atelier method, then a run held to the method', ()
     expect(r.out).toMatch(/Judgement: shown to the writer, reported as not measured \(1\)\n {2}- Weigh switching cost before recommending anything\./);
     expect(r.out).toMatch(/Nothing has been built\. To build exactly this: atelier method method\.md --golden acme\.md .*--name analysis/);
     expect(existsSync(join(data, 'skills', 'analysis'))).toBe(false);
-    // one reading of what each step is, and CHECK_DRAWS of which check it asks for (the draws' agreement is kept)
-    expect(await count()).toBe(before + 1 + CHECK_DRAWS);
+    // one reading of whether the "Required inputs" list instructs (the units reading, never its heading's words), one of
+    // what each step is, and CHECK_DRAWS of which check it asks for (the draws' agreement is kept)
+    expect(await count()).toBe(before + 2 + CHECK_DRAWS);
   });
 
   it('a step the example does not do stays required, and the disagreement is said once, on the build screen', () => {
@@ -320,9 +321,10 @@ describe('through the binary: atelier method, then a run held to the method', ()
     // asks for, drawn CHECK_DRAWS times and held against the first (core/method/step-check.ts). Every step stays the
     // owner's words. What each asks the writer to decide (core/method/decision-units.ts) is read by the compiled path on
     // its first run, not at build. And one more reading, of how strictly output is held (core/observers/latitude.ts).
-    expect(await count()).toBe(before + 2 + CHECK_DRAWS);
-    const tools = (await (await fetch(`${url()}/__log`)).json() as { bodies: string[] }).bodies.slice(-(2 + CHECK_DRAWS)).map((b) => (JSON.parse(b) as { tools?: { function?: { name?: string } }[] }).tools?.[0]?.function?.name);
-    expect(tools).toEqual(['emit_rule_polarity', ...Array.from({ length: CHECK_DRAWS }, () => 'emit_step_checks'), 'emit_latitude']);
+    // The "Required inputs" list is read first, by the units reading, and set aside: no step comes of it.
+    expect(await count()).toBe(before + 3 + CHECK_DRAWS);
+    const tools = (await (await fetch(`${url()}/__log`)).json() as { bodies: string[] }).bodies.slice(-(3 + CHECK_DRAWS)).map((b) => (JSON.parse(b) as { tools?: { function?: { name?: string } }[] }).tools?.[0]?.function?.name);
+    expect(tools).toEqual(['emit_method_units', 'emit_rule_polarity', ...Array.from({ length: CHECK_DRAWS }, () => 'emit_step_checks'), 'emit_latitude']);
     const skill = readFileSync(join(proj, '.claude', 'skills', 'analysis', 'SKILL.md'), 'utf8');
     for (const step of stepsOf(NOTE)) expect(skill).toContain(step.text.replace(/\.$/, ''));
     expect(readFileSync(join(proj, '.claude', 'skills', 'analysis', 'examples', 'exemplar.md'), 'utf8')).toContain('Borealis wins for a small team');
@@ -365,6 +367,26 @@ describe('through the binary: atelier method, then a run held to the method', ()
     expect(j.eval.result.conformant).toBe(false);
     expect(j.report.join('\n')).toMatch(/made from what was given 0 of 1 \(not: x\d+\)/);
   }, 120_000);
+
+  // THE DEFAULT RUN (the direct writer): the same conformance, and the same method line, beside the piece
+  it('on the default run: a piece that carries the method out is conformant; one that says nothing is not, with what it misses; a figure the material lacks is caught', async () => {
+    const ask = (...more: string[]) => atelier('invoke', '--skill', 'analysis', '--pipeline', 'direct', '--task=Compare Cygnus and Dorado on price for a small team.', '--with', 'prices=new-prices.md', '--json', ...more, ...BACKEND());
+    interface J { output: string; report: string[]; eval: { result: { conformant: boolean; reasons: string[] } } }
+    const read = (r: { out: string }): J => JSON.parse(r.out.slice(r.out.indexOf('{'))) as J;
+    await script(NEW_PIECE);
+    const good = read(ask());
+    expect(good.eval.result, JSON.stringify(good.eval.result.reasons)).toMatchObject({ conformant: true });
+    expect(good.report.join('\n')).toMatch(/Method: contains 3 of 3 thing\(s\) it must · made from what was given 1 of 1 · 1 judgement step\(s\) not measured\./);
+    await script(BLAND);
+    const bland = read(ask());
+    expect(bland.eval.result.conformant).toBe(false);
+    expect(bland.report.join('\n')).toMatch(/Method: contains 0 of 3 thing\(s\) it must \(missing: x\d+, x\d+, x\d+\)/);
+    await script(`${NEW_PIECE}\nCygnus has 4,200 paying customers today.`);
+    const figure = read(ask('--allow-unsourced'));
+    expect(figure.output).toContain('4,200');
+    expect(figure.eval.result.conformant).toBe(false);
+    expect(figure.report.join('\n')).toMatch(/made from what was given 0 of 1 \(not: x\d+\)/);
+  }, 180_000);
 
   it('the kind of work is never read off the method\'s title: no class is recorded unless --class names one', () => {
     const r = atelier('method', 'asks.md', '--golden', 'acme.md', '--name', 'asks', '--review', '--report', ...BACKEND());

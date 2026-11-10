@@ -13,7 +13,9 @@
 // default, and nothing here writes to a standard.
 //
 // Deterministic and free. No model is asked what it thinks the person would pick; a suggestion that
-// could change between two runs over the same evidence would be a suggestion nobody could audit.
+// could change between two runs over the same evidence would be a suggestion nobody could audit. The one guess at what
+// the skill is for (`modeFromIntent`) is only the no-model floor of the INTENT_MODE reading
+// (core/observers/intent-mode.ts): where a model is set up, its grounded reading decides.
 
 import type { Requirement } from '../state/canonical-state.js';
 import { isGeneralScope } from '../state/canonical-state.js';

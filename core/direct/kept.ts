@@ -47,6 +47,12 @@ const overlap = (a: string, b: string): number => {
 };
 
 /** How the person changed `delivered` into `kept`, sentence by sentence (see the header). */
+/** How many of a text's sentences another holds as written: what tells a person's edit of a run from another piece. */
+export function sharedSentences(a: string, b: string): number {
+  const nb = new Set(sentencesOf(b).map(norm));
+  return sentencesOf(a).map(norm).filter((s) => nb.has(s)).length;
+}
+
 export function editPairs(delivered: string, kept: string): EditPair[] {
   const a = sentencesOf(delivered); const b = sentencesOf(kept);
   const na = a.map(norm); const nb = b.map(norm);

@@ -19,8 +19,8 @@ import type { Reading } from '../inference/reading.js';
 /** One thing read on the piece: an author's habit, or a step of their method no check reads. */
 export interface StyleItem {
   readonly id: string;
-  readonly kind: 'habit' | 'step';
-  /** the habit as the build described it, or the step in the author's words */
+  readonly kind: 'habit' | 'step' | 'answer';
+  /** the habit as the build described it, the step in the author's words, or what the author settled before the draft */
   readonly text: string;
   /** the author's own sentence that shows the habit (habits only) */
   readonly theirs?: string;
@@ -30,12 +30,14 @@ export interface StyleInput { readonly items: readonly StyleItem[]; readonly pie
 export interface StyleFound { readonly id: string; readonly held: boolean | null; readonly quote?: string }
 export interface StyleReading { readonly found: readonly StyleFound[] }
 
-/** The most items one reading is asked: the habits first, then the steps. */
+/** The most items one reading is asked: the habits first, then the steps (the author's answers come on top). */
 export const STYLE_ITEMS_MAX = 16;
+/** The most of the author's answers before the draft read on the piece: an editor asks at most three, and answers kept from earlier runs of the same request come with them. */
+export const STYLE_ANSWERS_MAX = 5;
 /** Of those, the most the habits take, so a long persona never crowds out the author's own steps. */
 export const STYLE_HABITS_MAX = 10;
 
-export const STYLE_SYSTEM = `You read one piece of writing against how its author writes. You are given the author's habits, each with a sentence of theirs that shows it, and steps of the author's method. For each one, say whether the piece holds it.
+export const STYLE_SYSTEM = `You read one piece of writing against how its author writes. You are given the author's habits, each with a sentence of theirs that shows it, steps of the author's method, and what the author settled for this piece before it was written. For each one, say whether the piece holds it.
 
 - held: true when the piece does it, false when it does not.
 - quote: for held true, a short passage copied exactly from the piece that shows it; for held false, null.
@@ -55,8 +57,10 @@ export const STYLE_READ: Reading<StyleInput, StyleReading> = {
   prompt(input) {
     const habits = input.items.filter((i) => i.kind === 'habit');
     const steps = input.items.filter((i) => i.kind === 'step');
+    const answers = input.items.filter((i) => i.kind === 'answer');
     return [habits.length ? `The author's habits:\n${habits.map((h) => `- [${h.id}] ${h.text}${h.theirs ? ` (theirs: "${h.theirs}")` : ''}`).join('\n')}` : '',
       steps.length ? `Steps of the author's method:\n${steps.map((s) => `- [${s.id}] ${s.text}`).join('\n')}` : '',
+      answers.length ? `What the author settled for this piece before it was written (held when the piece carries it out):\n${answers.map((a) => `- [${a.id}] ${a.text}`).join('\n')}` : '',
       `The piece:\n<piece>\n${input.piece.slice(0, 24_000)}\n</piece>`].filter(Boolean).join('\n\n');
   },
   // nothing to read, or nothing to read it on: no call
@@ -95,13 +99,26 @@ export function styleItems(habits: readonly Habit[], steps: readonly string[]): 
     ...own.map((s, i) => ({ id: `s${i + 1}`, kind: 'step' as const, text: s.trim() }))].slice(0, STYLE_ITEMS_MAX);
 }
 
-/** What the review is told, with --style-review: only what the draft does not hold, each habit with the author's sentence. */
+/** What the author settled before the draft (the editor's questions, answered), as items read on the piece. */
+export function answerItems(answers: readonly { readonly id: string; readonly answer: string }[], label: (id: string) => string | null): StyleItem[] {
+  return answers.filter((a) => a.answer.trim()).slice(0, STYLE_ANSWERS_MAX)
+    .map((a, i) => ({ id: `a${i + 1}`, kind: 'answer' as const, text: `${(label(a.id) ?? a.id).replace(/:$/, '')}: ${a.answer.trim().slice(0, 200)}` }));
+}
+
+/**
+ * What the review is told, with --style-review: what the draft does not hold, each habit with the author's sentence;
+ * and, so that fixing those does not undo the rest, what the draft already holds, each with the draft's own words, to
+ * keep. Nothing is said where the draft misses nothing: the review is then the plain one.
+ */
 export function styleNote(items: readonly StyleItem[], found: readonly StyleFound[]): string {
   const missed = items.filter((i) => found.find((f) => f.id === i.id)?.held === false);
   if (!missed.length) return '';
-  return `Where the draft does not yet write as the author does:\n${missed.map((i) => (i.kind === 'habit'
+  const held = items.flatMap((i) => { const f = found.find((x) => x.id === i.id); return f?.held === true && f.quote ? [{ i, quote: f.quote }] : []; });
+  return [`Where the draft does not yet write as the author does:\n${missed.map((i) => (i.kind === 'habit'
     ? `- ${i.text.replace(/\.$/, '')}${i.theirs ? ` (theirs: "${i.theirs}")` : ''}: the draft does not.`
-    : `- Their method asks: ${i.text}; the draft does not do it.`)).join('\n')}`;
+    : i.kind === 'answer' ? `- They settled, before the draft: ${i.text}; the draft does not carry it out.`
+      : `- Their method asks: ${i.text}; the draft does not do it.`)).join('\n')}`,
+  ...(held.length ? [`What the draft already does as the author does, to keep as it is while you fix the rest:\n${held.map(({ i, quote }) => `- ${i.text.replace(/\.$/, '').slice(0, 120)}: "${quote}"`).join('\n')}`] : [])].join('\n\n');
 }
 
 /** The lines said beside the piece: what was held, what was not, what could not be read. */

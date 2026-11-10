@@ -70,6 +70,8 @@ export interface Question {
   readonly last?: string;
   /** what an answer unlocks, one line (`chooseQuestions` sets it on every question it returns) */
   readonly unlocks?: string;
+  /** a decision of this piece's own (../direct/questions.ts): what it decides, in a few words, as the writer is told it */
+  readonly about?: string;
 }
 /** An answer the skill was given, kept per skill (../state/store.ts). */
 export interface ToldAnswer { readonly id: string; readonly ask: string; readonly answer: string; readonly at: string }
@@ -229,15 +231,30 @@ const PAIR_BREAK = /,(?=\s*[a-z][a-z0-9_-]*\s*=)/i;
  * pairs, split only where a comma is followed by `<id>=`, so an answer may hold commas). A single letter names that
  * option of the question; a letter past its options is no answer: the default stands, and that is said. Anything else
  * is the person's own answer, kept as written. An id that is a question kind answers that kind, asked this run or not;
- * one that is no kind is said in one line and ignored. Never fails.
+ * one that is no kind is said in one line and ignored; one that follows an answer in the person's own words stays in that answer, and that is
+ * said. Never fails.
  */
 export function readAnswers(s: string | undefined, questions: readonly Question[],
   /** ids a caller asks beside the kinds here (the direct writer's editor questions, ../direct/questions.ts) */
-  extraIds: readonly string[] = []): { readonly answers: Map<string, string>; readonly said: string[] } {
+  extraIds: readonly string[] = [],
+  /** false where no gap question is asked (the direct writer): a short answer is then the person's, never a decline */
+  gaps = true): { readonly answers: Map<string, string>; readonly said: string[] } {
   const answers = new Map<string, string>(); const said: string[] = [];
   const kinds = [...[...QUESTION_KINDS, ...GAP_KINDS].map((k) => k.toLowerCase()), ...extraIds];
-  const gapIds = new Set<string>(GAP_KINDS.map((k) => k.toLowerCase()));
-  for (const part of (s ?? '').split(PAIR_BREAK)) {
+  const gapIds = new Set<string>(gaps ? GAP_KINDS.map((k) => k.toLowerCase()) : []);
+  // A break stands only before an id that is a question's: ", word=" inside an answer in the person's own words is the
+  // answer's. After a letter the next pair is always a pair, so a mistyped id there is still said.
+  const parts: string[] = [];
+  for (const p of (s ?? '').split(PAIR_BREAK)) {
+    const id = p.slice(0, Math.max(0, p.indexOf('='))).trim().toLowerCase(); const last = parts[parts.length - 1];
+    const lastChoice = last === undefined ? '' : last.slice(last.indexOf('=') + 1).trim();
+    if (last !== undefined && !kinds.includes(id) && !/^[a-d]$/i.test(lastChoice)) {
+      parts[parts.length - 1] = `${last},${p}`;
+      // kept, and said: the person's words are never cut on a guess, and a mistyped id is seen
+      said.push(`${id} names no question, so ",${p.trim()}" was kept as part of your answer to ${last.slice(0, last.indexOf('=')).trim().toLowerCase()}.`);
+    } else parts.push(p);
+  }
+  for (const part of parts) {
     const eq = part.indexOf('=');
     if (eq <= 0) continue;
     const id = part.slice(0, eq).trim().toLowerCase(); const choice = part.slice(eq + 1).trim();

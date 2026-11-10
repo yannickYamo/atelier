@@ -270,7 +270,7 @@ export function rate(): void {
   const madeUnder = store.getSkillVersion(L, rec.skillVersionHash);
   const { rule, ruleStatement } = ship ? { rule: null, ruleStatement: null } : named(madeUnder ? store.getStandard(L, madeUnder.standardVersionHash) : null);
   putRating(L, { invocationId: rec.invocationId, ship, why: why.join(' ').trim() || null, at: new Date().toISOString(), release: rec.fidelity?.release ?? null, ...(reasons.length ? { reasons } : {}), ...(rule ? { rule, ...(ruleStatement ? { ruleStatement } : {}) } : {}) });
-  console.log(`Recorded: ${ship ? 'yes, you would ship' : 'no, you would not ship'} ${rec.invocationId} as is.${ship ? '' : ' To have it written again: atelier fix "<what was wrong>" (add --always to change the skill for every run)'}`);
+  console.log(`Recorded: ${ship ? 'yes, you would ship' : 'no, you would not ship'} ${rec.invocationId} as is.${ship ? '' : ' To have it written again: atelier fix "<what was wrong>" (add --always to change the skill for every run)'}${why.join(' ').trim() || reasons.length ? ' Your reason is kept and counted by atelier eval; by itself it changes no run.' : ''}`);
   // YOUR RULING HOLDS THE WRITTEN CHECKS AGAIN, NOW (core/method/requalify.ts): a check that qualifies on it decides the next run.
   for (const m of requalifySkill(L).moved) console.log(movedLine(m));
 }

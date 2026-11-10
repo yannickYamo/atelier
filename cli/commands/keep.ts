@@ -12,7 +12,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import * as store from '../../core/state/store.js';
 import { sha } from '../../core/state/receipt.js';
-import { editPairs, type KeptPiece } from '../../core/direct/kept.js';
+import { editPairs, sharedSentences, type KeptPiece } from '../../core/direct/kept.js';
 import { titleOf } from '../../core/direct/pieces.js';
 import { DATA, die, argv, flag, skillArg, positionals } from '../runtime.js';
 
@@ -39,9 +39,13 @@ export function keep(): void {
   const runArg = args.find((a) => runs.some((r) => r.invocationId === a));
   const fileArg = args.find((a) => a !== runArg);
   if (fileArg && !existsSync(fileArg)) die(`there is no file at ${fileArg}, and no run of ${name} with that id. Nothing was kept.`);
-  const run = runArg ? runs.find((r) => r.invocationId === runArg) ?? null
-    // with no run named: the newest run of the person's own, never a test (a benchmark answer, a held-back case)
-    : fileArg && flag('--request') ? null : [...runs].filter((r) => r.settings?.flags.testRun !== true).sort((a, b) => b.at.localeCompare(a.at))[0] ?? null;
+  // with no run named: the newest run of the person's own, never a test (a benchmark answer, a held-back case)
+  const newest = [...runs].filter((r) => r.settings?.flags.testRun !== true).sort((a, b) => b.at.localeCompare(a.at))[0] ?? null;
+  // A file kept with no run named is an edit of the newest run only where it still holds some of that run's sentences:
+  // another piece read against it recorded every sentence of the run as one the person cut.
+  const fileText = fileArg ? readFileSync(fileArg, 'utf8') : '';
+  const unrelated = !runArg && fileArg !== undefined && newest !== null && sharedSentences(newest.output, fileText) === 0;
+  const run = runArg ? runs.find((r) => r.invocationId === runArg) ?? null : (fileArg && flag('--request')) || unrelated ? null : newest;
   if (!run && !fileArg) die(`${name} has no run to keep yet: atelier run "<the task>", then atelier keep --skill ${name}`);
   const text = (fileArg ? readFileSync(fileArg, 'utf8') : run?.output ?? '').trim();
   if (!text) die('there is no text to keep.');
@@ -53,5 +57,6 @@ export function keep(): void {
   const piece: KeptPiece = { id: `k${sha(text).slice(0, 8)}`, at: new Date().toISOString(), request, text, from: run?.invocationId ?? null, edits };
   store.setKept(L, [...kept.filter((k) => k.id !== piece.id), piece]);
   console.log(`kept ${piece.id}: "${titleOf(text)}"${run ? ` from run ${run.invocationId}` : ''}${fileArg && run ? `, with ${edits.length} correction(s) read from your edits` : ''}.`);
+  if (unrelated) console.log(`It shares no sentence with your newest run (${newest.invocationId}), so it is kept as a piece of its own, with no corrections read. If it is your edit of a run, name the run: atelier keep --skill ${name} <run id> ${fileArg}`);
   console.log(`The next runs of ${name} can be written from it, and their self-review is shown your corrections. atelier keep --skill ${name} --list shows what is kept.`);
 }
