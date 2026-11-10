@@ -113,14 +113,19 @@ export async function newSkill(): Promise<void> {
   }
   // Nothing at build reads with a model when none is set up: the persona and the other readings are left out, and said.
   if (keyless) process.env.ATELIER_BUILD_NO_MODEL = '1';
+  // A PERSON AT A TERMINAL WITH A FOLDER AND NO METHOD GETS THE SAME BUILD AS ONE WITH A METHOD: the skill writes from
+  // their pieces, how they write is read from them, and the build ends on the guided round (cli/guided.ts). Rules read
+  // off the pieces and put to them for approval (the screen below) are asked for by name, --rules; several voices keep
+  // their own build. A run already started continues as it was.
+  const direct = fresh && !keyless && !thin && guidedHere() && !who?.authors && !['--rules', '--voices', '--accept', '--set'].some((f) => argv.includes(f));
   if (composite) {
     console.log('No model is set up (ANTHROPIC_API_KEY), so each voice is read for what can be counted in its pieces alone.\n  To have a model read them too, set the key and run this again in a folder of its own.\n');
-  } else if (fresh && (keyless || thin)) {
-    console.log(keyless && guidedHere() ? 'No model key is set, so I can only count what is in your pieces: how long they run, what every one of them does.\n'
+  } else if (fresh && (keyless || thin || direct)) {
+    if (!direct) console.log(keyless && guidedHere() ? 'No model key is set, so I can only count what is in your pieces: how long they run, what every one of them does.\n'
       : keyless ? 'No model is set up (ANTHROPIC_API_KEY), so the skill is built from what can be counted in your examples, with no rules read by a model and none for you to approve.\n  To have a model read them too, set the key and run this again in a folder of its own.\n'
       // NEVER A REFUSAL FOR FEW EXAMPLES. Two or three pieces cannot have rules read off some and checked on the others,
       // so none is proposed as if checked: the pieces themselves are served, with what can be counted in them.
-      : guidedHere() ? ((n: number): string => `With ${n} piece${n === 1 ? '' : 's'}, I write from the pieces themselves. Give me four or more and I also read your rules from them.\n`)(examplePieces(corpusFiles(path).map((f) => ({ id: f, text: readCorpusText(f) }))).length)
+      : guidedHere() ? ((n: number): string => `With ${n} piece${n === 1 ? '' : 's'}, I write from the pieces themselves.\n`)(examplePieces(corpusFiles(path).map((f) => ({ id: f, text: readCorpusText(f) }))).length)
       : ((n: number): string => `With ${n} example(s), rules read by a model could not be checked on pieces it had not read, so none is proposed: your examples are served to the writer whole, with what can be counted in them${argv.includes('--method') ? ' and your method' : ''}${n >= 3 ? ', and how you sound, read from them' : ''}. Add pieces (four or more) to have rules read and checked.\n`)(examplePieces(corpusFiles(path).map((f) => ({ id: f, text: readCorpusText(f) }))).length));
     if (intent && !argv.includes('--for')) argv.push('--for', intent);
     await method();

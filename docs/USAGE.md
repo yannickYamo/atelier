@@ -255,6 +255,10 @@ atelier run "write the launch post" --with notes.md     # run: the work, then wh
 atelier fix "the opening buried the news"    # react: what was wrong, in your own words; that piece is written again
 ```
 
+The method note is optional: `atelier new ./posts "what it is for"` builds from your pieces alone, the same way.
+At a terminal that is the build you get with any number of pieces; `--rules` asks instead for rules read off four or
+more pieces and shown to you for approval before anything is built.
+
 At a terminal, `atelier new` does not end at "built". It says what it understood from your pieces, asks the few
 things only you can say (what the pieces are, who reads them, what for; at most five questions, enter skips), writes
 two pieces with the new skill as previews, and takes one round of "what would you change" on each. A preview is never

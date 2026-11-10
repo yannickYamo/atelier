@@ -30,7 +30,7 @@ import { planDiscovery, ingestProbeResults, type ProbeResults, type InferenceReq
 type ObserveRequest = Extract<InferenceRequest, { readonly kind: 'OBSERVE' }>;
 const isObserve = (r: InferenceRequest): r is ObserveRequest => r.kind === 'OBSERVE';
 /** How many times one observation is asked for before the discovery refuses to go on without it. */
-const OBSERVE_ATTEMPTS = 3;
+export const OBSERVE_ATTEMPTS = 3;
 import type { GoldenRef, ProposedFactor } from './chain/discovery-contract.js';
 import type { GoldenObservation } from './chain/taste-discovery.js';
 import type { ConstructScope } from './chain/construct-scope.js';

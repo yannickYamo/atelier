@@ -241,4 +241,28 @@ describe('the first ten minutes', () => {
     expect(r.stdout).toContain('Your skill "posts" is ready.');
     expect(r.stdout).not.toContain('What I understood');
   }, 120_000);
+  // A FOLDER OF PIECES AND NOTHING ELSE, AT A TERMINAL: the same build as with a method (written from the pieces, how
+  // they write read from them), ending on the guided round. It once took the rule-proposal path, which stops for an
+  // approval and never reached the round. Rules read off the pieces are asked for by name (--rules).
+  it('a folder with no method reaches the guided round; --rules asks for proposed rules instead', async () => {
+    const data = mkdtempSync(join(tmpdir(), 'atelier-first-data-')); const proj = mkdtempSync(join(tmpdir(), 'atelier-first-proj-'));
+    mkdirSync(join(proj, 'posts')); for (const n of [1, 2, 3, 4, 5, 6]) writeFileSync(join(proj, 'posts', `compare-${n}.md`), POST(n));
+    const env: NodeJS.ProcessEnv = { ...process.env, ATELIER_DATA: data, ATELIER_PROJECT_DIR: proj, ATELIER_PRICE_IN: '1', ATELIER_PRICE_OUT: '1', ATELIER_GUIDED: '1' };
+    delete env.ANTHROPIC_API_KEY; delete env.ANTHROPIC_AUTH_TOKEN; delete env.ATELIER_CONTEXT_READER;
+    await setBackend({ byTool: { emit_persona: { points: [{ aspect: 'close', description: 'Closes on a short plain sentence.', frequency: 'OFTEN', quote: 'That is the whole trade.' }] }, emit_holds_back: { ids: [] }, __plain: [DRAFT, REVIEWED] } });
+    const r = spawnSync('node', [CLI, 'new', 'posts', 'write posts in my voice', '--name', 'posts', ...BACKEND()], { encoding: 'utf8', cwd: proj, env, input: 'a blog post\n\n\nCompare Logseq and Craft.\n\n\n' });
+    const out = `${r.stdout}${r.stderr}`;
+    expect(r.status, out).toBe(0);
+    expect(out).toContain('What I understood'); expect(out).toContain('How you write:');
+    expect(out.match(/^Sample \d of 2: /gm)?.length).toBe(2);
+    expect(out).toMatch(/"posts" is ready/);
+    for (const old of ['Held back', 'Estimated discovery cost', 'Sealed', 'vantage', '--accept']) expect(out, old).not.toContain(old);
+    for (const w of INTERNAL) expect(out, w).not.toContain(w);
+
+    // asked for by name, the rules read off the pieces are still proposed
+    const proj2 = mkdtempSync(join(tmpdir(), 'atelier-first-proj-')); mkdirSync(join(proj2, 'posts')); for (const n of [1, 2, 3, 4, 5, 6]) writeFileSync(join(proj2, 'posts', `compare-${n}.md`), POST(n));
+    const r2 = spawnSync('node', [CLI, 'new', 'posts', 'write posts in my voice', '--name', 'posts2', '--rules', ...BACKEND()], { encoding: 'utf8', cwd: proj2, env: { ...env, ATELIER_PROJECT_DIR: proj2, ATELIER_DATA: mkdtempSync(join(tmpdir(), 'atelier-first-data-')) }, input: '' });
+    expect(`${r2.stdout}${r2.stderr}`).toContain('Reading your work');
+    expect(`${r2.stdout}${r2.stderr}`).not.toContain('What I understood');
+  }, 240_000);
 });
