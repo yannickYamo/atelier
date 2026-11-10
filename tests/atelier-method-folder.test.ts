@@ -201,7 +201,7 @@ describe('the front door: atelier new <your-work> --method <note>', () => {
     const lab = run('lab').out;
     for (const c of ['run', 'fix', 'reproduce', 'evolve', 'fidelity', 'method']) expect(lab).toContain(c);
     expect(run('lab', 'status').code).toBe(0);
-    expect(run('nonsense').out).toContain('The three you need: new, verify, setup');
+    expect(run('nonsense').out).toContain('The three you need: new, run, fix');
   }, 120_000);
 });
 
