@@ -193,7 +193,7 @@ describe('through the binary: one full case held back, run on its task and mater
     expect(tests.length).toBe(all.length);
     expect(store.listLearningInvocations(L)).toEqual([]);
     // through the binary: the commands that learn from runs find nothing to learn from
-    expect(atelier('status', '--skill', 'analysis').out).toMatch(/uses {11}0 recorded/);
+    expect(atelier('status', '--skill', 'analysis', '--report').out).toMatch(/uses {11}0 recorded/);
     // a complaint about a test run is refused: a skill is not corrected on what it is tested with
     const fix = atelier('fix', '--skill', 'analysis', '--invocation', tests[0].invocationId, 'too long');
     expect(fix.code).not.toBe(0);

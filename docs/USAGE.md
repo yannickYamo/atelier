@@ -238,7 +238,7 @@ your work ──► proposed rules ──► YOU APPROVE (once) ──► Standa
   but a long batch is one argument some agent hosts refuse).
   Rejection is suggested only when a rule failed in at least four pieces discovery never read; on fewer,
   the rule is shown as an example for you to judge. Accepting a suggestion is a ruling like any other, and
-  the record keeps which you took and which you changed: `atelier status --skill <name>` shows both counts,
+  the record keeps which you took and which you changed: `atelier status --skill <name> --report` shows both counts,
   so "you approved it" never hides "you pressed Enter".
 - **Whenever you want to.** `atelier fix "the close was a summary, not a turn"` in your own words. Label a few
   of the reader's verdicts (`atelier taste --calibrate`) to let it act. Change what "good" means with
@@ -267,6 +267,13 @@ any run.
 
 A skill is not tied to the model it was built on. Run it on another model and the piece is written, with one line
 saying which model wrote it; `atelier reproduce` measures how the skill holds there.
+
+`atelier status --skill <name>` is the page of one skill, in your words: what it is for, your rules, how you write,
+the pieces you kept, what you changed for every piece, and the command that undoes the last change. `--report` adds
+the build's own account.
+
+With no model key set, a build says so, asks nothing and promises nothing: set the key and run the same command
+again.
 
 `atelier status` lists every skill built on this machine, one line each. One skill per voice: build each client or
 author under its own `--name`, and write with `--skill <name>`.

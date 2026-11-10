@@ -88,10 +88,10 @@ export function routeOf(args: readonly string[], last: Pick<LastRun, 'asked'> | 
 
 /** What the diagnosis found, in the words a person uses. */
 const PLAIN: Record<string, string> = {
-  IMPLEMENTATION_MISS: 'Your rules already say this, and the skill did not carry it.',
-  STANDARD_GAP: 'Your rules do not say this.',
+  IMPLEMENTATION_MISS: 'Your rules already say this, and the piece did not follow it.',
+  STANDARD_GAP: 'Your skill has no rule for this yet.',
   DELIVERY_FAILURE: 'The skill that ran was not the one you approved.',
-  UNCERTAIN: 'It is not clear what should change.',
+  UNCERTAIN: 'I could not tell what should change for every piece.',
 };
 
 /**
@@ -251,8 +251,7 @@ export async function fix(): Promise<void> {
   let ranStandard = store.getStandard(L, inv.standardVersionHash) ?? die(`standard ${inv.standardVersionHash} missing.`);
   const budget: Budget = { spentUsd: 0, capUsd: numericFlag('--cap', 1.0), maxCalls: numericFlag('--max-calls', 12) };
   const d = await diagnose(clientFor(diagnoserModel()), budget, ranStandard, inv, fb);
-  console.log(`${PLAIN[d.route] ?? d.route}   ($${budget.spentUsd.toFixed(4)})`);
-  console.log(`  ${d.reason}\n`);
+  console.log(`${PLAIN[d.route] ?? d.route}${argv.includes('--report') ? `   ($${budget.spentUsd.toFixed(4)})\n  ${d.reason}` : ''}\n`);
   // Written ONCE, after diagnosis, so the record can name the rule the miss was attributed to.
   // The id is content-derived: re-entering the same complaint keeps the first record, and says so.
   const kept = store.putFeedbackOnce(L, d.route === 'IMPLEMENTATION_MISS' ? { ...fb, requirementId: d.requirementId ?? undefined } : fb);
@@ -274,9 +273,8 @@ export async function fix(): Promise<void> {
   }
 
   if (d.route === 'UNCERTAIN') {
-    console.log('I am not confident enough to change anything, and guessing would repair the wrong thing.');
-    console.log(`\n  ${d.question}\n`);
-    console.log(`Nothing was changed. Say it again with that answered:  atelier fix "<sharper complaint>"`);
+    console.log(`  ${d.question}\n`);
+    console.log(`Nothing was changed. Say it again with that answered:  atelier fix "<what was wrong, and what it should do instead>" --always`);
     return;
   }
 
@@ -287,7 +285,7 @@ export async function fix(): Promise<void> {
     const answer = flag('--add')?.toLowerCase()
       ?? (argv.includes('--skip') ? 'skip'
         : declined ? null
-          : await ask(`Your standard does not say this. Proposed:\n\n  "${proposal}"\n\nAdd as required / preferred, or don't add?  (required / preferred / skip)  `,
+          : await ask(`A rule that would cover it:\n\n  "${proposal}"\n\nrequired: every piece must follow it  ·  preferred: the writer is told, other ways stay fine  ·  skip: not my rule\nAdd it?  (required / preferred / skip)  `,
             ['required', 'preferred', 'skip']));
     if (declined && !answer) {
       console.log(`You declined exactly this addition before, so it is not re-asked on the same complaint.`);
@@ -295,17 +293,17 @@ export async function fix(): Promise<void> {
       return;
     }
     if (answer === null) {
-      console.log(`Your standard does not say this. Proposed:\n\n  "${proposal}"\n`);
-      console.log(`Rule on it (one flag, everything else is automatic):`);
-      console.log(`  atelier fix ${JSON.stringify(complaint)} --add required     it binds`);
-      console.log(`  atelier fix ${JSON.stringify(complaint)} --add preferred    shown; other valid forms stay acceptable`);
+      console.log(`A rule that would cover it:\n\n  "${proposal}"\n`);
+      console.log(`Add it with one of these:`);
+      console.log(`  atelier fix ${JSON.stringify(complaint)} --add required     every piece must follow it`);
+      console.log(`  atelier fix ${JSON.stringify(complaint)} --add preferred    the writer is told; other ways stay fine`);
       console.log(`  atelier fix ${JSON.stringify(complaint)} --skip             not my rule`);
       store.appendEvent(L, { kind: 'PROPOSED_CHANGE', at: fb.at, skillVersionHash: inv.skillVersionHash, proposal, accepted: null });
       return;
     }
     if (answer === 'skip') {
       store.appendEvent(L, { kind: 'PROPOSED_CHANGE', at: fb.at, skillVersionHash: inv.skillVersionHash, proposal, accepted: false });
-      console.log(`Not added. Recorded, so the same complaint does not re-ask; your standard is untouched.`);
+      console.log(`Not added, and the same words will not ask again. Your skill is unchanged.`);
       return;
     }
     if (answer !== 'required' && answer !== 'preferred') die(`--add takes required|preferred; got "${answer}".`);
@@ -317,9 +315,9 @@ export async function fix(): Promise<void> {
       console.log(`Your standard has moved since that run (${ranStandard.standardVersionHash} -> ${activeNow.standardVersionHash}); the addition goes on the current one.`);
     }
     const added = addRuleToActive(L, name, proposal, answer === 'required' ? 'REQUIRED' : 'PREFERRED', complaint, ranStandard, [fb.feedbackId], await readPolarityOf(proposal));
-    console.log(`Added as ${answer.toUpperCase()} — ${added.requirement.requirementId} ${answer === 'required' ? 'instructs' : 'is shown'}.`);
-    console.log(`StandardVersion ${added.standard.standardVersionHash} supersedes ${added.supersedes}  (reason: your complaint, on file)`);
-    console.log(`Rebuilt and installed: ${pickHost().invocationHint(name).trim()} now serves it.`);
+    console.log(`Added: every piece from now on ${answer === 'required' ? 'must follow it' : 'is written with it in mind'}. ${pickHost().invocationHint(name).trim()} already uses it.`);
+    console.log(`  See everything your skill holds: atelier status --skill ${name}${activeHash ? `   ·   undo this: atelier rollback --skill ${name} --to ${activeHash}` : ''}`);
+    if (argv.includes('--report')) console.log(`StandardVersion ${added.standard.standardVersionHash} supersedes ${added.supersedes} (${added.requirement.requirementId}; reason: your complaint, on file)`);
     return;
   }
 

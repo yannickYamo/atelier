@@ -27,7 +27,7 @@ import { mine } from './commands/mine.js';
 import { taste } from './commands/taste.js';
 import { tells } from './commands/tells.js';
 import { library } from './commands/library.js';
-import { tend, skillDashboard } from './commands/tend.js';
+import { tend, skillDashboard, skillPage } from './commands/tend.js';
 import { fidelity } from './commands/fidelity.js';
 import { report as reportRun, rate } from './commands/report.js';
 import { evaluate } from './commands/eval.js';
@@ -260,7 +260,8 @@ const main = async (): Promise<void> => {
     case 'status': {
       // With a skill: the one-page dashboard. Without: the run in flight in this project.
       const dash = flag('--skill');
-      if (dash) { skillDashboard(dash); return; }
+      // What the skill holds, in its owner's words; the machinery's own account with --report.
+      if (dash) { skillPage(dash); if (argv.includes('--report')) { console.log(''); skillDashboard(dash); } return; }
       // Every skill built here, one line each: the name it is run by and what it is for. One unreadable skill hides no other.
       const built = (existsSync(join(DATA, 'skills')) ? readdirSync(join(DATA, 'skills')) : []).flatMap((n) => {
         try {

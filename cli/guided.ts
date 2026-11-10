@@ -12,7 +12,7 @@
 
 import { spawnSync } from 'node:child_process';
 import { createInterface } from 'node:readline';
-import { DATA, argv, flag } from './runtime.js';
+import { DATA, argv, flag, canReach } from './runtime.js';
 import * as store from '../core/state/store.js';
 import { cardLine, amendCard, type PurposeCard } from '../core/direct/card.js';
 import { titleOf } from '../core/direct/pieces.js';
@@ -117,6 +117,15 @@ export async function guided(name: string, seen: Understood = { steps: [], dispu
       if (seen.confirm) console.log(`    To hold every piece to ${seen.disputed.length === 1 ? 'it' : 'them'}: ${seen.confirm}`);
     }
 
+    // WITH NO MODEL TO WRITE WITH, NOTHING IS PROMISED AND NOTHING IS ASKED: the skill is built from what could be
+    // counted, and the one thing left to do is said, with the command. Never "ready" for a skill that cannot write yet.
+    if (!canReach('target')) {
+      console.log(`\n"${name}" is built, and cannot write yet: no model key is set.`);
+      console.log('  Set one:   export ANTHROPIC_API_KEY=<your key>     (another provider: atelier models)');
+      console.log('  Then run the same command again: your pieces are read in full, and you see two pieces written.');
+      return;
+    }
+
     // 2. THE FEW THINGS ONLY THE PERSON CAN SAY: each field of the card nothing grounded. Enter leaves it unsaid.
     const open = CARD_ASKS.filter((a) => !card?.[a.field]).slice(0, MAX_BUILD_QUESTIONS);
     if (open.length) console.log(`\n${open.length === 1 ? 'One question' : `${open.length} questions`} before I write, so the pieces fit their reader (enter skips):`);
@@ -145,6 +154,7 @@ export async function guided(name: string, seen: Understood = { steps: [], dispu
       }
       if (atelier(['keep', '--skill', name, id]).ok) kept += 1;
     }
+    if (!kept) { console.log(`\n"${name}" is built, and no piece was written here. Try it: atelier run "<the task>" --skill ${name}`); return; }
     console.log(`\n"${name}" is ready${kept ? `: ${kept} piece${kept === 1 ? '' : 's'} you accepted ${kept === 1 ? 'is' : 'are'} kept, and every new piece is written from ${kept === 1 ? 'it' : 'them'} first` : ''}.`);
     console.log(`  Write with it: atelier run "<the task>"   ·   in Claude Code: /${name}   ·   in other tools: atelier setup`);
   } finally { io.close(); }

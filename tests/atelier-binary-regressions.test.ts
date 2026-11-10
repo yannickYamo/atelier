@@ -405,7 +405,7 @@ describe('a staged ruling silent on `needs` keeps what discovery found', () => {
     runM(data, proj, 'ratify', '--decisions', JSON.stringify(decisions));
     runM(data, proj, 'ratify-close', '--work-type', 'writing');
     runM(data, proj, 'build', '--name', 'ruled');
-    expect(runM(data, proj, 'status', '--skill', 'ruled')).toMatch(new RegExp(`your rulings\\s+${ids.length - 1} took the suggestion, 1 overrode it, 0 had none`));
+    expect(runM(data, proj, 'status', '--skill', 'ruled', '--report')).toMatch(new RegExp(`your rulings\\s+${ids.length - 1} took the suggestion, 1 overrode it, 0 had none`));
   });
 
   it('a `needs` the person wrote wins over the discovered one, silently', () => {

@@ -35,6 +35,8 @@ import { readerModel } from './taste.js';
 import { optimize } from './optimize.js';
 import { learnTells } from './tells.js';
 import { DATA, die, argv, skillArg } from '../runtime.js';
+import { cardLine } from '../../core/direct/card.js';
+import { titleOf } from '../../core/direct/pieces.js';
 
 export async function tend(): Promise<void> {
   const name = skillArg();
@@ -97,6 +99,47 @@ export async function tend(): Promise<void> {
 }
 
 /** One page: the standard, what it covers, what checks it, and what is waiting. */
+/**
+ * WHAT A SKILL HOLDS, IN ITS OWNER'S WORDS: what the work is for, their method, how they write, the pieces they kept,
+ * what they changed for every piece, and how to undo the last change. This is where a person looks to see that what
+ * they said was taken in. Everything here is read from what the build and their own commands stored; the machinery's
+ * account (versions, receipts, coverage, the floor) is `skillDashboard`, shown with --report.
+ */
+export function skillPage(name: string): void {
+  const L: store.StoreLayout = { root: DATA, skillName: name };
+  const active = store.getActive(L) ?? die(`no built skill called "${name}".`);
+  const sv = store.getSkillVersion(L, active) ?? die(`skill version ${active} is missing.`);
+  const v = store.getStandard(L, sv.standardVersionHash) ?? die(`standard ${sv.standardVersionHash} is missing.`);
+  const one = (t: string, n = 110): string => { const x = t.replace(/\s+/g, ' ').trim(); return x.length > n ? `${x.slice(0, n - 1).trimEnd()}…` : x; };
+  const list = (title: string, xs: readonly string[], most: number): void => {
+    if (!xs.length) return;
+    console.log(`\n  ${title}`);
+    for (const x of xs.slice(0, most)) console.log(`    - ${one(x)}`);
+    if (xs.length > most) console.log(`    and ${xs.length - most} more`);
+  };
+  const card = store.getCard(L); const voice = store.getVoice(L);
+  const said = card ? cardLine(card).replace(/^This work: /, '') : '';
+  console.log(name);
+  console.log(`  For: ${said ? said : 'not said yet'}   (say it: atelier amend --skill ${name} --card "kind=…; reader=…; purpose=…")`);
+  if (voice?.pieces?.length) console.log(`  Built from ${voice.corpusPieces ?? voice.pieces.length} of your pieces${voice.lengthSpan ? `, ${voice.lengthSpan[0]} to ${voice.lengthSpan[1]} words each` : ''}.`);
+  const live = v.requirements.filter((r) => r.authority !== 'EXPERT_REJECTED');
+  const yours = live.filter((r) => r.provenance !== 'MACHINE_DISCOVERED');
+  list('Your rules, in your words', yours.map((r) => r.statement), 12);
+  list('How you write', (voice?.persona?.points ?? []).map((pt) => pt.description).filter(Boolean), 6);
+  list('Also held on every new piece', live.filter((r) => r.provenance === 'MACHINE_DISCOVERED').map((r) => r.statement), 6);
+  const kept = store.getKept(L);
+  list(`Pieces you kept (${kept.length}): new pieces are written from these first`, [...kept].reverse().map((k) => `${k.request ?? titleOf(k.text) ?? 'a piece of yours'}  (${k.at.slice(0, 10)}${k.edits.length ? `, with ${k.edits.length} of your edits` : ''})`), 5);
+  // WHAT CHANGED SINCE THE BUILD, newest first: each change of the rules with the person's own reason, and the way back.
+  const rows = store.history(L);
+  const changes = rows.filter((h, i) => h.standard?.reason && rows.findIndex((x) => x.skillVersion.standardVersionHash === h.skillVersion.standardVersionHash) === i);
+  list(`What you changed for every piece (${changes.length})`, changes.map((h) => `${h.standard?.reason ?? ''}  (${h.skillVersion.builtAt.slice(0, 10)})`), 5);
+  const at = rows.findIndex((h) => h.active); const before = at >= 0 ? rows[at + 1] : undefined;
+  if (before) console.log(`\n  Undo the last change: atelier rollback --skill ${name} --to ${before.skillVersion.skillVersionHash}`);
+  const receipt = store.getReceipt(L, active); const lost = receipt ? degradedStages(receipt) : [];
+  if (lost.length) console.log(`\n  Part of the build did not finish (${lost.map((x) => x.id).join(', ')}). Finish it: atelier build --name ${name} --persona auto`);
+  console.log(`\n  Write with it: atelier run "<the task>" --skill ${name}   ·   change it for every piece: atelier fix "<what was wrong>" --always`);
+}
+
 export function skillDashboard(name: string): void {
   const L: store.StoreLayout = { root: DATA, skillName: name };
   const active = store.getActive(L) ?? die(`no built skill called "${name}".`);

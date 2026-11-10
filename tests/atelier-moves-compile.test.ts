@@ -342,7 +342,7 @@ describe('the points are read in batches', () => {
     // points 9 to 16 are the floor (the point's own quote, in every piece); the rest the reader's, in order
     expect(profile.units.map((u) => u.by)).toEqual([...Array<string>(8).fill('model'), ...Array<string>(8).fill('floor'), ...Array<string>(4).fill('model')]);
     expect(profile.units.map((u) => u.realisation).slice(0, 2)).toEqual(['move 1', 'move 2']);
-    const st = s.run('status', '--skill', 'code-review');
+    const st = s.run('status', '--skill', 'code-review', '--report');
     expect(st.out).toMatch(/built without: moves \(1 of 3 point batch\(es\) fell to the floor/);
   }, 240_000);
 });

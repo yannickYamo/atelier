@@ -99,11 +99,40 @@ describe('the first ten minutes', () => {
     expect(listed.out).toContain('posts  ·  a blog post; read by someone choosing a notes app');
     expect(listed.out).not.toMatch(/state BUILT|proposals \d/);
 
+    // what the skill holds, in the person's words: what it is for, their method, what they kept; none of the machinery
+    const page = typed('', 'status', '--skill', 'posts');
+    expect(page.out).toContain('For: a blog post; read by someone choosing a notes app');
+    expect(page.out).toContain('Your rules, in your words'); expect(page.out).toContain('- Close on one short plain sentence.');
+    expect(page.out).toContain('Pieces you kept (2)');
+    expect(INTERNAL.filter((w) => page.out.includes(w))).toEqual([]);
+    expect(page.out).not.toMatch(/receipt|floor|taste reader|dimensions/);
+
     // the same skill on another model: the piece is written, and the run is never refused for the change
     const r2 = spawnSync('node', [CLI, 'run', 'Compare Bear and Craft once more.', '--provider', 'openai-compatible', '--base-url', url(), '--model', 'scripted-next'], { encoding: 'utf8', cwd: proj, env, input: '' });
     expect([0, 1], `${r2.stdout}${r2.stderr}`).toContain(r2.status);
     expect(r2.stdout).toContain('That is the whole trade.');
     expect(`${r2.stdout}${r2.stderr}`).not.toContain('TARGET_BINDING_MISMATCH');
+  }, 240_000);
+
+  it('with no model key: nothing is asked, nothing is called ready, the one thing to do is said; the same command again reads the voice', async () => {
+    const data = mkdtempSync(join(tmpdir(), 'atelier-first-data-')); const proj = mkdtempSync(join(tmpdir(), 'atelier-first-proj-'));
+    mkdirSync(join(proj, 'posts')); writeFileSync(join(proj, 'posts', 'compare-1.md'), POST(1)); writeFileSync(join(proj, 'posts', 'compare-2.md'), POST(2)); writeFileSync(join(proj, 'posts', 'essay.md'), ESSAY);
+    const env: NodeJS.ProcessEnv = { ...process.env, ATELIER_DATA: data, ATELIER_PROJECT_DIR: proj, ATELIER_PRICE_IN: '1', ATELIER_PRICE_OUT: '1', ATELIER_GUIDED: '1' };
+    delete env.ANTHROPIC_API_KEY; delete env.ANTHROPIC_AUTH_TOKEN; delete env.ATELIER_CONTEXT_READER;
+    const args = ['new', 'posts', 'write posts in my voice', '--name', 'posts'];
+    const bare = spawnSync('node', [CLI, ...args], { encoding: 'utf8', cwd: proj, env, input: 'a blog post\n\n\n' });
+    const said = `${bare.stdout}${bare.stderr}`;
+    expect(bare.status, said).toBe(0);
+    expect(said).toContain('"posts" is built, and cannot write yet: no model key is set.');
+    expect(said).toContain('export ANTHROPIC_API_KEY=');
+    expect(said).not.toMatch(/is ready|questions? before I write|Sample \d of|could not be written/);
+    // the same command, once a model is there: the pieces are read for how the person sounds, and it writes
+    await setBackend({ byTool: { emit_persona: { points: [{ aspect: 'close', description: 'Closes on a short plain sentence.', frequency: 'OFTEN', quote: 'That is the whole trade.' }] }, emit_holds_back: { ids: [] }, __plain: [DRAFT, REVIEWED] } });
+    const again = spawnSync('node', [CLI, ...args, ...BACKEND()], { encoding: 'utf8', cwd: proj, env, input: '\n\n\n\n\n\n' });
+    const out = `${again.stdout}${again.stderr}`;
+    expect(again.status, out).toBe(0);
+    expect(out).toContain('How you write:'); expect(out).toContain('- Closes on a short plain sentence.');
+    expect(out).toMatch(/"posts" is ready/);
   }, 240_000);
 
   it('where nobody is there (--yes, or no terminal), the build says ready and asks nothing', async () => {

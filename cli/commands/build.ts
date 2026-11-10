@@ -166,7 +166,12 @@ async function chooseVoice(L: store.StoreLayout, v: StandardVersion, workForm: W
   const form: PieceForm = asked.form ?? (compact ? 'whole' : stored?.pieceForm ?? 'whole');
   // A persona is derived (one model call) only for a voice chosen in this run, or when asked for: choosing the
   // pieces again must never spend, nor bring back a persona the owner turned off.
-  const derivesPersona = !voice || personaFlag === 'auto';
+  // ...and for a voice an earlier build could not read for want of a model, now that one is here: a person who built
+  // once before setting a key gets the reading on the next build, without knowing a flag. A persona turned off
+  // (--persona none) is recorded as off, never as unread, and stays off.
+  const lastActive = store.getActive(L); const lastPersona = lastActive ? store.getReceipt(L, lastActive)?.stages.find((x) => x.id === 'persona') : undefined;
+  const unreadForWantOfAModel = Boolean(voice && !voice.persona && !NO_MODEL() && lastPersona && !lastPersona.ran && lastPersona.by === 'floor' && (lastPersona.why ?? '').includes('no model read the pieces'));
+  const derivesPersona = !voice || personaFlag === 'auto' || unreadForWantOfAModel;
   // This run's pieces: the run being built is this skill's, whatever name it is built under.
   const readable = derivesPersona || reselect ? sessionCorpus().map(withoutFrontMatter) : [];
   // A budget or a form with no pieces to apply it to is refused, with or without a stored voice: never ignored.

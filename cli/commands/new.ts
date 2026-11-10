@@ -116,7 +116,8 @@ export async function newSkill(): Promise<void> {
   if (composite) {
     console.log('No model is set up (ANTHROPIC_API_KEY), so each voice is read for what can be counted in its pieces alone.\n  To have a model read them too, set the key and run this again in a folder of its own.\n');
   } else if (fresh && (keyless || thin)) {
-    console.log(keyless ? 'No model is set up (ANTHROPIC_API_KEY), so the skill is built from what can be counted in your examples, with no rules read by a model and none for you to approve.\n  To have a model read them too, set the key and run this again in a folder of its own.\n'
+    console.log(keyless && guidedHere() ? 'No model key is set, so I can only count what is in your pieces: how long they run, what every one of them does.\n'
+      : keyless ? 'No model is set up (ANTHROPIC_API_KEY), so the skill is built from what can be counted in your examples, with no rules read by a model and none for you to approve.\n  To have a model read them too, set the key and run this again in a folder of its own.\n'
       // NEVER A REFUSAL FOR FEW EXAMPLES. Two or three pieces cannot have rules read off some and checked on the others,
       // so none is proposed as if checked: the pieces themselves are served, with what can be counted in them.
       : guidedHere() ? ((n: number): string => `With ${n} piece${n === 1 ? '' : 's'}, I write from the pieces themselves. Give me four or more and I also read your rules from them.\n`)(examplePieces(corpusFiles(path).map((f) => ({ id: f, text: readCorpusText(f) }))).length)

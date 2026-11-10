@@ -128,7 +128,7 @@ describe('the receipt of a method build', () => {
     expect(degradedStages(receipt).map((s) => s.id)).toEqual(['persona']);
     expect(receipt.stages.find((s) => s.id === 'persona')?.why).toMatch(/^the call failed: /);
     expect(receipt.stages.find((s) => s.id === 'persona')).toMatchObject({ by: 'floor', calls: 1 });
-    const st = run('status', '--skill', 'code-review');
+    const st = run('status', '--skill', 'code-review', '--report');
     expect(st.out).toMatch(/built without: persona \(the call failed.*\)\. Repair: atelier build --name code-review --persona auto/);
   }, 120_000);
 
@@ -150,7 +150,7 @@ describe('the receipt of a method build', () => {
     const receipt = store.getReceipt(L(data), store.getActive(L(data))!)!;
     expect(receipt.stages.find((s) => s.id === 'method')).toMatchObject({ ran: true, by: 'model', detail: line, degraded: true, failed: ["step 2: the written check throws on your example (Cannot access 'material' before initialization)"] });
     expect(degradedStages(receipt).map((s) => s.id)).toEqual(['method']);
-    const st = run('status', '--skill', 'code-review');
+    const st = run('status', '--skill', 'code-review', '--report');
     expect(st.out).toContain(line);
     expect(st.out).toMatch(/built without: method \(1 written check failed\)/);
     expect(st.out).not.toContain('Repair: atelier build');
