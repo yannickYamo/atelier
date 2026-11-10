@@ -94,6 +94,18 @@ describe('the first ten minutes', () => {
     expect(lastRun.direct?.pieces.length).toBeGreaterThan(0);
     expect(lastRun.direct?.pieces.some((x) => x.kept)).toBe(false);
     expect(lastRun.direct?.corrections).toBe(1);
+    // what the person said the work is stays out of the writer's prompt unless the experiment switch is on; with it,
+    // the writer is told their words (the kind and the reader they typed) and nothing they did not say
+    const SAID = 'What the author says these pieces are: a blog post.';
+    const bodies = async (): Promise<string[]> => ((await (await fetch(`${url()}/__log`)).json()) as { bodies: string[] }).bodies;
+    expect((await bodies()).some((b) => b.includes(SAID))).toBe(false);
+    await setBackend({ byTool: { __plain: [DRAFT, REVIEWED] } });
+    env.ATELIER_CARD_TO_WRITER = '1'; const told = typed('', 'run', 'Compare Bear and Craft for my notes.'); delete env.ATELIER_CARD_TO_WRITER;
+    expect([0, 1], told.out).toContain(told.code);
+    const toldBodies = await bodies();
+    expect(toldBodies.some((b) => b.includes(SAID) && b.includes('Who the author says reads them: someone choosing a notes app.'))).toBe(true);
+    expect(toldBodies.some((b) => b.includes('What the author says a reader should do or know'))).toBe(false);
+    await setBackend({ byTool: { __plain: [DRAFT, REVIEWED] } });
     // beside the piece: what the checks found in one sentence and what to do if it is not right, in plain words
     // the one sentence counts what was measured, what is judgement, and what could not be checked, and that last is named
     expect(ran.out).toMatch(/^Checked: nothing broke your rules \(3 measured; 3 are judgement calls the writer was given in your words; 1 could not be checked on this piece, named below\)\.$/m);

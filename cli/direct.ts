@@ -386,7 +386,14 @@ export async function runDirect(c: DirectContext) {
   const method = store.getMethod(c.L)?.text ?? '';
   // What an editor would ask before the draft: only the person's answers reach the writer.
   const asking = await editorQuestions(c, method, route.kind ?? null);
-  const variable = taskBlock({ material: c.material, task: c.asked, rules, method, settled: asking.note });
+  // WHAT THE PERSON SAID THE WORK IS, TO THE WRITER (an experiment, off unless ATELIER_CARD_TO_WRITER=1): the kind, the
+  // reader and the purpose, only where the person said them (a card that is theirs), never a reading of their pieces.
+  // The comparison of pieces written with and without it decides whether it becomes what every run does.
+  const theirs = process.env.ATELIER_CARD_TO_WRITER === '1' ? store.getCard(c.L) : null;
+  const said = theirs?.by === 'you' ? [theirs.kind ? `What the author says these pieces are: ${theirs.kind}.` : '', theirs.reader ? `Who the author says reads them: ${theirs.reader}.` : '',
+    theirs.purpose ? `What the author says a reader should do or know after one: ${theirs.purpose.replace(/\.$/, '')}.` : ''].filter(Boolean).join('\n') : '';
+  if (said) c.detail('The writer was told what the person said the work is (ATELIER_CARD_TO_WRITER=1).');
+  const variable = taskBlock({ material: c.material, task: c.asked, rules, method, settled: [said, asking.note].filter((x) => x.trim()).join('\n\n') });
   c.detail(`Written from ${shown.length} of ${catalogue.length} piece(s) of the author's${route.kind ? `, as ${route.kind}` : ''} (${decided.by === 'model' ? 'chosen by a reading of the request' : `chosen by shared words: ${decided.why ?? 'no reading'}`}): ${shown.map((p) => titleOf(p.text)).join('; ')}.`);
 
   // HOW THE AUTHOR WRITES, read on the text after the draft (core/direct/style.ts): the habits the build read from their
