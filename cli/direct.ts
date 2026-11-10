@@ -370,7 +370,7 @@ export async function runDirect(c: DirectContext) {
   const budget: Budget = { spentUsd: 0, capUsd: numericFlag('--cap', 3), maxCalls: numericFlag('--max-calls', 6) };
   const voice = store.getVoice(c.L);
   const kept = store.getKept(c.L);
-  const catalogue = catalogueOf(builtPieces(voice, store.getExemplar(c.L)), kept.map((k) => ({ text: k.text, request: k.request })));
+  const catalogue = catalogueOf(builtPieces(voice, store.getExemplar(c.L)), kept.filter((k) => !k.correctionOnly).map((k) => ({ text: k.text, request: k.request })));
   const materialText = c.material.map((m) => m.text).join('\n\n');
 
   // 1. WHICH PIECES: a reading of the request, grounded; the shared-words floor when no model can read.

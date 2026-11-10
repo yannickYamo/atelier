@@ -257,10 +257,12 @@ atelier fix "the opening buried the news"    # react: what was wrong, in your ow
 
 At a terminal, `atelier new` does not end at "built". It says what it understood from your pieces, asks the few
 things only you can say (what the pieces are, who reads them, what for; at most five questions, enter skips), writes
-two pieces with the new skill, and takes one round of "what would you change" on each. What you accept is kept, and
-every later piece is written from it first. With `--json` or no terminal, it builds and asks nothing; so does `--yes`, which on a build with a method note
-also keeps as written any step your own pieces do not follow. A skill built again keeps the pieces you accepted and
-writes no new samples. If the input ends before you answer, nothing is kept.
+two pieces with the new skill as previews, and takes one round of "what would you change" on each. A preview is never
+added to your pieces: the skill is written from your own work. A change you ask for and confirm with `y` is held as
+your correction, and every later piece is reviewed against it. The build ends on its first version; a change you
+make for every piece later (`atelier fix "…" --always`) makes the next. With `--json` or no terminal, it builds and asks nothing; so does `--yes`, which on a build with a method note
+also keeps as written any step your own pieces do not follow. A skill built again keeps what you kept and corrected and
+writes no new previews. Enter never keeps anything, and neither does an input that ends.
 
 Under the work a run prints two lines: what the checks found, in one sentence, and what to type if the piece is not
 right. Anything a check found and left for you (a possible slip, a specific to confirm) is listed there in full. A

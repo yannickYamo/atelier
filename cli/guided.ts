@@ -1,14 +1,15 @@
 // atelier/cli/guided.ts — THE END OF A BUILD, FOR A PERSON AT A TERMINAL: what was understood, the few things only they
 // can say, two pieces written with the new skill, and one round of what to change. Then the skill is ready.
 //
-// One pass, never a loop: a person says what is wrong with a sample once, the piece is written again, and both are kept
-// as theirs. Everything here is made of what already exists: the purpose card (core/direct/card.ts), a run of the skill
-// as a person would make it (`atelier invoke`), `atelier fix` on that run and `atelier keep` of what they accept. Kept
-// pieces are written from first on every later run (cli/direct.ts), so what the person accepted here is what the skill
-// is held to next.
+// One pass, never a loop. The two pieces are PREVIEWS: the skill is written from the person's own pieces, and a draft
+// the model wrote is never added to them, whether the person pressed enter or not. What the round does keep is how the
+// person changes a draft: they say it once, the piece is written again, and on their y the sentences before and after
+// are held as their correction (core/direct/kept.ts, `correctionOnly`), which every later review is shown
+// (core/direct/prompt.ts). Everything here is made of what already exists: the purpose card (core/direct/card.ts), a
+// run of the skill as a person would make it (`atelier invoke`) and `atelier fix` on that run.
 //
 // Nothing here waits where nobody is: it runs only at a terminal (or where ATELIER_GUIDED=1 says a person's lines come
-// on stdin, as a test does), never under --yes, --json or a host.
+// on stdin, as a test does), never under --yes, --json or a host. An input that ends accepts nothing.
 
 import { spawnSync } from 'node:child_process';
 import { createInterface } from 'node:readline';
@@ -16,6 +17,8 @@ import { DATA, argv, flag, canReach } from './runtime.js';
 import * as store from '../core/state/store.js';
 import { cardLine, amendCard, type PurposeCard } from '../core/direct/card.js';
 import { titleOf } from '../core/direct/pieces.js';
+import { editPairs, type KeptPiece } from '../core/direct/kept.js';
+import { createHash } from 'node:crypto';
 
 /** How many pieces the build writes for the person to read. */
 const SAMPLES = 2;
@@ -139,10 +142,9 @@ export async function guided(name: string, seen: Understood = { steps: [], dispu
       console.log('  Then run the same command again: your pieces are read in full, and you see two pieces written.');
       return;
     }
-    // BUILT AGAIN: the pieces the person already accepted still lead, so nothing is asked or written a second time.
-    const already = store.getKept(L).length;
-    if (already) {
-      console.log(`\n"${name}" is built again. The ${already === 1 ? 'piece' : `${already} pieces`} you kept still ${already === 1 ? 'leads' : 'lead'} every new one.`);
+    // BUILT AGAIN: a skill that has written before is not shown at work a second time, and nothing is asked again.
+    if (store.listInvocations(L).length) {
+      console.log(`\n"${name}" is built again. What you kept and corrected is still held.`);
       console.log(`  Write with it: atelier run "<the task>" --skill ${name}   ·   what it holds: atelier status --skill ${name}`);
       return;
     }
@@ -164,30 +166,38 @@ export async function guided(name: string, seen: Understood = { steps: [], dispu
     if (first === null) { left(); return; }
     const requests = sampleRequests(L, first.trim());
     if (!requests.length) { console.log('No sample was written: none of your pieces carries a title or a request to start from.'); return; }
-    let kept = 0; let noted = false;
+    // A SAMPLE IS A PREVIEW, NEVER A REFERENCE. What the skill is written from is the person's own pieces: a draft the
+    // model wrote teaches nothing about them, however good, and enter is not approval. What does teach is how they
+    // change a draft: said once, confirmed with a y, and from then on shown to the review of every piece.
+    let corrections = 0; let written = 0; let noted = false;
     for (const [i, request] of requests.entries()) {
       console.log(`\nSample ${i + 1} of ${requests.length}: ${request}\nwriting…`);
       const piece = write(name, request);
       if ('why' in piece) { console.log(`  (this sample could not be written: ${piece.why})`); continue; }
+      written += 1;
       console.log(`\n${piece.text}\n`);
       if (piece.note && !noted) { console.log(`${piece.note}\n`); noted = true; }
-      // 4. ONE ROUND: what to change, said once; the piece is written again and the answer is kept as theirs.
-      const change = await io.ask('Anything to change? Say it in your words, or press enter to keep it: ');
-      // an input that ended accepted nothing: the piece is not kept as theirs
+      // ONE ROUND: what to change, said once; the piece is written again.
+      const change = await io.ask('Anything to change? Say it in your words, or press enter to go on: ');
       if (change === null) break;
-      let id = piece.id;
-      if (change.trim()) {
-        atelier(['fix', change.trim()]);
-        const after = [...store.listInvocations(L)].sort((a, b) => b.at.localeCompare(a.at))[0];
-        if (after && after.invocationId !== piece.id && after.output.trim()) { id = after.invocationId; console.log(`\nWritten again:\n\n${after.output.trim()}\n`); }
-        else console.log('  (it could not be written again; the first version is kept, and atelier fix takes the same words later)');
-      }
-      // counted as kept only when it was: a keep that failed says so, and the piece stays one run among others
-      if (atelier(['keep', '--skill', name, id]).ok) kept += 1;
-      else console.log(`  (this piece could not be kept; keep it later with: atelier keep --skill ${name} ${id})`);
+      if (!change.trim()) continue;
+      atelier(['fix', change.trim()]);
+      const after = [...store.listInvocations(L)].sort((x, y) => y.at.localeCompare(x.at))[0];
+      if (!after || after.invocationId === piece.id || !after.output.trim()) { console.log('  (it could not be written again; atelier fix takes the same words later)'); continue; }
+      console.log(`\nWritten again:\n\n${after.output.trim()}\n`);
+      const yes = await io.ask('Is that the change you meant? (y: every later piece is corrected the same way / enter: no) ');
+      if (yes === null) break;
+      if (!/^y(es)?$/i.test(yes.trim())) continue;
+      const edits = editPairs(piece.text, after.output.trim());
+      if (!edits.length) { console.log('  (nothing changed between the two, so there is nothing to carry forward)'); continue; }
+      const text = after.output.trim();
+      const record: KeptPiece = { id: `k${createHash('sha256').update(text).digest('hex').slice(0, 8)}`, at: new Date().toISOString(), request, text, from: after.invocationId, edits, correctionOnly: true };
+      store.setKept(L, [...store.getKept(L).filter((k) => k.id !== record.id), record]);
+      corrections += edits.length;
     }
-    if (!kept) { console.log(`\n"${name}" is built, and no piece was kept here. Try it: atelier run "<the task>" --skill ${name}`); return; }
-    console.log(`\n"${name}" is ready: ${kept} piece${kept === 1 ? '' : 's'} you accepted ${kept === 1 ? 'is' : 'are'} kept, and every new piece is written from ${kept === 1 ? 'it' : 'them'} first.`);
+    if (!written) { console.log(`\n"${name}" is built, and no piece was written here. Try it: atelier run "<the task>" --skill ${name}`); return; }
+    console.log(`\n"${name}" is ready${corrections ? `: every new piece is reviewed against the ${corrections === 1 ? 'correction' : `${corrections} corrections`} you just made` : ''}.`);
+    console.log(`  This is its first version. A change you make for every piece (atelier fix "<what was wrong>" --always) makes the next, and atelier status --skill ${name} shows what it holds and how to go back.`);
     console.log(`  Write with it: atelier run "<the task>"   ·   in Claude Code: /${name}   ·   in other tools: atelier setup`);
   } finally { io.close(); }
 }

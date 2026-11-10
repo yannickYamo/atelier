@@ -73,20 +73,22 @@ the piece just written). For each:
 atelier run "<the request>" --skill <kebab-name> --no-questions
 ```
 
-Show the piece as printed and ask: "Anything to change? Say it in your words, or keep it." If they say what to change:
+Show the piece as printed and ask: "Anything to change? Say it in your words, or go on." The two pieces are previews:
+the skill is written from the user's own pieces, and a draft you wrote for them is never kept as one of theirs. Do
+**not** run `atelier keep` on a preview. If they say what to change:
 
 ```bash
 atelier fix "<their words, verbatim>"
 ```
 
-Show the piece written again. Then, for the version they accept:
+Show the piece written again and ask whether that is the change they meant. If they say every piece should do this:
 
 ```bash
-atelier keep --skill <kebab-name>
+atelier fix "<their words, verbatim>" --always
 ```
 
-One round per piece, never a loop: a second complaint goes to `atelier fix` later, when they use the skill. What they
-kept is what every later piece is written from first.
+and relay what it prints. One round per piece, never a loop. `atelier keep --skill <kebab-name> <file>` is for later:
+a piece they edited and published themselves, which the skill then learns from.
 
 ## 4. Ready
 

@@ -142,7 +142,9 @@ export function skillPage(name: string): void {
   list('Your rules, in your words', yours.map((r) => r.statement), 12);
   list('How you write', (voice?.persona?.points ?? []).map((pt) => pt.description).filter(Boolean), 6);
   list('Also held on every new piece', live.filter((r) => r.provenance === 'MACHINE_DISCOVERED' && !theirs.has(r.requirementId)).map((r) => r.statement), 6);
-  const kept = store.getKept(L);
+  const allKept = store.getKept(L); const kept = allKept.filter((k) => !k.correctionOnly);
+  const corrected = allKept.flatMap((k) => k.edits).length;
+  if (corrected) console.log(`\n  Your corrections (${corrected}): every new piece is reviewed against how you changed earlier drafts`);
   list(`Pieces you kept (${kept.length}): new pieces are written from these first`, [...kept].reverse().map((k) => `${k.request ?? titleOf(k.text)}  (${k.at.slice(0, 10)}${k.edits.length ? `, with ${k.edits.length} of your edits` : ''})`), 5);
   if (changes.length) {
     console.log(`\n  What you changed for every piece (${changes.length})`);

@@ -23,7 +23,7 @@ export function keep(): void {
   const kept = store.getKept(L);
   if (argv.includes('--list')) {
     if (!kept.length) { console.log(`${name} has no kept pieces. After a run you like: atelier keep --skill ${name} [<your edited file>]`); return; }
-    for (const k of kept) console.log(`  ${k.id}  ${k.at.slice(0, 10)}  ${titleOf(k.text)}  (${k.edits.length} correction(s)${k.from ? `, from run ${k.from}` : ''})`);
+    for (const k of kept) console.log(`  ${k.id}  ${k.at.slice(0, 10)}  ${titleOf(k.text)}  (${k.edits.length} correction(s)${k.from ? `, from run ${k.from}` : ''}${k.correctionOnly ? '; corrections only, never written from' : ''})`);
     return;
   }
   const removing = argv.includes('--remove');

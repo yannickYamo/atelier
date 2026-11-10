@@ -24,6 +24,12 @@ export interface KeptPiece {
   readonly from: string | null;
   /** how they changed the delivered text, sentence by sentence */
   readonly edits: readonly EditPair[];
+  /**
+   * A draft the model wrote and rewrote on the person's words (the round at the end of a build): its corrections are
+   * shown to every later review, and it is never one of the pieces written from. The pieces a skill is written from
+   * are the person's own, and what they chose to keep with `atelier keep`.
+   */
+  readonly correctionOnly?: true;
 }
 
 /** The most pairs one kept piece records. */

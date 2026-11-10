@@ -1,5 +1,6 @@
 // THE FIRST TEN MINUTES, AS A PERSON MEETS THEM: one command builds the skill from their pieces and their method, says
-// what it understood, asks the few things only they can say, writes two pieces, takes one round of changes and says it
+// what it understood, asks the few things only they can say, writes two pieces as previews, takes one round of changes
+// (a change they confirm is carried to every later piece; a preview is never kept as a piece of theirs) and says it
 // is ready; one more command writes with it. Driven through the shipped binary on the scripted backend, with the
 // person's lines on stdin. What is counted is the experience: commands typed, flags needed, stops, questions, samples,
 // and the internal words a person should never have to read.
@@ -50,8 +51,9 @@ describe('the first ten minutes', () => {
       return { code: r.status, out: `${r.stdout}${r.stderr}` };
     };
     await setBackend({ byTool: { emit_persona: { points: [{ aspect: 'close', description: 'Closes on a short plain sentence.', frequency: 'OFTEN', quote: 'That is the whole trade.' }] }, emit_holds_back: { ids: [] }, __plain: [DRAFT, REVIEWED], emit_piece: { piece: FIXED } } });
-    // what the person types: the kind, the reader, enter for the purpose; a first request; a change to the first piece; enter on the second
-    const lines = ['a blog post', 'someone choosing a notes app', '', 'Compare Logseq and Craft for my notes.', 'Make the close shorter.', ''];
+    // what the person types: the kind, the reader, enter for the purpose; a first request; a change to the first piece
+    // and a y to say it is the change they meant; enter on the second
+    const lines = ['a blog post', 'someone choosing a notes app', '', 'Compare Logseq and Craft for my notes.', 'Make the close shorter.', 'y', ''];
     const built = typed(`${lines.join('\n')}\n`, 'new', 'posts', 'write posts in my voice', '--method', 'method.md', '--name', 'posts');
 
     // no stop: the one command ends with a skill that is active
@@ -69,9 +71,13 @@ describe('the first ten minutes', () => {
     expect(built.out).toContain('Sample 1 of 2: Compare Logseq and Craft for my notes.');
     expect(built.out).toContain('That is the whole trade.');
     expect(built.out).toContain('Written again:'); expect(built.out).toContain('Pick by what you would miss.');
+    // A SAMPLE IS A PREVIEW: the one the person passed with enter is kept nowhere. The one they changed and confirmed
+    // is held as their correction (the sentence before and after), never as a piece to write from.
     const kept = store.getKept({ root: data, skillName: 'posts' });
-    expect(kept.length).toBe(2); expect(kept.some((k) => k.text.includes('Pick by what you would miss.'))).toBe(true);
-    expect(built.out).toMatch(/"posts" is ready/);
+    expect(kept.length).toBe(1); expect(kept[0].correctionOnly).toBe(true);
+    expect(kept[0].edits).toEqual([{ before: 'That is the whole trade.', after: 'Pick by what you would miss.' }]);
+    expect(built.out).toContain('"posts" is ready: every new piece is reviewed against the correction you just made.');
+    expect(built.out).toContain('This is its first version.');
     // the guided part speaks in the person's words
     // the whole build speaks in the person's words: their method as they wrote it, and none of the machinery
     expect(INTERNAL.filter((w) => built.out.includes(w))).toEqual([]);
@@ -83,6 +89,11 @@ describe('the first ten minutes', () => {
     const ran = typed('', 'run', 'Compare Bear and Craft for my notes.');
     expect([0, 1], ran.out).toContain(ran.code);
     expect(ran.out).toContain('That is the whole trade.');
+    // that run was written from the person's own pieces alone, with their correction before its review
+    const lastRun = [...store.listInvocations({ root: data, skillName: 'posts' })].sort((a, b) => b.at.localeCompare(a.at))[0] as unknown as { direct?: { pieces: { kept: boolean }[]; corrections: number } };
+    expect(lastRun.direct?.pieces.length).toBeGreaterThan(0);
+    expect(lastRun.direct?.pieces.some((x) => x.kept)).toBe(false);
+    expect(lastRun.direct?.corrections).toBe(1);
     // beside the piece: what the checks found in one sentence and what to do if it is not right, in plain words
     // the one sentence counts what was measured, what is judgement, and what could not be checked, and that last is named
     expect(ran.out).toMatch(/^Checked: nothing broke your rules \(3 measured; 3 are judgement calls the writer was given in your words; 1 could not be checked on this piece, named below\)\.$/m);
@@ -107,7 +118,7 @@ describe('the first ten minutes', () => {
     const page = typed('', 'status', '--skill', 'posts');
     expect(page.out).toContain('For: a blog post; read by someone choosing a notes app');
     expect(page.out).toContain('Your rules, in your words'); expect(page.out).toContain('- Close on one short plain sentence.');
-    expect(page.out).toContain('Pieces you kept (2)');
+    expect(page.out).toContain('Your corrections (1)'); expect(page.out).not.toContain('Pieces you kept');
     expect(INTERNAL.filter((w) => page.out.includes(w))).toEqual([]);
     expect(page.out).not.toMatch(/receipt|floor|taste reader|dimensions/);
 
@@ -128,9 +139,9 @@ describe('the first ten minutes', () => {
     await setBackend({ byTool: { emit_persona: { points: [] }, emit_holds_back: { ids: [] }, __plain: [DRAFT, REVIEWED] } });
     const again = typed('', 'new', 'posts', 'write posts in my voice', '--method', 'method.md', '--name', 'posts');
     expect(again.code, again.out).toBe(0);
-    expect(again.out).toContain('"posts" is built again. The 2 pieces you kept still lead every new one.');
+    expect(again.out).toContain('"posts" is built again. What you kept and corrected is still held.');
     expect(again.out).not.toMatch(/Sample \d of|before I write/);
-    expect(store.getKept({ root: data, skillName: 'posts' }).length).toBe(2);
+    expect(store.getKept({ root: data, skillName: 'posts' }).length).toBe(1);
   }, 240_000);
 
   it('with no model key: nothing is asked, nothing is called ready, the one thing to do is said; the same command again reads the voice', async () => {
@@ -178,8 +189,20 @@ describe('the first ten minutes', () => {
     // the input ends at "anything to change?": the sample was shown, and is not kept as accepted
     await script(); const mid = fresh(); const e2 = build(mid, 'a blog post\n\n\nCompare Logseq and Craft.\n');
     expect(e2.out).toContain('Sample 1 of 2: Compare Logseq and Craft.');
-    expect(e2.out).not.toMatch(/is ready/);
+    expect(e2.out).not.toContain('Sample 2 of 2');
     expect(store.getKept({ root: mid.data, skillName: 'posts' })).toEqual([]);
+
+    // enter is not approval: both samples shown, the build is ready, and nothing is kept
+    await script(); const skim = fresh(); const e5 = build(skim, 'a blog post\n\n\n\n\n\n');
+    expect(e5.out.match(/^Sample \d of 2: /gm)?.length).toBe(2);
+    expect(e5.out).toMatch(/"posts" is ready\.$/m);
+    expect(store.getKept({ root: skim.data, skillName: 'posts' })).toEqual([]);
+
+    // a change asked for and not confirmed (enter at "is that the change you meant?") carries nothing forward
+    await setBackend({ byTool: { emit_persona: { points: [] }, emit_holds_back: { ids: [] }, __plain: [DRAFT, REVIEWED], emit_piece: { piece: FIXED } } });
+    const unsure = fresh(); const e6 = build(unsure, 'a blog post\n\n\nCompare Logseq and Craft.\nMake the close shorter.\n\n\n');
+    expect(e6.out).toContain('Written again:');
+    expect(store.getKept({ root: unsure.data, skillName: 'posts' })).toEqual([]);
 
     // --yes: built, nothing asked, no sample, though a person's lines are there
     await script(); const yes = fresh(); const e3 = build(yes, 'a blog post\n\n\n\n\n\n', '--yes');
