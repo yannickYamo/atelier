@@ -14,7 +14,7 @@ import { DATA, VALUED_OPTIONS, argv, die, flag, loadSession, boundMaterial } fro
 import * as store from '../../core/state/store.js';
 import { renderRunCard, stateLine, type RunCard } from '../../core/eval/run-card.js';
 import type { EvaluationRecord } from '../../core/eval/record.js';
-import { OTHER_MODEL_NOTE } from '../guided.js';
+import { OTHER_MODEL_NOTE, DECLINED_NOTE } from '../guided.js';
 import { GRAMMAR_LISTED } from '../../core/observers/grammar.js';
 import { planFor } from '../../core/plan/execution-plan.js';
 import type { EvalSummary } from '../../core/eval/summary.js';
@@ -190,7 +190,7 @@ export async function run(): Promise<void> {
   const work = result?.output ?? null;
   if (!result || work === null) { process.stderr.write(engine.err); process.exitCode = engine.code || 1; return; }
   // the engine's one line on a change of model (cli/commands/invoke.ts, `checkedBinding`) is the person's to read
-  for (const l of engine.err.split('\n')) if (l.startsWith(OTHER_MODEL_NOTE)) process.stderr.write(`${l}\n`);
+  for (const l of engine.err.split('\n')) if (l.startsWith(OTHER_MODEL_NOTE) || l.startsWith(DECLINED_NOTE)) process.stderr.write(`${l}\n`);
   const goes = result.eval?.record?.delivery?.decision;
   console.log(`${goes === 'PERSON' ? 'FOR YOUR REVIEW (sent to a person, not shipped as checked):\n\n' : goes === 'BLOCK' ? 'BLOCKED (not for use as it is):\n\n' : ''}${work.trimEnd()}\n`);
   // A FIX MADE IN PLACE SAYS WHAT CHANGED: sentences changed of total, and each span before and after.

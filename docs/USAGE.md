@@ -229,7 +229,7 @@ your work ──► proposed rules ──► YOU APPROVE (once) ──► Standa
 
 ## When it asks you
 
-- **Once, when you create a skill.** It shows the rules it found, each with a suggested ruling: the rules
+- **Once, when you create a skill with `--rules`, or with no terminal.** It shows the rules it found, each with a suggested ruling: the rules
   that will instruct the model and the ones with the thinnest evidence in full, the rest one line each
   (`atelier pending` shows every rule with its evidence). Press Enter to accept them all, or change any
   (`p3=reject`). Without a terminal, `atelier new <folder> --accept` accepts and builds in one step.
@@ -257,7 +257,8 @@ atelier fix "the opening buried the news"    # react: what was wrong, in your ow
 
 The method note is optional: `atelier new ./posts "what it is for"` builds from your pieces alone, the same way.
 At a terminal that is the build you get with any number of pieces; `--rules` asks instead for rules read off four or
-more pieces and shown to you for approval before anything is built.
+more pieces and shown to you for approval before anything is built. Without a terminal (`--yes`, `--json`, a pipe, a
+host), four or more pieces and a model still take the rules route.
 
 At a terminal, `atelier new` does not end at "built". It says what it understood from your pieces, asks the few
 things only you can say (what the pieces are, who reads them, what for; at most five questions, enter skips), writes
@@ -401,7 +402,7 @@ the skill on blind: `atelier reproduce` needs a skill built with `atelier new`.
 ## Using it
 
 ```bash
-atelier new ./posts "write me a blog post like these"   # read your work, approve the rules, build
+atelier new ./posts "write me a blog post like these"   # read your work, build, try it on two previews
 /posts write the launch post                           # in Claude Code
 atelier invoke --skill posts "write the launch post"    # or the CLI: written, checked, repaired
 atelier verify --skill posts draft.md --repair           # guard any text

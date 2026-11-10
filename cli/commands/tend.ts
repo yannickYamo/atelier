@@ -154,7 +154,9 @@ export function skillPage(name: string): void {
   const before = store.getPreviousActive(L);
   if (before && store.getSkillVersion(L, before)) console.log(`\n  Undo the last change: atelier rollback --skill ${name} --to ${before}`);
   const receipt = store.getReceipt(L, active); const lost = receipt ? degradedStages(receipt) : [];
-  if (lost.length) console.log(`\n  Part of the build did not finish (${lost.map((x) => x.id).join(', ')}). Finish it: atelier build --name ${name} --persona auto`);
+  if (lost.length) console.log(lost.every((x) => x.id === 'persona')
+    ? `\n  How you write was not read when this was built. Building it again reads it, or: atelier build --name ${name} --persona auto`
+    : `\n  Part of the build did not finish (${lost.map((x) => x.id).join(', ')}). Finish it: atelier build --name ${name} --persona auto`);
   console.log(`\n  Write with it: atelier run "<the task>" --skill ${name}   ·   change it for every piece: atelier fix "<what was wrong>" --always`);
 }
 

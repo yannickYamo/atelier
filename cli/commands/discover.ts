@@ -45,7 +45,7 @@ import { quantile, wordsOf, proseRegions } from '../../core/observers/text.js';
 import * as store from '../../core/state/store.js';
 import { skillNameFrom } from '../../renderers/agent-skill/render.js';
 import { mapLimit } from '../../core/inference/concurrency.js';
-import { GenerationIncomplete, ModelUnavailable } from '../../core/inference/client.js';
+import { GenerationIncomplete, ModelUnavailable, declined } from '../../core/inference/client.js';
 import { sha, die, argv, orchestrated, proposerModel, proposerIsDefault, diagnoserModel, modelFor, providerFor, MODEL_DEFAULT, PROPOSER_DEFAULT, type ProposalMeta, clientFor, clientAndBinding, loadSession, saveSession, sourceProvenance, numericFlag, priceOverrideFor, runFile, flag, DATA, canReach, contextReaderClient, contextReaderModel } from '../runtime.js';
 import { priceFor, ANTHROPIC_PRICING, PRICES_CHECKED_ON } from '../../providers/pricing.js';
 
@@ -101,6 +101,15 @@ export async function onCorpusReader<T>(call: (client: InferenceClient) => Promi
     return await call(clientFor(proposerModel()));
   } catch (e) {
     const target = modelFor('target');
+    // DECLINED: the next model that is not the one that declined, or the same one once more where there is no other.
+    // On a real build the default reader declined the one call that reads how the author writes, and the skill was
+    // built without it.
+    if (declined(e)) {
+      const other = nextDistinctModel(proposerModel(), [diagnoserModel(), target]) ?? proposerModel();
+      const read = await call(clientFor(other));
+      if (other !== proposerModel()) console.log(`(${proposerModel()} declined to read your pieces; ${other} read them.)`);
+      return read;
+    }
     if (discoveryRetry(e, proposerIsDefault()) !== 'UNSERVED' || target === proposerModel()) throw e;
     console.log(`(${proposerModel()}, the default reader, is not served by this backend; using ${target}.)`);
     return call(clientFor(target));
@@ -268,7 +277,7 @@ export async function discover(): Promise<void> {
       : `\n${usedModel}, the default reader, is not served by this backend; reading your work with ${fallbackModel} instead. The record names the model that read it.`);
     usedModel = fallbackModel;
     client = clientFor(fallbackModel);
-    boundAfresh(budget, argv.includes('--max-calls'));
+    boundAfresh(budget, flag('--max-calls') !== undefined);
     chain = await runDiscoveryChain(client, budget, 'skill', openItems, openGoldens, { standardDimensions: [ev.workType] }, usedModel, framings);
   }
 

@@ -62,6 +62,9 @@ const sealedFrom = (): string | null => {
   return first ? first.path.slice(0, first.path.length - first.id.length).replace(/\/$/, '') : null;
 };
 
+/** Asking for any of these asks for the rules read off the pieces: only that route reads them. */
+const RULES_ROUTE_FLAGS = ['--rules', '--voices', '--accept', '--set', '--exemplar', '--reserve', '--held-out', '--work-type'];
+
 export async function newSkill(): Promise<void> {
   // Checked on the first screen, so a mistyped value is refused now and not after the rules are approved. The values
   // themselves are read by the build: give them on the call that builds (`--accept`).
@@ -106,18 +109,19 @@ export async function newSkill(): Promise<void> {
   // model-free build, with several voices kept apart where there are several.
   const thin = fresh && thinCorpus(path);
   const composite = fresh && (keyless || thin) && Boolean(who?.authors);
-  // VOICES READ IN THE WRITING ARE SAID, AND BUILT AS ONE unless asked: the person pointed at one folder.
-  const voicesRead = fresh && who && !who.authors ? who.voices : null;
-  if (voicesRead && voicesRead.groups.length > 1) {
-    console.log(`${voicesRead.groups.length} voices read in how the pieces are written (${voicesRead.groups.map((g) => `${g.pieces.length} piece(s)`).join(', ')}): built as one voice, which is what pointing at one folder asks for.\n  To build the combination of them, each read on its own:  atelier new ${shellWord(corpus)} --voices\n`);
-  }
   // Nothing at build reads with a model when none is set up: the persona and the other readings are left out, and said.
   if (keyless) process.env.ATELIER_BUILD_NO_MODEL = '1';
   // A PERSON AT A TERMINAL WITH A FOLDER AND NO METHOD GETS THE SAME BUILD AS ONE WITH A METHOD: the skill writes from
   // their pieces, how they write is read from them, and the build ends on the guided round (cli/guided.ts). Rules read
   // off the pieces and put to them for approval (the screen below) are asked for by name, --rules; several voices keep
   // their own build. A run already started continues as it was.
-  const direct = fresh && !keyless && !thin && guidedHere() && !who?.authors && !['--rules', '--voices', '--accept', '--set'].some((f) => argv.includes(f));
+  const direct = fresh && !keyless && !thin && guidedHere() && !who?.authors && mode === 'GENERATE' && !declared && !RULES_ROUTE_FLAGS.some((f) => argv.some((a) => a === f || a.startsWith(`${f}=`)));
+  // VOICES READ IN THE WRITING ARE SAID, AND BUILT AS ONE unless asked: the person pointed at one folder.
+  const voicesRead = fresh && who && !who.authors ? who.voices : null;
+  // (the direct build says it itself: cli/commands/method.ts)
+  if (voicesRead && voicesRead.groups.length > 1 && !direct) {
+    console.log(`${voicesRead.groups.length} voices read in how the pieces are written (${voicesRead.groups.map((g) => `${g.pieces.length} piece(s)`).join(', ')}): built as one voice, which is what pointing at one folder asks for.\n  To build the combination of them, each read on its own:  atelier new ${shellWord(corpus)} --voices\n`);
+  }
   if (composite) {
     console.log('No model is set up (ANTHROPIC_API_KEY), so each voice is read for what can be counted in its pieces alone.\n  To have a model read them too, set the key and run this again in a folder of its own.\n');
   } else if (fresh && (keyless || thin || direct)) {

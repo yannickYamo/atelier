@@ -64,6 +64,8 @@ function atelier(args: readonly string[]): { out: string; said: string; ok: bool
 
 /** How a run's one line on a change of model starts (cli/commands/invoke.ts, `checkedBinding`). */
 export const OTHER_MODEL_NOTE = '(written ';
+/** How the line that says the writer declined once and was asked again begins: `atelier run` passes it through too. */
+export const DECLINED_NOTE = '(the model declined';
 
 /** One piece written with the skill: its text and the run it is recorded as; null where nothing could be written. */
 function write(name: string, request: string): { id: string; text: string; note: string | null } | { why: string } {

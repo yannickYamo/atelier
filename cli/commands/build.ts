@@ -170,7 +170,7 @@ async function chooseVoice(L: store.StoreLayout, v: StandardVersion, workForm: W
   // once before setting a key gets the reading on the next build, without knowing a flag. A persona turned off
   // (--persona none) is recorded as off, never as unread, and stays off.
   const lastActive = store.getActive(L); const lastPersona = lastActive ? store.getReceipt(L, lastActive)?.stages.find((x) => x.id === 'persona') : undefined;
-  const unreadForWantOfAModel = Boolean(voice && !voice.persona && !NO_MODEL() && lastPersona && !lastPersona.ran && lastPersona.by === 'floor' && (lastPersona.why ?? '').includes('no model read the pieces'));
+  const unreadForWantOfAModel = Boolean(voice && !voice.persona && !NO_MODEL() && lastPersona && !lastPersona.ran && lastPersona.by === 'floor' && ((lastPersona.why ?? '').includes('no model read the pieces') || lastPersona.degraded === true));
   const derivesPersona = !voice || personaFlag === 'auto' || unreadForWantOfAModel;
   // This run's pieces: the run being built is this skill's, whatever name it is built under.
   const readable = derivesPersona || reselect ? sessionCorpus().map(withoutFrontMatter) : [];
@@ -254,7 +254,7 @@ async function chooseVoice(L: store.StoreLayout, v: StandardVersion, workForm: W
     const whole = unsplitPairs(loadSession().source ?? '');
     if (whole.length) console.log(`(${whole.length} file(s) look like a request and an answer, but were read whole: ${whole.slice(0, 5).join(', ')}${whole.length > 5 ? ', …' : ''}. Start the file with front matter \`request:\`, or \`## Request\` then \`## Answer\`, and build again.)`);
     if (pairs.length >= 3) {
-      const scopeBudget: Budget = { spentUsd: 0, capUsd: numericFlag('--cap', 1.5), maxCalls: 1 };
+      const scopeBudget: Budget = { spentUsd: 0, capUsd: numericFlag('--cap', 1.5), maxCalls: 2 };
       let scope: ScopeProfile;
       try {
         // A build that promised to call no model (`atelier method`) states the counts alone, and says nothing.
@@ -327,7 +327,8 @@ async function chooseVoice(L: store.StoreLayout, v: StandardVersion, workForm: W
   // Three pieces at least: a habit's frequency is read across pieces, and across two there is no "most".
   if (readable.length < 3) return noPersona(`${readable.length} piece(s) can be read here; three or more are needed to say how often a habit holds.`);
   if (NO_MODEL()) return noPersona('no model read the pieces (none is set up, or --no-model); how the author sounds is read by one.');
-  const budget: Budget = { spentUsd: 0, capUsd: numericFlag('--cap', 1.5), maxCalls: 1 };
+  // two calls: the reading, and one more where the model declined the first (onCorpusReader)
+  const budget: Budget = { spentUsd: 0, capUsd: numericFlag('--cap', 1.5), maxCalls: 2 };
   try {
     const persona = reconcilePersona(await onCorpusReader((c) => derivePersona(c, budget, readable)), standardForbids(v));
     // Nothing to say about a persona with no point in it: it adds nothing to the skill.

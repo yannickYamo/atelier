@@ -34,7 +34,7 @@ import { draftHash, appendDecision, type RatificationLedger } from '../../core/r
 import { decide } from '../../core/ratification/authority.js';
 import type { Requirement, CheckQualification } from '../../core/state/canonical-state.js';
 import type { GoldenCase } from '../../core/golden/case.js';
-import { proposalsAcross, countedOffers, tellOffers, grammarOffer, stepsOf, asideOf, outlineOf, shortFormOffers, type MethodProposal } from '../../core/method/standard.js';
+import { proposalsAcross, countedOffers, tellOffers, grammarOffer, stepsOf, asideOf, titleOf, outlineOf, shortFormOffers, type MethodProposal } from '../../core/method/standard.js';
 import { shortFormOptions, type ShortFormOptions } from '../../core/observers/short-form.js';
 import { ensureGrammar } from '../../core/observers/grammar.js';
 import { readCase, corpusFiles, sessionCorpus, corpusHashOf } from '../corpus.js';
@@ -295,6 +295,11 @@ export async function method(): Promise<void> {
   const planSteps = stepsOf(note, keep).map((st, i) => ({ id: String(i + 1), text: st.text, under: st.under }));
   const checksPlan = await stepPlan(planSteps, cases, stepKindsRead, { frozen: frozenNow, rejected });
   const across = proposalsAcross(note, cases, checksPlan, keep);
+  // A WRITTEN CHECK THAT FAILED THE AUTHOR'S OWN PIECES WAS DROPPED (core/method/standard.ts): the receipt's count and the
+  // checks frozen for the next build say so too, so it is neither counted as held nor kept as it was.
+  const droppedChecks = new Set(across.proposals.filter((p) => p.origin === 'STATED' && p.measurement === null && checksPlan?.get(p.statement)?.measurement?.observer === 'CHECK').map((p) => p.statement));
+  const planKept = checksPlan && droppedChecks.size ? new Map([...checksPlan].map(([text, c]) => (droppedChecks.has(text) ? [text, { how: 'judgement' as const, measurement: null, by: c.by, quote: c.quote, means: 'a written check failed your own pieces and was dropped: yours to judge', ...(c.kind ? { kind: c.kind } : {}) }] as const : [text, c] as const))) : checksPlan;
+  if (droppedChecks.size && argv.includes('--report')) console.log(`(${droppedChecks.size} written check(s) failed your own pieces and were dropped; those steps are yours to judge.)`);
   // A WRITTEN CHECK EARNS ITS SAY (core/method/mutants.ts): it must pass every example and catch the edits that break
   // only its step; until then it is kept, shown with what it caught, and enforced nowhere. Its standing is said beside it.
   const read = { ...across, proposals: across.proposals.map((p) => (p.qualification ? { ...p, onExample: describeQualification(p.qualification) } : p)) };
@@ -420,13 +425,13 @@ export async function method(): Promise<void> {
   // checked, which written check failed and why, what was settled; kept by the note's hash, so a plain rebuild says the same.
   // kept for the build's later stages and the compiled path, which read the method's steps without a model
   store.setMethodKeep(LN, note, keep);
-  if (checksPlan) store.putStepLedger(LN, { methodHash: sha(note), reader: READER_KEY, ...ledgerOf(planSteps, checksPlan, conflicts) });
+  if (checksPlan) store.putStepLedger(LN, { methodHash: sha(note), reader: READER_KEY, ...ledgerOf(planSteps, planKept ?? checksPlan, conflicts) });
   const said: string[] = []; const log = console.log;
   if (!whole) console.log = (...a: unknown[]) => { said.push(a.map(String).join(' ')); };
   try { ratifyClose(); await build(name); } catch (e) { console.log = log; for (const l of said) console.log(l); throw e; } finally { console.log = log; }
   // THE CHECKS THIS BUILD RATIFIED ARE FROZEN (core/method/freeze.ts): the next build keeps each while its step and the
   // examples are unchanged.
-  if (checksPlan) store.putFrozenChecks(LN, toFreeze(planSteps, Object.fromEntries(planSteps.flatMap((st) => { const c = checksPlan.get(st.text); return c ? [[st.id, c]] : []; })), examplesKey(cases), stepKindsRead.byModel, rejected));
+  if (checksPlan) store.putFrozenChecks(LN, toFreeze(planSteps, Object.fromEntries(planSteps.flatMap((st) => { const c = (planKept ?? checksPlan).get(st.text); return c ? [[st.id, c]] : []; })), examplesKey(cases), stepKindsRead.byModel, rejected));
   // THE UNITS, BESIDE THE STANDARD THEY WERE READ FROM, never inside it: keyed by requirement id under the standard's
   // hash, so a reading moves no standard and a rebuild under the same standard finds them (core/state/store.ts).
   if (units.size) {
@@ -508,7 +513,11 @@ async function asideKept(note: string): Promise<Set<string> | null> {
   const input = { steps: aside.map((st, i) => ({ id: String(i + 1), text: st.text, under: st.under })) };
   const d = await readContext(METHOD_UNITS, input, contextReaderClient(), contextReaderModel(), { spentUsd: 0, capUsd: 0.1, maxCalls: 1 });
   if (d.by !== 'model') return null;
-  const kept = new Set(input.steps.filter((st) => d.value[st.id]?.kind === 'instruction').map((st) => st.text));
+  // THE TITLE-SHAPED LINE IS A STEP ONLY ON THE READING'S OWN WORD: a line it could not ground falls to the floor
+  // (./decision-units.ts, `unitFloor`), which calls everything an instruction, and a note's title must not become a
+  // step that way. A sentence beside the list is kept on either, as it was.
+  const title = titleOf(note);
+  const kept = new Set(input.steps.filter((st) => d.value[st.id]?.kind === 'instruction' && (st.text !== title || d.value[st.id]?.by === 'model')).map((st) => st.text));
   if (argv.includes('--report')) console.log(`(sentences beside the list, and a title-shaped first line, read as instructions and kept as steps: ${kept.size} of ${aside.length}.)`);
   return kept;
 }

@@ -720,6 +720,10 @@ export interface DirectRecord {
   /** who chose them: a reading of the request (`model`), or the shared-words floor (`floor`), and why the floor */
   readonly route: { readonly by: 'code' | 'model' | 'floor'; readonly reader: string; readonly kind: string | null; readonly why?: string };
   readonly effort: string;
+  /** the range of the author's shown pieces, in words, told to the writer as a guide where the request stated no length */
+  readonly lengthGuide?: { readonly from: number; readonly to: number };
+  /** the writer was told what the person said the work is (the experiment ATELIER_CARD_TO_WRITER=1) */
+  readonly cardToWriter?: true;
   /** whether the self-review ran and its revision was kept; why not, when it was not */
   readonly review: { readonly ran: boolean; readonly why?: string };
   /** how many of the person's corrections the review was shown */

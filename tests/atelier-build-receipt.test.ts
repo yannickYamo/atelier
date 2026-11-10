@@ -127,7 +127,7 @@ describe('the receipt of a method build', () => {
     const receipt = store.getReceipt(L(data), store.getActive(L(data))!)!;
     expect(degradedStages(receipt).map((s) => s.id)).toEqual(['persona']);
     expect(receipt.stages.find((s) => s.id === 'persona')?.why).toMatch(/^the call failed: /);
-    expect(receipt.stages.find((s) => s.id === 'persona')).toMatchObject({ by: 'floor', calls: 1 });
+    expect(receipt.stages.find((s) => s.id === 'persona')).toMatchObject({ by: 'floor', calls: 2 }); // the reading, and one more ask after the model declined the first
     const st = run('status', '--skill', 'code-review', '--report');
     expect(st.out).toMatch(/built without: persona \(the call failed.*\)\. Repair: atelier build --name code-review --persona auto/);
   }, 120_000);
