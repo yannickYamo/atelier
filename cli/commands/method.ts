@@ -18,6 +18,7 @@ import { basename, resolve } from 'node:path';
 import { DATA, argv, die, flag, positional, positionals, loadSession, saveSession, archiveSession, authoredIdAllocator, runFile, sha, canReach, contextReaderClient, contextReaderModel } from '../runtime.js';
 import * as store from '../../core/state/store.js';
 import { resetStages } from '../stages.js';
+import { guided, guidedHere } from '../guided.js';
 import { METHOD_UNITS, unitFloor, describeUnit, type DecisionUnit } from '../../core/method/decision-units.js';
 import { STEP_CHECK, STEP_CHECK_REPAIR, planOf, stepCheckInput, heldByPolarity, floorFor, ledgerOf, type StepPlan, type StepToCheck, type StepCheck, type ExampleCase } from '../../core/method/step-check.js';
 import { measure } from '../../core/observers/registry.js';
@@ -442,8 +443,11 @@ export async function method(): Promise<void> {
   const plan = planFor({ requirements: decided }); const against = plan.readsMaterial;
   // What the skill will do with each rule, for whoever asks for the whole account.
   if (whole) { console.log('\nWhat a run does with each rule:'); for (const l of describePlan(plan)) console.log(l); }
-  console.log(`\nYour skill "${name}" is ready.`);
+  // A PERSON AT A TERMINAL IS SHOWN IT WORKING (cli/guided.ts): what was understood, two pieces, one round of changes.
+  const person = guidedHere();
+  console.log(`\nYour skill "${name}" is ${person ? 'built' : 'ready'}.`);
   if (disputed.length && !confirmed) console.log(`  ${disputed.length} of your steps ${disputed.length === 1 ? 'is' : 'are'} not what your own examples do (marked ! above). ${disputed.length === 1 ? 'It is' : 'They are'} checked and shown on every run, and block${disputed.length === 1 ? 's' : ''} nothing until you say so:\n    keep ${disputed.length === 1 ? 'it' : 'them'} as written: atelier ${typedWithout(['--yes'])} --name ${name} --yes   ·   or change the method and build again`);
+  if (person) { await guided(name); return; }
   console.log(`  Check a text: atelier verify --skill ${name} <file>   ·   Write with it: atelier run "<the task>"${against ? ' --with <file>' : ''}   (or /${name} in Claude Code)`);
 }
 
