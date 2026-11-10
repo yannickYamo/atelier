@@ -325,7 +325,9 @@ export async function method(): Promise<void> {
   if (who?.readAsOne) console.log(`${who.readAsOne}\n`);
   else if (who?.authors) console.log(`${cases.length} piece(s) by ${who.authors.names.length} authors (${howSaid(who.authors.how)}): a build from a method reads them as one voice.\n`);
   if (voices && voices.groups.length > 1) console.log(`${voices.groups.length} voices read in how the pieces are written (${voices.groups.map((g) => `${g.pieces.length} piece(s)`).join(', ')}): built as one voice, which is what pointing at one folder asks for.\n  To build the combination of them, each read on its own:  atelier new ${goldenPath} --voices\n`);
-  for (const line of whole ? describeMethod(proposals, example.caseClass) : shortScreen(proposals)) console.log(line);
+  // a person shown the skill at work reads what was understood there (cli/guided.ts), in their words: here, one line
+  if (!whole && guidedHere() && !argv.includes('--review')) console.log(notePath === null ? 'Reading your pieces…' : 'Reading your pieces and your method…');
+  else for (const line of whole ? describeMethod(proposals, example.caseClass) : shortScreen(proposals)) console.log(line);
   // The limits of a corpus of short pieces: one line on the screen, the whole account with --report.
   if (short.brief && !guidedHere()) { console.log(''); for (const line of whole ? short.limits : [short.brief]) console.log(`Short form: ${line}`); }
 
@@ -446,9 +448,14 @@ export async function method(): Promise<void> {
   if (whole) { console.log('\nWhat a run does with each rule:'); for (const l of describePlan(plan)) console.log(l); }
   // A PERSON AT A TERMINAL IS SHOWN IT WORKING (cli/guided.ts): what was understood, two pieces, one round of changes.
   const person = guidedHere();
-  console.log(`\nYour skill "${name}" is ${person ? 'built' : 'ready'}.`);
+  if (!person) console.log(`\nYour skill "${name}" is ready.`);
+  if (person) {
+    const stated = proposals.filter((p) => p.origin === 'STATED');
+    await guided(name, { steps: stated.map((p) => p.statement), disputed: confirmed ? [] : disputed.map((p) => p.statement),
+      confirm: `atelier ${typedWithout(['--yes'])} --name ${name} --yes` });
+    return;
+  }
   if (disputed.length && !confirmed) console.log(`  ${disputed.length} of your steps ${disputed.length === 1 ? 'is' : 'are'} not what your own examples do (marked ! above). ${disputed.length === 1 ? 'It is' : 'They are'} checked and shown on every run, and block${disputed.length === 1 ? 's' : ''} nothing until you say so:\n    keep ${disputed.length === 1 ? 'it' : 'them'} as written: atelier ${typedWithout(['--yes'])} --name ${name} --yes   ·   or change the method and build again`);
-  if (person) { await guided(name); return; }
   console.log(`  Check a text: atelier verify --skill ${name} <file>   ·   Write with it: atelier run "<the task>"${against ? ' --with <file>' : ''}   (or /${name} in Claude Code)`);
 }
 

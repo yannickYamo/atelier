@@ -119,6 +119,7 @@ export async function newSkill(): Promise<void> {
     console.log(keyless ? 'No model is set up (ANTHROPIC_API_KEY), so the skill is built from what can be counted in your examples, with no rules read by a model and none for you to approve.\n  To have a model read them too, set the key and run this again in a folder of its own.\n'
       // NEVER A REFUSAL FOR FEW EXAMPLES. Two or three pieces cannot have rules read off some and checked on the others,
       // so none is proposed as if checked: the pieces themselves are served, with what can be counted in them.
+      : guidedHere() ? ((n: number): string => `With ${n} piece${n === 1 ? '' : 's'}, I write from the pieces themselves. Give me four or more and I also read your rules from them.\n`)(examplePieces(corpusFiles(path).map((f) => ({ id: f, text: readCorpusText(f) }))).length)
       : ((n: number): string => `With ${n} example(s), rules read by a model could not be checked on pieces it had not read, so none is proposed: your examples are served to the writer whole, with what can be counted in them${argv.includes('--method') ? ' and your method' : ''}${n >= 3 ? ', and how you sound, read from them' : ''}. Add pieces (four or more) to have rules read and checked.\n`)(examplePieces(corpusFiles(path).map((f) => ({ id: f, text: readCorpusText(f) }))).length));
     if (intent && !argv.includes('--for')) argv.push('--for', intent);
     await method();

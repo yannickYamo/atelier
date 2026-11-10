@@ -168,12 +168,12 @@ describeWithEngine('through the binary: a run keeps the author\'s words, and its
     await fetch(`http://127.0.0.1:${port}/__set`, { method: 'POST', body: JSON.stringify({ byTool: { emit_piece: { piece: PIECE } } }) });
     let out: string;
     try {
-      out = execFileSync('sh', ['-c', `node "${CLI}" run 'a short launch note' --skill us --allow-unsourced --provider openai-compatible --base-url http://127.0.0.1:${port} --model scripted 2>&1`], { encoding: 'utf8', cwd: proj, env });
+      out = execFileSync('sh', ['-c', `node "${CLI}" run 'a short launch note' --skill us --allow-unsourced --report --provider openai-compatible --base-url http://127.0.0.1:${port} --model scripted 2>&1`], { encoding: 'utf8', cwd: proj, env });
     } catch (e) { out = (e as { stdout: string }).stdout; }
     for (const w of ['vite', 'cosy room', 'third storey', 'Just yeet']) expect(out, w).toContain(w);
     for (const w of ['vote', 'cost room', 'third story', 'Just yet']) expect(out, w).not.toContain(w);
     const flat = out.replace(/\s+/g, ' ');
-    expect(flat).toMatch(/To check: listed for you to check: \d+ possible slips?: /);
+    expect(flat).toMatch(/No mechanical errors: spelling, agreement, punctuation\. listed for you to check: \d+ possible slips?: /);
     expect(flat).not.toMatch(/no mechanical error/);
   }, 240_000);
 });

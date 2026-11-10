@@ -159,7 +159,7 @@ describeWithEngine('through the binary', () => {
     expect(out).toContain(piece);
     expect(out).not.toMatch(/Every requirement was read in full and held/);
     expect(out).not.toMatch(/BLOCKED/);
-    expect(out.replace(/\s+/g, ' ')).toMatch(/listed for you to check: \d+ possible slips?: "are" \(subject–verb agreement: "are" → "is"\)/);
+    expect(out.replace(/\s+/g, ' ')).toMatch(/Possible slip: "are" \(subject–verb agreement: "are" → "is"\)/);
     await script(piece);
     const fixedOut = all('invoke', '--pipeline', 'legacy', 'a short note', ...model(), '--fix-grammar', '--json');
     const shown = JSON.parse(fixedOut.slice(fixedOut.indexOf('{'))) as { output: string; invocationId: string };
@@ -182,7 +182,7 @@ describeWithEngine('through the binary', () => {
     const out = all('run', '--pipeline', 'direct', 'a short note', ...model());
     expect(out).toContain(piece);
     expect(out).not.toMatch(/Every requirement was read in full and held/);
-    expect(out.replace(/\s+/g, ' ')).toMatch(/listed for you to check: 1 possible slip: "are" \(subject–verb agreement: "are" → "is"\)/);
+    expect(out.replace(/\s+/g, ' ')).toMatch(/Possible slip: "are" \(subject–verb agreement: "are" → "is"\)/);
     await script(piece);
     const fixedOut = all('invoke', '--pipeline', 'direct', 'a short note', ...model(), '--fix-grammar', '--json');
     const shown = JSON.parse(fixedOut.slice(fixedOut.indexOf('{'))) as { output: string; invocationId: string };

@@ -72,8 +72,10 @@ describe('the first ten minutes', () => {
     expect(kept.length).toBe(2); expect(kept.some((k) => k.text.includes('Pick by what you would miss.'))).toBe(true);
     expect(built.out).toMatch(/"posts" is ready/);
     // the guided part speaks in the person's words
-    const guidedPart = built.out.slice(built.out.indexOf('What I understood'));
-    expect(INTERNAL.filter((w) => guidedPart.includes(w))).toEqual([]);
+    // the whole build speaks in the person's words: their method as they wrote it, and none of the machinery
+    expect(INTERNAL.filter((w) => built.out.includes(w))).toEqual([]);
+    expect(built.out).toContain('Your method, which every piece follows:'); expect(built.out).toContain('- Close on one short plain sentence.');
+    for (const hidden of ['You judge these yourself', 'never blocking', '--report', 'could not be read']) expect(built.out, hidden).not.toContain(hidden);
 
     // one more command writes with it, with nobody asked anything
     await setBackend({ byTool: { __plain: [DRAFT, REVIEWED] } });
@@ -83,6 +85,19 @@ describe('the first ten minutes', () => {
     // beside the piece: what the checks found in one sentence and what to do if it is not right, in plain words
     expect(ran.out).toMatch(/^Checked: /m); expect(ran.out).toContain('Not right? atelier fix');
     expect(ran.out).not.toContain('── Evaluation');
+    expect(ran.out).not.toMatch(/left for you to read|possible slip|small reader/i);
+
+    // saying what was wrong: the request is named in the person's words, and one line says how to make it a habit
+    await setBackend({ byTool: { __plain: [DRAFT, REVIEWED], emit_piece: { piece: FIXED } } });
+    const fixed = typed('', 'fix', 'the close is too long');
+    expect(fixed.out).toContain('About your last run of /posts: "Compare Bear and Craft for my notes."');
+    expect(fixed.out).toContain('Pick by what you would miss.');
+    expect(fixed.out).not.toMatch(/--evaluation|small reader/);
+
+    // every skill on one line, and nothing of the build's own state
+    const listed = typed('', 'status');
+    expect(listed.out).toContain('posts  ·  a blog post; read by someone choosing a notes app');
+    expect(listed.out).not.toMatch(/state BUILT|proposals \d/);
 
     // the same skill on another model: the piece is written, and the run is never refused for the change
     const r2 = spawnSync('node', [CLI, 'run', 'Compare Bear and Craft once more.', '--provider', 'openai-compatible', '--base-url', url(), '--model', 'scripted-next'], { encoding: 'utf8', cwd: proj, env, input: '' });

@@ -85,23 +85,44 @@ function sampleRequests(L: store.StoreLayout, first: string): string[] {
  * THE GUIDED END OF A BUILD. Never fails the build: the skill is built before this starts, and anything that cannot be
  * done here is said in one line and left.
  */
-export async function guided(name: string): Promise<void> {
+export interface Understood {
+  /** the steps of the person's method, in their words */
+  readonly steps: readonly string[];
+  /** steps their own pieces do not do, in their words */
+  readonly disputed: readonly string[];
+  /** the command that makes the disputed steps rules */
+  readonly confirm?: string;
+}
+
+/** A list a person reads at a glance: the first few, and how many more. */
+const few = (xs: readonly string[], most: number): string[] => [...xs.slice(0, most).map((x) => `    - ${x.replace(/\s+/g, ' ').trim()}`), ...(xs.length > most ? [`    and ${xs.length - most} more`] : [])];
+
+export async function guided(name: string, seen: Understood = { steps: [], disputed: [] }): Promise<void> {
   const L = { root: DATA, skillName: name };
   const io = lines();
   try {
     // 1. WHAT WAS UNDERSTOOD, in the person's words, from what the build kept.
     let card: PurposeCard | null = store.getCard(L);
     const voice = store.getVoice(L);
+    // Only what was read is said: a thing the pieces did not give is asked next, never reported as a failure.
     console.log('\nWhat I understood');
-    console.log(`  ${card && cardLine(card) ? cardLine(card) : 'What this work is for could not be read from your pieces.'}`);
-    if (voice?.pieces?.length) console.log(`  Written from ${voice.corpusPieces ?? voice.pieces.length} of your pieces${voice.lengthSpan ? `, which run ${voice.lengthSpan[0]} to ${voice.lengthSpan[1]} words` : ''}.`);
+    if (voice?.pieces?.length) console.log(`  Your pieces: ${voice.corpusPieces ?? voice.pieces.length}${voice.lengthSpan ? `, ${voice.lengthSpan[0]} to ${voice.lengthSpan[1]} words each` : ''}.`);
+    if (card && cardLine(card)) console.log(`  ${cardLine(card)}.`);
+    const sound = (voice?.persona?.points ?? []).map((pt) => pt.description).filter(Boolean);
+    if (sound.length) { console.log('  How you write:'); for (const l of few(sound, 4)) console.log(l); }
+    if (seen.steps.length) { console.log(`  Your method, which every piece follows:`); for (const l of few(seen.steps, 6)) console.log(l); }
+    if (seen.disputed.length) {
+      console.log(`  ${seen.disputed.length === 1 ? 'One step of your method is' : `${seen.disputed.length} steps of your method are`} not what your own pieces do. The writer is told ${seen.disputed.length === 1 ? 'it' : 'them'}, and no piece is held back for ${seen.disputed.length === 1 ? 'it' : 'them'}:`);
+      for (const l of few(seen.disputed, 3)) console.log(l);
+      if (seen.confirm) console.log(`    To hold every piece to ${seen.disputed.length === 1 ? 'it' : 'them'}: ${seen.confirm}`);
+    }
 
     // 2. THE FEW THINGS ONLY THE PERSON CAN SAY: each field of the card nothing grounded. Enter leaves it unsaid.
     const open = CARD_ASKS.filter((a) => !card?.[a.field]).slice(0, MAX_BUILD_QUESTIONS);
-    if (open.length) console.log(`\n${open.length === 1 ? 'One question' : `${open.length} questions`} before I write (enter skips):`);
+    if (open.length) console.log(`\n${open.length === 1 ? 'One question' : `${open.length} questions`} before I write, so the pieces fit their reader (enter skips):`);
     const said: string[] = [];
     for (const a of open) { const v = (await io.ask(`  ${a.ask} `)).trim(); if (v) said.push(`${a.field}=${v.replace(/;/g, ',')}`); }
-    if (said.length) { card = amendCard(card, said.join('; ')); store.setCard(L, card); console.log(`  Kept: ${cardLine(card)}.`); }
+    if (said.length) { card = amendCard(card, said.join('; ')); store.setCard(L, card); console.log(`  Got it. ${cardLine(card)}.`); }
 
     // 3. TWO PIECES, written as every later run writes them.
     const first = (await io.ask(`\nA first request to try it on (enter: I choose from your pieces): `)).trim();

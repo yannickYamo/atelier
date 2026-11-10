@@ -155,7 +155,7 @@ function thisOutputAgain(L: store.StoreLayout, name: string, inv: InvocationReco
   const complaints = [...(last.correcting?.complaints ?? []).filter((c) => c !== complaint), complaint];
   const { args, notes } = replayOf(name, last, complaints, settingsTyped(complaint), store.getActive(L));
   for (const n of notes) console.log(`(${n})`);
-  console.log('Changing what you named in this piece and keeping the rest word for word (where it is about the whole piece, it is written again). Your skill is not changed.\n');
+  console.log('Changing what you named in this piece; the rest stays word for word.\n');
   // IN PLACE (cli/fix-in-place.ts): the version of the piece to change, this complaint, and the piece first complained of,
   // whose earlier fixes' removals stay out.
   const r = spawnSync(process.execPath, [...process.execArgv, process.argv[1], ...args, ...fixInPlaceArgs(last, inv.invocationId, complaint)], { stdio: 'inherit' });
@@ -166,8 +166,7 @@ function thisOutputAgain(L: store.StoreLayout, name: string, inv: InvocationReco
     const now = readJson<LastRun>(pointer, { what: 'the last invocation', requireKeys: ['invocationId', 'skillName'] });
     if (now.invocationId !== last.invocationId) writeAtomic(pointer, JSON.stringify({ ...now, asked: last.asked, with: last.with ?? [], correcting: { of: inv.invocationId, complaints } }, null, 1));
   }
-  console.log(`\nOnly this piece was written again. If every run should do this: atelier fix ${JSON.stringify(complaint)} --always`);
-  console.log(`If the evaluation was wrong about your work (it blocked what was right, or passed what was not): atelier fix ${JSON.stringify(complaint)} --evaluation`);
+  console.log(`\nOnly this piece changed. To write every piece this way from now on: atelier fix ${JSON.stringify(complaint)} --always`);
   process.exitCode = r.status ?? 1;
 }
 
@@ -232,7 +231,9 @@ export async function fix(): Promise<void> {
   // A RUN MARKED AS A TEST IS NOT SOMETHING TO FIX THE SKILL ON. It is a benchmark answer or a held-back case: a
   // complaint about it, mined later, would teach the skill from the work it is tested on.
   if (inv.settings?.flags.testRun) die(`run ${invId} was a test (a benchmark answer, or a held-back case run by atelier reproduce). A skill is not corrected on what it is tested with: say what was wrong about a run of your own work.`);
-  console.log(`About your last run of /${name}: "${inv.input.slice(0, 70)}${inv.input.length > 70 ? '…' : ''}"`);
+  // what the person asked for, in their words; a run made in a host kept only what the skill was given
+  const askedFor = (lastRun?.asked?.trim() ? lastRun.asked : inv.input).replace(/\s+/g, ' ').trim();
+  console.log(`About your last run of /${name}: "${askedFor.slice(0, 70)}${askedFor.length > 70 ? '…' : ''}"`);
   console.log(`You said: "${complaint}"\n`);
 
   // ── WHERE THE COMPLAINT GOES (three ways, and the first is the default) ──────────────────────

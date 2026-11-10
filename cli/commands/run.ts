@@ -13,6 +13,7 @@ import { execFile, spawnSync } from 'node:child_process';
 import { DATA, VALUED_OPTIONS, argv, die, flag, loadSession, boundMaterial } from '../runtime.js';
 import * as store from '../../core/state/store.js';
 import { renderRunCard, stateLine, type RunCard } from '../../core/eval/run-card.js';
+import type { EvaluationRecord } from '../../core/eval/record.js';
 import { GRAMMAR_LISTED } from '../../core/observers/grammar.js';
 import { planFor } from '../../core/plan/execution-plan.js';
 import type { EvalSummary } from '../../core/eval/summary.js';
@@ -125,6 +126,19 @@ function skillFor(named: string | null): string {
 /** Does the skill check the work against material, with none given? Said before the draft, and never a refusal. */
 const needsMaterial = (std: Pick<StandardVersion, 'requirements'>, L: store.StoreLayout): boolean => planFor(std).readsMaterial && !store.getMaterial(L).length && !boundMaterial().length;
 
+/**
+ * WHAT THE CHECKS FOUND, IN ONE SENTENCE A PERSON CAN READ WITHOUT KNOWING THE MACHINERY. It never says more than was
+ * observed: rules a check measured are counted as measured, and a rule that is a matter of judgement is said to be one,
+ * given to the writer, not counted as verified and not handed to the reader as work.
+ */
+function shortLine(r: EvaluationRecord): string {
+  if (r.state === 'VERIFIED') return 'every rule was measured and held.';
+  const required = r.entries.filter((e) => e.required && e.result !== 'NOT_APPLICABLE' && e.reason !== 'LISTED_FOR_YOU');
+  const held = required.filter((e) => e.result === 'PASS').length; const open = required.length - held;
+  if (!open) return stateLine(r);
+  return `nothing broke your rules (${held} measured; ${open} ${open === 1 ? 'is a judgement call' : 'are judgement calls'} the writer was given in your words).`;
+}
+
 export async function run(): Promise<void> {
   const typed = sortArgs(argv.slice(1));
   const name = skillFor(typed.skill ?? flag('--skill') ?? null);
@@ -163,7 +177,7 @@ export async function run(): Promise<void> {
   // BESIDE THE WORK, NEVER IN IT: what the run decided for the person and what it was not given, with what to add (a fix in
   // place says its own, in its lines above)
   if (!result.fix) {
-    const beside = [...inferredLines(result.inferred ?? []), ...(result.ownWords && !result.ownWords.checked && result.ownWords.why ? [`Not read for sentences about the piece's own making: ${result.ownWords.why}.`] : [])];
+    const beside = [...inferredLines(result.inferred ?? []), ...(typed.report && result.ownWords && !result.ownWords.checked && result.ownWords.why ? [`Not read for sentences about the piece's own making: ${result.ownWords.why}.`] : [])];
     if (beside.length) console.log(`${beside.join('\n')}\n`);
     const open = openQuestionLines(result);
     if (open.length) console.log(`${open.join('\n')}\n`);
@@ -182,12 +196,16 @@ export async function run(): Promise<void> {
     // WHAT WAS DONE WITH IT (core/eval/consequence.ts), and where it waits when it went to a person.
     if (delivery) console.log(`\n${deliveryLine(delivery, result.eval?.record?.state)}${delivery.decision === 'PERSON' ? `\nSent to a person: it waits in atelier report --pending; rule on it with atelier rate ${result.invocationId} yes|no [--rule <id>].` : ''}`);
   } else {
-    console.log(`Checked: ${card ? stateLine(card.record) : ''}`);
+    console.log(`Checked: ${card ? shortLine(card.record) : ''}`);
     // What a check found and left to the person (a possible slip, a specific to confirm) is said here, in full: the
     // short form never hides something that is theirs to read.
     for (const e of card?.record.entries ?? []) {
       const ev = e.observation.evidence ?? '';
-      if (e.result !== 'PASS' && e.result !== 'NOT_APPLICABLE' && ev && (e.reason === 'LISTED_FOR_YOU' || ev.startsWith(GRAMMAR_LISTED) || ev.includes('listed to check: '))) console.log(`  To check: ${ev}`);
+      if (e.result === 'PASS' || e.result === 'NOT_APPLICABLE' || !ev) continue;
+      // Of the grammar checker's list, only a slip it can name the correction of is said here; a name, a heading or a
+      // word it merely does not know stays in the full account (--report), where every finding is listed.
+      if (ev.startsWith(GRAMMAR_LISTED) || ev.includes('listed to check: ')) { for (const m of ev.match(/"[^"]*" \([^()]*→[^()]*\)/g) ?? []) console.log(`  Possible slip: ${m}`); continue; }
+      if (e.reason === 'LISTED_FOR_YOU') console.log(`  To check: ${ev}`);
     }
     console.log(`Not right? atelier fix "<what was wrong>"   ·   every check, rule by rule: atelier report ${result.invocationId}`);
   }

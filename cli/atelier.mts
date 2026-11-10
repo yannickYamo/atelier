@@ -267,11 +267,15 @@ const main = async (): Promise<void> => {
           const L = { root: DATA, skillName: n }; const active = store.getActive(L);
           if (!active) return [];
           const card = store.getCard(L); const said = card ? cardLine(card) : '';
-          return [`  ${n}  ·  ${said ? said : store.getSkillVersion(L, active)?.description ?? ''}`];
+          return [`  ${n}  ·  ${said ? said.replace(/^This work: /, '') : store.getSkillVersion(L, active)?.description ?? ''}`];
         } catch { return [`  ${n}  ·  (could not be read)`]; }
       });
       if (built.length) console.log(`Your skills (write with one: atelier run "<the task>" --skill <name>):\n${built.join('\n')}\n`);
       const s = loadSession();
+      // The build in flight in this project is said while there is one; once skills are built and nothing waits, the
+      // list above is the whole answer (--report says the rest).
+      const quiet = built.length > 0 && s.run.state === 'BUILT' && !argv.includes('--report');
+      if (quiet) return;
       console.log(`state ${s.run.state}  skill ${s.skillName ?? '(none)'}  proposals ${s.proposals.length}`
         + `  decided ${s.decided.length}  enrolled [${s.run.enrolments.map((e) => e.study).join(', ')}]`);
       console.log(`project ${projectDir()}`);
