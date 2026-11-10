@@ -57,7 +57,7 @@ describe('--help never runs the command', () => {
     expect(out).not.toMatch(/^EXIT:/);
     const lines = out.split('\n');
     expect(lines[0]).toMatch(/^atelier: /);
-    expect(lines.slice(2, 5).map((l) => /atelier ([a-z]+)/.exec(l)?.[1])).toEqual(['new', 'verify', 'setup']);
+    expect(lines.slice(2, 5).map((l) => /atelier ([a-z]+)/.exec(l)?.[1])).toEqual(['new', 'run', 'fix']);
     // AGENTS.md: "`atelier lab` lists everything else".
     const lab = run(data, proj, 'lab');
     const every = new Set([...lab.matchAll(/[a-z][a-z-]+/g)].map((m) => m[0]));

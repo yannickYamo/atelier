@@ -251,11 +251,27 @@ is built and tested offline; it has not yet looked after a live skill for weeks.
 
 ```bash
 atelier new ./posts --method method.md       # build: your finished work, and a note of how you do it
-atelier run "write the launch post" --with notes.md     # run: the work, then its evaluation, rule by rule
+atelier run "write the launch post" --with notes.md     # run: the work, then what the checks found, in one line
 atelier fix "the opening buried the news"    # react: what was wrong, in your own words; that piece is written again
 ```
 
-Under the work a run prints its evaluation, in three layers that are kept apart because they are different
+At a terminal, `atelier new` does not end at "built". It says what it understood from your pieces, asks the few
+things only you can say (what the pieces are, who reads them, what for; at most five questions, enter skips), writes
+two pieces with the new skill, and takes one round of "what would you change" on each. What you accept is kept, and
+every later piece is written from it first. With `--yes`, `--json` or no terminal, it builds and asks nothing.
+
+Under the work a run prints two lines: what the checks found, in one sentence, and what to type if the piece is not
+right. Anything a check found and left for you (a possible slip, a specific to confirm) is listed there in full. A
+piece that is held back shows its whole evaluation at once, and `--report` or `atelier report <run>` shows it for
+any run.
+
+A skill is not tied to the model it was built on. Run it on another model and the piece is written, with one line
+saying which model wrote it; `atelier reproduce` measures how the skill holds there.
+
+`atelier status` lists every skill built on this machine, one line each. One skill per voice: build each client or
+author under its own `--name`, and write with `--skill <name>`.
+
+The whole evaluation is in three layers that are kept apart because they are different
 promises: **your rules**, in your words; **this request** (a length it asked for); and **evidence** (every specific
 traced to what you supplied, no passage lifted from one of your examples). Below them, the habits seen in your
 examples, which are counted and block nothing, and what was done to the draft. Each line carries one of four marks,

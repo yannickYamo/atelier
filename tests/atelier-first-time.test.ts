@@ -26,8 +26,9 @@ beforeAll(async () => {
 });
 afterAll(() => { backend.kill(); });
 
-const POST = (n: number): string => `# Obsidian against Bear, round ${n}\n\nI ran both for a month on the same notes. Obsidian keeps plain files; Bear keeps a database you cannot open. Sync on Bear was faster, export on Obsidian was honest.\n\n## Where each one wins\n\nBear wins on the phone. Obsidian wins the day you leave. That is the whole trade.\n`;
-const ESSAY = '# Why I stopped chasing tools\n\nFor years I changed notes apps every spring, as if the next one would make me think better. It never did. The habit was the problem, and the habit was mine.\n\nWhat changed was small: I stopped reading launch posts. The notes stayed where they were, and so did I.\n';
+const BODY = 'I ran both for a month on the same notes, every working day, and wrote down what broke. Obsidian keeps plain files in a folder I can open with anything; Bear keeps a database I cannot open without Bear. Sync on Bear was faster every single morning, and export on Obsidian was honest about what it gave back. I moved four hundred notes in each direction to see what survived the trip, and the answer was not the one I expected when I started.';
+const POST = (n: number): string => `# Obsidian against Bear, round ${n}\n\n${BODY}\n\n## Where each one wins\n\n${BODY}\n\nBear wins on the phone. Obsidian wins the day you leave. That is the whole trade.\n\n## What I would pick\n\n${BODY}\n\nPick the one you can walk away from.\n`;
+const ESSAY = `# Why I stopped chasing tools\n\nFor years I changed notes apps every spring, as if the next one would make me think better. It never did. The habit was the problem, and the habit was mine.\n\n${BODY}\n\nWhat changed was small: I stopped reading launch posts. The notes stayed where they were, and so did I.\n\n${BODY}\n`;
 const METHOD = 'How I write a post\n\n1. Open on what I did, not on the industry.\n2. Say where each side wins.\n3. Close on one short plain sentence.\n';
 const DRAFT = '# Logseq against Craft\n\nA first draft.';
 const FIXED = '# Logseq against Craft\n\nI ran both for a week on the same notes. Logseq is local-first and free. Craft is paid and syncs through its own cloud. Pick by what you would miss.';
@@ -53,7 +54,6 @@ describe('the first ten minutes', () => {
     const lines = ['a blog post', 'someone choosing a notes app', '', 'Compare Logseq and Craft for my notes.', 'Make the close shorter.', ''];
     const built = typed(`${lines.join('\n')}\n`, 'new', 'posts', 'write posts in my voice', '--method', 'method.md', '--name', 'posts');
 
-    if (process.env.SHOW) writeFileSync(process.env.SHOW, built.out);
     // no stop: the one command ends with a skill that is active
     expect(built.code, built.out).toBe(0);
     expect(store.getActive({ root: data, skillName: 'posts' })).toBeTruthy();
@@ -80,6 +80,15 @@ describe('the first ten minutes', () => {
     const ran = typed('', 'run', 'Compare Bear and Craft for my notes.');
     expect([0, 1], ran.out).toContain(ran.code);
     expect(ran.out).toContain('That is the whole trade.');
+    // beside the piece: what the checks found in one sentence and what to do if it is not right, in plain words
+    expect(ran.out).toMatch(/^Checked: /m); expect(ran.out).toContain('Not right? atelier fix');
+    expect(ran.out).not.toContain('── Evaluation');
+
+    // the same skill on another model: the piece is written, and the run is never refused for the change
+    const r2 = spawnSync('node', [CLI, 'run', 'Compare Bear and Craft once more.', '--provider', 'openai-compatible', '--base-url', url(), '--model', 'scripted-next'], { encoding: 'utf8', cwd: proj, env, input: '' });
+    expect([0, 1], `${r2.stdout}${r2.stderr}`).toContain(r2.status);
+    expect(r2.stdout).toContain('That is the whole trade.');
+    expect(`${r2.stdout}${r2.stderr}`).not.toContain('TARGET_BINDING_MISMATCH');
   }, 240_000);
 
   it('where nobody is there (--yes, or no terminal), the build says ready and asks nothing', async () => {

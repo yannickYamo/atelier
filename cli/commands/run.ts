@@ -12,7 +12,8 @@ import { deliveryLine } from '../../core/eval/consequence.js';
 import { execFile, spawnSync } from 'node:child_process';
 import { DATA, VALUED_OPTIONS, argv, die, flag, loadSession, boundMaterial } from '../runtime.js';
 import * as store from '../../core/state/store.js';
-import { renderRunCard, type RunCard } from '../../core/eval/run-card.js';
+import { renderRunCard, stateLine, type RunCard } from '../../core/eval/run-card.js';
+import { GRAMMAR_LISTED } from '../../core/observers/grammar.js';
 import { planFor } from '../../core/plan/execution-plan.js';
 import type { EvalSummary } from '../../core/eval/summary.js';
 import { listEvals } from '../../core/state/eval-store.js';
@@ -170,10 +171,26 @@ export async function run(): Promise<void> {
   // THE EVALUATION IS PART OF WHAT A RUN RETURNS, not a report behind a flag: every rule, as it fared.
   const card = cardFor(result);
   const without = result.eval ? `  A structured output, held by its contract: ${result.eval.result.conformant ? 'it conforms' : `it does not conform (${result.eval.result.reasons.join('; ')})`}.` : '  This run was not evaluated: nothing is known about whether it holds your rules. See why: add --report';
-  for (const l of card ? renderRunCard(card, process.stdout.columns || 100) : ['── Evaluation ──', without]) console.log(l);
-  // WHAT WAS DONE WITH IT (core/eval/consequence.ts), and where it waits when it went to a person.
   const delivery = result.eval?.record?.delivery;
-  if (delivery) console.log(`\n${deliveryLine(delivery, result.eval?.record?.state)}${delivery.decision === 'PERSON' ? `\nSent to a person: it waits in atelier report --pending; rule on it with atelier rate ${result.invocationId} yes|no [--rule <id>].` : ''}`);
+  const lines = card ? renderRunCard(card, process.stdout.columns || 100) : ['── Evaluation ──', without];
+  // A PIECE THAT GOES OUT IS FOLLOWED BY TWO LINES, in the person's words: what the checks found in one sentence, and
+  // what to do if it is not right. The whole account, rule by rule, is one flag or one command away. A piece that is
+  // held back (blocked, or sent to a person) shows the whole account at once: there the person needs the reasons.
+  const whole = typed.report || !card || goes === 'PERSON' || goes === 'BLOCK' || result.eval?.record?.state === 'BLOCKED';
+  if (whole) {
+    for (const l of lines) console.log(l);
+    // WHAT WAS DONE WITH IT (core/eval/consequence.ts), and where it waits when it went to a person.
+    if (delivery) console.log(`\n${deliveryLine(delivery, result.eval?.record?.state)}${delivery.decision === 'PERSON' ? `\nSent to a person: it waits in atelier report --pending; rule on it with atelier rate ${result.invocationId} yes|no [--rule <id>].` : ''}`);
+  } else {
+    console.log(`Checked: ${card ? stateLine(card.record) : ''}`);
+    // What a check found and left to the person (a possible slip, a specific to confirm) is said here, in full: the
+    // short form never hides something that is theirs to read.
+    for (const e of card?.record.entries ?? []) {
+      const ev = e.observation.evidence ?? '';
+      if (e.result !== 'PASS' && e.result !== 'NOT_APPLICABLE' && ev && (e.reason === 'LISTED_FOR_YOU' || ev.startsWith(GRAMMAR_LISTED) || ev.includes('listed to check: '))) console.log(`  To check: ${ev}`);
+    }
+    console.log(`Not right? atelier fix "<what was wrong>"   ·   every check, rule by rule: atelier report ${result.invocationId}`);
+  }
   if (typed.report) console.log(`\n${result.report.join('\n')}`);
   process.exitCode = engine.code !== 0 ? engine.code : exitFor(result.eval);
 }

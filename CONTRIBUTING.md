@@ -1,7 +1,6 @@
 # Contributing
 
-Thanks for looking. Atelier is source-available, not open source: the license permits use and redistribution of
-unmodified copies, and changes are made only by the authors and the people they name. What is open to everyone is evidence: a report of what Atelier got right and wrong on work whose standard you know. The rest of this
+Thanks for looking. Atelier is open source under the MIT license. The most useful contribution is evidence: a report of what Atelier got right and wrong on work whose standard you know. The rest of this
 file is for the people who change the code.
 
 ## Run it

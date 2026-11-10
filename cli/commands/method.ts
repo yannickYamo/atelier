@@ -327,7 +327,7 @@ export async function method(): Promise<void> {
   if (voices && voices.groups.length > 1) console.log(`${voices.groups.length} voices read in how the pieces are written (${voices.groups.map((g) => `${g.pieces.length} piece(s)`).join(', ')}): built as one voice, which is what pointing at one folder asks for.\n  To build the combination of them, each read on its own:  atelier new ${goldenPath} --voices\n`);
   for (const line of whole ? describeMethod(proposals, example.caseClass) : shortScreen(proposals)) console.log(line);
   // The limits of a corpus of short pieces: one line on the screen, the whole account with --report.
-  if (short.brief) { console.log(''); for (const line of whole ? short.limits : [short.brief]) console.log(`Short form: ${line}`); }
+  if (short.brief && !guidedHere()) { console.log(''); for (const line of whole ? short.limits : [short.brief]) console.log(`Short form: ${line}`); }
 
   // `--review` looks and builds nothing. Otherwise the skill is built from exactly what the screen showed: a reading
   // the owner did not mean is corrected by changing the method and building again, which is one command.
@@ -436,7 +436,8 @@ export async function method(): Promise<void> {
   // words, when a model was there to read: what it read, or why it read nothing. With no model set up the screen stays
   // as it was (`atelier new` has said so once already), and what the owner asked for (--persona none) is not said back.
   // Everything the build said is in --report.
-  if (!whole) for (const l of said.filter((x) => /^(Latitude: |Accepted unmeasured: |Work form: |What this work is, read from your pieces: |Persona: |Scope: |\(no persona: \d|\(the persona could not be derived|\(the examples could not be read for scope|\(a fidelity profile in this project|\S+ ".*": its check (?:now|no longer) qualifies on your rulings)/.test(x))) console.log(l);
+  // a person shown the skill at work (cli/guided.ts) reads what was understood there, in their words, not the settings
+  if (!whole && !guidedHere()) for (const l of said.filter((x) => /^(Latitude: |Accepted unmeasured: |Work form: |What this work is, read from your pieces: |Persona: |Scope: |\(no persona: \d|\(the persona could not be derived|\(the examples could not be read for scope|\(a fidelity profile in this project|\S+ ".*": its check (?:now|no longer) qualifies on your rulings)/.test(x))) console.log(l);
   // Required is what a run is held to. What the example showed is checked and reported, and fails nothing: said apart,
   // so that the count of what is enforced is never larger than it is.
   // The screen above already said what is checked and what is theirs: all that is left to say is that it is ready.

@@ -13,8 +13,14 @@ atelier history  --skill <name>     # every version, newest first, active marked
 atelier rollback --skill <name> --to <skillVersionHash>
 ```
 
-`inspect` reads the **StandardVersion**, never the generated `SKILL.md`. If they diverge, Atelier says
-so rather than trusting the file — the installed file is a compiled output, and if it were treated as
-the source of truth then editing it would silently change what the user is recorded as having approved.
+`inspect` reads the standard the user approved, never the generated `SKILL.md`. If the two differ, Atelier says so
+instead of trusting the file: the installed file is an output, and editing it must never change what the user is
+recorded as having approved.
 
 Rollback moves one pointer. **It never deletes history**, so a rollback can itself be rolled back.
+
+To list every skill built on this machine, one line each with what it is for:
+
+```bash
+atelier status
+```

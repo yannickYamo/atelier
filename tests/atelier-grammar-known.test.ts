@@ -173,7 +173,7 @@ describeWithEngine('through the binary: a run keeps the author\'s words, and its
     for (const w of ['vite', 'cosy room', 'third storey', 'Just yeet']) expect(out, w).toContain(w);
     for (const w of ['vote', 'cost room', 'third story', 'Just yet']) expect(out, w).not.toContain(w);
     const flat = out.replace(/\s+/g, ' ');
-    expect(flat).toMatch(/No mechanical errors: spelling, agreement, punctuation\. listed for you to check: \d+ possible slips?: /);
+    expect(flat).toMatch(/To check: listed for you to check: \d+ possible slips?: /);
     expect(flat).not.toMatch(/no mechanical error/);
   }, 240_000);
 });

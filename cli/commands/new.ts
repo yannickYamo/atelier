@@ -14,6 +14,7 @@
 
 import { existsSync, statSync } from 'node:fs';
 import { basename, relative, resolve } from 'node:path';
+import { guided, guidedHere } from '../guided.js';
 import { die, argv, flag, flagAll, positional, loadSession, saveSession, assertReachable, canReach, sourceProvenance, runFile, DATA, contextReaderClient, contextReaderModel } from '../runtime.js';
 import { readContext } from '../../core/inference/reading.js';
 import { INTENT_MODE, WHY } from '../../core/observers/intent-mode.js';
@@ -233,6 +234,8 @@ export async function newSkill(): Promise<void> {
   await ensureGrammar();
   heldOutCheck(built);
   proposeFloor(built);
+  // a person at a terminal is shown it at work (cli/guided.ts), which ends on the same next steps in fewer words
+  if (guidedHere()) { await guided(built); return; }
   console.log(`\nUse it:    /${built} <your task>   ·   atelier invoke --skill ${built} "<your task>"`);
   console.log(`Check:     atelier verify --skill ${built} <file>   ·   correct it: atelier fix "<what was wrong>"`);
   // A voice is carried by what the author lived and measured, which Atelier will not invent.

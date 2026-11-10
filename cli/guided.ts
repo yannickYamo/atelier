@@ -25,7 +25,7 @@ export const MAX_BUILD_QUESTIONS = 5;
 /** Whether a person is there to read and answer: a terminal, and nothing typed that says "do not ask". */
 export const guidedHere = (): boolean =>
   !argv.includes('--yes') && !argv.includes('--json') && !argv.includes('--review')
-  && (process.env.ATELIER_GUIDED === '1' || (Boolean(process.stdin.isTTY) && Boolean(process.stdout.isTTY)));
+  && (process.env.ATELIER_GUIDED === '1' || (process.stdin.isTTY && process.stdout.isTTY));
 
 /** The person's lines, one at a time; an ended input answers every later question with nothing (enter). */
 function lines(): { ask: (q: string) => Promise<string>; close: () => void } {
@@ -37,7 +37,7 @@ function lines(): { ask: (q: string) => Promise<string>; close: () => void } {
     // where the lines come from a pipe nothing echoes them: the line is ended here, so each question stands alone
     ask: async (q) => {
       process.stdout.write(q);
-      const r = ready.shift(); const a = r !== undefined ? r : ended ? '' : await new Promise<string>((ok) => { waiting.push(ok); });
+      const a = ready.shift() ?? (ended ? '' : await new Promise<string>((ok) => { waiting.push(ok); }));
       if (!process.stdin.isTTY) process.stdout.write('\n');
       return a;
     },
@@ -51,7 +51,7 @@ const modelArgs = (): string[] => ['--provider', '--base-url', '--model'].flatMa
 /** This binary, run as a person would run it. */
 function atelier(args: readonly string[]): { out: string; said: string; ok: boolean } {
   const r = spawnSync(process.execPath, [...process.execArgv, process.argv[1], ...args, ...modelArgs()], { encoding: 'utf8', env: process.env, stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 64 * 1024 * 1024 });
-  return { out: r.stdout ?? '', said: `${r.stderr ?? ''}`, ok: r.status === 0 || r.status === 1 };
+  return { out: r.stdout ?? '', said: r.stderr ?? '', ok: r.status === 0 || r.status === 1 };
 }
 
 /** One piece written with the skill: its text and the run it is recorded as; null where nothing could be written. */
