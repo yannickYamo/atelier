@@ -964,7 +964,7 @@ export type ControllerAction = 'cut' | 'mechanical' | 'rewrite' | 'operators' | 
 export interface InferredItem {
   /** what kind of thing: a question nobody answered, a specific nothing gave, a claim with no proof given, a sentence
    * about the piece's own making, a slot written again, a name nothing gave */
-  readonly kind: 'decision' | 'specific' | 'proof' | 'own-words' | 'slot' | 'name';
+  readonly kind: 'decision' | 'specific' | 'proof' | 'own-words' | 'slot' | 'name' | 'length';
   /** what it is about, in the run's words */
   readonly what: string;
   /** how the run settled it */

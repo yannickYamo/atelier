@@ -74,6 +74,9 @@ export function evaluate(): void {
   // The complaints `atelier fix` recorded, grouped by the rule the diagnosis attributed them to.
   for (const f of store.listFeedback(L)) { const k = f.about === 'EVALUATION' ? 'that the evaluation was wrong about the work' : f.requirementId ? `about rule ${f.requirementId}` : 'not yet diagnosed'; complaints.set(k, (complaints.get(k) ?? 0) + 1); }
   const noRating = ratings.filter((r) => !r.ship).map((r) => r.why).filter((w): w is string => Boolean(w));
+  // the reason codes given with a rating (atelier rate --reason), counted over the runs not shipped
+  const reasonCodes = new Map<string, number>();
+  for (const r of ratings.filter((x) => !x.ship)) for (const k of r.reasons ?? []) reasonCodes.set(k, (reasonCodes.get(k) ?? 0) + 1);
   const queue = evals.filter((e) => !byRun.has(e.invocationId))
     .sort((a, b) => Number(a.record ? a.record.state !== 'BLOCKED' : a.result.conformant) - Number(b.record ? b.record.state !== 'BLOCKED' : b.result.conformant)
       || ((b.fidelity ? b.fidelity.measured - b.fidelity.inBand : 0) - (a.fidelity ? a.fidelity.measured - a.fidelity.inBand : 0)))
@@ -102,7 +105,7 @@ export function evaluate(): void {
     // Each cohort's conformant share against the next cohort in the list, with Newcombe's score interval on the difference.
     console.log(JSON.stringify({ skill: name, cohorts: summary.map((c, i) => ({ ...c, conformantCi: wilson(c.conformant, c.runs), wouldShipCi: wilson(c.wouldShip, c.rated),
       ...(summary[i + 1] ? { conformantVsNextCohort: newcombe(c.conformant, c.runs, summary[i + 1].conformant, summary[i + 1].runs) } : {}) })),
-      brokenRules: Object.fromEntries(brokenCount), reasons: Object.fromEntries(reasonCount), complaints: Object.fromEntries(complaints),
+      brokenRules: Object.fromEntries(brokenCount), reasons: Object.fromEntries(reasonCount), notShippedReasons: Object.fromEntries(reasonCodes), complaints: Object.fromEntries(complaints),
       notShippedBecause: noRating, toRead: queue.map((e) => e.invocationId), coverage, moves }, null, 1));
     return;
   }
@@ -129,6 +132,7 @@ export function evaluate(): void {
     for (const [id, n] of [...brokenCount].sort((a, b) => b[1] - a[1]).slice(0, 5)) console.log(`    rule ${id} broken in ${n} run(s)`);
     for (const [k, n] of [...reasonCount].sort((a, b) => b[1] - a[1]).slice(0, 5)) console.log(`    ${n} run(s): ${k}`);
     for (const [k, n] of [...complaints].sort((a, b) => b[1] - a[1])) console.log(`    ${n} complaint(s) via atelier fix: ${k}`);
+    for (const [k, n] of [...reasonCodes].sort((a, b) => b[1] - a[1])) console.log(`    ${n} run(s) you would not ship: ${k}`);
     for (const w of noRating.slice(0, 5)) console.log(`    not shipped because: "${w.slice(0, 100)}"`);
   }
   if (argv.includes('--label') || queue.length) {

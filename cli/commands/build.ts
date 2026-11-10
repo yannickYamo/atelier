@@ -484,7 +484,7 @@ async function cardFor(L: store.StoreLayout, purpose: string | null): Promise<vo
   // kept under its key so the same pieces are not read again
   if (!card) { if (d.by === 'model') store.setCard(L, { kind: null, reader: null, purpose: null, settles: [], by: 'model', reading }); return; }
   store.setCard(L, { ...card, reading });
-  console.log(`What this work is, read from your pieces: ${cardLine(card)}. It shapes what an editor asks before each piece; change it with atelier amend --skill ${L.skillName} --card "kind=...; reader=...; settles=a, b".`);
+  console.log(`What this work is, read from your pieces: ${cardLine(card)}. It shapes what an editor asks before each piece; change it with atelier amend --skill ${L.skillName} --card "kind=...; reader=...; settles=<one decision>; settles=<another>".`);
 }
 
 function compositeVoice(c: CompositeRecord, v: StandardVersion, budget: number | null, form: PieceForm): Voice | null {

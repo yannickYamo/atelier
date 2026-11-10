@@ -207,6 +207,32 @@ describe('a run through the binary, written the direct way', () => {
   }, 60_000);
   afterAll(() => { backend.kill(); });
 
+  it('hashtags past the author\'s own count are removed; a request that speaks of hashtags, for or against, has none removed and is told the count', async () => {
+    const s = await built();
+    const TAGGED = `${REVIEWED}\n\n#notes #apps`;
+    await setBackend({ byTool: { __plain: [DRAFT, TAGGED] } });
+    const plain = s.run('invoke', '--skill', 'posts', 'Compare Logseq and Craft for my notes.', '--claims', 'pattern', ...BACKEND());
+    expect(plain.out).toContain('Hashtags removed (2)');
+    await setBackend({ byTool: { __plain: [DRAFT, TAGGED] } });
+    const spoken = s.run('invoke', '--skill', 'posts', 'Compare Logseq and Craft for my notes. No hashtags.', '--claims', 'pattern', ...BACKEND());
+    expect(spoken.out).not.toContain('Hashtags removed');
+    expect(spoken.out).toContain('Hashtags left in (2): your pieces carry none, and your request speaks of hashtags, so none was removed.');
+  }, 120_000);
+
+  it('a reading that could not be made is said, and the record says the reader of specifics failed', async () => {
+    await setBackend({ byTool: { emit_persona: PERSONA, emit_holds_back: { ids: [] }, __plain: [DRAFT, REVIEWED] } });
+    const s = seed(FILES, { ATELIER_CLAIMS: 'model', ATELIER_CLAIMS_MODEL: 'scripted' });
+    expect(s.run('new', 'posts', 'write posts in my voice', '--name', 'posts', ...BACKEND()).code).toBe(0);
+    // the reader of specifics answers with nothing it can use
+    await setBackend({ byTool: { __plain: [DRAFT, REVIEWED], emit_specifics: { nonsense: true } } });
+    const r = s.run('invoke', '--skill', 'posts', 'Compare Logseq and Craft for my notes.', '--with', 'notes=notes.md', ...BACKEND());
+    expect([0, 1], r.out).toContain(r.code);
+    expect(r.out).toContain("(the editor's questions were not read: the reading could not be grounded in the material; none is asked)");
+    expect(r.out).toContain('(the reader that traces each specific to what you gave could not run; a pattern check read the piece instead');
+    const rec = store.listInvocations({ root: s.data, skillName: 'posts' }).at(-1);
+    expect(rec?.settings?.claim?.degraded).toBe(true);
+  }, 120_000);
+
   it('the claim reader reads the delivered piece once: nothing is cut on this path, so a second read buys nothing', async () => {
     await setBackend({ byTool: { emit_persona: PERSONA, emit_holds_back: { ids: [] }, __plain: [DRAFT, REVIEWED] } });
     const s = seed(FILES, { ATELIER_CLAIMS: 'model', ATELIER_CLAIMS_MODEL: 'scripted' });
@@ -230,6 +256,59 @@ describe('a run through the binary, written the direct way', () => {
     const j = jsonOf(r.out) as Out & { toCheck: unknown };
     expect(JSON.stringify(j.toCheck)).toContain('We moved eleven or twelve teams over to it.');
   }, 120_000);
+
+  // FOUR WAYS THE DEFAULT RUN FAILED QUIETLY (audit of 9 Nov), each held through the binary.
+  const ASKS = (id: string): Record<string, unknown> => ({ statedIn: 'NONE', quote: null, ask: `What is the ${id}?`, options: ['first', 'second'], default: 'first' });
+  const EDITOR = { decisions: [], fields: { idea: ASKS('idea'), reader: ASKS('reader'), pain: ASKS('pain'), proof: ASKS('proof'), next: ASKS('next') } };
+  const built = async (files: Record<string, string> = FILES): Promise<ReturnType<typeof seed>> => {
+    await setBackend({ byTool: { emit_persona: PERSONA, emit_holds_back: { ids: [] }, __plain: [DRAFT, REVIEWED] } });
+    const s = seed(files);
+    expect(s.run('new', 'posts', 'write posts in my voice', '--name', 'posts', ...BACKEND()).code).toBe(0);
+    return s;
+  };
+  it('a review that answers with a remark is not the piece: the first draft is delivered, and the record says the review did not run', async () => {
+    const s = await built();
+    await setBackend({ byTool: { __plain: [REVIEWED, 'No changes needed.'] } });
+    const j = jsonOf(s.run('invoke', '--skill', 'posts', 'Compare Logseq and Craft for my notes.', '--with', 'notes=notes.md', '--json', ...BACKEND()).out);
+    expect(j.output).toBe(REVIEWED);
+    expect(j.direct?.review).toEqual({ ran: false, why: 'its reply was not the piece (3 words against the draft\'s 32)' });
+  }, 120_000);
+  it('an answer belongs to the request and its notes: the same request over other notes is not told it', async () => {
+    const s = await built({ ...FILES, 'other.md': 'Notes: Bear is paid and syncs through iCloud; Obsidian is free and local.' });
+    await setBackend({ byTool: { __plain: [DRAFT, REVIEWED], emit_editor_questions: EDITOR } });
+    const ask = 'Compare the two for my notes.';
+    const a = jsonOf(s.run('invoke', '--skill', 'posts', ask, '--with', 'notes=notes.md', '--answers', 'idea=local files outlive every tool', '--json', ...BACKEND()).out) as Out & { answers: { id: string; answer: string }[] };
+    expect(a.answers).toEqual([{ id: 'idea', answer: 'local files outlive every tool' }]);
+    // an answered question is no longer listed as one to ask
+    expect(((a as unknown as { questions: { id: string }[] }).questions).some((q) => q.id === 'idea')).toBe(false);
+    // the same request and notes again: the answer is still theirs
+    const again = jsonOf(s.run('invoke', '--skill', 'posts', ask, '--with', 'notes=notes.md', '--json', ...BACKEND()).out) as Out & { answers: { id: string; answer: string }[] };
+    expect(again.answers).toEqual([{ id: 'idea', answer: 'local files outlive every tool' }]);
+    // the same words asked over other notes: another piece, and nothing settled for it
+    const m0 = await mark();
+    const b = jsonOf(s.run('invoke', '--skill', 'posts', ask, '--with', 'notes=other.md', '--json', ...BACKEND()).out) as Out & { answers: unknown[] };
+    expect(b.answers).toEqual([]);
+    expect(JSON.stringify((await bodies()).slice(m0))).not.toContain('local files outlive every tool');
+  }, 180_000);
+  it('atelier run lists the questions nobody answered beside the piece, with their options and how to answer', async () => {
+    const s = await built();
+    await setBackend({ byTool: { __plain: [DRAFT, REVIEWED], emit_editor_questions: EDITOR } });
+    const r = s.run('run', 'Compare Logseq and Craft for my notes.', '--skill', 'posts', '--with', 'notes=notes.md', ...BACKEND());
+    expect(r.out).toContain('Written without your answer to 3 questions an editor would ask:');
+    expect(r.out).toContain('  - idea: What is the idea? (a) first; b) second)');
+    expect(r.out).toContain('  To answer, run again with --answers "idea=<letter or your words>,reader=<letter or your words>,pain=<letter or your words>".');
+    const answered = s.run('run', 'Compare Logseq and Craft for my notes.', '--skill', 'posts', '--with', 'notes=notes.md', '--answers', 'idea=a,reader=b,pain=a', ...BACKEND());
+    expect(answered.out).not.toContain('Written without your answer');
+  }, 180_000);
+  it('a length the request states and the piece misses is listed beside it; one it meets is not', async () => {
+    const s = await built();
+    await setBackend({ byTool: { __plain: [DRAFT, REVIEWED] } });
+    const j = jsonOf(s.run('invoke', '--skill', 'posts', 'Compare Logseq and Craft for my notes, in about 2,000 words.', '--with', 'notes=notes.md', '--json', ...BACKEND()).out) as Out & { inferred: { kind: string; what: string; settled: string }[] };
+    expect(j.inferred.filter((i) => i.kind === 'length')).toEqual([{ kind: 'length', what: 'the request asks for 2,000 words', settled: '32 words written, too short', add: 'atelier fix "make it 2,000 words"' }]);
+    await setBackend({ byTool: { __plain: [DRAFT, REVIEWED] } });
+    const ok = jsonOf(s.run('invoke', '--skill', 'posts', 'Compare Logseq and Craft for my notes, in under 100 words.', '--with', 'notes=notes.md', '--json', ...BACKEND()).out) as Out & { inferred: { kind: string }[] };
+    expect(ok.inferred.filter((i) => i.kind === 'length')).toEqual([]);
+  }, 180_000);
 
   // THE FLAGS OF THE DEFAULT RUN, each held to what it says (cli/help.ts): the effort asked, how much writing is shown,
   // and the work form the build is told, which decides whether a run writes directly at all.
@@ -274,7 +353,7 @@ describe('a run through the binary, written the direct way', () => {
     const built = s.run('new', 'posts', 'write posts in my voice', '--name', 'posts', ...BACKEND());
     expect(built.code, built.out).toBe(0);
     expect(built.out).toContain('What this work is, read from your pieces: This work: a comparison of note apps; for: Says which app to pick; each piece settles: which app wins, for whom.');
-    const amended = s.run('amend', '--skill', 'posts', '--card', 'reader=someone leaving an app; settles=which app wins, what leaving costs');
+    const amended = s.run('amend', '--skill', 'posts', '--card', 'reader=someone leaving an app; settles=which app wins; settles=what leaving costs');
     expect(amended.out).toContain('What this work is, now yours: This work: a comparison of note apps; read by someone leaving an app; for: Says which app to pick; each piece settles: which app wins; what leaving costs.');
     const TABLE = `${REVIEWED}\n\n| App | Price |\n|---|---|\n| Logseq | 0 |\n| Craft | 10 |\n| Total | 12 |`;
     await setBackend({ byTool: { __plain: [DRAFT, TABLE], emit_editor_questions: { decisions: [], fields: {} } } });
@@ -552,6 +631,16 @@ describe('a run through the binary, written the direct way', () => {
     expect(s.run('keep', '--skill', 'posts', '--remove', kept[0].id).out).toContain('0 kept piece(s) left');
     expect(store.getKept({ root: s.data, skillName: 'posts' })).toEqual([]);
     expect(s.run('keep', '--skill', 'posts', '--remove', 'k00000000').code).not.toBe(0);
+    // a file that is no edit of the newest run, kept with no run named: a piece of its own, with no corrections read from it
+    writeFileSync(join(s.proj, 'other-piece.md'), '# On backups\n\nI keep three copies of everything. One of them is never in the house.');
+    const lone = s.run('keep', '--skill', 'posts', 'other-piece.md');
+    expect(lone.code, lone.out).toBe(0); expect(lone.out).toContain('shares no sentence with your newest run');
+    const own = store.getKept({ root: s.data, skillName: 'posts' });
+    expect(own.length).toBe(1); expect(own[0].edits).toEqual([]); expect(own[0].from).toBeNull();
+    // a reason code given with a rating is counted where the ratings are read
+    const rated = s.run('rate', next.invocationId, 'no', 'ran long', '--reason', 'too-long', '--skill', 'posts');
+    expect(rated.out).toContain('Your reason is kept and counted by atelier eval; by itself it changes no run.');
+    expect(s.run('eval', '--skill', 'posts').out).toContain('1 run(s) you would not ship: too-long');
   }, 180_000);
 });
 

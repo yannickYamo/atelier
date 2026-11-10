@@ -97,17 +97,19 @@ export function cardLine(c: PurposeCard): string {
 }
 
 /**
- * THE PERSON'S CHANGE (`atelier amend --card "kind=…; reader=…; settles=a, b"`): each field they name replaces the
+ * THE PERSON'S CHANGE (`atelier amend --card "kind=…; reader=…; settles=a; settles=b"`): each field they name replaces the
  * reading's, and the card is theirs from then on. A field left out keeps what was there.
  */
 export function amendCard(was: PurposeCard | null, said: string): PurposeCard {
   const next: { kind: string | null; reader: string | null; purpose: string | null; settles: readonly string[] } = {
     kind: was?.kind ?? null, reader: was?.reader ?? null, purpose: was?.purpose ?? null, settles: was?.settles ?? [] };
+  let settlesGiven = false;
   for (const part of said.split(';')) {
     const eq = part.indexOf('=');
     if (eq <= 0) throw new Error(`--card takes field=value pairs separated by ";" (kind, reader, purpose, settles); got "${part.trim()}".`);
     const key = part.slice(0, eq).trim().toLowerCase(); const value = part.slice(eq + 1).trim();
-    if (key === 'settles') next.settles = value ? value.split(',').map((x) => x.trim()).filter(Boolean).slice(0, SETTLES_MAX) : [];
+    // each `settles=` is one decision, whole: a decision holds commas ("the price, per seat"), so none splits it
+    if (key === 'settles') { if (!settlesGiven) next.settles = []; settlesGiven = true; if (value) next.settles = [...next.settles, value].slice(0, SETTLES_MAX); }
     else if (key === 'kind' || key === 'reader' || key === 'purpose') next[key] = value || null;
     else throw new Error(`--card has no field "${key}": kind, reader, purpose or settles.`);
   }

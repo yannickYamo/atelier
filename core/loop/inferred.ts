@@ -54,7 +54,7 @@ export function inferredItems(f: InferredFrom): InferredItem[] {
 export function inferredLines(items: readonly InferredItem[]): string[] {
   if (!items.length) return [];
   const label: Record<InferredItem['kind'], string> = { decision: 'decided for you', specific: 'not given', proof: 'no proof given', 'own-words': 'about its own making',
-    slot: 'a slot, written whole', name: 'a name nothing gave' };
+    slot: 'a slot, written whole', name: 'a name nothing gave', length: 'not the length asked' };
   return [`Inferred for this piece (${items.length}), beside it and never in it:`,
     ...items.map((i) => `  - ${label[i.kind]}: ${i.what} → ${i.settled}${i.add ? ` (to change: ${i.add})` : ''}`)];
 }

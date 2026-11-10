@@ -498,7 +498,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   if (directNot === null && std) {
     const { client, binding } = checkedBinding(L, sv);
     const spentBefore = spentAtRoute;
-    const d = await runDirect({ L, sv, std, name, asked, material, client, binding, spentBefore, settings: (checks) => ({ ...settingsFor(checks, null, 1, '', null, std, heldFirst), maxTokens: directMaxTokens() }), say: (l) => { report.say(l); }, detail: (l) => { report.detail(l); }, started,
+    const d = await runDirect({ L, sv, std, name, asked, material, client, binding, spentBefore, settings: (checks) => Object.assign(settingsFor(checks, null, 1, '', null, std, heldFirst), { maxTokens: directMaxTokens() }), say: (l) => { report.say(l); }, detail: (l) => { report.detail(l); }, started,
       held: heldFirst?.level ?? null, interactive: machine === null && process.stdin.isTTY && process.stdout.isTTY });
     const spent = finish(report, { rec: d.rec, sv, name, task: d.rec.input, asked, budget: d.budget, spentBefore });
     // `answer` is the piece with the specifics left for the person to check listed under it, as on the compiled path

@@ -26,6 +26,8 @@ import { spend, processSpentUsd, type Budget, type InferenceClient } from '../co
 import { resolveProvenance } from '../core/fidelity/provenance.js';
 import { DEFAULT_SETTINGS, type ImplementationSettings } from '../core/fidelity/types.js';
 import { inferredLines } from '../core/loop/inferred.js';
+import { statedLength, againstStated, notHeldBecause } from '../core/intake/length.js';
+import { wordsWritten } from '../core/eval/size.js';
 import type { RuntimeBinding } from '../core/runtime/binding.js';
 import type { SkillVersion, StandardVersion, DirectRecord, RepairRecord, InvocationSettings, LatitudeLevel, InferredItem } from '../core/state/canonical-state.js';
 import { runOnce, draftMaxTokens, type Written } from '../core/loop/run-once.js';
@@ -218,7 +220,8 @@ export async function editorQuestions(c: Pick<DirectContext, 'L' | 'asked' | 'ma
   if (argv.includes('--no-questions')) return { note: '', questions: [], answers: [], by: 'off' };
   // AN EDITOR'S ANSWER BELONGS TO THE PIECE IT WAS GIVEN FOR. The one idea of last week's post is not this one's: read
   // across requests, an answer counted as "stated" for the next piece, which was then neither asked nor told it.
-  const forRequest = sha(c.asked.trim());
+  // The piece is the request with what was given for it: the same words asked over other notes are another piece.
+  const forRequest = c.material.length ? sha(JSON.stringify([c.asked.trim(), materialShown(c.material)])) : sha(c.asked.trim());
   // An answer kept for one request (`for`) is this request's only. One kept with none is the skill's (the compiled
   // path's kinds); an editor kind kept with none predates answers per request and is left out.
   const all = store.getTold(c.L);
@@ -230,6 +233,8 @@ export async function editorQuestions(c: Pick<DirectContext, 'L' | 'asked' | 'ma
   const decided = kept ??
     await readContext(EDITOR_QUESTIONS, input, contextReaderClient(), contextReaderModel(), { spentUsd: 0, capUsd: 0.03, maxCalls: 1 }, 'other');
   if (!kept && decided.by === 'model') store.putEditorReading(c.L, key, { value: decided.value, by: decided.by });
+  // a reading that could not be made asks nothing, and says so: silence here read as "nothing was open"
+  if (!kept && decided.by !== 'model') c.say(`(the editor's questions were not read: ${('why' in decided ? decided.why : undefined) ?? 'no model'}; none is asked)`);
   const questions = decided.value.questions;
   const { answers: given, said } = readAnswers(flag('--answers'), questions, [...new Set([...EDITOR_KINDS, ...questions.map((q) => q.id)])], false);
   for (const s of said) c.say(s);
@@ -435,8 +440,14 @@ export async function runDirect(c: DirectContext) {
         // with --style-review, what the draft does not hold of how the author writes reaches the review, and only that
         const styleNoteNow = styleOn && steer ? styleNote(styleOf, (await readStyle(draft, 'draft')).found) : '';
         const again = await prose(c.client, budget, stable, variable, reviewAsk(draft, { material: c.material, edits: corrections, rules, method, style: styleNoteNow }), effort, 'emit_review');
-        output = again.piece; review = { ran: true };
-        if (styleNoteNow && style) style = { ...style, steered: true };
+        // A REVIEW RETURNS THE PIECE, REVISED. Asked to change only what needs changing, a reply under half the draft's
+        // words is no revision of it (a remark about the draft, a fragment): the draft is delivered, and it is said.
+        const [was, now] = [wordsWritten(draft), wordsWritten(again.piece)];
+        if (now * 2 < was) { review = { ran: false, why: `its reply was not the piece (${now} words against the draft's ${was})` }; c.say(`(the self-review did not return the piece, so the first draft is delivered: ${now} words came back against the draft's ${was})`); }
+        else {
+          output = again.piece; review = { ran: true };
+          if (styleNoteNow && style) style = { ...style, steered: true };
+        }
       } catch (e) { review = { ran: false, why: `the review could not run: ${(e as Error).message.split('\n')[0]}` }; c.say(`(the self-review could not run, so the first draft is delivered: ${review.why})`); }
     }
     // 3b. A FACT ONLY AN EXAMPLE'S CASE HELD (core/loop/grounding.ts). The writer is shown the author's pieces whole, so
@@ -454,14 +465,19 @@ export async function runDirect(c: DirectContext) {
       }
     } catch (e) { c.say(`(a fact carried from one of your pieces could not be rewritten: ${(e as Error).message.split('\n')[0]}; it is listed)`); }
     // 3c. HASHTAGS THE AUTHOR'S PIECES DO NOT CARRY (core/loop/shape-steer.ts): past the most their pieces carry, removed in
-    // code, no model call; a tag inside a sentence keeps its word. A request or material that itself names hashtags asks
-    // for them, and nothing is removed.
+    // code, no model call; a tag inside a sentence keeps its word. A request or material that itself carries a tag (#word)
+    // gives them, and nothing is removed. A request that speaks of hashtags, for or against, is not read by code: nothing is
+    // removed and the count is said ("No hashtags." once switched the removal off in silence).
     {
       const band = c.std.requirements.find((r) => r.authority !== 'EXPERT_REJECTED' && learnedShape(r) && steeredShape(r.measurement)?.shape === 'hashtags');
       const max = band?.measurement?.params.max;
-      const asksTags = /(?:^|\s)#\p{L}|hashtag/iu.test(`${c.asked}\n${materialText}`);
-      if (typeof max === 'number' && !asksTags && !argv.includes('--no-repair')) {
-        const tags = (t: string): number => (t.match(/(?<![\w&])#(?=[\p{N}_]*\p{L})[\p{L}\p{N}_]+/gu) ?? []).length;
+      const asksTags = /(?:^|\s)#\p{L}/u.test(`${c.asked}\n${materialText}`);
+      // the request speaks of hashtags: whether for or against them is not code's to read, so nothing is removed and the
+      // ones past the author's own count are said beside the piece
+      const spoken = /hashtag/i.test(c.asked);
+      const tags = (t: string): number => (t.match(/(?<![\w&])#(?=[\p{N}_]*\p{L})[\p{L}\p{N}_]+/gu) ?? []).length;
+      if (typeof max === 'number' && !asksTags && spoken && tags(output) > max) c.say(`Hashtags left in (${tags(output)}): your pieces carry ${max === 0 ? 'none' : `at most ${max}`}, and your request speaks of hashtags, so none was removed. atelier fix "remove the hashtags" takes them out.`);
+      else if (typeof max === 'number' && !asksTags && !argv.includes('--no-repair')) {
         const next = removeShapeExtras(output, 'hashtags', max);
         const removed = tags(output) - tags(next);
         if (removed > 0) {
@@ -493,6 +509,8 @@ export async function runDirect(c: DirectContext) {
         toCheck = toCheckOf(report, checks.evidence ?? '');
         listedHere.splice(0, listedHere.length, ...toCheck);
       } catch (e) { c.say(`(the checks could not read the piece: ${(e as Error).message.split('\n')[0]}; it is delivered unchecked)`); }
+      // the reader of specifics failed mid-run and the pattern check took over: said, since what is listed is then weaker
+      if (checks.claimSensor?.degraded) c.say('(the reader that traces each specific to what you gave could not run; a pattern check read the piece instead, so the specifics listed are not the whole list)');
     }
     repaired = violatedBefore.filter((id) => !violated.includes(id));
     // read on the piece as delivered, after the sentences that broke a rule were rewritten, said beside it. With
@@ -539,6 +557,14 @@ export async function runDirect(c: DirectContext) {
   const named = new Map(listedHere.map((t) => [t.sentence, t.specific]));
   const inferred: InferredItem[] = toCheck.filter((t) => rec.output.includes(t.slice(0, 60)))
     .map((t) => { const sp = named.get(t); return { kind: 'specific', what: sp ? `"${sp.slice(0, 100)}", in: ${t.slice(0, 160)}` : t.slice(0, 160), settled: 'left in the piece for you to check', add: 'your source for it, as material (--with)' }; });
+  // THE LENGTH THE REQUEST STATES, AGAINST WHAT WAS WRITTEN: listed beside the piece, never a redraft. Where the route
+  // reading quoted the words that state it, only those are parsed; the pattern over the request is the floor.
+  const lengthFrom = decided.by === 'model' && route.length !== undefined ? route.length : c.asked;
+  const lengthAsked = lengthFrom ? statedLength(lengthFrom) : null;
+  if (lengthAsked && notHeldBecause(c.asked, lengthAsked) === null) {
+    const written = wordsWritten(rec.output); const how = againstStated(written, lengthAsked);
+    if (how !== 'met') inferred.push({ kind: 'length', what: `the request asks for ${lengthAsked.raw}`, settled: `${written.toLocaleString('en-US')} words written, too ${how}`, add: `atelier fix "make it ${lengthAsked.raw}"` });
+  }
   for (const l of inferredLines(inferred)) c.say(l);
   if (!review.ran && review.why) c.detail(`Self-review: not run (${review.why}).`);
   if (draftText && draftText !== rec.output) c.detail('The self-review revised the first draft; the first draft is kept on the record.');
@@ -572,7 +598,8 @@ export async function runDirect(c: DirectContext) {
     ...recordHead({ state: evaluation?.record?.state ?? null, standardVersionHash: c.sv.standardVersionHash, skillVersion: c.sv.skillVersionHash, certificate: rec.settings?.certificate ?? null, record: evaluation?.record ?? null }),
     eval: evaluation,
     // the questions were asked before the piece was written, and are listed before it
-    questions: questionsJson(asking.questions), answers: asking.answers,
+    // only the ones still open: an answered question listed here was asked of the person again by a host
+    questions: questionsJson(asking.questions.filter((q) => !asking.answers.some((a) => a.id === q.id))), answers: asking.answers,
     output: rec.output, answer: rec.output, invocationId: rec.invocationId, skillVersion: c.sv.skillVersionHash, costUsd: Number(spent.toFixed(4)),
     rulesBroken: violated, cut: rec.repair?.storiesCut ?? [], toCheck, totals, plan: null, inferred, work: rec.work ?? null,
     direct: rec.direct ?? null, model: rec.observedRuntime?.resolvedModel ?? c.binding.requestedModel, maxTokens: directMaxTokens(),

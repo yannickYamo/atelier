@@ -99,7 +99,7 @@ const READINGS: Readonly<Record<string, readonly ['run' | 'build' | 'command' | 
 /** Every model call the default run may make, by the tool it answers with, and what reads its answer. */
 const RUN_CALLS: Readonly<Record<string, string>> = {
   emit_piece: 'the draft', emit_review: 'the one self-review', emit_piece_route: 'piece-route', emit_style_read: 'style-read',
-  emit_editor_questions: 'editor-questions', emit_request_latitude: 'request-latitude',
+  emit_editor_questions: 'editor-questions', emit_request_latitude: 'request-latitude', emit_specifics: 'the specifics listed beside the piece',
 };
 
 /** The readings declared in the source, by id: a parser of the code's form (a declaration and its id field). */
@@ -136,7 +136,9 @@ async function traced(how: Build): Promise<Traced> {
   writeFileSync(join(proj, 'method.md'), NOTE);
   const trace = (n: string): string => join(data, `trace-${n}.txt`);
   const run = (t: string, ...a: string[]): void => {
-    const env: NodeJS.ProcessEnv = { ...process.env, ATELIER_DATA: data, ATELIER_PROJECT_DIR: proj, ATELIER_PRICE_IN: '1', ATELIER_PRICE_OUT: '1', ATELIER_TRACE_STORE: t };
+    const env: NodeJS.ProcessEnv = { ...process.env, ATELIER_DATA: data, ATELIER_PROJECT_DIR: proj, ATELIER_PRICE_IN: '1', ATELIER_PRICE_OUT: '1', ATELIER_TRACE_STORE: t,
+      // the reader of specifics a person with a key has by default: without it the run's calls were one short
+      ATELIER_CLAIMS: 'model', ATELIER_CLAIMS_MODEL: 'scripted' };
     delete env.ANTHROPIC_API_KEY; delete env.ANTHROPIC_AUTH_TOKEN; delete env.ATELIER_CONTEXT_READER;
     execFileSync('node', [CLI, ...a, '--provider', 'openai-compatible', '--base-url', `http://127.0.0.1:${port}`, '--model', 'scripted'], { encoding: 'utf8', cwd: proj, env, stdio: ['ignore', 'pipe', 'pipe'] });
   };
@@ -152,8 +154,9 @@ async function traced(how: Build): Promise<Traced> {
     run(trace('read'), 'new', 'posts', 'write posts like these', '--name', 'posts');
     run(trace('build'), 'new', 'posts', 'write posts like these', '--name', 'posts', '--accept');
   } else run(trace('build'), 'new', 'posts', ...(withMethod ? ['--method', 'method.md'] : ['write posts like these']), '--name', 'posts', '--yes');
-  await setBackend({ byTool: { __plain: ['# Tool\n\nA draft.', '# Tool\n\nI would start with the riskiest line. Reviewed.'] } });
-  run(trace('run'), 'invoke', '--skill', 'posts', 'Write about tool 9.', '--json', '--claims', 'pattern');
+  await setBackend({ byTool: { __plain: ['# Tool\n\nA draft.', '# Tool\n\nI would start with the riskiest line. Reviewed.'], emit_specifics: { specifics: [] } } });
+  // as a person runs it, with no flag that turns a reader off
+  run(trace('run'), 'invoke', '--skill', 'posts', 'Write about tool 9.', '--json');
   const norm = (p: string): string => p.replace(`${data}/`, '').replace(proj, '<project>').replace(/^runs\/[^/]+\/.*/, 'runs/*').replace(/^sessions\/.*/, 'sessions/*')
     .replace(/^<project>\/\.claude\/.*/, '<project>/.claude/*').replace(/^skills\/[^/]+\//, 'skills/*/').replace(/[0-9a-f]{12,}/g, 'h');
   const lines = (n: string): string[] => (existsSync(trace(n)) ? readFileSync(trace(n), 'utf8').split('\n').filter(Boolean) : []);

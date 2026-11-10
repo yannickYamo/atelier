@@ -25,7 +25,7 @@ describe('the purpose card, read from the pieces and held to them', () => {
   });
   it('the person\'s card replaces the fields they name and keeps the rest; a field it does not have is refused', () => {
     const was = { kind: 'a pricing memo', reader: null, purpose: null, settles: ['the price'], by: 'model' as const };
-    expect(amendCard(was, 'reader=a sales rep before a call; settles=the price, the competitor')).toEqual({ kind: 'a pricing memo', reader: 'a sales rep before a call', purpose: null, settles: ['the price', 'the competitor'], by: 'you' });
+    expect(amendCard(was, 'reader=a sales rep before a call; settles=the price, per seat; settles=the competitor')).toEqual({ kind: 'a pricing memo', reader: 'a sales rep before a call', purpose: null, settles: ['the price, per seat', 'the competitor'], by: 'you' });
     expect(() => amendCard(was, 'tone=warm')).toThrow(/--card has no field "tone": kind, reader, purpose or settles/);
     expect(() => amendCard(was, 'just words')).toThrow(/field=value pairs/);
     expect(cardLine(amendCard(null, 'kind=a reply; settles=what is offered'))).toBe('This work: a reply; each piece settles: what is offered');

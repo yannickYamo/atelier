@@ -96,6 +96,10 @@ describe('an answer under 20 characters to a gap question is a decline', () => {
     expect(r.said).toEqual([`proof=yes it fell: under 20 characters, counted as a decline; written with the default (${PROOF_DEFAULT}).`]);
     const long = 'Footfall fell 40% per the port survey';
     expect([...readAnswers(`proof=${long},reader=Local traders`, qs).answers]).toEqual([['proof', long], ['reader', 'Local traders']]);
+    // ", word=" inside an answer in the person's words is the answer's; a mistyped id after a letter is still said
+    const own = 'Footfall fell 40%, margin=thin since then';
+    expect([...readAnswers(`proof=${own},reader=b`, qs).answers]).toEqual([['proof', own], ['reader', 'Town council']]);
+    expect(readAnswers('reader=b,prof=the port survey says so', qs).said).toEqual(['prof matched no question; ignored.']);
   });
   it('the decision kinds keep short answers as before', () => {
     expect([...readAnswers('emphasis=jobs', []).answers]).toEqual([['emphasis', 'jobs']]);
