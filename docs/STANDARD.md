@@ -36,8 +36,9 @@ listed as yours, never reported as met.
 - **To another machine:** a standard lives in one folder, `~/.atelier/skills/<name>` (or under `ATELIER_DATA`). Copy
   the folder, or point `ATELIER_DATA` at a shared place, and the skill, its versions and its reference set come with
   it.
-- **To another model:** run it with `--model`, `--provider` and `--base-url`. The run goes on and the record says
-  which model wrote the piece.
+- **To another model:** run it with `--model`, `--provider` and `--base-url`. A plain run goes on, says in one line
+  which model wrote the piece, and records it; the stricter paths stop until you accept the new model
+  (`--accept-new-binding`).
 
 ## One standard, three uses
 

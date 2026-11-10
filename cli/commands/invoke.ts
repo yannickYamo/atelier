@@ -1290,10 +1290,12 @@ function checkedBinding(L: store.StoreLayout, sv: SkillVersion,
     die(describeMismatch(verdict, sv.skillVersionHash));
   }
   if (verdict.kind === 'TARGET_BINDING_MISMATCH' && !stops && !argv.includes('--accept-new-binding')) {
-    // one line, to the person and never into a --json answer; recorded as the accepted case is, so it is said once
-    console.error(`(written on ${binding.requestedModel}, not the model this skill was built with: your skill is unchanged, and what was measured before describes the other model)`);
-    store.recordBinding(L, sv.skillVersionHash, binding);
-    store.appendEvent(L, { kind: 'BINDING_ACCEPTED', at: new Date().toISOString(), skillVersionHash: sv.skillVersionHash, bindingHash: bindingHash(binding) });
+    // One line, to the person and never into a --json answer. NOT recorded as accepted: nobody was asked, so a path
+    // that stops on a change of model (a strict skill, --deep) still stops, and the line is said on every such run.
+    const built = store.expectedBinding(L, sv.skillVersionHash, binding)?.requestedModel;
+    console.error(built && built !== binding.requestedModel
+      ? `(written on ${binding.requestedModel}; this skill was built on ${built}. Your skill is unchanged, and what was measured before describes ${built}.)`
+      : `(written with model settings other than the ones this skill was built with. Your skill is unchanged, and what was measured before describes those.)`);
   } else if (verdict.kind === 'TARGET_BINDING_MISMATCH') {
     console.log(`\nRunning on a new runtime binding — ${describeBinding(binding)}.`);
     console.log(`Observations from here are recorded against this binding and are not evidence about the other one.`);

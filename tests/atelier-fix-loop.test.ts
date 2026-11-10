@@ -290,6 +290,19 @@ describe('STANDARD_GAP: one approval mints, compiles and installs — or one ref
     expect(s2.requirements.find((r) => r.statement.includes('before the framework'))?.authority).toBe('EXPERT_RATIFIED');
     expect(store.readEvents(L).some((e) => e.kind === 'PROPOSED_CHANGE' && e.accepted === true)).toBe(true);
     expect(store.readEvents(L).some((e) => e.kind === 'LEDGER_DECISION')).toBe(true);
+
+    // THE PERSON CAN SEE IT WAS TAKEN IN, AND CAN TAKE IT BACK: the skill's page lists the change in their own words
+    // with the rule it added, and both undo commands (the one the fix printed, the one the page prints) name the
+    // version that was active before, which a rollback restores.
+    const page = run(data, proj, 'status', '--skill', 'focus');
+    expect(page).toContain('What you changed for every piece (1)');
+    expect(page).toContain('I always want the recommendation first');
+    expect(page).toContain('Lead with the recommendation before the framework.');
+    const fromFix = /undo this: atelier rollback --skill focus --to (\S+)/.exec(out)?.[1];
+    const fromPage = /Undo the last change: atelier rollback --skill focus --to (\S+)/.exec(page)?.[1];
+    expect(fromFix).toBeTruthy(); expect(fromPage).toBe(fromFix);
+    run(data, proj, 'rollback', '--skill', 'focus', '--to', fromFix!);
+    expect(store.getSkillVersion(L, store.getActive(L)!)!.standardVersionHash).toBe(s1hash);
   }, 120_000);
 
   it('two additions against the SAME run accumulate: the second lands on the first, not beside it', async () => {

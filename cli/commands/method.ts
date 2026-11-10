@@ -326,7 +326,7 @@ export async function method(): Promise<void> {
   else if (who?.authors) console.log(`${cases.length} piece(s) by ${who.authors.names.length} authors (${howSaid(who.authors.how)}): a build from a method reads them as one voice.\n`);
   if (voices && voices.groups.length > 1) console.log(`${voices.groups.length} voices read in how the pieces are written (${voices.groups.map((g) => `${g.pieces.length} piece(s)`).join(', ')}): built as one voice, which is what pointing at one folder asks for.\n  To build the combination of them, each read on its own:  atelier new ${goldenPath} --voices\n`);
   // a person shown the skill at work reads what was understood there (cli/guided.ts), in their words: here, one line
-  if (!whole && guidedHere() && !argv.includes('--review')) console.log(notePath === null ? 'Reading your pieces…' : 'Reading your pieces and your method…');
+  if (!whole && guidedHere()) console.log(notePath === null ? 'Reading your pieces…' : 'Reading your pieces and your method…');
   else for (const line of whole ? describeMethod(proposals, example.caseClass) : shortScreen(proposals)) console.log(line);
   // The limits of a corpus of short pieces: one line on the screen, the whole account with --report.
   if (short.brief && !guidedHere()) { console.log(''); for (const line of whole ? short.limits : [short.brief]) console.log(`Short form: ${line}`); }

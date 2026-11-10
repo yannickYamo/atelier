@@ -36,7 +36,8 @@ Never run `--accept` on the user's behalf without their answer: that one decisio
 
 ## 2. What was understood, and the few questions
 
-The build prints a line starting `What this work is, read from your pieces:`. Tell the user that line in plain words.
+Run `atelier status --skill <kebab-name>`: it shows what the skill holds, in the user's words. Tell the user its `For:` line
+and their rules in plain words.
 Ask only for what it does not say, at most five questions in all, and skip any they leave unanswered:
 
 - what the pieces are (a blog post, a newsletter, a memo),
@@ -49,11 +50,14 @@ Record their answers, in their words:
 atelier amend --skill <kebab-name> --card "kind=<their words>; reader=<their words>; purpose=<their words>"
 ```
 
-Leave out a field they did not answer. Do not fill one in for them.
+Leave out a field they did not answer. Do not fill one in for them. `;` separates the fields: where their answer
+contains one, write a comma in its place.
 
 ## 3. Two pieces, one round
 
-Ask for one request to try the skill on; take the second from the subject of one of their own pieces. For each:
+Ask for one request to try the skill on; take the second from the subject of one of their own pieces. One piece at a
+time: write it, take the one round, keep it, and only then write the next (`atelier fix` and `atelier keep` act on
+the piece just written). For each:
 
 ```bash
 atelier run "<the request>" --skill <kebab-name> --no-questions

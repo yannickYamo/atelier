@@ -258,7 +258,9 @@ atelier fix "the opening buried the news"    # react: what was wrong, in your ow
 At a terminal, `atelier new` does not end at "built". It says what it understood from your pieces, asks the few
 things only you can say (what the pieces are, who reads them, what for; at most five questions, enter skips), writes
 two pieces with the new skill, and takes one round of "what would you change" on each. What you accept is kept, and
-every later piece is written from it first. With `--yes`, `--json` or no terminal, it builds and asks nothing.
+every later piece is written from it first. With `--json` or no terminal, it builds and asks nothing; so does `--yes`, which on a build with a method note
+also keeps as written any step your own pieces do not follow. A skill built again keeps the pieces you accepted and
+writes no new samples. If the input ends before you answer, nothing is kept.
 
 Under the work a run prints two lines: what the checks found, in one sentence, and what to type if the piece is not
 right. Anything a check found and left for you (a possible slip, a specific to confirm) is listed there in full. A
@@ -266,7 +268,9 @@ piece that is held back shows its whole evaluation at once, and `--report` or `a
 any run.
 
 A skill is not tied to the model it was built on. Run it on another model and the piece is written, with one line
-saying which model wrote it; `atelier reproduce` measures how the skill holds there.
+on every such run saying which model wrote it and which the skill was built on; `atelier reproduce` measures how the
+skill holds there. The stricter paths (a skill held strictly, `--deep`, a short format) stop on a change of model
+until you say `--accept-new-binding`.
 
 `atelier status --skill <name>` is the page of one skill, in your words: what it is for, your rules, how you write,
 the pieces you kept, what you changed for every piece, and the command that undoes the last change. `--report` adds

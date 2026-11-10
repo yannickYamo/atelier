@@ -1,7 +1,8 @@
 // cli/commands/tend.ts — ONE COMMAND FOR EVERYTHING BELOW THE STANDARD, AND ONE PAGE FOR WHERE IT STANDS.
 //
 //   atelier tend --skill <name> [--cap <usd>] [--auto]     look after a skill: mine, read, improve
-//   atelier status --skill <name>                          where the skill stands, on one page
+//   atelier status --skill <name>                          what the skill holds, in its owner's words (skillPage)
+//   atelier status --skill <name> --report                 and where it stands, on one page (skillDashboard)
 //
 // The loop has several parts (failure mining, the taste reader, the regression floor, the optimizer),
 // and each has its own command for when you want to drive it. `tend` runs them in order, within one
@@ -123,18 +124,33 @@ export function skillPage(name: string): void {
   console.log(`  For: ${said ? said : 'not said yet'}   (say it: atelier amend --skill ${name} --card "kind=…; reader=…; purpose=…")`);
   if (voice?.pieces?.length) console.log(`  Built from ${voice.corpusPieces ?? voice.pieces.length} of your pieces${voice.lengthSpan ? `, ${voice.lengthSpan[0]} to ${voice.lengthSpan[1]} words each` : ''}.`);
   const live = v.requirements.filter((r) => r.authority !== 'EXPERT_REJECTED');
-  const yours = live.filter((r) => r.provenance !== 'MACHINE_DISCOVERED');
+  // WHAT THE PERSON CHANGED FOR EVERY PIECE: the active standard's own line, back to the build (each standard names the
+  // one it replaced and why, in the person's words). A candidate that was never made active is not on that line, and a
+  // build made again (its reason is the command's, not theirs) is not a change they made.
+  const changes: { why: string; at: string; rules: string[] }[] = []; const theirs = new Set<string>();
+  for (let cur: typeof v | null = v, n = 0; cur?.supersedes && n < 200; n++) {
+    const prev: typeof v | null = store.getStandard(L, cur.supersedes);
+    if (cur.reason && !cur.reason.startsWith('built again with atelier ')) {
+      const had = new Map((prev?.requirements ?? []).map((r) => [r.requirementId, r.statement]));
+      const moved = cur.requirements.filter((r) => r.authority !== 'EXPERT_REJECTED' && had.get(r.requirementId) !== r.statement);
+      for (const r of moved) theirs.add(r.requirementId);
+      changes.push({ why: cur.reason, at: cur.mintedAt.slice(0, 10), rules: moved.map((r) => r.statement) });
+    }
+    cur = prev;
+  }
+  const yours = live.filter((r) => r.provenance !== 'MACHINE_DISCOVERED' && !theirs.has(r.requirementId));
   list('Your rules, in your words', yours.map((r) => r.statement), 12);
   list('How you write', (voice?.persona?.points ?? []).map((pt) => pt.description).filter(Boolean), 6);
-  list('Also held on every new piece', live.filter((r) => r.provenance === 'MACHINE_DISCOVERED').map((r) => r.statement), 6);
+  list('Also held on every new piece', live.filter((r) => r.provenance === 'MACHINE_DISCOVERED' && !theirs.has(r.requirementId)).map((r) => r.statement), 6);
   const kept = store.getKept(L);
-  list(`Pieces you kept (${kept.length}): new pieces are written from these first`, [...kept].reverse().map((k) => `${k.request ?? titleOf(k.text) ?? 'a piece of yours'}  (${k.at.slice(0, 10)}${k.edits.length ? `, with ${k.edits.length} of your edits` : ''})`), 5);
-  // WHAT CHANGED SINCE THE BUILD, newest first: each change of the rules with the person's own reason, and the way back.
-  const rows = store.history(L);
-  const changes = rows.filter((h, i) => h.standard?.reason && rows.findIndex((x) => x.skillVersion.standardVersionHash === h.skillVersion.standardVersionHash) === i);
-  list(`What you changed for every piece (${changes.length})`, changes.map((h) => `${h.standard?.reason ?? ''}  (${h.skillVersion.builtAt.slice(0, 10)})`), 5);
-  const at = rows.findIndex((h) => h.active); const before = at >= 0 ? rows[at + 1] : undefined;
-  if (before) console.log(`\n  Undo the last change: atelier rollback --skill ${name} --to ${before.skillVersion.skillVersionHash}`);
+  list(`Pieces you kept (${kept.length}): new pieces are written from these first`, [...kept].reverse().map((k) => `${k.request ?? titleOf(k.text)}  (${k.at.slice(0, 10)}${k.edits.length ? `, with ${k.edits.length} of your edits` : ''})`), 5);
+  if (changes.length) {
+    console.log(`\n  What you changed for every piece (${changes.length})`);
+    for (const c of changes.slice(0, 8)) { console.log(`    - "${one(c.why)}"  (${c.at})`); for (const r of c.rules) console.log(`        now a rule: ${one(r, 140)}`); }
+    if (changes.length > 8) console.log(`    and ${changes.length - 8} more`);
+  }
+  const before = store.getPreviousActive(L);
+  if (before && store.getSkillVersion(L, before)) console.log(`\n  Undo the last change: atelier rollback --skill ${name} --to ${before}`);
   const receipt = store.getReceipt(L, active); const lost = receipt ? degradedStages(receipt) : [];
   if (lost.length) console.log(`\n  Part of the build did not finish (${lost.map((x) => x.id).join(', ')}). Finish it: atelier build --name ${name} --persona auto`);
   console.log(`\n  Write with it: atelier run "<the task>" --skill ${name}   ·   change it for every piece: atelier fix "<what was wrong>" --always`);

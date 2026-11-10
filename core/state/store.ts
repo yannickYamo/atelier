@@ -807,7 +807,15 @@ export function setActive(l: StoreLayout, skillVersionHash: string): void {
   if (!getSkillVersion(l, skillVersionHash)) {
     throw new Error(`STORE: cannot activate ${skillVersionHash} — no such version. Activation points at history; it does not create it.`);
   }
-  writeAtomic(join(dirs(l).base, 'active.json'), JSON.stringify({ skillVersionHash, at: new Date().toISOString() }, null, 1));
+  // THE VERSION LEFT is kept with the pointer: what "undo the last change" goes back to. A version built and never
+  // made active (a candidate that lost) is never it; activating the same version again leaves it as it was.
+  const was = getActive(l); const before = was && was !== skillVersionHash ? was : getPreviousActive(l);
+  writeAtomic(join(dirs(l).base, 'active.json'), JSON.stringify({ skillVersionHash, at: new Date().toISOString(), ...(before && before !== skillVersionHash ? { previous: before } : {}) }, null, 1));
+}
+/** The version that was active before the current one; null for a skill never changed, or one changed before this was kept. */
+export function getPreviousActive(l: StoreLayout): string | null {
+  const p = join(dirs(l).base, 'active.json');
+  return existsSync(p) ? readJson<{ skillVersionHash: string; previous?: string }>(p, { what: 'the active pointer', requireKeys: ['skillVersionHash'] }).previous ?? null : null;
 }
 export const getActive = (l: StoreLayout): string | null => {
   const p = join(dirs(l).base, 'active.json');
@@ -908,12 +916,15 @@ export function expectedBinding(l: StoreLayout, skillVersionHash: string, candid
   // Comparing only against the first binding made that acceptance last one run: the next invoke on the
   // accepted model was refused again, as if nobody had said yes. The exact configuration matches itself;
   // anything not on the log is still compared with the surface's first binding.
+  const onSurface = candidate ? log.filter((b) => b.binding.providerAdapter === candidate.providerAdapter) : log;
   if (candidate) {
     const h = bindingHash(candidate);
-    const accepted = log.find((b) => b.hash === h);
-    if (accepted) return accepted.binding;
+    // ON THE LOG IS NOT THE SAME AS ACCEPTED. A plain run on another model goes on with one line said and is logged
+    // like every run (core/runtime/record.ts), with nobody asked: it is the surface's baseline only if it was first
+    // there, and accepted only where a person said so (the BINDING_ACCEPTED event --accept-new-binding leaves).
+    const logged = log.find((b) => b.hash === h);
+    if (logged && (onSurface[0]?.hash === h || readEvents(l).some((e) => e.kind === 'BINDING_ACCEPTED' && e.skillVersionHash === skillVersionHash && e.bindingHash === h))) return logged.binding;
   }
-  const onSurface = candidate ? log.filter((b) => b.binding.providerAdapter === candidate.providerAdapter) : log;
   return onSurface[0]?.binding ?? null;
 }
 

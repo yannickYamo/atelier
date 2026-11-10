@@ -63,6 +63,7 @@ describe('the first ten minutes', () => {
     expect(asked === 'One' ? 1 : Number(asked)).toBeLessThanOrEqual(5);
     const card = store.getCard({ root: data, skillName: 'posts' });
     expect(card?.by).toBe('you'); expect(card?.kind).toBe('a blog post'); expect(card?.reader).toBe('someone choosing a notes app');
+    expect(card?.purpose ?? null, 'a question answered with enter leaves the field unsaid').toBeNull();
     // two pieces, one round, and what the person accepted is kept
     expect(built.out.match(/^Sample \d of 2: /gm)?.length).toBe(2);
     expect(built.out).toContain('Sample 1 of 2: Compare Logseq and Craft for my notes.');
@@ -83,7 +84,10 @@ describe('the first ten minutes', () => {
     expect([0, 1], ran.out).toContain(ran.code);
     expect(ran.out).toContain('That is the whole trade.');
     // beside the piece: what the checks found in one sentence and what to do if it is not right, in plain words
-    expect(ran.out).toMatch(/^Checked: /m); expect(ran.out).toContain('Not right? atelier fix');
+    // the one sentence counts what was measured, what is judgement, and what could not be checked, and that last is named
+    expect(ran.out).toMatch(/^Checked: nothing broke your rules \(3 measured; 3 are judgement calls the writer was given in your words; 1 could not be checked on this piece, named below\)\.$/m);
+    expect(ran.out).toMatch(/^ {2}Not checked on this piece: Every specific in the work .*\(no material was supplied to look them up in\)$/m);
+    expect(ran.out).toContain('Not right? atelier fix');
     expect(ran.out).not.toContain('── Evaluation');
     expect(ran.out).not.toMatch(/left for you to read|possible slip|small reader/i);
 
@@ -107,11 +111,26 @@ describe('the first ten minutes', () => {
     expect(INTERNAL.filter((w) => page.out.includes(w))).toEqual([]);
     expect(page.out).not.toMatch(/receipt|floor|taste reader|dimensions/);
 
-    // the same skill on another model: the piece is written, and the run is never refused for the change
-    const r2 = spawnSync('node', [CLI, 'run', 'Compare Bear and Craft once more.', '--provider', 'openai-compatible', '--base-url', url(), '--model', 'scripted-next'], { encoding: 'utf8', cwd: proj, env, input: '' });
-    expect([0, 1], `${r2.stdout}${r2.stderr}`).toContain(r2.status);
-    expect(r2.stdout).toContain('That is the whole trade.');
-    expect(`${r2.stdout}${r2.stderr}`).not.toContain('TARGET_BINDING_MISMATCH');
+    // the same skill on another model: the piece is written, one line says which model wrote it and which the skill
+    // was built on, and the line is said again on the next such run (nobody was asked, so nothing was accepted)
+    const other = (): { code: number | null; out: string; err: string } => {
+      const r = spawnSync('node', [CLI, 'run', 'Compare Bear and Craft once more.', '--provider', 'openai-compatible', '--base-url', url(), '--model', 'scripted-next'], { encoding: 'utf8', cwd: proj, env, input: '' });
+      return { code: r.status, out: r.stdout, err: r.stderr };
+    };
+    for (const r2 of [other(), other()]) {
+      expect(r2.code, `${r2.out}${r2.err}`).toBe(ran.code);
+      expect(r2.out).toContain('That is the whole trade.');
+      expect(r2.err).toContain('(written on scripted-next; this skill was built on scripted.');
+      expect(`${r2.out}${r2.err}`).not.toContain('TARGET_BINDING_MISMATCH');
+    }
+
+    // built again at a terminal: the pieces already accepted still lead; nothing is asked or written a second time
+    await setBackend({ byTool: { emit_persona: { points: [] }, emit_holds_back: { ids: [] }, __plain: [DRAFT, REVIEWED] } });
+    const again = typed('', 'new', 'posts', 'write posts in my voice', '--method', 'method.md', '--name', 'posts');
+    expect(again.code, again.out).toBe(0);
+    expect(again.out).toContain('"posts" is built again. The 2 pieces you kept still lead every new one.');
+    expect(again.out).not.toMatch(/Sample \d of|before I write/);
+    expect(store.getKept({ root: data, skillName: 'posts' }).length).toBe(2);
   }, 240_000);
 
   it('with no model key: nothing is asked, nothing is called ready, the one thing to do is said; the same command again reads the voice', async () => {
@@ -135,7 +154,48 @@ describe('the first ten minutes', () => {
     expect(out).toMatch(/"posts" is ready/);
   }, 240_000);
 
-  it('where nobody is there (--yes, or no terminal), the build says ready and asks nothing', async () => {
+  it('a person who is not answering is never taken to have accepted: ended input keeps nothing; --yes and --no-model write no sample', async () => {
+    const fresh = (): { data: string; proj: string; env: NodeJS.ProcessEnv } => {
+      const data = mkdtempSync(join(tmpdir(), 'atelier-first-data-')); const proj = mkdtempSync(join(tmpdir(), 'atelier-first-proj-'));
+      mkdirSync(join(proj, 'posts')); writeFileSync(join(proj, 'posts', 'compare-1.md'), POST(1)); writeFileSync(join(proj, 'posts', 'compare-2.md'), POST(2)); writeFileSync(join(proj, 'posts', 'essay.md'), ESSAY);
+      const env: NodeJS.ProcessEnv = { ...process.env, ATELIER_DATA: data, ATELIER_PROJECT_DIR: proj, ATELIER_PRICE_IN: '1', ATELIER_PRICE_OUT: '1', ATELIER_GUIDED: '1' };
+      delete env.ANTHROPIC_API_KEY; delete env.ANTHROPIC_AUTH_TOKEN; delete env.ATELIER_CONTEXT_READER;
+      return { data, proj, env };
+    };
+    const build = (f: { proj: string; env: NodeJS.ProcessEnv }, input: string, ...more: string[]): { code: number | null; out: string } => {
+      const r = spawnSync('node', [CLI, 'new', 'posts', 'write posts in my voice', '--name', 'posts', ...more, ...BACKEND()], { encoding: 'utf8', cwd: f.proj, env: f.env, input });
+      return { code: r.status, out: `${r.stdout}${r.stderr}` };
+    };
+    const script = (): Promise<Response> => setBackend({ byTool: { emit_persona: { points: [] }, emit_holds_back: { ids: [] }, __plain: [DRAFT, REVIEWED] } });
+
+    // the input ends at the first question: nothing is written, nothing is kept, and it is not called ready
+    await script(); const ended = fresh(); const e1 = build(ended, '');
+    expect(e1.code, e1.out).toBe(0);
+    expect(e1.out).toContain('the input ended');
+    expect(e1.out).not.toMatch(/is ready|Sample \d of/);
+    expect(store.getKept({ root: ended.data, skillName: 'posts' })).toEqual([]);
+
+    // the input ends at "anything to change?": the sample was shown, and is not kept as accepted
+    await script(); const mid = fresh(); const e2 = build(mid, 'a blog post\n\n\nCompare Logseq and Craft.\n');
+    expect(e2.out).toContain('Sample 1 of 2: Compare Logseq and Craft.');
+    expect(e2.out).not.toMatch(/is ready/);
+    expect(store.getKept({ root: mid.data, skillName: 'posts' })).toEqual([]);
+
+    // --yes: built, nothing asked, no sample, though a person's lines are there
+    await script(); const yes = fresh(); const e3 = build(yes, 'a blog post\n\n\n\n\n\n', '--yes');
+    expect(e3.code, e3.out).toBe(0);
+    expect(e3.out).toContain('Your skill "posts" is ready.');
+    expect(e3.out).not.toMatch(/What I understood|Sample \d of/);
+
+    // --no-model with a model in reach: the person asked for no model, so none is called for samples
+    await script(); const off = fresh(); const e4 = build(off, 'a blog post\n\n\n\n\n\n', '--no-model');
+    expect(e4.code, e4.out).toBe(0);
+    expect(e4.out).toContain('"posts" is built without a model, as you asked');
+    expect(e4.out).not.toMatch(/Sample \d of|before I write|is ready/);
+    expect(store.listInvocations({ root: off.data, skillName: 'posts' })).toEqual([]);
+  }, 300_000);
+
+  it('where nobody is there (no terminal), the build says ready and asks nothing', async () => {
     const data = mkdtempSync(join(tmpdir(), 'atelier-first-data-')); const proj = mkdtempSync(join(tmpdir(), 'atelier-first-proj-'));
     mkdirSync(join(proj, 'posts')); writeFileSync(join(proj, 'posts', 'compare-1.md'), POST(1)); writeFileSync(join(proj, 'posts', 'essay.md'), ESSAY);
     const env: NodeJS.ProcessEnv = { ...process.env, ATELIER_DATA: data, ATELIER_PROJECT_DIR: proj, ATELIER_PRICE_IN: '1', ATELIER_PRICE_OUT: '1' };

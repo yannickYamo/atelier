@@ -158,7 +158,7 @@ export const FRONT_DOOR: readonly string[] = [
 /** The commands a newcomer does not need, by what they are for. Nothing is hidden: it is one command away. */
 const LAB: readonly (readonly [string, readonly string[]])[] = [
   ['write to the standard', ['run', 'fix', 'keep', 'invoke']],
-  ['check and correct', ['score', 'material', 'amend', 'add', 'status', 'report', 'rate', 'export', 'mcp', 'models']],
+  ['check and correct', ['verify', 'score', 'material', 'amend', 'add', 'status', 'report', 'rate', 'export', 'mcp', 'models']],
   ['build, the long way', ['method', 'skill', 'review', 'pending', 'ratify', 'ratify-one', 'ratify-close', 'build', 'confirm', 'plan', 'abort', 'check']],
   ['measure a skill', ['reproduce', 'evolve', 'eval', 'qualify', 'floor', 'reference', 'history', 'inspect']],
   ['experimental: not shown to help yet', ['fidelity', 'taste', 'tells', 'library', 'tend', 'voice', 'optimize', 'mine', 'sharpen', 'improve', 'compare', 'profiles', 'carriers']],
@@ -173,10 +173,10 @@ function lab(): void {
     return;
   }
   if (rest.length) die(`atelier lab: there is no command "${rest[0]}". The list: atelier lab`);
-  console.log('atelier lab: everything beyond new, verify and setup. Each is its own command: atelier <command> --help\n');
+  console.log('atelier lab: everything beyond new, run, fix and setup. Each is its own command: atelier <command> --help\n');
   const listed = new Set<string>();
   for (const [what, names] of LAB) { const here = names.filter((n) => COMMANDS.includes(n)); here.forEach((n) => listed.add(n)); console.log(`  ${what}:\n    ${here.join(' · ')}`); }
-  const others = COMMANDS.filter((c) => !listed.has(c) && !['new', 'verify', 'setup', 'lab'].includes(c));
+  const others = COMMANDS.filter((c) => !listed.has(c) && !['new', 'setup', 'lab'].includes(c));
   if (others.length) console.log(`  the rest:\n    ${others.join(' · ')}`);
   console.log('\n  `atelier invoke` is `atelier run` with its full report.');
 }
@@ -275,7 +275,10 @@ const main = async (): Promise<void> => {
       const s = loadSession();
       // The build in flight in this project is said while there is one; once skills are built and nothing waits, the
       // list above is the whole answer (--report says the rest).
-      const quiet = built.length > 0 && s.run.state === 'BUILT' && !argv.includes('--report');
+      // Read off core/state/policy.ts, the one owner of "what is permitted now". A build that is blocked, or other
+      // runs in flight under this store, are always said; the bare state line only while a build is in flight.
+      const polNow = policyFor(s.run); const elsewhere = listSessions().filter((x) => !x.here);
+      const quiet = built.length > 0 && s.run.state === 'BUILT' && !argv.includes('--report') && !polNow.reasonIfBlocked && !elsewhere.length;
       if (quiet) return;
       console.log(`state ${s.run.state}  skill ${s.skillName ?? '(none)'}  proposals ${s.proposals.length}`
         + `  decided ${s.decided.length}  enrolled [${s.run.enrolments.map((e) => e.study).join(', ')}]`);
@@ -329,7 +332,7 @@ const main = async (): Promise<void> => {
       // version had drifted to omit nine registered commands, including `promote` and `confirm`,
       // which other commands tell the user to run.
       if (cmd !== undefined && cmd !== '' && cmd !== 'help' && cmd !== '--help' && cmd !== '-h') {
-        die(`unknown command "${cmd}". The three you need: new, run, fix. Every other: atelier lab`);
+        die(`unknown command "${cmd}". Start with: new, run, fix. Every other: atelier lab`);
       }
       // The three commands the product is lived with (FRONT_DOOR); every other command is one word away, under `atelier lab`.
       for (const line of FRONT_DOOR) console.log(line);
