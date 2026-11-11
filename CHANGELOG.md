@@ -10,6 +10,7 @@ Atelier learns how you write from the pieces you would sign, writes new pieces t
 - It also writes to the standard: `atelier run`, then `atelier fix` in your own words.
 - At a terminal, `atelier new` ends with the skill at work: what it understood, a few questions only you can answer, two previews and one round of changes. A folder of pieces with no method note is built the same way; `--rules` asks for rules read off the pieces and shown for approval instead.
 - A model that declines to write a piece is asked again, up to three times, and the run says so; a declined reading of how you write is asked again too, and a skill built without it reads it on the next build.
+- "How you write" shows, under each point, how often you do it and a sentence of yours it was read from, at the build and on the skill page (`atelier status --skill <name>`).
 - Where nothing sets a length, the writer is told how long your own pieces run, as a guide. It is never held and never a reason to write again.
 - The title of a method note is not one of its steps. A check written for a step that fails your own pieces is dropped, and the step is yours to judge; it is no longer shown as a step your pieces do not follow.
 - A skill built from your pieces now writes from them: your pieces of the kind asked for, whole, with your material, the task and your own stated rules, then one review against the same. `atelier keep` keeps the piece you published, so the next runs write from it and learn from each sentence you changed. `--pipeline legacy` keeps the compiled path.

@@ -17,6 +17,7 @@ import { DATA, argv, flag, canReach } from './runtime.js';
 import * as store from '../core/state/store.js';
 import { cardLine, amendCard, type PurposeCard } from '../core/direct/card.js';
 import { titleOf } from '../core/direct/pieces.js';
+import type { PersonaPoint } from '../core/compiler/persona.js';
 import { editPairs, type KeptPiece } from '../core/direct/kept.js';
 import { createHash } from 'node:crypto';
 
@@ -110,6 +111,19 @@ export interface Understood {
 /** A list a person reads at a glance: the first few, and how many more. */
 const few = (xs: readonly string[], most: number): string[] => [...xs.slice(0, most).map((x) => `    - ${x.replace(/\s+/g, ' ').trim()}`), ...(xs.length > most ? [`    and ${xs.length - most} more`] : [])];
 
+/**
+ * HOW THE PERSON WRITES, EACH POINT WITH WHERE IT WAS READ: how often they do it (counted over their pieces where it was,
+ * else the reading's own word) and a sentence of theirs that shows it. The same lines at the build and on the skill
+ * page (cli/commands/tend.ts): what was decided about their writing, beside the evidence, and nothing of how.
+ */
+export function howYouWrite(points: readonly PersonaPoint[], most: number): string[] {
+  const clip = (t: string, n: number): string => { const x = t.replace(/\s+/g, ' ').trim(); return x.length > n ? `${x.slice(0, n - 1).trimEnd()}…` : x; };
+  const often = (x: PersonaPoint): string => (x.rate ? `in ${x.rate.k} of your ${x.rate.n} pieces` : ({ ALWAYS: 'always', OFTEN: 'often', SOMETIMES: 'in some pieces', RARELY: 'rarely' } as const)[x.frequency]);
+  const said = points.filter((x) => x.description.trim());
+  return [...said.slice(0, most).flatMap((x) => [`    - ${clip(x.description, 160)}`, ...(x.quote.trim() ? [`        ${often(x)}, as in: "${clip(x.quote, 140)}"`] : [])]),
+    ...(said.length > most ? [`    and ${said.length - most} more`] : [])];
+}
+
 export async function guided(name: string, seen: Understood = { steps: [], disputed: [] }): Promise<void> {
   const L = { root: DATA, skillName: name };
   const io = lines();
@@ -121,8 +135,8 @@ export async function guided(name: string, seen: Understood = { steps: [], dispu
     console.log('\nWhat I understood');
     if (voice?.pieces?.length) console.log(`  Your pieces: ${voice.corpusPieces ?? voice.pieces.length}${voice.lengthSpan ? `, ${voice.lengthSpan[0]} to ${voice.lengthSpan[1]} words each` : ''}.`);
     if (card && cardLine(card)) console.log(`  ${cardLine(card)}.`);
-    const sound = (voice?.persona?.points ?? []).map((pt) => pt.description).filter(Boolean);
-    if (sound.length) { console.log('  How you write:'); for (const l of few(sound, 4)) console.log(l); }
+    const sound = howYouWrite(voice?.persona?.points ?? [], 4);
+    if (sound.length) { console.log('  How you write:'); for (const l of sound) console.log(l); }
     if (seen.steps.length) { console.log(`  Your method, which every piece follows:`); for (const l of few(seen.steps, 6)) console.log(l); }
     if (seen.disputed.length) {
       console.log(`  ${seen.disputed.length === 1 ? 'One step of your method is' : `${seen.disputed.length} steps of your method are`} not what your own pieces do. The writer is told ${seen.disputed.length === 1 ? 'it' : 'them'}, and no piece is held back for ${seen.disputed.length === 1 ? 'it' : 'them'}:`);

@@ -174,6 +174,8 @@ describe('the first ten minutes', () => {
     const out = `${again.stdout}${again.stderr}`;
     expect(again.status, out).toBe(0);
     expect(out).toContain('How you write:'); expect(out).toContain('- Closes on a short plain sentence.');
+    // each point with how often and a sentence of theirs it was read from
+    expect(out).toMatch(/^ {8}(?:often|in \d of your \d pieces), as in: "That is the whole trade\."$/m);
     expect(out).toMatch(/"posts" is ready/);
   }, 240_000);
 

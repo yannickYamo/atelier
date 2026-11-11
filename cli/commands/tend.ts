@@ -22,6 +22,7 @@
 //
 //   0 9 * * 1  cd /path/to/project && atelier tend --skill house-style --cap 5 --auto >> ~/.atelier/tend.log 2>&1
 
+import { howYouWrite } from '../guided.js';
 import { staleChecks } from '../checks.js';
 import * as store from '../../core/state/store.js';
 import { degradedStages, describeStages } from '../../core/state/receipt.js';
@@ -140,7 +141,7 @@ export function skillPage(name: string): void {
   }
   const yours = live.filter((r) => r.provenance !== 'MACHINE_DISCOVERED' && !theirs.has(r.requirementId));
   list('Your rules, in your words', yours.map((r) => r.statement), 12);
-  list('How you write', (voice?.persona?.points ?? []).map((pt) => pt.description).filter(Boolean), 6);
+  { const sound = howYouWrite(voice?.persona?.points ?? [], 6); if (sound.length) { console.log('\n  How you write'); for (const l of sound) console.log(l); } }
   list('Also held on every new piece', live.filter((r) => r.provenance === 'MACHINE_DISCOVERED' && !theirs.has(r.requirementId)).map((r) => r.statement), 6);
   const allKept = store.getKept(L); const kept = allKept.filter((k) => !k.correctionOnly);
   const corrected = allKept.flatMap((k) => k.edits).length;
