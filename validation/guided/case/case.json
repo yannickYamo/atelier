@@ -1,0 +1,37 @@
+{
+ "corpus": "../../../examples/blog/posts",
+ "for": "short engineering blog posts about a change we made and what it cost",
+ "card": {
+  "kind": "a short engineering blog post",
+  "reader": "engineering leads at other companies",
+  "purpose": "weigh whether the same trade would work for their team"
+ },
+ "change": "Open on the number of pages, not on a general statement.",
+ "always": "Never end on a question to the reader.",
+ "requests": [
+  {
+   "task": "Write a post about cutting our on-call pages by deleting alerts nobody acted on.",
+   "with": [
+    "notes=notes/n0.md"
+   ]
+  },
+  {
+   "task": "Write a post about replacing our staging environment with per-PR previews.",
+   "with": [
+    "notes=notes/n1.md"
+   ]
+  },
+  {
+   "task": "Write a post about how we got our test suite from 38 minutes to 6.",
+   "with": [
+    "notes=notes/n2.md"
+   ]
+  },
+  {
+   "task": "Write a post about capping design docs at two pages.",
+   "with": [
+    "notes=notes/n3.md"
+   ]
+  }
+ ]
+}
