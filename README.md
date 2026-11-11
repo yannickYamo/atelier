@@ -14,6 +14,8 @@ Every team will run agents, and out of the box they all write the same way. What
 
 Atelier captures that standard from finished work on day zero, before any agent has run. It is a record you own: your pieces, your method, your rules, and the pieces you accepted. It has a version. Any text can be checked against it. It moves to another tool, another machine or another model, and stays the same when the model underneath changes. [What a standard holds](docs/STANDARD.md).
 
+Part of a standard can be decided: a length, a structure, a word you never use, a figure that must come from your notes. Atelier holds every piece to that part. The rest is taste. For that part it shows you what it learned and the sentence of yours it learned it from, and writes from it.
+
 One standard, one agent. An agency keeps one per client. A content team keeps one per voice.
 
 ## How it learns your taste
