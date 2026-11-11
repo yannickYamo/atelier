@@ -1,12 +1,12 @@
 # Atelier
 
-Atelier turns the work you'd sign into an agent that writes it your way. Point it at your best pieces and your method. It learns the standard behind them, writes new pieces from it, and holds every draft to it: yours, a model's or an agent's.
+Atelier learns your standard from your best work, writes to it, and shows you what it holds. Point it at the pieces you'd sign and, if you have one, the method you follow. You get an agent that writes new pieces your way, and a record of your standard that you own.
 
 [![CI](https://github.com/yannickYamo/atelier/actions/workflows/ci.yml/badge.svg)](https://github.com/yannickYamo/atelier/actions/workflows/ci.yml)
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![node](https://img.shields.io/badge/node-%3E%3D22-brightgreen)](package.json)
 
-<p align="center"><img src="docs/how-it-works.svg" alt="Your best work goes in. Atelier learns your taste and you approve each habit it found. It writes every new piece in your voice, for that request. It reads each piece before you do: made-up facts flagged, copied passages caught. Next: expert agents." width="100%"></p>
+<p align="center"><img src="docs/how-it-works.svg" alt="Your best work goes in. Atelier learns your taste and shows each habit beside a sentence of yours. It writes every new piece in your voice, for that request. It reads each piece before you do: made-up facts flagged, copied passages caught. Next: expert agents." width="100%"></p>
 
 ## The standard is the product
 
@@ -24,11 +24,11 @@ You point it at finished work you're happy with. Ten blog posts, a year of newsl
 
 Some of that is countable: how long your paragraphs run, how your pieces open, which words never appear, how often you ask the reader a question. Some of it isn't. Where you commit and where you hedge. How you close. What you always cut before sending.
 
-Most of this was never written down anywhere. People know good when they see it and can't say why. Atelier does the saying part, then hands it back to you one rule at a time, in plain words. You keep the rules that are actually you and drop the rest.
+Most of this was never written down anywhere. People know good when they see it and can't say why. Atelier does the saying part, then shows it back to you in plain words: each habit with how often you do it and a sentence of yours it was read from. If one is wrong, say so in your own words and it changes.
 
-What you approve is fixed. A model can't quietly reword it later.
+A rule you state is fixed. A model can't quietly reword it later.
 
-## Every draft held to it
+## Written from your pieces, read before it reaches you
 
 A new piece is written from your own pieces of the kind you asked for, whole, with the material you attached and the task, then reviewed once: anything you wouldn't write is fixed, and the rest is left alone. The rules you stated yourself are shown to the writer in your words, and a sentence that still breaks one is rewritten, that sentence only.
 
@@ -64,14 +64,15 @@ How each was measured, and what isn't established yet, is in [EVALS](EVALS.md).
 ## Try it
 
 ```bash
-npm install -g @yannickyamo/atelier
+git clone https://github.com/yannickYamo/atelier && cd atelier
+npm install && npm run build && npm link
 
-atelier new ./my-posts "blog posts like these" --method method.md --name posts   # build the agent from your pieces and your method
+atelier new ./my-posts "blog posts like these" --method method.md --name posts   # build the agent from your pieces (the method is optional)
 atelier run "a post on why we moved off the queue" --with notes=notes.md   # write in your voice
 atelier verify --skill posts draft.md --with notes=notes.md   # read any draft, yours or an agent's
 ```
 
-At a terminal, `atelier new` ends by showing the agent at work: what it understood, a few questions only you can answer, two pieces written on the spot as previews, and one round of changes that every later piece is reviewed against. What you accept is kept, and every later piece is written from it first.
+At a terminal, `atelier new` ends by showing the agent at work: what it understood, a few questions only you can answer, two pieces written on the spot as previews, and one round of changes. A change you ask for and confirm is carried to every later piece. The previews are never added to your own pieces: the agent is built from your work, not from its drafts.
 
 `atelier setup` lets the coding agents in a project (Claude Code, Codex) call it on their own drafts. Not happy with a piece? `atelier fix "the opening was too abstract"` and say it in your own words. [examples/blog](examples/blog) has six posts to try it on.
 

@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1160 520" width="1160" height="520" role="img" aria-labelledby="t d">
   <title id="t">How Atelier works</title>
-  <desc id="d">Your best work goes in. Atelier learns your taste, including the habits you never wrote down, and you approve each one. It writes each new piece in your voice, for that request. It reads every piece before you do, flagging made-up facts and copied passages. You get work you can sign. Next: expert agents that learn the decisions behind the work.</desc>
+  <desc id="d">Your best work goes in. Atelier learns your taste, including the habits you never wrote down, and shows each beside a sentence of yours. It writes each new piece in your voice, for that request. It reads every piece before you do, flagging made-up facts and copied passages. You get work you can sign. Next: expert agents that learn the decisions behind the work.</desc>
   <style>
     .bg { fill: #faf7f2; }
     .card { fill: #ffffff; stroke: #e4ddd2; stroke-width: 1.5; }
@@ -65,7 +65,7 @@
     <text class="muted b" x="24" y="168">habits you never</text>
     <text class="muted b" x="24" y="192">put into words.</text>
     <rect class="chip" x="24" y="240" width="202" height="44" rx="22"/>
-    <text class="accent s" x="125" y="268" text-anchor="middle">You approve each one</text>
+    <text class="accent s" x="125" y="268" text-anchor="middle">Each beside your words</text>
   </g>
 
   <line class="accent-s" x1="506" y1="196" x2="546" y2="196" stroke-width="2.5" marker-end="url(#arrow)"/>
