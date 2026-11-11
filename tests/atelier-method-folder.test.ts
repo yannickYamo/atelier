@@ -201,7 +201,7 @@ describe('the front door: atelier new <your-work> --method <note>', () => {
     const lab = run('lab').out;
     for (const c of ['run', 'fix', 'reproduce', 'evolve', 'fidelity', 'method']) expect(lab).toContain(c);
     expect(run('lab', 'status').code).toBe(0);
-    expect(run('nonsense').out).toContain('The three you need: new, verify, setup');
+    expect(run('nonsense').out).toContain('Start with: new, run, fix');
   }, 120_000);
 });
 
@@ -258,7 +258,7 @@ describe('a build that stopped half-way is finished by building again', () => {
     const skill = readFileSync(join(proj, '.claude', 'skills', 'review', 'SKILL.md'), 'utf8');
     // built once, not twice over: each step of the method is in the skill one time
     expect(skill.match(/Open with a Summary section/g)?.length).toBe(1);
-    const run2 = run('lab', 'status', '--skill', 'review');
+    const run2 = run('lab', 'status', '--skill', 'review', '--report');
     expect(run2.code, run2.out).toBe(0);
   }, 120_000);
   it('the same from examples alone, with no model', () => {

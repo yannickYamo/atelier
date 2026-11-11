@@ -1,7 +1,8 @@
 // cli/commands/tend.ts — ONE COMMAND FOR EVERYTHING BELOW THE STANDARD, AND ONE PAGE FOR WHERE IT STANDS.
 //
 //   atelier tend --skill <name> [--cap <usd>] [--auto]     look after a skill: mine, read, improve
-//   atelier status --skill <name>                          where the skill stands, on one page
+//   atelier status --skill <name>                          what the skill holds, in its owner's words (skillPage)
+//   atelier status --skill <name> --report                 and where it stands, on one page (skillDashboard)
 //
 // The loop has several parts (failure mining, the taste reader, the regression floor, the optimizer),
 // and each has its own command for when you want to drive it. `tend` runs them in order, within one
@@ -21,6 +22,7 @@
 //
 //   0 9 * * 1  cd /path/to/project && atelier tend --skill house-style --cap 5 --auto >> ~/.atelier/tend.log 2>&1
 
+import { howYouWrite } from '../guided.js';
 import { staleChecks } from '../checks.js';
 import * as store from '../../core/state/store.js';
 import { degradedStages, describeStages } from '../../core/state/receipt.js';
@@ -35,6 +37,8 @@ import { readerModel } from './taste.js';
 import { optimize } from './optimize.js';
 import { learnTells } from './tells.js';
 import { DATA, die, argv, skillArg } from '../runtime.js';
+import { cardLine } from '../../core/direct/card.js';
+import { titleOf } from '../../core/direct/pieces.js';
 
 export async function tend(): Promise<void> {
   const name = skillArg();
@@ -97,6 +101,66 @@ export async function tend(): Promise<void> {
 }
 
 /** One page: the standard, what it covers, what checks it, and what is waiting. */
+/**
+ * WHAT A SKILL HOLDS, IN ITS OWNER'S WORDS: what the work is for, their method, how they write, the pieces they kept,
+ * what they changed for every piece, and how to undo the last change. This is where a person looks to see that what
+ * they said was taken in. Everything here is read from what the build and their own commands stored; the machinery's
+ * account (versions, receipts, coverage, the floor) is `skillDashboard`, shown with --report.
+ */
+export function skillPage(name: string): void {
+  const L: store.StoreLayout = { root: DATA, skillName: name };
+  const active = store.getActive(L) ?? die(`no built skill called "${name}".`);
+  const sv = store.getSkillVersion(L, active) ?? die(`skill version ${active} is missing.`);
+  const v = store.getStandard(L, sv.standardVersionHash) ?? die(`standard ${sv.standardVersionHash} is missing.`);
+  const one = (t: string, n = 110): string => { const x = t.replace(/\s+/g, ' ').trim(); return x.length > n ? `${x.slice(0, n - 1).trimEnd()}…` : x; };
+  const list = (title: string, xs: readonly string[], most: number): void => {
+    if (!xs.length) return;
+    console.log(`\n  ${title}`);
+    for (const x of xs.slice(0, most)) console.log(`    - ${one(x)}`);
+    if (xs.length > most) console.log(`    and ${xs.length - most} more`);
+  };
+  const card = store.getCard(L); const voice = store.getVoice(L);
+  const said = card ? cardLine(card).replace(/^This work: /, '') : '';
+  console.log(name);
+  console.log(`  For: ${said ? said : 'not said yet'}   (say it: atelier amend --skill ${name} --card "kind=…; reader=…; purpose=…")`);
+  if (voice?.pieces?.length) console.log(`  Built from ${voice.corpusPieces ?? voice.pieces.length} of your pieces${voice.lengthSpan ? `, ${voice.lengthSpan[0]} to ${voice.lengthSpan[1]} words each` : ''}.`);
+  const live = v.requirements.filter((r) => r.authority !== 'EXPERT_REJECTED');
+  // WHAT THE PERSON CHANGED FOR EVERY PIECE: the active standard's own line, back to the build (each standard names the
+  // one it replaced and why, in the person's words). A candidate that was never made active is not on that line, and a
+  // build made again (its reason is the command's, not theirs) is not a change they made.
+  const changes: { why: string; at: string; rules: string[] }[] = []; const theirs = new Set<string>();
+  for (let cur: typeof v | null = v, n = 0; cur?.supersedes && n < 200; n++) {
+    const prev: typeof v | null = store.getStandard(L, cur.supersedes);
+    if (cur.reason && !cur.reason.startsWith('built again with atelier ')) {
+      const had = new Map((prev?.requirements ?? []).map((r) => [r.requirementId, r.statement]));
+      const moved = cur.requirements.filter((r) => r.authority !== 'EXPERT_REJECTED' && had.get(r.requirementId) !== r.statement);
+      for (const r of moved) theirs.add(r.requirementId);
+      changes.push({ why: cur.reason, at: cur.mintedAt.slice(0, 10), rules: moved.map((r) => r.statement) });
+    }
+    cur = prev;
+  }
+  const yours = live.filter((r) => r.provenance !== 'MACHINE_DISCOVERED' && !theirs.has(r.requirementId));
+  list('Your rules, in your words', yours.map((r) => r.statement), 12);
+  { const sound = howYouWrite(voice?.persona?.points ?? [], 6); if (sound.length) { console.log('\n  How you write'); for (const l of sound) console.log(l); } }
+  list('Also held on every new piece', live.filter((r) => r.provenance === 'MACHINE_DISCOVERED' && !theirs.has(r.requirementId)).map((r) => r.statement), 6);
+  const allKept = store.getKept(L); const kept = allKept.filter((k) => !k.correctionOnly);
+  const corrected = allKept.flatMap((k) => k.edits).length;
+  if (corrected) console.log(`\n  Your corrections (${corrected}): every new piece is reviewed against how you changed earlier drafts`);
+  list(`Pieces you kept (${kept.length}): new pieces are written from these first`, [...kept].reverse().map((k) => `${k.request ?? titleOf(k.text)}  (${k.at.slice(0, 10)}${k.edits.length ? `, with ${k.edits.length} of your edits` : ''})`), 5);
+  if (changes.length) {
+    console.log(`\n  What you changed for every piece (${changes.length})`);
+    for (const c of changes.slice(0, 8)) { console.log(`    - "${one(c.why)}"  (${c.at})`); for (const r of c.rules) console.log(`        now a rule: ${one(r, 140)}`); }
+    if (changes.length > 8) console.log(`    and ${changes.length - 8} more`);
+  }
+  const before = store.getPreviousActive(L);
+  if (before && store.getSkillVersion(L, before)) console.log(`\n  Undo the last change: atelier rollback --skill ${name} --to ${before}`);
+  const receipt = store.getReceipt(L, active); const lost = receipt ? degradedStages(receipt) : [];
+  if (lost.length) console.log(lost.every((x) => x.id === 'persona')
+    ? `\n  How you write was not read when this was built. Building it again reads it, or: atelier build --name ${name} --persona auto`
+    : `\n  Part of the build did not finish (${lost.map((x) => x.id).join(', ')}). Finish it: atelier build --name ${name} --persona auto`);
+  console.log(`\n  Write with it: atelier run "<the task>" --skill ${name}   ·   change it for every piece: atelier fix "<what was wrong>" --always`);
+}
+
 export function skillDashboard(name: string): void {
   const L: store.StoreLayout = { root: DATA, skillName: name };
   const active = store.getActive(L) ?? die(`no built skill called "${name}".`);

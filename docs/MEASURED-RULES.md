@@ -612,7 +612,7 @@ It never adds, removes or rewords a rule. Run it by hand or from cron, for examp
 0 9 * * 1  cd /path/to/project && atelier tend --skill house-style --cap 5 --auto >> ~/.atelier/tend.log 2>&1
 ```
 
-`atelier status --skill <name>` is the one-page view: rules (counted and read), which of the eight
+`atelier status --skill <name> --report` is the one-page view: rules (counted and read), which of the eight
 dimensions they cover, what the taste reader holds, the floor's state, uses, what waits, and when the
 skill was last tended.
 

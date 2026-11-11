@@ -206,6 +206,6 @@ describe('through the build', () => {
     expect(stage2).toMatchObject({ ran: true, by: 'model', calls: 3, degraded: true, detail: '2 points in 1 call: 2 moves: 1 standing, 0 situational, 1 occasional; 2 cells asked, 1 answered, 1 left in 2 calls', why: '1 of 2 cells not tabled: their counts are the first reading\'s' });
     expect(again.out).toContain(`· moves ✓ (${stage2.detail!}; ${stage2.why!}) ·`);
     expect(store.getMovesByHash(L, receiptOf().movesHash!)!.units.map((u) => [u.kind, u.pieces, u.tabled])).toEqual([['standing', 4, false], ['occasional', 2, false]]);
-    expect(run('status', '--skill', 'code-review').out).toMatch(/built without: moves \(1 of 2 cells not tabled/);
+    expect(run('status', '--skill', 'code-review', '--report').out).toMatch(/built without: moves \(1 of 2 cells not tabled/);
   }, 240_000);
 });

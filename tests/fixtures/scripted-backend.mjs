@@ -31,6 +31,9 @@ let failNext = 0;
 // `emptyNext: { <tool>: k }` answers the next k calls of that tool with an empty object: a model that returned no
 // usable answer, where `failNext` is a server that returned an error.
 let emptyNext = {};
+// `refuseNext: { <tool>: k, __plain: k }` ends the next k calls of that tool (or of prose) with finish_reason
+// content_filter and no answer: a model that declined, and answers when asked again.
+let refuseNext = {};
 // how many prose calls the current script has answered (`byTool.__plain`)
 let plainServed = 0;
 
@@ -48,6 +51,7 @@ const server = createServer((req, res) => {
       when = Array.isArray(parsed.when) ? parsed.when : [];
       failNext = typeof parsed.failNext === 'number' ? parsed.failNext : 0;
       emptyNext = parsed.emptyNext && typeof parsed.emptyNext === 'object' ? { ...parsed.emptyNext } : {};
+      refuseNext = parsed.refuseNext && typeof parsed.refuseNext === 'object' ? { ...parsed.refuseNext } : {};
       if (parsed.byTool) { byTool = parsed.byTool; } else { payload = parsed; byTool = null; }
       plainServed = 0;
       res.end('{"ok":true}'); return;
@@ -56,6 +60,8 @@ const server = createServer((req, res) => {
     if (req.url === '/__log') { res.end(JSON.stringify({ bodies })); return; }
     count += 1; bodies.push(body);
     if (failNext > 0) { failNext -= 1; res.statusCode = 500; res.end('{"error":"scripted failure"}'); return; }
+    { const key = JSON.parse(body || '{}')?.tools?.[0]?.function?.name ?? '__plain';
+      if (refuseNext[key] > 0) { refuseNext[key] -= 1; res.end(JSON.stringify({ choices: [{ finish_reason: 'content_filter', message: {} }], usage: { prompt_tokens: 10, completion_tokens: 0 } })); return; } }
     // A CALL WITH NO TOOL IS A PIECE WRITTEN AS PROSE (the direct writer, `plain` requests): answered with text. Scripted
     // with `byTool: { __plain: [text, text, ...] }` (the first call gets the first text, and so on, the last repeating), or
     // a `when` whose answer is `{ text }`.

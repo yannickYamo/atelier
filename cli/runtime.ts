@@ -115,6 +115,7 @@ export const VALUED_OPTIONS: readonly string[] = ['correcting', 'moves', 'set-as
 ];
 
 export const BOOLEAN_OPTIONS: readonly string[] = [
+  '--rules',
   'accept', 'accept-new-binding', 'fix-grammar', 'profile', 'auto-reserve', 'cluster-per-file', 'drop', 'dry-run', 'indifferent',
   'allow-unsourced', 'answer-only', 'bare', 'clear', 'holdout', 'json', 'list', 'loop', 'no-contrast', 'no-repair', 'no-coverage', 'no-review', 'style-review', 'no-style', 'remove', 'repair', 'hook', 'never-this-transition', 'no-negative-probe', 'none', 'public-source',
   'ai-assisted', 'blind-expert', 'delivery-proven', 'no-ai-assist', 'per-passage',

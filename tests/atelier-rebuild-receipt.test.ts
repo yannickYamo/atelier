@@ -41,7 +41,7 @@ describe('the receipt of a rebuild (through the binary)', () => {
     const before = store.getActive(L())!;
     const built = store.getReceipt(L(), before)!;
     expect(built).not.toBeNull();
-    expect(run('status', '--skill', 'posts').out).toContain(`  build          receipt ${built.receiptHash}; complete`);
+    expect(run('status', '--skill', 'posts', '--report').out).toContain(`  build          receipt ${built.receiptHash}; complete`);
 
     // a level the standard does not hold yet, so the amend mints a new version; the same level again would be the same version
     const held = store.getStandard(L(), store.getSkillVersion(L(), before)!.standardVersionHash)!.latitude?.level;
@@ -57,7 +57,7 @@ describe('the receipt of a rebuild (through the binary)', () => {
       stages: built.stages, models: built.models, corpusHash: built.corpusHash, methodHash: built.methodHash, rebuilt: { from: before, by: 'amend' } });
     expect(carried!.receiptHash).not.toBe(built.receiptHash);
 
-    const status = run('status', '--skill', 'posts').out;
+    const status = run('status', '--skill', 'posts', '--report').out;
     expect(status).not.toContain('no receipt');
     expect(status).toContain(`  build          receipt ${carried!.receiptHash}; complete; rebuilt by amend from ${before}`);
   });
@@ -78,7 +78,7 @@ describe('the receipt of a rebuild (through the binary)', () => {
     expect(run('amend', '--skill', 'posts', '--latitude', level, '--reason', 'the same level again').code).toBe(0);
     expect(store.getActive(L())).toBe(active);
     expect(store.getReceipt(L(), active)).toBeNull();
-    const status = run('status', '--skill', 'posts').out;
+    const status = run('status', '--skill', 'posts', '--report').out;
     expect(status).toContain('  build          no receipt (built before receipts were kept)');
     expect(status).not.toContain('rebuilt by');
   });

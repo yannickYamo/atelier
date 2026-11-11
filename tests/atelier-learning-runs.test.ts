@@ -20,6 +20,7 @@ const HISTORY: Readonly<Record<string, string>> = {
   'cli/commands/keep.ts': 'looks one named run up, or the last one, to keep the piece the person chose',
   'cli/commands/promote.ts': 'reads the runs of a candidate the owner named for a comparison',
   'cli/commands/eval.ts': 'names the test runs so that they can be left out of its counts',
+  'cli/guided.ts': 'looks up the one run a fix just wrote during the build, to show it and keep it',
   'cli/fix-in-place.ts': 'reads the fixes of one piece, by the run first fixed: what they took out stays out of it',
 };
 

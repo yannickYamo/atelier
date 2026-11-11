@@ -642,7 +642,7 @@ describe('through the binary: discovery builds the profile, invoke steers and re
     // THE STATE THIS TEST STANDS ON, CHECKED BEFORE IT IS USED. The tests of this file share one store and run in order;
     // this one failed once in a full run with "no active version for posts" and passed on every rerun. A missing
     // skill is named here, by the test that needs it, instead of surfacing three assertions later as a wrong message.
-    expect(run('status', '--skill', 'posts'), 'the posts skill must be built and active before the plan-first steps').not.toMatch(/^EXIT:|no active version/);
+    expect(run('status', '--skill', 'posts', '--report'), 'the posts skill must be built and active before the plan-first steps').not.toMatch(/^EXIT:|no active version/);
     expect(run('invoke', '--pipeline', 'legacy', '--skill', 'posts', 'x', '--structure', 'plan')).toMatch(/--structure plan needs your pieces read for structure first/);
     const readOut = run('fidelity', '--skill', 'posts', '--read-structure-from', join(proj, 'posts'), '--cap', '1');
     expect(readOut).not.toMatch(/^EXIT:/);

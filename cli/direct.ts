@@ -22,11 +22,12 @@ import { STYLE_READ, styleItems, answerItems, styleNote, styleLines, type StyleR
 import * as store from '../core/state/store.js';
 import { sha } from '../core/state/receipt.js';
 import { readContext } from '../core/inference/reading.js';
-import { spend, processSpentUsd, type Budget, type InferenceClient } from '../core/inference/client.js';
+import { spend, processSpentUsd, declined, type Budget, type InferenceClient } from '../core/inference/client.js';
 import { resolveProvenance } from '../core/fidelity/provenance.js';
 import { DEFAULT_SETTINGS, type ImplementationSettings } from '../core/fidelity/types.js';
 import { inferredLines } from '../core/loop/inferred.js';
 import { statedLength, againstStated, notHeldBecause } from '../core/intake/length.js';
+import { DECLINED_NOTE } from './guided.js';
 import { wordsWritten } from '../core/eval/size.js';
 import type { RuntimeBinding } from '../core/runtime/binding.js';
 import type { SkillVersion, StandardVersion, DirectRecord, RepairRecord, InvocationSettings, LatitudeLevel, InferredItem } from '../core/state/canonical-state.js';
@@ -278,15 +279,29 @@ const asEffort = (x: string | undefined): Effort => {
   return x as Effort;
 };
 
+const PROSE_ATTEMPTS = 3;
+
+
 /** One prose call: the pieces cached, the task beside them, `ask` as the turn. */
 async function prose(client: InferenceClient, budget: Budget, stable: string, variable: string, ask: string, effort: Effort, tool: string): Promise<Written> {
   const temperature = flag('--temperature') === undefined ? undefined : Number(flag('--temperature'));
-  const r = await spend(budget, PROSE_ESTIMATE_USD, async () => {
+  const once = () => spend(budget, PROSE_ESTIMATE_USD, async () => {
     const res = await client.complete({ stableBlock: stable, variableBlock: variable, userMessage: ask, toolName: tool, toolDescription: 'Write the piece.',
       schema: { type: 'object', properties: { piece: { type: 'string' } }, required: ['piece'] }, maxTokens: directMaxTokens(), plain: { effort },
       ...(temperature === undefined ? {} : { temperature }) });
     return { value: res, cost: res.cost, usage: res };
   }, 'writing');
+  // A MODEL THAT DECLINES TO WRITE IS ASKED AGAIN, up to PROSE_ATTEMPTS times in all: on a real run the same request was
+  // declined and then written on the next ask, and the person had been left with an error and no piece. Said once a call.
+  let r: Awaited<ReturnType<typeof once>> | null = null;
+  for (let attempt = 1; r === null; attempt++) {
+    try { r = await once(); } catch (e) {
+      if (!declined(e) || attempt >= PROSE_ATTEMPTS) throw e;
+      // the ask that was declined is given back to the run's call bound: the review and the repair still have theirs
+      budget.calls = Math.max(0, (budget.calls ?? 1) - 1);
+      if (attempt === 1) process.stderr.write(`${DECLINED_NOTE} to write this; asked again.)\n`);
+    }
+  }
   // A reply that wraps the piece in a work field is the field; prose with none is the piece whole.
   const field = workField(asText((r.json as { piece?: unknown } | null)?.piece));
   const piece = field.text.trim();
@@ -370,7 +385,7 @@ export async function runDirect(c: DirectContext) {
   const budget: Budget = { spentUsd: 0, capUsd: numericFlag('--cap', 3), maxCalls: numericFlag('--max-calls', 6) };
   const voice = store.getVoice(c.L);
   const kept = store.getKept(c.L);
-  const catalogue = catalogueOf(builtPieces(voice, store.getExemplar(c.L)), kept.map((k) => ({ text: k.text, request: k.request })));
+  const catalogue = catalogueOf(builtPieces(voice, store.getExemplar(c.L)), kept.filter((k) => !k.correctionOnly).map((k) => ({ text: k.text, request: k.request })));
   const materialText = c.material.map((m) => m.text).join('\n\n');
 
   // 1. WHICH PIECES: a reading of the request, grounded; the shared-words floor when no model can read.
@@ -386,7 +401,23 @@ export async function runDirect(c: DirectContext) {
   const method = store.getMethod(c.L)?.text ?? '';
   // What an editor would ask before the draft: only the person's answers reach the writer.
   const asking = await editorQuestions(c, method, route.kind ?? null);
-  const variable = taskBlock({ material: c.material, task: c.asked, rules, method, settled: asking.note });
+  // WHAT THE PERSON SAID THE WORK IS, TO THE WRITER (an experiment, off unless ATELIER_CARD_TO_WRITER=1): the kind, the
+  // reader and the purpose, only where the person said them (a card that is theirs), never a reading of their pieces.
+  // The comparison of pieces written with and without it decides whether it becomes what every run does.
+  const theirs = process.env.ATELIER_CARD_TO_WRITER === '1' ? store.getCard(c.L) : null;
+  const said = theirs?.by === 'you' ? [theirs.kind ? `What the author says these pieces are: ${theirs.kind}.` : '', theirs.reader ? `Who the author says reads them: ${theirs.reader}.` : '',
+    theirs.purpose ? `What the author says a reader should do or know after one: ${theirs.purpose.replace(/\.$/, '')}.` : ''].filter(Boolean).join('\n') : '';
+  if (said) c.detail('The writer was told what the person said the work is (ATELIER_CARD_TO_WRITER=1).');
+  // THE LENGTH OF THE AUTHOR'S OWN PIECES, SAID AS A GUIDE where the request states none: the task sets the length, and a
+  // length read off the pieces is never held or a reason to write again. Without it, pieces came out half as long again
+  // as the author's. Two pieces at least: one piece has a length, not a range.
+  const lengthSaidIn = decided.by === 'model' && route.length !== undefined ? route.length : c.asked;
+  // a length the route reading quoted is a stated length, whether or not a parser can size it
+  const lengthStated = decided.by === 'model' && route.length !== undefined ? Boolean(route.length) : statedLength(lengthSaidIn ?? '') !== null;
+  const lengths = shown.map((x) => wordsWritten(x.text)).filter((n) => n > 0).sort((a, b) => a - b);
+  const lengthGuide = !lengthStated && lengths.length >= 2
+    ? `Where neither the task nor anything of the author's above sets a length: the author's pieces shown here run ${lengths[0].toLocaleString('en-US')} to ${lengths[lengths.length - 1].toLocaleString('en-US')} words, and for a piece of their kind that is its natural length. A guide, not a limit.` : '';
+  const variable = taskBlock({ material: c.material, task: c.asked, rules, method, settled: [said, asking.note, lengthGuide].filter((x) => x.trim()).join('\n\n') });
   c.detail(`Written from ${shown.length} of ${catalogue.length} piece(s) of the author's${route.kind ? `, as ${route.kind}` : ''} (${decided.by === 'model' ? 'chosen by a reading of the request' : `chosen by shared words: ${decided.why ?? 'no reading'}`}): ${shown.map((p) => titleOf(p.text)).join('; ')}.`);
 
   // HOW THE AUTHOR WRITES, read on the text after the draft (core/direct/style.ts): the habits the build read from their
@@ -532,7 +563,7 @@ export async function runDirect(c: DirectContext) {
   const direct = (): DirectRecord => ({ version: DIRECT_VERSION, asked: c.asked, from: catalogue.length,
     pieces: shown.map((p) => ({ id: p.id, title: titleOf(p.text), kept: p.kept })),
     route: { by: decided.by, reader: decided.reader, kind: route.kind, ...(decided.why ? { why: decided.why } : {}) }, effort, review, corrections: corrections.length,
-    ...(method.trim() ? { method: true } : {}), questions: { by: asking.by, asked: asking.questions.map((q) => q.id), answered: asking.answers.map((a) => a.id) },
+    ...(method.trim() ? { method: true } : {}), ...(lengthGuide ? { lengthGuide: { from: lengths[0], to: lengths[lengths.length - 1] } } : {}), ...(said ? { cardToWriter: true } : {}), questions: { by: asking.by, asked: asking.questions.map((q) => q.id), answered: asking.answers.map((a) => a.id) },
     ...(style ? { style } : {}), ...(grounded ? { grounded } : {}), ...(hashtags ? { hashtags } : {}) });
   // HOW TYPICAL OF THE AUTHOR THE PIECE IS (core/fidelity): read on the delivered text against the profile the build
   // installed, for the evaluation's panel. Descriptive only: nothing on this path steers by it, so no release is credited.

@@ -18,7 +18,7 @@ import { normalizeClass, checkClass } from '../core/observers/doc-class.js';
 import { signTestOneSidedP, mcnemarExactP, binomialUpperTailP } from '../core/stats/sign-test.js';
 import { accountRefusal } from '../providers/anthropic.js';
 import { isUnknownModel, ModelUnavailable, GenerationIncomplete } from '../core/inference/client.js';
-import { discoveryRetry } from '../cli/commands/discover.js';
+import { discoveryRetry, discoveryCallBound, boundAfresh } from '../cli/commands/discover.js';
 import { contrastForm } from '../cli/commands/discover.js';
 import { USAGE } from '../cli/help.js';
 import { BOOLEAN_OPTIONS } from '../cli/runtime.js';
@@ -358,6 +358,17 @@ describe('a provider that refuses the key is said in one line, request id kept',
     expect(discoveryRetry(new ModelUnavailable('my-model', 'x'), false)).toBeNull();
     expect(discoveryRetry(refused, false)).toBe('REFUSED');
     expect(discoveryRetry(new Error('anything else'), true)).toBeNull();
+  });
+  // Six short posts, two held back, two vantages: 2 proposals, 2 matcher calls, 24 rules on 2 pieces asked up to 3
+  // times each (144), and 4 after. The bound was 56, one ask per observation, and a real run stopped on it.
+  it('the call bound of a reading covers every ask it can make, and a reading started again on another model is bounded afresh', () => {
+    expect(discoveryCallBound(2, 2)).toBe(2 + 2 + 144 + 4);
+    expect(discoveryCallBound(3, 8)).toBe(3 + 4 + 864 + 4);
+    expect(discoveryCallBound(2, 0)).toBe(2 + 2 + 72 + 4);
+    const b = { spentUsd: 0.4, capUsd: 3, calls: 9, maxCalls: 152 };
+    boundAfresh(b, false); expect(b).toEqual({ spentUsd: 0.4, capUsd: 3, calls: 0, maxCalls: 152 });
+    const theirs = { spentUsd: 0.4, capUsd: 3, calls: 9, maxCalls: 20 };
+    boundAfresh(theirs, true); expect(theirs.calls).toBe(9);
   });
 
   // In-process server, so the BIN runs asynchronously (execFileSync would block the server's loop).

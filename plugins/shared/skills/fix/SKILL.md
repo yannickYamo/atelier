@@ -21,7 +21,7 @@ anything is diagnosed against it.
 
 ## What comes back, and what you relay
 
-**`Your rules already say this, and the skill did not carry it.`** — the standard covers the complaint and the output missed it.
+**`Your rules already say this, and the piece did not follow it.`** — the standard covers the complaint and the output missed it.
 Atelier builds one alternative implementation, re-runs the same task on it, and prints two outputs
 labelled A and B, blinded. Show the user both **without saying which is which**, ask *"Which is
 better — A, B, or the same?"*, and answer with:
@@ -33,11 +33,11 @@ atelier fix "<same complaint>" --pick a|b|same
 The winner is active and installed in the same motion. The StandardVersion hash does not change —
 if the user asks, that is the whole point.
 
-**`Your rules do not say this.`** — nothing the user has ratified covers this. Atelier proposes the
+**`Your skill has no rule for this yet.`** — nothing the user has ratified covers this. Atelier proposes the
 missing rule and asks the one question that is theirs alone. Put it to them in their terms:
 
-> Your standard doesn't say this. Proposed: "<the sentence>".
-> Add it as **required** (it binds), as **preferred** (shown, other valid forms stay fine), or not at all?
+> Your skill has no rule for this yet. A rule that would cover it: "<the sentence>".
+> Add it as **required** (every piece must follow it), as **preferred** (the writer is told, other ways stay fine), or not at all?
 
 ```bash
 atelier fix "<same complaint>" --add required|preferred     # their choice
@@ -48,7 +48,7 @@ An approval mints the superseding StandardVersion, compiles and installs it — 
 **Never answer this question for them.** A machine may propose; only the person makes it theirs.
 
 **`The skill that ran was not the one you approved.`** — the installed file was not what they approved; Atelier has already put the
-approved bytes back. **`It is not clear what should change.`** — relay Atelier's one clarifying question and re-run `fix` with
+approved bytes back. **`I could not tell what should change for every piece.`** — relay Atelier's one clarifying question and re-run `fix` with
 a sharper complaint.
 
 ## For a one-word reaction with no repair wanted

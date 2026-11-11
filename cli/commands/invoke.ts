@@ -496,7 +496,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const stale = std ? staleChecks(L) : null;
   if (stale) report.say(`Note: ${stale}.`);
   if (directNot === null && std) {
-    const { client, binding } = checkedBinding(L, sv);
+    const { client, binding } = checkedBinding(L, sv, false);
     const spentBefore = spentAtRoute;
     const d = await runDirect({ L, sv, std, name, asked, material, client, binding, spentBefore, settings: (checks) => Object.assign(settingsFor(checks, null, 1, '', null, std, heldFirst), { maxTokens: directMaxTokens() }), say: (l) => { report.say(l); }, detail: (l) => { report.detail(l); }, started,
       held: heldFirst?.level ?? null, interactive: machine === null && process.stdin.isTTY && process.stdout.isTTY });
@@ -1280,14 +1280,23 @@ export function taskWithMaterial(L: store.StoreLayout, asked: string, lineCiting
  * is the point of owning the standard), but knowingly, on a fresh record, never inheriting conclusions
  * drawn on another binding. Deterministic, and before the call.
  */
-function checkedBinding(L: store.StoreLayout, sv: SkillVersion): ReturnType<typeof clientAndBinding> {
+function checkedBinding(L: store.StoreLayout, sv: SkillVersion,
+  /** false on the default path: the skill is the person's on whatever model they run, so a change of model is said in one line and the run goes on */
+  stops = true): ReturnType<typeof clientAndBinding> {
   const found = clientAndBinding('target');
   const { binding } = found;
   const verdict = compareBindings(store.expectedBinding(L, sv.skillVersionHash, binding), binding);
-  if (verdict.kind === 'TARGET_BINDING_MISMATCH' && !argv.includes('--accept-new-binding')) {
+  if (verdict.kind === 'TARGET_BINDING_MISMATCH' && stops && !argv.includes('--accept-new-binding')) {
     die(describeMismatch(verdict, sv.skillVersionHash));
   }
-  if (verdict.kind === 'TARGET_BINDING_MISMATCH') {
+  if (verdict.kind === 'TARGET_BINDING_MISMATCH' && !stops && !argv.includes('--accept-new-binding')) {
+    // One line, to the person and never into a --json answer. NOT recorded as accepted: nobody was asked, so a path
+    // that stops on a change of model (a strict skill, --deep) still stops, and the line is said on every such run.
+    const built = store.expectedBinding(L, sv.skillVersionHash, binding)?.requestedModel;
+    console.error(built && built !== binding.requestedModel
+      ? `(written on ${binding.requestedModel}; this skill was built on ${built}. Your skill is unchanged, and what was measured before describes ${built}.)`
+      : `(written with model settings other than the ones this skill was built with. Your skill is unchanged, and what was measured before describes those.)`);
+  } else if (verdict.kind === 'TARGET_BINDING_MISMATCH') {
     console.log(`\nRunning on a new runtime binding — ${describeBinding(binding)}.`);
     console.log(`Observations from here are recorded against this binding and are not evidence about the other one.`);
     // The style detector learned the habits of the model the skill was built with; another family's are not its.

@@ -108,7 +108,7 @@ describe('tend and status --skill', () => {
     expect(out).not.toContain('── optimize ──');
     expect(store.readEvents(L).some((e) => e.kind === 'TENDED')).toBe(true);
     expect(store.getMining(L)).not.toBeNull();
-    const page = run(data, proj, 'status', '--skill', 'focus');
+    const page = run(data, proj, 'status', '--skill', 'focus', '--report');
     expect(page).toMatch(/rules\s+2: 2 counted, 0 read by the taste reader/);
     expect(page).toMatch(/uses\s+1 recorded/);
     expect(page).toMatch(/last tended\s+\d{4}-/);
@@ -128,6 +128,6 @@ describe('tend and status --skill', () => {
     expect(out).toMatch(/installed \S+; the previous version remains: atelier rollback --skill focus --to /);
     expect(store.getActive(L)).not.toBe(before);
     expect(store.getSkillVersion(L, store.getActive(L)!)!.standardVersionHash, 'tend moved the standard').toBe(std);
-    expect(run(data, proj, 'status', '--skill', 'focus')).toMatch(/floor\s+\S+/);
+    expect(run(data, proj, 'status', '--skill', 'focus', '--report')).toMatch(/floor\s+\S+/);
   }, 300_000);
 });

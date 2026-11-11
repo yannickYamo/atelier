@@ -12,7 +12,7 @@
  * This file is dispatch and nothing else. Each command lives in `commands/`, and what they share
  * lives in `runtime.ts`.
  */
-import { cmd, argv, die, flag, loadSession, saveSession, listSessions, projectDir, archiveSession, sessionPath } from './runtime.js';
+import { DATA, cmd, argv, die, flag, loadSession, saveSession, listSessions, projectDir, archiveSession, sessionPath } from './runtime.js';
 import { intake } from './commands/intake.js';
 import { discover } from './commands/discover.js';
 import { plan } from './commands/plan.js';
@@ -27,7 +27,7 @@ import { mine } from './commands/mine.js';
 import { taste } from './commands/taste.js';
 import { tells } from './commands/tells.js';
 import { library } from './commands/library.js';
-import { tend, skillDashboard } from './commands/tend.js';
+import { tend, skillDashboard, skillPage } from './commands/tend.js';
 import { fidelity } from './commands/fidelity.js';
 import { report as reportRun, rate } from './commands/report.js';
 import { evaluate } from './commands/eval.js';
@@ -55,7 +55,10 @@ import { score } from './commands/score.js';
 import { mcp } from './commands/mcp.js';
 import { material } from './commands/material.js';
 import { keep } from './commands/keep.js';
-import { existsSync } from 'node:fs';
+import { existsSync, readdirSync } from 'node:fs';
+import { join } from 'node:path';
+import * as store from '../core/state/store.js';
+import { cardLine } from '../core/direct/card.js';
 import { USAGE, wantsHelp, version } from './help.js';
 import { enrol, terminate, type Run } from '../core/state/run-state.js';
 import { policyFor } from '../core/state/policy.js';
@@ -138,24 +141,24 @@ export const COMMANDS: readonly string[] = [
 ];
 
 /**
- * WHAT A PERSON SEES FIRST: build the check, run it, plug it into the agents. Three commands carry the product;
+ * WHAT A PERSON SEES FIRST: build the skill, write with it, say what was wrong. Those carry the product;
  * everything else is still here, under `atelier lab`, for whoever wants it.
  */
 export const FRONT_DOOR: readonly string[] = [
-  'atelier: learns how you write from the pieces you would sign, writes new pieces that way, and reads each one before you see it.',
+  'atelier: learns how you write from the pieces you would sign, and writes new pieces that way, in any tool, on any model.',
   '',
-  '  atelier new <your-work> "<what it is for>"    build the check from your finished pieces (--method <note> adds your own rules)',
-  '  atelier verify --skill <name> <file>          check any text: made-up facts, copied passages, broken rules',
-  '  atelier setup                                 let the agents in this project call it',
-  '',
-  '  It writes too: atelier run "<task>", then atelier fix "<what was wrong>". Explain a command: atelier <command> --help',
-  '  Everything else: atelier lab. Which model it uses: atelier models',
+  '  atelier new <your-work> "<what it is for>"    build a skill from your finished pieces (--method <note> adds how you work)',
+  '  atelier run "<task>"                          write a piece with it',
+  '  atelier fix "<what was wrong>"                say it once, in your words; the piece is written again',
+  '  atelier setup                                 let the agents in this project use it',
+  '  One skill per voice: --name <client> at the build, --skill <client> after. Check any text: atelier verify --skill <name> <file>',
+  '  Explain a command: atelier <command> --help. Everything else: atelier lab. Which model it uses: atelier models',
 ];
 
 /** The commands a newcomer does not need, by what they are for. Nothing is hidden: it is one command away. */
 const LAB: readonly (readonly [string, readonly string[]])[] = [
   ['write to the standard', ['run', 'fix', 'keep', 'invoke']],
-  ['check and correct', ['score', 'material', 'amend', 'add', 'status', 'report', 'rate', 'export', 'mcp', 'models']],
+  ['check and correct', ['verify', 'score', 'material', 'amend', 'add', 'status', 'report', 'rate', 'export', 'mcp', 'models']],
   ['build, the long way', ['method', 'skill', 'review', 'pending', 'ratify', 'ratify-one', 'ratify-close', 'build', 'confirm', 'plan', 'abort', 'check']],
   ['measure a skill', ['reproduce', 'evolve', 'eval', 'qualify', 'floor', 'reference', 'history', 'inspect']],
   ['experimental: not shown to help yet', ['fidelity', 'taste', 'tells', 'library', 'tend', 'voice', 'optimize', 'mine', 'sharpen', 'improve', 'compare', 'profiles', 'carriers']],
@@ -170,10 +173,10 @@ function lab(): void {
     return;
   }
   if (rest.length) die(`atelier lab: there is no command "${rest[0]}". The list: atelier lab`);
-  console.log('atelier lab: everything beyond new, verify and setup. Each is its own command: atelier <command> --help\n');
+  console.log('atelier lab: everything beyond new, run, fix and setup. Each is its own command: atelier <command> --help\n');
   const listed = new Set<string>();
   for (const [what, names] of LAB) { const here = names.filter((n) => COMMANDS.includes(n)); here.forEach((n) => listed.add(n)); console.log(`  ${what}:\n    ${here.join(' · ')}`); }
-  const others = COMMANDS.filter((c) => !listed.has(c) && !['new', 'verify', 'setup', 'lab'].includes(c));
+  const others = COMMANDS.filter((c) => !listed.has(c) && !['new', 'setup', 'lab'].includes(c));
   if (others.length) console.log(`  the rest:\n    ${others.join(' · ')}`);
   console.log('\n  `atelier invoke` is `atelier run` with its full report.');
 }
@@ -257,8 +260,26 @@ const main = async (): Promise<void> => {
     case 'status': {
       // With a skill: the one-page dashboard. Without: the run in flight in this project.
       const dash = flag('--skill');
-      if (dash) { skillDashboard(dash); return; }
+      // What the skill holds, in its owner's words; the machinery's own account with --report.
+      if (dash) { skillPage(dash); if (argv.includes('--report')) { console.log(''); skillDashboard(dash); } return; }
+      // Every skill built here, one line each: the name it is run by and what it is for. One unreadable skill hides no other.
+      const built = (existsSync(join(DATA, 'skills')) ? readdirSync(join(DATA, 'skills')) : []).flatMap((n) => {
+        try {
+          const L = { root: DATA, skillName: n }; const active = store.getActive(L);
+          if (!active) return [];
+          const card = store.getCard(L); const said = card ? cardLine(card) : '';
+          return [`  ${n}  ·  ${said ? said.replace(/^This work: /, '') : store.getSkillVersion(L, active)?.description ?? ''}`];
+        } catch { return [`  ${n}  ·  (could not be read)`]; }
+      });
+      if (built.length) console.log(`Your skills (write with one: atelier run "<the task>" --skill <name>):\n${built.join('\n')}\n`);
       const s = loadSession();
+      // The build in flight in this project is said while there is one; once skills are built and nothing waits, the
+      // list above is the whole answer (--report says the rest).
+      // Read off core/state/policy.ts, the one owner of "what is permitted now". A build that is blocked, or other
+      // runs in flight under this store, are always said; the bare state line only while a build is in flight.
+      const polNow = policyFor(s.run); const elsewhere = listSessions().filter((x) => !x.here);
+      const quiet = built.length > 0 && s.run.state === 'BUILT' && !argv.includes('--report') && !polNow.reasonIfBlocked && !elsewhere.length;
+      if (quiet) return;
       console.log(`state ${s.run.state}  skill ${s.skillName ?? '(none)'}  proposals ${s.proposals.length}`
         + `  decided ${s.decided.length}  enrolled [${s.run.enrolments.map((e) => e.study).join(', ')}]`);
       console.log(`project ${projectDir()}`);
@@ -311,7 +332,7 @@ const main = async (): Promise<void> => {
       // version had drifted to omit nine registered commands, including `promote` and `confirm`,
       // which other commands tell the user to run.
       if (cmd !== undefined && cmd !== '' && cmd !== 'help' && cmd !== '--help' && cmd !== '-h') {
-        die(`unknown command "${cmd}". The three you need: new, verify, setup. Every other: atelier lab`);
+        die(`unknown command "${cmd}". Start with: new, run, fix. Every other: atelier lab`);
       }
       // The three commands the product is lived with (FRONT_DOOR); every other command is one word away, under `atelier lab`.
       for (const line of FRONT_DOOR) console.log(line);

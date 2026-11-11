@@ -12,7 +12,7 @@ import { readJson } from '../../core/state/read-json.js';
 import { proposeAcrossFramings } from '../../core/discovery/propose.js';
 import { DEFAULT_FRAMINGS, COMPOSITE_FRAMINGS, type FramingId } from '../../core/discovery/framing.js';
 import { describeUnion } from '../../core/discovery/union.js';
-import { runDiscoveryChain } from '../../core/discovery/run-chain.js';
+import { runDiscoveryChain, OBSERVE_ATTEMPTS } from '../../core/discovery/run-chain.js';
 import { anchoredQuote } from '../../core/discovery/conformance.js';
 import { type ImportPlan } from '../../core/discovery/chain/corpus-import.js';
 import { runMethodExtraction, describeMethodRun } from '../../core/discovery/run-methods.js';
@@ -45,7 +45,7 @@ import { quantile, wordsOf, proseRegions } from '../../core/observers/text.js';
 import * as store from '../../core/state/store.js';
 import { skillNameFrom } from '../../renderers/agent-skill/render.js';
 import { mapLimit } from '../../core/inference/concurrency.js';
-import { GenerationIncomplete, ModelUnavailable } from '../../core/inference/client.js';
+import { GenerationIncomplete, ModelUnavailable, declined } from '../../core/inference/client.js';
 import { sha, die, argv, orchestrated, proposerModel, proposerIsDefault, diagnoserModel, modelFor, providerFor, MODEL_DEFAULT, PROPOSER_DEFAULT, type ProposalMeta, clientFor, clientAndBinding, loadSession, saveSession, sourceProvenance, numericFlag, priceOverrideFor, runFile, flag, DATA, canReach, contextReaderClient, contextReaderModel } from '../runtime.js';
 import { priceFor, ANTHROPIC_PRICING, PRICES_CHECKED_ON } from '../../providers/pricing.js';
 
@@ -64,6 +64,27 @@ export const nextDistinctModel = (used: string, candidates: readonly string[]): 
  * default and this backend does not serve it (UNSERVED). A model the person named is theirs, and is never
  * swapped behind their back.
  */
+/**
+ * THE MOST CALLS ONE READING OF A CORPUS CAN MAKE, which is what the call bound is set to unless the person set their
+ * own (--max-calls): one proposal per vantage, the matcher between them, then every rule the union can keep (twelve a
+ * vantage, the proposer's schema) against every held-out piece, each asked up to OBSERVE_ATTEMPTS times where an answer
+ * comes back unusable, and four for what follows. It counted one ask per observation, so a run whose observer was asked
+ * twice for a few answers stopped at the bound with nothing saved.
+ */
+export function discoveryCallBound(vantages: number, heldOut: number): number {
+  return vantages + 2 * (vantages - 1) + 12 * vantages * Math.max(1, heldOut) * OBSERVE_ATTEMPTS + 4;
+}
+
+/**
+ * A READING STARTED AGAIN ON ANOTHER MODEL IS BOUNDED AS A READING: the calls the model that declined had made do not
+ * count against the one that takes over (the money they cost still does). They did, so a refusal part-way left the
+ * second model less than a whole reading's calls and the run ended at the bound. A bound the person set is theirs
+ * and holds across both.
+ */
+export function boundAfresh(budget: Budget, personSetTheBound: boolean): void {
+  if (!personSetTheBound) budget.calls = 0;
+}
+
 export function discoveryRetry(e: unknown, proposerIsDefault: boolean): 'REFUSED' | 'UNSERVED' | null {
   if (e instanceof GenerationIncomplete && e.termination.kind === 'REFUSAL') return 'REFUSED';
   if (e instanceof ModelUnavailable && proposerIsDefault) return 'UNSERVED';
@@ -80,6 +101,15 @@ export async function onCorpusReader<T>(call: (client: InferenceClient) => Promi
     return await call(clientFor(proposerModel()));
   } catch (e) {
     const target = modelFor('target');
+    // DECLINED: the next model that is not the one that declined, or the same one once more where there is no other.
+    // On a real build the default reader declined the one call that reads how the author writes, and the skill was
+    // built without it.
+    if (declined(e)) {
+      const other = nextDistinctModel(proposerModel(), [diagnoserModel(), target]) ?? proposerModel();
+      const read = await call(clientFor(other));
+      if (other !== proposerModel()) console.log(`(${proposerModel()} declined to read your pieces; ${other} read them.)`);
+      return read;
+    }
     if (discoveryRetry(e, proposerIsDefault()) !== 'UNSERVED' || target === proposerModel()) throw e;
     console.log(`(${proposerModel()}, the default reader, is not served by this backend; using ${target}.)`);
     return call(clientFor(target));
@@ -167,7 +197,7 @@ export async function discover(): Promise<void> {
   // binds a runaway without binding the run it was sized for.
   // A composite reads each voice from three vantages (A, B and C: what the writing does to a reader), so three.
   const vantages = s.authors ? COMPOSITE_FRAMINGS.length : DEFAULT_FRAMINGS.length;
-  const worstCaseCalls = vantages /* vantages */ + 2 * (vantages - 1) /* matcher */ + 24 * heldCount + 4;
+  const worstCaseCalls = discoveryCallBound(vantages, heldCount);
   // With several authors each is read on its own, so the bound grows with their number (below).
   const budget: Budget = { spentUsd: 0, capUsd: numericFlag('--cap', 3.0), maxCalls: numericFlag('--max-calls', worstCaseCalls * Math.max(1, s.authors?.names.length ?? 1)) };
   const heldTok = heldItems.reduce((n, i) => n + tokOf(i.text), 0);
@@ -247,6 +277,7 @@ export async function discover(): Promise<void> {
       : `\n${usedModel}, the default reader, is not served by this backend; reading your work with ${fallbackModel} instead. The record names the model that read it.`);
     usedModel = fallbackModel;
     client = clientFor(fallbackModel);
+    boundAfresh(budget, flag('--max-calls') !== undefined);
     chain = await runDiscoveryChain(client, budget, 'skill', openItems, openGoldens, { standardDimensions: [ev.workType] }, usedModel, framings);
   }
 

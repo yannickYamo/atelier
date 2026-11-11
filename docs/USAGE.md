@@ -229,7 +229,7 @@ your work ──► proposed rules ──► YOU APPROVE (once) ──► Standa
 
 ## When it asks you
 
-- **Once, when you create a skill.** It shows the rules it found, each with a suggested ruling: the rules
+- **Once, when you create a skill with `--rules`, or with no terminal.** It shows the rules it found, each with a suggested ruling: the rules
   that will instruct the model and the ones with the thinnest evidence in full, the rest one line each
   (`atelier pending` shows every rule with its evidence). Press Enter to accept them all, or change any
   (`p3=reject`). Without a terminal, `atelier new <folder> --accept` accepts and builds in one step.
@@ -238,7 +238,7 @@ your work ──► proposed rules ──► YOU APPROVE (once) ──► Standa
   but a long batch is one argument some agent hosts refuse).
   Rejection is suggested only when a rule failed in at least four pieces discovery never read; on fewer,
   the rule is shown as an example for you to judge. Accepting a suggestion is a ruling like any other, and
-  the record keeps which you took and which you changed: `atelier status --skill <name>` shows both counts,
+  the record keeps which you took and which you changed: `atelier status --skill <name> --report` shows both counts,
   so "you approved it" never hides "you pressed Enter".
 - **Whenever you want to.** `atelier fix "the close was a summary, not a turn"` in your own words. Label a few
   of the reader's verdicts (`atelier taste --calibrate`) to let it act. Change what "good" means with
@@ -251,11 +251,45 @@ is built and tested offline; it has not yet looked after a live skill for weeks.
 
 ```bash
 atelier new ./posts --method method.md       # build: your finished work, and a note of how you do it
-atelier run "write the launch post" --with notes.md     # run: the work, then its evaluation, rule by rule
+atelier run "write the launch post" --with notes.md     # run: the work, then what the checks found, in one line
 atelier fix "the opening buried the news"    # react: what was wrong, in your own words; that piece is written again
 ```
 
-Under the work a run prints its evaluation, in three layers that are kept apart because they are different
+The method note is optional: `atelier new ./posts "what it is for"` builds from your pieces alone, the same way.
+At a terminal that is the build you get with any number of pieces; `--rules` asks instead for rules read off four or
+more pieces and shown to you for approval before anything is built. Without a terminal (`--yes`, `--json`, a pipe, a
+host), four or more pieces and a model still take the rules route.
+
+At a terminal, `atelier new` does not end at "built". It says what it understood from your pieces, asks the few
+things only you can say (what the pieces are, who reads them, what for; at most five questions, enter skips), writes
+two pieces with the new skill as previews, and takes one round of "what would you change" on each. A preview is never
+added to your pieces: the skill is written from your own work. A change you ask for and confirm with `y` is held as
+your correction, and every later piece is reviewed against it. The build ends on its first version; a change you
+make for every piece later (`atelier fix "…" --always`) makes the next. With `--json` or no terminal, it builds and asks nothing; so does `--yes`, which on a build with a method note
+also keeps as written any step your own pieces do not follow. A skill built again keeps what you kept and corrected and
+writes no new previews. Enter never keeps anything, and neither does an input that ends.
+
+Under the work a run prints two lines: what the checks found, in one sentence, and what to type if the piece is not
+right. Anything a check found and left for you (a possible slip, a specific to confirm) is listed there in full. A
+piece that is held back shows its whole evaluation at once, and `--report` or `atelier report <run>` shows it for
+any run.
+
+A skill is not tied to the model it was built on. Run it on another model and the piece is written, with one line
+on every such run saying which model wrote it and which the skill was built on; `atelier reproduce` measures how the
+skill holds there. The stricter paths (a skill held strictly, `--deep`, a short format) stop on a change of model
+until you say `--accept-new-binding`.
+
+`atelier status --skill <name>` is the page of one skill, in your words: what it is for, your rules, how you write,
+the pieces you kept, what you changed for every piece, and the command that undoes the last change. `--report` adds
+the build's own account.
+
+With no model key set, a build says so, asks nothing and promises nothing: set the key and run the same command
+again.
+
+`atelier status` lists every skill built on this machine, one line each. One skill per voice: build each client or
+author under its own `--name`, and write with `--skill <name>`.
+
+The whole evaluation is in three layers that are kept apart because they are different
 promises: **your rules**, in your words; **this request** (a length it asked for); and **evidence** (every specific
 traced to what you supplied, no passage lifted from one of your examples). Below them, the habits seen in your
 examples, which are counted and block nothing, and what was done to the draft. Each line carries one of four marks,
@@ -368,7 +402,7 @@ the skill on blind: `atelier reproduce` needs a skill built with `atelier new`.
 ## Using it
 
 ```bash
-atelier new ./posts "write me a blog post like these"   # read your work, approve the rules, build
+atelier new ./posts "write me a blog post like these"   # read your work, build, try it on two previews
 /posts write the launch post                           # in Claude Code
 atelier invoke --skill posts "write the launch post"    # or the CLI: written, checked, repaired
 atelier verify --skill posts draft.md --repair           # guard any text

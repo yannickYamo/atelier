@@ -100,7 +100,7 @@ describe('IMPLEMENTATION_MISS: candidate → rerun → blinded pick → winner a
     await setByTool({ emit_coverage: COVERED, emit_piece: { piece: 'the improved answer' } });
     const first = run(data, proj, 'fix', '--always', 'the answer buried the recommendation');
     expect(first).toContain('About your last run of /focus');
-    expect(first).toContain('Your rules already say this, and the skill did not carry it.');
+    expect(first).toContain('Your rules already say this, and the piece did not follow it.');
     expect(first).toContain('──── A ────');
     expect(first).toContain('the original answer');
     expect(first).toContain('the improved answer');
@@ -276,8 +276,8 @@ describe('STANDARD_GAP: one approval mints, compiles and installs — or one ref
     const s1hash = store.getSkillVersion(L, store.getActive(L)!)!.standardVersionHash;
     await setByTool({ emit_coverage: ABSENT('Lead with the recommendation before the framework.') });
     const out = run(data, proj, 'fix', '--always', 'I always want the recommendation first', '--add', 'required');
-    expect(out).toContain('Added as REQUIRED');
-    expect(out).toContain('supersedes');
+    expect(out).toContain('Added: every piece from now on must follow it');
+    expect(out).toContain('undo this: atelier rollback --skill');
 
     const sv = store.getSkillVersion(L, store.getActive(L)!)!;
     const s2 = store.getStandard(L, sv.standardVersionHash)!;
@@ -290,6 +290,19 @@ describe('STANDARD_GAP: one approval mints, compiles and installs — or one ref
     expect(s2.requirements.find((r) => r.statement.includes('before the framework'))?.authority).toBe('EXPERT_RATIFIED');
     expect(store.readEvents(L).some((e) => e.kind === 'PROPOSED_CHANGE' && e.accepted === true)).toBe(true);
     expect(store.readEvents(L).some((e) => e.kind === 'LEDGER_DECISION')).toBe(true);
+
+    // THE PERSON CAN SEE IT WAS TAKEN IN, AND CAN TAKE IT BACK: the skill's page lists the change in their own words
+    // with the rule it added, and both undo commands (the one the fix printed, the one the page prints) name the
+    // version that was active before, which a rollback restores.
+    const page = run(data, proj, 'status', '--skill', 'focus');
+    expect(page).toContain('What you changed for every piece (1)');
+    expect(page).toContain('I always want the recommendation first');
+    expect(page).toContain('Lead with the recommendation before the framework.');
+    const fromFix = /undo this: atelier rollback --skill focus --to (\S+)/.exec(out)?.[1];
+    const fromPage = /Undo the last change: atelier rollback --skill focus --to (\S+)/.exec(page)?.[1];
+    expect(fromFix).toBeTruthy(); expect(fromPage).toBe(fromFix);
+    run(data, proj, 'rollback', '--skill', 'focus', '--to', fromFix!);
+    expect(store.getSkillVersion(L, store.getActive(L)!)!.standardVersionHash).toBe(s1hash);
   }, 120_000);
 
   it('two additions against the SAME run accumulate: the second lands on the first, not beside it', async () => {
@@ -302,14 +315,14 @@ describe('STANDARD_GAP: one approval mints, compiles and installs — or one ref
     const s1 = store.getSkillVersion(L, store.getActive(L)!)!.standardVersionHash;
 
     await setByTool({ emit_coverage: ABSENT('Never use an em dash.') });
-    expect(run(data, proj, 'fix', '--always', 'it uses em dashes', '--add', 'required')).toContain('Added as REQUIRED');
+    expect(run(data, proj, 'fix', '--always', 'it uses em dashes', '--add', 'required')).toContain('Added: every piece from now on must follow it');
     const s2 = store.getSkillVersion(L, store.getActive(L)!)!.standardVersionHash;
     expect(s2).not.toBe(s1);
 
     // no new invocation in between: the second complaint is about the same run as the first
     await setByTool({ emit_coverage: ABSENT('Every sentence must parse as correct English.') });
     const out = run(data, proj, 'fix', '--always', 'it has ungrammatical sentences', '--add', 'required');
-    expect(out).toContain('Added as REQUIRED');
+    expect(out).toContain('Added: every piece from now on must follow it');
     expect(out).toContain('has moved since that run');
 
     const s3 = store.getStandard(L, store.getSkillVersion(L, store.getActive(L)!)!.standardVersionHash)!;
@@ -343,7 +356,7 @@ describe('a repair follows a moved standard instead of dying on it', () => {
     const s1 = store.getSkillVersion(L, store.getActive(L)!)!.standardVersionHash;
 
     await setByTool({ emit_coverage: ABSENT('Never use an em dash.') });
-    expect(run(data, proj, 'fix', '--always', 'it uses em dashes', '--add', 'required')).toContain('Added as REQUIRED');
+    expect(run(data, proj, 'fix', '--always', 'it uses em dashes', '--add', 'required')).toContain('Added: every piece from now on must follow it');
     const s2 = store.getSkillVersion(L, store.getActive(L)!)!.standardVersionHash;
     expect(s2).not.toBe(s1);
 
@@ -354,7 +367,7 @@ describe('a repair follows a moved standard instead of dying on it', () => {
     // the re-run on the current version is fix's replay too, not organic use
     expect(store.listInvocations(L).filter((r) => r.request.source === 'FIX').every((r) => r.provenance === 'FIX_EVALUATION')).toBe(true);
     expect(store.listInvocations(L).filter((r) => r.provenance === 'FIX_EVALUATION').length).toBeGreaterThanOrEqual(2);
-    expect(out).toContain('Your rules already say this, and the skill did not carry it.');
+    expect(out).toContain('Your rules already say this, and the piece did not follow it.');
     expect(out).not.toContain('REPAIR INVARIANT');
     expect(out).toContain('--pick a|b|same');
 

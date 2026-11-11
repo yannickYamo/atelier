@@ -57,7 +57,7 @@ describe('--help never runs the command', () => {
     expect(out).not.toMatch(/^EXIT:/);
     const lines = out.split('\n');
     expect(lines[0]).toMatch(/^atelier: /);
-    expect(lines.slice(2, 5).map((l) => /atelier ([a-z]+)/.exec(l)?.[1])).toEqual(['new', 'verify', 'setup']);
+    expect(lines.slice(2, 5).map((l) => /atelier ([a-z]+)/.exec(l)?.[1])).toEqual(['new', 'run', 'fix']);
     // AGENTS.md: "`atelier lab` lists everything else".
     const lab = run(data, proj, 'lab');
     const every = new Set([...lab.matchAll(/[a-z][a-z-]+/g)].map((m) => m[0]));
@@ -405,7 +405,7 @@ describe('a staged ruling silent on `needs` keeps what discovery found', () => {
     runM(data, proj, 'ratify', '--decisions', JSON.stringify(decisions));
     runM(data, proj, 'ratify-close', '--work-type', 'writing');
     runM(data, proj, 'build', '--name', 'ruled');
-    expect(runM(data, proj, 'status', '--skill', 'ruled')).toMatch(new RegExp(`your rulings\\s+${ids.length - 1} took the suggestion, 1 overrode it, 0 had none`));
+    expect(runM(data, proj, 'status', '--skill', 'ruled', '--report')).toMatch(new RegExp(`your rulings\\s+${ids.length - 1} took the suggestion, 1 overrode it, 0 had none`));
   });
 
   it('a `needs` the person wrote wins over the discovered one, silently', () => {

@@ -18,6 +18,7 @@ import { basename, resolve } from 'node:path';
 import { DATA, argv, die, flag, positional, positionals, loadSession, saveSession, archiveSession, authoredIdAllocator, runFile, sha, canReach, contextReaderClient, contextReaderModel } from '../runtime.js';
 import * as store from '../../core/state/store.js';
 import { resetStages } from '../stages.js';
+import { guided, guidedHere } from '../guided.js';
 import { METHOD_UNITS, unitFloor, describeUnit, type DecisionUnit } from '../../core/method/decision-units.js';
 import { STEP_CHECK, STEP_CHECK_REPAIR, planOf, stepCheckInput, heldByPolarity, floorFor, ledgerOf, type StepPlan, type StepToCheck, type StepCheck, type ExampleCase } from '../../core/method/step-check.js';
 import { measure } from '../../core/observers/registry.js';
@@ -33,7 +34,7 @@ import { draftHash, appendDecision, type RatificationLedger } from '../../core/r
 import { decide } from '../../core/ratification/authority.js';
 import type { Requirement, CheckQualification } from '../../core/state/canonical-state.js';
 import type { GoldenCase } from '../../core/golden/case.js';
-import { proposalsAcross, countedOffers, tellOffers, grammarOffer, stepsOf, asideOf, outlineOf, shortFormOffers, type MethodProposal } from '../../core/method/standard.js';
+import { proposalsAcross, countedOffers, tellOffers, grammarOffer, stepsOf, asideOf, titleOf, outlineOf, shortFormOffers, type MethodProposal } from '../../core/method/standard.js';
 import { shortFormOptions, type ShortFormOptions } from '../../core/observers/short-form.js';
 import { ensureGrammar } from '../../core/observers/grammar.js';
 import { readCase, corpusFiles, sessionCorpus, corpusHashOf } from '../corpus.js';
@@ -294,6 +295,11 @@ export async function method(): Promise<void> {
   const planSteps = stepsOf(note, keep).map((st, i) => ({ id: String(i + 1), text: st.text, under: st.under }));
   const checksPlan = await stepPlan(planSteps, cases, stepKindsRead, { frozen: frozenNow, rejected });
   const across = proposalsAcross(note, cases, checksPlan, keep);
+  // A WRITTEN CHECK THAT FAILED THE AUTHOR'S OWN PIECES WAS DROPPED (core/method/standard.ts): the receipt's count and the
+  // checks frozen for the next build say so too, so it is neither counted as held nor kept as it was.
+  const droppedChecks = new Set(across.proposals.filter((p) => p.origin === 'STATED' && p.measurement === null && checksPlan?.get(p.statement)?.measurement?.observer === 'CHECK').map((p) => p.statement));
+  const planKept = checksPlan && droppedChecks.size ? new Map([...checksPlan].map(([text, c]) => (droppedChecks.has(text) ? [text, { how: 'judgement' as const, measurement: null, by: c.by, quote: c.quote, means: 'a written check failed your own pieces and was dropped: yours to judge', ...(c.kind ? { kind: c.kind } : {}) }] as const : [text, c] as const))) : checksPlan;
+  if (droppedChecks.size && argv.includes('--report')) console.log(`(${droppedChecks.size} written check(s) failed your own pieces and were dropped; those steps are yours to judge.)`);
   // A WRITTEN CHECK EARNS ITS SAY (core/method/mutants.ts): it must pass every example and catch the edits that break
   // only its step; until then it is kept, shown with what it caught, and enforced nowhere. Its standing is said beside it.
   const read = { ...across, proposals: across.proposals.map((p) => (p.qualification ? { ...p, onExample: describeQualification(p.qualification) } : p)) };
@@ -324,9 +330,11 @@ export async function method(): Promise<void> {
   if (who?.readAsOne) console.log(`${who.readAsOne}\n`);
   else if (who?.authors) console.log(`${cases.length} piece(s) by ${who.authors.names.length} authors (${howSaid(who.authors.how)}): a build from a method reads them as one voice.\n`);
   if (voices && voices.groups.length > 1) console.log(`${voices.groups.length} voices read in how the pieces are written (${voices.groups.map((g) => `${g.pieces.length} piece(s)`).join(', ')}): built as one voice, which is what pointing at one folder asks for.\n  To build the combination of them, each read on its own:  atelier new ${goldenPath} --voices\n`);
-  for (const line of whole ? describeMethod(proposals, example.caseClass) : shortScreen(proposals)) console.log(line);
+  // a person shown the skill at work reads what was understood there (cli/guided.ts), in their words: here, one line
+  if (!whole && guidedHere()) console.log(notePath === null ? 'Reading your pieces…' : 'Reading your pieces and your method…');
+  else for (const line of whole ? describeMethod(proposals, example.caseClass) : shortScreen(proposals)) console.log(line);
   // The limits of a corpus of short pieces: one line on the screen, the whole account with --report.
-  if (short.brief) { console.log(''); for (const line of whole ? short.limits : [short.brief]) console.log(`Short form: ${line}`); }
+  if (short.brief && !guidedHere()) { console.log(''); for (const line of whole ? short.limits : [short.brief]) console.log(`Short form: ${line}`); }
 
   // `--review` looks and builds nothing. Otherwise the skill is built from exactly what the screen showed: a reading
   // the owner did not mean is corrected by changing the method and building again, which is one command.
@@ -417,13 +425,13 @@ export async function method(): Promise<void> {
   // checked, which written check failed and why, what was settled; kept by the note's hash, so a plain rebuild says the same.
   // kept for the build's later stages and the compiled path, which read the method's steps without a model
   store.setMethodKeep(LN, note, keep);
-  if (checksPlan) store.putStepLedger(LN, { methodHash: sha(note), reader: READER_KEY, ...ledgerOf(planSteps, checksPlan, conflicts) });
+  if (checksPlan) store.putStepLedger(LN, { methodHash: sha(note), reader: READER_KEY, ...ledgerOf(planSteps, planKept ?? checksPlan, conflicts) });
   const said: string[] = []; const log = console.log;
   if (!whole) console.log = (...a: unknown[]) => { said.push(a.map(String).join(' ')); };
   try { ratifyClose(); await build(name); } catch (e) { console.log = log; for (const l of said) console.log(l); throw e; } finally { console.log = log; }
   // THE CHECKS THIS BUILD RATIFIED ARE FROZEN (core/method/freeze.ts): the next build keeps each while its step and the
   // examples are unchanged.
-  if (checksPlan) store.putFrozenChecks(LN, toFreeze(planSteps, Object.fromEntries(planSteps.flatMap((st) => { const c = checksPlan.get(st.text); return c ? [[st.id, c]] : []; })), examplesKey(cases), stepKindsRead.byModel, rejected));
+  if (checksPlan) store.putFrozenChecks(LN, toFreeze(planSteps, Object.fromEntries(planSteps.flatMap((st) => { const c = (planKept ?? checksPlan).get(st.text); return c ? [[st.id, c]] : []; })), examplesKey(cases), stepKindsRead.byModel, rejected));
   // THE UNITS, BESIDE THE STANDARD THEY WERE READ FROM, never inside it: keyed by requirement id under the standard's
   // hash, so a reading moves no standard and a rebuild under the same standard finds them (core/state/store.ts).
   if (units.size) {
@@ -435,14 +443,23 @@ export async function method(): Promise<void> {
   // words, when a model was there to read: what it read, or why it read nothing. With no model set up the screen stays
   // as it was (`atelier new` has said so once already), and what the owner asked for (--persona none) is not said back.
   // Everything the build said is in --report.
-  if (!whole) for (const l of said.filter((x) => /^(Latitude: |Accepted unmeasured: |Work form: |What this work is, read from your pieces: |Persona: |Scope: |\(no persona: \d|\(the persona could not be derived|\(the examples could not be read for scope|\(a fidelity profile in this project|\S+ ".*": its check (?:now|no longer) qualifies on your rulings)/.test(x))) console.log(l);
+  // a person shown the skill at work (cli/guided.ts) reads what was understood there, in their words, not the settings
+  if (!whole && !guidedHere()) for (const l of said.filter((x) => /^(Latitude: |Accepted unmeasured: |Work form: |What this work is, read from your pieces: |Persona: |Scope: |\(no persona: \d|\(the persona could not be derived|\(the examples could not be read for scope|\(a fidelity profile in this project|\S+ ".*": its check (?:now|no longer) qualifies on your rulings)/.test(x))) console.log(l);
   // Required is what a run is held to. What the example showed is checked and reported, and fails nothing: said apart,
   // so that the count of what is enforced is never larger than it is.
   // The screen above already said what is checked and what is theirs: all that is left to say is that it is ready.
   const plan = planFor({ requirements: decided }); const against = plan.readsMaterial;
   // What the skill will do with each rule, for whoever asks for the whole account.
   if (whole) { console.log('\nWhat a run does with each rule:'); for (const l of describePlan(plan)) console.log(l); }
-  console.log(`\nYour skill "${name}" is ready.`);
+  // A PERSON AT A TERMINAL IS SHOWN IT WORKING (cli/guided.ts): what was understood, two pieces, one round of changes.
+  const person = guidedHere();
+  if (!person) console.log(`\nYour skill "${name}" is ready.`);
+  if (person) {
+    const stated = proposals.filter((p) => p.origin === 'STATED');
+    await guided(name, { steps: stated.map((p) => p.statement), disputed: confirmed ? [] : disputed.map((p) => p.statement),
+      confirm: `atelier ${typedWithout(['--yes'])} --name ${name} --yes` });
+    return;
+  }
   if (disputed.length && !confirmed) console.log(`  ${disputed.length} of your steps ${disputed.length === 1 ? 'is' : 'are'} not what your own examples do (marked ! above). ${disputed.length === 1 ? 'It is' : 'They are'} checked and shown on every run, and block${disputed.length === 1 ? 's' : ''} nothing until you say so:\n    keep ${disputed.length === 1 ? 'it' : 'them'} as written: atelier ${typedWithout(['--yes'])} --name ${name} --yes   ·   or change the method and build again`);
   console.log(`  Check a text: atelier verify --skill ${name} <file>   ·   Write with it: atelier run "<the task>"${against ? ' --with <file>' : ''}   (or /${name} in Claude Code)`);
 }
@@ -496,7 +513,11 @@ async function asideKept(note: string): Promise<Set<string> | null> {
   const input = { steps: aside.map((st, i) => ({ id: String(i + 1), text: st.text, under: st.under })) };
   const d = await readContext(METHOD_UNITS, input, contextReaderClient(), contextReaderModel(), { spentUsd: 0, capUsd: 0.1, maxCalls: 1 });
   if (d.by !== 'model') return null;
-  const kept = new Set(input.steps.filter((st) => d.value[st.id]?.kind === 'instruction').map((st) => st.text));
+  // THE TITLE-SHAPED LINE IS A STEP ONLY ON THE READING'S OWN WORD: a line it could not ground falls to the floor
+  // (./decision-units.ts, `unitFloor`), which calls everything an instruction, and a note's title must not become a
+  // step that way. A sentence beside the list is kept on either, as it was.
+  const title = titleOf(note);
+  const kept = new Set(input.steps.filter((st) => d.value[st.id]?.kind === 'instruction' && (st.text !== title || d.value[st.id]?.by === 'model')).map((st) => st.text));
   if (argv.includes('--report')) console.log(`(sentences beside the list, and a title-shaped first line, read as instructions and kept as steps: ${kept.size} of ${aside.length}.)`);
   return kept;
 }

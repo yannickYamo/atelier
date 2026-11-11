@@ -443,3 +443,11 @@ export async function spend<T>(budget: Budget, estimateUsd: number, fn: () => Pr
   }
   return value;
 }
+
+/**
+ * THE MODEL DECLINED THIS CALL (a refusal, or a provider's filter): no fault of the work, and seen to pass on the next
+ * ask of the same call. A caller may ask again, each ask paid and counted, before it gives up.
+ */
+export function declined(e: unknown): boolean {
+  return e instanceof GenerationIncomplete && (e.termination.kind === 'REFUSAL' || e.termination.kind === 'CONTENT_FILTER');
+}

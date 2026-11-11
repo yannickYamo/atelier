@@ -65,6 +65,12 @@ export interface MethodStep {
  * (./decision-units.ts, `asideKept` in cli/commands/method.ts), and only the sentences it read as instructions are kept,
  * passed here as `keep`. With nothing read (no model) the list is the method and its prose is not.
  */
+/** The note's title-shaped first line, where it has one (see `splitSteps`). */
+export function titleOf(note: string): string | null { return splitSteps(note).title?.text ?? null; }
+
+/** A check a model wrote that reads what the piece was made from: unreadable on a piece that carries no material. */
+const readsMaterial = (m: Measurement): boolean => m.observer === 'CHECK' && ((m.params.source as readonly string[] | undefined) ?? []).join('\n').replace(/^\s*\([^)]*\)\s*=>/, '').includes('material');
+
 export function asideOf(note: string): MethodStep[] { const { aside, title } = splitSteps(note); return title ? [title, ...aside] : aside; }
 
 /** A rebuild and a run number the steps as the build did: the lines the build's reading kept, under the note's hash. */
@@ -233,7 +239,7 @@ export function methodProposals(note: string, example: Pick<GoldenCase, 'task' |
   const out: MethodProposal[] = []; const claimed = new Set<string>(); const claimedSections = new Set<string>();
   // A step the example does not hold keeps its check: the owner stated it. What the example did is said beside it.
   // (A check against the material says nothing of an example handed over without its material.)
-  const unreadable = (m: Measurement): boolean => targetOf(m.observer) === 'BOUND_MATERIAL' && !example.material.length;
+  const unreadable = (m: Measurement): boolean => (targetOf(m.observer) === 'BOUND_MATERIAL' || readsMaterial(m)) && !example.material.length;
   const against = (r: { verdict: string; detail: string }, m: Measurement): string | null => (r.verdict === 'VIOLATED' && !unreadable(m) ? `your example does not do this (${r.detail})` : null);
   for (const step of stepsOf(note, keep)) {
     // THE CHECK THE READING GAVE THE STEP, grounded on this example already (./step-check.ts); none, and the step is
@@ -241,6 +247,11 @@ export function methodProposals(note: string, example: Pick<GoldenCase, 'task' |
     const given = plan?.get(step.text) ?? null; const m = given?.measurement ?? null;
     if (!m) { out.push({ statement: step.text, origin: 'STATED', obligation: 'JUDGEMENT', measurement: null, onExample: null, conflict: null }); continue; }
     const r = read(m);
+    // A CHECK A MODEL WROTE FOR THE STEP, FAILING THE AUTHOR'S OWN PIECE, IS A WRONG CHECK, not a piece that breaks the
+    // step: it is dropped, and the step is the owner's to judge. (A count from the list Atelier measures is another
+    // matter: what it found is said beside the step.) A real build told an author their own step was "not what your
+    // pieces do" on the word of such a check.
+    if (m.observer === 'CHECK' && r.verdict === 'VIOLATED' && !(readsMaterial(m) && !example.material.length)) { out.push({ statement: step.text, origin: 'STATED', obligation: 'JUDGEMENT', measurement: null, onExample: null, conflict: null }); continue; }
     claimed.add(m.observer === 'TABLE' ? `TABLE:${(m.params.columns as readonly string[]).join('|')}` : m.observer);
     if (m.observer === 'PRESENCE') for (const sec of ((m.params.sections as readonly string[] | undefined) ?? [])) claimedSections.add(norm(sec));
     out.push({ statement: step.text, origin: 'STATED', obligation: targetOf(m.observer) === 'BOUND_MATERIAL' ? 'EXECUTION' : 'DELIVERABLE', measurement: m, onExample: unreadable(m) ? 'could not be read on it: it carries no material' : r.detail, conflict: against(r, m), ...(given?.near ? { related: true as const } : {}), ...(given?.qualification ? { qualification: given.qualification } : {}) });
@@ -322,7 +333,7 @@ export function acrossExamples(proposals: readonly MethodProposal[], others: rea
   return proposals.flatMap((p): MethodProposal[] => {
     const m = p.measurement;
     if (!m) return [p];
-    const bound = targetOf(m.observer) === 'BOUND_MATERIAL';
+    const bound = targetOf(m.observer) === 'BOUND_MATERIAL' || readsMaterial(m);
     const results = others.filter((c) => !bound || c.material.length).map((c) => ({ id: c.id, r: measure(c.reference, m, { ...(c.task ? { request: c.task } : {}), material: c.material } satisfies CheckContext) }))
       .filter((x) => x.r.verdict !== 'NOT_APPLICABLE');
     const fails = results.filter((x) => x.r.verdict === 'VIOLATED'); const n = results.length + 1; const all = others.length + 1;
@@ -331,6 +342,8 @@ export function acrossExamples(proposals: readonly MethodProposal[], others: rea
     // EXAMPLE AGREEMENT GATES ONLY WHAT WAS READ FROM THE EXAMPLES. What one piece shows and another does not was that
     // piece's own, and is dropped. What the owner stated stands, with the pieces that do not do it named.
     if (p.origin === 'SHOWN_BY_EXAMPLE') return [];
+    // a written check that fails any of the author's pieces is dropped the same way (see `methodProposals`)
+    if (m.observer === 'CHECK') return [{ statement: p.statement, origin: p.origin, obligation: 'JUDGEMENT', measurement: null, onExample: null, conflict: null }];
     const lead = p.conflict ? [p.conflict.replace(/^your example does not do this /, `${leadId ?? 'the first'} `)] : [];
     const named = [...lead, ...fails.map((x) => `${x.id} (${x.r.detail})`)]; const k = named.length;
     return [{ ...p, onExample: `held in ${n - k} of ${on}`,
