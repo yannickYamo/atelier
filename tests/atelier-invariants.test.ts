@@ -338,7 +338,7 @@ describe('8 · every surface says the same thing about the same run', () => {
   });
   it('the state of a record is its entries\' and nothing else\'s', () => {
     for (const record of records) expect(recordOf(record.entries).state).toBe(record.state);
-    expect(stateLine(records[2])).toMatch(/^Not usable as it stands: 1 requirement seen to fail\./);
+    expect(stateLine(records[2])).toMatch(/^1 requirement not met\./);
     expect(records[2].entries.filter(blocks).map((e: Entry) => e.id)).toEqual(['x2']);
   });
   it('the exit code a script reads is the record\'s state, however the run was asked for', async () => {

@@ -73,7 +73,7 @@ export function stateLine(r: EvaluationRecord): string {
   // for this run (counted as not applying) is said apart, so "2 of 6 verified; 5 left" never happens.
   const open = required.filter(needsReview).length; const aside = r.entries.filter((e) => needsReview(e) && e.result === 'NOT_APPLICABLE').length;
   const asideSaid = aside ? `; ${aside} set aside for this run` : '';
-  if (r.state === 'BLOCKED') return `Not usable as it stands: ${s(failed.length, 'requirement')} seen to fail. ${passed} of ${required.length} verified${open ? `, ${open} left for you` : ''}${asideSaid}.`;
+  if (r.state === 'BLOCKED') return `${s(failed.length, 'requirement')} not met. ${passed} of ${required.length} verified${open ? `, ${open} left for you` : ''}${asideSaid}.`;
   if (r.state === 'VERIFIED') return `Every requirement was read in full and held (${required.length} of ${required.length}).`;
   return `Nothing was seen to fail. ${passed} of ${required.length} verified; ${open} left for you to read${asideSaid}.`;
 }

@@ -44,19 +44,33 @@ const jsonOf = (out: string): { output: string; direct?: { review: { ran: boolea
 
 
 describe('the self-review and the rules code holds', () => {
-  it('a review that adds an em dash under the person\'s ban is not taken: the draft is delivered, said, and on the record', async () => {
+  it('a review that breaks the person\'s ban, which the sentence repair does not mend, is not taken: the draft is delivered, said, and on the record', async () => {
     const cli = session();
-    await set({ emit_step_checks: CHECKS, __plain: [DRAFT, BROKEN] });
+    await set({ emit_step_checks: CHECKS, __plain: [DRAFT, CONTRAST] });
     expect(cli('new', join(FX, 'voice'), '--method', join(FX, 'rules.md'), '--name', 'post-voice', '--yes', '--latitude', 'creative', ...be()).code).toBe(0);
-    await set({ __plain: [DRAFT, BROKEN] });
+    await set({ __plain: [DRAFT, CONTRAST], emit_replacements: { rewriteSpans: [] } });
     const r = cli('invoke', '--skill', 'post-voice', 'Write a post on this week\'s news about the wharf.', '--claims', 'pattern', '--json', ...be());
     const j = jsonOf(r.out);
     expect(j.direct, r.out + r.err).toBeTruthy();
-    expect(j.output).not.toContain('—');
     expect(j.output).toBe(DRAFT);
     expect(j.direct?.review.ran).toBe(false);
     expect(j.direct?.review.why).toContain('it broke a rule the draft held');
     expect(r.err + r.out).toContain('which the first draft held, so the first draft is delivered');
+    // and `atelier run` says it beside the piece
+    await set({ __plain: [DRAFT, CONTRAST], emit_replacements: { rewriteSpans: [] } });
+    const ran = cli('run', 'Write a post on this week\'s news about the wharf.', '--skill', 'post-voice', '--claims', 'pattern', '--no-questions', ...be());
+    expect(ran.out, ran.err).toContain('This is the first draft: the review of it was not used, because it broke a rule the draft held');
+  }, 120_000);
+
+  it('a review whose broken sentence the repair mends is kept, with what it added', async () => {
+    const cli = session();
+    await set({ emit_step_checks: CHECKS, __plain: [DRAFT, BROKEN] });
+    expect(cli('new', join(FX, 'voice'), '--method', join(FX, 'rules.md'), '--name', 'post-voice', '--yes', '--latitude', 'creative', ...be()).code).toBe(0);
+    await set({ __plain: [DRAFT, BROKEN] });
+    const j = jsonOf(cli('invoke', '--skill', 'post-voice', 'Write a post on this week\'s news about the wharf.', '--claims', 'pattern', '--json', ...be()).out);
+    expect(j.output).not.toContain('—');
+    expect(j.output).toContain('closer than anyone said');
+    expect(j.direct?.review).toEqual({ ran: true });
   }, 120_000);
 
   it('a review that breaks nothing is taken as before', async () => {
@@ -80,7 +94,7 @@ describe('the self-review and the rules code holds', () => {
     const r = cli('run', 'Write a post on this week\'s news about the wharf.', '--skill', 'post-voice', '--claims', 'pattern', '--no-questions', ...be());
     expect(r.code, r.out + r.err).toBe(1);
     expect(r.out.startsWith('Needs a fix: see under the piece.\n\n# The wharf, this week')).toBe(true);
-    expect(r.out).toMatch(/^Needs a fix: Checked: /m);
+    expect(r.out).toMatch(/^Needs a fix\. Checked: 1 of your rules is not met, named below/m);
     expect(r.out).toMatch(/^ {2}Not met: /m);
     expect(r.out).toContain('To fix it atelier fix "<what to change>"');
     expect(r.out).not.toMatch(/BLOCKED|Delivery:|trusted-fail|not for use|held back/);

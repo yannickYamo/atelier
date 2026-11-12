@@ -22,6 +22,7 @@ import { listEvals } from '../../core/state/eval-store.js';
 import type { StandardVersion, InferredItem } from '../../core/state/canonical-state.js';
 import { ACCEPTED_UNREAD } from '../../core/eval/record-build.js';
 import { inferredLines } from '../../core/loop/inferred.js';
+import { REVIEW_BROKE } from '../direct.js';
 
 export interface EngineRun { readonly output: string | null; readonly invocationId: string; readonly costUsd: number; readonly cut?: readonly string[]; readonly toCheck: readonly string[];
   readonly report: readonly string[]; readonly eval: EvalSummary | null;
@@ -133,9 +134,11 @@ export type Outcome = 'ready' | 'look' | 'fix';
 export const OUTCOME_SAID: Readonly<Record<Outcome, string>> = { ready: 'Ready', look: 'Needs a look', fix: 'Needs a fix' };
 /** A rule no check could read on this piece (no notes to trace a figure to) is named under the piece and is nothing to look at. */
 const NOT_CHECKED = '  Not checked on this piece: ';
+/** A rule a check reads in part, and which held on the part it reads: named, and nothing to look at. */
+const HELD_PART = '  Held where it is checked: ';
 export const outcomeOf = (decision: string | undefined, state: string | null | undefined, found: readonly string[] = []): Outcome =>
   decision === 'BLOCK' || state === 'BLOCKED' ? 'fix'
-    : decision === 'PERSON' || (decision === 'SHIP_LABELLED' && found.some((l) => !l.startsWith(NOT_CHECKED))) ? 'look' : 'ready';
+    : decision === 'PERSON' || (decision === 'SHIP_LABELLED' && found.some((l) => !l.startsWith(NOT_CHECKED) && !l.startsWith(HELD_PART))) ? 'look' : 'ready';
 
 /**
  * WHAT A CHECK FOUND AND LEFT TO THE PERSON, one line each, in their rule's words: a rule not met, a possible slip, a
@@ -154,6 +157,7 @@ export function foundLines(r: EvaluationRecord): string[] {
     // word it merely does not know stays in the full account (--report), where every finding is listed.
     if (ev.startsWith(GRAMMAR_LISTED) || ev.includes('listed to check: ')) { for (const m of slipsOf(e)) out.push(`  Possible slip: ${m}`); continue; }
     if (e.reason === 'LISTED_FOR_YOU') out.push(`  To check: ${ev}`);
+    else if (e.reason === 'PARTLY_CHECKED') out.push(`${HELD_PART}${said(e)} (${ev})`);
     // a rule a check exists for and could not read on this piece (no material to trace a figure to): named, with why
     else if (e.required && !(e.reason === 'NOT_MACHINE_CHECKABLE' && e.observation.proposition === null)) out.push(`${NOT_CHECKED}${said(e)} (${ev})`);
   }
@@ -174,16 +178,19 @@ function shortLine(r: EvaluationRecord): string {
   const listed = (e: EvaluationRecord['entries'][number]): boolean => (e.observation.evidence ?? '').startsWith(GRAMMAR_LISTED);
   const slip = required.filter((e) => listed(e) && slipsOf(e).length > 0).length;
   const held = required.filter((e) => e.result === 'PASS' || (listed(e) && !slipsOf(e).length)).length;
-  const open = required.filter((e) => e.result !== 'PASS' && !listed(e));
-  if (!open.length && !slip) return held === required.length && required.every((e) => e.result === 'PASS') ? stateLine(r) : `nothing broke your rules (${held} measured).`;
+  // A RULE NOT MET LEADS THE SENTENCE: it never reads "nothing broke your rules" over a line that says one did.
+  const failed = required.filter((e) => e.result === 'FAIL').length;
+  const open = required.filter((e) => e.result !== 'PASS' && e.result !== 'FAIL' && !listed(e));
+  if (!open.length && !slip && !failed) return held === required.length && required.every((e) => e.result === 'PASS') ? stateLine(r) : `nothing broke your rules (${held} measured).`;
   // A rule no check reads is a judgement call. A rule a check reads in part, could not read here (no material given),
   // or reads without being relied on is something else: not checked in full on this piece, and said as that.
-  const judged = open.filter((e) => e.reason === 'NOT_MACHINE_CHECKABLE' && e.observation.proposition === null).length; const unread = open.length - judged;
+  const judged = open.filter((e) => e.reason === 'NOT_MACHINE_CHECKABLE' && e.observation.proposition === null).length; const partly = open.filter((e) => e.reason === 'PARTLY_CHECKED').length; const unread = open.length - judged - partly;
   const parts = [`${held} measured`,
     ...(judged ? [`${judged} ${judged === 1 ? 'is a judgement call' : 'are judgement calls'} the writer was given in your words`] : []),
+    ...(partly ? [`${partly} held where ${partly === 1 ? 'it is' : 'they are'} checked`] : []),
     ...(unread ? [`${unread} could not be checked on this piece, named below`] : []),
     ...(slip ? ['a possible slip is listed below'] : [])];
-  return `nothing broke your rules (${parts.join('; ')}).`;
+  return `${failed ? `${failed} of your rules ${failed === 1 ? 'is' : 'are'} not met, named below` : 'nothing broke your rules'} (${parts.join('; ')}).`;
 }
 
 /** The slips the grammar check can name the correction of, as it wrote them: `"are" (subject–verb agreement: "are" → "is")`. */
@@ -238,7 +245,8 @@ export async function run(): Promise<void> {
   // BESIDE THE WORK, NEVER IN IT: what the run decided for the person and what it was not given, with what to add (a fix in
   // place says its own, in its lines above)
   if (!result.fix) {
-    const beside = [...inferredLines(result.inferred ?? []), ...(typed.report && result.ownWords && !result.ownWords.checked && result.ownWords.why ? [`Not read for sentences about the piece's own making: ${result.ownWords.why}.`] : [])];
+    const why = (result.direct as { review?: { ran: boolean; why?: string } } | undefined)?.review?.why ?? '';
+    const beside = [...(why.startsWith(REVIEW_BROKE) ? [`This is the first draft: the review of it was not used, because ${why}.`] : []), ...inferredLines(result.inferred ?? []), ...(typed.report && result.ownWords && !result.ownWords.checked && result.ownWords.why ? [`Not read for sentences about the piece's own making: ${result.ownWords.why}.`] : [])];
     if (beside.length) console.log(`${beside.join('\n')}\n`);
     const open = openQuestionLines(result);
     if (open.length) console.log(`${open.join('\n')}\n`);
@@ -252,7 +260,7 @@ export async function run(): Promise<void> {
     // WHAT WAS DONE WITH IT (core/eval/consequence.ts), and where it waits when it went to a person.
     if (delivery) console.log(`\n${deliveryLine(delivery, result.eval?.record?.state)}${delivery.decision === 'PERSON' ? `\nSent to a person: it waits in atelier report --pending; rule on it with atelier rate ${result.invocationId} yes|no [--rule <id>].` : ''}`);
   } else {
-    console.log(`${OUTCOME_SAID[outcome]}${outcome === 'ready' ? '.' : ':'} Checked: ${shortLine(card.record)}`);
+    console.log(`${OUTCOME_SAID[outcome]}. Checked: ${shortLine(card.record)}`);
     for (const l of found) console.log(l);
     if (goes === 'PERSON') console.log(`To rule on it later: atelier rate ${result.invocationId} yes|no`);
     console.log(`${outcome === 'fix' ? 'To fix it' : 'Not right?'} atelier fix "<what ${outcome === 'fix' ? 'to change' : 'was wrong'}>"   ·   every check, rule by rule: atelier report ${result.invocationId}`);

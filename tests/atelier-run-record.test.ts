@@ -22,7 +22,7 @@ describe('the card, layer by layer', () => {
   it('a blocked run: the failure whole, the part-read rule with both halves, the judgement left to the owner, and one next step', () => {
     const out = card(buildRecord({ requirements: reqs, checked, waived: new Map(), request: null, claims: null, copying: null }));
     expect(out).toContain('── Evaluation · BLOCKED ');
-    expect(out).toContain('Not usable as it stands: 1 requirement seen to fail. 0 of 3 verified, 2 left for you.');
+    expect(out).toContain('1 requirement not met. 0 of 3 verified, 2 left for you.');
     expect(out).toContain('    ✗  Between 220 and 420 words.\n         found: 439 words (220 to 420): long by 19');
     expect(out).toContain('    ~  Open with a Parties section that names both parties exactly as the term sheet does.\n         checked, and held: a "Parties" section, with something in it, opening the work\n         not checked, yours to read: names both parties exactly as the term sheet does');
     expect(out).toContain('    ?  Take every name from the term sheet.\n       (no check reads the rule marked ? with nothing under it: it is yours to judge)');

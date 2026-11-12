@@ -221,9 +221,12 @@ export async function verify(): Promise<void> {
   } else {
     // THE OUTCOME FIRST, in the three words a run uses (cli/commands/run.ts); the whole account follows as before.
     const found = foundLines(record);
-    console.log(`${OUTCOME_SAID[outcomeOf(record.delivery?.decision, record.state, found)]}.\n`);
+    const outcome = OUTCOME_SAID[outcomeOf(record.delivery?.decision, record.state, found)];
+    console.log(`${outcome}.`);
+    for (const l of found) console.log(l);
+    console.log('');
     console.log(describeVerify(report, partlyChecked(record)));
-    console.log(`\n${record.state.replace('_', ' ')} · ${stateLine(record)}`);
+    console.log(`\n${outcome} · ${stateLine(record)}`);
     if (record.delivery) console.log(deliveryLine(record.delivery, record.state));
     // WHAT FAILED, BY NAME: a check the record holds beyond the rule lines above (copying from an example, the request's
     // own checks) is named here, so the text output says what blocked the work, not only --json.

@@ -173,7 +173,7 @@ describe('a step that bans the em dash is held by the count at zero, with no mod
     expect(b.out).toContain("Stages: method ✓ (2 step(s) served whole; 1 of 2 checked; 1 ban over an examples' rate)");
     const vf = cli('verify', '--skill', 'nodash', 'draft.md', '--claims', 'pattern');
     expect(vf.code, vf.out).toBe(1);
-    expect(vf.out).toMatch(/BLOCKED/);
+    expect(vf.out).toMatch(/^Needs a fix · /m);
     expect(vf.out).toMatch(new RegExp(`${ban.requirementId}\\b[^\\n]*Never use em dashes`));
   }, 120_000);
 });
