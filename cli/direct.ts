@@ -476,8 +476,20 @@ export async function runDirect(c: DirectContext) {
         const [was, now] = [wordsWritten(draft), wordsWritten(again.piece)];
         if (now * 2 < was) { review = { ran: false, why: `its reply was not the piece (${now} words against the draft's ${was})` }; c.say(`(the self-review did not return the piece, so the first draft is delivered: ${now} words came back against the draft's ${was})`); }
         else {
-          output = again.piece; review = { ran: true };
-          if (styleNoteNow && style) style = { ...style, steered: true };
+          // A REVIEW NEVER BREAKS A RULE THE DRAFT HELD. Both are read by the rules code holds (no model call: the claim
+          // reader is left out); where the review breaks one the draft held, the draft is delivered and it is said.
+          const byCode = { ...checks, guardClaims: false };
+          const held = brokenOf(await checkDraftAsync(c.name, c.std, draft, byCode));
+          const after = await checkDraftAsync(c.name, c.std, again.piece, byCode);
+          const broke = brokenOf(after).filter((id) => !held.includes(id));
+          if (broke.length) {
+            const named = broke.map((id) => after.checked.find((x) => x.requirementId === id)?.statement.replace(/\s+/g, ' ').trim().slice(0, 90) ?? id);
+            review = { ran: false, why: `it broke a rule the draft held (${named.join('; ')})` };
+            c.say(`(the self-review broke "${named[0]}", which the first draft held, so the first draft is delivered; what the review changed is not in it)`);
+          } else {
+            output = again.piece; review = { ran: true };
+            if (styleNoteNow && style) style = { ...style, steered: true };
+          }
         }
       } catch (e) { review = { ran: false, why: `the review could not run: ${(e as Error).message.split('\n')[0]}` }; c.say(`(the self-review could not run, so the first draft is delivered: ${review.why})`); }
     }
