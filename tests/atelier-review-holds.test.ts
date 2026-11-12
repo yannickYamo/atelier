@@ -3,7 +3,9 @@
 // line, and the record says the review was not taken, with why. Run through the shipped binary on the scripted backend.
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
-import { mkdtempSync, existsSync } from 'node:fs';
+import { mkdtempSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { outcomeOf } from '../cli/commands/run.js';
+import { checkSection } from '../renderers/agent-skill/render.js';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
@@ -27,19 +29,21 @@ beforeAll(async () => {
 }, 60_000);
 afterAll(() => { backend.kill(); });
 
-describe('the self-review and the rules code holds', () => {
-  const set = (byTool: Record<string, unknown>): Promise<unknown> => fetch(`http://127.0.0.1:${port}/__set`, { method: 'POST', body: JSON.stringify({ byTool }) });
-  const session = (): ((...a: string[]) => { code: number; out: string; err: string }) => {
-    const data = mkdtempSync(join(tmpdir(), 'atelier-rev-data-')); const proj = mkdtempSync(join(tmpdir(), 'atelier-rev-proj-'));
-    const env = { ...process.env, ATELIER_DATA: data, ATELIER_PROJECT_DIR: proj, ATELIER_PRICE_IN: '1', ATELIER_PRICE_OUT: '1', ANTHROPIC_API_KEY: '', ANTHROPIC_AUTH_TOKEN: '', ATELIER_CONTEXT_READER: 'scripted' };
-    return (...a) => {
-      try { return { code: 0, out: execFileSync('node', [CLI, ...a], { encoding: 'utf8', cwd: proj, env, stdio: ['ignore', 'pipe', 'pipe'] }), err: '' }; }
-      catch (e) { const x = e as { status: number; stdout: string; stderr: string }; return { code: x.status, out: x.stdout, err: x.stderr }; }
-    };
+const set = (byTool: Record<string, unknown>): Promise<unknown> => fetch(`http://127.0.0.1:${port}/__set`, { method: 'POST', body: JSON.stringify({ byTool }) });
+const session = (): ((...a: string[]) => { code: number; out: string; err: string }) & { proj: string } => {
+  const data = mkdtempSync(join(tmpdir(), 'atelier-rev-data-')); const proj = mkdtempSync(join(tmpdir(), 'atelier-rev-proj-'));
+  const env = { ...process.env, ATELIER_DATA: data, ATELIER_PROJECT_DIR: proj, ATELIER_PRICE_IN: '1', ATELIER_PRICE_OUT: '1', ANTHROPIC_API_KEY: '', ANTHROPIC_AUTH_TOKEN: '', ATELIER_CONTEXT_READER: 'scripted' };
+  const run = (...a: string[]): { code: number; out: string; err: string } => {
+    try { return { code: 0, out: execFileSync('node', [CLI, ...a], { encoding: 'utf8', cwd: proj, env, stdio: ['ignore', 'pipe', 'pipe'] }), err: '' }; }
+    catch (e) { const x = e as { status: number; stdout: string; stderr: string }; return { code: x.status, out: x.stdout, err: x.stderr }; }
   };
-  const be = (): string[] => ['--provider', 'openai-compatible', '--base-url', `http://127.0.0.1:${port}`, '--model', 'scripted'];
-  const jsonOf = (out: string): { output: string; direct?: { review: { ran: boolean; why?: string } } | null } => JSON.parse(out.slice(out.indexOf('{')));
+  return Object.assign(run, { proj });
+};
+const be = (): string[] => ['--provider', 'openai-compatible', '--base-url', `http://127.0.0.1:${port}`, '--model', 'scripted'];
+const jsonOf = (out: string): { output: string; direct?: { review: { ran: boolean; why?: string } } | null } => JSON.parse(out.slice(out.indexOf('{'))) as { output: string; direct?: { review: { ran: boolean; why?: string } } | null };
 
+
+describe('the self-review and the rules code holds', () => {
   it('a review that adds an em dash under the person\'s ban is not taken: the draft is delivered, said, and on the record', async () => {
     const cli = session();
     await set({ emit_step_checks: CHECKS, __plain: [DRAFT, BROKEN] });
@@ -92,5 +96,29 @@ describe('the self-review and the rules code holds', () => {
     expect(r.out.startsWith('# The wharf, this week')).toBe(true);
     expect(r.out).toMatch(/^Ready\. Checked: /m);
     expect(r.out).not.toMatch(/Delivery:|trusted-fail/);
+  }, 120_000);
+});
+
+describe('the three outcomes, and where a host is told to check', () => {
+  it('needs a fix where a required rule failed; needs a look only where something was found; else ready', () => {
+    expect(outcomeOf('BLOCK', 'BLOCKED')).toBe('fix');
+    expect(outcomeOf('SHIP_LABELLED', 'BLOCKED')).toBe('fix');
+    expect(outcomeOf('PERSON', 'NEEDS_REVIEW')).toBe('look');
+    expect(outcomeOf('SHIP_LABELLED', 'NEEDS_REVIEW', ['  Possible slip: "teh" → "the"'])).toBe('look');
+    // a rule no check could read on this piece (no notes given) is named, and is nothing to look at
+    expect(outcomeOf('SHIP_LABELLED', 'NEEDS_REVIEW', ['  Not checked on this piece: Every specific (no material)'])).toBe('ready');
+    expect(outcomeOf('SHIP', 'VERIFIED')).toBe('ready');
+  });
+  it('the installed skill orders the check by its exact command, in its first 2,000 characters, and verify says the outcome first', async () => {
+    expect(checkSection('posts')).toContain('run `atelier verify --skill posts <file>`');
+    const cli = session();
+    await set({ emit_step_checks: CHECKS, __plain: [DRAFT, DRAFT] });
+    expect(cli('new', join(FX, 'voice'), '--method', join(FX, 'rules.md'), '--name', 'post-voice', '--yes', '--latitude', 'creative', ...be()).code).toBe(0);
+    const proj = cli.proj;
+    const md = readFileSync(join(proj, '.claude', 'skills', 'post-voice', 'SKILL.md'), 'utf8');
+    expect(md.slice(0, 2000)).toContain('run `atelier verify --skill post-voice <file>`');
+    writeFileSync(join(proj, 'd.md'), DRAFT);
+    const v = cli('verify', '--skill', 'post-voice', 'd.md', '--claims', 'pattern');
+    expect(v.out, v.err).toMatch(/^(Ready|Needs a look|Needs a fix)\.\n/);
   }, 120_000);
 });

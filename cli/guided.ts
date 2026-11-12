@@ -20,6 +20,8 @@ import { titleOf } from '../core/direct/pieces.js';
 import type { PersonaPoint } from '../core/compiler/persona.js';
 import { editPairs, type KeptPiece } from '../core/direct/kept.js';
 import { createHash } from 'node:crypto';
+import { planFor } from '../core/plan/execution-plan.js';
+import type { StandardVersion } from '../core/state/canonical-state.js';
 
 /** How many pieces the build writes for the person to read. */
 const SAMPLES = 2;
@@ -124,6 +126,21 @@ export function howYouWrite(points: readonly PersonaPoint[], most: number): stri
     ...(said.length > most ? [`    and ${said.length - most} more`] : [])];
 }
 
+
+/**
+ * WHAT THE STANDARD HOLDS, IN TWO LINES, the same at the end of a build and on the skill page: how many of the rules code
+ * checks on every piece, and how many are the person's to judge, each with one rule in their words. Counts the run plan
+ * already has (core/plan/execution-plan.ts); nothing is computed for it.
+ */
+export function whatItHolds(std: Pick<StandardVersion, 'requirements'> & Partial<Pick<StandardVersion, 'qualifications'>>): string[] {
+  const rules = planFor(std).rules;
+  const eg = (xs: readonly { statement: string }[]): string => { const t = (xs[0]?.statement ?? '').replace(/\s+/g, ' ').trim().replace(/[.]$/, ''); return t.length > 70 ? `${t.slice(0, 69).trimEnd()}…` : t; };
+  const checked = rules.filter((r) => r.check !== null); const judged = rules.filter((r) => r.check === null);
+  return [
+    ...(checked.length ? [`Checked by code on every piece: ${checked.length} of your ${rules.length} rules (for example: ${eg(checked)}).`] : []),
+    ...(judged.length ? [`Yours to judge, shown beside every piece: ${judged.length} (for example: ${eg(judged)}).`] : []),
+  ];
+}
 export async function guided(name: string, seen: Understood = { steps: [], disputed: [] }): Promise<void> {
   const L = { root: DATA, skillName: name };
   const io = lines();
@@ -138,6 +155,8 @@ export async function guided(name: string, seen: Understood = { steps: [], dispu
     const sound = howYouWrite(voice?.persona?.points ?? [], 4);
     if (sound.length) { console.log('  How you write:'); for (const l of sound) console.log(l); }
     if (seen.steps.length) { console.log(`  Your method, which every piece follows:`); for (const l of few(seen.steps, 6)) console.log(l); }
+    { const active = store.getActive(L); const sv = active ? store.getSkillVersion(L, active) : null; const std = sv ? store.getStandard(L, sv.standardVersionHash) : null;
+      for (const l of std ? whatItHolds(std) : []) console.log(`  ${l}`); }
     if (seen.disputed.length) {
       console.log(`  ${seen.disputed.length === 1 ? 'One step of your method is' : `${seen.disputed.length} steps of your method are`} not what your own pieces do. The writer is told ${seen.disputed.length === 1 ? 'it' : 'them'}, and no piece is held back for ${seen.disputed.length === 1 ? 'it' : 'them'}:`);
       for (const l of few(seen.disputed, 3)) console.log(l);

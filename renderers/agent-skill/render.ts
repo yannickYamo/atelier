@@ -229,6 +229,18 @@ export interface ManifestRow {
 }
 
 /**
+ * THE HOST CHECKS ITS OWN DRAFT. A host that loads the skill as text writes without Atelier's runtime, so nothing reads
+ * its draft unless it runs the check. One plain order naming the command, near the top of the body so a partial read
+ * still shows it. Wiring to `atelier verify`; no script and no other command.
+ */
+export const checkSection = (skillId: string): string => `## Check the work before you hand it back
+
+Save what you wrote to a file and run \`atelier verify --skill ${skillId} <file>\` (add \`--with notes=<file>\` for
+notes the person gave you). Tell the person its first line (Ready, Needs a look or Needs a fix) and what it lists
+under it. If the \`atelier\` command is not installed, hand the work back and say it was not checked.
+`;
+
+/**
  * Render a standard THROUGH an architecture.
  *
  * The architecture is a parameter, not a derivation, and that is the whole change: the same standard
@@ -682,6 +694,8 @@ description: ${yamlScalar(description)}
 <!-- form: ${answers ? 'replies' : 'documents'} -->
 
 # ${skillId}
+
+${checkSection(skillId)}
 ${methodSection}
 ${method ? `Everything below my method is secondary: examples of finished work, how I sound, and rules read from my
 pieces. Apply those as judgment, including knowing when one does not apply. None of them overrides the method.${!voiceSection && !exemplar ? `\n\n${factsBelong(answers)}` : ''}`

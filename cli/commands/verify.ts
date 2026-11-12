@@ -24,6 +24,7 @@
 // claim or moves a banned move onto a sibling is refused), and prints the repaired text. Nothing else
 // in the text is touched: it keeps its own voice.
 
+import { OUTCOME_SAID, outcomeOf, foundLines } from './run.js';
 import { profileOf, bandWords } from '../../core/observers/selection.js';
 import { sayPooled } from '../../core/observers/pooled.js';
 import { checksFor, shortFormRequest } from '../checks.js';
@@ -218,6 +219,9 @@ export async function verify(): Promise<void> {
       ...report, ...(profile ? { profile } : {}), failed: record.state === 'BLOCKED' || (taste?.failed ?? false), violated: violatedOf(record), ...(classNote ? { note: classNote } : {}),
       ...(taste ? { taste: { failed: taste.failed, verdicts: taste.verdicts } } : {}) }, null, 1));
   } else {
+    // THE OUTCOME FIRST, in the three words a run uses (cli/commands/run.ts); the whole account follows as before.
+    const found = foundLines(record);
+    console.log(`${OUTCOME_SAID[outcomeOf(record.delivery?.decision, record.state, found)]}.\n`);
     console.log(describeVerify(report, partlyChecked(record)));
     console.log(`\n${record.state.replace('_', ' ')} · ${stateLine(record)}`);
     if (record.delivery) console.log(deliveryLine(record.delivery, record.state));
