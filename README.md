@@ -79,7 +79,7 @@ At a terminal, `atelier new` ends by showing the agent at work: what it understo
 Here is what comes back when an agent's draft invents a source and lifts a paragraph from one of your posts:
 
 ```text
-  ✗ Every specific in the work is found in what you supplied: 1 not found in it, and still in the text
+  ✗ Every name and figure in the work is in what you supplied: 1 not found in it, and still in the text
   ✗ No passage is lifted from one of your examples: a run of 33 words is shared with one of them (11 at most)
 ```
 

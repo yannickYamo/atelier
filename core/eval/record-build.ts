@@ -238,7 +238,7 @@ function evidenceEntries(f: RecordFacts): Entry[] {
   const out: Entry[] = [];
   const c = f.claims;
   if (c) {
-    const base = { id: 'specifics', dimension: 'EVIDENCE' as const, source: 'SYSTEM' as const, statement: 'Every specific in the work is found in what you supplied', required: true };
+    const base = { id: 'specifics', dimension: 'EVIDENCE' as const, source: 'SYSTEM' as const, statement: 'Every name and figure in the work is in what you supplied', required: true };
     const proposition = 'each figure, name, date and quotation, looked for in the request and the material';
     // Specifics the reader could not decide either way: its reading did not finish, wherever else the entry lands.
     const undecided = c.unconfirmed ? { incomplete: `${c.unconfirmed} specific${c.unconfirmed === 1 ? '' : 's'} unconfirmed: confirm them or bind your material` } : {};

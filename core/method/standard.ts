@@ -205,6 +205,12 @@ export interface MethodProposal {
    */
   readonly conflict: string | null;
   /**
+   * What the check written for a stated step found on the owner's example, where the example did not pass it. The check
+   * is dropped (it may be the check that is wrong) and the step is theirs to judge; what it found is said at the build,
+   * so an example that breaks their own rule is never passed over in silence.
+   */
+  readonly foundOnExample?: string;
+  /**
    * The check was tied to the step by a section name of the example, not by the step's wording alone ("State the
    * constraints in a Regulation section"). A reading of what the owner meant: said beside the step on the build screen.
    */
@@ -251,7 +257,7 @@ export function methodProposals(note: string, example: Pick<GoldenCase, 'task' |
     // step: it is dropped, and the step is the owner's to judge. (A count from the list Atelier measures is another
     // matter: what it found is said beside the step.) A real build told an author their own step was "not what your
     // pieces do" on the word of such a check.
-    if (m.observer === 'CHECK' && r.verdict === 'VIOLATED' && !(readsMaterial(m) && !example.material.length)) { out.push({ statement: step.text, origin: 'STATED', obligation: 'JUDGEMENT', measurement: null, onExample: null, conflict: null }); continue; }
+    if (m.observer === 'CHECK' && r.verdict === 'VIOLATED' && !(readsMaterial(m) && !example.material.length)) { out.push({ statement: step.text, origin: 'STATED', obligation: 'JUDGEMENT', measurement: null, onExample: null, conflict: null, ...(r.detail ? { foundOnExample: r.detail.replace(/\s+/g, ' ').trim().slice(0, 160) } : {}) }); continue; }
     claimed.add(m.observer === 'TABLE' ? `TABLE:${(m.params.columns as readonly string[]).join('|')}` : m.observer);
     if (m.observer === 'PRESENCE') for (const sec of ((m.params.sections as readonly string[] | undefined) ?? [])) claimedSections.add(norm(sec));
     out.push({ statement: step.text, origin: 'STATED', obligation: targetOf(m.observer) === 'BOUND_MATERIAL' ? 'EXECUTION' : 'DELIVERABLE', measurement: m, onExample: unreadable(m) ? 'could not be read on it: it carries no material' : r.detail, conflict: against(r, m), ...(given?.near ? { related: true as const } : {}), ...(given?.qualification ? { qualification: given.qualification } : {}) });
@@ -343,7 +349,7 @@ export function acrossExamples(proposals: readonly MethodProposal[], others: rea
     // piece's own, and is dropped. What the owner stated stands, with the pieces that do not do it named.
     if (p.origin === 'SHOWN_BY_EXAMPLE') return [];
     // a written check that fails any of the author's pieces is dropped the same way (see `methodProposals`)
-    if (m.observer === 'CHECK') return [{ statement: p.statement, origin: p.origin, obligation: 'JUDGEMENT', measurement: null, onExample: null, conflict: null }];
+    if (m.observer === 'CHECK') { const d = (fails[0]?.r.detail ?? '').replace(/\s+/g, ' ').trim().slice(0, 160); return [{ statement: p.statement, origin: p.origin, obligation: 'JUDGEMENT', measurement: null, onExample: null, conflict: null, ...(d ? { foundOnExample: `in ${fails.length} of ${on}, ${d}` } : {}) }]; }
     const lead = p.conflict ? [p.conflict.replace(/^your example does not do this /, `${leadId ?? 'the first'} `)] : [];
     const named = [...lead, ...fails.map((x) => `${x.id} (${x.r.detail})`)]; const k = named.length;
     return [{ ...p, onExample: `held in ${n - k} of ${on}`,

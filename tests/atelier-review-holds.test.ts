@@ -136,3 +136,17 @@ describe('the three outcomes, and where a host is told to check', () => {
     expect(v.out, v.err).toMatch(/^(Ready|Needs a look|Needs a fix)\.\n/);
   }, 120_000);
 });
+
+describe('what the build says, and the words people type', () => {
+  it('a stated step whose written check the examples do not pass is said beside the step, with what was found; `atelier list` shows the skills', async () => {
+    const cli = session();
+    const SRC = '(text) => { const n = (text.match(/\\bthe\\b/g) || []).length; return { ok: n === 0, detail: n + " places where it says \\"the\\"", spans: [] }; }';
+    await set({ emit_step_checks: { checks: [{ id: '1', how: 'written', measure: null, source: SRC, quote: 'No AI tells', means: 'never the word "the"' }, ...CHECKS.checks.slice(1)] }, __plain: [DRAFT, DRAFT] });
+    const built = cli('new', join(FX, 'voice'), '--method', join(FX, 'rules.md'), '--name', 'post-voice', '--yes', '--latitude', 'creative', ...be());
+    expect(built.code, built.out + built.err).toBe(0);
+    expect(built.out).toMatch(/- No AI tells\.\n {6}! Your example may not follow this: \d+ places where it says "the"\. The writer is told the rule; it is yours to judge on each piece\./);
+    const listed = cli('list');
+    expect(listed.code, listed.err).toBe(0);
+    expect(listed.out).toContain('post-voice');
+  }, 120_000);
+});

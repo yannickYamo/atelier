@@ -82,8 +82,8 @@ describeWithEngine('the grammar rule, with the real engine, under --fix-grammar'
     const r = readGrammar(text, {});
     expect(r.confirmed).toEqual([]);
     expect(measure(text, m()).verdict).toBe('MET');
-    // A capitalisation the checker proposes is listed, never made.
-    expect(r.uncertain.some((s) => /SentenceCapitalization|Capitaliz/.test(s.why))).toBe(true);
+    // A capitalisation the checker proposes is the author's styling: never made, and not listed.
+    expect(r.uncertain.some((s) => /SentenceCapitalization|Capitaliz/.test(s.why))).toBe(false);
   });
   it('two commas and a space before a full stop are corrected; " ;", " ?", "..", "!!", an ellipsis and a smiley are the author\'s', () => {
     const text = 'We shipped it,, and then we waited ; the queue drained . Done ? Yes.. It held!! Wait... then :) fine.';
@@ -98,8 +98,8 @@ describeWithEngine('the grammar rule, with the real engine, under --fix-grammar'
     const text = 'The Widgit sold 2,000 units, a 15% rise, and Acme Corp\'s margin held at 42%. The cache reduces p99 latency by 30ms.';
     const r = readGrammar(text, {});
     expect(r.confirmed).toEqual([]);
-    expect(r.uncertain.filter((s) => s.text === 'Widgit')).toHaveLength(1);
-    expect(r.uncertain.find((s) => s.text === 'Widgit')?.why).toMatch(/a name, an acronym or a coined word is the author's/);
+    // a name, an acronym or a coined word is the author's: never listed
+    expect(r.uncertain.filter((s) => s.text === 'Widgit')).toHaveLength(0);
   });
   it('an ambiguous construction is listed to check, and the list is never rewritten or counted as worse', () => {
     const v = standard(rule());

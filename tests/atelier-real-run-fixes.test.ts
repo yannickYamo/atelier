@@ -108,9 +108,9 @@ describe('what the first real run broke', () => {
     // failed by another of the author's pieces: dropped, with no dispute
     const across = acrossExamples(held, [{ id: 'second.md', ...piece('The price was two days. We gained a faster build.') }], 'first.md');
     const after = across.find((p) => p.statement === step);
-    expect(after).toEqual({ statement: step, origin: 'STATED', obligation: 'JUDGEMENT', measurement: null, onExample: null, conflict: null });
+    expect(after).toEqual({ statement: step, origin: 'STATED', obligation: 'JUDGEMENT', measurement: null, onExample: null, conflict: null, foundOnExample: 'in 1 of your 2 examples, no cost named' });
     // failed by the first piece itself: the same
     const lead = methodProposals(NOTE, piece('The price was two days. We gained a faster build.'), plan).find((p) => p.statement === step);
-    expect(lead).toEqual({ statement: step, origin: 'STATED', obligation: 'JUDGEMENT', measurement: null, onExample: null, conflict: null });
+    expect(lead).toEqual({ statement: step, origin: 'STATED', obligation: 'JUDGEMENT', measurement: null, onExample: null, conflict: null, foundOnExample: 'no cost named' });
   });
 });

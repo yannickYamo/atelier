@@ -107,6 +107,7 @@ export const COMMANDS: readonly string[] = [
   'invoke',
   'run',
   'lab',
+  'list',
   'mine',
   'taste',
   'tend',
@@ -158,7 +159,7 @@ export const FRONT_DOOR: readonly string[] = [
 /** The commands a newcomer does not need, by what they are for. Nothing is hidden: it is one command away. */
 const LAB: readonly (readonly [string, readonly string[]])[] = [
   ['write to the standard', ['run', 'fix', 'keep', 'invoke']],
-  ['check and correct', ['verify', 'score', 'material', 'amend', 'add', 'status', 'report', 'rate', 'export', 'mcp', 'models']],
+  ['check and correct', ['verify', 'score', 'material', 'amend', 'add', 'status', 'list', 'report', 'rate', 'export', 'mcp', 'models']],
   ['build, the long way', ['method', 'skill', 'review', 'pending', 'ratify', 'ratify-one', 'ratify-close', 'build', 'confirm', 'plan', 'abort', 'check']],
   ['measure a skill', ['reproduce', 'evolve', 'eval', 'qualify', 'floor', 'reference', 'history', 'inspect']],
   ['experimental: not shown to help yet', ['fidelity', 'taste', 'tells', 'library', 'tend', 'voice', 'optimize', 'mine', 'sharpen', 'improve', 'compare', 'profiles', 'carriers']],
@@ -257,6 +258,8 @@ const main = async (): Promise<void> => {
     case 'record': return record();
     case 'fix': return fix();
     case 'reference': return reference();
+    // `atelier list` is what people type for their skills: it is `atelier status`, never an unknown command.
+    case 'list':
     case 'status': {
       // With a skill: the one-page dashboard. Without: the run in flight in this project.
       const dash = flag('--skill');

@@ -286,7 +286,7 @@ the build's own account.
 With no model key set, a build says so, asks nothing and promises nothing: set the key and run the same command
 again.
 
-`atelier status` lists every skill built on this machine, one line each. One skill per voice: build each client or
+`atelier status` (or `atelier list`) lists every skill built on this machine, one line each. One skill per voice: build each client or
 author under its own `--name`, and write with `--skill <name>`.
 
 The whole evaluation is in three layers that are kept apart because they are different
@@ -368,7 +368,9 @@ atelier new ./memos --method method.md               # your finished examples (a
 atelier new ./memos --method method.md --review      # look at what it would check, and build nothing
 ```
 
-Every step of the note is your rule, in your words. It calls no model. The screen sorts the steps into three
+Every step of the note is your rule, in your words. Write one step for each section the work must have, by name,
+and one for how it should read ("show the working: what was used, derived and calculated"): a section or a register no
+step names is left to the examples. An example by someone else gives the shape of the work, not your voice. It calls no model. The screen sorts the steps into three
 kinds and says, for each check, what it looks for and how your examples fare on it:
 
 - **Checked on every output.** A section the work must have ("Open with a Summary section", "Then a Background
