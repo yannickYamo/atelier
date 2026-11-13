@@ -338,7 +338,7 @@ describe('through the binary', () => {
     expect(listed.code).toBe(0);
     expect(listed.out).toMatch(new RegExp(`to check {2}${g?.requirementId ?? 'g'} {2}No mechanical errors`));
     expect(listed.out).toMatch(/listed for you to check: 2 possible slips: "are" \(subject–verb agreement: "are" → "is"\)/);
-    expect(listed.out).toMatch(/NEEDS REVIEW/);
+    expect(listed.out).toMatch(/^Needs a look · /m);
     expect(listed.out).not.toMatch(/FAIL {2}/);
     const r = tryRun('verify', '--skill', 'posts', 'draft.md', '--allow-unsourced', '--fix-grammar');
     expect(r.code).toBe(1);
@@ -351,7 +351,7 @@ describe('through the binary', () => {
     // Switched off, the same clean draft is not passed on the rule: it is named as not checked, and needs review.
     const off = execFileSync('node', [CLI, 'verify', '--skill', 'posts', 'clean.md', '--allow-unsourced'], { encoding: 'utf8', cwd: proj,
       env: { ...process.env, ATELIER_DATA: data, ATELIER_PROJECT_DIR: proj, ATELIER_GRAMMAR: 'off' }, stdio: ['ignore', 'pipe', 'pipe'] });
-    expect(off).toMatch(/NEEDS REVIEW/);
+    expect(off).toMatch(/^(Needs a look|Ready) · /m);
     expect(off).toMatch(/switched off for this process/);
   }, 120_000);
 

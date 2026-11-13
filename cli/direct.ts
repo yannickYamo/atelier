@@ -75,6 +75,8 @@ import { methodReading, methodLine } from '../core/eval/obligations.js';
 
 
 
+/** How a record says the review's piece was set aside for breaking a rule; `atelier run` says it beside the piece. */
+export const REVIEW_BROKE = 'it broke a rule the draft held';
 export const DIRECT_VERSION = '1';
 const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'] as const;
 type Effort = (typeof EFFORTS)[number];
@@ -462,10 +464,13 @@ export async function runDirect(c: DirectContext) {
   const seen: { report: VerifyReport | null; checks: ReturnType<typeof checksFor> | null } = { report: null, checks: null };
   // what the last check listed, with the words each reader named: the record keeps the sentences, the person reads both
   const listedHere: ToCheck[] = [];
+  // why the review's piece was set aside on this run (it broke a rule the draft held, and the repair did not mend it)
+  let reviewOff = '';
   const refine = async (draft: string): Promise<{ output: string; repair: RepairRecord | null }> => {
     draftText = draft;
     let output = draft;
-    if (argv.includes('--no-review')) review = { ran: false, why: 'turned off (--no-review)' };
+    if (reviewOff) { review = { ran: false, why: reviewOff }; grounded = undefined; hashtags = undefined; fixedHere = ''; }
+    else if (argv.includes('--no-review')) review = { ran: false, why: 'turned off (--no-review)' };
     else {
       try {
         // with --style-review, what the draft does not hold of how the author writes reaches the review, and only that
@@ -542,6 +547,21 @@ export async function runDirect(c: DirectContext) {
       } catch (e) { c.say(`(the checks could not read the piece: ${(e as Error).message.split('\n')[0]}; it is delivered unchecked)`); }
       // the reader of specifics failed mid-run and the pattern check took over: said, since what is listed is then weaker
       if (checks.claimSensor?.degraded) c.say('(the reader that traces each specific to what you gave could not run; a pattern check read the piece instead, so the specifics listed are not the whole list)');
+    }
+    // A REVIEW NEVER COSTS A RULE THE DRAFT HELD. The sentences that break a rule were rewritten above; where a rule code
+    // holds is still broken and the first draft held it, the first draft is taken through the same steps instead, and
+    // it is said. Both are read by code alone (the claim reader is left out), so the comparison makes no model call.
+    if (review.ran && violated.length) {
+      const byCode = { ...checks, guardClaims: false };
+      const now = await checkDraftAsync(c.name, c.std, output, byCode);
+      const held = brokenOf(await checkDraftAsync(c.name, c.std, draft, byCode));
+      const broke = brokenOf(now).filter((id) => !held.includes(id));
+      if (broke.length) {
+        const named = broke.map((id) => now.checked.find((x) => x.requirementId === id)?.statement.replace(/\s+/g, ' ').trim().slice(0, 90) ?? id);
+        reviewOff = `${REVIEW_BROKE} (${named.join('; ')})`;
+        c.say(`(the self-review broke "${named[0]}", which the first draft held, so the first draft is delivered; what the review changed is not in it)`);
+        return refine(draft);
+      }
     }
     repaired = violatedBefore.filter((id) => !violated.includes(id));
     // read on the piece as delivered, after the sentences that broke a rule were rewritten, said beside it. With

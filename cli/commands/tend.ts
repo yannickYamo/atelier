@@ -22,7 +22,7 @@
 //
 //   0 9 * * 1  cd /path/to/project && atelier tend --skill house-style --cap 5 --auto >> ~/.atelier/tend.log 2>&1
 
-import { howYouWrite } from '../guided.js';
+import { howYouWrite, whatItHolds } from '../guided.js';
 import { staleChecks } from '../checks.js';
 import * as store from '../../core/state/store.js';
 import { degradedStages, describeStages } from '../../core/state/receipt.js';
@@ -124,6 +124,7 @@ export function skillPage(name: string): void {
   console.log(name);
   console.log(`  For: ${said ? said : 'not said yet'}   (say it: atelier amend --skill ${name} --card "kind=…; reader=…; purpose=…")`);
   if (voice?.pieces?.length) console.log(`  Built from ${voice.corpusPieces ?? voice.pieces.length} of your pieces${voice.lengthSpan ? `, ${voice.lengthSpan[0]} to ${voice.lengthSpan[1]} words each` : ''}.`);
+  for (const l of whatItHolds(v)) console.log(`  ${l}`);
   const live = v.requirements.filter((r) => r.authority !== 'EXPERT_REJECTED');
   // WHAT THE PERSON CHANGED FOR EVERY PIECE: the active standard's own line, back to the build (each standard names the
   // one it replaced and why, in the person's words). A candidate that was never made active is not on that line, and a

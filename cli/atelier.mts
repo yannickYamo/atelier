@@ -145,14 +145,14 @@ export const COMMANDS: readonly string[] = [
  * everything else is still here, under `atelier lab`, for whoever wants it.
  */
 export const FRONT_DOOR: readonly string[] = [
-  'atelier: learns how you write from the pieces you would sign, and writes new pieces that way, in any tool, on any model.',
+  'atelier: learns your standard from your best work, writes to it, and shows you what it holds.',
   '',
   '  atelier new <your-work> "<what it is for>"    build a skill from your finished pieces (--method <note> adds how you work)',
   '  atelier run "<task>"                          write a piece with it',
   '  atelier fix "<what was wrong>"                say it once, in your words; the piece is written again',
+  '  atelier verify --skill <name> <file>          check any draft: ready, needs a look, or needs a fix',
   '  atelier setup                                 let the agents in this project use it',
-  '  One skill per voice: --name <client> at the build, --skill <client> after. Check any text: atelier verify --skill <name> <file>',
-  '  Explain a command: atelier <command> --help. Everything else: atelier lab. Which model it uses: atelier models',
+  '  One skill per voice: --name <client> at the build, --skill <client> after. Explain a command: atelier <command> --help. Everything else: atelier lab',
 ];
 
 /** The commands a newcomer does not need, by what they are for. Nothing is hidden: it is one command away. */

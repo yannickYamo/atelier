@@ -348,7 +348,9 @@ it, never failed for it (`--graded none` turns the steering off for a run). How 
 writer is told the most your pieces carry, and a draft above it is written again toward it; a draft below it is never a
 miss, since it could only reach your rate by inventing opinion you never gave.
 
-`--report` on either command adds the engine's whole account. `atelier rate <run> yes|no "why"` records whether you
+A run ends with one of three outcomes, said in a line under the piece: Ready, Needs a look (a check found something
+for you, each listed in one line) or Needs a fix (a rule you require is not met, named in your words). The piece is
+always printed. `--report` on either command adds the engine's whole account. `atelier rate <run> yes|no "why"` records whether you
 would use the work as it is, and `atelier lab eval` shows that and every check over all your runs. Every
 other command is under `atelier lab`. `atelier invoke` is `atelier run` with that account always on, and is what
 scripts and other tools call.

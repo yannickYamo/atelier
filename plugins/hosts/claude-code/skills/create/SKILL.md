@@ -63,7 +63,9 @@ the piece just written). For each:
 atelier run "<the request>" --skill <kebab-name> --no-questions
 ```
 
-Show the piece as printed and ask: "Anything to change? Say it in your words, or go on." The two pieces are previews:
+Show the piece as printed. Under it the run says one of three things, "Ready", "Needs a look" or "Needs a fix", and
+lists what it found, one line each: say that to the user as printed. Then ask: "Anything to change? Say it in your
+words, or go on." The two pieces are previews:
 the skill is written from the user's own pieces, and a draft you wrote for them is never kept as one of theirs. Do
 **not** run `atelier keep` on a preview. If they say what to change:
 

@@ -9,6 +9,9 @@ Atelier learns how you write from the pieces you would sign, writes new pieces t
 - `atelier setup` lets the agents in a project call it through an MCP server, for Claude Code and Codex.
 - It also writes to the standard: `atelier run`, then `atelier fix` in your own words.
 - At a terminal, `atelier new` ends with the skill at work: what it understood, a few questions only you can answer, two previews and one round of changes. A folder of pieces with no method note is built the same way; `--rules` asks for rules read off the pieces and shown for approval instead.
+- A run ends with one of three outcomes in plain words, Ready, Needs a look or Needs a fix, and lists what a check found under the piece, one line each. The piece is always handed over; the rule-by-rule account is behind `--report`. `atelier verify` says the same outcome first.
+- The self-review never costs a rule: a sentence of the reviewed piece that breaks a rule is rewritten as before, and where a rule code holds is still broken and the first draft held it, the first draft is delivered and the run says so beside the piece.
+- The installed skill tells the host to check its own draft with `atelier verify` before handing it back. The build and `atelier status --skill <name>` say how many of your rules code checks on every piece and how many are yours to judge.
 - A model that declines to write a piece is asked again, up to three times, and the run says so; a declined reading of how you write is asked again too, and a skill built without it reads it on the next build.
 - "How you write" shows, under each point, how often you do it and a sentence of yours it was read from, at the build and on the skill page (`atelier status --skill <name>`).
 - Where nothing sets a length, the writer is told how long your own pieces run, as a guide. It is never held and never a reason to write again.
