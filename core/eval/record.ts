@@ -43,6 +43,8 @@ export interface Observation {
    * its own line, and it never moves the run's state either way.
    */
   readonly listed?: true;
+  /** the owner accepted this rule as unmeasured: no check reads it and no run waits on it. A fact, so nothing reads the sentence that says it. */
+  readonly accepted?: true;
   /**
    * What an observer that may not be believed returned (a written check not qualified on the owner's examples, a claim
    * reader not measured on this kind): never a verdict on the record, which stays UNVERIFIED; what delivery reads to tell a

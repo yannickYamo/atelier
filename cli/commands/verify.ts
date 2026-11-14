@@ -24,7 +24,7 @@
 // claim or moves a banned move onto a sibling is refused), and prints the repaired text. Nothing else
 // in the text is touched: it keeps its own voice.
 
-import { OUTCOME_SAID, outcomeOf, foundLines } from './run.js';
+import { OUTCOME_SAID, outcomeOf, foundLines } from '../../core/eval/wording.js';
 import { profileOf, bandWords } from '../../core/observers/selection.js';
 import { sayPooled } from '../../core/observers/pooled.js';
 import { checksFor, shortFormRequest } from '../checks.js';
@@ -221,7 +221,7 @@ export async function verify(): Promise<void> {
   } else {
     // THE OUTCOME FIRST, in the three words a run uses (cli/commands/run.ts); the whole account follows as before.
     const found = foundLines(record);
-    const outcome = OUTCOME_SAID[outcomeOf(record.delivery?.decision, record.state, found)];
+    const outcome = OUTCOME_SAID[outcomeOf(record.delivery?.decision, record.state, record)];
     console.log(`${outcome}.`);
     for (const l of found) console.log(l);
     console.log('');

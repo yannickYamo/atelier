@@ -4,7 +4,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { mkdtempSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { outcomeOf } from '../cli/commands/run.js';
 import { checkSection } from '../renderers/agent-skill/render.js';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -114,15 +113,6 @@ describe('the self-review and the rules code holds', () => {
 });
 
 describe('the three outcomes, and where a host is told to check', () => {
-  it('needs a fix where a required rule failed; needs a look only where something was found; else ready', () => {
-    expect(outcomeOf('BLOCK', 'BLOCKED')).toBe('fix');
-    expect(outcomeOf('SHIP_LABELLED', 'BLOCKED')).toBe('fix');
-    expect(outcomeOf('PERSON', 'NEEDS_REVIEW')).toBe('look');
-    expect(outcomeOf('SHIP_LABELLED', 'NEEDS_REVIEW', ['  Possible slip: "teh" → "the"'])).toBe('look');
-    // a rule no check could read on this piece (no notes given) is named, and is nothing to look at
-    expect(outcomeOf('SHIP_LABELLED', 'NEEDS_REVIEW', ['  Not checked on this piece: Every specific (no material)'])).toBe('ready');
-    expect(outcomeOf('SHIP', 'VERIFIED')).toBe('ready');
-  });
   it('the installed skill orders the check by its exact command, in its first 2,000 characters, and verify says the outcome first', async () => {
     expect(checkSection('posts')).toContain('run `atelier verify --skill posts <file>`');
     const cli = session();

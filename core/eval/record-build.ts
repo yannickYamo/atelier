@@ -95,7 +95,7 @@ function standardEntry(p: PlannedRule, f: RecordFacts): Entry {
 }
 
 /** The evidence of a rule the person accepted with no check: theirs to judge, and nothing a run found. */
-export const ACCEPTED_UNREAD = 'accepted by you as unmeasured: no check reads it, and the run is not held for it';
+const ACCEPTED_UNREAD = 'accepted by you as unmeasured: no check reads it, and the run is not held for it';
 
 /**
  * THE PART THE OWNER ACCEPTED UNREAD. A rule they named as accepted unmeasured that a check reads only in part ("one
@@ -163,7 +163,7 @@ function plannedEntry(p: PlannedRule, f: RecordFacts): Entry {
   const base = { id: p.id, statement: p.statement, dimension: required ? 'STANDARD' as const : 'HABIT' as const, source: p.stated ? 'METHOD' as const : 'EXAMPLE' as const, required };
   const o = p.check;
   // ACCEPTED UNMEASURED BY THE OWNER: no check reads it, and they said a run need not wait on it. Listed, never a review.
-  if (!o && required && f.accepted?.has(p.id)) return entry({ ...base, observation: { ...NOTHING, evidence: ACCEPTED_UNREAD, listed: true }, verdict: null });
+  if (!o && required && f.accepted?.has(p.id)) return entry({ ...base, observation: { ...NOTHING, evidence: ACCEPTED_UNREAD, listed: true, accepted: true }, verdict: null });
   // SET ASIDE FOR THIS REQUEST, a step no check reads as well: recorded as set aside (the state still leaves it to the
   // owner), never as unread, so delivery never waits on a step the request lifted (core/eval/consequence.ts).
   const aside = f.waived.get(p.id);

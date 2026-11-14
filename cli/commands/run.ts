@@ -12,15 +12,13 @@ import { deliveryLine } from '../../core/eval/consequence.js';
 import { execFile, spawnSync } from 'node:child_process';
 import { DATA, VALUED_OPTIONS, argv, die, flag, loadSession, boundMaterial } from '../runtime.js';
 import * as store from '../../core/state/store.js';
-import { renderRunCard, stateLine, type RunCard } from '../../core/eval/run-card.js';
-import type { EvaluationRecord } from '../../core/eval/record.js';
+import { renderRunCard, type RunCard } from '../../core/eval/run-card.js';
 import { OTHER_MODEL_NOTE, DECLINED_NOTE } from '../guided.js';
-import { GRAMMAR_LISTED } from '../../core/observers/grammar.js';
 import { planFor } from '../../core/plan/execution-plan.js';
 import type { EvalSummary } from '../../core/eval/summary.js';
 import { listEvals } from '../../core/state/eval-store.js';
 import type { StandardVersion, InferredItem } from '../../core/state/canonical-state.js';
-import { ACCEPTED_UNREAD } from '../../core/eval/record-build.js';
+import { OUTCOME_SAID, outcomeOf, foundLines, shortLine } from '../../core/eval/wording.js';
 import { inferredLines } from '../../core/loop/inferred.js';
 import { REVIEW_BROKE } from '../direct.js';
 
@@ -129,76 +127,6 @@ function skillFor(named: string | null): string {
 /** Does the skill check the work against material, with none given? Said before the draft, and never a refusal. */
 const needsMaterial = (std: Pick<StandardVersion, 'requirements'>, L: store.StoreLayout): boolean => planFor(std).readsMaterial && !store.getMaterial(L).length && !boundMaterial().length;
 
-/** The three outcomes a person reads. The owner's table decides which (core/eval/consequence.ts); these are its words. */
-export type Outcome = 'ready' | 'look' | 'fix';
-export const OUTCOME_SAID: Readonly<Record<Outcome, string>> = { ready: 'Ready', look: 'Needs a look', fix: 'Needs a fix' };
-/** A rule no check could read on this piece (no notes to trace a figure to) is named under the piece and is nothing to look at. */
-const NOT_CHECKED = '  Not checked on this piece: ';
-/** A rule a check reads in part, and which held on the part it reads: named, and nothing to look at. */
-const HELD_PART = '  Held where it is checked: ';
-export const outcomeOf = (decision: string | undefined, state: string | null | undefined, found: readonly string[] = []): Outcome =>
-  decision === 'BLOCK' || state === 'BLOCKED' ? 'fix'
-    : decision === 'PERSON' || (decision === 'SHIP_LABELLED' && found.some((l) => !l.startsWith(NOT_CHECKED) && !l.startsWith(HELD_PART))) ? 'look' : 'ready';
-
-/**
- * WHAT A CHECK FOUND AND LEFT TO THE PERSON, one line each, in their rule's words: a rule not met, a possible slip, a
- * specific to confirm, a rule no check could read on this piece. The short form never hides something that is theirs.
- */
-export function foundLines(r: EvaluationRecord): string[] {
-  const out: string[] = [];
-  const said = (e: EvaluationRecord['entries'][number]): string => e.statement.replace(/\s+/g, ' ').trim().slice(0, 90);
-  for (const e of r.entries) {
-    const ev = e.observation.evidence ?? '';
-    if (e.result === 'PASS' || e.result === 'NOT_APPLICABLE') continue;
-    if (e.required && e.result === 'FAIL') { out.push(`  Not met: ${said(e)}${ev ? ` (${ev})` : ''}`); continue; }
-    // a rule the person accepted with no check is theirs to judge, counted in the line above: nothing was found on it
-    if (!ev || ev === ACCEPTED_UNREAD) continue;
-    // Of the grammar checker's list, only a slip it can name the correction of is said here; a name, a heading or a
-    // word it merely does not know stays in the full account (--report), where every finding is listed.
-    if (ev.startsWith(GRAMMAR_LISTED) || ev.includes('listed to check: ')) { for (const m of slipsOf(e)) out.push(`  Possible slip: ${m}`); continue; }
-    if (e.reason === 'LISTED_FOR_YOU') out.push(`  To check: ${ev}`);
-    else if (e.reason === 'PARTLY_CHECKED') out.push(`${HELD_PART}${said(e)} (${ev})`);
-    // a rule a check exists for and could not read on this piece (no material to trace a figure to): named, with why
-    else if (e.required && !(e.reason === 'NOT_MACHINE_CHECKABLE' && e.observation.proposition === null)) out.push(`${NOT_CHECKED}${said(e)} (${ev})`);
-  }
-  return out;
-}
-
-/**
- * WHAT THE CHECKS FOUND, IN ONE SENTENCE A PERSON CAN READ WITHOUT KNOWING THE MACHINERY. It never says more than was
- * observed: rules a check measured are counted as measured, and a rule that is a matter of judgement is said to be one,
- * given to the writer, not counted as verified and not handed to the reader as work.
- */
-function shortLine(r: EvaluationRecord): string {
-  if (r.state === 'VERIFIED') return 'every rule was measured and held.';
-  const required = r.entries.filter((e) => e.required && e.result !== 'NOT_APPLICABLE' && e.reason !== 'LISTED_FOR_YOU');
-  // The grammar check reads the whole piece and lists what it is unsure of (a name, a heading, a word it does not
-  // know). With no slip it can name the correction of, it was read and nothing certain was found: counted as measured.
-  // A slip with a correction is said under this line (`slipsOf`), and counted here as that.
-  const listed = (e: EvaluationRecord['entries'][number]): boolean => (e.observation.evidence ?? '').startsWith(GRAMMAR_LISTED);
-  const slip = required.filter((e) => listed(e) && slipsOf(e).length > 0).length;
-  const held = required.filter((e) => e.result === 'PASS' || (listed(e) && !slipsOf(e).length)).length;
-  // A RULE NOT MET LEADS THE SENTENCE: it never reads "nothing broke your rules" over a line that says one did.
-  const failed = required.filter((e) => e.result === 'FAIL').length;
-  const open = required.filter((e) => e.result !== 'PASS' && e.result !== 'FAIL' && !listed(e));
-  if (!open.length && !slip && !failed) return held === required.length && required.every((e) => e.result === 'PASS') ? stateLine(r) : `nothing broke your rules (${held} measured).`;
-  // A rule no check reads is a judgement call. A rule a check reads in part, could not read here (no material given),
-  // or reads without being relied on is something else: not checked in full on this piece, and said as that.
-  const judged = open.filter((e) => e.reason === 'NOT_MACHINE_CHECKABLE' && e.observation.proposition === null).length; const partly = open.filter((e) => e.reason === 'PARTLY_CHECKED').length; const unread = open.length - judged - partly;
-  const parts = [`${held} measured`,
-    ...(judged ? [`${judged} ${judged === 1 ? 'is a judgement call' : 'are judgement calls'} the writer was given in your words`] : []),
-    ...(partly ? [`${partly} held where ${partly === 1 ? 'it is' : 'they are'} checked`] : []),
-    ...(unread ? [`${unread} could not be checked on this piece, named below`] : []),
-    ...(slip ? ['a possible slip is listed below'] : [])];
-  return `${failed ? `${failed} of your rules ${failed === 1 ? 'is' : 'are'} not met, named below` : 'nothing broke your rules'} (${parts.join('; ')}).`;
-}
-
-/** The slips the grammar check can name the correction of, as it wrote them: `"are" (subject–verb agreement: "are" → "is")`. */
-const slipsOf = (e: EvaluationRecord['entries'][number]): string[] => {
-  const ev = e.observation.evidence ?? '';
-  return ev.startsWith(GRAMMAR_LISTED) || ev.includes('listed to check: ') ? ev.match(/"[^"]*" \([^()]*→[^()]*\)/g) ?? [] : [];
-};
-
 export async function run(): Promise<void> {
   const typed = sortArgs(argv.slice(1));
   const name = skillFor(typed.skill ?? flag('--skill') ?? null);
@@ -236,7 +164,7 @@ export async function run(): Promise<void> {
   // handed over. What to look at or fix is listed under it; the table's own account stays behind --report.
   const card = cardFor(result);
   const found = card ? foundLines(card.record) : [];
-  const outcome = outcomeOf(goes, result.eval?.record?.state, found);
+  const outcome = outcomeOf(goes, result.eval?.record?.state, card?.record);
   const head = !card || typed.report || outcome === 'ready' ? '' : `${OUTCOME_SAID[outcome]}: see under the piece.\n\n`;
   console.log(`${head}${work.trimEnd()}\n`);
   // A FIX MADE IN PLACE SAYS WHAT CHANGED: sentences changed of total, and each span before and after.
