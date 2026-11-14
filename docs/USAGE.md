@@ -772,6 +772,9 @@ Every command takes `--provider` (`anthropic` or `openai-compatible`), `--model`
 `--api-key-env` (the variable that holds the key; `ANTHROPIC_API_KEY` by default). `--discovery-provider`,
 `--discovery-model`, `--target-provider` and `--target-model` (and their `-base-url`) set the build's reading and the
 run's writing apart, so a standard learnt with the most capable model you can reach runs on a cheaper one.
+
+Behind a company gateway to Anthropic, set `ANTHROPIC_AUTH_TOKEN` (in place of the key) and `ANTHROPIC_BASE_URL` (the
+gateway's address). `--base-url` is for an OpenAI-compatible backend.
 `--price-in` and `--price-out` give the rate in USD per million tokens where the provider reports none, and
 `--token-limit-param` names the field a provider takes for its token limit. `atelier models` says the same;
 docs/PORTABILITY.md has the detail.
