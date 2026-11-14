@@ -2,7 +2,7 @@
 // which outcome a record comes to. The sentences are pinned once, in the last test, against the module's own table.
 import { describe, it, expect } from 'vitest';
 import { entry, stateOf, type Entry, type Observation, type EvaluationRecord } from '../core/eval/record.js';
-import { kindOf, linesOf, foundLines, outcomeOf, shortLine, SAID, OUTCOME_SAID } from '../core/eval/wording.js';
+import { kindOf, linesOf, foundLines, outcomeOf, shortLine, verdictLines, SAID, OUTCOME_SAID } from '../core/eval/wording.js';
 
 const obs = (o: Partial<Observation> = {}): Observation => ({ proposition: 'counts it', coverage: 'FULL', qualification: 'DETERMINISTIC', evidence: '1 in 39 words (none allowed)', ...o });
 const rule = (id: string, verdict: 'MET' | 'VIOLATED' | null, o: Partial<Observation> = {}, more: Partial<Pick<Entry, 'required'>> & { applies?: false | { setAside: string } } = {}): Entry =>
@@ -65,6 +65,17 @@ describe('the outcome of a record', () => {
     expect(line).toContain('1 to look at');
     expect(foundLines(r)).toHaveLength(3);
     expect(shortLine(record(rule('a', 'MET')))).toBe('every rule was measured and held.');
+  });
+});
+
+describe('the check of one text, as verify and the MCP tool say it', () => {
+  it('opens with the outcome and puts the passages that broke a rule under that rule only', () => {
+    const r = record(rule('a', 'MET'), rule('b', 'VIOLATED'));
+    const lines = verdictLines(r, new Map([['a', []], ['b', [{ start: 0, end: 1, text: '—', why: 'an em dash' }]]]));
+    expect(lines[0]).toBe(`${OUTCOME_SAID.fix}.`);
+    expect(lines).toHaveLength(3);
+    expect(lines[2]).toContain('an em dash');
+    expect(verdictLines(record(rule('a', 'MET')))).toEqual([`${OUTCOME_SAID.ready}.`]);
   });
 });
 

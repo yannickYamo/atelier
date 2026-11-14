@@ -15,6 +15,8 @@
 
 import type { Entry, EvaluationRecord } from './record.js';
 import { GRAMMAR_LISTED } from '../observers/grammar.js';
+import { spanLines } from '../observers/verify.js';
+import type { Span } from '../observers/registry.js';
 
 export type Kind = 'held' | 'broken' | 'unchecked' | 'judge' | 'look';
 
@@ -112,4 +114,16 @@ export function shortLine(r: Pick<EvaluationRecord, 'entries' | 'state'>): strin
     ...(other ? [`${other} to look at, named below`] : []),
     ...(slip ? ['a possible slip is listed below'] : [])];
   return `${broken ? `${broken} of your rules ${broken === 1 ? 'is' : 'are'} not met, named below` : 'nothing broke your rules'} (${parts.join('; ')}).`;
+}
+
+/** The outcome of a record, in its word. */
+export const outcomeWord = (r: Pick<EvaluationRecord, 'entries' | 'state' | 'delivery'>): string => OUTCOME_SAID[outcomeOf(r.delivery?.decision, r.state, r)];
+
+/**
+ * THE RESULT OF A CHECK OF ONE TEXT, AS A PERSON OR A HOST READS IT (`atelier verify`, the MCP tool): the outcome, each
+ * thing to look at or fix, and under a rule not met the passages that broke it.
+ */
+export function verdictLines(r: Pick<EvaluationRecord, 'entries' | 'state' | 'delivery'>, spans: ReadonlyMap<string, readonly Span[]> = new Map()): string[] {
+  return [`${outcomeWord(r)}.`,
+    ...r.entries.flatMap((e) => [...linesOf(e), ...(kindOf(e) === 'broken' ? spanLines(spans.get(e.id) ?? [], '      ') : [])])];
 }
