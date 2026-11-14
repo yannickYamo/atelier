@@ -156,7 +156,13 @@ export async function run(): Promise<void> {
   let result: EngineRun | null = null;
   try { result = JSON.parse(engine.out) as EngineRun; } catch { /* the engine said why on its own stream */ }
   const work = result?.output ?? null;
-  if (!result || work === null) { process.stderr.write(engine.err); process.exitCode = engine.code || 1; return; }
+  // A RUN THAT FAILED SAYS WHY, AND ONLY THAT: the engine's own error lines. Its account of the run so far (which reader
+  // ran, what was not bound) is the report's, shown whole with --report or where no error line was written.
+  if (!result || work === null) {
+    const errors = engine.err.split('\n').filter((l) => l.startsWith('atelier: '));
+    process.stderr.write(typed.report || !errors.length ? engine.err : `${errors.join('\n')}\n`);
+    process.exitCode = engine.code || 1; return;
+  }
   // the engine's one line on a change of model (cli/commands/invoke.ts, `checkedBinding`) is the person's to read
   for (const l of engine.err.split('\n')) if (l.startsWith(OTHER_MODEL_NOTE) || l.startsWith(DECLINED_NOTE)) process.stderr.write(`${l}\n`);
   const goes = result.eval?.record?.delivery?.decision;
@@ -170,6 +176,8 @@ export async function run(): Promise<void> {
   // A FIX MADE IN PLACE SAYS WHAT CHANGED: sentences changed of total, and each span before and after.
   for (const l of result.fix?.lines ?? []) console.log(l);
   if (result.fix) console.log('');
+  // A FIX THAT COULD NOT BE MADE IN PLACE WROTE THE PIECE AGAIN WHOLE, and says so: other sentences may have changed.
+  if (!result.fix && typed.rest.includes('--fix-of')) console.log('The whole piece was written again with what you said, not only the sentences you named: other sentences may have changed.\n');
   // BESIDE THE WORK, NEVER IN IT: what the run decided for the person and what it was not given, with what to add (a fix in
   // place says its own, in its lines above)
   if (!result.fix) {

@@ -155,7 +155,8 @@ function thisOutputAgain(L: store.StoreLayout, name: string, inv: InvocationReco
   const complaints = [...(last.correcting?.complaints ?? []).filter((c) => c !== complaint), complaint];
   const { args, notes } = replayOf(name, last, complaints, settingsTyped(complaint), store.getActive(L));
   for (const n of notes) console.log(`(${n})`);
-  console.log('Changing what you named in this piece; the rest stays word for word.\n');
+  // What changed is said with the piece (cli/commands/run.ts): in place, or written again whole. Nothing is promised before it is known.
+  console.log('Writing it again with what you said.\n');
   // IN PLACE (cli/fix-in-place.ts): the version of the piece to change, this complaint, and the piece first complained of,
   // whose earlier fixes' removals stay out.
   const r = spawnSync(process.execPath, [...process.execArgv, process.argv[1], ...args, ...fixInPlaceArgs(last, inv.invocationId, complaint)], { stdio: 'inherit' });
