@@ -24,7 +24,7 @@
 // claim or moves a banned move onto a sibling is refused), and prints the repaired text. Nothing else
 // in the text is touched: it keeps its own voice.
 
-import { OUTCOME_SAID, outcomeOf, foundLines } from '../../core/eval/wording.js';
+import { OUTCOME_SAID, outcomeOf, linesOf, kindOf } from '../../core/eval/wording.js';
 import { profileOf, bandWords } from '../../core/observers/selection.js';
 import { sayPooled } from '../../core/observers/pooled.js';
 import { checksFor, shortFormRequest } from '../checks.js';
@@ -220,17 +220,24 @@ export async function verify(): Promise<void> {
       ...(taste ? { taste: { failed: taste.failed, verdicts: taste.verdicts } } : {}) }, null, 1));
   } else {
     // THE OUTCOME FIRST, in the three words a run uses (cli/commands/run.ts); the whole account follows as before.
-    const found = foundLines(record);
     const outcome = OUTCOME_SAID[outcomeOf(record.delivery?.decision, record.state, record)];
     console.log(`${outcome}.`);
-    for (const l of found) console.log(l);
-    console.log('');
-    console.log(describeVerify(report, partlyChecked(record)));
-    console.log(`\n${outcome} · ${stateLine(record)}`);
-    if (record.delivery) console.log(deliveryLine(record.delivery, record.state));
-    // WHAT FAILED, BY NAME: a check the record holds beyond the rule lines above (copying from an example, the request's
-    // own checks) is named here, so the text output says what blocked the work, not only --json.
-    for (const e of record.entries.filter(blocks)) console.log(`  ✗ ${e.statement.replace(/[.]$/, '')}${e.observation.evidence ? `: ${e.observation.evidence}` : ''}`);
+    // under a rule not met, the passages that broke it: what to change, for a person or a host
+    const spansOf = new Map(report.checked.map((c) => [c.requirementId, c.result.spans]));
+    for (const e of record.entries) {
+      for (const l of linesOf(e)) console.log(l);
+      if (kindOf(e) === 'broken') for (const l of spanLines(spansOf.get(e.id) ?? [], '      ')) console.log(l);
+    }
+    // THE WHOLE ACCOUNT, RULE BY RULE, IS ONE FLAG AWAY (--report, or any flag that asks for a part of it): the table
+    // of checks, where the record stands and what delivery did with it. A person or a host reads the lines above.
+    const whole = argv.includes('--report') || argv.includes('--profile') || argv.includes('--taste');
+    if (!whole) console.log(`Every check, rule by rule: add --report`);
+    else {
+      console.log('');
+      console.log(describeVerify(report, partlyChecked(record)));
+      console.log(`\n${outcome} · ${stateLine(record)}`);
+      if (record.delivery) console.log(deliveryLine(record.delivery, record.state));
+    }
     if (report.checked.some((c) => c.requirementId === 'UNSOURCED' && c.result.verdict === 'VIOLATED')) {
       console.log(`\nUNSOURCED: if a flagged story or figure is yours, add it to the skill's material (atelier material --skill ${name} <file>) or pass --allow-unsourced.`);
     }

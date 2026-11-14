@@ -103,7 +103,7 @@ describe('a store 1.0 wrote', () => {
 
   it('gives the verdicts 1.0 gave, rule by rule, with the same exit code', () => {
     for (const [text, was] of Object.entries(lock.verdicts)) {
-      const r = run('verify', '--skill', lock.standard.skill, '--claims', 'pattern', join(FIXTURE, 'texts', text));
+      const r = run('verify', '--skill', lock.standard.skill, '--claims', 'pattern', '--report', join(FIXTURE, 'texts', text));
       const rules = [...r.out.matchAll(/^(ok|FAIL|n\/a)\s+(\S+)/gm)].map((m) => [m[1], m[2]]);
       expect(rules, `${text}: verdicts differ from 1.0's`).toEqual(was.rules);
       expect(r.code, `${text}: exit code differs from 1.0's`).toBe(was.exit);

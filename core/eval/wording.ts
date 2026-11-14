@@ -13,7 +13,7 @@
 // `kindOf` covers every reason an entry can carry (the switch has no default: a new reason does not compile until it is
 // given a kind). Why a check is not relied on is mechanics, and stays in the full account (--report).
 
-import type { Entry, EvaluationRecord, RunState } from './record.js';
+import type { Entry, EvaluationRecord } from './record.js';
 import { GRAMMAR_LISTED } from '../observers/grammar.js';
 
 export type Kind = 'held' | 'broken' | 'unchecked' | 'judge' | 'look';
@@ -87,7 +87,7 @@ export const OUTCOME_SAID: Readonly<Record<Outcome, string>> = { ready: 'Ready',
  * THE OUTCOME, FROM THE RECORD AND NEVER FROM A SENTENCE: needs a fix where a rule is broken or delivery blocks; needs a
  * look where delivery sends it to a person or anything is theirs to look at; ready otherwise.
  */
-export function outcomeOf(decision: string | undefined, state: RunState | string | null | undefined, r?: Pick<EvaluationRecord, 'entries'> | null): Outcome {
+export function outcomeOf(decision: string | undefined, state: string | null | undefined, r?: Pick<EvaluationRecord, 'entries'> | null): Outcome {
   const kinds = (r?.entries ?? []).map(kindOf);
   if (decision === 'BLOCK' || state === 'BLOCKED' || kinds.includes('broken')) return 'fix';
   return decision === 'PERSON' || kinds.includes('look') ? 'look' : 'ready';

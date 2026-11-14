@@ -288,7 +288,7 @@ describe('through the binary: the reader runs on the person\'s own backend when 
     const byPattern = run({ ATELIER_CLAIMS: 'pattern' }, 'verify', '--skill', 'house', file);
     expect(byPattern.code).toBe(0);
     // An unmeasured pair (a model on the person's own backend) warns: the pattern check gates.
-    const byReader = run({ ATELIER_CLAIMS: 'model', ATELIER_CLAIMS_MODEL: 'my-small-model' }, 'verify', '--skill', 'house', file, ...remote(port));
+    const byReader = run({ ATELIER_CLAIMS: 'model', ATELIER_CLAIMS_MODEL: 'my-small-model' }, 'verify', '--skill', 'house', file, '--report', ...remote(port));
     expect(byReader.code).toBe(0);
     // where it may not cut (no qualified reader), the owner's cut gives way to the level: what the reader found is flagged for review
     expect(byReader.out).toMatch(/warn {2}UNSOURCED·check[\s\S]*94 minutes/);
@@ -296,7 +296,7 @@ describe('through the binary: the reader runs on the person\'s own backend when 
     expect(byReader.out).toContain('claim reader (my-small-model');
     expect(byReader.out).toMatch(/not qualified/);
     // The escape hatch: the same reader gates, and says loudly that it is unmeasured.
-    const gated = run({ ATELIER_CLAIMS: 'model', ATELIER_CLAIMS_MODEL: 'my-small-model', ATELIER_CLAIMS_GATE: 'reader' }, 'verify', '--skill', 'house', file, ...remote(port));
+    const gated = run({ ATELIER_CLAIMS: 'model', ATELIER_CLAIMS_MODEL: 'my-small-model', ATELIER_CLAIMS_GATE: 'reader' }, 'verify', '--skill', 'house', file, '--report', ...remote(port));
     // It fails the check; on a standard held as grounded (it has no latitude) an untraced specific goes to a person: exit 0.
     expect(gated.code).toBe(0);
     expect(gated.out).toMatch(/FAIL {2}UNSOURCED {2}Never/);
@@ -306,7 +306,7 @@ describe('through the binary: the reader runs on the person\'s own backend when 
 
   it('a backend that is not Anthropic never gets a model it did not name: the pattern check runs, and says why', () => {
     const { run, file } = setup();
-    const r = run({ ATELIER_CLAIMS: 'model', ATELIER_CLAIMS_MODEL: '' }, 'verify', '--skill', 'house', file, ...remote(port));
+    const r = run({ ATELIER_CLAIMS: 'model', ATELIER_CLAIMS_MODEL: '' }, 'verify', '--skill', 'house', file, '--report', ...remote(port));
     expect(r.out).toMatch(/no claim reader configured: set ATELIER_CLAIMS_MODEL/);
   });
 });
@@ -576,7 +576,7 @@ describe('the audit of the invented-claim check', () => {
 
     it('1: an invented figure in a heading, with only the pattern check reading: flagged for review, never cut, though the owner chose cut', async () => {
       const { run, file } = setup('# According to a survey, 43% of operators agree\n\nWe changed the cache.\n');
-      const checked = run({ ATELIER_CLAIMS: 'pattern' }, 'verify', '--skill', 'house', file);
+      const checked = run({ ATELIER_CLAIMS: 'pattern' }, 'verify', '--skill', 'house', file, '--report');
       expect(checked.code).toBe(0);
       expect(checked.out).toContain('According to a survey, 43% of operators agree');
       expect(checked.out).toContain('the skill is held grounded');

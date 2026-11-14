@@ -285,7 +285,7 @@ describe('through the binary', () => {
     expect(out).not.toMatch(/Checked: every REQUIRED measured rule holds\b(?! that)/);
     expect(out).toMatch(/Checked: every REQUIRED measured rule that could be checked holds; not checked: \S+ \(the grammar check could not run: switched off/);
     writeFileSync(join(proj, 'clean.md'), 'They were late to the meeting. The plan still holds.');
-    const v = both('verify', '--skill', 'posts', 'clean.md', '--allow-unsourced');
+    const v = both('verify', '--skill', 'posts', 'clean.md', '--allow-unsourced', '--report');
     expect(v).toMatch(/^not checked {2}\S+ {2}No mechanical errors/m);
     expect(v).not.toMatch(/^n\/a {3}\S+ {2}No mechanical errors/m);
   }, 180_000);
