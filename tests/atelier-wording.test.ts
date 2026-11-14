@@ -38,11 +38,17 @@ describe('what one entry is to the person', () => {
     expect(kindOf(rule('h', 'VIOLATED', { qualification: 'UNQUALIFIED' }, { required: false }))).toBeNull();
   });
   it('the grammar list is to look at only where a correction can be named', () => {
-    const named = rule('g', null, { coverage: 'NONE', listed: true, evidence: 'listed for you to check: 1 possible slip: "are" (agreement: "are" → "is")' });
-    const unsure = rule('g', null, { coverage: 'NONE', listed: true, evidence: 'listed for you to check: 1 possible slip: "Wharfside" (a word the checker does not know)' });
+    const named = rule('g', null, { coverage: 'NONE', listed: true, evidence: 'listed for you to check: 1 possible slip', slips: ['"are" (agreement: "are" → "is")'] });
+    const unsure = rule('g', null, { coverage: 'NONE', listed: true, evidence: 'listed for you to check: 1 possible slip', slips: [] });
     expect(kindOf(named)).toBe('look');
     expect(kindOf(unsure)).toBeNull();
     expect(linesOf(named)).toHaveLength(1);
+  });
+  it('a listing check that could not run is not checked, and is nothing to look at', () => {
+    const off = rule('g', null, { coverage: 'NONE', listed: true, notRun: true, evidence: 'grammar not checked: switched off' });
+    expect(kindOf(off)).toBe('unchecked');
+    const r = record(rule('a', 'MET'), off);
+    expect(outcomeOf('SHIP_LABELLED', r.state, r)).toBe('ready');
   });
 });
 

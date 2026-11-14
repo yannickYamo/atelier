@@ -4,6 +4,7 @@
 // carried by `--json`, and drawn as the panel (core/eval/summary.ts). Every figure is read from what the run
 // recorded or the skill holds: the panel never computes a number the record does not support.
 
+import { toCheckList } from '../core/observers/grammar.js';
 import * as store from '../core/state/store.js';
 import { copyGuardPieces } from '../core/compiler/voice.js';
 
@@ -252,7 +253,8 @@ export function recordForText(x: { L: store.StoreLayout; std: StandardVersion; t
   const level = x.level ?? latitudeOf(x.std);
   return withDelivery(buildRecord({
     requirements: x.std.requirements, ...(x.std.qualifications ? { qualifications: x.std.qualifications } : {}), waived: x.waived ?? new Map(), request: x.request ?? null,
-    checked: x.report ? x.report.checked.filter((c) => !isClaimLine(c.requirementId)).map((c) => ({ id: c.requirementId, statement: c.statement, required: acts(c), verdict: c.result.verdict, detail: c.result.detail })) : null,
+    checked: x.report ? x.report.checked.filter((c) => !isClaimLine(c.requirementId)).map((c) => ({ id: c.requirementId, statement: c.statement, required: acts(c), verdict: c.result.verdict, detail: c.result.detail,
+      ...(c.observer === 'GRAMMAR' && c.result.verdict === 'NOT_APPLICABLE' && c.result.spans.length ? { slips: c.result.spans.filter((sp) => sp.named).map((sp) => toCheckList([sp])) } : {}) })) : null,
     claims: { state, bound: x.unmeasured !== NO_MATERIAL || spans('UNSOURCED') > 0, qualified: deciding, why: x.unmeasured,
       delivered: spans('UNSOURCED'), open: spans(INCONCLUSIVE) + spans(CLAIMS_TO_CHECK) + spans(PUBLIC_FACTS), cut: x.cut ?? 0, ...(x.slotted ? { slotted: true } : {}), unconfirmed: spans(INCONCLUSIVE) },
     // Wording found in three or more pieces of the corpus is the author's standard wording, and is not counted.

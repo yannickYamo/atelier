@@ -23,10 +23,10 @@ describe('every state an entry can reach', () => {
             for (const required of [true, false])
               for (const listed of [false, true])
                 for (const proposition of ['counts it', null])
-                  for (const evidence of ['2 found', 'listed for you to check: 1 possible slip: "are" (agreement: "are" → "is")', null])
+                  for (const [evidence, slips] of [['2 found', undefined], ['a list', ['"are" (agreement: "are" → "is")']], ['a list', []], [null, undefined]] as const)
                     for (const incomplete of [undefined, 'the check did not run']) {
                       const e = entry({ id: 'r', dimension: 'STANDARD', source: 'METHOD', statement: 'A rule.', required, applies, verdict,
-                        observation: { proposition, coverage, qualification, evidence, ...(listed ? { listed: true as const } : {}), ...(incomplete ? { incomplete } : {}) } });
+                        observation: { proposition, coverage, qualification, evidence, ...(listed ? { listed: true as const } : {}), ...(incomplete ? { incomplete } : {}), ...(slips ? { slips } : {}) } });
                       states += 1;
                       const kind = kindOf(e);
                       kinds.add(String(kind));
@@ -37,7 +37,7 @@ describe('every state an entry can reach', () => {
                       if (required && e.observation.found === 'VIOLATED') { expect(kind).toBe('look'); expect(linesOf(e)).toHaveLength(1); }
                       if (kind === 'held' || kind === 'judge') expect(e.result).not.toBe('FAIL');
                     }
-    expect(states).toBe(6912);
+    expect(states).toBe(9216);
     expect([...kinds].sort()).toEqual(['broken', 'held', 'judge', 'look', 'null', 'unchecked']);
   });
 });
@@ -63,11 +63,11 @@ afterAll(() => { backend.kill(); });
 
 const set = (byTool: Record<string, unknown>): Promise<unknown> => fetch(`http://127.0.0.1:${port}/__set`, { method: 'POST', body: JSON.stringify({ byTool }) });
 interface Said { code: number; out: string; err: string }
-const session = (): ((...a: string[]) => Said) & { proj: string } => {
+const session = (): ((...a: string[]) => Said) & { proj: string; env: NodeJS.ProcessEnv } => {
   const data = mkdtempSync(join(tmpdir(), 'atelier-gate-data-')); const proj = mkdtempSync(join(tmpdir(), 'atelier-gate-proj-'));
   const env = { ...process.env, ATELIER_DATA: data, ATELIER_PROJECT_DIR: proj, ATELIER_PRICE_IN: '1', ATELIER_PRICE_OUT: '1', ANTHROPIC_API_KEY: '', ANTHROPIC_AUTH_TOKEN: '', ATELIER_CONTEXT_READER: 'scripted' };
   const run = (...a: string[]): Said => { const r = spawnSync('node', [CLI, ...a], { encoding: 'utf8', cwd: proj, env }); return { code: r.status ?? 1, out: r.stdout, err: r.stderr }; };
-  return Object.assign(run, { proj });
+  return Object.assign(run, { proj, env });
 };
 const be = (): string[] => ['--provider', 'openai-compatible', '--base-url', `http://127.0.0.1:${port}`, '--model', 'scripted'];
 const NEW = (): string[] => ['new', join(FX, 'voice'), '--method', join(FX, 'rules.md'), '--name', 'post-voice', '--yes', '--latitude', 'creative', ...be()];
@@ -117,6 +117,11 @@ describe('the front door, through the binary', () => {
     const good = c('verify', '--skill', 'post-voice', 'good.md', '--claims', 'pattern');
     gate('verify, clean', good, '\u0000');
     expect(good.out).toMatch(/^Ready\.$/m);
+    // the grammar check switched off is a check that did not run: named as not checked, and the draft is still Ready
+    const off = spawnSync('node', [CLI, 'verify', '--skill', 'post-voice', 'good.md', '--claims', 'pattern'], { encoding: 'utf8', cwd: c.proj, env: { ...c.env, ATELIER_GRAMMAR: 'off' } });
+    gate('verify, grammar off', { code: off.status ?? 1, out: off.stdout, err: off.stderr }, '\u0000');
+    expect(off.stdout).toMatch(/^Ready\.$/m);
+    expect(off.stdout).toMatch(/^ {2}Not checked on this piece: No mechanical errors/m);
   }, 180_000);
   it('a run that breaks a required rule, and a run whose review is set aside', async () => {
     const c = session();

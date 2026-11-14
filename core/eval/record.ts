@@ -45,6 +45,10 @@ export interface Observation {
   readonly listed?: true;
   /** the owner accepted this rule as unmeasured: no check reads it and no run waits on it. A fact, so nothing reads the sentence that says it. */
   readonly accepted?: true;
+  /** the grammar check listed what it found on this text: the slips it can name the correction of (empty where it named none). A fact, so nothing reads the list's sentence. */
+  readonly slips?: readonly string[];
+  /** a check that only lists could not run on this text (the grammar engine switched off): not checked, and nothing to look at */
+  readonly notRun?: true;
   /**
    * What an observer that may not be believed returned (a written check not qualified on the owner's examples, a claim
    * reader not measured on this kind): never a verdict on the record, which stays UNVERIFIED; what delivery reads to tell a

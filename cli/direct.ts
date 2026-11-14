@@ -64,7 +64,6 @@ import { readFidelity } from '../core/fidelity/profile.js';
 import { typicalityOf } from '../core/fidelity/typicality.js';
 import type { FidelityRecord } from '../core/fidelity/types.js';
 import { grammarListed, toCheckList } from '../core/observers/grammar.js';
-import { GRAMMAR_NOT_CHECKED } from '../core/eval/record-build.js';
 import { totalsOff, totalsLine } from '../core/observers/totals.js';import { howHeld } from './how-held.js';
 import { methodReading, methodLine } from '../core/eval/obligations.js';
 
@@ -353,7 +352,7 @@ export const toCheckOf = (report: Awaited<ReturnType<typeof checkDraftAsync>>, k
  * and the steps no check reads, which are the person's to judge.
  */
 /** `styleRead`: the steps no check reads were read this run, after the draft (core/direct/style.ts), and are said there. */
-const notRunHere = (e: Entry): boolean => (e.observation.evidence ?? '').startsWith(GRAMMAR_NOT_CHECKED);
+const notRunHere = (e: Entry): boolean => e.observation.notRun === true;
 export function rulesLines(entries: readonly Entry[], styleRead = false): string[] {
   const own = entries.filter((e) => e.dimension === 'STANDARD');
   if (!own.length) return [];

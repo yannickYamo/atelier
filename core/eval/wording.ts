@@ -14,19 +14,15 @@
 // given a kind). Why a check is not relied on is mechanics, and stays in the full account (--report).
 
 import type { Entry, EvaluationRecord } from './record.js';
-import { GRAMMAR_LISTED } from '../observers/grammar.js';
 import { spanLines } from '../observers/verify.js';
 import type { Span } from '../observers/registry.js';
 
 export type Kind = 'held' | 'broken' | 'unchecked' | 'judge' | 'look';
 
-/** The slips the grammar check can name the correction of, as it wrote them: `"are" (subject–verb agreement: "are" → "is")`. */
-export const slipsOf = (e: Entry): string[] => {
-  const ev = e.observation.evidence ?? '';
-  return ev.startsWith(GRAMMAR_LISTED) || ev.includes('listed to check: ') ? ev.match(/"[^"]*" \([^()]*→[^()]*\)/g) ?? [] : [];
-};
-/** The grammar check read the whole piece and listed what it is unsure of. */
-const grammarList = (e: Entry): boolean => { const ev = e.observation.evidence ?? ''; return ev.startsWith(GRAMMAR_LISTED) || ev.includes('listed to check: '); };
+/** The slips the grammar check named the correction of on this text: `"are" (subject–verb agreement: "are" → "is")`. */
+export const slipsOf = (e: Entry): readonly string[] => e.observation.slips ?? [];
+/** The grammar check read the whole piece and listed what it is unsure of (a fact on the record, never read from its sentence). */
+const grammarList = (e: Entry): boolean => e.observation.slips !== undefined;
 
 /**
  * WHAT ONE ENTRY IS TO THE PERSON, or null where there is nothing to say of it: it does not apply to this piece, or it
@@ -39,8 +35,9 @@ export function kindOf(e: Entry): Kind | null {
     case 'MET': return e.required ? 'held' : null;
     case 'NOT_MET': return e.required ? 'broken' : null;
     case 'PARTLY_CHECKED': return e.required ? 'held' : null;
+    // a check that could not run here is not checked, and is nothing to look at;
     // the grammar check's list: a slip it can name the correction of is to look at; a name or a word it does not know is in --report
-    case 'LISTED_FOR_YOU': return o.accepted ? 'judge' : grammarList(e) ? (slipsOf(e).length ? 'look' : null) : o.evidence ? 'look' : null;
+    case 'LISTED_FOR_YOU': return o.accepted ? 'judge' : o.notRun ? 'unchecked' : grammarList(e) ? (slipsOf(e).length ? 'look' : null) : o.evidence ? 'look' : null;
     // A CHECK THAT IS NOT YET RELIED ON NEVER HIDES WHAT IT FOUND: broken by its reading is the person's to look at
     case 'OBSERVER_UNQUALIFIED': return !e.required ? null : o.found === 'VIOLATED' ? 'look' : 'judge';
     case 'NOT_MACHINE_CHECKABLE':
@@ -74,7 +71,7 @@ export function linesOf(e: Entry): string[] {
   if (kind === 'broken') return [`  ${SAID.broken}${withFound(e)}`];
   if (kind === 'held') return e.reason === 'PARTLY_CHECKED' ? [`  ${SAID.heldPart}${withFound(e)}`] : [];
   if (kind === 'unchecked') return [`  ${SAID.unchecked}${withFound(e)}`];
-  if (grammarList(e)) return slipsOf(e).map((m) => `  ${SAID.slip}${m}`);
+  if (slipsOf(e).length) return slipsOf(e).map((m) => `  ${SAID.slip}${m}`);
   return e.reason === 'LISTED_FOR_YOU' ? [`  ${SAID.toCheck}${e.observation.evidence ?? ''}`] : [`  ${SAID.look}${withFound(e)}`];
 }
 

@@ -272,7 +272,7 @@ function misspellingsIn(text: string, protectedIn: readonly Range[], known: Read
     if ((counts.get(lower) ?? 0) >= 3) { uncertain.push(span('used three times or more: a spelling the author chooses (a known misspelling)')); continue; }
     // A capital anywhere, a sentence's start included, may be a name ("Wellcome", "Untill Then", "Teh Hong Piow").
     if (word !== lower) { uncertain.push(span(`a capitalised word may be a name (a known misspelling of "${right}")`)); continue; }
-    confirmed.push(span(`spelling: "${word}" → "${right}"`, right));
+    confirmed.push({ ...span(`spelling: "${word}" → "${right}"`, right), named: true });
   }
   return { confirmed, uncertain };
 }
@@ -478,7 +478,8 @@ export function readGrammar(text: string, params: Measurement['params'], context
     }
     // Where only spacing changes (" ," to ",", " ." to "."), the change is said by the words around it, never as "(removed)".
     const spacing = fix !== null && fix.trim() === problem.trim();
-    confirmed.push(span(fix === null ? `${label}: ${l.message.replace(/\s+/g, ' ').trim()}` : spacing ? `${label} in "${around()}"` : `${label}: "${problem.trim()}" → "${fix.trim()}"`, fix ?? undefined));
+    const said = span(fix === null ? `${label}: ${l.message.replace(/\s+/g, ' ').trim()}` : spacing ? `${label} in "${around()}"` : `${label}: "${problem.trim()}" → "${fix.trim()}"`, fix ?? undefined);
+    confirmed.push(fix !== null && !spacing ? { ...said, named: true } : said);
   }
   // A finding the rule acts on is not also listed to check: the engine's own note on the same stretch goes.
   const byPlace = (a: Span, b: Span): number => a.start - b.start || a.end - b.end;
