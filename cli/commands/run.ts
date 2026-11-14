@@ -20,7 +20,6 @@ import { listEvals } from '../../core/state/eval-store.js';
 import type { StandardVersion, InferredItem } from '../../core/state/canonical-state.js';
 import { OUTCOME_SAID, outcomeOf, foundLines, shortLine } from '../../core/eval/wording.js';
 import { inferredLines } from '../../core/loop/inferred.js';
-import { REVIEW_BROKE } from '../direct.js';
 
 export interface EngineRun { readonly output: string | null; readonly invocationId: string; readonly costUsd: number; readonly cut?: readonly string[]; readonly toCheck: readonly string[];
   readonly report: readonly string[]; readonly eval: EvalSummary | null;
@@ -181,8 +180,8 @@ export async function run(): Promise<void> {
   // BESIDE THE WORK, NEVER IN IT: what the run decided for the person and what it was not given, with what to add (a fix in
   // place says its own, in its lines above)
   if (!result.fix) {
-    const why = (result.direct as { review?: { ran: boolean; why?: string } } | undefined)?.review?.why ?? '';
-    const beside = [...(why.startsWith(REVIEW_BROKE) ? [`This is the first draft: the review of it was not used, because ${why}.`] : []), ...inferredLines(result.inferred ?? []), ...(typed.report && result.ownWords && !result.ownWords.checked && result.ownWords.why ? [`Not read for sentences about the piece's own making: ${result.ownWords.why}.`] : [])];
+    const broke = (result.direct as { review?: { broke?: readonly string[] } } | undefined)?.review?.broke ?? [];
+    const beside = [...(broke.length ? [`This is the first draft: the review of it was not used, because it broke a rule the draft held (${broke.join('; ')}).`] : []), ...inferredLines(result.inferred ?? []), ...(typed.report && result.ownWords && !result.ownWords.checked && result.ownWords.why ? [`Not read for sentences about the piece's own making: ${result.ownWords.why}.`] : [])];
     if (beside.length) console.log(`${beside.join('\n')}\n`);
     const open = openQuestionLines(result);
     if (open.length) console.log(`${open.join('\n')}\n`);

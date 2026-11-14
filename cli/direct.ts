@@ -76,7 +76,7 @@ import { methodReading, methodLine } from '../core/eval/obligations.js';
 
 
 /** How a record says the review's piece was set aside for breaking a rule; `atelier run` says it beside the piece. */
-export const REVIEW_BROKE = 'it broke a rule the draft held';
+const REVIEW_BROKE = 'it broke a rule the draft held';
 export const DIRECT_VERSION = '1';
 const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'] as const;
 type Effort = (typeof EFFORTS)[number];
@@ -465,11 +465,11 @@ export async function runDirect(c: DirectContext) {
   // what the last check listed, with the words each reader named: the record keeps the sentences, the person reads both
   const listedHere: ToCheck[] = [];
   // why the review's piece was set aside on this run (it broke a rule the draft held, and the repair did not mend it)
-  let reviewOff = '';
+  let reviewOff = ''; let reviewBroke: string[] = [];
   const refine = async (draft: string): Promise<{ output: string; repair: RepairRecord | null }> => {
     draftText = draft;
     let output = draft;
-    if (reviewOff) { review = { ran: false, why: reviewOff }; grounded = undefined; hashtags = undefined; fixedHere = ''; }
+    if (reviewOff) { review = { ran: false, why: reviewOff, broke: reviewBroke }; grounded = undefined; hashtags = undefined; fixedHere = ''; }
     else if (argv.includes('--no-review')) review = { ran: false, why: 'turned off (--no-review)' };
     else {
       try {
@@ -558,7 +558,7 @@ export async function runDirect(c: DirectContext) {
       const broke = brokenOf(now).filter((id) => !held.includes(id));
       if (broke.length) {
         const named = broke.map((id) => now.checked.find((x) => x.requirementId === id)?.statement.replace(/\s+/g, ' ').trim().slice(0, 90) ?? id);
-        reviewOff = `${REVIEW_BROKE} (${named.join('; ')})`;
+        reviewOff = `${REVIEW_BROKE} (${named.join('; ')})`; reviewBroke = named;
         c.say(`(the self-review broke "${named[0]}", which the first draft held, so the first draft is delivered; what the review changed is not in it)`);
         return refine(draft);
       }

@@ -53,7 +53,7 @@ describe('the self-review and the rules code holds', () => {
     expect(j.direct, r.out + r.err).toBeTruthy();
     expect(j.output).toBe(DRAFT);
     expect(j.direct?.review.ran).toBe(false);
-    expect(j.direct?.review.why).toContain('it broke a rule the draft held');
+    expect((j.direct?.review as { broke?: string[] }).broke).toHaveLength(1);
     expect(r.err + r.out).toContain('which the first draft held, so the first draft is delivered');
     // and `atelier run` says it beside the piece
     await set({ __plain: [DRAFT, CONTRAST], emit_replacements: { rewriteSpans: [] } });
