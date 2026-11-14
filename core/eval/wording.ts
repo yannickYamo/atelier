@@ -37,7 +37,8 @@ export function kindOf(e: Entry): Kind | null {
     case 'PARTLY_CHECKED': return e.required ? 'held' : null;
     // a check that could not run here is not checked, and is nothing to look at;
     // the grammar check's list: a slip it can name the correction of is to look at; a name or a word it does not know is in --report
-    case 'LISTED_FOR_YOU': return o.accepted ? 'judge' : o.notRun ? 'unchecked' : grammarList(e) ? (slipsOf(e).length ? 'look' : null) : o.evidence ? 'look' : null;
+    // accepted as unmeasured is theirs to judge, unless the check that reads part of it found it broken
+    case 'LISTED_FOR_YOU': return o.accepted ? (o.found === 'VIOLATED' ? 'look' : 'judge') : o.notRun ? 'unchecked' : grammarList(e) ? (slipsOf(e).length ? 'look' : null) : o.evidence ? 'look' : null;
     // A CHECK THAT IS NOT YET RELIED ON NEVER HIDES WHAT IT FOUND: broken by its reading is the person's to look at
     case 'OBSERVER_UNQUALIFIED': return !e.required ? null : o.found === 'VIOLATED' ? 'look' : 'judge';
     case 'NOT_MACHINE_CHECKABLE':
@@ -49,7 +50,8 @@ export function kindOf(e: Entry): Kind | null {
 
 /** The rule in the person's words, on one line. */
 const said = (e: Entry): string => e.statement.replace(/\s+/g, ' ').trim().slice(0, 90);
-const withFound = (e: Entry): string => `${said(e)}${e.observation.evidence ? ` (${e.observation.evidence})` : ''}`;
+// what the check saw, never why it is or is not relied on: that is the full account's (--report)
+const withFound = (e: Entry): string => { const saw = e.observation.saw ?? e.observation.evidence; return `${said(e)}${saw ? ` (${saw})` : ''}`; };
 
 /** The words each kind is said in under a piece. The only table of them. */
 export const SAID = {
@@ -71,8 +73,9 @@ export function linesOf(e: Entry): string[] {
   if (kind === 'broken') return [`  ${SAID.broken}${withFound(e)}`];
   if (kind === 'held') return e.reason === 'PARTLY_CHECKED' ? [`  ${SAID.heldPart}${withFound(e)}`] : [];
   if (kind === 'unchecked') return [`  ${SAID.unchecked}${withFound(e)}`];
-  if (slipsOf(e).length) return slipsOf(e).map((m) => `  ${SAID.slip}${m}`);
-  return e.reason === 'LISTED_FOR_YOU' ? [`  ${SAID.toCheck}${e.observation.evidence ?? ''}`] : [`  ${SAID.look}${withFound(e)}`];
+  const slips = slipsOf(e);
+  if (slips.length) return [...slips.slice(0, 8).map((m) => `  ${SAID.slip}${m}`), ...(slips.length > 8 ? [`  ${SAID.slip}and ${slips.length - 8} more (each one: --report)`] : [])];
+  return e.reason === 'LISTED_FOR_YOU' && !e.observation.accepted ? [`  ${SAID.toCheck}${e.observation.saw ?? e.observation.evidence ?? ''}`] : [`  ${SAID.look}${withFound(e)}`];
 }
 
 /** Every line under a piece, in the record's order. */
@@ -84,12 +87,13 @@ export const OUTCOME_SAID: Readonly<Record<Outcome, string>> = { ready: 'Ready',
 
 /**
  * THE OUTCOME, FROM THE RECORD AND NEVER FROM A SENTENCE: needs a fix where a rule is broken or delivery blocks; needs a
- * look where delivery sends it to a person or anything is theirs to look at; ready otherwise.
+ * look where delivery sends it to a person or anything is theirs to look at (unless the owner's table ships that plain,
+ * where it is still listed); ready otherwise.
  */
 export function outcomeOf(decision: string | undefined, state: string | null | undefined, r?: Pick<EvaluationRecord, 'entries'> | null): Outcome {
   const kinds = (r?.entries ?? []).map(kindOf);
   if (decision === 'BLOCK' || state === 'BLOCKED' || kinds.includes('broken')) return 'fix';
-  return decision === 'PERSON' || kinds.includes('look') ? 'look' : 'ready';
+  return decision === 'PERSON' || (decision !== 'SHIP' && kinds.includes('look')) ? 'look' : 'ready';
 }
 
 const n = (k: number, one: string, many: string): string => `${k} ${k === 1 ? one : many}`;

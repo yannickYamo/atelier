@@ -15,6 +15,7 @@ export const guardPiecesOf = (L: store.StoreLayout): string[] => {
 };
 import * as fstore from '../core/state/fidelity-store.js';
 import { acts, type VerifyReport, type RuleCheck } from '../core/observers/verify.js';
+import type { Span } from '../core/observers/registry.js';
 import { INCONCLUSIVE, UNREAD, CLAIMS_TO_CHECK, PUBLIC_FACTS, COPIED_LINE, REMOVED_LINE } from '../core/loop/run-repair.js';
 import { featureOf } from '../core/observers/features.js';
 import { overlapIndex, suppliedWording, formTokensOut, STANDARD_WORDING_PIECES } from '../core/observers/overlap.js';
@@ -224,6 +225,15 @@ export function buildRunEval(x: RunEvalInput): EvalSummary {
 // both are left out of the evaluation with the claim lines.
 const CLAIM_LINES = [INCONCLUSIVE, UNREAD, CLAIMS_TO_CHECK, PUBLIC_FACTS, COPIED_LINE, REMOVED_LINE];
 const isClaimLine = (id: string): boolean => id.startsWith('UNSOURCED') || CLAIM_LINES.includes(id);
+
+/**
+ * THE PASSAGES A CHECK POINTED AT, BY THE RECORD'S ENTRY: a rule's own, and for the two entries the record names itself
+ * (every specific is in what was supplied; no passage is lifted) the lines of the check that found them.
+ */
+export function spansByEntry(report: VerifyReport): Map<string, readonly Span[]> {
+  const of = (id: string): readonly Span[] => report.checked.find((c) => c.requirementId === id)?.result.spans ?? [];
+  return new Map<string, readonly Span[]>([...report.checked.map((c) => [c.requirementId, c.result.spans] as const), ['specifics', of('UNSOURCED')], ['lifted', of(COPIED_LINE)]]);
+}
 
 /**
  * THE RECORD OF ONE TEXT AGAINST ONE STANDARD (core/eval/record.ts), from the check of it. `invoke` builds it for

@@ -155,11 +155,11 @@ export async function run(): Promise<void> {
   let result: EngineRun | null = null;
   try { result = JSON.parse(engine.out) as EngineRun; } catch { /* the engine said why on its own stream */ }
   const work = result?.output ?? null;
-  // A RUN THAT FAILED SAYS WHY, AND ONLY THAT: the engine's own error lines. Its account of the run so far (which reader
+  // A RUN THAT FAILED SAYS WHY, AND ONLY THAT: the engine's error, from its first line on (what to set, what to run again). Its account of the run so far (which reader
   // ran, what was not bound) is the report's, shown whole with --report or where no error line was written.
   if (!result || work === null) {
-    const errors = engine.err.split('\n').filter((l) => l.startsWith('atelier: '));
-    process.stderr.write(typed.report || !errors.length ? engine.err : `${errors.join('\n')}\n`);
+    const at = engine.err.search(/^atelier: /m);
+    process.stderr.write(typed.report || at < 0 ? engine.err : engine.err.slice(at));
     process.exitCode = engine.code || 1; return;
   }
   // the engine's one line on a change of model (cli/commands/invoke.ts, `checkedBinding`) is the person's to read

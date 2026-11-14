@@ -2,6 +2,8 @@
 // which outcome a record comes to. The sentences are pinned once, in the last test, against the module's own table.
 import { describe, it, expect } from 'vitest';
 import { entry, stateOf, type Entry, type Observation, type EvaluationRecord } from '../core/eval/record.js';
+import { spansByEntry } from '../cli/eval-run.js';
+import { COPIED_LINE } from '../core/loop/run-repair.js';
 import { kindOf, linesOf, foundLines, outcomeOf, shortLine, verdictLines, SAID, OUTCOME_SAID } from '../core/eval/wording.js';
 
 const obs = (o: Partial<Observation> = {}): Observation => ({ proposition: 'counts it', coverage: 'FULL', qualification: 'DETERMINISTIC', evidence: '1 in 39 words (none allowed)', ...o });
@@ -29,7 +31,31 @@ describe('what one entry is to the person', () => {
     expect(linesOf(e)[0]).not.toContain(SAID.unchecked);
     const r = record(rule('x1', 'MET'), e);
     expect(outcomeOf('SHIP_LABELLED', r.state, r)).toBe('look');
-    expect(outcomeOf('SHIP', r.state, r)).toBe('look');
+    // where the owner's own table ships that finding plain, the line is still listed and the outcome is theirs
+    expect(outcomeOf('SHIP', r.state, r)).toBe('ready');
+    expect(outcomeOf(undefined, r.state, r)).toBe('look');
+  });
+  it('says what the check saw, never why the check is not relied on', () => {
+    const e = rule('x3', 'VIOLATED', { qualification: 'UNQUALIFIED', evidence: '1 found. This check has not qualified on your examples, so it blocks nothing and the rule is yours to read', saw: '1 found' });
+    expect(linesOf(e)).toEqual(['  To look at: Rule x3. (1 found)']);
+  });
+  it('a rule accepted as unmeasured is theirs to judge, unless the check that reads part of it found it broken', () => {
+    expect(kindOf(rule('a', null, { qualification: 'UNQUALIFIED', listed: true, accepted: true, evidence: 'none found; accepted by you as unmeasured', saw: 'none found', found: 'MET' }))).toBe('judge');
+    const broke = rule('a', null, { qualification: 'UNQUALIFIED', listed: true, accepted: true, evidence: '1 found. Not relied on; accepted by you as unmeasured', saw: '1 found', found: 'VIOLATED' });
+    expect(kindOf(broke)).toBe('look');
+    expect(linesOf(broke)).toEqual(['  To look at: Rule a. (1 found)']);
+  });
+  it('the passages a check pointed at are found for the two entries the record names itself', () => {
+    const line = (requirementId: string, text: string): unknown => ({ requirementId, result: { spans: [{ start: 0, end: 1, text, why: 'w' }] } });
+    const by = spansByEntry({ checked: [line('x1', 'a'), line('UNSOURCED', '73%'), line(COPIED_LINE, 'a lifted run')] } as never);
+    expect(by.get('x1')?.[0].text).toBe('a');
+    expect(by.get('specifics')?.[0].text).toBe('73%');
+    expect(by.get('lifted')?.[0].text).toBe('a lifted run');
+  });
+  it('lists at most eight slips and counts the rest', () => {
+    const many = rule('g', null, { coverage: 'NONE', listed: true, evidence: 'a list', slips: Array.from({ length: 11 }, (_, i) => `"w${i}" (spelling: "w${i}" → "v${i}")`) });
+    expect(linesOf(many)).toHaveLength(9);
+    expect(linesOf(many)[8]).toContain('and 3 more');
   });
   it('says nothing of what does not apply, was set aside, or is a habit and not a rule', () => {
     expect(kindOf(rule('a', null, {}, { applies: false }))).toBeNull();

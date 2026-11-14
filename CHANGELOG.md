@@ -7,6 +7,7 @@ Atelier learns how you write from the pieces you would sign, writes new pieces t
 - `atelier verify` prints the outcome and what to look at or fix, with the passages that broke a rule under it. The rule-by-rule table is one flag away: `--report`.
 - `atelier fix` says when it wrote the whole piece again and not only the sentences you named. A run that fails prints its error, without the run's notes.
 - A skill built with no purpose typed is described to the host by what it is for. The installed skill shows its standard's version. The missing-key message and the usage guide say how to run behind a gateway.
+- With the grammar check switched off, a draft is not sent for a look on that account: the rule is named as not checked.
 - A rule that a check not yet relied on found broken is listed under the piece as something to look at. Such a run read "Ready" before.
 - `atelier new` builds the check from your finished pieces, with or without a note of your own rules, and shows every rule for approval before it binds.
 - `atelier verify` checks any text for invented specifics, passages copied from your examples and broken rules; as a Claude Code hook it blocks the break and hands the agent the reason.

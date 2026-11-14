@@ -10,6 +10,8 @@ import { join, resolve } from 'node:path';
 import { entry, type Coverage, type Qualification } from '../core/eval/record.js';
 import { kindOf, linesOf, SAID, OUTCOME_SAID } from '../core/eval/wording.js';
 
+/** Words of the machinery. None may reach the person, on either stream. */
+const MACHINERY = /\b(BLOCKED|NEEDS[_ ]REVIEW|VERIFIED|SHIP(_LABELLED)?|OBSERVER_UNQUALIFIED|NOT_MACHINE_CHECKABLE|PARTLY_CHECKED|LISTED_FOR_YOU)\b|trusted-fail|untrusted-|judgement-unread|Delivery:|Judgement reader|compiled path|--pipeline|not yet qualified|has not qualified/;
 const PREFIXES = Object.values(SAID);
 const OUTCOMES = Object.values(OUTCOME_SAID).join('|');
 
@@ -24,20 +26,22 @@ describe('every state an entry can reach', () => {
               for (const listed of [false, true])
                 for (const proposition of ['counts it', null])
                   for (const [evidence, slips] of [['2 found', undefined], ['a list', ['"are" (agreement: "are" → "is")']], ['a list', []], [null, undefined]] as const)
-                    for (const incomplete of [undefined, 'the check did not run']) {
+                    for (const incomplete of [undefined, 'the check did not run'])
+                      for (const mark of [{}, { accepted: true as const }, { notRun: true as const }]) {
                       const e = entry({ id: 'r', dimension: 'STANDARD', source: 'METHOD', statement: 'A rule.', required, applies, verdict,
-                        observation: { proposition, coverage, qualification, evidence, ...(listed ? { listed: true as const } : {}), ...(incomplete ? { incomplete } : {}), ...(slips ? { slips } : {}) } });
+                        observation: { proposition, coverage, qualification, evidence, ...(listed ? { listed: true as const } : {}), ...(incomplete ? { incomplete } : {}), ...(slips ? { slips } : {}), ...mark,
+                          ...(evidence && qualification === 'UNQUALIFIED' ? { evidence: `${evidence}. This check has not qualified on your examples, so it blocks nothing and the rule is yours to read`, saw: evidence } : {}) } });
                       states += 1;
                       const kind = kindOf(e);
                       kinds.add(String(kind));
                       expect(['held', 'broken', 'unchecked', 'judge', 'look', null]).toContain(kind);
-                      for (const l of linesOf(e)) expect(PREFIXES.some((p) => l.startsWith(`  ${p}`)), l).toBe(true);
+                      for (const l of linesOf(e)) { expect(PREFIXES.some((p) => l.startsWith(`  ${p}`)), l).toBe(true); expect(l).not.toMatch(MACHINERY); }
                       // what a believed check saw fail is never said as anything but broken, and what any check found broken is never silent
                       if (required && e.result === 'FAIL') expect(kind).toBe('broken');
                       if (required && e.observation.found === 'VIOLATED') { expect(kind).toBe('look'); expect(linesOf(e)).toHaveLength(1); }
                       if (kind === 'held' || kind === 'judge') expect(e.result).not.toBe('FAIL');
                     }
-    expect(states).toBe(9216);
+    expect(states).toBe(27648);
     expect([...kinds].sort()).toEqual(['broken', 'held', 'judge', 'look', 'null', 'unchecked']);
   });
 });
@@ -87,8 +91,6 @@ const ALLOWED: readonly RegExp[] = [
   /^The whole piece was written again with what you said/,
   /^About your last run of \//, /^You said: "/, /^Writing it again with what you said\.$/, /^Only this piece changed\. /,
 ];
-/** Words of the machinery. None may reach the person, on either stream. */
-const MACHINERY = /\b(BLOCKED|NEEDS[_ ]REVIEW|VERIFIED|SHIP(_LABELLED)?|OBSERVER_UNQUALIFIED|NOT_MACHINE_CHECKABLE|PARTLY_CHECKED|LISTED_FOR_YOU)\b|trusted-fail|untrusted-|judgement-unread|Delivery:|Judgement reader|compiled path|--pipeline|not yet qualified|has not qualified/;
 const gate = (what: string, r: Said, piece: string): void => {
   const said = r.out.replace(piece, '');
   for (const l of said.split('\n')) expect(ALLOWED.some((a) => a.test(l)), `${what}: not an allowed line: ${JSON.stringify(l)}`).toBe(true);
@@ -110,10 +112,21 @@ describe('the front door, through the binary', () => {
     const fixed = c('fix', 'the ending is flat', '--skill', 'post-voice', '--claims', 'pattern', ...be());
     expect(fixed.code).toBe(0);
     gate('fix', fixed, FIXED);
+    // the scripted reading names no sentences, so the piece is written again whole, and the person is told
+    expect(fixed.out).toContain('The whole piece was written again');
     writeFileSync(join(c.proj, 'bad.md'), CONTRAST); writeFileSync(join(c.proj, 'good.md'), DRAFT);
     const bad = c('verify', '--skill', 'post-voice', 'bad.md', '--claims', 'pattern');
     gate('verify, a broken ban', bad, '\u0000');
     expect(bad.out).toMatch(/^Needs a fix\.$/m);
+    expect(bad.out).toMatch(/^ {6}› "isn't a harbour, it's"/m);
+    // the whole account is one flag away, and only there
+    expect(c('verify', '--skill', 'post-voice', 'bad.md', '--claims', 'pattern', '--report').out).toMatch(/^FAIL {2}\S+ {2}No "not X, it's Y"/m);
+    // a run that cannot start says what to set, the gateway line included, and none of the run's own notes
+    const nokey = c('run', 'Write a post.', '--skill', 'post-voice', '--no-questions');
+    expect(nokey.code).not.toBe(0);
+    expect(nokey.err).toMatch(/^atelier: /);
+    expect(nokey.err).toContain('ANTHROPIC_BASE_URL');
+    expect(nokey.err).not.toMatch(MACHINERY);
     const good = c('verify', '--skill', 'post-voice', 'good.md', '--claims', 'pattern');
     gate('verify, clean', good, '\u0000');
     expect(good.out).toMatch(/^Ready\.$/m);

@@ -30,6 +30,8 @@ export interface Observation {
   readonly qualification: Qualification;
   /** what the check found on this output */
   readonly evidence: string | null;
+  /** what the check found, alone, where `evidence` also says why the check is not relied on: what a person reads under the piece */
+  readonly saw?: string;
   /** the part of the requirement no check read, in the owner's words, where coverage is PARTIAL */
   readonly unchecked?: string;
   /**

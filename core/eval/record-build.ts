@@ -110,7 +110,7 @@ function acceptedPart(p: PlannedRule, e: Entry, f: RecordFacts): Entry {
   if (e.reason !== 'PARTLY_CHECKED' && e.reason !== 'OBSERVER_UNQUALIFIED') return e;
   const part = e.reason === 'PARTLY_CHECKED' ? e.observation.unchecked ?? 'the rest of it' : 'what its check, not qualified on your examples, reads';
   return entry({ id: e.id, dimension: e.dimension, source: e.source, statement: e.statement, required: e.required,
-    observation: { ...e.observation, evidence: `${e.observation.evidence ? `${e.observation.evidence}; ` : ''}accepted by you as unmeasured for ${part}`, listed: true }, verdict: null });
+    observation: { ...e.observation, evidence: `${e.observation.evidence ? `${e.observation.evidence}; ` : ''}accepted by you as unmeasured for ${part}`, listed: true, accepted: true }, verdict: null });
 }
 
 function readEntry(p: PlannedRule, f: RecordFacts): Entry {
@@ -184,7 +184,7 @@ function plannedEntry(p: PlannedRule, f: RecordFacts): Entry {
     : p.notEnforced === 'RELATED_CHECK' ? 'This check reads something near your rule and not the rule itself, so it blocks nothing'
     : p.notEnforced === 'UNQUALIFIED' ? 'This check has not qualified on your examples, so it blocks nothing and the rule is yours to read' : 'You have not made this check required, so it blocks nothing';
   const seen = (evidence: string | null): Observation => ({ proposition: o.proposition, coverage: o.coverage, qualification: held ? 'UNQUALIFIED' : o.observer === 'CHECK' ? 'QUALIFIED' : 'DETERMINISTIC',
-    evidence: held && evidence ? `${evidence}. ${whyNot}` : evidence, ...(o.unchecked ? { unchecked: o.unchecked } : {}), ...(held ? {} : { proof: proofOf(p, f) }), ...(line?.slips ? { slips: line.slips } : {}) });
+    evidence: held && evidence ? `${evidence}. ${whyNot}` : evidence, ...(held && evidence ? { saw: evidence } : {}), ...(o.unchecked ? { unchecked: o.unchecked } : {}), ...(held ? {} : { proof: proofOf(p, f) }), ...(line?.slips ? { slips: line.slips } : {}) });
   // A REQUIRED rule held back for want of material is not set aside: it was not checked, and the work cannot read as
   // VERIFIED on its account (a run is never refused for material it was not given; neither is it excused).
   if (why === MATERIAL_NOT_BOUND && required && p.enforced) return entry({ ...base, observation: { ...seen(why), coverage: 'NONE', incomplete: `not checked: ${p.id} needs material this run was not given` }, verdict: null });

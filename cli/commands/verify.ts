@@ -43,7 +43,7 @@ import type { InferenceClient } from '../../core/inference/client.js';
 import { describeTaste, vetoMisses, actsAsMiss } from '../../core/taste/reader.js';
 import { recordTaste, readerModel } from './taste.js';
 import { certificateFor, tasteStandingFor, claimStandingOf, recordHead } from '../../core/eval/certificate.js';
-import { recordForText } from '../eval-run.js';
+import { recordForText, spansByEntry } from '../eval-run.js';
 import { stateLine } from '../../core/eval/run-card.js';
 import { partlyChecked, blocks, type EvaluationRecord } from '../../core/eval/record.js';
 import { deliveryLine } from '../../core/eval/consequence.js';
@@ -220,7 +220,7 @@ export async function verify(): Promise<void> {
       ...(taste ? { taste: { failed: taste.failed, verdicts: taste.verdicts } } : {}) }, null, 1));
   } else {
     // THE OUTCOME FIRST, in the three words a run uses (cli/commands/run.ts); the whole account follows as before.
-    const said = verdictLines(record, new Map(report.checked.map((c) => [c.requirementId, c.result.spans])));
+    const said = verdictLines(record, spansByEntry(report));
     const outcome = outcomeWord(record);
     for (const l of said) console.log(l);
     // THE WHOLE ACCOUNT, RULE BY RULE, IS ONE FLAG AWAY (--report, or any flag that asks for a part of it): the table

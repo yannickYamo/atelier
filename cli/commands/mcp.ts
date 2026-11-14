@@ -29,7 +29,7 @@ import { checksFor } from '../checks.js';
 import { skillCardFor } from '../skill-card.js';
 import { renderSkillCard } from '../../core/eval/skill-card.js';
 import { renderPanel } from '../../core/eval/summary.js';
-import { recordForText } from '../eval-run.js';
+import { recordForText, spansByEntry } from '../eval-run.js';
 import { stateLine } from '../../core/eval/run-card.js';
 import { verdictLines, outcomeWord } from '../../core/eval/wording.js';
 import { needsReview, partlyChecked } from '../../core/eval/record.js';
@@ -175,7 +175,7 @@ const call = async (name: string, args: Record<string, unknown>): Promise<{ text
       }
     }
     // THE SAME WORDS `atelier verify` PRINTS, FIRST (core/eval/wording.ts); the table of checks follows for a host that reads on.
-    const said = verdictLines(record, new Map(report.checked.map((c) => [c.requirementId, c.result.spans])));
+    const said = verdictLines(record, spansByEntry(report));
     return { isError: false, text: `${said.join('\n')}\n\n${describeVerify(report, partlyChecked(record))}${taste ? `\n\n${taste.text}` : ''}${cls.note ? `\n(${cls.note})` : ''}\n\n${outcomeWord(record)} · ${stateLine(record)}\n\n${JSON.stringify({ failed: record.state === 'BLOCKED' || (taste?.failed ?? false), state: record.state, delivery: record.delivery ?? null,
       notVerified: record.entries.filter(needsReview).map((e) => ({ rule: e.id, statement: e.statement, why: e.reason, ...(e.observation.unchecked ? { unchecked: e.observation.unchecked } : {}) })),
       violations: report.checked.filter((c) => c.result.verdict === 'VIOLATED').map((c) => ({ rule: c.requirementId, materiality: c.materiality,
