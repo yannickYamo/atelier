@@ -109,7 +109,7 @@ describe('the first ten minutes', () => {
     // beside the piece: what the checks found in one sentence and what to do if it is not right, in plain words
     // the one sentence counts what was measured, what is judgement, and what could not be checked, and that last is named
     expect(ran.out).toMatch(/^Ready\. Checked: nothing broke your rules \(3 measured; 3 are judgement calls the writer was given in your words; 1 could not be checked on this piece, named below\)\.$/m);
-    expect(ran.out).toMatch(/^ {2}Not checked on this piece: Every specific in the work .*\(no material was supplied to look them up in\)$/m);
+    expect(ran.out).toMatch(/^ {2}Not checked on this piece: Every name and figure in the work .*\(no material was supplied to look them up in\)$/m);
     expect(ran.out).toContain('Not right? atelier fix');
     expect(ran.out).not.toContain('── Evaluation');
     expect(ran.out).not.toMatch(/left for you to read|possible slip|small reader/i);

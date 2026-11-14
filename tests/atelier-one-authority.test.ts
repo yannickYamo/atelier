@@ -198,7 +198,7 @@ describe('a rule that was not checked because it does not apply everywhere is no
   });
   it('a refusal for something found names what it is about', () => {
     const e = buildRunEval(input({ report: report(line('x1', 'MET'), line('x2', 'MET'), line('UNSOURCED', 'VIOLATED', 2)) }));
-    expect(e.result.reasons).toEqual(['Every specific in the work is found in what you supplied: 2 not found in it, and still in the text']);
+    expect(e.result.reasons).toEqual(['Every name and figure in the work is in what you supplied: 2 not found in it, and still in the text']);
   });
 });
 

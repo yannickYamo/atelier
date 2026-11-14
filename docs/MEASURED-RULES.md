@@ -126,9 +126,10 @@ correction ("I is") are listed.
 Never flagged: code and inline code, quotations and block quotes, URLs and link targets, paths and `path:line`
 citations, file names, email addresses, @mentions, #hashtags, $cashtags, emoji, ALL-CAPS tokens, figures and
 currency, front matter, and quotations in guillemets and low-high quotes (« », ‹ ›, „ “). A name the checker knows
-("Paris") is not flagged either. Listed with a note and never changed, under `--fix-grammar` too: a capitalised word
-the checker does not know, wherever it stands, as "a name, an acronym or a coined word" (a known misspelling with a
-capital is listed the same way, since it may be a name); a word the standard's other rules name, a word of the
+("Paris") is not flagged either, nor is a capitalised word the checker does not know (a name, an acronym or a coined
+word is the author's), nor a capital the checker proposes (a heading's title case, a sentence the author starts small).
+Listed with a note and never changed, under `--fix-grammar` too: a known misspelling with a capital, since it may be
+a name; a word the standard's other rules name, a word of the
 request or the bound material, and a word the author's own pieces use (with the checker off at build, every word of
 theirs that is not a common English word), each as the author's own; a word the text uses three times or more, as
 a spelling the author chooses; and a word said twice ("very very", "had had"). These guards hold for a known

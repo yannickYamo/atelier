@@ -428,12 +428,15 @@ export function readGrammar(text: string, params: Measurement['params'], context
     const around = (): string => `${/\S*\s*$/u.exec(text.slice(Math.max(0, l.start - 40), l.start))?.[0] ?? ''}${problem}${/^[^\s\p{L}\p{N}]*(?:\s+\S+)?/u.exec(text.slice(l.end, l.end + 40))?.[0] ?? ''}`.trim();
     const where = problem.trim() ? '' : ` in "${around()}"`;
     const note = (why: string): void => { uncertain.push(span(`${why}${where} (${l.rule}: ${l.message.replace(/\s+/g, ' ').trim()})`)); };
-    if (label === null) { note('the checker proposes a change this rule does not make'); continue; }   // (c) not in the list
+    // (c) not in the list. A capital the checker proposes (a heading's title case, a sentence the author starts
+    // small) is the author's styling and is not listed: it buried the real slips. Anything else it proposes is listed.
+    if (label === null && l.kind === 'Capitalization') continue;
+    if (label === null) { note('the checker proposes a change this rule does not make'); continue; }
     if (Object.hasOwn(LISTED_RULES, l.rule)) { note(LISTED_RULES[l.rule]); continue; }   // a legitimate reading exists
     let fix = l.replacement;
     if (SPELLING(l)) {
       const word = problem.trim();
-      if (/^[A-Z]/.test(word) || /[A-Z]/.test(word.slice(1)) || /\d/.test(word)) { note('a name, an acronym or a coined word is the author\'s'); continue; }
+      if (/^[A-Z]/.test(word) || /[A-Z]/.test(word.slice(1)) || /\d/.test(word)) continue;   // a name, an acronym or a coined word is the author's: never listed
       if (known.has(bare(word).replace(/[’]/g, '\''))) { note('a word of the author\'s own, or one the request or material carries'); continue; }
       if ((counts.get(word.toLowerCase()) ?? 0) >= 3) { note('used three times or more: a spelling the author chooses'); continue; }
       // Not a known misspelling (those are read above): a slip, a coinage, slang, a word of one dialect, a split or

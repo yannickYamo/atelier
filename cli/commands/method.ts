@@ -53,11 +53,15 @@ import { build } from './build.js';
 const LABEL = { DELIVERABLE: 'the work must contain', EXECUTION: 'the work must be made from', JUDGEMENT: 'judgement' } as const;
 
 /** The screen: the owner's steps by what each is, then what needs their word. Returned as lines, so a test reads what a person does. */
+/** A stated step whose written check the example did not pass: said beside the step, with what was found. */
+const EXAMPLE_BREAKS = (p: MethodProposal): string => (p.foundOnExample ? `! Your example may not follow this: ${p.foundOnExample}. The writer is told the rule; it is yours to judge on each piece.` : '');
+
 export function describeMethod(ps: readonly MethodProposal[], cls: string): string[] {
   const out: string[] = [];
   const stated = ps.filter((p) => p.origin === 'STATED'); const shown = ps.filter((p) => p.origin === 'SHOWN_BY_EXAMPLE' && !p.counted);
   const counted = ps.filter((p) => p.counted);
   const of = (k: MethodProposal['obligation']): MethodProposal[] => stated.filter((p) => p.obligation === k);
+  const exampleBreaks = EXAMPLE_BREAKS;
   // How much of the step the check reads, and what their own work did: both said beside it.
   const beside = (p: MethodProposal): string => { const o = observesOf(p.statement, p.measurement, false);
     return `${o?.coverage === 'PARTIAL' ? `\n      not checked, yours to read: ${o.unchecked}` : ''}${p.conflict ? `\n      ! ${p.conflict}. Checked and shown on every run; it blocks nothing until you confirm it (--yes).` : ''}`; };
@@ -78,7 +82,7 @@ export function describeMethod(ps: readonly MethodProposal[], cls: string): stri
   };
   block('Checked on every output: what the work must contain', of('DELIVERABLE'), (p) => `${looksFor(p)}your example: ${p.onExample ?? 'held'}${beside(p)}`);
   block('Checked against the material: what the work must be made from', of('EXECUTION'), (p) => `${p.measurement?.observer === 'LINES' ? `checks for: ${propositionOf(p.measurement)} (for a diff, a line the change adds); ` : ''}your example: ${p.onExample ?? 'held'}${beside(p)}`);
-  block('Judgement: shown to the writer, reported as not measured', of('JUDGEMENT'), () => '');
+  block('Judgement: shown to the writer, reported as not measured', of('JUDGEMENT'), (p) => exampleBreaks(p));
   block('Shown by your example, and not in your method: shown to the writer, required only if you say so', shown, (p) => `${LABEL[p.obligation]}; your example: ${p.onExample ?? 'held'}`);
   // What every example meets and the build requires (the machine-writing moves, mechanical errors, a platform's limit)
   // is said to be required here: a rule that blocks is never listed as one that waits for the owner's word.
@@ -132,7 +136,7 @@ export function shortScreen(ps: readonly MethodProposal[]): string[] {
     ...near.map((p) => `  - ${p.statement}\n      shown: ${lookedFor(p)}`));
   if (part.length) out.push('', `Checked in part: the rest is yours to read (${part.length}):`,
     ...part.map((p) => `  - ${p.statement}\n      checked: ${lookedFor(p)}\n      not checked: ${cover(p)?.unchecked ?? ''}${disagrees(p)}`));
-  if (judged.length) out.push('', `You judge these yourself (${judged.length}):`, ...judged.map((p) => `  - ${p.statement}`));
+  if (judged.length) out.push('', `You judge these yourself (${judged.length}):`, ...judged.flatMap((p) => [`  - ${p.statement}`, ...(EXAMPLE_BREAKS(p) ? [`      ${EXAMPLE_BREAKS(p)}`] : [])]));
   const requiredShown = shown.filter((p) => p.required); const habits = shown.filter((p) => !p.required);
   // One line: what blocks is said to block, and only the rest is called a habit.
   const parts = [...(requiredShown.length ? [`${requiredShown.length} required, since every example meets ${requiredShown.length === 1 ? 'it' : 'them'}, and checked on every run`] : []),
