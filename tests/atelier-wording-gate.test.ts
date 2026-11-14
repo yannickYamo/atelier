@@ -123,6 +123,25 @@ describe('the front door, through the binary', () => {
     expect(off.stdout).toMatch(/^Ready\.$/m);
     expect(off.stdout).toMatch(/^ {2}Not checked on this piece: No mechanical errors/m);
   }, 180_000);
+  it('the compiled engine, reached from the front door by a flag, says a result in the same words', async () => {
+    const c = session();
+    await set({ emit_step_checks: CHECKS, __plain: [DRAFT, DRAFT] });
+    expect(c(...NEW()).code).toBe(0);
+    await set({ emit_piece: { piece: DRAFT }, __plain: [DRAFT] });
+    const two = c(...RUN(), '--drafts', '2');
+    expect(two.code).toBe(0);
+    gate('run --drafts 2', two, DRAFT);
+    const SHORT = 'The wharf stays open. I counted the boats on Tuesday.';
+    await set({ emit_piece: { piece: SHORT }, __plain: [SHORT] });
+    const short = c(...RUN(), '--limit', '280');
+    expect(short.code).toBe(0);
+    gate('run --limit 280', short, SHORT);
+    await set({ emit_piece: { piece: CONTRAST }, __plain: [CONTRAST], emit_replacements: { rewriteSpans: [] } });
+    const broke = c(...RUN(), '--drafts', '2');
+    gate('run --drafts 2, a broken ban', broke, CONTRAST);
+    expect(broke.out).toMatch(/^Needs a fix\. Checked: /m);
+    expect(broke.out).toMatch(/^ {2}Not met: No "not X, it's Y"/m);
+  }, 180_000);
   it('a run that breaks a required rule, and a run whose review is set aside', async () => {
     const c = session();
     await set({ emit_step_checks: CHECKS, __plain: [CONTRAST, CONTRAST], emit_replacements: { rewriteSpans: [] } });
