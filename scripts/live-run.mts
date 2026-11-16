@@ -17,7 +17,7 @@
 // calls on your account (a build, one piece, one fix, two checks).
 
 import { execFileSync, spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { kindOf, OUTCOME_SAID } from '../core/eval/wording.js';
@@ -42,7 +42,7 @@ const cli = (...a: string[]): { code: number; out: string; err: string } => {
 };
 interface Scenario { readonly name: string; readonly pass: boolean; readonly found: string }
 const scenarios: Scenario[] = [];
-const check = (name: string, pass: boolean, found: string): void => { scenarios.push({ name, pass, found: found.replace(/\s+/g, ' ').trim().slice(0, 300) }); console.log(`${pass ? 'ok  ' : 'FAIL'}  ${name}${pass ? '' : `\n      ${found.slice(0, 600)}`}`); };
+const check = (name: string, pass: boolean, found: string): void => { scenarios.push({ name, pass, found: pass ? '' : found.replace(/\s+/g, ' ').trim().slice(0, 300) }); console.log(`${pass ? 'ok  ' : 'FAIL'}  ${name}${pass ? '' : `\n      ${found.slice(0, 600)}`}`); };
 const firstLine = (s: string, re: RegExp): string => s.split('\n').find((l) => re.test(l)) ?? '(none)';
 const entriesOf = (json: string): Entry[] => { try { return ((JSON.parse(json.slice(json.indexOf('{'))) as { record?: { entries?: Entry[] } }).record?.entries) ?? []; } catch { return []; } };
 
@@ -84,12 +84,14 @@ check('fix: nothing of the machinery is said, on either stream', !MACHINERY.test
 
 const git = (...a: string[]): string => { try { return execFileSync('git', a, { cwd: ROOT, encoding: 'utf8' }).trim(); } catch { return ''; } };
 const record = {
-  schema: 1, commit: git('rev-parse', 'HEAD'), dirty: git('status', '--porcelain', '--untracked-files=no') !== '',
+  schema: 1, commit: git('rev-parse', 'HEAD'), // the record itself is no change to the code: a second run over a committed record is not a dirty tree
+  dirty: git('status', '--porcelain', '--untracked-files=no', '--', '.', ':(exclude)release/live-run.json') !== '',
   at: new Date().toISOString(), node: process.version, version: (JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')) as { version: string }).version,
   // a run against a scripted or local stand-in is not a live run, and the release check refuses it
   scripted: process.env.LIVE_SCRIPTED === '1',
   pass: scenarios.every((s) => s.pass), scenarios,
 };
+for (const d of [data, proj]) rmSync(d, { recursive: true, force: true });
 mkdirSync(resolve(OUT, '..'), { recursive: true });
 writeFileSync(OUT, `${JSON.stringify(record, null, 1)}\n`);
 console.log(`\n${record.pass ? 'All held.' : `${scenarios.filter((s) => !s.pass).length} did not hold.`} Record: ${OUT}${record.dirty ? '\n(the working tree had uncommitted changes: commit them and run again before a release)' : ''}`);

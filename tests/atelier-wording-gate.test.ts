@@ -4,11 +4,12 @@
 // through): every line printed is one of the allowed shapes, and no word of the machinery reaches the person.
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { spawnSync, spawn, type ChildProcess } from 'node:child_process';
-import { mkdtempSync, existsSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { entry, type Coverage, type Qualification } from '../core/eval/record.js';
 import { kindOf, linesOf, SAID, OUTCOME_SAID } from '../core/eval/wording.js';
+import { methodDecides } from '../core/direct/prompt.js';
 
 /** Words of the machinery. None may reach the person, on either stream. */
 const MACHINERY = /\b(BLOCKED|NEEDS[_ ]REVIEW|VERIFIED|SHIP(_LABELLED)?|OBSERVER_UNQUALIFIED|NOT_MACHINE_CHECKABLE|PARTLY_CHECKED|LISTED_FOR_YOU)\b|trusted-fail|untrusted-|judgement-unread|Delivery:|Judgement reader|compiled path|--pipeline|not yet qualified|has not qualified/;
@@ -104,6 +105,8 @@ describe('the front door, through the binary', () => {
     const c = session();
     await set({ emit_step_checks: CHECKS, __plain: [DRAFT, DRAFT] });
     expect(c(...NEW()).code).toBe(0);
+    // the installed skill tells its host what the writer is told: which source decides (core/direct/prompt.ts, `methodDecides`)
+    expect(readFileSync(join(c.proj, '.claude/skills/post-voice/SKILL.md'), 'utf8')).toContain(methodDecides('mine'));
     await set({ __plain: [DRAFT, DRAFT] });
     const ran = c(...RUN());
     expect(ran.code).toBe(0);

@@ -155,7 +155,7 @@ export async function run(): Promise<void> {
   if (process.stderr.isTTY) process.stderr.write(asking ? 'reading your request…\n' : 'writing…\n');
   const engine = await new Promise<{ code: number; out: string; err: string }>((done) => {
     const child = spawn(process.execPath, [...process.execArgv, process.argv[1], ...engineArgs, '--json'],
-      { env: asking ? { ...process.env, [ASK_FD]: '3' } : process.env, stdio: asking ? ['inherit', 'pipe', 'pipe', process.stderr] : ['ignore', 'pipe', 'pipe'] });
+      { env: { ...process.env, [ASK_FD]: asking ? '3' : '' }, stdio: asking ? ['inherit', 'pipe', 'pipe', process.stderr] : ['ignore', 'pipe', 'pipe'] });
     let out = ''; let err = '';
     child.stdout?.setEncoding('utf8').on('data', (d: string) => { out += d; });
     child.stderr?.setEncoding('utf8').on('data', (d: string) => { err += d; });

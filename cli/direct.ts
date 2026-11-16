@@ -197,17 +197,20 @@ export interface DirectContext {
  */
 export const ASK_FD = 'ATELIER_ASK_FD';
 let askStream: NodeJS.WritableStream | null = null;
-const askOut = (): NodeJS.WritableStream => {
+export const askOut = (): NodeJS.WritableStream => {
   const fd = Number(process.env[ASK_FD]);
   if (!Number.isInteger(fd) || fd < 3) return process.stderr;
-  return askStream ??= createWriteStream('', { fd, autoClose: false });
+  // a descriptor that is not there (the variable inherited from another shell) must never end a run
+  return askStream ??= createWriteStream('', { fd, autoClose: false }).on('error', () => { /* nothing to ask on: the run goes on */ });
 };
 /** Asked from `atelier run` at a terminal: the questions come before the draft, in the one run. */
 export const askedByRun = (): boolean => { const fd = Number(process.env[ASK_FD]); return Number.isInteger(fd) && fd >= 3; };
 /** A line read from the person at the terminal; the prompt goes beside the work, never in it. */
 async function askLine(prompt: string): Promise<string> {
   const rl = createInterface({ input: process.stdin, output: askOut() });
-  try { return (await rl.question(prompt)).trim(); } finally { rl.close(); }
+  // the keyboard closed (Ctrl-D) is "just write it": the piece is written with the suggested answers, never dropped
+  const closed = new Promise<string>((done) => { rl.once('close', () => { done('just write it'); }); });
+  try { return (await Promise.race([rl.question(prompt), closed])).trim(); } finally { rl.close(); }
 }
 
 /** A kept editor reading, only where every question in it is whole: anything else is read again. */

@@ -112,7 +112,7 @@ import { checkSatisfiable, describeSatisfiability, type SatisfiabilityVerdict, d
 import { resolveProvenance } from '../../core/fidelity/provenance.js';
 
 import { runOnce, draftMaxTokens } from '../../core/loop/run-once.js';
-import { runDirect, directWhyNot, directMaxTokens, askedByRun } from '../direct.js';
+import { runDirect, directWhyNot, directMaxTokens, askedByRun, askOut } from '../direct.js';
 import { version } from '../help.js';
 import { writeAtomic } from '../../core/state/fs-atomic.js';
 import { compareBindings, describeMismatch, describeNewSurface, detectResolvedModelDrift, bindingHash } from '../../core/runtime/binding.js';
@@ -495,6 +495,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   // A SKILL WHOSE CHECKS AN EARLIER CHECK READER READ is said on every run, on either path, until it is built again.
   const stale = std ? staleChecks(L) : null;
   if (stale) report.say(`Note: ${stale}.`);
+  if (!(directNot === null && std) && askedByRun()) askOut().write('writing…\n');
   if (directNot === null && std) {
     const { client, binding } = checkedBinding(L, sv, false);
     const spentBefore = spentAtRoute;

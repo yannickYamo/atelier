@@ -322,6 +322,24 @@ describe('a run through the binary, written the direct way', () => {
     // what they typed reached the writer
     expect(JSON.stringify((await bodies()).slice(m0))).toContain('files I can open in ten years');
   }, 180_000);
+  it.skipIf(!pty)('the keyboard closed at a question (Ctrl-D) still writes the piece', async () => {
+    const s = await built();
+    await setBackend({ byTool: { __plain: [DRAFT, REVIEWED], emit_editor_questions: EDITOR } });
+    const env: NodeJS.ProcessEnv = { ...process.env, ATELIER_DATA: s.data, ATELIER_PROJECT_DIR: s.proj, ATELIER_PRICE_IN: '1', ATELIER_PRICE_OUT: '1' };
+    delete env.ANTHROPIC_API_KEY; delete env.ANTHROPIC_AUTH_TOKEN; delete env.ATELIER_CONTEXT_READER;
+    const cmd = ['node', CLI, 'run', '"Compare Logseq and Craft for my notes."', '--skill', 'posts', '--with', 'notes=notes.md', ...BACKEND()].join(' ');
+    const r = spawnSync('script', ['-qec', cmd, '/dev/null'], { encoding: 'utf8', cwd: s.proj, env, input: '\x04' });
+    expect(r.status, r.stdout).toBe(0);
+    expect(r.stdout.replace(/\r/g, '')).toContain(REVIEWED.slice(0, 40));
+  }, 180_000);
+  it('a descriptor to ask on that is not there never ends a run', async () => {
+    const s = await built();
+    await setBackend({ byTool: { __plain: [DRAFT, REVIEWED], emit_editor_questions: EDITOR } });
+    const r = spawnSync('node', [CLI, 'run', 'Compare Logseq and Craft for my notes.', '--skill', 'posts', '--with', 'notes=notes.md', ...BACKEND()],
+      { encoding: 'utf8', cwd: s.proj, input: '', env: { ...process.env, ATELIER_DATA: s.data, ATELIER_PROJECT_DIR: s.proj, ATELIER_PRICE_IN: '1', ATELIER_PRICE_OUT: '1', ANTHROPIC_API_KEY: '', ANTHROPIC_AUTH_TOKEN: '', ATELIER_ASK_FD: '3' } });
+    expect(r.status, r.stderr).toBe(0);
+    expect(r.stdout).toContain(REVIEWED.slice(0, 40));
+  }, 180_000);
   it('a length the request states and the piece misses is listed beside it; one it meets is not', async () => {
     const s = await built();
     await setBackend({ byTool: { __plain: [DRAFT, REVIEWED] } });

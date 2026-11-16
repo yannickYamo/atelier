@@ -48,7 +48,6 @@ export function rulesBlock(rules: readonly string[] | undefined): string {
 /** The most of the author's method the writer is shown, in characters. */
 export const METHOD_SHOWN = 12_000;
 
-/** The author's method, whole, as the writer and the review read it; empty where the skill has none. */
 /**
  * WHICH SOURCE DECIDES, SAID ONCE. The author's method is their word on how the work is done; the pieces show how it
  * reads. Where the two differ, the method decides. The writer's prompt and the installed skill (renderers/agent-skill)
@@ -56,6 +55,7 @@ export const METHOD_SHOWN = 12_000;
  */
 export const methodDecides = (voice: 'author' | 'mine'): string => (voice === 'mine' ? 'Where my method and my pieces differ, my method decides.' : 'Where the method and the pieces differ, the method decides.');
 
+/** The author's method, whole, as the writer and the review read it; empty where the skill has none. */
 export function methodBlock(method: string | undefined): string {
   const m = (method ?? '').trim();
   return m ? `The author's method for their pieces, in their words. Follow it wherever it applies to this piece. ${methodDecides('author')}\n\n<method>\n${m.slice(0, METHOD_SHOWN)}\n</method>\n\n` : '';

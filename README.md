@@ -76,7 +76,7 @@ At a terminal, `atelier new` ends by showing the agent at work: what it understo
 
 `atelier setup` lets the coding agents in a project (Claude Code, Codex) call it on their own drafts. Not happy with a piece? `atelier fix "the opening was too abstract"` and say it in your own words. [examples/blog](examples/blog) has six posts to try it on.
 
-Here is what comes back when an agent's draft invents a source and lifts a paragraph from one of your posts:
+Here is what comes back, shortened, when an agent's draft invents a source and lifts a paragraph from one of your posts:
 
 ```text
 Needs a fix.
