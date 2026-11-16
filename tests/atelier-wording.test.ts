@@ -46,7 +46,7 @@ describe('what one entry is to the person', () => {
     expect(linesOf(broke)).toEqual(['  To look at: Rule a. (1 found)']);
   });
   it('the passages a check pointed at are found for the two entries the record names itself', () => {
-    const line = (requirementId: string, text: string): unknown => ({ requirementId, result: { spans: [{ start: 0, end: 1, text, why: 'w' }] } });
+    const line = (requirementId: string, text: string): unknown => ({ requirementId, result: { verdict: 'VIOLATED', spans: [{ start: 0, end: 1, text, why: 'w' }] } });
     const by = spansByEntry({ checked: [line('x1', 'a'), line('UNSOURCED', '73%'), line(COPIED_LINE, 'a lifted run')] } as never);
     expect(by.get('x1')?.[0].text).toBe('a');
     expect(by.get('specifics')?.[0].text).toBe('73%');
@@ -78,6 +78,24 @@ describe('what one entry is to the person', () => {
   });
 });
 
+describe('specifics looked for in what the person supplied', () => {
+  const specifics = (o: Partial<Observation>, verdict: 'MET' | 'VIOLATED' | null = 'MET'): Entry => entry({ id: 'specifics', dimension: 'EVIDENCE', source: 'SYSTEM', statement: 'Every name and figure in the work is in what you supplied', required: true, observation: obs(o), verdict });
+  it('one not found in the notes is to look at, whether or not the reader is relied on; with no notes it is not checked', () => {
+    const open = specifics({ coverage: 'PARTIAL', evidence: '1 could not be found in it: listed for you', toConfirm: 1 });
+    expect(kindOf(open)).toBe('look');
+    expect(kindOf(specifics({ coverage: 'PARTIAL', qualification: 'UNQUALIFIED', evidence: '1 could not be found in it: listed for you (why)', saw: '1 could not be found in it: listed for you', toConfirm: 1 }))).toBe('look');
+    expect(kindOf(specifics({ coverage: 'NONE', qualification: 'UNAVAILABLE', evidence: 'no material was supplied to look them up in: 1 listed for you' }, null))).toBe('unchecked');
+    expect(kindOf(specifics({ evidence: 'all found' }))).toBe('held');
+    const r = record(rule('a', 'MET'), open);
+    expect(outcomeOf('SHIP_LABELLED', r.state, r)).toBe('look');
+    // the passage is shown under it by verify
+    expect(verdictLines(r, new Map([['specifics', [{ start: 0, end: 3, text: '73%', why: 'a figure not in your material' }]]]))).toHaveLength(3);
+  });
+  it('a rule that held on the part a check reads is counted, and is not a line under the piece', () => {
+    expect(linesOf(rule('a', 'MET', { coverage: 'PARTIAL' }))).toEqual([]);
+  });
+});
+
 describe('the outcome of a record', () => {
   it('needs a fix where a rule is broken or delivery blocks; needs a look where something is to look at; else ready', () => {
     const broken = record(rule('a', 'VIOLATED'));
@@ -95,7 +113,7 @@ describe('the outcome of a record', () => {
     expect(line).toMatch(/^1 of your rules is not met/);
     expect(line).toContain('1 measured');
     expect(line).toContain('1 to look at');
-    expect(foundLines(r)).toHaveLength(3);
+    expect(foundLines(r)).toHaveLength(2);
     expect(shortLine(record(rule('a', 'MET')))).toBe('every rule was measured and held.');
   });
 });
@@ -113,7 +131,7 @@ describe('the check of one text, as verify and the MCP tool say it', () => {
 
 describe('the words, pinned once', () => {
   it('each kind is said in the one table', () => {
-    expect(SAID).toEqual({ broken: 'Not met: ', heldPart: 'Held where it is checked: ', unchecked: 'Not checked on this piece: ', look: 'To look at: ', slip: 'Possible slip: ', toCheck: 'To check: ' });
+    expect(SAID).toEqual({ broken: 'Not met: ', unchecked: 'Not checked on this piece: ', look: 'To look at: ', slip: 'Possible slip: ', toCheck: 'To check: ' });
     expect(OUTCOME_SAID).toEqual({ ready: 'Ready', look: 'Needs a look', fix: 'Needs a fix' });
     expect(linesOf(rule('b', 'VIOLATED'))).toEqual(['  Not met: Rule b. (1 in 39 words (none allowed))']);
   });

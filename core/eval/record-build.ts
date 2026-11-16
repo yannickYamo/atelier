@@ -254,8 +254,8 @@ function evidenceEntries(f: RecordFacts): Entry[] {
       const evidence = c.delivered ? `${c.delivered} not found in it, and still in the text${cut}` : c.open ? `${c.open} could not be found in it: listed for you${cut}`
         : c.cut ? `${c.cut} not found in it: ${done} before delivery; the rest found` : 'all found';
       // A specific left open is a part of the text nobody could vouch for: the reading is of the rest.
-      out.push(entry({ ...base, observation: { proposition, coverage: c.open && !c.delivered ? 'PARTIAL' : 'FULL', qualification: c.qualified ? 'QUALIFIED' : 'UNQUALIFIED', evidence: c.qualified || !c.why ? evidence : `${evidence} (${c.why})`,
-        ...(c.open && !c.delivered ? { unchecked: `${c.open} specific${c.open === 1 ? '' : 's'} listed for you` } : {}), ...undecided, ...(c.qualified ? { proof: { kind: 'definitional' as const } } : {}) }, verdict: c.delivered ? 'VIOLATED' : 'MET' }));
+      out.push(entry({ ...base, observation: { proposition, coverage: c.open && !c.delivered ? 'PARTIAL' : 'FULL', qualification: c.qualified ? 'QUALIFIED' : 'UNQUALIFIED', evidence: c.qualified || !c.why ? evidence : `${evidence} (${c.why})`, ...(c.qualified || !c.why ? {} : { saw: evidence }),
+        ...(c.open && !c.delivered ? { unchecked: `${c.open} specific${c.open === 1 ? '' : 's'} listed for you`, toConfirm: c.open } : {}), ...undecided, ...(c.qualified ? { proof: { kind: 'definitional' as const } } : {}) }, verdict: c.delivered ? 'VIOLATED' : 'MET' }));
     }
   }
   if (f.copying) {

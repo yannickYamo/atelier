@@ -43,7 +43,7 @@ import { readAnswers, questionLines, materialShown, type Question } from '../cor
 import { typedAnswer, JUST_WRITE, questionsJson } from './prewrite.js';
 import { createInterface } from 'node:readline/promises';
 import { learnedShape, steeredShape, removeShapeExtras } from '../core/loop/shape-steer.js';
-import { checkDraftAsync, refineToStandard, REPAIR_PASSES, CLAIMS_TO_CHECK, INCONCLUSIVE, PUBLIC_FACTS } from '../core/loop/run-repair.js';
+import { checkDraftAsync, refineToStandard, REPAIR_PASSES, CLAIMS_TO_CHECK, READER_REPORT, INCONCLUSIVE, PUBLIC_FACTS } from '../core/loop/run-repair.js';
 import { supportIsIn, numbersIn } from '../core/loop/claim-extract.js';
 import type { Span } from '../core/observers/registry.js';
 import { planFor } from '../core/plan/execution-plan.js';
@@ -378,7 +378,8 @@ export function grammarLines(report: VerifyReport | null | undefined): string[] 
   return (report?.checked ?? []).filter((c) => c.observer === 'GRAMMAR' && grammarListed(c) && c.result.spans.length)
     .map((c) => `Grammar, listed for you to check and never changed (${c.result.spans.length}): ${toCheckList(c.result.spans, c.result.spans.length)}.`);
 }
-const LISTED_IDS: ReadonlySet<string> = new Set(['UNSOURCED', CLAIMS_TO_CHECK, INCONCLUSIVE, PUBLIC_FACTS]);
+// the reader's own findings where it does not gate (not yet relied on): listed for the person like any other, never hidden
+const LISTED_IDS: ReadonlySet<string> = new Set(['UNSOURCED', CLAIMS_TO_CHECK, INCONCLUSIVE, PUBLIC_FACTS, READER_REPORT]);
 
 /** The direct run, recorded. Returns the record and the JSON a `--json` run prints. */
 export async function runDirect(c: DirectContext) {

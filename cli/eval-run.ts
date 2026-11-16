@@ -16,7 +16,7 @@ export const guardPiecesOf = (L: store.StoreLayout): string[] => {
 import * as fstore from '../core/state/fidelity-store.js';
 import { acts, type VerifyReport, type RuleCheck } from '../core/observers/verify.js';
 import type { Span } from '../core/observers/registry.js';
-import { INCONCLUSIVE, UNREAD, CLAIMS_TO_CHECK, PUBLIC_FACTS, COPIED_LINE, REMOVED_LINE } from '../core/loop/run-repair.js';
+import { INCONCLUSIVE, UNREAD, CLAIMS_TO_CHECK, PUBLIC_FACTS, COPIED_LINE, REMOVED_LINE, READER_REPORT } from '../core/loop/run-repair.js';
 import { featureOf } from '../core/observers/features.js';
 import { overlapIndex, suppliedWording, formTokensOut, STANDARD_WORDING_PIECES } from '../core/observers/overlap.js';
 import { bandsFor } from '../core/fidelity/profile.js';
@@ -231,8 +231,8 @@ const isClaimLine = (id: string): boolean => id.startsWith('UNSOURCED') || CLAIM
  * (every specific is in what was supplied; no passage is lifted) the lines of the check that found them.
  */
 export function spansByEntry(report: VerifyReport): Map<string, readonly Span[]> {
-  const of = (id: string): readonly Span[] => report.checked.find((c) => c.requirementId === id)?.result.spans ?? [];
-  return new Map<string, readonly Span[]>([...report.checked.map((c) => [c.requirementId, c.result.spans] as const), ['specifics', of('UNSOURCED')], ['lifted', of(COPIED_LINE)]]);
+  const of = (id: string): readonly Span[] => { const c = report.checked.find((x) => x.requirementId === id); return c?.result.verdict === 'VIOLATED' ? c.result.spans : []; };
+  return new Map<string, readonly Span[]>([...report.checked.map((c) => [c.requirementId, c.result.spans] as const), ['specifics', [...of('UNSOURCED'), ...of(CLAIMS_TO_CHECK), ...of(INCONCLUSIVE), ...of(PUBLIC_FACTS), ...of(READER_REPORT)]], ['lifted', of(COPIED_LINE)]]);
 }
 
 /**
@@ -266,7 +266,7 @@ export function recordForText(x: { L: store.StoreLayout; std: StandardVersion; t
     checked: x.report ? x.report.checked.filter((c) => !isClaimLine(c.requirementId)).map((c) => ({ id: c.requirementId, statement: c.statement, required: acts(c), verdict: c.result.verdict, detail: c.result.detail,
       ...(c.observer === 'GRAMMAR' && c.result.verdict === 'NOT_APPLICABLE' && c.result.spans.length ? { slips: c.result.spans.filter((sp) => sp.named).map((sp) => toCheckList([sp])) } : {}) })) : null,
     claims: { state, bound: x.unmeasured !== NO_MATERIAL || spans('UNSOURCED') > 0, qualified: deciding, why: x.unmeasured,
-      delivered: spans('UNSOURCED'), open: spans(INCONCLUSIVE) + spans(CLAIMS_TO_CHECK) + spans(PUBLIC_FACTS), cut: x.cut ?? 0, ...(x.slotted ? { slotted: true } : {}), unconfirmed: spans(INCONCLUSIVE) },
+      delivered: spans('UNSOURCED'), open: spans(INCONCLUSIVE) + spans(CLAIMS_TO_CHECK) + spans(PUBLIC_FACTS) + spans(READER_REPORT), cut: x.cut ?? 0, ...(x.slotted ? { slotted: true } : {}), unconfirmed: spans(INCONCLUSIVE) },
     // Wording found in three or more pieces of the corpus is the author's standard wording, and is not counted.
     copying: shared ? { longest: shared.longestShared, limit: copyLimit(voice), tellable: (voice?.lengthPieces ?? voice?.pieces?.length ?? 0) >= STANDARD_WORDING_PIECES, ...(shared.longestWords ? { words: shared.longestWords } : {}), of: x.text.split(/\s+/).filter(Boolean).length } : null,
     unmeasured: new Set(x.lostToLength ?? []), read: readMap(x.readings),

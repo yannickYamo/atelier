@@ -123,6 +123,12 @@ export async function verify(): Promise<void> {
   const named = [...store.getMaterial(L), ...boundMaterial()].map((m) => ({ name: m.name, text: m.text }));
   const checks = { ...checksFor(L, { material, task: flag('--task') ?? '', context: { ...(flag('--task') ? { request: flag('--task') } : {}), material: named }, guardClaims: !argv.includes('--allow-unsourced'), placeholders: argv.includes('--placeholders') }),
     ...(short.format ? { format: short.format } : {}), ...(short.transfer ? { doesNotApply: short.transfer.doesNotApply } : {}) };
+  // The claim reader's standing (which instrument reads, whether it is relied on) is the full account's: said with
+  // --report, and without it only where the reader failed or was made to gate unmeasured.
+  const sensorNotes = (): void => {
+    const sn = checks.claimSensor;
+    if (sn && (argv.includes('--report') || sn.degraded || (sn.gate === 'reader' && !sn.qualified))) for (const n of sn.notes) console.error(`(${n})`);
+  };
   if (argv.includes('--repair')) {
     const budget = { spentUsd: 0, capUsd: numericFlag('--cap', 1), maxCalls: numericFlag('--max-calls', 4) };
     // The model is asked for only when a rewrite needs it: a repair that is all mechanical (a known misspelling, a/an,
@@ -130,7 +136,7 @@ export async function verify(): Promise<void> {
     let model: InferenceClient | null = null;
     const client: InferenceClient = { complete: (req) => { if (!model) { assertReachable('target'); model = clientAndBinding('target').client; } return model.complete(req); } };
     const r = await refineToStandard(client, budget, name, v, text, REPAIR_PASSES, checks);
-    for (const n of checks.claimSensor?.notes ?? []) console.error(`(${n})`);
+    sensorNotes();
     // WHAT WAS LISTED, NOT CHANGED: a grammar rule whose findings are only listed is unverified, never held. Its items
     // are said here, in both outputs, so "nothing changed" never reads as "every rule holds".
     const listed = r.report.checked.filter(grammarListed).map((c) => ({ rule: c.requirementId, statement: c.statement,
@@ -155,7 +161,7 @@ export async function verify(): Promise<void> {
     return;
   }
   const report = await checkDraftAsync(name, v, text, checks);
-  for (const n of checks.claimSensor?.notes ?? []) console.error(`(${n})`);
+  sensorNotes();
   // The reading-based rules, on request (`--taste`): this calls a model, and every count here is free.
   // Read first, so `--json` prints one object holding both.
   let taste: { text: string; failed: boolean; verdicts: unknown[] } | null = null;

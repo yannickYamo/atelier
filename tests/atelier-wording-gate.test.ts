@@ -87,6 +87,7 @@ const ALLOWED: readonly RegExp[] = [
   /^ {6}› /,
   /^(Not right\?|To fix it) atelier fix "/,
   /^Every check, rule by rule: add --report$/,
+  /^Inferred for this piece \(\d+\), beside it and never in it:$/, /^ {2}- (decided for you|not given|no proof given|about its own making|a slot, written whole|a name nothing gave|not the length asked): /,
   /^This is the first draft: the review of it was not used, because it broke a rule the draft held \(/,
   /^The whole piece was written again with what you said/,
   /^About your last run of \//, /^You said: "/, /^Writing it again with what you said\.$/, /^Only this piece changed\. /,
@@ -127,6 +128,21 @@ describe('the front door, through the binary', () => {
     expect(nokey.err).toMatch(/^atelier: /);
     expect(nokey.err).toContain('ANTHROPIC_BASE_URL');
     expect(nokey.err).not.toMatch(MACHINERY);
+    // A FIGURE THAT IS NOT IN THE NOTES GIVEN is to look at, in the short view of a run and of a check, with the passage
+    const PLANTED = `${DRAFT} A survey found that 73% of residents wanted it kept.`;
+    const notes = join(c.proj, 'notes.md'); writeFileSync(notes, 'The council voted to keep the wharf open. I walked it on Tuesday and counted the boats. Most were working boats.');
+    await set({ __plain: [PLANTED, PLANTED] });
+    const planted = c(...RUN(), '--with', `notes=${notes}`);
+    gate('run, a planted figure', planted, PLANTED);
+    expect(planted.out).toMatch(/^Needs a look\. Checked: /m);
+    expect(planted.out).toMatch(/^ {2}To look at: Every name and figure in the work is in what you supplied/m);
+    writeFileSync(join(c.proj, 'planted.md'), PLANTED);
+    const seen = c('verify', '--skill', 'post-voice', 'planted.md', '--claims', 'pattern', '--with', `notes=${notes}`);
+    gate('verify, a planted figure', seen, '\u0000');
+    expect(seen.out).toMatch(/^Needs a look\.$/m);
+    expect(seen.out).toMatch(/^ {6}› "A survey found that 73% of residents wanted it kept\."/m);
+    const clean = c('verify', '--skill', 'post-voice', 'good.md', '--claims', 'pattern', '--with', `notes=${notes}`);
+    expect(clean.out).toMatch(/^Ready\.$/m);
     const good = c('verify', '--skill', 'post-voice', 'good.md', '--claims', 'pattern');
     gate('verify, clean', good, '\u0000');
     expect(good.out).toMatch(/^Ready\.$/m);

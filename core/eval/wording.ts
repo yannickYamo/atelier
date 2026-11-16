@@ -34,13 +34,14 @@ export function kindOf(e: Entry): Kind | null {
     case 'DOES_NOT_APPLY': case 'REPLACED_BY_REQUEST': case 'SET_ASIDE': return null;
     case 'MET': return e.required ? 'held' : null;
     case 'NOT_MET': return e.required ? 'broken' : null;
-    case 'PARTLY_CHECKED': return e.required ? 'held' : null;
+    // specifics looked for in what the person supplied and not found there are theirs to confirm: to look at
+    case 'PARTLY_CHECKED': return !e.required ? null : o.toConfirm ? 'look' : 'held';
     // a check that could not run here is not checked, and is nothing to look at;
     // the grammar check's list: a slip it can name the correction of is to look at; a name or a word it does not know is in --report
     // accepted as unmeasured is theirs to judge, unless the check that reads part of it found it broken
     case 'LISTED_FOR_YOU': return o.accepted ? (o.found === 'VIOLATED' ? 'look' : 'judge') : o.notRun ? 'unchecked' : grammarList(e) ? (slipsOf(e).length ? 'look' : null) : o.evidence ? 'look' : null;
     // A CHECK THAT IS NOT YET RELIED ON NEVER HIDES WHAT IT FOUND: broken by its reading is the person's to look at
-    case 'OBSERVER_UNQUALIFIED': return !e.required ? null : o.found === 'VIOLATED' ? 'look' : 'judge';
+    case 'OBSERVER_UNQUALIFIED': return !e.required ? null : o.found === 'VIOLATED' || o.toConfirm ? 'look' : 'judge';
     case 'NOT_MACHINE_CHECKABLE':
       if (!e.required) return null;
       if (grammarList(e)) return slipsOf(e).length ? 'look' : 'held';
@@ -56,7 +57,6 @@ const withFound = (e: Entry): string => { const saw = e.observation.saw ?? e.obs
 /** The words each kind is said in under a piece. The only table of them. */
 export const SAID = {
   broken: 'Not met: ',
-  heldPart: 'Held where it is checked: ',
   unchecked: 'Not checked on this piece: ',
   look: 'To look at: ',
   slip: 'Possible slip: ',
@@ -64,14 +64,15 @@ export const SAID = {
 } as const;
 
 /**
- * WHAT IS SAID UNDER THE PIECE FOR ONE ENTRY: nothing for a rule that held in full or is theirs to judge (both are
- * counted in the line above), one line for anything else.
+ * WHAT IS SAID UNDER THE PIECE FOR ONE ENTRY: nothing for a rule that held or is theirs to judge (both are counted in
+ * the line above), one line for anything else.
  */
 export function linesOf(e: Entry): string[] {
   const kind = kindOf(e);
   if (kind === null || kind === 'judge') return [];
   if (kind === 'broken') return [`  ${SAID.broken}${withFound(e)}`];
-  if (kind === 'held') return e.reason === 'PARTLY_CHECKED' ? [`  ${SAID.heldPart}${withFound(e)}`] : [];
+  // held, in full or on the part a check reads: counted in the sentence above, and nothing for the person to do
+  if (kind === 'held') return [];
   if (kind === 'unchecked') return [`  ${SAID.unchecked}${withFound(e)}`];
   const slips = slipsOf(e);
   if (slips.length) return [...slips.slice(0, 8).map((m) => `  ${SAID.slip}${m}`), ...(slips.length > 8 ? [`  ${SAID.slip}and ${slips.length - 8} more (each one: --report)`] : [])];
@@ -122,9 +123,9 @@ export const outcomeWord = (r: Pick<EvaluationRecord, 'entries' | 'state' | 'del
 
 /**
  * THE RESULT OF A CHECK OF ONE TEXT, AS A PERSON OR A HOST READS IT (`atelier verify`, the MCP tool): the outcome, each
- * thing to look at or fix, and under a rule not met the passages that broke it.
+ * thing to look at or fix, and under a rule not met, or a specific to confirm, the passages it is about.
  */
 export function verdictLines(r: Pick<EvaluationRecord, 'entries' | 'state' | 'delivery'>, spans: ReadonlyMap<string, readonly Span[]> = new Map()): string[] {
   return [`${outcomeWord(r)}.`,
-    ...r.entries.flatMap((e) => [...linesOf(e), ...(kindOf(e) === 'broken' ? spanLines(spans.get(e.id) ?? [], '      ') : [])])];
+    ...r.entries.flatMap((e) => { const k = kindOf(e); return [...linesOf(e), ...(k === 'broken' || (k === 'look' && !slipsOf(e).length) ? spanLines(spans.get(e.id) ?? [], '      ') : [])]; })];
 }

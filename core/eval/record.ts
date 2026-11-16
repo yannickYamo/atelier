@@ -51,6 +51,8 @@ export interface Observation {
   readonly slips?: readonly string[];
   /** a check that only lists could not run on this text (the grammar engine switched off): not checked, and nothing to look at */
   readonly notRun?: true;
+  /** specifics in the text that were looked for in what the person supplied and not found there: theirs to confirm */
+  readonly toConfirm?: number;
   /**
    * What an observer that may not be believed returned (a written check not qualified on the owner's examples, a claim
    * reader not measured on this kind): never a verdict on the record, which stays UNVERIFIED; what delivery reads to tell a
