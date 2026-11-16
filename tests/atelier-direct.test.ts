@@ -370,7 +370,7 @@ describe('a run through the binary, written the direct way', () => {
   }, 180_000);
   it('what the work is: read at the build and said once, the person\'s card replaces it, and the editor is told it; a total its rows miss is listed', async () => {
     await setBackend({ byTool: { emit_persona: PERSONA, emit_holds_back: { ids: [] }, __plain: [DRAFT, REVIEWED],
-      emit_purpose_card: { kind: 'a comparison of note apps', kindQuote: 'Obsidian against Bear', reader: null, readerQuote: null, purpose: 'Says which app to pick.', settles: ['which app wins, for whom'] } } });
+      emit_purpose_card: { kind: 'a comparison of note apps', kindQuote: 'Obsidian against Bear', reader: null, readerQuote: null, purpose: 'Says which app to pick.', purposeQuote: 'Bear wins on the phone', settles: ['which app wins, for whom'] } } });
     const s = seed(FILES, { ATELIER_CONTEXT_READER: 'scripted' });
     const built = s.run('new', 'posts', 'write posts in my voice', '--name', 'posts', ...BACKEND());
     expect(built.code, built.out).toBe(0);

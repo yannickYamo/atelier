@@ -13,7 +13,7 @@ const PIECES: CardInput = { purpose: 'pricing memos for our sales team', pieces:
 describe('the purpose card, read from the pieces and held to them', () => {
   it('a kind and a reader stand only with a quote found in the pieces or the purpose; settles is kept to five', () => {
     const r = PURPOSE_CARD.ground({ kind: 'a pricing memo', kindQuote: 'pricing memos for our sales team', reader: 'a sales rep before a call', readerQuote: 'To: the sales team',
-      purpose: 'Tells the team which price to quote and against whom.', settles: ['the price', 'what it is compared with', 'the price', 'which plan first', 'a', 'b', 'c'] }, PIECES);
+      purpose: 'Tells the team which price to quote and against whom.', purposeQuote: 'Quote the annual plan first', settles: ['the price', 'what it is compared with', 'the price', 'which plan first', 'a', 'b', 'c'] }, PIECES);
     expect(r?.card).toEqual({ kind: 'a pricing memo', reader: 'a sales rep before a call', purpose: 'Tells the team which price to quote and against whom.',
       settles: ['the price', 'what it is compared with', 'which plan first', 'a', 'b'], by: 'model' });
     const made = PURPOSE_CARD.ground({ kind: 'a pricing memo', kindQuote: 'memos about pricing', reader: 'a CFO', readerQuote: 'the CFO reads it', purpose: null, settles: [] }, PIECES);
@@ -21,6 +21,19 @@ describe('the purpose card, read from the pieces and held to them', () => {
   });
   it('no pieces, nothing read; no model, no card', () => {
     expect(PURPOSE_CARD.decide({ purpose: 'x', pieces: [] })).toEqual({ card: null });
+  });
+  it('a purpose stands on a quote too: a hedge nothing shows is left empty, so the build asks for it', () => {
+    const hedged = PURPOSE_CARD.ground({ kind: 'a pricing memo', kindQuote: 'pricing memos for our sales team', reader: 'unclear from the pieces', readerQuote: null, purpose: 'Not clear from the pieces.', purposeQuote: null, settles: [] }, PIECES);
+    expect(hedged?.card).toMatchObject({ kind: 'a pricing memo', reader: null, purpose: null });
+  });
+  it('the author\'s own note grounds the reader and the purpose, and is shown to the reading', () => {
+    const method = 'Open on the reader\'s pain. These memos are read by a founder choosing a billing tool, who should leave knowing which plan to buy.';
+    const r = PURPOSE_CARD.ground({ kind: 'a pricing memo', kindQuote: 'pricing memos for our sales team', reader: 'a founder choosing a billing tool', readerQuote: 'read by a founder choosing a billing tool',
+      purpose: 'The reader leaves knowing which plan to buy.', purposeQuote: 'should leave knowing which plan to buy', settles: [] }, { ...PIECES, method });
+    expect(r?.card).toMatchObject({ reader: 'a founder choosing a billing tool', purpose: 'The reader leaves knowing which plan to buy.' });
+    // without the note, the same reading grounds neither
+    expect(PURPOSE_CARD.ground({ kind: null, kindQuote: null, reader: 'a founder choosing a billing tool', readerQuote: 'read by a founder choosing a billing tool', purpose: 'p', purposeQuote: 'should leave knowing which plan to buy', settles: ['the price'] }, PIECES)?.card).toMatchObject({ reader: null, purpose: null });
+    expect(PURPOSE_CARD.prompt({ ...PIECES, method })).toContain('Open on the reader\'s pain.');
     expect(PURPOSE_CARD.floor(PIECES)).toEqual({ card: null });
   });
   it('the person\'s card replaces the fields they name and keeps the rest; a field it does not have is refused', () => {

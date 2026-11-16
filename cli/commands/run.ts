@@ -151,7 +151,7 @@ export async function run(): Promise<void> {
   // AT A TERMINAL THE EDITOR'S QUESTIONS COME BEFORE THE DRAFT, IN THIS RUN: the engine is handed the person's keyboard and
   // a descriptor onto their screen (cli/direct.ts, ASK_FD), and its two streams are still read whole. Anywhere else (a
   // pipe, a host, a script) nothing is asked, and the open questions are listed beside the piece as before.
-  const asking = Boolean(process.stdin.isTTY && process.stderr.isTTY);
+  const asking = process.stdin.isTTY && process.stderr.isTTY;
   if (process.stderr.isTTY) process.stderr.write(asking ? 'reading your request…\n' : 'writing…\n');
   const engine = await new Promise<{ code: number; out: string; err: string }>((done) => {
     const child = spawn(process.execPath, [...process.execArgv, process.argv[1], ...engineArgs, '--json'],

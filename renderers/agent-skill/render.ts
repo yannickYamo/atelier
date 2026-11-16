@@ -21,6 +21,7 @@ import { TRAIT_LABEL } from '../../core/composite/traits.js';
 import { observerFor } from '../../core/observers/registry.js';
 import type { StandardVersion, Provenance } from '../../core/state/canonical-state.js';
 import { isGeneralScope } from '../../core/state/canonical-state.js';
+import { methodDecides } from '../../core/direct/prompt.js';
 import { assertArchitectureServesStandard, type SkillArchitecture, type Carrier, type GateRole } from '../../core/architecture/compile.js';
 import { isConfirmed } from '../../core/architecture/compile.js';
 
@@ -698,7 +699,7 @@ description: ${yamlScalar(description)}
 ${checkSection(skillId)}
 ${methodSection}
 ${method ? `Everything below my method is secondary: examples of finished work, how I sound, and rules read from my
-pieces. Apply those as judgment, including knowing when one does not apply. None of them overrides the method.${!voiceSection && !exemplar ? `\n\n${factsBelong(answers)}` : ''}`
+pieces. Apply those as judgment, including knowing when one does not apply. ${methodDecides('mine')}${!voiceSection && !exemplar ? `\n\n${factsBelong(answers)}` : ''}`
   : `Apply the standard below as judgment, not as a checklist — including knowing when a rule does not
 apply.`}
 ${exemplar ? `

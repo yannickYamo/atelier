@@ -72,7 +72,7 @@ describe('what reaches the writer', () => {
   });
   it('the method is shown whole before the rules, a rule it already says is not repeated, and the answers come before the task', () => {
     const b = taskBlock({ material: [], task: 'Write it.', method: 'Open on the pain.\nNo em dashes.', rules: ['No em dashes.', 'Keep paragraphs short.'], settled: 'Before writing, the author settled these.' });
-    expect(b).toBe('The author\'s method for their pieces, in their words. Follow it wherever it applies to this piece:\n\n<method>\nOpen on the pain.\nNo em dashes.\n</method>\n\n'
+    expect(b).toBe('The author\'s method for their pieces, in their words. Follow it wherever it applies to this piece. Where the method and the pieces differ, the method decides.\n\n<method>\nOpen on the pain.\nNo em dashes.\n</method>\n\n'
       + 'The author\'s own rules for their writing, in their words. Each one holds in this piece wherever it applies:\n\n<rules>\n- Keep paragraphs short.\n</rules>\n\n'
       + 'Before writing, the author settled these.\n\nThe task:\n\n<task>\nWrite it.\n</task>');
     expect(methodBlock('')).toBe('');
