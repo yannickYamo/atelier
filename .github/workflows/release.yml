@@ -26,7 +26,7 @@ jobs:
         with:
           # the whole history: the live-run check asks whether the record's commit is an ancestor of the tag
           fetch-depth: 0
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
