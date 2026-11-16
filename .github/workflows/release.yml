@@ -23,6 +23,9 @@ jobs:
       HAS_NPM_TOKEN: ${{ secrets.NPM_TOKEN != '' }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          # the whole history: the live-run check asks whether the record's commit is an ancestor of the tag
+          fetch-depth: 0
       - uses: actions/setup-node@v5
         with:
           node-version: 22
@@ -32,6 +35,11 @@ jobs:
       - run: npm run typecheck
       - run: npm run lint
       - run: npm test
+
+      # The suite runs offline. A release also needs a record of the front door run on a real model
+      # (scripts/live-run.mts), on this code: without one, nothing is published.
+      - name: a live run stands for this commit
+        run: npm run check:live
 
       # The tag and the manifest must agree. A tag that does not match `version` publishes something
       # nobody can find again from the release.

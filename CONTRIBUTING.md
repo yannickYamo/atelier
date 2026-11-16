@@ -35,11 +35,16 @@ no reason is indistinguishable from one nobody understood.
 
 A dated CHANGELOG section means shipped, so the section is dated by the release, not before it.
 1. `npm run preflight`: green or stop.
-2. Rename `## [Unreleased]` to `## [x.y.z] — <date>`; bump `package.json` to match.
-3. `git tag vx.y.z && git push --tags`. release.yml re-runs the checks, then creates the GitHub release
+2. `npm run build && npm run live`, with a model key in the environment. The suite runs offline, so this is the one
+   check of what a person sees when a real model writes: it builds a skill from the fixtures, writes a piece, checks
+   two drafts and fixes one (a few model calls on your account). Commit `release/live-run.json`. After it, only that
+   record, the changelog and the version may change; any other change means running it again.
+3. Rename `## [Unreleased]` to `## [x.y.z] — <date>`; bump `package.json` to match.
+4. `git tag vx.y.z && git push --tags`. release.yml re-runs the checks, stops unless the live-run record stands
+   for the tagged commit (`npm run check:live`), then creates the GitHub release
    with the version's CHANGELOG section as its notes. It also publishes to npm with provenance, but only
    when the `NPM_TOKEN` repository secret is set; without it the release stops at GitHub.
-4. Add the npm install line to README **after** `npm view @yannickyamo/atelier` returns a version.
+5. Add the npm install line to README **after** `npm view @yannickyamo/atelier` returns a version.
 
 `main` and the release tags are what count; any other branch on the remote is a working branch.
 

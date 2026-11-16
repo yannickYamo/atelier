@@ -13,6 +13,7 @@ Atelier learns how you write from the pieces you would sign, writes new pieces t
 - At a terminal, `atelier run` asks the editor's questions before it writes; anywhere else nothing is asked and the open questions are listed beside the piece.
 - What the work is, who reads it and what it is for are read from your method note as well as your pieces, each on a passage of yours. Where nothing shows one, the build asks you.
 - The writer and the installed skill are told the same thing: where your method and your pieces differ, your method decides. The build says so.
+- Before a release, `npm run live` runs the front door on a real model and records what it found; the release stops without that record.
 - A rule that a check not yet relied on found broken is listed under the piece as something to look at. Such a run read "Ready" before.
 - `atelier new` builds the check from your finished pieces, with or without a note of your own rules, and shows every rule for approval before it binds.
 - `atelier verify` checks any text for invented specifics, passages copied from your examples and broken rules; as a Claude Code hook it blocks the break and hands the agent the reason.
