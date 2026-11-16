@@ -154,7 +154,7 @@ export async function guided(name: string, seen: Understood = { steps: [], dispu
     if (card && cardLine(card)) console.log(`  ${cardLine(card)}.`);
     const sound = howYouWrite(voice?.persona?.points ?? [], 4);
     if (sound.length) { console.log('  How you write:'); for (const l of sound) console.log(l); }
-    if (seen.steps.length) { console.log(`  Your method, which every piece follows:`); for (const l of few(seen.steps, 6)) console.log(l); }
+    if (seen.steps.length) { console.log('  Your method, which every piece follows (where it and your pieces differ, your method decides):'); for (const l of few(seen.steps, 6)) console.log(l); }
     { const active = store.getActive(L); const sv = active ? store.getSkillVersion(L, active) : null; const std = sv ? store.getStandard(L, sv.standardVersionHash) : null;
       for (const l of std ? whatItHolds(std) : []) console.log(`  ${l}`); }
     if (seen.disputed.length) {

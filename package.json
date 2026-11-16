@@ -42,6 +42,8 @@
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "check:private": "tsx scripts/check-private.mts",
+    "live": "tsx scripts/live-run.mts",
+    "check:live": "tsx scripts/check-live-record.mts",
     "build:plugins": "tsx plugins/build-plugins.mts",
     "pretest": "npm run build:plugins && npm run build",
     "preflight": "npm run typecheck && npm run lint && npm test && npm run build",

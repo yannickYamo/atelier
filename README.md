@@ -55,9 +55,9 @@ And the failure isn't only stylistic. Fluent drafts invent. They attribute, they
 
 ## What's shown so far
 
-- **46 of 46 planted inventions caught** in drafts the check had never seen.
+- **46 of 46 planted inventions caught** in drafts the check had never seen. It also flagged about one clean draft in five, so a flag is a sentence for you to look at, never a refusal.
 - **Your counted rules held:** 31% of answers broke one, against 76% for a hand-written skill.
-- **Writing level with pasting your own posts** into the same model, on 25 blind-judged briefs, and ahead of asking it bare on 24 of them.
+- **Writing level with pasting your own posts** into the same model, on 25 blind-judged briefs, and ahead of asking it bare on 24 of them. Against a paste followed by one review it is behind: 4 won, 11 tied, 10 lost.
 
 How each was measured, and what isn't established yet, is in [EVALS](EVALS.md).
 
@@ -76,11 +76,15 @@ At a terminal, `atelier new` ends by showing the agent at work: what it understo
 
 `atelier setup` lets the coding agents in a project (Claude Code, Codex) call it on their own drafts. Not happy with a piece? `atelier fix "the opening was too abstract"` and say it in your own words. [examples/blog](examples/blog) has six posts to try it on.
 
-Here is what comes back when an agent's draft invents a source and lifts a paragraph from one of your posts:
+Here is what comes back, shortened, when an agent's draft invents a source and lifts a paragraph from one of your posts:
 
 ```text
-  ✗ Every name and figure in the work is in what you supplied: 1 not found in it, and still in the text
-  ✗ No passage is lifted from one of your examples: a run of 33 words is shared with one of them (11 at most)
+Needs a fix.
+  To look at: Every name and figure in the work is in what you supplied (2 could not be found in it: listed for you)
+      › "A survey by the Harbour Trust found that 73 percent of residents wanted the wharf kept …"
+      › "The first barge of the season left Hollin Vale at six this morning with forty tonnes of…"
+  Not met: No passage is lifted from one of your examples (a run of 68 words is shared with one of them (11 at most))
+Every check, rule by rule: add --report
 ```
 
 ## Against the alternatives

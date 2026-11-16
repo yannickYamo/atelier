@@ -223,13 +223,13 @@ describe('a conditional measured rule can be widened, and verify says how', () =
     run(data, proj, 'ratify-close', '--work-type', 'writing');
     run(data, proj, 'build', '--name', 'demo');
     writeFileSync(join(proj, 't.md'), 'We leverage things.');
-    const before = run(data, proj, 'verify', '--skill', 'demo', 't.md');
+    const before = run(data, proj, 'verify', '--skill', 'demo', 't.md', '--report');
     expect(before).not.toMatch(/^EXIT:/);
     expect(before).toContain('atelier amend --skill demo --rule x1 --applies-when GENERAL --reason "<why>"');
     const amended = run(data, proj, 'amend', '--skill', 'demo', '--rule', 'x1', '--applies-when', 'GENERAL', '--reason', 'it holds everywhere');
     expect(amended).not.toMatch(/^EXIT:/);
     expect(amended).toMatch(/applies when: the post is about strategy {2}-> {2}GENERAL/);
-    const after = run(data, proj, 'verify', '--skill', 'demo', 't.md');
+    const after = run(data, proj, 'verify', '--skill', 'demo', 't.md', '--report');
     expect(after).toMatch(/^EXIT:1/);
     expect(after).toMatch(/FAIL {2}x1 {2}Never say leverage\./);
     expect(after).not.toContain('--applies-when GENERAL');

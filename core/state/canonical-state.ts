@@ -725,7 +725,8 @@ export interface DirectRecord {
   /** the writer was told what the person said the work is (the experiment ATELIER_CARD_TO_WRITER=1) */
   readonly cardToWriter?: true;
   /** whether the self-review ran and its revision was kept; why not, when it was not */
-  readonly review: { readonly ran: boolean; readonly why?: string };
+  /** `broke`: the rules the review's piece broke that the first draft held, where the first draft was delivered for it */
+  readonly review: { readonly ran: boolean; readonly why?: string; readonly broke?: readonly string[] };
   /** how many of the person's corrections the review was shown */
   readonly corrections: number;
   /** whether the author's method was shown to the writer, whole */

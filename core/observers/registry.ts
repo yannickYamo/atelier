@@ -31,6 +31,8 @@ export interface Span {
   readonly family?: string;
   /** for a mechanical error (./grammar.ts): the text that corrects it in place, "" to remove it; absent where the checker offers none */
   readonly replacement?: string;
+  /** for a mechanical error: `why` names the correction ("are" → "is"). Kept where the replacement itself is withheld, so nothing reads `why` to know */
+  readonly named?: true;
 }
 
 export interface ObserverResult {

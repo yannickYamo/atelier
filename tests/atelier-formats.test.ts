@@ -70,7 +70,7 @@ describe('through the binary: a skill built for X holds its posts to the limit t
     writeFileSync(file, 'This post runs on and on. '.repeat(14));
     // no limit assumed: the same post passes the format check
     expect(run('verify', '--skill', 'posts', file).out).not.toMatch(/holds at most/);
-    const r = run('verify', '--skill', 'posts', file, '--class', 'x-post', '--limit', '280');
+    const r = run('verify', '--skill', 'posts', file, '--class', 'x-post', '--limit', '280', '--report');
     expect(r.code).toBe(1);
     expect(r.out).toMatch(/FORMAT/);
     expect(r.out).toMatch(/a post on X holds at most 280/);

@@ -42,8 +42,9 @@ import { cardLine, type PurposeCard } from '../core/direct/card.js';
 import { readAnswers, questionLines, materialShown, type Question } from '../core/loop/questions.js';
 import { typedAnswer, JUST_WRITE, questionsJson } from './prewrite.js';
 import { createInterface } from 'node:readline/promises';
+import { createWriteStream } from 'node:fs';
 import { learnedShape, steeredShape, removeShapeExtras } from '../core/loop/shape-steer.js';
-import { checkDraftAsync, refineToStandard, REPAIR_PASSES, CLAIMS_TO_CHECK, INCONCLUSIVE, PUBLIC_FACTS } from '../core/loop/run-repair.js';
+import { checkDraftAsync, refineToStandard, REPAIR_PASSES, CLAIMS_TO_CHECK, READER_REPORT, INCONCLUSIVE, PUBLIC_FACTS } from '../core/loop/run-repair.js';
 import { supportIsIn, numbersIn } from '../core/loop/claim-extract.js';
 import type { Span } from '../core/observers/registry.js';
 import { planFor } from '../core/plan/execution-plan.js';
@@ -64,7 +65,6 @@ import { readFidelity } from '../core/fidelity/profile.js';
 import { typicalityOf } from '../core/fidelity/typicality.js';
 import type { FidelityRecord } from '../core/fidelity/types.js';
 import { grammarListed, toCheckList } from '../core/observers/grammar.js';
-import { GRAMMAR_NOT_CHECKED } from '../core/eval/record-build.js';
 import { totalsOff, totalsLine } from '../core/observers/totals.js';import { howHeld } from './how-held.js';
 import { methodReading, methodLine } from '../core/eval/obligations.js';
 
@@ -76,7 +76,7 @@ import { methodReading, methodLine } from '../core/eval/obligations.js';
 
 
 /** How a record says the review's piece was set aside for breaking a rule; `atelier run` says it beside the piece. */
-export const REVIEW_BROKE = 'it broke a rule the draft held';
+const REVIEW_BROKE = 'it broke a rule the draft held';
 export const DIRECT_VERSION = '1';
 const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'] as const;
 type Effort = (typeof EFFORTS)[number];
@@ -191,10 +191,26 @@ export interface DirectContext {
   readonly read?: (prompt: string) => Promise<string>;
 }
 
-/** A line read from the person at the terminal; the prompt goes to stderr, so stdout stays the work. */
+/**
+ * WHERE A QUESTION IS WRITTEN. At a terminal it is stderr, so stdout stays the work. Under `atelier run`, which reads this
+ * process's two streams whole, it is the descriptor `run` handed down for it (ASK_FD): the person's own terminal.
+ */
+export const ASK_FD = 'ATELIER_ASK_FD';
+let askStream: NodeJS.WritableStream | null = null;
+export const askOut = (): NodeJS.WritableStream => {
+  const fd = Number(process.env[ASK_FD]);
+  if (!Number.isInteger(fd) || fd < 3) return process.stderr;
+  // a descriptor that is not there (the variable inherited from another shell) must never end a run
+  return askStream ??= createWriteStream('', { fd, autoClose: false }).on('error', () => { /* nothing to ask on: the run goes on */ });
+};
+/** Asked from `atelier run` at a terminal: the questions come before the draft, in the one run. */
+export const askedByRun = (): boolean => { const fd = Number(process.env[ASK_FD]); return Number.isInteger(fd) && fd >= 3; };
+/** A line read from the person at the terminal; the prompt goes beside the work, never in it. */
 async function askLine(prompt: string): Promise<string> {
-  const rl = createInterface({ input: process.stdin, output: process.stderr });
-  try { return (await rl.question(prompt)).trim(); } finally { rl.close(); }
+  const rl = createInterface({ input: process.stdin, output: askOut() });
+  // the keyboard closed (Ctrl-D) is "just write it": the piece is written with the suggested answers, never dropped
+  const closed = new Promise<string>((done) => { rl.once('close', () => { done('just write it'); }); });
+  try { return (await Promise.race([rl.question(prompt), closed])).trim(); } finally { rl.close(); }
 }
 
 /** A kept editor reading, only where every question in it is whole: anything else is read again. */
@@ -253,7 +269,7 @@ export async function editorQuestions(c: Pick<DirectContext, 'L' | 'asked' | 'ma
     const g = given.get(q.id) ?? before.get(q.id);
     if (g !== undefined) { answers.push({ id: q.id, answer: g }); continue; }
     if (!c.interactive || rest) continue;
-    process.stderr.write(`\n${questionLines([q]).join('\n')}\n`);
+    askOut().write(`\n${questionLines([q]).join('\n')}\n`);
     const typed = await (c.read ?? askLine)('Your answer (a letter, your own words, enter for the suggested one, or "just write it"): ');
     if (JUST_WRITE.test(typed)) { rest = true; continue; }
     answers.push({ id: q.id, answer: typedAnswer(q, typed) });
@@ -353,7 +369,7 @@ export const toCheckOf = (report: Awaited<ReturnType<typeof checkDraftAsync>>, k
  * and the steps no check reads, which are the person's to judge.
  */
 /** `styleRead`: the steps no check reads were read this run, after the draft (core/direct/style.ts), and are said there. */
-const notRunHere = (e: Entry): boolean => (e.observation.evidence ?? '').startsWith(GRAMMAR_NOT_CHECKED);
+const notRunHere = (e: Entry): boolean => e.observation.notRun === true;
 export function rulesLines(entries: readonly Entry[], styleRead = false): string[] {
   const own = entries.filter((e) => e.dimension === 'STANDARD');
   if (!own.length) return [];
@@ -379,7 +395,8 @@ export function grammarLines(report: VerifyReport | null | undefined): string[] 
   return (report?.checked ?? []).filter((c) => c.observer === 'GRAMMAR' && grammarListed(c) && c.result.spans.length)
     .map((c) => `Grammar, listed for you to check and never changed (${c.result.spans.length}): ${toCheckList(c.result.spans, c.result.spans.length)}.`);
 }
-const LISTED_IDS: ReadonlySet<string> = new Set(['UNSOURCED', CLAIMS_TO_CHECK, INCONCLUSIVE, PUBLIC_FACTS]);
+// the reader's own findings where it does not gate (not yet relied on): listed for the person like any other, never hidden
+const LISTED_IDS: ReadonlySet<string> = new Set(['UNSOURCED', CLAIMS_TO_CHECK, INCONCLUSIVE, PUBLIC_FACTS, READER_REPORT]);
 
 /** The direct run, recorded. Returns the record and the JSON a `--json` run prints. */
 export async function runDirect(c: DirectContext) {
@@ -403,6 +420,8 @@ export async function runDirect(c: DirectContext) {
   const method = store.getMethod(c.L)?.text ?? '';
   // What an editor would ask before the draft: only the person's answers reach the writer.
   const asking = await editorQuestions(c, method, route.kind ?? null);
+  // under `atelier run` at a terminal, the questions are done (or there were none): say the writing has begun
+  if (askedByRun()) askOut().write('writing…\n');
   // WHAT THE PERSON SAID THE WORK IS, TO THE WRITER (an experiment, off unless ATELIER_CARD_TO_WRITER=1): the kind, the
   // reader and the purpose, only where the person said them (a card that is theirs), never a reading of their pieces.
   // The comparison of pieces written with and without it decides whether it becomes what every run does.
@@ -465,11 +484,11 @@ export async function runDirect(c: DirectContext) {
   // what the last check listed, with the words each reader named: the record keeps the sentences, the person reads both
   const listedHere: ToCheck[] = [];
   // why the review's piece was set aside on this run (it broke a rule the draft held, and the repair did not mend it)
-  let reviewOff = '';
+  let reviewOff = ''; let reviewBroke: string[] = [];
   const refine = async (draft: string): Promise<{ output: string; repair: RepairRecord | null }> => {
     draftText = draft;
     let output = draft;
-    if (reviewOff) { review = { ran: false, why: reviewOff }; grounded = undefined; hashtags = undefined; fixedHere = ''; }
+    if (reviewOff) { review = { ran: false, why: reviewOff, broke: reviewBroke }; grounded = undefined; hashtags = undefined; fixedHere = ''; }
     else if (argv.includes('--no-review')) review = { ran: false, why: 'turned off (--no-review)' };
     else {
       try {
@@ -558,7 +577,7 @@ export async function runDirect(c: DirectContext) {
       const broke = brokenOf(now).filter((id) => !held.includes(id));
       if (broke.length) {
         const named = broke.map((id) => now.checked.find((x) => x.requirementId === id)?.statement.replace(/\s+/g, ' ').trim().slice(0, 90) ?? id);
-        reviewOff = `${REVIEW_BROKE} (${named.join('; ')})`;
+        reviewOff = `${REVIEW_BROKE} (${named.join('; ')})`; reviewBroke = named;
         c.say(`(the self-review broke "${named[0]}", which the first draft held, so the first draft is delivered; what the review changed is not in it)`);
         return refine(draft);
       }

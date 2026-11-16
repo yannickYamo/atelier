@@ -36,7 +36,7 @@ import { compileArchitecture, type SkillArchitecture } from '../../core/architec
 import { applyEscalation } from '../../core/architecture/escalate.js';
 import { assertStandardUnchanged } from '../../core/architecture/replace-carrier.js';
 import { foldRepairs, foldProhibitions, mayPropose, repairKey, type EvaluationBasis } from '../../core/architecture/repair-memory.js';
-import { renderAgentSkill, assertPortable } from '../../renderers/agent-skill/render.js';
+import { renderAgentSkill, assertPortable, defaultDescription } from '../../renderers/agent-skill/render.js';
 import { genomeOf, mutationsOf, describeMutation, mutationKey, type Mutation } from '../../core/optimizer/genome.js';
 import { REFLECT_SYSTEM, REFLECT_SCHEMA, reflectPrompt, parseReflection, type Failure, type Attempt } from '../../core/optimizer/reflect.js';
 import { finalists, type Scores } from '../../core/optimizer/pareto.js';
@@ -270,7 +270,7 @@ function build(L: store.StoreLayout, name: string, v: StandardVersion, sv: { ski
     : arch;
   const exemplar = m.kind === 'EXEMPLAR' ? (m.on ? store.getExemplar(L) : null) : carried.exemplar;
   const contrast = m.kind === 'CONTRAST' ? (m.on ? contrastAvailable(L, v) : []) : carried.contrast;
-  const desc = sv.description ?? `Applies a compiled standard (${v.workType})`;
+  const desc = sv.description ?? defaultDescription(v.workType);
   const pkg = renderAgentSkill(v, nextArch, name, desc, exemplar, contrast, carried.voice, carried.method);
   assertPortable(pkg);
   const candidate = { skillVersionHash: sha(`${nextArch.architectureHash}|${pkg.packageHash}`), skillName: name,

@@ -81,7 +81,7 @@ describe('the first ten minutes', () => {
     // the guided part speaks in the person's words
     // the whole build speaks in the person's words: their method as they wrote it, and none of the machinery
     expect(INTERNAL.filter((w) => built.out.includes(w))).toEqual([]);
-    expect(built.out).toContain('Your method, which every piece follows:'); expect(built.out).toContain('- Close on one short plain sentence.');
+    expect(built.out).toContain('Your method, which every piece follows (where it and your pieces differ, your method decides):'); expect(built.out).toContain('- Close on one short plain sentence.');
     for (const hidden of ['You judge these yourself', 'never blocking', '--report', 'could not be read']) expect(built.out, hidden).not.toContain(hidden);
 
     // one more command writes with it, with nobody asked anything

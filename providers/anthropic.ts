@@ -150,7 +150,8 @@ export class AnthropicInferenceClient implements InferenceClient {
     if (!key && !authToken) {
       throw new Error(
         'Neither ANTHROPIC_API_KEY nor ANTHROPIC_AUTH_TOKEN is set.\n'
-        + '  export ANTHROPIC_API_KEY=sk-...        (or ANTHROPIC_AUTH_TOKEN=... behind a gateway)\n'
+        + '  export ANTHROPIC_API_KEY=sk-...\n'
+        + '  Behind a company gateway: export ANTHROPIC_AUTH_TOKEN=... and ANTHROPIC_BASE_URL=https://<your gateway>\n'
         + 'Atelier needs an inference provider for this step. Your corpus, standard and outputs '
         + 'stay on this machine; nothing is sent anywhere except that one call.',
       );

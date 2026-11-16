@@ -9,20 +9,18 @@
 // happens, and this is a way of showing it.
 
 import { deliveryLine } from '../../core/eval/consequence.js';
-import { execFile, spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
+import { ASK_FD } from '../direct.js';
 import { DATA, VALUED_OPTIONS, argv, die, flag, loadSession, boundMaterial } from '../runtime.js';
 import * as store from '../../core/state/store.js';
-import { renderRunCard, stateLine, type RunCard } from '../../core/eval/run-card.js';
-import type { EvaluationRecord } from '../../core/eval/record.js';
+import { renderRunCard, type RunCard } from '../../core/eval/run-card.js';
 import { OTHER_MODEL_NOTE, DECLINED_NOTE } from '../guided.js';
-import { GRAMMAR_LISTED } from '../../core/observers/grammar.js';
 import { planFor } from '../../core/plan/execution-plan.js';
 import type { EvalSummary } from '../../core/eval/summary.js';
 import { listEvals } from '../../core/state/eval-store.js';
 import type { StandardVersion, InferredItem } from '../../core/state/canonical-state.js';
-import { ACCEPTED_UNREAD } from '../../core/eval/record-build.js';
+import { OUTCOME_SAID, outcomeOf, foundLines, shortLine } from '../../core/eval/wording.js';
 import { inferredLines } from '../../core/loop/inferred.js';
-import { REVIEW_BROKE } from '../direct.js';
 
 export interface EngineRun { readonly output: string | null; readonly invocationId: string; readonly costUsd: number; readonly cut?: readonly string[]; readonly toCheck: readonly string[];
   readonly report: readonly string[]; readonly eval: EvalSummary | null;
@@ -129,76 +127,6 @@ function skillFor(named: string | null): string {
 /** Does the skill check the work against material, with none given? Said before the draft, and never a refusal. */
 const needsMaterial = (std: Pick<StandardVersion, 'requirements'>, L: store.StoreLayout): boolean => planFor(std).readsMaterial && !store.getMaterial(L).length && !boundMaterial().length;
 
-/** The three outcomes a person reads. The owner's table decides which (core/eval/consequence.ts); these are its words. */
-export type Outcome = 'ready' | 'look' | 'fix';
-export const OUTCOME_SAID: Readonly<Record<Outcome, string>> = { ready: 'Ready', look: 'Needs a look', fix: 'Needs a fix' };
-/** A rule no check could read on this piece (no notes to trace a figure to) is named under the piece and is nothing to look at. */
-const NOT_CHECKED = '  Not checked on this piece: ';
-/** A rule a check reads in part, and which held on the part it reads: named, and nothing to look at. */
-const HELD_PART = '  Held where it is checked: ';
-export const outcomeOf = (decision: string | undefined, state: string | null | undefined, found: readonly string[] = []): Outcome =>
-  decision === 'BLOCK' || state === 'BLOCKED' ? 'fix'
-    : decision === 'PERSON' || (decision === 'SHIP_LABELLED' && found.some((l) => !l.startsWith(NOT_CHECKED) && !l.startsWith(HELD_PART))) ? 'look' : 'ready';
-
-/**
- * WHAT A CHECK FOUND AND LEFT TO THE PERSON, one line each, in their rule's words: a rule not met, a possible slip, a
- * specific to confirm, a rule no check could read on this piece. The short form never hides something that is theirs.
- */
-export function foundLines(r: EvaluationRecord): string[] {
-  const out: string[] = [];
-  const said = (e: EvaluationRecord['entries'][number]): string => e.statement.replace(/\s+/g, ' ').trim().slice(0, 90);
-  for (const e of r.entries) {
-    const ev = e.observation.evidence ?? '';
-    if (e.result === 'PASS' || e.result === 'NOT_APPLICABLE') continue;
-    if (e.required && e.result === 'FAIL') { out.push(`  Not met: ${said(e)}${ev ? ` (${ev})` : ''}`); continue; }
-    // a rule the person accepted with no check is theirs to judge, counted in the line above: nothing was found on it
-    if (!ev || ev === ACCEPTED_UNREAD) continue;
-    // Of the grammar checker's list, only a slip it can name the correction of is said here; a name, a heading or a
-    // word it merely does not know stays in the full account (--report), where every finding is listed.
-    if (ev.startsWith(GRAMMAR_LISTED) || ev.includes('listed to check: ')) { for (const m of slipsOf(e)) out.push(`  Possible slip: ${m}`); continue; }
-    if (e.reason === 'LISTED_FOR_YOU') out.push(`  To check: ${ev}`);
-    else if (e.reason === 'PARTLY_CHECKED') out.push(`${HELD_PART}${said(e)} (${ev})`);
-    // a rule a check exists for and could not read on this piece (no material to trace a figure to): named, with why
-    else if (e.required && !(e.reason === 'NOT_MACHINE_CHECKABLE' && e.observation.proposition === null)) out.push(`${NOT_CHECKED}${said(e)} (${ev})`);
-  }
-  return out;
-}
-
-/**
- * WHAT THE CHECKS FOUND, IN ONE SENTENCE A PERSON CAN READ WITHOUT KNOWING THE MACHINERY. It never says more than was
- * observed: rules a check measured are counted as measured, and a rule that is a matter of judgement is said to be one,
- * given to the writer, not counted as verified and not handed to the reader as work.
- */
-function shortLine(r: EvaluationRecord): string {
-  if (r.state === 'VERIFIED') return 'every rule was measured and held.';
-  const required = r.entries.filter((e) => e.required && e.result !== 'NOT_APPLICABLE' && e.reason !== 'LISTED_FOR_YOU');
-  // The grammar check reads the whole piece and lists what it is unsure of (a name, a heading, a word it does not
-  // know). With no slip it can name the correction of, it was read and nothing certain was found: counted as measured.
-  // A slip with a correction is said under this line (`slipsOf`), and counted here as that.
-  const listed = (e: EvaluationRecord['entries'][number]): boolean => (e.observation.evidence ?? '').startsWith(GRAMMAR_LISTED);
-  const slip = required.filter((e) => listed(e) && slipsOf(e).length > 0).length;
-  const held = required.filter((e) => e.result === 'PASS' || (listed(e) && !slipsOf(e).length)).length;
-  // A RULE NOT MET LEADS THE SENTENCE: it never reads "nothing broke your rules" over a line that says one did.
-  const failed = required.filter((e) => e.result === 'FAIL').length;
-  const open = required.filter((e) => e.result !== 'PASS' && e.result !== 'FAIL' && !listed(e));
-  if (!open.length && !slip && !failed) return held === required.length && required.every((e) => e.result === 'PASS') ? stateLine(r) : `nothing broke your rules (${held} measured).`;
-  // A rule no check reads is a judgement call. A rule a check reads in part, could not read here (no material given),
-  // or reads without being relied on is something else: not checked in full on this piece, and said as that.
-  const judged = open.filter((e) => e.reason === 'NOT_MACHINE_CHECKABLE' && e.observation.proposition === null).length; const partly = open.filter((e) => e.reason === 'PARTLY_CHECKED').length; const unread = open.length - judged - partly;
-  const parts = [`${held} measured`,
-    ...(judged ? [`${judged} ${judged === 1 ? 'is a judgement call' : 'are judgement calls'} the writer was given in your words`] : []),
-    ...(partly ? [`${partly} held where ${partly === 1 ? 'it is' : 'they are'} checked`] : []),
-    ...(unread ? [`${unread} could not be checked on this piece, named below`] : []),
-    ...(slip ? ['a possible slip is listed below'] : [])];
-  return `${failed ? `${failed} of your rules ${failed === 1 ? 'is' : 'are'} not met, named below` : 'nothing broke your rules'} (${parts.join('; ')}).`;
-}
-
-/** The slips the grammar check can name the correction of, as it wrote them: `"are" (subject–verb agreement: "are" → "is")`. */
-const slipsOf = (e: EvaluationRecord['entries'][number]): string[] => {
-  const ev = e.observation.evidence ?? '';
-  return ev.startsWith(GRAMMAR_LISTED) || ev.includes('listed to check: ') ? ev.match(/"[^"]*" \([^()]*→[^()]*\)/g) ?? [] : [];
-};
-
 export async function run(): Promise<void> {
   const typed = sortArgs(argv.slice(1));
   const name = skillFor(typed.skill ?? flag('--skill') ?? null);
@@ -220,15 +148,30 @@ export async function run(): Promise<void> {
   // NEVER REFUSED FOR WHAT IS MISSING: the work is written, the rules that needed the material are shown as not
   // checked, and the person is told how to have them checked.
   if (std && needsMaterial(std, L)) process.stderr.write('This skill checks the work against material you give it, and none was given: those rules will show as not checked. To have them checked, add --with <file>.\n');
-  if (process.stderr.isTTY) process.stderr.write('writing…\n');
+  // AT A TERMINAL THE EDITOR'S QUESTIONS COME BEFORE THE DRAFT, IN THIS RUN: the engine is handed the person's keyboard and
+  // a descriptor onto their screen (cli/direct.ts, ASK_FD), and its two streams are still read whole. Anywhere else (a
+  // pipe, a host, a script) nothing is asked, and the open questions are listed beside the piece as before.
+  const asking = process.stdin.isTTY && process.stderr.isTTY;
+  if (process.stderr.isTTY) process.stderr.write(asking ? 'reading your request…\n' : 'writing…\n');
   const engine = await new Promise<{ code: number; out: string; err: string }>((done) => {
-    execFile(process.execPath, [...process.execArgv, process.argv[1], ...engineArgs, '--json'], { maxBuffer: 1 << 26, env: process.env },
-      (e, out, err) => { done({ code: e ? (typeof e.code === 'number' ? e.code : 1) : 0, out, err }); });
+    const child = spawn(process.execPath, [...process.execArgv, process.argv[1], ...engineArgs, '--json'],
+      { env: { ...process.env, [ASK_FD]: asking ? '3' : '' }, stdio: asking ? ['inherit', 'pipe', 'pipe', process.stderr] : ['ignore', 'pipe', 'pipe'] });
+    let out = ''; let err = '';
+    child.stdout?.setEncoding('utf8').on('data', (d: string) => { out += d; });
+    child.stderr?.setEncoding('utf8').on('data', (d: string) => { err += d; });
+    child.on('error', (e) => { done({ code: 1, out, err: `${err}atelier: ${e.message}\n` }); });
+    child.on('close', (code) => { done({ code: code ?? 1, out, err }); });
   });
   let result: EngineRun | null = null;
   try { result = JSON.parse(engine.out) as EngineRun; } catch { /* the engine said why on its own stream */ }
   const work = result?.output ?? null;
-  if (!result || work === null) { process.stderr.write(engine.err); process.exitCode = engine.code || 1; return; }
+  // A RUN THAT FAILED SAYS WHY, AND ONLY THAT: the engine's error, from its first line on (what to set, what to run again). Its account of the run so far (which reader
+  // ran, what was not bound) is the report's, shown whole with --report or where no error line was written.
+  if (!result || work === null) {
+    const at = engine.err.search(/^atelier: /m);
+    process.stderr.write(typed.report || at < 0 ? engine.err : engine.err.slice(at));
+    process.exitCode = engine.code || 1; return;
+  }
   // the engine's one line on a change of model (cli/commands/invoke.ts, `checkedBinding`) is the person's to read
   for (const l of engine.err.split('\n')) if (l.startsWith(OTHER_MODEL_NOTE) || l.startsWith(DECLINED_NOTE)) process.stderr.write(`${l}\n`);
   const goes = result.eval?.record?.delivery?.decision;
@@ -236,19 +179,22 @@ export async function run(): Promise<void> {
   // handed over. What to look at or fix is listed under it; the table's own account stays behind --report.
   const card = cardFor(result);
   const found = card ? foundLines(card.record) : [];
-  const outcome = outcomeOf(goes, result.eval?.record?.state, found);
+  const outcome = outcomeOf(goes, result.eval?.record?.state, card?.record);
   const head = !card || typed.report || outcome === 'ready' ? '' : `${OUTCOME_SAID[outcome]}: see under the piece.\n\n`;
   console.log(`${head}${work.trimEnd()}\n`);
   // A FIX MADE IN PLACE SAYS WHAT CHANGED: sentences changed of total, and each span before and after.
   for (const l of result.fix?.lines ?? []) console.log(l);
   if (result.fix) console.log('');
+  // A FIX THAT COULD NOT BE MADE IN PLACE WROTE THE PIECE AGAIN WHOLE, and says so: other sentences may have changed.
+  if (!result.fix && typed.rest.includes('--fix-of')) console.log('The whole piece was written again with what you said, not only the sentences you named: other sentences may have changed.\n');
   // BESIDE THE WORK, NEVER IN IT: what the run decided for the person and what it was not given, with what to add (a fix in
   // place says its own, in its lines above)
   if (!result.fix) {
-    const why = (result.direct as { review?: { ran: boolean; why?: string } } | undefined)?.review?.why ?? '';
-    const beside = [...(why.startsWith(REVIEW_BROKE) ? [`This is the first draft: the review of it was not used, because ${why}.`] : []), ...inferredLines(result.inferred ?? []), ...(typed.report && result.ownWords && !result.ownWords.checked && result.ownWords.why ? [`Not read for sentences about the piece's own making: ${result.ownWords.why}.`] : [])];
+    const broke = (result.direct as { review?: { broke?: readonly string[] } } | undefined)?.review?.broke ?? [];
+    const beside = [...(broke.length ? [`This is the first draft: the review of it was not used, because it broke a rule the draft held (${broke.join('; ')}).`] : []), ...inferredLines(result.inferred ?? []), ...(typed.report && result.ownWords && !result.ownWords.checked && result.ownWords.why ? [`Not read for sentences about the piece's own making: ${result.ownWords.why}.`] : [])];
     if (beside.length) console.log(`${beside.join('\n')}\n`);
-    const open = openQuestionLines(result);
+    // asked at the terminal before the draft, a question left unanswered was the person's choice: not listed again
+    const open = asking ? [] : openQuestionLines(result);
     if (open.length) console.log(`${open.join('\n')}\n`);
   }
   // THE EVALUATION IS PART OF WHAT A RUN RETURNS: one line on what the checks found, each thing left to the person, and

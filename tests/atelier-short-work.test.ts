@@ -124,8 +124,8 @@ describe('through the binary', () => {
     writeFileSync(join(proj, 'copied.md'), GOOD[3]);
     const v = run(['verify', '--skill', 'tw', 'copied.md', '--allow-unsourced']);
     expect(v.code).toBe(1);
-    expect(v.out).toMatch(/^Needs a fix · /m);
-    expect(v.out).toMatch(/^ {2}✗ No passage is lifted from one of your examples: a run of \d+ words is shared/m);
+    expect(v.out).toMatch(/^Needs a fix\.$/m);
+    expect(v.out).toMatch(/^ {2}Not met: No passage is lifted from one of your examples \(a run of \d+ words is shared/m);
   }, 300_000);
 
   it('verify --profile on a build with no model reads a pooled rate as the rule states it, never "n/a"', () => {

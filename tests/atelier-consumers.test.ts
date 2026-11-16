@@ -144,7 +144,7 @@ async function traced(how: Build): Promise<Traced> {
   };
   await setBackend({ byTool: { emit_persona: PERSONA, emit_holds_back: { ids: [] },
     // what the work is, read at the build and told to the editor's questions on the run
-    emit_purpose_card: { kind: 'a post on a tool', kindQuote: 'I would start with the riskiest line', reader: null, readerQuote: null, purpose: 'Says where to start.', settles: ['where to start'] },
+    emit_purpose_card: { kind: 'a post on a tool', kindQuote: 'I would start with the riskiest line', reader: null, readerQuote: null, purpose: 'Says where to start.', purposeQuote: 'I would start with the riskiest line', settles: ['where to start'] },
     // discovery: the rules read off the pieces, matched and observed on the pieces held back, then accepted
     emit_factors: { factors: [factor('Lead with the decision, then the reasoning.'), factor('Close on a plain instruction.')] },
     emit_matches: { matches: [{ leftIndex: 0, matchedRightIndex: 0 }, { leftIndex: 1, matchedRightIndex: 1 }] },

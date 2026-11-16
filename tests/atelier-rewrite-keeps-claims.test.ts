@@ -210,14 +210,14 @@ describe('through the binary: class and UNSOURCED on verify, invoke and the MCP 
     const { proj, run } = seed();
     const f = join(proj, 'd.md'); writeFileSync(f, 'According to a 2023 survey, 73% of teams drink coffee.');
     // with nothing bound there is nothing to check a figure against: it is listed, and nothing fails
-    const unbound = run('verify', '--skill', 'nodrink', f);
+    const unbound = run('verify', '--skill', 'nodrink', f, '--report');
     expect(unbound.code).toBe(0);
     expect(unbound.out).toContain('no material was bound to check against');
     const other = join(proj, 'other.md'); writeFileSync(other, 'We like coffee in the morning.');
     run('material', '--skill', 'nodrink', other);
     // the owner chose cut, and no qualified reader reads here: the pattern check never cuts nor fails, the level's action
     // stands (a standard with no latitude is held grounded: flagged for review)
-    const bad = run('verify', '--skill', 'nodrink', f);
+    const bad = run('verify', '--skill', 'nodrink', f, '--report');
     expect(bad.code, bad.out).toBe(0);
     expect(bad.out).toContain('the skill is held grounded');
     expect(bad.out).toContain('73% of teams drink coffee');

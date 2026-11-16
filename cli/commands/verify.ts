@@ -24,7 +24,7 @@
 // claim or moves a banned move onto a sibling is refused), and prints the repaired text. Nothing else
 // in the text is touched: it keeps its own voice.
 
-import { OUTCOME_SAID, outcomeOf, foundLines } from './run.js';
+import { verdictLines, outcomeWord } from '../../core/eval/wording.js';
 import { profileOf, bandWords } from '../../core/observers/selection.js';
 import { sayPooled } from '../../core/observers/pooled.js';
 import { checksFor, shortFormRequest } from '../checks.js';
@@ -43,7 +43,7 @@ import type { InferenceClient } from '../../core/inference/client.js';
 import { describeTaste, vetoMisses, actsAsMiss } from '../../core/taste/reader.js';
 import { recordTaste, readerModel } from './taste.js';
 import { certificateFor, tasteStandingFor, claimStandingOf, recordHead } from '../../core/eval/certificate.js';
-import { recordForText } from '../eval-run.js';
+import { recordForText, spansByEntry } from '../eval-run.js';
 import { stateLine } from '../../core/eval/run-card.js';
 import { partlyChecked, blocks, type EvaluationRecord } from '../../core/eval/record.js';
 import { deliveryLine } from '../../core/eval/consequence.js';
@@ -123,6 +123,12 @@ export async function verify(): Promise<void> {
   const named = [...store.getMaterial(L), ...boundMaterial()].map((m) => ({ name: m.name, text: m.text }));
   const checks = { ...checksFor(L, { material, task: flag('--task') ?? '', context: { ...(flag('--task') ? { request: flag('--task') } : {}), material: named }, guardClaims: !argv.includes('--allow-unsourced'), placeholders: argv.includes('--placeholders') }),
     ...(short.format ? { format: short.format } : {}), ...(short.transfer ? { doesNotApply: short.transfer.doesNotApply } : {}) };
+  // The claim reader's standing (which instrument reads, whether it is relied on) is the full account's: said with
+  // --report, and without it only where the reader failed or was made to gate unmeasured.
+  const sensorNotes = (): void => {
+    const sn = checks.claimSensor;
+    if (sn && (argv.includes('--report') || sn.degraded || (sn.gate === 'reader' && !sn.qualified))) for (const n of sn.notes) console.error(`(${n})`);
+  };
   if (argv.includes('--repair')) {
     const budget = { spentUsd: 0, capUsd: numericFlag('--cap', 1), maxCalls: numericFlag('--max-calls', 4) };
     // The model is asked for only when a rewrite needs it: a repair that is all mechanical (a known misspelling, a/an,
@@ -130,7 +136,7 @@ export async function verify(): Promise<void> {
     let model: InferenceClient | null = null;
     const client: InferenceClient = { complete: (req) => { if (!model) { assertReachable('target'); model = clientAndBinding('target').client; } return model.complete(req); } };
     const r = await refineToStandard(client, budget, name, v, text, REPAIR_PASSES, checks);
-    for (const n of checks.claimSensor?.notes ?? []) console.error(`(${n})`);
+    sensorNotes();
     // WHAT WAS LISTED, NOT CHANGED: a grammar rule whose findings are only listed is unverified, never held. Its items
     // are said here, in both outputs, so "nothing changed" never reads as "every rule holds".
     const listed = r.report.checked.filter(grammarListed).map((c) => ({ rule: c.requirementId, statement: c.statement,
@@ -155,7 +161,7 @@ export async function verify(): Promise<void> {
     return;
   }
   const report = await checkDraftAsync(name, v, text, checks);
-  for (const n of checks.claimSensor?.notes ?? []) console.error(`(${n})`);
+  sensorNotes();
   // The reading-based rules, on request (`--taste`): this calls a model, and every count here is free.
   // Read first, so `--json` prints one object holding both.
   let taste: { text: string; failed: boolean; verdicts: unknown[] } | null = null;
@@ -220,17 +226,19 @@ export async function verify(): Promise<void> {
       ...(taste ? { taste: { failed: taste.failed, verdicts: taste.verdicts } } : {}) }, null, 1));
   } else {
     // THE OUTCOME FIRST, in the three words a run uses (cli/commands/run.ts); the whole account follows as before.
-    const found = foundLines(record);
-    const outcome = OUTCOME_SAID[outcomeOf(record.delivery?.decision, record.state, found)];
-    console.log(`${outcome}.`);
-    for (const l of found) console.log(l);
-    console.log('');
-    console.log(describeVerify(report, partlyChecked(record)));
-    console.log(`\n${outcome} · ${stateLine(record)}`);
-    if (record.delivery) console.log(deliveryLine(record.delivery, record.state));
-    // WHAT FAILED, BY NAME: a check the record holds beyond the rule lines above (copying from an example, the request's
-    // own checks) is named here, so the text output says what blocked the work, not only --json.
-    for (const e of record.entries.filter(blocks)) console.log(`  ✗ ${e.statement.replace(/[.]$/, '')}${e.observation.evidence ? `: ${e.observation.evidence}` : ''}`);
+    const said = verdictLines(record, spansByEntry(report));
+    const outcome = outcomeWord(record);
+    for (const l of said) console.log(l);
+    // THE WHOLE ACCOUNT, RULE BY RULE, IS ONE FLAG AWAY (--report, or any flag that asks for a part of it): the table
+    // of checks, where the record stands and what delivery did with it. A person or a host reads the lines above.
+    const whole = argv.includes('--report') || argv.includes('--profile') || argv.includes('--taste');
+    if (!whole) console.log(`Every check, rule by rule: add --report`);
+    else {
+      console.log('');
+      console.log(describeVerify(report, partlyChecked(record)));
+      console.log(`\n${outcome} · ${stateLine(record)}`);
+      if (record.delivery) console.log(deliveryLine(record.delivery, record.state));
+    }
     if (report.checked.some((c) => c.requirementId === 'UNSOURCED' && c.result.verdict === 'VIOLATED')) {
       console.log(`\nUNSOURCED: if a flagged story or figure is yours, add it to the skill's material (atelier material --skill ${name} <file>) or pass --allow-unsourced.`);
     }

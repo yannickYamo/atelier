@@ -15,10 +15,12 @@ import { entry, recordOf, type Entry, type EvaluationRecord, type Observation, t
 import { GRAMMAR_NOT_RUN, GRAMMAR_LISTED } from '../observers/grammar.js';
 import { MATERIAL_UNREAD } from '../observers/written.js';
 /** How the record says a grammar rule whose engine could not run: not checked, though left for the person. */
-export const GRAMMAR_NOT_CHECKED = 'grammar not checked';
+const GRAMMAR_NOT_CHECKED = 'grammar not checked';
 
 
-export interface CheckedLine { readonly id: string; readonly statement?: string; readonly required: boolean; readonly verdict: 'MET' | 'VIOLATED' | 'NOT_APPLICABLE'; readonly detail: string }
+export interface CheckedLine { readonly id: string; readonly statement?: string; readonly required: boolean; readonly verdict: 'MET' | 'VIOLATED' | 'NOT_APPLICABLE'; readonly detail: string;
+  /** the grammar check's list on this text: the slips it names the correction of, as it words them (empty: it listed, and named none) */
+  readonly slips?: readonly string[] }
 
 export interface RecordFacts {
   /** the standard's live requirements, in the owner's order */
@@ -95,7 +97,7 @@ function standardEntry(p: PlannedRule, f: RecordFacts): Entry {
 }
 
 /** The evidence of a rule the person accepted with no check: theirs to judge, and nothing a run found. */
-export const ACCEPTED_UNREAD = 'accepted by you as unmeasured: no check reads it, and the run is not held for it';
+const ACCEPTED_UNREAD = 'accepted by you as unmeasured: no check reads it, and the run is not held for it';
 
 /**
  * THE PART THE OWNER ACCEPTED UNREAD. A rule they named as accepted unmeasured that a check reads only in part ("one
@@ -108,7 +110,7 @@ function acceptedPart(p: PlannedRule, e: Entry, f: RecordFacts): Entry {
   if (e.reason !== 'PARTLY_CHECKED' && e.reason !== 'OBSERVER_UNQUALIFIED') return e;
   const part = e.reason === 'PARTLY_CHECKED' ? e.observation.unchecked ?? 'the rest of it' : 'what its check, not qualified on your examples, reads';
   return entry({ id: e.id, dimension: e.dimension, source: e.source, statement: e.statement, required: e.required,
-    observation: { ...e.observation, evidence: `${e.observation.evidence ? `${e.observation.evidence}; ` : ''}accepted by you as unmeasured for ${part}`, listed: true }, verdict: null });
+    observation: { ...e.observation, evidence: `${e.observation.evidence ? `${e.observation.evidence}; ` : ''}accepted by you as unmeasured for ${part}`, listed: true, accepted: true }, verdict: null });
 }
 
 function readEntry(p: PlannedRule, f: RecordFacts): Entry {
@@ -163,7 +165,7 @@ function plannedEntry(p: PlannedRule, f: RecordFacts): Entry {
   const base = { id: p.id, statement: p.statement, dimension: required ? 'STANDARD' as const : 'HABIT' as const, source: p.stated ? 'METHOD' as const : 'EXAMPLE' as const, required };
   const o = p.check;
   // ACCEPTED UNMEASURED BY THE OWNER: no check reads it, and they said a run need not wait on it. Listed, never a review.
-  if (!o && required && f.accepted?.has(p.id)) return entry({ ...base, observation: { ...NOTHING, evidence: ACCEPTED_UNREAD, listed: true }, verdict: null });
+  if (!o && required && f.accepted?.has(p.id)) return entry({ ...base, observation: { ...NOTHING, evidence: ACCEPTED_UNREAD, listed: true, accepted: true }, verdict: null });
   // SET ASIDE FOR THIS REQUEST, a step no check reads as well: recorded as set aside (the state still leaves it to the
   // owner), never as unread, so delivery never waits on a step the request lifted (core/eval/consequence.ts).
   const aside = f.waived.get(p.id);
@@ -182,7 +184,7 @@ function plannedEntry(p: PlannedRule, f: RecordFacts): Entry {
     : p.notEnforced === 'RELATED_CHECK' ? 'This check reads something near your rule and not the rule itself, so it blocks nothing'
     : p.notEnforced === 'UNQUALIFIED' ? 'This check has not qualified on your examples, so it blocks nothing and the rule is yours to read' : 'You have not made this check required, so it blocks nothing';
   const seen = (evidence: string | null): Observation => ({ proposition: o.proposition, coverage: o.coverage, qualification: held ? 'UNQUALIFIED' : o.observer === 'CHECK' ? 'QUALIFIED' : 'DETERMINISTIC',
-    evidence: held && evidence ? `${evidence}. ${whyNot}` : evidence, ...(o.unchecked ? { unchecked: o.unchecked } : {}), ...(held ? {} : { proof: proofOf(p, f) }) });
+    evidence: held && evidence ? `${evidence}. ${whyNot}` : evidence, ...(held && evidence ? { saw: evidence } : {}), ...(o.unchecked ? { unchecked: o.unchecked } : {}), ...(held ? {} : { proof: proofOf(p, f) }), ...(line?.slips ? { slips: line.slips } : {}) });
   // A REQUIRED rule held back for want of material is not set aside: it was not checked, and the work cannot read as
   // VERIFIED on its account (a run is never refused for material it was not given; neither is it excused).
   if (why === MATERIAL_NOT_BOUND && required && p.enforced) return entry({ ...base, observation: { ...seen(why), coverage: 'NONE', incomplete: `not checked: ${p.id} needs material this run was not given` }, verdict: null });
@@ -203,7 +205,7 @@ function plannedEntry(p: PlannedRule, f: RecordFacts): Entry {
   const editorial = !p.stated;
   if (line.verdict === 'NOT_APPLICABLE' && line.detail.startsWith(GRAMMAR_NOT_RUN)) {
     return editorial
-      ? entry({ ...base, observation: { ...seen(`${GRAMMAR_NOT_CHECKED}: ${line.detail.slice(GRAMMAR_NOT_RUN.length).replace(/^:\s*/, '')}`), coverage: 'NONE', listed: true }, verdict: null })
+      ? entry({ ...base, observation: { ...seen(`${GRAMMAR_NOT_CHECKED}: ${line.detail.slice(GRAMMAR_NOT_RUN.length).replace(/^:\s*/, '')}`), coverage: 'NONE', listed: true, notRun: true }, verdict: null })
       : entry({ ...base, observation: { ...seen(line.detail), coverage: 'NONE', incomplete: `not checked: ${p.id} (${line.detail})` }, verdict: null });
   }
   if (line.verdict === 'NOT_APPLICABLE' && line.detail.startsWith(GRAMMAR_LISTED)) {
@@ -252,8 +254,8 @@ function evidenceEntries(f: RecordFacts): Entry[] {
       const evidence = c.delivered ? `${c.delivered} not found in it, and still in the text${cut}` : c.open ? `${c.open} could not be found in it: listed for you${cut}`
         : c.cut ? `${c.cut} not found in it: ${done} before delivery; the rest found` : 'all found';
       // A specific left open is a part of the text nobody could vouch for: the reading is of the rest.
-      out.push(entry({ ...base, observation: { proposition, coverage: c.open && !c.delivered ? 'PARTIAL' : 'FULL', qualification: c.qualified ? 'QUALIFIED' : 'UNQUALIFIED', evidence: c.qualified || !c.why ? evidence : `${evidence} (${c.why})`,
-        ...(c.open && !c.delivered ? { unchecked: `${c.open} specific${c.open === 1 ? '' : 's'} listed for you` } : {}), ...undecided, ...(c.qualified ? { proof: { kind: 'definitional' as const } } : {}) }, verdict: c.delivered ? 'VIOLATED' : 'MET' }));
+      out.push(entry({ ...base, observation: { proposition, coverage: c.open && !c.delivered ? 'PARTIAL' : 'FULL', qualification: c.qualified ? 'QUALIFIED' : 'UNQUALIFIED', evidence: c.qualified || !c.why ? evidence : `${evidence} (${c.why})`, ...(c.qualified || !c.why ? {} : { saw: evidence }),
+        ...(c.open && !c.delivered ? { unchecked: `${c.open} specific${c.open === 1 ? '' : 's'} listed for you`, toConfirm: c.open } : {}), ...undecided, ...(c.qualified ? { proof: { kind: 'definitional' as const } } : {}) }, verdict: c.delivered ? 'VIOLATED' : 'MET' }));
     }
   }
   if (f.copying) {

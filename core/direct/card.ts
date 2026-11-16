@@ -28,48 +28,52 @@ export interface PurposeCard {
   /** the reading's key (id, version and the pieces' hash): read again only when it changes */
   readonly reading?: string;
 }
-export interface CardInput { readonly purpose: string | null; readonly pieces: readonly { readonly name: string; readonly text: string }[] }
+export interface CardInput { readonly purpose: string | null; readonly pieces: readonly { readonly name: string; readonly text: string }[];
+  /** the author's method note, where they wrote one: it often says who the work is for and what it is to do, which the pieces only show */
+  readonly method?: string | null }
 
 /** The most decisions a card says its kind of work settles. */
 export const SETTLES_MAX = 5;
 
-export const CARD_SYSTEM = `You read a set of one author's finished pieces, and the one line they gave for what the pieces are for where they gave one. Say what this work is, as an editor who knows this kind of work would:
+export const CARD_SYSTEM = `You read a set of one author's finished pieces, with the one line they gave for what the pieces are for and their own note on how they work, where they gave them. Say what this work is, as an editor who knows this kind of work would:
 
 - kind: what the pieces are, in a few words ("a pricing memo", "a reply to a customer's complaint", "a post on engineering practice").
-- kindQuote: a short passage copied exactly from a piece or from the stated purpose that shows it.
+- kindQuote: a short passage copied exactly from a piece, the stated purpose or the author's note that shows it.
 - reader: who reads them, and in what situation ("a customer who was billed twice", "an engineer choosing a tool").
-- readerQuote: a short passage copied exactly from a piece or from the stated purpose that shows it.
+- readerQuote: a short passage copied exactly from a piece, the stated purpose or the author's note that shows it.
 - purpose: what a piece of this kind is for: what it gets the reader to know, do or decide. One sentence.
+- purposeQuote: a short passage copied exactly from a piece, the stated purpose or the author's note that shows it.
 - settles: the decisions every piece of this kind has to settle before it is written, at most five, each in a few words ("the price, and what it is compared with", "what is offered to make it right"). What any piece of writing settles (a title, a length) is not one of them.
 
-Say only what the pieces show. Where they do not show a reader, give null for it and its quote.`;
+Say only what the pieces and the author's own words show. Where the author's note says who reads the work or what it is for, that is their word: use it. Where nothing shows a reader or a purpose, give null for it and its quote; never a guess, and never a sentence saying it is unclear.`;
 
 export const CARD_SCHEMA: Record<string, unknown> = {
   type: 'object', properties: {
     kind: { type: ['string', 'null'] }, kindQuote: { type: ['string', 'null'] },
     reader: { type: ['string', 'null'] }, readerQuote: { type: ['string', 'null'] },
-    purpose: { type: ['string', 'null'] }, settles: { type: 'array', items: { type: 'string' } },
-  }, required: ['kind', 'kindQuote', 'reader', 'readerQuote', 'purpose', 'settles'], additionalProperties: false,
+    purpose: { type: ['string', 'null'] }, purposeQuote: { type: ['string', 'null'] }, settles: { type: 'array', items: { type: 'string' } },
+  }, required: ['kind', 'kindQuote', 'reader', 'readerQuote', 'purpose', 'purposeQuote', 'settles'], additionalProperties: false,
 };
 
 const clip = (s: unknown, n: number): string => (typeof s === 'string' ? s.replace(/\s+/g, ' ').trim().slice(0, n) : '');
 const flat = (s: string): string => s.replace(/[‘’]/g, "'").replace(/[“”]/g, '"').replace(/\s+/g, ' ').trim().toLowerCase();
 
-/** Whether a quote of eight characters or more is in the pieces or the stated purpose (a form check). */
+/** Whether a quote of eight characters or more is in the pieces, the stated purpose or the author's note (a form check). */
 const found = (quote: unknown, input: CardInput): boolean => {
   const q = flat(clip(quote, 300));
-  return q.length >= 8 && [input.purpose ?? '', ...input.pieces.map((p) => p.text)].some((t) => flat(t).includes(q));
+  return q.length >= 8 && [input.purpose ?? '', input.method ?? '', ...input.pieces.map((p) => p.text)].some((t) => flat(t).includes(q));
 };
 
 export interface CardReading { readonly card: PurposeCard | null }
 
 export const PURPOSE_CARD: Reading<CardInput, CardReading> = {
-  id: 'purpose-card', version: '1',
+  id: 'purpose-card', version: '2',
   system: CARD_SYSTEM, schema: CARD_SCHEMA,
   toolName: 'emit_purpose_card', toolDescription: 'What this work is: its kind, its reader, its purpose, and the decisions every piece of it settles.',
   maxTokens: 800, estimateUsd: 0.02,
   prompt(input) {
     return [input.purpose?.trim() ? `What the author said the pieces are for: ${input.purpose.trim()}` : 'The author said nothing about what the pieces are for.',
+      ...(input.method?.trim() ? [`The author's note on how they work:\n<method>\n${input.method.trim().slice(0, 6000)}\n</method>`] : []),
       `The pieces:\n${input.pieces.slice(0, 12).map((p) => `<piece name="${p.name}">\n${p.text.slice(0, 4000)}\n</piece>`).join('\n\n')}`].join('\n\n');
   },
   // no pieces, nothing to read
@@ -82,10 +86,12 @@ export const PURPOSE_CARD: Reading<CardInput, CardReading> = {
     const card: PurposeCard = {
       kind: kind && found(r.kindQuote, input) ? kind : null,
       reader: reader && found(r.readerQuote, input) ? reader : null,
-      purpose: clip(r.purpose, 240) || null,
+      // A PURPOSE STANDS ON A QUOTE, as the kind and the reader do: one nothing shows is left empty, so the build asks
+      // the person for it. A hedge ("unclear from the pieces") was once kept as the purpose, and nothing was asked.
+      purpose: clip(r.purpose, 240) && found(r.purposeQuote, input) ? clip(r.purpose, 240) : null,
       settles, by: 'model',
     };
-    return { card: card.kind || card.reader || card.settles.length ? card : null };
+    return { card: card.kind || card.reader || card.purpose || card.settles.length ? card : null };
   },
   floor() { return { card: null }; },
 };

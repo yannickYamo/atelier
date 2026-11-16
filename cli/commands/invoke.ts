@@ -112,7 +112,7 @@ import { checkSatisfiable, describeSatisfiability, type SatisfiabilityVerdict, d
 import { resolveProvenance } from '../../core/fidelity/provenance.js';
 
 import { runOnce, draftMaxTokens } from '../../core/loop/run-once.js';
-import { runDirect, directWhyNot, directMaxTokens } from '../direct.js';
+import { runDirect, directWhyNot, directMaxTokens, askedByRun, askOut } from '../direct.js';
 import { version } from '../help.js';
 import { writeAtomic } from '../../core/state/fs-atomic.js';
 import { compareBindings, describeMismatch, describeNewSurface, detectResolvedModelDrift, bindingHash } from '../../core/runtime/binding.js';
@@ -495,11 +495,12 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   // A SKILL WHOSE CHECKS AN EARLIER CHECK READER READ is said on every run, on either path, until it is built again.
   const stale = std ? staleChecks(L) : null;
   if (stale) report.say(`Note: ${stale}.`);
+  if (!(directNot === null && std) && askedByRun()) askOut().write('writing…\n');
   if (directNot === null && std) {
     const { client, binding } = checkedBinding(L, sv, false);
     const spentBefore = spentAtRoute;
     const d = await runDirect({ L, sv, std, name, asked, material, client, binding, spentBefore, settings: (checks) => Object.assign(settingsFor(checks, null, 1, '', null, std, heldFirst), { maxTokens: directMaxTokens() }), say: (l) => { report.say(l); }, detail: (l) => { report.detail(l); }, started,
-      held: heldFirst?.level ?? null, interactive: machine === null && process.stdin.isTTY && process.stdout.isTTY });
+      held: heldFirst?.level ?? null, interactive: (machine === null && process.stdin.isTTY && process.stdout.isTTY) || askedByRun() });
     const spent = finish(report, { rec: d.rec, sv, name, task: d.rec.input, asked, budget: d.budget, spentBefore });
     // `answer` is the piece with the specifics left for the person to check listed under it, as on the compiled path
     const lists = d.claimAct !== 'cut' || formatOf(flag('--class') ?? store.getDocClass(L))?.claims === 'list';

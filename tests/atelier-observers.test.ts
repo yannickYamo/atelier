@@ -136,7 +136,7 @@ describe('verify: any text, held to the standard', () => {
     let code = 0; let out: string;
     try { out = run('verify', '--skill', 'house', join(proj, 'draft.md')); } catch (e) { code = (e as { status: number }).status; out = (e as { stdout: string }).stdout; }
     expect(code).toBe(1);
-    expect(out).toMatch(/FAIL {2}x1/);
+    expect(out).toMatch(/^Needs a fix\.\n {2}Not met: /);
     expect(out).toMatch(/"leverage"/);
   });
 });

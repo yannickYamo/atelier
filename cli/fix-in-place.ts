@@ -164,9 +164,12 @@ export async function fixInPlace(c: FixInPlace): Promise<{ output: string; json:
   // THE WHOLE PIECE, CHECKED AGAIN: the standard, and the author's range where the skill has one.
   const report = await checkDraftAsync(c.name, c.std, text, checks).catch(() => null);
   const profile = fstore.getProfile(c.L);
+  // THE FULL ACCOUNT'S OWN LINES (--report): the range and where the record stands. What a person reads of the checks is
+  // said once, by the run, in the words every run uses (core/eval/wording.ts).
+  const account: string[] = [];
   if (profile) {
     const a = readFidelity(piece, profile); const b = readFidelity(text, profile);
-    lines.push(b.measured ? `Your range: ${b.inBand} of ${b.measured} of your counted features inside it (before the fix: ${a.inBand} of ${a.measured}).` : 'Your range: none of your counted features steer on this skill yet.');
+    account.push(b.measured ? `Your range: ${b.inBand} of ${b.measured} of your counted features inside it (before the fix: ${a.inBand} of ${a.measured}).` : 'Your range: none of your counted features steer on this skill yet.');
   }
   const at = new Date().toISOString();
   const back = removed.length ? reintroducedRuns(text, removed, piece, ownText).map((x) => x.text) : [];
@@ -188,14 +191,14 @@ export async function fixInPlace(c: FixInPlace): Promise<{ output: string; json:
     putEval(c.L, evaluation);
   } catch (e) { lines.push(`(the evaluation of the fixed piece could not be built: ${(e as Error).message.split('\n')[0]})`); }
   const record = evaluation?.record ?? null;
-  if (record) lines.push(`${record.state.replace('_', ' ')} · ${stateLine(record)}${record.delivery ? ` · ${deliveryLine(record.delivery, record.state)}` : ''}`);
-  for (const l of lines) c.say(l);
+  if (record) account.push(`${record.state.replace('_', ' ')} · ${stateLine(record)}${record.delivery ? ` · ${deliveryLine(record.delivery, record.state)}` : ''}`);
+  for (const l of [...lines, ...account]) c.say(l);
   // What `atelier fix` needs to change this piece again: this version, what was asked, and the files given with it.
   writeAtomic(runFile('last-invocation.json'), JSON.stringify({ invocationId: rec.invocationId, skillName: c.name, input: rec.input, at, asked: c.asked,
     with: boundMaterial().filter((m) => m.path).map((m) => ({ name: m.name, path: resolvePath(m.path) })), settings: c.settings, skillVersion: c.sv.skillVersionHash }, null, 1));
   const json = { ...recordHead({ state: record?.state ?? null, standardVersionHash: c.sv.standardVersionHash, skillVersion: c.sv.skillVersionHash, certificate: rec.settings?.certificate ?? null, record }),
     output: text, answer: text, invocationId: rec.invocationId, skillVersion: c.sv.skillVersionHash, costUsd: Number(spent.toFixed(4)),
-    rulesBroken: [], cut: [], toCheck: [], work: rec.work ?? null, report: lines, eval: evaluation, fix: { ...rec.fix, lines },
+    rulesBroken: [], cut: [], toCheck: [], work: rec.work ?? null, report: [...lines, ...account], eval: evaluation, fix: { ...rec.fix, lines },
     inferred: rec.inferred ?? [], ownWords: { checked: own.checked, ...(own.why ? { why: own.why } : {}) } };
   return { output: text, json, record, conformant: evaluation?.result.conformant ?? false };
 }

@@ -50,6 +50,10 @@ describe('atelier fix, in place, through the binary', () => {
       when: [{ contains: passage(S[4]), answer: { reply: `Step 1: find the barge. Step 2: make it wait.\n<work>${NEW5}</work>` } },
         { contains: passage(S[16]), answer: { reply: `<work>${NEW17}</work>` } }] });
     const shown = cli('fix', 'barges 5 and 17 should wait at the lock', ...be);
+    expect(shown).not.toContain('The whole piece was written again');
+    // what the checks found is said once, in the words every run uses: no state name, no delivery row, no range
+    expect(shown).toMatch(/^(Ready|Needs a look|Needs a fix)\. Checked: /m);
+    expect(shown).not.toMatch(/Your range:|Delivery:|NEEDS REVIEW|VERIFIED ·|BLOCKED ·|trusted-fail/);
     const fixed = latest(L);
     const after = sentencesOf(fixed.output).map((x) => x.text);
     expect(after).toHaveLength(30);
@@ -129,9 +133,12 @@ describe('atelier fix, in place, through the binary', () => {
     // about the whole piece: written again whole; the draft brings the removed wording back and the repair rewrites it
     await set({ byTool: { emit_fix_scope: { sentences: [], whole: true }, emit_piece: { piece: `<work>${PIECE}</work>` },
       emit_replacements: { replacements: [{ id: 1, text: 'Barge 5 rests by the mill on day 5.' }] } } });
-    cli('fix', 'make the whole log shorter in tone', ...be);
+    const said = cli('fix', 'make the whole log shorter in tone', ...be);
     const whole = latest(L);
     expect(whole.fix).toBeUndefined();
+    // a fix not made in place says the whole piece was written again, and never promises the rest stayed as it was
+    expect(said).toContain('The whole piece was written again');
+    expect(said).not.toContain('word for word');
     expect(whole.output).not.toContain(S[4]);
     expect(whole.output).toContain('Barge 5 rests by the mill on day 5.');
     // three stretches kept out: two by the first fix, "Barge 5 now waits at the" by the second

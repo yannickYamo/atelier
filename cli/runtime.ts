@@ -533,7 +533,8 @@ export const assertReachable = (role: Role): void => {
   if (provider === 'anthropic') {
     if (!process.env.ANTHROPIC_API_KEY && !process.env.ANTHROPIC_AUTH_TOKEN) {
       die('Neither ANTHROPIC_API_KEY nor ANTHROPIC_AUTH_TOKEN is set.\n'
-        + '  export ANTHROPIC_API_KEY=sk-...        (or ANTHROPIC_AUTH_TOKEN=... behind a gateway)\n'
+        + '  export ANTHROPIC_API_KEY=sk-...\n'
+        + '  Behind a company gateway: export ANTHROPIC_AUTH_TOKEN=... and ANTHROPIC_BASE_URL=https://<your gateway>\n'
         + `Atelier needs an inference provider for the ${role} step. Your corpus, standard and outputs stay\n`
         + 'on this machine; nothing is sent anywhere except that one call.\n'
         + '  Nothing has been read or sealed, so this command is safe to run again once the key is set.');

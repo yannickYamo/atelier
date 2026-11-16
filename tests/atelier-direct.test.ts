@@ -5,7 +5,7 @@
 // what the record says, and the ways out of it (`--pipeline legacy`, `--no-review`, a test run). Then `atelier keep`:
 // a kept piece is written from first, and the sentences the person changed are shown to the next review as theirs.
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
+import { execFileSync, spawn, type ChildProcess, spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -300,6 +300,46 @@ describe('a run through the binary, written the direct way', () => {
     const answered = s.run('run', 'Compare Logseq and Craft for my notes.', '--skill', 'posts', '--with', 'notes=notes.md', '--answers', 'idea=a,reader=b,pain=a', ...BACKEND());
     expect(answered.out).not.toContain('Written without your answer');
   }, 180_000);
+  // AT A TERMINAL THE QUESTIONS COME BEFORE THE DRAFT, IN ONE RUN. Run under a real pseudo-terminal (`script`), since the
+  // whole point is what happens when a person is there; skipped where `script -qec` is not to be had (macOS, Windows).
+  const pty = process.platform === 'linux' && spawnSync('script', ['-qec', 'true', '/dev/null']).status === 0;
+  it.skipIf(!pty)('atelier run at a terminal asks the editor\'s questions before it writes, and the answers reach the writer', async () => {
+    const s = await built();
+    await setBackend({ byTool: { __plain: [DRAFT, REVIEWED], emit_editor_questions: EDITOR } });
+    const m0 = await mark();
+    const env: NodeJS.ProcessEnv = { ...process.env, ATELIER_DATA: s.data, ATELIER_PROJECT_DIR: s.proj, ATELIER_PRICE_IN: '1', ATELIER_PRICE_OUT: '1' };
+    delete env.ANTHROPIC_API_KEY; delete env.ANTHROPIC_AUTH_TOKEN; delete env.ATELIER_CONTEXT_READER;
+    const cmd = ['node', CLI, 'run', '"Compare Logseq and Craft for my notes."', '--skill', 'posts', '--with', 'notes=notes.md', ...BACKEND()].join(' ');
+    const r = spawnSync('script', ['-qec', cmd, '/dev/null'], { encoding: 'utf8', cwd: s.proj, env, input: 'b\nfiles I can open in ten years\njust write it\n' });
+    expect(r.status, r.stdout).toBe(0);
+    const seen = r.stdout.replace(/\r/g, '');
+    const asked = seen.indexOf('What is the idea?'); const wrote = seen.indexOf('writing…'); const piece = seen.indexOf(REVIEWED.slice(0, 40));
+    expect(asked).toBeGreaterThan(-1);
+    expect(wrote).toBeGreaterThan(asked);
+    expect(piece).toBeGreaterThan(wrote);
+    // nothing is listed after the fact: the person was asked, and "just write it" was their answer to the rest
+    expect(seen).not.toContain('Written without your answer');
+    // what they typed reached the writer
+    expect(JSON.stringify((await bodies()).slice(m0))).toContain('files I can open in ten years');
+  }, 180_000);
+  it.skipIf(!pty)('the keyboard closed at a question (Ctrl-D) still writes the piece', async () => {
+    const s = await built();
+    await setBackend({ byTool: { __plain: [DRAFT, REVIEWED], emit_editor_questions: EDITOR } });
+    const env: NodeJS.ProcessEnv = { ...process.env, ATELIER_DATA: s.data, ATELIER_PROJECT_DIR: s.proj, ATELIER_PRICE_IN: '1', ATELIER_PRICE_OUT: '1' };
+    delete env.ANTHROPIC_API_KEY; delete env.ANTHROPIC_AUTH_TOKEN; delete env.ATELIER_CONTEXT_READER;
+    const cmd = ['node', CLI, 'run', '"Compare Logseq and Craft for my notes."', '--skill', 'posts', '--with', 'notes=notes.md', ...BACKEND()].join(' ');
+    const r = spawnSync('script', ['-qec', cmd, '/dev/null'], { encoding: 'utf8', cwd: s.proj, env, input: '\x04' });
+    expect(r.status, r.stdout).toBe(0);
+    expect(r.stdout.replace(/\r/g, '')).toContain(REVIEWED.slice(0, 40));
+  }, 180_000);
+  it('a descriptor to ask on that is not there never ends a run', async () => {
+    const s = await built();
+    await setBackend({ byTool: { __plain: [DRAFT, REVIEWED], emit_editor_questions: EDITOR } });
+    const r = spawnSync('node', [CLI, 'run', 'Compare Logseq and Craft for my notes.', '--skill', 'posts', '--with', 'notes=notes.md', ...BACKEND()],
+      { encoding: 'utf8', cwd: s.proj, input: '', env: { ...process.env, ATELIER_DATA: s.data, ATELIER_PROJECT_DIR: s.proj, ATELIER_PRICE_IN: '1', ATELIER_PRICE_OUT: '1', ANTHROPIC_API_KEY: '', ANTHROPIC_AUTH_TOKEN: '', ATELIER_ASK_FD: '3' } });
+    expect(r.status, r.stderr).toBe(0);
+    expect(r.stdout).toContain(REVIEWED.slice(0, 40));
+  }, 180_000);
   it('a length the request states and the piece misses is listed beside it; one it meets is not', async () => {
     const s = await built();
     await setBackend({ byTool: { __plain: [DRAFT, REVIEWED] } });
@@ -348,7 +388,7 @@ describe('a run through the binary, written the direct way', () => {
   }, 180_000);
   it('what the work is: read at the build and said once, the person\'s card replaces it, and the editor is told it; a total its rows miss is listed', async () => {
     await setBackend({ byTool: { emit_persona: PERSONA, emit_holds_back: { ids: [] }, __plain: [DRAFT, REVIEWED],
-      emit_purpose_card: { kind: 'a comparison of note apps', kindQuote: 'Obsidian against Bear', reader: null, readerQuote: null, purpose: 'Says which app to pick.', settles: ['which app wins, for whom'] } } });
+      emit_purpose_card: { kind: 'a comparison of note apps', kindQuote: 'Obsidian against Bear', reader: null, readerQuote: null, purpose: 'Says which app to pick.', purposeQuote: 'Bear wins on the phone', settles: ['which app wins, for whom'] } } });
     const s = seed(FILES, { ATELIER_CONTEXT_READER: 'scripted' });
     const built = s.run('new', 'posts', 'write posts in my voice', '--name', 'posts', ...BACKEND());
     expect(built.code, built.out).toBe(0);

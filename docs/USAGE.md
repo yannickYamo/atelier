@@ -432,9 +432,9 @@ memo, which price and against what; for an essay, the claim it stakes). Nothing 
 already settles is asked. Where no such decision is open, the five things any argument lands on are asked instead,
 each only where nothing you gave states it, quoted: the one idea the reader should leave with, who reads it and in what
 situation, what they live with that the piece speaks to, what shows it, and what they do next. The same request and
-notes ask the same questions every time. `atelier run` always writes the piece and lists the open questions beside it,
-with their options. `atelier invoke` at a terminal asks them (a letter, your own words, enter for the suggested answer,
-"just write it" for none). With `--json` they come back as `questions`. Nothing you did not answer reaches the
+notes ask the same questions every time. At a terminal, `atelier run` asks them before it writes (a letter, your own words, enter for the suggested answer,
+"just write it" for none); anywhere else (a pipe, a script, an agent) it asks nothing, always writes the piece and lists
+the open questions beside it, with their options. With `--json` they come back as `questions`. Nothing you did not answer reaches the
 writer. Answer next time with `--answers "<id>=b,<id>=<your words>"`, by the id each question shows. An answer belongs to the request it
 was given for: run that request again and it reaches the writer without being asked; another request is asked afresh.
 `--no-questions` reads nothing.
@@ -772,6 +772,9 @@ Every command takes `--provider` (`anthropic` or `openai-compatible`), `--model`
 `--api-key-env` (the variable that holds the key; `ANTHROPIC_API_KEY` by default). `--discovery-provider`,
 `--discovery-model`, `--target-provider` and `--target-model` (and their `-base-url`) set the build's reading and the
 run's writing apart, so a standard learnt with the most capable model you can reach runs on a cheaper one.
+
+Behind a company gateway to Anthropic, set `ANTHROPIC_AUTH_TOKEN` (in place of the key) and `ANTHROPIC_BASE_URL` (the
+gateway's address). `--base-url` is for an OpenAI-compatible backend.
 `--price-in` and `--price-out` give the rate in USD per million tokens where the provider reports none, and
 `--token-limit-param` names the field a provider takes for its token limit. `atelier models` says the same;
 docs/PORTABILITY.md has the detail.

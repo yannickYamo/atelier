@@ -334,13 +334,13 @@ describe('through the binary', () => {
     expect(readFileSync(join(proj, '.claude', 'skills', 'posts', 'SKILL.md'), 'utf8')).toContain('No mechanical errors');
     writeFileSync(join(proj, 'draft.md'), 'He are late to the meeting, and the bug fix landed. The plan still holds.');
     // By default the finding is listed, the rule is the person's to read, and nothing blocks.
-    const listed = tryRun('verify', '--skill', 'posts', 'draft.md', '--allow-unsourced');
+    const listed = tryRun('verify', '--skill', 'posts', 'draft.md', '--allow-unsourced', '--report');
     expect(listed.code).toBe(0);
     expect(listed.out).toMatch(new RegExp(`to check {2}${g?.requirementId ?? 'g'} {2}No mechanical errors`));
     expect(listed.out).toMatch(/listed for you to check: 2 possible slips: "are" \(subject–verb agreement: "are" → "is"\)/);
     expect(listed.out).toMatch(/^Needs a look · /m);
     expect(listed.out).not.toMatch(/FAIL {2}/);
-    const r = tryRun('verify', '--skill', 'posts', 'draft.md', '--allow-unsourced', '--fix-grammar');
+    const r = tryRun('verify', '--skill', 'posts', 'draft.md', '--allow-unsourced', '--fix-grammar', '--report');
     expect(r.code).toBe(1);
     expect(r.out).toMatch(new RegExp(`FAIL {2}${g?.requirementId ?? 'g'} {2}No mechanical errors`));
     expect(r.out).toMatch(/1 mechanical error\(s\): subject–verb agreement; 1 listed to check/);
@@ -351,7 +351,7 @@ describe('through the binary', () => {
     // Switched off, the same clean draft is not passed on the rule: it is named as not checked, and needs review.
     const off = execFileSync('node', [CLI, 'verify', '--skill', 'posts', 'clean.md', '--allow-unsourced'], { encoding: 'utf8', cwd: proj,
       env: { ...process.env, ATELIER_DATA: data, ATELIER_PROJECT_DIR: proj, ATELIER_GRAMMAR: 'off' }, stdio: ['ignore', 'pipe', 'pipe'] });
-    expect(off).toMatch(/^(Needs a look|Ready) · /m);
+    expect(off).toMatch(/^(Needs a look|Ready)\.$/m);
     expect(off).toMatch(/switched off for this process/);
   }, 120_000);
 
