@@ -71,7 +71,7 @@ const seen = verify('planted.md'); const seenKinds = entriesOf(verify('planted.m
 const specifics = (es: readonly Entry[]): Entry | undefined => es.find((e) => e.id === 'specifics');
 const plantedKind = specifics(seenKinds) ? kindOf(specifics(seenKinds)!) : null;
 check('verify: a planted figure is to look at or broken, on the record', plantedKind === 'look' || plantedKind === 'broken', `the specifics entry is ${String(plantedKind)}`);
-check('verify: the planted figure is shown in the short view', /73 percent/.test(seen.out) && OUTCOME.test(seen.out) && !/^Ready\./m.test(seen.out), firstLine(seen.out, OUTCOME));
+check('verify: the planted figure is shown in the short view', seen.out.includes('73 percent') && OUTCOME.test(seen.out) && !/^Ready\./m.test(seen.out), firstLine(seen.out, OUTCOME));
 check('verify: nothing of the machinery is said', !MACHINERY.test(`${seen.out}\n${seen.err}`), firstLine(`${seen.out}\n${seen.err}`, MACHINERY));
 const clean = entriesOf(verify('true.md', '--json').out);
 const cleanKind = specifics(clean) ? kindOf(specifics(clean)!) : null;

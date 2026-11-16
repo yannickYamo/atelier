@@ -32,8 +32,8 @@ export function whyNot(r: LiveRecord | null, changed: readonly string[] | null):
 
 if (process.argv[1] && resolve(process.argv[1]) === resolve(import.meta.filename)) {
   const root = resolve(process.argv[2] ?? '.'); const file = join(root, 'release/live-run.json');
-  let record: LiveRecord | null = null;
-  try { record = existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) as LiveRecord : null; } catch { record = null; }
+  const read = (): LiveRecord | null => { try { return existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) as LiveRecord : null; } catch { return null; } };
+  const record = read();
   const git = (...a: string[]): string | null => { try { return execFileSync('git', a, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }); } catch { return null; } };
   const commit = record?.commit ?? '';
   const ancestor = /^[0-9a-f]{7,40}$/.test(commit) && git('merge-base', '--is-ancestor', commit, 'HEAD') !== null;
