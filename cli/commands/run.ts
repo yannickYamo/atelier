@@ -9,7 +9,8 @@
 // happens, and this is a way of showing it.
 
 import { deliveryLine } from '../../core/eval/consequence.js';
-import { execFile, spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
+import { ASK_FD } from '../direct.js';
 import { DATA, VALUED_OPTIONS, argv, die, flag, loadSession, boundMaterial } from '../runtime.js';
 import * as store from '../../core/state/store.js';
 import { renderRunCard, type RunCard } from '../../core/eval/run-card.js';
@@ -147,10 +148,19 @@ export async function run(): Promise<void> {
   // NEVER REFUSED FOR WHAT IS MISSING: the work is written, the rules that needed the material are shown as not
   // checked, and the person is told how to have them checked.
   if (std && needsMaterial(std, L)) process.stderr.write('This skill checks the work against material you give it, and none was given: those rules will show as not checked. To have them checked, add --with <file>.\n');
-  if (process.stderr.isTTY) process.stderr.write('writing…\n');
+  // AT A TERMINAL THE EDITOR'S QUESTIONS COME BEFORE THE DRAFT, IN THIS RUN: the engine is handed the person's keyboard and
+  // a descriptor onto their screen (cli/direct.ts, ASK_FD), and its two streams are still read whole. Anywhere else (a
+  // pipe, a host, a script) nothing is asked, and the open questions are listed beside the piece as before.
+  const asking = Boolean(process.stdin.isTTY && process.stderr.isTTY);
+  if (process.stderr.isTTY) process.stderr.write(asking ? 'reading your request…\n' : 'writing…\n');
   const engine = await new Promise<{ code: number; out: string; err: string }>((done) => {
-    execFile(process.execPath, [...process.execArgv, process.argv[1], ...engineArgs, '--json'], { maxBuffer: 1 << 26, env: process.env },
-      (e, out, err) => { done({ code: e ? (typeof e.code === 'number' ? e.code : 1) : 0, out, err }); });
+    const child = spawn(process.execPath, [...process.execArgv, process.argv[1], ...engineArgs, '--json'],
+      { env: asking ? { ...process.env, [ASK_FD]: '3' } : process.env, stdio: asking ? ['inherit', 'pipe', 'pipe', process.stderr] : ['ignore', 'pipe', 'pipe'] });
+    let out = ''; let err = '';
+    child.stdout?.setEncoding('utf8').on('data', (d: string) => { out += d; });
+    child.stderr?.setEncoding('utf8').on('data', (d: string) => { err += d; });
+    child.on('error', (e) => { done({ code: 1, out, err: `${err}atelier: ${e.message}\n` }); });
+    child.on('close', (code) => { done({ code: code ?? 1, out, err }); });
   });
   let result: EngineRun | null = null;
   try { result = JSON.parse(engine.out) as EngineRun; } catch { /* the engine said why on its own stream */ }
@@ -183,7 +193,8 @@ export async function run(): Promise<void> {
     const broke = (result.direct as { review?: { broke?: readonly string[] } } | undefined)?.review?.broke ?? [];
     const beside = [...(broke.length ? [`This is the first draft: the review of it was not used, because it broke a rule the draft held (${broke.join('; ')}).`] : []), ...inferredLines(result.inferred ?? []), ...(typed.report && result.ownWords && !result.ownWords.checked && result.ownWords.why ? [`Not read for sentences about the piece's own making: ${result.ownWords.why}.`] : [])];
     if (beside.length) console.log(`${beside.join('\n')}\n`);
-    const open = openQuestionLines(result);
+    // asked at the terminal before the draft, a question left unanswered was the person's choice: not listed again
+    const open = asking ? [] : openQuestionLines(result);
     if (open.length) console.log(`${open.join('\n')}\n`);
   }
   // THE EVALUATION IS PART OF WHAT A RUN RETURNS: one line on what the checks found, each thing left to the person, and

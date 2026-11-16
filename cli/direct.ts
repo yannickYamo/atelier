@@ -42,6 +42,7 @@ import { cardLine, type PurposeCard } from '../core/direct/card.js';
 import { readAnswers, questionLines, materialShown, type Question } from '../core/loop/questions.js';
 import { typedAnswer, JUST_WRITE, questionsJson } from './prewrite.js';
 import { createInterface } from 'node:readline/promises';
+import { createWriteStream } from 'node:fs';
 import { learnedShape, steeredShape, removeShapeExtras } from '../core/loop/shape-steer.js';
 import { checkDraftAsync, refineToStandard, REPAIR_PASSES, CLAIMS_TO_CHECK, READER_REPORT, INCONCLUSIVE, PUBLIC_FACTS } from '../core/loop/run-repair.js';
 import { supportIsIn, numbersIn } from '../core/loop/claim-extract.js';
@@ -190,9 +191,22 @@ export interface DirectContext {
   readonly read?: (prompt: string) => Promise<string>;
 }
 
-/** A line read from the person at the terminal; the prompt goes to stderr, so stdout stays the work. */
+/**
+ * WHERE A QUESTION IS WRITTEN. At a terminal it is stderr, so stdout stays the work. Under `atelier run`, which reads this
+ * process's two streams whole, it is the descriptor `run` handed down for it (ASK_FD): the person's own terminal.
+ */
+export const ASK_FD = 'ATELIER_ASK_FD';
+let askStream: NodeJS.WritableStream | null = null;
+const askOut = (): NodeJS.WritableStream => {
+  const fd = Number(process.env[ASK_FD]);
+  if (!Number.isInteger(fd) || fd < 3) return process.stderr;
+  return askStream ??= createWriteStream('', { fd, autoClose: false });
+};
+/** Asked from `atelier run` at a terminal: the questions come before the draft, in the one run. */
+export const askedByRun = (): boolean => { const fd = Number(process.env[ASK_FD]); return Number.isInteger(fd) && fd >= 3; };
+/** A line read from the person at the terminal; the prompt goes beside the work, never in it. */
 async function askLine(prompt: string): Promise<string> {
-  const rl = createInterface({ input: process.stdin, output: process.stderr });
+  const rl = createInterface({ input: process.stdin, output: askOut() });
   try { return (await rl.question(prompt)).trim(); } finally { rl.close(); }
 }
 
@@ -252,7 +266,7 @@ export async function editorQuestions(c: Pick<DirectContext, 'L' | 'asked' | 'ma
     const g = given.get(q.id) ?? before.get(q.id);
     if (g !== undefined) { answers.push({ id: q.id, answer: g }); continue; }
     if (!c.interactive || rest) continue;
-    process.stderr.write(`\n${questionLines([q]).join('\n')}\n`);
+    askOut().write(`\n${questionLines([q]).join('\n')}\n`);
     const typed = await (c.read ?? askLine)('Your answer (a letter, your own words, enter for the suggested one, or "just write it"): ');
     if (JUST_WRITE.test(typed)) { rest = true; continue; }
     answers.push({ id: q.id, answer: typedAnswer(q, typed) });
@@ -403,6 +417,8 @@ export async function runDirect(c: DirectContext) {
   const method = store.getMethod(c.L)?.text ?? '';
   // What an editor would ask before the draft: only the person's answers reach the writer.
   const asking = await editorQuestions(c, method, route.kind ?? null);
+  // under `atelier run` at a terminal, the questions are done (or there were none): say the writing has begun
+  if (askedByRun()) askOut().write('writing…\n');
   // WHAT THE PERSON SAID THE WORK IS, TO THE WRITER (an experiment, off unless ATELIER_CARD_TO_WRITER=1): the kind, the
   // reader and the purpose, only where the person said them (a card that is theirs), never a reading of their pieces.
   // The comparison of pieces written with and without it decides whether it becomes what every run does.
