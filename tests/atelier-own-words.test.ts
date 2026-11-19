@@ -64,11 +64,18 @@ describe('what is listed beside the work', () => {
     expect(items).toEqual([
       { kind: 'decision', what: 'Why now?', settled: 'decided: The jobs', add: '--answers "angle=<your answer>"' },
       { kind: 'proof', what: 'Proof?', settled: 'argued from what is given, with no figure of yours', add: '--answers "proof=<your answer>"' },
-      { kind: 'specific', what: 'step 3: which verdict the author would give', settled: 'decided on what is given', add: 'the specific, as material (--with)' },
+      { kind: 'specific', what: 'step 3: which verdict the author would give', settled: 'decided on what is given', add: 'the specific, given with --with' },
       { kind: 'own-words', what: BAD, settled: 'dropped: it talked about the piece\'s own making' },
     ]);
-    expect(inferredLines(items)[0]).toBe('Inferred for this piece (4), beside it and never in it:');
-    expect(inferredLines(items)[1]).toBe('  - decided for you: Why now? → decided: The jobs (to change: --answers "angle=<your answer>")');
+    expect(inferredLines(items)[0]).toBe('Beside the piece, never in it (4):');
+    // what most needs the person comes first: what nothing gave, then what was decided for them
+    expect(inferredLines(items)[1]).toBe('  - not given: step 3: which verdict the author would give → decided on what is given (to change: the specific, given with --with)');
+    expect(inferredLines(items)[4]).toBe('  - decided for you: Why now? → decided: The jobs (to change: --answers "angle=<your answer>")');
+    // several of one kind, settled the same way, are said once with each sentence under it
+    const two = ['Nine loads over six days.', 'We need four people each morning.'].map((what) => ({ kind: 'specific' as const, what, settled: 'left in the piece for you to check', add: 'your source for it, given with --with' }));
+    expect(inferredLines(two)).toEqual(['Beside the piece, never in it (2):',
+      '  - not given (2) → left in the piece for you to check (to change: your source for it, given with --with):',
+      '      › Nine loads over six days.', '      › We need four people each morning.']);
     expect(inferredLines([])).toEqual([]);
   });
 });

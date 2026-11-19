@@ -1,11 +1,6 @@
 // atelier/core/loop/inferred.ts — WHAT THE RUN DECIDED FOR THE PERSON, BESIDE THE PIECE, NEVER IN IT.
-//
-// A run never refuses for what it was not given, and never writes the gap into the piece. Where nobody answered a
-// question, the run takes the position its reading of the request and the author's pieces gives; where the method needs
-// a specific nothing gives, the piece is decided on what is given; where a claim has no proof given, it is argued at the
-// strength what is given supports. Each of those is a decision the person did not make: it is listed here, with what
-// they can give to change it, in the report beside the work and on the record (`inferred`). The writer is told the
-// decisions as decisions, never as assumptions to say aloud.
+// A run never refuses for what it was not given, and never writes the gap into the piece: what it decided for the
+// person is listed here with what they can give to change it, beside the work and on the record (`inferred`).
 
 import type { InferredItem } from '../state/canonical-state.js';
 import type { OwnWordsFix } from './own-words.js';
@@ -39,13 +34,13 @@ export function inferredItems(f: InferredFrom): InferredItem[] {
     else out.push({ kind: 'specific', what: q.ask, settled: 'not served: the piece is written without it', add });
   }
   for (const p of f.proofs ?? []) if (!out.some((x) => x.kind === 'proof' && x.what.includes(p))) out.push({ kind: 'proof', what: p, settled: 'argued from what is given, with no figure of yours', add: 'a figure, case or source of yours (--with)' });
-  for (const s of f.specifics ?? []) out.push({ kind: 'specific', what: `step ${s.step}: ${s.missing}`, settled: 'decided on what is given', add: 'the specific, as material (--with)' });
+  for (const s of f.specifics ?? []) out.push({ kind: 'specific', what: `step ${s.step}: ${s.missing}`, settled: 'decided on what is given', add: 'the specific, given with --with' });
   for (const w of f.ownWordsLeft ?? []) out.push({ kind: 'own-words', what: w.sentence.slice(0, 160), settled: `left as written (${w.why})`, add: 'edit or remove this sentence' });
   for (const w of f.ownWords ?? []) {
     const kind = w.kind === 'slot' ? 'slot' : w.kind === 'name' ? 'name' : 'own-words';
     const why = kind === 'slot' ? 'it left a slot to fill' : kind === 'name' ? `it named ${w.name ?? 'someone'}, which nothing given holds` : 'it talked about the piece\'s own making';
     out.push({ kind, what: w.sentence.slice(0, 160), settled: w.rewrite === null ? `dropped: ${why}` : `written again: ${w.rewrite.slice(0, 160)}`,
-      ...(kind === 'name' ? { add: 'the real name, as material (--with)' } : kind === 'slot' ? { add: 'the specific, as material (--with)' } : {}) });
+      ...(kind === 'name' ? { add: 'the real name, given with --with' } : kind === 'slot' ? { add: 'the specific, given with --with' } : {}) });
   }
   return out;
 }
@@ -55,6 +50,11 @@ export function inferredLines(items: readonly InferredItem[]): string[] {
   if (!items.length) return [];
   const label: Record<InferredItem['kind'], string> = { decision: 'decided for you', specific: 'not given', proof: 'no proof given', 'own-words': 'about its own making',
     slot: 'a slot, written whole', name: 'a name nothing gave', length: 'not the length asked' };
-  return [`Inferred for this piece (${items.length}), beside it and never in it:`,
-    ...items.map((i) => `  - ${label[i.kind]}: ${i.what} → ${i.settled}${i.add ? ` (to change: ${i.add})` : ''}`)];
+  // What most needs the person first, and one kind said once: four sentences to check were four lines ending alike.
+  const order: InferredItem['kind'][] = ['name', 'slot', 'specific', 'proof', 'length', 'own-words', 'decision'];
+  const tail = (i: InferredItem): string => `→ ${i.settled}${i.add ? ` (to change: ${i.add})` : ''}`;
+  const groups = new Map<string, InferredItem[]>();
+  for (const i of [...items].sort((a, b) => order.indexOf(a.kind) - order.indexOf(b.kind))) groups.set(`${i.kind}|${tail(i)}`, [...(groups.get(`${i.kind}|${tail(i)}`) ?? []), i]);
+  return [`Beside the piece, never in it (${items.length}):`, ...[...groups.values()].flatMap((g) => g.length === 1
+    ? [`  - ${label[g[0].kind]}: ${g[0].what} ${tail(g[0])}`] : [`  - ${label[g[0].kind]} (${g.length}) ${tail(g[0])}:`, ...g.map((i) => `      › ${i.what}`)])];
 }

@@ -246,7 +246,7 @@ export async function newSkill(): Promise<void> {
   heldOutCheck(built);
   proposeFloor(built);
   // a person at a terminal is shown it at work (cli/guided.ts), which ends on the same next steps in fewer words
-  if (guidedHere()) { await guided(built); return; }
+  if (guidedHere()) { await guided(built, { steps: [], disputed: [], given: corpusFiles(path).length }); return; }
   console.log(`\nUse it:    /${built} <your task>   ·   atelier invoke --skill ${built} "<your task>"`);
   console.log(`Check:     atelier verify --skill ${built} <file>   ·   correct it: atelier fix "<what was wrong>"`);
   // A voice is carried by what the author lived and measured, which Atelier will not invent.

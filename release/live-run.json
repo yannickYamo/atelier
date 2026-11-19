@@ -1,0 +1,103 @@
+{
+ "schema": 1,
+ "commit": "0a300c0fed0707bfcff21518476ce0f2fe193b2b",
+ "dirty": false,
+ "at": "2026-11-18T01:06:52.094Z",
+ "node": "v22.22.0",
+ "version": "1.1.0",
+ "scripted": false,
+ "pass": true,
+ "scenarios": [
+  {
+   "name": "build: the skill is built and installed",
+   "pass": true,
+   "found": ""
+  },
+  {
+   "name": "build: nothing of the machinery is said",
+   "pass": true,
+   "found": ""
+  },
+  {
+   "name": "build: the installed skill says which source decides",
+   "pass": true,
+   "found": ""
+  },
+  {
+   "name": "run: a piece is handed over with one of the three outcomes",
+   "pass": true,
+   "found": ""
+  },
+  {
+   "name": "run: nothing of the machinery is said, on either stream",
+   "pass": true,
+   "found": ""
+  },
+  {
+   "name": "verify: a planted figure is to look at or broken, on the record",
+   "pass": true,
+   "found": ""
+  },
+  {
+   "name": "verify: the planted figure is shown in the short view",
+   "pass": true,
+   "found": ""
+  },
+  {
+   "name": "verify: nothing of the machinery is said",
+   "pass": true,
+   "found": ""
+  },
+  {
+   "name": "verify: sentences taken from the notes are not flagged",
+   "pass": true,
+   "found": ""
+  },
+  {
+   "name": "fix: the piece is handed back with one of the three outcomes",
+   "pass": true,
+   "found": ""
+  },
+  {
+   "name": "fix: nothing of the machinery is said, on either stream",
+   "pass": true,
+   "found": ""
+  },
+  {
+   "name": "method: the build read who the work is for from the method note",
+   "pass": true,
+   "found": ""
+  },
+  {
+   "name": "method: the installed skill is told which source decides",
+   "pass": true,
+   "found": ""
+  },
+  {
+   "name": "method: the writer was given the method, on the record",
+   "pass": true,
+   "found": ""
+  },
+  {
+   "name": "method: nothing of the machinery is said",
+   "pass": true,
+   "found": ""
+  },
+  {
+   "name": "terminal: a run was written and recorded",
+   "pass": true,
+   "found": ""
+  },
+  {
+   "name": "terminal: the open questions were asked and the typed answers are on the record",
+   "pass": true,
+   "found": ""
+  },
+  {
+   "name": "terminal: nothing of the machinery is said",
+   "pass": true,
+   "found": ""
+  }
+ ],
+ "notRun": []
+}

@@ -21,6 +21,8 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { kindOf, OUTCOME_SAID } from '../core/eval/wording.js';
+import { methodDecides } from '../core/direct/prompt.js';
+import * as store from '../core/state/store.js';
 import type { Entry } from '../core/eval/record.js';
 
 const ROOT = resolve(import.meta.dirname, '..');
@@ -36,10 +38,11 @@ const OUTCOME = new RegExp(`^(${Object.values(OUTCOME_SAID).join('|')})\\.`, 'm'
 
 const data = mkdtempSync(join(tmpdir(), 'atelier-live-data-')); const proj = mkdtempSync(join(tmpdir(), 'atelier-live-proj-'));
 const env = { ...process.env, ATELIER_DATA: data, ATELIER_PROJECT_DIR: proj };
-const cli = (...a: string[]): { code: number; out: string; err: string } => {
-  const r = spawnSync('node', [CLI, ...a], { encoding: 'utf8', cwd: proj, env, maxBuffer: 1 << 26 });
+const cliIn = (dir: string) => (...a: string[]): { code: number; out: string; err: string } => {
+  const r = spawnSync('node', [CLI, ...a], { encoding: 'utf8', cwd: dir, env: { ...env, ATELIER_PROJECT_DIR: dir }, maxBuffer: 1 << 26 });
   return { code: r.status ?? 1, out: r.stdout, err: r.stderr };
 };
+const cli = cliIn(proj);
 interface Scenario { readonly name: string; readonly pass: boolean; readonly found: string }
 const scenarios: Scenario[] = [];
 const check = (name: string, pass: boolean, found: string): void => { scenarios.push({ name, pass, found: pass ? '' : found.replace(/\s+/g, ' ').trim().slice(0, 300) }); console.log(`${pass ? 'ok  ' : 'FAIL'}  ${name}${pass ? '' : `\n      ${found.slice(0, 600)}`}`); };
@@ -55,7 +58,7 @@ const built = cli('new', join(FX, 'voice'), '--method', join(FX, 'rules.md'), '-
 const skillFile = join(proj, '.claude/skills', SKILL, 'SKILL.md');
 check('build: the skill is built and installed', built.code === 0 && existsSync(skillFile), `exit ${built.code}; ${built.err.split('\n').find((l) => l.startsWith('atelier: ')) ?? ''}`);
 check('build: nothing of the machinery is said', !MACHINERY.test(built.out), firstLine(built.out, MACHINERY));
-check('build: the installed skill says which source decides', existsSync(skillFile) && readFileSync(skillFile, 'utf8').includes('my method decides'), 'the sentence is not in SKILL.md');
+check('build: the installed skill says which source decides', existsSync(skillFile) && readFileSync(skillFile, 'utf8').includes(methodDecides('mine')), 'the sentence is not in SKILL.md');
 
 // 2. A PIECE, from notes, in the short view a person reads.
 const ran = cli('run', 'Write a post for the growers on this week\'s vote about the wharf, and what we could do next.', '--skill', SKILL, '--with', `notes=${notes}`, '--no-questions', ...EXTRA);
@@ -82,6 +85,39 @@ const fixed = cli('fix', 'make the opening one sentence shorter', '--skill', SKI
 check('fix: the piece is handed back with one of the three outcomes', OUTCOME.test(fixed.out), `exit ${fixed.code}; ${fixed.err.split('\n').find((l) => l.startsWith('atelier: ')) ?? '(no outcome line)'}`);
 check('fix: nothing of the machinery is said, on either stream', !MACHINERY.test(`${fixed.out}\n${fixed.err}`), firstLine(`${fixed.out}\n${fixed.err}`, MACHINERY));
 
+// 6. THE METHOD AND THE PIECES DISAGREE. The pieces open on a scene; the method note says to open on the decision and names
+// who reads the work. What the build understood stands on the author's words, the host and the writer are both given the
+// method, and both are told which source decides.
+const CONFLICT = 'live-method';
+// a second skill is built from a project folder of its own: one project holds one standard
+const proj2 = mkdtempSync(join(tmpdir(), 'atelier-live-proj2-')); const cli2 = cliIn(proj2);
+const conflictBuilt = cli2('new', join(FX, 'voice'), '--method', join(ROOT, 'tests/fixtures/method-conflict/method.md'), '--name', CONFLICT, '--yes', ...EXTRA);
+const L = { root: data, skillName: CONFLICT };
+const card = conflictBuilt.code === 0 ? store.getCard(L) : null;
+check('method: the build read who the work is for from the method note', card?.reader != null && card.by === 'model', `exit ${conflictBuilt.code}; ${conflictBuilt.err.split('\n').find((l) => l.startsWith('atelier: ')) ?? ''} the card is ${JSON.stringify(card)}`);
+const conflictSkill = join(proj2, '.claude/skills', CONFLICT, 'SKILL.md');
+check('method: the installed skill is told which source decides', existsSync(conflictSkill) && readFileSync(conflictSkill, 'utf8').includes(methodDecides('mine')), 'the sentence is not in SKILL.md');
+const conflictRun = cli2('run', 'Write the note on whether to repair the old wharf or lease the second one.', '--skill', CONFLICT, '--with', `notes=${notes}`, '--no-questions', ...EXTRA);
+const served = (store.listInvocations(L)[0] as { direct?: { method?: boolean } } | undefined)?.direct;
+check('method: the writer was given the method, on the record', conflictRun.code === 0 && served?.method === true, `exit ${conflictRun.code}; the record's direct run is ${JSON.stringify(served ?? null).slice(0, 200)}`);
+check('method: nothing of the machinery is said', !MACHINERY.test(`${conflictBuilt.out}\n${conflictRun.out}\n${conflictRun.err}`), firstLine(`${conflictBuilt.out}\n${conflictRun.out}\n${conflictRun.err}`, MACHINERY));
+
+// 7. AT A TERMINAL THE QUESTIONS COME BEFORE THE PIECE. Driven through a pseudo-terminal, since the point is what happens
+// when a person is there. Where there is none to be had (no `script -qec`), the scenario is recorded as not run.
+const pty = process.platform === 'linux' && spawnSync('script', ['-qec', 'true', '/dev/null']).status === 0;
+if (pty) {
+  const before = store.listInvocations({ root: data, skillName: SKILL }).length;
+  const q = (x: string): string => `'${x.replace(/'/g, `'\\''`)}'`;
+  const cmd = ['node', CLI, 'run', 'Write a post about the wharf.', '--skill', SKILL, ...EXTRA].map(q).join(' ');
+  const t = spawnSync('script', ['-qec', cmd, '/dev/null'], { encoding: 'utf8', cwd: proj, env, input: 'a\na\na\na\na\n', maxBuffer: 1 << 26 });
+  const recs = store.listInvocations({ root: data, skillName: SKILL });
+  const asked = (recs[0] as { direct?: { questions?: { asked?: readonly string[]; answered?: readonly string[] } } } | undefined)?.direct?.questions;
+  check('terminal: a run was written and recorded', t.status === 0 && recs.length === before + 1, `exit ${t.status}; ${recs.length - before} new record(s)`);
+  check('terminal: the open questions were asked and the typed answers are on the record', (asked?.asked?.length ?? 0) > 0 && (asked?.answered?.length ?? 0) > 0, `asked ${JSON.stringify(asked?.asked ?? [])}, answered ${JSON.stringify(asked?.answered ?? [])}`);
+  check('terminal: nothing of the machinery is said', !MACHINERY.test(t.stdout), firstLine(t.stdout, MACHINERY));
+}
+const notRun = pty ? [] : ['terminal: questions before the piece (no pseudo-terminal on this machine)'];
+
 const git = (...a: string[]): string => { try { return execFileSync('git', a, { cwd: ROOT, encoding: 'utf8' }).trim(); } catch { return ''; } };
 const record = {
   schema: 1, commit: git('rev-parse', 'HEAD'), // the record itself is no change to the code: a second run over a committed record is not a dirty tree
@@ -89,9 +125,9 @@ const record = {
   at: new Date().toISOString(), node: process.version, version: (JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')) as { version: string }).version,
   // a run against a scripted or local stand-in is not a live run, and the release check refuses it
   scripted: process.env.LIVE_SCRIPTED === '1',
-  pass: scenarios.every((s) => s.pass), scenarios,
+  pass: scenarios.every((s) => s.pass), scenarios, notRun,
 };
-for (const d of [data, proj]) rmSync(d, { recursive: true, force: true });
+for (const d of [data, proj, proj2]) rmSync(d, { recursive: true, force: true });
 mkdirSync(resolve(OUT, '..'), { recursive: true });
 writeFileSync(OUT, `${JSON.stringify(record, null, 1)}\n`);
 console.log(`\n${record.pass ? 'All held.' : `${scenarios.filter((s) => !s.pass).length} did not hold.`} Record: ${OUT}${record.dirty ? '\n(the working tree had uncommitted changes: commit them and run again before a release)' : ''}`);

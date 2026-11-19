@@ -460,7 +460,7 @@ export async function method(): Promise<void> {
   if (!person) console.log(`\nYour skill "${name}" is ready.`);
   if (person) {
     const stated = proposals.filter((p) => p.origin === 'STATED');
-    await guided(name, { steps: stated.map((p) => p.statement), disputed: confirmed ? [] : disputed.map((p) => p.statement),
+    await guided(name, { steps: stated.map((p) => p.statement), disputed: confirmed ? [] : disputed.map((p) => p.statement), given: cases.length,
       confirm: `atelier ${typedWithout(['--yes'])} --name ${name} --yes` });
     return;
   }

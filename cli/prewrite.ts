@@ -15,7 +15,7 @@
 import { createInterface } from 'node:readline/promises';
 import { readContext, type DecidedBy } from '../core/inference/reading.js';
 import type { InferenceClient } from '../core/inference/client.js';
-import { QUESTIONS, GAPS, POSITION_IDS, chooseQuestions, readAnswers, questionLines, defaultsLine, answersNote, materialShown, STANDING_KINDS, QUESTION_KINDS, KIND_ASK, type Question, type QuestionKind } from '../core/loop/questions.js';
+import { QUESTIONS, GAPS, POSITION_IDS, chooseQuestions, readAnswers, pickedOption, questionLines, defaultsLine, answersNote, materialShown, STANDING_KINDS, QUESTION_KINDS, KIND_ASK, type Question, type QuestionKind } from '../core/loop/questions.js';
 import { PIECE_PLAN, planLines, planNote, type PiecePlan, type PlanInput } from '../core/loop/piece-plan.js';
 import * as store from '../core/state/store.js';
 import type { InvocationRecord } from '../core/state/canonical-state.js';
@@ -66,8 +66,7 @@ async function ask(prompt: string): Promise<string> {
 /** One answer typed at the terminal: empty is the default, a letter its option, anything else the person's own words. */
 export function typedAnswer(q: Question, typed: string): string {
   if (!typed) return q.default;
-  const i = /^[a-d]$/i.test(typed) ? typed.toLowerCase().charCodeAt(0) - 97 : -1;
-  return i >= 0 && i < q.options.length ? q.options[i] : typed;
+  return pickedOption(q.options, typed);
 }
 /** What a person types to take the defaults for every question left. */
 export const JUST_WRITE = /^just write(?: it)?\.?$/i;

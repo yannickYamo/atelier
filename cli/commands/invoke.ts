@@ -1125,7 +1125,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   // A SPECIFIC LEFT IN FOR THE PERSON TO CHECK (nothing of theirs to check it against, or the latitude lists it) stays in
   // the piece, wrong where it must be rather than missing, and is listed beside it with what to give to settle it
   const inferredAll = [...(rec.inferred ?? []), ...(rec.repair?.claimsToCheck ?? []).filter((t) => rec.output.includes(t.slice(0, 60)))
-    .map((t): InferredItem => ({ kind: 'specific', what: t.slice(0, 160), settled: 'left in the piece for you to check', add: 'your source for it, as material (--with)' }))];
+    .map((t): InferredItem => ({ kind: 'specific', what: t.slice(0, 160), settled: 'left in the piece for you to check', add: 'your source for it, given with --with' }))];
   for (const l of inferredLines(inferredAll)) report.say(l);
   if (!ownState.checked && ownState.why) report.detail(`Not read for sentences about the piece's own making: ${ownState.why}.`);
   reportChecks(report, rec, std, checks);

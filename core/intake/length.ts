@@ -326,8 +326,8 @@ export function statedBounds(s: StatedLength): readonly [number | null, number |
   return [lo, hi];
 }
 
-/** How a count sits against a stated length: inside it, or short or long of it. */
+/** How a count sits against a stated length. A word ceiling is met within a tenth over it, as a target is. */
 export function againstStated(count: number, s: StatedLength): 'met' | 'short' | 'long' {
   const [lo, hi] = statedBounds(s);
-  return lo !== null && count < lo ? 'short' : hi !== null && count > hi ? 'long' : 'met';
+  const top = hi !== null && s.unit === 'words' && (s.kind === 'max' || s.kind === 'range') ? Math.round(hi * 1.1) : hi; return lo !== null && count < lo ? 'short' : top !== null && count > top ? 'long' : 'met';
 }

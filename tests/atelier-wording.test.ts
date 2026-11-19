@@ -4,7 +4,7 @@ import { describe, it, expect } from 'vitest';
 import { entry, stateOf, type Entry, type Observation, type EvaluationRecord } from '../core/eval/record.js';
 import { spansByEntry } from '../cli/eval-run.js';
 import { COPIED_LINE } from '../core/loop/run-repair.js';
-import { kindOf, linesOf, foundLines, outcomeOf, shortLine, verdictLines, SAID, OUTCOME_SAID } from '../core/eval/wording.js';
+import { kindOf, linesOf, outcomeOf, shortLine, verdictLines, SAID, OUTCOME_SAID } from '../core/eval/wording.js';
 
 const obs = (o: Partial<Observation> = {}): Observation => ({ proposition: 'counts it', coverage: 'FULL', qualification: 'DETERMINISTIC', evidence: '1 in 39 words (none allowed)', ...o });
 const rule = (id: string, verdict: 'MET' | 'VIOLATED' | null, o: Partial<Observation> = {}, more: Partial<Pick<Entry, 'required'>> & { applies?: false | { setAside: string } } = {}): Entry =>
@@ -110,10 +110,10 @@ describe('the outcome of a record', () => {
   it('the sentence never reads "nothing broke" over a broken rule, and counts each kind once', () => {
     const r = record(rule('a', 'MET'), rule('b', 'VIOLATED'), rule('c', 'MET', { coverage: 'PARTIAL' }), rule('d', null, { proposition: null, coverage: 'NONE', evidence: null }), rule('e', 'VIOLATED', { qualification: 'UNQUALIFIED' }));
     const line = shortLine(r);
-    expect(line).toMatch(/^1 of your rules is not met/);
+    expect(line).toMatch(/^1 of the rules is not met/);
     expect(line).toContain('1 measured');
     expect(line).toContain('1 to look at');
-    expect(foundLines(r)).toHaveLength(2);
+    expect(verdictLines(r).slice(1)).toHaveLength(2);
     expect(shortLine(record(rule('a', 'MET')))).toBe('every rule was measured and held.');
   });
 });

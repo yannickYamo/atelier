@@ -88,7 +88,7 @@ describe('a piece that talks about its own making, through the binary', () => {
     expect(JSON.stringify(j.inferred)).not.toContain('ticket office');
     expect(j.ownWords).toEqual({ checked: true });
     expect((j.report as string[]).join('\n')).toContain('The piece talked about its own making in 1 sentence(s) (the brief and a date): 1 written again to speak to the reader. What was missing is listed beside the draft, never in it.');
-    expect((j.report as string[]).join('\n')).toContain('Inferred for this piece');
+    expect((j.report as string[]).join('\n')).toContain('Beside the piece, never in it');
     // the record on disk says the same
     const [rec] = store.listInvocations({ root: data, skillName: 'quay' });
     expect(rec.output).not.toContain(CONFESSION);
@@ -172,7 +172,7 @@ describe('a piece that talks about its own making, through the binary', () => {
     const j = JSON.parse(run('invoke', '--skill', 'quay', 'Write a post on the new terminal.', '--json', ...be)) as Record<string, any>;
     expect(String(j.output)).not.toMatch(/\[[^\]]+\]/);
     expect(String(j.output)).toContain(WHOLE);
-    expect(j.inferred).toContainEqual({ kind: 'slot', what: SLOTTED, settled: `written again: ${WHOLE}`, add: 'the specific, as material (--with)' });
+    expect(j.inferred).toContainEqual({ kind: 'slot', what: SLOTTED, settled: `written again: ${WHOLE}`, add: 'the specific, given with --with' });
     const bodies = (await log()).slice(seen);
     for (const t of writes(bodies)) {
       expect(t).toContain('Leave no bracketed slot for me to fill');
@@ -201,7 +201,7 @@ describe('a piece that talks about its own making, through the binary', () => {
     const j = JSON.parse(run('invoke', '--skill', 'quay', 'Write a post on the new terminal.', '--json', ...be)) as Record<string, any>;
     expect(String(j.output)).not.toContain('Varga');
     expect(String(j.output)).toContain(PLAIN);
-    expect(j.inferred).toContainEqual({ kind: 'name', what: NAMED, settled: `written again: ${PLAIN}`, add: 'the real name, as material (--with)' });
+    expect(j.inferred).toContainEqual({ kind: 'name', what: NAMED, settled: `written again: ${PLAIN}`, add: 'the real name, given with --with' });
     expect((j.report as string[]).join('\n')).toContain('It named someone nothing given holds in 1 sentence(s) (Tomas Varga)');
     const read = (await log()).slice(seen).filter((b) => toolOf(b) === 'emit_own_words').map(textOf).join('\n');
     expect(read).toContain('<given>');
@@ -212,7 +212,7 @@ describe('a piece that talks about its own making, through the binary', () => {
     await script();
     const { data, run, be } = setup();
     const shown = run('run', 'Write a post on the new terminal.', '--skill', 'quay', ...be);
-    expect(shown).toContain('Inferred for this piece');
+    expect(shown).toContain('Beside the piece, never in it');
     expect(shown).toContain(`about its own making: ${CONFESSION} → written again: ${REWRITE}`);
     expect(shown).toContain('decided for you: Why does the terminal matter to you now? → decided: My daily crossing');
     const [rec] = store.listInvocations({ root: data, skillName: 'quay' });

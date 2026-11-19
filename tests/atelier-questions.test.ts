@@ -235,3 +235,30 @@ describe('the angle and the news are the author\'s where nothing given states th
     expect(JSON.stringify(QUESTIONS.schema)).toContain('"NONE"');
   });
 });
+
+describe('a typed answer that names an option the way people type it', () => {
+  const q = { id: 'reader', ask: 'Who reads it?', options: ['Leaders deciding how to staff', 'Engineers who might use it', 'Founders who doubt depth'], default: 'Leaders deciding how to staff' } as never;
+  it('takes "c)", "(b)", "a." and "A:" as that option', async () => {
+    const { typedAnswer } = await import('../cli/prewrite.js');
+    expect(typedAnswer(q, 'c)')).toBe('Founders who doubt depth');
+    expect(typedAnswer(q, '(b)')).toBe('Engineers who might use it');
+    expect(typedAnswer(q, 'a.')).toBe('Leaders deciding how to staff');
+    expect(typedAnswer(q, 'A:')).toBe('Leaders deciding how to staff');
+  });
+  it('keeps the option and the words after it when a letter starts a longer answer', async () => {
+    const { typedAnswer } = await import('../cli/prewrite.js');
+    const got = typedAnswer(q, 'a) but also to give myself credibility as a leader');
+    expect(got).toContain('Leaders deciding how to staff');
+    expect(got).toContain('but also to give myself credibility as a leader');
+    expect(got).not.toMatch(/^a\)/);
+  });
+  it('leaves words that only start with a letter as the person wrote them', async () => {
+    const { typedAnswer } = await import('../cli/prewrite.js');
+    expect(typedAnswer(q, 'a team lead who doubts it')).toBe('a team lead who doubts it');
+    expect(typedAnswer(q, 'd)')).toBe('d)');
+  });
+  it('reads --answers the same way', () => {
+    const { answers } = readAnswers('reader=c)', [q], ['reader'], false);
+    expect(answers.get('reader')).toBe('Founders who doubt depth');
+  });
+});

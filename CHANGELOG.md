@@ -13,6 +13,13 @@ Atelier learns how you write from the pieces you would sign, writes new pieces t
 - At a terminal, `atelier run` asks the editor's questions before it writes; anywhere else nothing is asked and the open questions are listed beside the piece.
 - What the work is, who reads it and what it is for are read from your method note as well as your pieces, each on a passage of yours. Where nothing shows one, the build asks you.
 - The writer and the installed skill are told the same thing: where your method and your pieces differ, your method decides. At a terminal the build says so.
+- The questions asked before a piece are shaped by your pieces as well as your request and method: what your pieces always rest on and this request leaves out is asked, five questions at most.
+- The build reads who the work is for from the line you give, your method and your pieces together. Where your own words say it, nothing is asked; otherwise it asks once (enter keeps what it read). It then writes one piece as a preview, with one round of changes. What you said is told to the writer of every piece.
+- Where the line you give `atelier new` asks for a piece, the build writes that piece, with the editor's questions at a terminal and your notes from `--with <name>=<file>`. A line that only says what the work is writes no piece. The build no longer writes a preview on a subject taken from your pieces. Its first screen says one thing a line, and describes the pieces you gave, which may not be your own.
+- Beside the piece: what you answered before the draft counts as given, so a sentence of your own answer is no longer listed for you to check. Sentences left to check are grouped under one line, with what most needs you first. Questions asked one at a time keep their numbers.
+- A question before a piece is asked only where its answers would give different pieces. A purpose read off your pieces is never told to the writer as yours.
+- A note marked for one use or one kind of piece is used only there.
+- A skill whose method makes it strict is written the same way as any other, with its checks held strict.
 - Before a release, `npm run live` runs the front door on a real model and records what it found; the release stops without that record.
 - A rule that a check not yet relied on found broken is listed under the piece as something to look at. Such a run read "Ready" before.
 - `atelier new` builds the check from your finished pieces, with or without a note of your own rules, and shows every rule for approval before it binds.

@@ -80,7 +80,7 @@ export function replaceEmDashes(text: string): string {
       if (i === parts.length - 1 && !part.trim()) return /[.!?:;,]["”’)]?$/.test(acc.trim()) ? acc.trimEnd() : `${acc.trimEnd()}.`;
       if (edged(parts[i - 1], part)) return `${acc} - ${part}`;
       const tail = part.trim().split(/\s+/).length;
-      return `${acc}${tail <= 4 ? ', ' : ': '}${part}`;
+      return `${acc}${tail <= 4 || /^(?:and|but|or|nor|so|yet)\b/i.test(part.trim()) ? ', ' : ': '}${part}`;
     });
   }).join(' ')), replaceInTableRow);
 }

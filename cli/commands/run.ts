@@ -19,7 +19,8 @@ import { planFor } from '../../core/plan/execution-plan.js';
 import type { EvalSummary } from '../../core/eval/summary.js';
 import { listEvals } from '../../core/state/eval-store.js';
 import type { StandardVersion, InferredItem } from '../../core/state/canonical-state.js';
-import { OUTCOME_SAID, outcomeOf, foundLines, shortLine } from '../../core/eval/wording.js';
+import { OUTCOME_SAID, outcomeOf, verdictLines, shortLine } from '../../core/eval/wording.js';
+import type { Span } from '../../core/observers/registry.js';
 import { inferredLines } from '../../core/loop/inferred.js';
 
 export interface EngineRun { readonly output: string | null; readonly invocationId: string; readonly costUsd: number; readonly cut?: readonly string[]; readonly toCheck: readonly string[];
@@ -178,7 +179,8 @@ export async function run(): Promise<void> {
   // ONE OF THREE OUTCOMES, IN THE PERSON'S WORDS (`outcomeOf`): ready, needs a look, needs a fix. The piece is always
   // handed over. What to look at or fix is listed under it; the table's own account stays behind --report.
   const card = cardFor(result);
-  const found = card ? foundLines(card.record) : [];
+  // under a rule not met, the sentences that break it (the engine's spans), as `atelier verify` says them
+  const found = card ? verdictLines(card.record, new Map(Object.entries((result as { brokenAt?: Record<string, Span[]> }).brokenAt ?? {}))).slice(1) : [];
   const outcome = outcomeOf(goes, result.eval?.record?.state, card?.record);
   const head = !card || typed.report || outcome === 'ready' ? '' : `${OUTCOME_SAID[outcome]}: see under the piece.\n\n`;
   console.log(`${head}${work.trimEnd()}\n`);
@@ -209,7 +211,7 @@ export async function run(): Promise<void> {
     console.log(`${OUTCOME_SAID[outcome]}. Checked: ${shortLine(card.record)}`);
     for (const l of found) console.log(l);
     if (goes === 'PERSON') console.log(`To rule on it later: atelier rate ${result.invocationId} yes|no`);
-    console.log(`${outcome === 'fix' ? 'To fix it' : 'Not right?'} atelier fix "<what ${outcome === 'fix' ? 'to change' : 'was wrong'}>"   ·   every check, rule by rule: atelier report ${result.invocationId}`);
+    console.log(`${outcome === 'fix' ? 'To fix it:' : 'Not right?'} atelier fix "<what ${outcome === 'fix' ? 'to change' : 'was wrong'}>"   ·   every check, rule by rule: atelier report ${result.invocationId}`);
   }
   if (typed.report) console.log(`\n${result.report.join('\n')}`);
   process.exitCode = engine.code !== 0 ? engine.code : exitFor(result.eval);

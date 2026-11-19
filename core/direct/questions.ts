@@ -32,7 +32,7 @@ import { KIND_ASK, QUESTION_KINDS, GAP_KINDS, type Question, type ToldAnswer, ty
 export const EDITOR_KINDS = ['idea', 'reader', 'pain', 'proof', 'next'] as const;
 export type EditorKind = typeof EDITOR_KINDS[number];
 /** The most questions asked before one piece. */
-export const EDITOR_MAX = 3;
+export const EDITOR_MAX = 5;
 
 /** What the writer is told an answer of each kind is about. */
 export const EDITOR_ASK: Readonly<Record<EditorKind, string>> = {
@@ -64,14 +64,16 @@ export interface EditorInput {
   readonly kind?: string | null;
   /** what this skill's work is, read at the build or written by the person (./card.ts), where there is one */
   readonly card?: PurposeCard | null;
+  /** how the author writes, read from their finished pieces at the build: each habit with a sentence of theirs */
+  readonly habits?: readonly { readonly text: string; readonly theirs: string }[];
 }
 /** One field or decision as read: stated (and where), or asked with its question. */
 export interface EditorDecision { readonly kind: string; readonly stated: string | null; readonly question: Question | null; readonly why?: string; readonly from?: 'decision' | 'field' }
 export interface EditorReading { readonly decisions: readonly EditorDecision[]; readonly questions: readonly Question[] }
 
-export const EDITOR_SYSTEM = `You prepare a writer the way a good editor does before a first draft. You are shown the person's request, the material that came with it, their method where they have one, the kind of work it is where that was read, what their work usually is and settles where that was read, and what they told this skill before.
+export const EDITOR_SYSTEM = `You prepare a writer the way a good editor does before a first draft. You are shown the person's request, the material that came with it, their method where they have one, the kind of work it is where that was read, what their work usually is and settles where that was read, how they write where that was read from their finished pieces, and what they told this skill before.
 
-First, decisions: the open decisions that would change this piece's argument most, given what it is and who it is for. At most three, the most important first. A decision is open when nothing you were shown settles it: never ask what the request, the material, the method or what they told you before already decides. What their work usually settles is where to look first, never a reason to ask what this request already decides. Ask what an expert in this kind of work would settle before writing it (for a pricing memo, which price and against what; for a reply to a customer, what is offered; for an essay, the claim it stakes), not questions of voice or form. For each:
+First, decisions: the open decisions that would change this piece's argument most, given what it is and who it is for. At most five, the most important first; fewer is better than a question the person need not answer. Before you keep a decision, picture the piece under each of its answers: where the piece would come out the same whichever they chose, it is not worth their time, and you leave it out. A decision is open when nothing you were shown settles it: never ask what the request, the material, the method or what they told you before already decides. What their work usually settles is where to look first, never a reason to ask what this request already decides. Ask what an expert in this kind of work would settle before writing it (for a pricing memo, which price and against what; for a reply to a customer, what is offered; for an essay, the claim it stakes), not questions of voice or form. How the author writes shows what their pieces are built on: a position taken in the first lines, one idea or image carried through, a case told before the claim, where they leave the reader. Where this piece needs one of those from the person and nothing you were shown gives it, that is an open decision: ask for it, as a question about this piece. Never ask how it should sound: their pieces settle that. For each:
 - id: two or three lower-case words joined by hyphens naming the decision ("price-anchor", "what-is-offered").
 - decides: what is to be decided, in a few words.
 - ask: the question you would put to the person (one short sentence, plain words).
@@ -135,16 +137,17 @@ function questionOf(id: string, x: Record<string, unknown>, input: EditorInput, 
 }
 
 export const EDITOR_QUESTIONS: Reading<EditorInput, EditorReading> = {
-  id: 'editor-questions', version: '2',
+  id: 'editor-questions', version: '4',
   system: EDITOR_SYSTEM, schema: EDITOR_SCHEMA,
   toolName: 'emit_editor_questions', toolDescription: 'The open decisions that would change this piece\'s argument most, and for the idea, the reader, their pain, the proof and the next step: where each is stated, or the question to ask.',
-  maxTokens: 1500, estimateUsd: 0.015,
+  maxTokens: 4000, estimateUsd: 0.03,
   prompt(input) {
     return [`The request:\n${input.request.slice(0, 4000)}`,
       input.kind ? `The kind of work: ${input.kind}` : '',
-      input.card ? `What this author's work is, read from all their pieces (not a statement about this request): ${cardLine(input.card)}` : '',
+      input.card ? `${input.card.by === 'you' ? 'What the author says their work is, in their words' : 'What this author\'s work is, read from all their pieces'} (not a statement about this request): ${cardLine(input.card)}` : '',
       input.material.length ? `The material:\n${input.material.map((m) => `[${m.name}]\n${m.head}`).join('\n\n')}` : 'No material came with it.',
       input.method.trim() ? `Their method:\n${input.method.slice(0, 6000)}` : '',
+      input.habits?.length ? `How this author writes, read from their finished pieces (each with a sentence of theirs):\n${input.habits.map((h) => `- ${h.text} (as in "${h.theirs}")`).join('\n')}` : '',
       input.told.length ? `What they told this skill before:\n${input.told.map((t) => `- ${t.ask} ${t.answer}`).join('\n')}` : ''].filter(Boolean).join('\n\n');
   },
   // An empty request asks nothing: there is no piece to prepare.
@@ -193,9 +196,9 @@ export const askOf = (id: string): string | null => (EDITOR_KINDS as readonly st
  * What the writer is told: only what the person answered, in their words. Empty where nobody answered, so a run nobody
  * answers is written exactly as it would be with no question step.
  */
-export function editorNote(answers: readonly { readonly id: string; readonly answer: string }[], asked: readonly Pick<Question, 'id' | 'about'>[] = []): string {
-  // a decision of this piece's own is told by what it decides; a field or a compiled-path kind by its own words
-  const label = (id: string): string | null => askOf(id) ?? (() => { const q = asked.find((x) => x.id === id); return q?.about ? `${q.about.replace(/[.:]$/, '')}:` : null; })();
+export function editorNote(answers: readonly { readonly id: string; readonly answer: string }[], asked: readonly (Pick<Question, 'id' | 'about'> & { readonly ask?: string })[] = []): string {
+  // a decision of this piece's own is told by what it decides, with the question asked: an option is worded against it
+  const label = (id: string): string | null => askOf(id) ?? (() => { const q = asked.find((x) => x.id === id); return q?.about ? `${q.about.replace(/[.:]$/, '')}${q.ask ? ` (asked: "${q.ask}")` : ''}:` : null; })();
   const lines = answers.filter((a) => label(a.id) !== null && a.answer.trim()).map((a) => `- ${label(a.id) ?? ''} ${a.answer.trim()}`);
   return lines.length ? `Before writing, the author settled these. Write from them; they are the author's, not lines to quote:\n\n${lines.join('\n')}` : '';
 }
