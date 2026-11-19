@@ -188,7 +188,7 @@ export function getCard(l: StoreLayout): PurposeCard | null {
     const c = readJson<PurposeCard>(p, { what: 'the purpose card', requireKeys: ['settles'] });
     const str = (x: unknown): string | null => (typeof x === 'string' && x.trim() ? x : null);
     if (!c || typeof c !== 'object' || !Array.isArray(c.settles)) return null;
-    return { kind: str(c.kind), reader: str(c.reader), purpose: str(c.purpose), settles: c.settles.filter((x): x is string => typeof x === 'string'), by: c.by === 'you' ? 'you' : 'model', ...(typeof c.reading === 'string' ? { reading: c.reading } : {}) };
+    return { kind: str(c.kind), reader: str(c.reader), purpose: str(c.purpose), settles: c.settles.filter((x): x is string => typeof x === 'string'), by: c.by === 'you' ? 'you' : 'model', ...(Array.isArray(c.stated) ? { stated: c.stated.filter((f) => f === 'kind' || f === 'reader' || f === 'purpose') } : {}), ...(typeof c.request === 'string' && c.request.trim() ? { request: c.request } : {}), ...(typeof c.reading === 'string' ? { reading: c.reading } : {}) };
   } catch { return null; }
 }
 export function setCard(l: StoreLayout, c: PurposeCard | null): void {

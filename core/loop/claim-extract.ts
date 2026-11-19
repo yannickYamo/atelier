@@ -302,7 +302,7 @@ export function claimAction(ctx: { readonly level: LatitudeLevel; readonly bound
   return { act: 'list', why: 'the skill is held creative: what is not in your material is listed for you, never cut' };
 }
 const STOP = new Set(['the', 'and', 'that', 'with', 'this', 'from', 'were', 'was', 'have', 'had', 'into', 'about', 'their', 'there', 'then', 'than', 'when', 'what', 'which', 'would', 'could', 'because']);
-const contentWords = (s: string): string[] => wordsOf(s).map((w) => w.toLowerCase()).filter((w) => w.length >= 4 && !STOP.has(w));
+const contentWords = (s: string): string[] => wordsOf(s).map((w) => w.toLowerCase()).filter((w) => w.length >= 4 && !STOP.has(w)).map((w) => w.replace(/(?<=[^s])s$/, ''));
 
 /** Compared as the same text: case, quote style, spacing, thousands separators and how a number is spelled aside. */
 const norm = (s: string): string => {
@@ -442,9 +442,7 @@ export function decideSpecifics(text: string, specifics: readonly ExtractedSpeci
     const s = ss[at];
     const lived = LIVED.has(sp.kind) || sp.attributed;
     const numbersOk = numbersIn(sp.text).every((n) => knownNumbers.has(n));
-    // IN THE MATERIAL, WHATEVER THE READER SAID. A specific whose own words and numbers are in what the
-    // person supplied traces to them; the reader calling it NONE, or quoting a weak support, does not
-    // make it invented. Code checks the trace both ways.
+    // IN THE MATERIAL, WHATEVER THE READER SAID: its own words and numbers in what was supplied trace it (both ways).
     // A RULE LICENSES ONLY ITS OWN WORDS. "Under two minutes" from a rule may be repeated; a story, a quotation, or a fact
     // about this request is never supported by what the skill's rules or examples say (the source roles: evidence is the
     // request and its material, the standard is instruction).
@@ -465,9 +463,9 @@ export function decideSpecifics(text: string, specifics: readonly ExtractedSpeci
       const src = sp.source === 'MATERIAL' ? material : task;
       const inSource = supportIsIn(sp.support, src) || supportIsIn(sp.support, known);
       // A lived event or a quotation must share its substance with the passage it cites, not just a topic.
-      const cw = contentWords(sp.text);
-      const sup = new Set(contentWords(sp.support));
-      const overlapOk = !lived || cw.length === 0 || cw.filter((w) => sup.has(w)).length / cw.length >= 0.4;
+      // the person's fact in other words shares a figure of the passage, or two words making most of it
+      const cw = contentWords(sp.text); const sup = new Set(contentWords(sp.support)); const shared = cw.filter((w) => sup.has(w)).length;
+      const overlapOk = !lived || cw.length === 0 || shared / cw.length >= 0.4 || (shared >= 2 && shared / sup.size >= 0.4) || (shared >= 1 && numbersIn(sp.text).some((n) => numbersIn(sp.support).includes(n)));
       supported = inSource && numbersOk && overlapOk;
     } else if (sp.source === 'PUBLIC' && !lived && !strict) {
       publicFacts.push({ start: s.start, end: s.end, text: s.text, specific: sp.text, why: `"${sp.text}": stated as general knowledge; check it before you publish` });

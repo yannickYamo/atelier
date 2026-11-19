@@ -48,6 +48,12 @@ describe('a length the request states in numbers is read off the request', () =>
     expect(againstStated(5000, statedLength('at least 600 words')!)).toBe('met');
     expect(againstStated(1200, statedLength('800-1000 words')!)).toBe('long');
   });
+  it('a word ceiling is met within a tenth over it, as a target is; a paragraph count is exact', () => {
+    const cap = statedLength('no more than 1100 words.')!;
+    expect([1100, 1155, 1210, 1211].map((n) => againstStated(n, cap))).toEqual(['met', 'met', 'met', 'long']);
+    expect(againstStated(1090, statedLength('800-1000 words')!)).toBe('met');
+    expect(againstStated(6, { raw: 'no more than 5 paragraphs', unit: 'paragraphs', kind: 'max', min: null, max: 5, target: null })).toBe('long');
+  });
 });
 
 describe('an em dash the author writes is theirs, however few of their pieces hold one', () => {

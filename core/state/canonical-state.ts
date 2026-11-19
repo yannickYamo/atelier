@@ -722,8 +722,8 @@ export interface DirectRecord {
   readonly effort: string;
   /** the range of the author's shown pieces, in words, told to the writer as a guide where the request stated no length */
   readonly lengthGuide?: { readonly from: number; readonly to: number };
-  /** the writer was told what the person said the work is (the experiment ATELIER_CARD_TO_WRITER=1) */
-  readonly cardToWriter?: true;
+  /** the writer was told what the person said the work is, who reads it and what for */
+  readonly purposeToWriter?: true;
   /** whether the self-review ran and its revision was kept; why not, when it was not */
   /** `broke`: the rules the review's piece broke that the first draft held, where the first draft was delivered for it */
   readonly review: { readonly ran: boolean; readonly why?: string; readonly broke?: readonly string[] };

@@ -1,7 +1,7 @@
 // tests/atelier-card-and-totals.test.ts — WHAT THE WORK IS, READ ONCE; WHAT THE AUTHOR SETTLED, READ ON THE PIECE; AND A
 // TOTAL ITS OWN ROWS DO NOT ADD UP TO. Expected values are written out by hand.
 import { describe, it, expect } from 'vitest';
-import { PURPOSE_CARD, amendCard, cardLine, type CardInput } from '../core/direct/card.js';
+import { PURPOSE_CARD, amendCard, cardLine, cardSaid, type CardInput } from '../core/direct/card.js';
 import { answerItems, styleNote, STYLE_READ } from '../core/direct/style.js';
 import { totalsOff, figureOf } from '../core/observers/totals.js';
 import { EDITOR_QUESTIONS } from '../core/direct/questions.js';
@@ -15,9 +15,19 @@ describe('the purpose card, read from the pieces and held to them', () => {
     const r = PURPOSE_CARD.ground({ kind: 'a pricing memo', kindQuote: 'pricing memos for our sales team', reader: 'a sales rep before a call', readerQuote: 'To: the sales team',
       purpose: 'Tells the team which price to quote and against whom.', purposeQuote: 'Quote the annual plan first', settles: ['the price', 'what it is compared with', 'the price', 'which plan first', 'a', 'b', 'c'] }, PIECES);
     expect(r?.card).toEqual({ kind: 'a pricing memo', reader: 'a sales rep before a call', purpose: 'Tells the team which price to quote and against whom.',
-      settles: ['the price', 'what it is compared with', 'which plan first', 'a', 'b'], by: 'model' });
+      settles: ['the price', 'what it is compared with', 'which plan first', 'a', 'b'], by: 'model', stated: ['kind'] });
+    // the kind's quote is in the line the person gave, so the kind is theirs; the reader and purpose were read off a piece
     const made = PURPOSE_CARD.ground({ kind: 'a pricing memo', kindQuote: 'memos about pricing', reader: 'a CFO', readerQuote: 'the CFO reads it', purpose: null, settles: [] }, PIECES);
     expect(made?.card).toBeNull();
+  });
+  it('a kind longer than its room ends on a whole word', () => {
+    const long = 'a pricing memo for the sales team of a company that sells billing software to founders everywhere, and to the finance teams they hire later on';
+    expect(PURPOSE_CARD.ground({ kind: long, kindQuote: 'pricing memos for our sales team', reader: null, purpose: null, settles: [] }, PIECES)?.card?.kind)
+      .toBe('a pricing memo for the sales team of a company that sells billing software to founders everywhere, and to the finance…');
+    // a line that asks for one piece is kept as the first piece to write, only where the reading quoted the line itself
+    const asks = (asksQuote: string): string | undefined => PURPOSE_CARD.ground({ kind: null, kindQuote: null, reader: null, readerQuote: null, purpose: null, purposeQuote: null, asksQuote, settles: [] }, PIECES)?.card?.request;
+    expect(asks('pricing memos for our sales team')).toBe('pricing memos for our sales team');
+    expect(asks('We price the Team plan at $12 a seat')).toBeUndefined();
   });
   it('no pieces, nothing read; no model, no card', () => {
     expect(PURPOSE_CARD.decide({ purpose: 'x', pieces: [] })).toEqual({ card: null });
@@ -90,5 +100,41 @@ describe('a total its own rows do not add up to', () => {
     expect(figureOf('**12.5%**')).toEqual({ value: 12.5, decimals: 1 });
     expect(figureOf('−3')).toEqual({ value: -3, decimals: 0 });
     expect(figureOf('about 12')).toBeNull();
+  });
+});
+
+describe('whether the line asks for one piece is always answered', () => {
+  // optional, the reader left it out on one build in four over ten pieces, and the build wrote no piece
+  it('the reading must say it, as a quote or null', () => {
+    expect((PURPOSE_CARD.schema as { required: string[] }).required).toContain('asksQuote');
+  });
+});
+
+describe('what the person said, told to the writer as what it is about', () => {
+  const base = { kind: 'an X post about a personal build', reader: 'product leaders on X', purpose: 'Show it can be built fast.', settles: [], by: 'model' as const, stated: ['kind', 'reader', 'purpose'] as const };
+  it('a line that asks for one piece describes that piece, never the author\'s pieces', () => {
+    const said = cardSaid({ ...base, request: 'write an X post on my new CLI' }, 'write an X post on my new CLI');
+    expect(said).toContain('this piece');
+    expect(said).not.toContain('these pieces');
+    expect(said).toContain('an X post about a personal build');
+  });
+  it('a later request is told nothing of a piece asked for at the build', () => {
+    expect(cardSaid({ ...base, request: 'write an X post on my new CLI' }, 'write a launch note for v2')).toBe('');
+  });
+  it('a line about the work in general still describes the pieces', () => {
+    expect(cardSaid(base, 'anything')).toContain('these pieces');
+  });
+  it('nothing the reading made up, only what the person said', () => {
+    expect(cardSaid({ ...base, stated: [] }, 'anything')).toBe('');
+  });
+});
+
+describe('how many pieces the build read', () => {
+  // pieces are said to be held back only where a blind comparison holds them; a writer's served budget is not that
+  it('every piece given, and held back only what is', async () => {
+    const { piecesReadLine } = await import('../cli/guided.js');
+    expect(piecesReadLine(10, 0)).toBe('  Pieces read: 10');
+    expect(piecesReadLine(10, 2)).toBe('  Pieces read: 8 of the 10 you gave (2 held back for a blind comparison)');
+    expect(piecesReadLine(0, 0)).toBe('');
   });
 });

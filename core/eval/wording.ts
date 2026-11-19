@@ -50,7 +50,7 @@ export function kindOf(e: Entry): Kind | null {
 }
 
 /** The rule in the person's words, on one line. */
-const said = (e: Entry): string => e.statement.replace(/\s+/g, ' ').trim().slice(0, 90);
+const said = (e: Entry): string => { const t = e.statement.replace(/\s+/g, ' ').trim(); return t.length <= 90 ? t : `${t.slice(0, 90).replace(/\s+\S*$/, '')}…`; };
 // what the check saw, never why it is or is not relied on: that is the full account's (--report)
 const withFound = (e: Entry): string => { const saw = e.observation.saw ?? e.observation.evidence; return `${said(e)}${saw ? ` (${saw})` : ''}`; };
 
@@ -79,8 +79,6 @@ export function linesOf(e: Entry): string[] {
   return e.reason === 'LISTED_FOR_YOU' && !e.observation.accepted ? [`  ${SAID.toCheck}${e.observation.saw ?? e.observation.evidence ?? ''}`] : [`  ${SAID.look}${withFound(e)}`];
 }
 
-/** Every line under a piece, in the record's order. */
-export const foundLines = (r: Pick<EvaluationRecord, 'entries'>): string[] => r.entries.flatMap(linesOf);
 
 /** The three outcomes a person reads, and their words. */
 export type Outcome = 'ready' | 'look' | 'fix';
@@ -108,14 +106,14 @@ export function shortLine(r: Pick<EvaluationRecord, 'entries' | 'state'>): strin
   const held = of('held', false); const partly = of('held', true); const broken = of('broken'); const judged = of('judge'); const unread = of('unchecked');
   const look = r.entries.filter((e) => kindOf(e) === 'look');
   const slip = look.some((e) => slipsOf(e).length > 0); const other = look.filter((e) => e.reason === 'OBSERVER_UNQUALIFIED').length;
-  if (!broken && !partly && !judged && !unread && !look.length) return r.state === 'VERIFIED' ? 'every rule was measured and held.' : `nothing broke your rules (${held} measured).`;
+  if (!broken && !partly && !judged && !unread && !look.length) return r.state === 'VERIFIED' ? 'every rule was measured and held.' : `nothing broke the rules (${held} measured).`;
   const parts = [`${held} measured`,
     ...(judged ? [`${n(judged, 'is a judgement call', 'are judgement calls')} the writer was given in your words`] : []),
     ...(partly ? [`${partly} held where ${partly === 1 ? 'it is' : 'they are'} checked`] : []),
     ...(unread ? [`${unread} could not be checked on this piece, named below`] : []),
     ...(other ? [`${other} to look at, named below`] : []),
     ...(slip ? ['a possible slip is listed below'] : [])];
-  return `${broken ? `${broken} of your rules ${broken === 1 ? 'is' : 'are'} not met, named below` : 'nothing broke your rules'} (${parts.join('; ')}).`;
+  return `${broken ? `${broken} of the rules ${broken === 1 ? 'is' : 'are'} not met, named below` : 'nothing broke the rules'} (${parts.join('; ')}).`;
 }
 
 /** The outcome of a record, in its word. */

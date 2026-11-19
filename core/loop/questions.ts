@@ -223,17 +223,16 @@ export const QUESTIONS: Reading<QuestionsInput, QuestionsReading> = {
 /** A letter for an option: a, b, c, d. */
 export const letter = (i: number): string => String.fromCharCode(97 + i);
 
+/** "c", "c)", "(c)", "c." or "a) but also …": that option, words after the letter kept; anything else as written. */
+export function pickedOption(options: readonly string[], typed: string): string {
+  const m = /^\(?([a-d])(?:$|[).:]\s*(.*)$|\)?\s+[-–,;]\s*(.*)$)/is.exec(typed.trim()); const i = m ? m[1].toLowerCase().charCodeAt(0) - 97 : 9;
+  const rest = (m?.[2] ?? m?.[3] ?? '').trim(); return i >= options.length ? typed : rest ? `${options[i]}; ${rest}` : options[i];
+}
+
 /** Where one `id=choice` pair ends and the next begins (a form parser): a comma followed by an id and "=". */
 const PAIR_BREAK = /,(?=\s*[a-z][a-z0-9_-]*\s*=)/i;
 
-/**
- * THE ANSWERS GIVEN AS `--answers "angle=b,naming=only the product, never the operator"` (a form parser: `id=choice`
- * pairs, split only where a comma is followed by `<id>=`, so an answer may hold commas). A single letter names that
- * option of the question; a letter past its options is no answer: the default stands, and that is said. Anything else
- * is the person's own answer, kept as written. An id that is a question kind answers that kind, asked this run or not;
- * one that is no kind is said in one line and ignored; one that follows an answer in the person's own words stays in that answer, and that is
- * said. Never fails.
- */
+/** `--answers "angle=b,naming=only the product, never"`: `id=choice` pairs; a letter picks its option, other words kept. */
 export function readAnswers(s: string | undefined, questions: readonly Question[],
   /** ids a caller asks beside the kinds here (the direct writer's editor questions, ../direct/questions.ts) */
   extraIds: readonly string[] = [],
@@ -261,6 +260,8 @@ export function readAnswers(s: string | undefined, questions: readonly Question[
     if (!id || !choice) continue;
     if (!kinds.includes(id)) { said.push(`${id} matched no question; ignored.`); continue; }
     const q = questions.find((x) => x.id === id);
+    const picked = q ? pickedOption(q.options, choice) : choice;
+    if (picked !== choice) { answers.set(id, picked); continue; }
     const i = /^[a-d]$/i.test(choice) ? choice.toLowerCase().charCodeAt(0) - 97 : -1;
     if (i < 0) {
       // A gap question's answer in the person's own words is a fact or a frame: a few characters carry neither, and
@@ -278,8 +279,8 @@ export function readAnswers(s: string | undefined, questions: readonly Question[
 }
 
 /** The questions as a person reads them in a terminal: each with its lettered options and its default, and what an answer unlocks. */
-export function questionLines(qs: readonly Question[]): string[] {
-  return qs.flatMap((q, n) => [`${n + 1}. ${q.ask}`, ...q.options.map((o, i) => `   ${letter(i)}) ${o}${same(o, q.default) ? ' (default)' : ''}`),
+export function questionLines(qs: readonly Question[], from = 0): string[] {
+  return qs.flatMap((q, n) => [`${from + n + 1}. ${q.ask}`, ...q.options.map((o, i) => `   ${letter(i)}) ${o}${same(o, q.default) ? ' (default)' : ''}`),
     ...(q.last ? [`   last time you said: ${q.last}`] : []), ...(q.unlocks ? [`   an answer unlocks: ${q.unlocks}`] : [])]);
 }
 

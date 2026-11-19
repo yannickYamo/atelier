@@ -260,14 +260,15 @@ At a terminal that is the build you get with any number of pieces; `--rules` ask
 more pieces and shown to you for approval before anything is built. Without a terminal (`--yes`, `--json`, a pipe, a
 host), four or more pieces and a model still take the rules route.
 
-At a terminal, `atelier new` does not end at "built". It says what it understood from your pieces, asks the few
-things only you can say (what the pieces are, who reads them, what for; at most five questions, enter skips), writes
-two pieces with the new skill as previews, and takes one round of "what would you change" on each. A preview is never
-added to your pieces: the skill is written from your own work. A change you ask for and confirm with `y` is held as
+At a terminal, `atelier new` does not end at "built". It says what it understood from your pieces, asks the one
+thing only you can say (who reads the pieces and what for; asked only where your own words did not say it), then,
+where the line you gave asks for a piece, writes that piece (`--with <name>=<file>` gives it your notes) and takes one
+round of "what would you change". A line that only says what the work is asks for no piece, and none is written. A
+piece written here is never added to your pieces: the skill is written from the work you gave. A change you ask for and confirm with `y` is held as
 your correction, and every later piece is reviewed against it. The build ends on its first version; a change you
 make for every piece later (`atelier fix "…" --always`) makes the next. With `--json` or no terminal, it builds and asks nothing; so does `--yes`, which on a build with a method note
 also keeps as written any step your own pieces do not follow. A skill built again keeps what you kept and corrected and
-writes no new previews. Enter never keeps anything, and neither does an input that ends.
+writes no piece here. Enter never keeps anything, and neither does an input that ends.
 
 Under the work a run prints two lines: what the checks found, in one sentence, and what to type if the piece is not
 right. Anything a check found and left for you (a possible slip, a specific to confirm) is listed there in full. A
@@ -406,7 +407,7 @@ the skill on blind: `atelier reproduce` needs a skill built with `atelier new`.
 ## Using it
 
 ```bash
-atelier new ./posts "write me a blog post like these"   # read your work, build, try it on two previews
+atelier new ./posts "write me a blog post like these"   # read your work, build, and write the piece you asked for
 /posts write the launch post                           # in Claude Code
 atelier invoke --skill posts "write the launch post"    # or the CLI: written, checked, repaired
 atelier verify --skill posts draft.md --repair           # guard any text
@@ -714,7 +715,7 @@ say", no "I won't invent a figure". What the request, your material and your pie
 nobody made is taken from your pieces and the request; a point with no figure given is argued from what is given. The
 last step of every run reads the finished piece for any sentence about its notes or its gaps and writes it again to
 speak to the reader, or drops it. Everything the run decided for you, each specific it was not given and each sentence
-it wrote again is listed under the work ("Inferred for this piece") and in `--json` as `inferred`, each with what to
+it wrote again is listed under the work ("Beside the piece, never in it") and in `--json` as `inferred`, each with what to
 add (`--answers`, `--with`) to change it.
 
 ### Voice, and other registers (opt-in)

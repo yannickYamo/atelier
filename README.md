@@ -72,7 +72,7 @@ atelier run "a post on why we moved off the queue" --with notes=notes.md   # wri
 atelier verify --skill posts draft.md --with notes=notes.md   # read any draft, yours or an agent's
 ```
 
-At a terminal, `atelier new` ends by showing the agent at work: what it understood, a few questions only you can answer, two pieces written on the spot as previews, and one round of changes. A change you ask for and confirm is carried to every later piece. The previews are never added to your own pieces: the agent is built from your work, not from its drafts.
+At a terminal, `atelier new` ends by showing the agent at work: what it understood, one question only you can answer (who reads the work and what for; enter keeps what it read), the piece your line asked for (give it your notes with `--with <name>=<file>`), and one round of changes. A change you ask for and confirm is carried to every later piece. That piece is never added to your own pieces: the agent is built from your work, not from its drafts.
 
 `atelier setup` lets the coding agents in a project (Claude Code, Codex) call it on their own drafts. Not happy with a piece? `atelier fix "the opening was too abstract"` and say it in your own words. [examples/blog](examples/blog) has six posts to try it on.
 

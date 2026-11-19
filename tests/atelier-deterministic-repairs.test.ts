@@ -73,3 +73,15 @@ describe('only where a rule the work is held to bans them', () => {
     expect(mechanicalFixes(v, verifyText('s', v, text), text)).toEqual({ text, fixed: [] });
   });
 });
+
+describe('a dash before a joining word', () => {
+  it('becomes a comma, never a colon, when the words after it start with and, but, or, so or yet', () => {
+    const out = replaceEmDashes('It tells you whether the part passes — and, importantly, how far the data behind that answer can be trusted.');
+    expect(out).not.toContain('passes:');
+    expect(out).toContain('passes, and, importantly,');
+    expect(replaceEmDashes('The tool is fast — but it is wrong more often than anyone would like.')).toContain('fast, but it');
+  });
+  it('still sets a long explanation after a colon', () => {
+    expect(replaceEmDashes('There is one rule — the model never writes a value it cannot cite.')).toContain('rule: the model');
+  });
+});

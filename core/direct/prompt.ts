@@ -1,13 +1,8 @@
 // atelier/core/direct/prompt.ts — WHAT THE DIRECT WRITER IS SENT: THE PIECES, THE MATERIAL, THE TASK. NOTHING ELSE.
 //
-// Each layer a compiled skill put between the model and what the person gave it was measured as neutral or as a cost:
-// rules about the author (73% of what the writer read), a plan that served three points instead of the notes, method
-// steps that asked every piece for numbers nobody gave, a quota of moves. The baseline that won in every blind test sent
-// three things and asked for the piece, then sent them again with the draft and asked for a check and a revision. This
-// is that, with what Atelier adds where it was shown to help: the pieces of the kind asked for (./route.ts), each with
-// the request it answered, and the person's own earlier corrections, shown to the review as theirs (../direct/kept.ts).
-// A rule the author stated and required (a ban they wrote, "No em dashes.") is their word, not a reading of them: it is
-// shown beside the task, in their words. Nothing read off their pieces is.
+// The baseline that won every blind test (pieces, material, task; then a check and a revision), with what was shown to
+// help: the pieces of the kind asked for (./route.ts), the person's earlier corrections (../direct/kept.ts), and the
+// rules they stated, in their words. Nothing read off their pieces is told the writer.
 //
 // The pieces are the stable block (cached across the draft and the review); the material and the task are the
 // variable block; the user turn asks for the piece.
@@ -48,11 +43,7 @@ export function rulesBlock(rules: readonly string[] | undefined): string {
 /** The most of the author's method the writer is shown, in characters. */
 export const METHOD_SHOWN = 12_000;
 
-/**
- * WHICH SOURCE DECIDES, SAID ONCE. The author's method is their word on how the work is done; the pieces show how it
- * reads. Where the two differ, the method decides. The writer's prompt and the installed skill (renderers/agent-skill)
- * both say this sentence, so the two writers of a skill are never told opposite things.
- */
+/** WHICH SOURCE DECIDES, SAID ONCE: the method over the pieces, in this prompt and the installed skill alike. */
 export const methodDecides = (voice: 'author' | 'mine'): string => (voice === 'mine' ? 'Where my method and my pieces differ, my method decides.' : 'Where the method and the pieces differ, the method decides.');
 
 /** The author's method, whole, as the writer and the review read it; empty where the skill has none. */
@@ -61,13 +52,10 @@ export function methodBlock(method: string | undefined): string {
   return m ? `The author's method for their pieces, in their words. Follow it wherever it applies to this piece. ${methodDecides('author')}\n\n<method>\n${m.slice(0, METHOD_SHOWN)}\n</method>\n\n` : '';
 }
 
-/**
- * The material, the author's method and their own rules where they have them, what they settled before the draft, and
- * the task. A rule whose words are already in the method is not said twice.
- */
-export function taskBlock(x: Pick<DirectInput, 'material' | 'task' | 'rules' | 'method' | 'settled'>): string {
+/** The material, the method, the author's rules (one the method says is not repeated), what they settled, the task. */
+export function taskBlock(x: Pick<DirectInput, 'material' | 'task' | 'rules' | 'method' | 'settled'> & { readonly points?: boolean }): string {
   const material = x.material.length
-    ? `The material for this piece:\n\n${x.material.map((m) => `<material name="${m.name}">\n${m.text.trim()}\n</material>`).join('\n\n')}\n\n`
+    ? `The material for this piece. A note marked for one use or one kind of piece is used only there.\n\n${x.material.map((m) => `<material name="${m.name}">\n${m.text.trim()}\n</material>`).join('\n\n')}\n\n${x.points ? `${DIRECT_POINTS_NOTE}\n\n` : ''}`
     : '';
   const flat = (s: string): string => s.replace(/\s+/g, ' ').trim().toLowerCase();
   const inMethod = flat(x.method ?? '');
@@ -76,18 +64,19 @@ export function taskBlock(x: Pick<DirectInput, 'material' | 'task' | 'rules' | '
   return `${material}${methodBlock(x.method)}${rulesBlock(rules)}${settled}The task:\n\n<task>\n${x.task.trim()}\n</task>`;
 }
 
+export const ANSWERS_HEAD = 'WHAT THE AUTHOR ANSWERED BEFORE THIS PIECE WAS WRITTEN, in their own words:';
+
+/** Material in finished sentences (core/loop/material-points.ts) is facts to write from; the author's pieces are the voice. */
+export const DIRECT_POINTS_NOTE = 'The material above is facts and points to write from, not a voice: say each one the way the author\'s pieces would, in new sentences. Do not reuse its sentences, its stretches of wording or its coined phrases.';
+
 /** The user turn that asks for the first draft. */
 export const DRAFT_ASK = 'Write the piece now. Return only the piece, in Markdown, starting with its title if it has one.';
 
 /** The person's corrections, as the review reads them: at most this many, newest first. */
 export const EDITS_SHOWN = 8;
 
-/**
- * The user turn that asks for the review and the revision of `draft`. THE SMALLEST REVISION: the arm that beat this one
- * on the same briefs asked the model only to fix what the author would not write, and kept the plainer voice. A review
- * asked to "check against the pieces, then revise" rewrote a median 77% of the lines and added the polish, maxims and
- * extra sections the judges named. No list of banned moves: what is wrong is what the author would not write.
- */
+/** The review of `draft`, THE SMALLEST REVISION: fix only what the author would not write (a review asked to check and
+ *  revise rewrote 77% of lines and added polish, maxims and sections). No list of banned moves. */
 export function reviewAsk(draft: string, x: Pick<DirectInput, 'material' | 'edits' | 'rules' | 'method'> & { readonly style?: string }): string {
   const sources = x.material.length ? 'the material and the task' : 'the task';
   const edits = (x.edits ?? []).slice(0, EDITS_SHOWN);

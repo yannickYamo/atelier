@@ -730,7 +730,8 @@ export async function build(nameArg?: string, opts: { closing?: boolean } = {}):
   const inferred = argv.includes('--review') ? store.getInferredMethod(L) : await inferredMethodFor(L, methodText, desc);
   const moves = argv.includes('--review') ? null : await movesFor(L, voice, methodText ?? (inferred?.steps.length ? { text: noteOf(inferred.steps) } : null));
   // WHAT THIS WORK IS (core/direct/card.ts): read once per corpus, for the editor's questions; a review reads nothing
-  if (!argv.includes('--review')) await cardFor(L, desc, methodText?.text ?? null);
+  // the person's own line where the session holds it, never the description a host is given ("Use when asked to: …")
+  if (!argv.includes('--review')) await cardFor(L, s.intent?.text ?? flag('--for') ?? desc, methodText?.text ?? null);
   if (!argv.includes('--review')) reportOwnPieces(v, name, s);
   // THE SKILL WORDS EACH POINT BY ITS COUNT: the persona's points carry the rates the profile measured (never the
   // reading's own word for how often) where a profile was read; the voice on disk is unchanged.

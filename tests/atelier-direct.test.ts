@@ -12,7 +12,7 @@ import { join, resolve } from 'node:path';
 import * as store from '../core/state/store.js';
 import { catalogueOf, withinBudget, lexicalOrder, titleOf } from '../core/direct/pieces.js';
 import { PIECE_ROUTE } from '../core/direct/route.js';
-import { piecesBlock, taskBlock, reviewAsk, rulesBlock, EDITS_SHOWN, RULES_SHOWN } from '../core/direct/prompt.js';
+import { piecesBlock, taskBlock, reviewAsk, rulesBlock, EDITS_SHOWN, RULES_SHOWN, DIRECT_POINTS_NOTE, ANSWERS_HEAD } from '../core/direct/prompt.js';
 import { editPairs, correctionsOf, sentencesOf, MAX_PAIRS, type KeptPiece } from '../core/direct/kept.js';
 import { directWhyNot, builtPieces } from '../cli/direct.js';
 import { argv } from '../cli/runtime.js';
@@ -73,7 +73,7 @@ describe('what the writer and the review are sent', () => {
     const s = piecesBlock(pieces);
     expect(s).toContain('<piece n="1" request="Write \'a\' post">\n# A post\n\nThe body.\n</piece>');
     const t = taskBlock({ material: [{ name: 'notes', text: ' the notes ' }], task: ' the task ' });
-    expect(t).toBe('The material for this piece:\n\n<material name="notes">\nthe notes\n</material>\n\nThe task:\n\n<task>\nthe task\n</task>');
+    expect(t).toBe('The material for this piece. A note marked for one use or one kind of piece is used only there.\n\n<material name="notes">\nthe notes\n</material>\n\nThe task:\n\n<task>\nthe task\n</task>');
   });
   it('the author\'s own rules only where they stated some, at most RULES_SHOWN, and the review is told to hold them', () => {
     expect(rulesBlock([])).toBe(''); expect(rulesBlock(undefined)).toBe('');
@@ -140,7 +140,8 @@ describe('which path a run takes (directWhyNot), with no flag on the command lin
     expect(directWhyNot({ ...base, voice: null, exemplar: { text: '# Memo\n\nbody' } })).toBeNull();
     expect(builtPieces(null, { text: '# Memo\n\nbody', request: 'Write the pricing memo.' })).toEqual([{ text: '# Memo\n\nbody', request: 'Write the pricing memo.' }]);
     expect(builtPieces(voice, { text: 'ignored' })).toEqual([{ text: '# A\n\nbody', request: null }]);
-    expect(directWhyNot({ ...base, std: { ...std, latitude: { level: 'STRICT' } } as unknown as StandardVersion })).toMatch(/strict skill/);
+    // a skill held strict is written the direct way too, its checks held at that level
+    expect(directWhyNot({ ...base, std: { ...std, latitude: { level: 'STRICT' } } as unknown as StandardVersion })).toBeNull();
     expect(directWhyNot({ ...base, voice: { ...voice, form: 'REPLY' } as unknown as Voice })).toMatch(/answers/);
     expect(directWhyNot({ ...base, voice: null })).toMatch(/none of the author's pieces/);
   });
@@ -246,6 +247,22 @@ describe('a run through the binary, written the direct way', () => {
     expect(reads.length).toBe(1);
   }, 120_000);
 
+  // THE PERSON'S ANSWERS ARE THEIRS, SAID SO TO THE CLAIM READER: labelled and ahead of the material, a fact given in an
+  // answer is cited to the answer.
+  it('the claim reader is told what the person answered before the draft, as their own words, ahead of the material', async () => {
+    await setBackend({ byTool: { emit_persona: PERSONA, emit_holds_back: { ids: [] }, __plain: [DRAFT, REVIEWED] } });
+    const s = seed(FILES, { ATELIER_CLAIMS: 'model', ATELIER_CLAIMS_MODEL: 'scripted' });
+    expect(s.run('new', 'posts', 'write posts in my voice', '--name', 'posts', ...BACKEND()).code).toBe(0);
+    await setBackend({ byTool: { __plain: [DRAFT, REVIEWED], emit_specifics: { specifics: [] } } });
+    const m0 = await mark();
+    s.run('invoke', '--skill', 'posts', 'Compare Logseq and Craft for my notes.', '--with', 'notes=notes.md', '--answers', 'proof=I ran both for a week', '--json', ...BACKEND());
+    const read = (await bodies()).slice(m0).find((b) => b.tools?.some((t) => t.function?.name === 'emit_specifics'));
+    const t = read ? textOf(read) : '';
+    expect(t).toContain(ANSWERS_HEAD);
+    expect(t.indexOf('I ran both for a week')).toBeGreaterThan(t.indexOf(ANSWERS_HEAD));
+    expect(t.indexOf(ANSWERS_HEAD)).toBeLessThan(t.indexOf('Logseq is local-first'));
+  }, 120_000);
+
   it('a count in words the claim reader missed is still listed beside the piece', async () => {
     await setBackend({ byTool: { emit_persona: PERSONA, emit_holds_back: { ids: [] }, __plain: [DRAFT, REVIEWED] } });
     const s = seed(FILES, { ATELIER_CLAIMS: 'model', ATELIER_CLAIMS_MODEL: 'scripted' });
@@ -255,6 +272,21 @@ describe('a run through the binary, written the direct way', () => {
     const r = s.run('invoke', '--skill', 'posts', 'Compare Logseq and Craft for my notes.', '--with', 'notes=notes.md', '--json', ...BACKEND());
     const j = jsonOf(r.out) as Out & { toCheck: unknown };
     expect(JSON.stringify(j.toCheck)).toContain('We moved eleven or twelve teams over to it.');
+  }, 120_000);
+
+  // MATERIAL WRITTEN AS FINISHED SENTENCES IS FACTS, NOT A VOICE: a README given with a request set the piece's voice and
+  // its phrases came through whole. The writer is told it is points to write from, and stretches copied from it are found.
+  it('material in finished sentences is served as points, and a stretch copied from it is found on the record', async () => {
+    await setBackend({ byTool: { emit_persona: PERSONA, emit_holds_back: { ids: [] }, __plain: [DRAFT, REVIEWED] } });
+    const README = 'Logseq keeps every note as a plain file on your own disk, forever. Craft keeps your notes in its own cloud and charges for sync.';
+    const s = seed({ ...FILES, 'readme.md': README }, {});
+    expect(s.run('new', 'posts', 'write posts in my voice', '--name', 'posts', ...BACKEND()).code).toBe(0);
+    const COPYING = `${REVIEWED} Logseq keeps every note as a plain file on your own disk.`;
+    await setBackend({ byTool: { __plain: [COPYING, COPYING] } });
+    const m0 = await mark();
+    const j = jsonOf(s.run('invoke', '--skill', 'posts', 'Compare Logseq and Craft for my notes.', '--with', 'readme=readme.md', '--json', '--claims', 'pattern', ...BACKEND()).out) as Out & { copied?: { runs: number } };
+    expect(textOf((await plainSince(m0))[0])).toContain(DIRECT_POINTS_NOTE);
+    expect(j.copied?.runs ?? 0).toBeGreaterThan(0);
   }, 120_000);
 
   // FOUR WAYS THE DEFAULT RUN FAILED QUIETLY (audit of 9 Nov), each held through the binary.
@@ -294,10 +326,10 @@ describe('a run through the binary, written the direct way', () => {
     const s = await built();
     await setBackend({ byTool: { __plain: [DRAFT, REVIEWED], emit_editor_questions: EDITOR } });
     const r = s.run('run', 'Compare Logseq and Craft for my notes.', '--skill', 'posts', '--with', 'notes=notes.md', ...BACKEND());
-    expect(r.out).toContain('Written without your answer to 3 questions an editor would ask:');
+    expect(r.out).toContain('Written without your answer to 5 questions an editor would ask:');
     expect(r.out).toContain('  - idea: What is the idea? (a) first; b) second)');
-    expect(r.out).toContain('  To answer, run again with --answers "idea=<letter or your words>,reader=<letter or your words>,pain=<letter or your words>".');
-    const answered = s.run('run', 'Compare Logseq and Craft for my notes.', '--skill', 'posts', '--with', 'notes=notes.md', '--answers', 'idea=a,reader=b,pain=a', ...BACKEND());
+    expect(r.out).toContain('  To answer, run again with --answers "idea=<letter or your words>,reader=<letter or your words>,pain=<letter or your words>,proof=<letter or your words>,next=<letter or your words>".');
+    const answered = s.run('run', 'Compare Logseq and Craft for my notes.', '--skill', 'posts', '--with', 'notes=notes.md', '--answers', 'idea=a,reader=b,pain=a,proof=a,next=b', ...BACKEND());
     expect(answered.out).not.toContain('Written without your answer');
   }, 180_000);
   // AT A TERMINAL THE QUESTIONS COME BEFORE THE DRAFT, IN ONE RUN. Run under a real pseudo-terminal (`script`), since the
@@ -558,12 +590,12 @@ describe('a run through the binary, written the direct way', () => {
     await setBackend({ byTool: { __plain: [DRAFT, REVIEWED], emit_editor_questions: EDITOR } });
     const m0 = await mark();
     s.run('invoke', '--skill', 'posts', 'Compare Logseq and Craft for my notes.', '--json', '--claims', 'pattern', '--answers', 'who-pays=b', ...BACKEND());
-    expect(textOf((await plainSince(m0))[0])).toContain('- whether the comparison counts the cost: No, sync is worth paying for');
+    expect(textOf((await plainSince(m0))[0])).toContain('- whether the comparison counts the cost (asked: "Does the price decide it for you?"): No, sync is worth paying for');
     // the next run of the same request: the reader, told the answer, no longer asks it, and the answer still reaches the writer
     await setBackend({ byTool: { __plain: [DRAFT, REVIEWED], emit_editor_questions: { ...EDITOR, decisions: [EDITOR.decisions[1]] } } });
     const m1 = await mark();
     s.run('invoke', '--skill', 'posts', 'Compare Logseq and Craft for my notes.', '--json', '--claims', 'pattern', ...BACKEND());
-    expect(textOf((await plainSince(m1))[0])).toContain('- whether the comparison counts the cost: No, sync is worth paying for');
+    expect(textOf((await plainSince(m1))[0])).toContain('- whether the comparison counts the cost (asked: "Does the price decide it for you?"): No, sync is worth paying for');
   }, 180_000);
 
   it('the editor\'s questions: asked where nothing states them, unanswered they change nothing, answered they reach the writer; the method is shown whole', async () => {
@@ -734,5 +766,18 @@ describe('what the direct path must not lose (found in review)', () => {
     const n = jsonOf(s.run('invoke', '--skill', 'posts', 'Compare Logseq and Craft.', '--with', 'notes=notes.md', '--json', '--claims', 'pattern', '--no-repair', ...BACKEND()).out) as Out & { toCheck: string[]; state?: string };
     expect(n.output).toBe(INVENTED);
     expect(n.toCheck.length).toBeGreaterThan(0);
+  }, 180_000);
+
+  it('what the person answered before the draft is given: a sentence of their answer is never listed for them to check', async () => {
+    await setBackend({ byTool: { emit_persona: PERSONA, emit_holds_back: { ids: [] }, __plain: [DRAFT, INVENTED] } });
+    const s = seed(FILES);
+    expect(s.run('new', 'posts', 'write posts in my voice', '--name', 'posts', ...BACKEND()).code).toBe(0);
+    const listed = async (...extra: string[]): Promise<string[]> => {
+      await setBackend({ byTool: { __plain: [DRAFT, INVENTED] } });
+      const j = jsonOf(s.run('invoke', '--skill', 'posts', '--task', 'Compare Logseq and Craft.', '--with', 'notes=notes.md', '--json', '--claims', 'pattern', ...extra, ...BACKEND()).out) as Out & { inferred: { kind: string; what: string }[] };
+      return j.inferred.filter((i) => i.kind === 'specific' && /49 dollars|3,000 readers/.test(i.what)).map((i) => i.kind);
+    };
+    expect(await listed()).toEqual(['specific']);
+    expect(await listed('--answers', 'proof=It cost me 49 dollars in its first year, and 3,000 readers wrote in.')).toEqual([]);
   }, 180_000);
 });

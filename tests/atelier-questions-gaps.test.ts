@@ -85,6 +85,8 @@ describe('the merge: at most three, each with unlocks and a default, and a log o
   it('the terminal lines say what an answer unlocks', () => {
     const { questions } = chooseQuestions({ decisions: [], questions: [] }, GAPS.ground({ claims: [], reader: frame(), stakes: frame({ spread: 'SAME' }) }, INPUT));
     expect(questionLines(questions)).toContain(`   an answer unlocks: ${GAP_WORDING.READER.unlocks}`);
+    // asked one at a time, a question keeps its place in the list
+    expect(questionLines(questions.slice(0, 1), 2)[0]).toBe(`3. ${questions[0].ask}`);
   });
 });
 

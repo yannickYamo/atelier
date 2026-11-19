@@ -86,9 +86,9 @@ const ALLOWED: readonly RegExp[] = [
   new RegExp(`^(${OUTCOMES}): see under the piece\\.$`),
   new RegExp(`^ {2}(${PREFIXES.map((p) => p.replace(/[?]/g, '\\?')).join('|')})`),
   /^ {6}› /,
-  /^(Not right\?|To fix it) atelier fix "/,
+  /^(Not right\?|To fix it:) atelier fix "/,
   /^Every check, rule by rule: add --report$/,
-  /^Inferred for this piece \(\d+\), beside it and never in it:$/, /^ {2}- (decided for you|not given|no proof given|about its own making|a slot, written whole|a name nothing gave|not the length asked): /,
+  /^Beside the piece, never in it \(\d+\):$/, /^ {2}- (decided for you|not given|no proof given|about its own making|a slot, written whole|a name nothing gave|not the length asked)(: | \(\d+\) → )/,
   /^This is the first draft: the review of it was not used, because it broke a rule the draft held \(/,
   /^The whole piece was written again with what you said/,
   /^About your last run of \//, /^You said: "/, /^Writing it again with what you said\.$/, /^Only this piece changed\. /,
@@ -183,7 +183,7 @@ describe('the front door, through the binary', () => {
     const broke = c(...RUN());
     expect(broke.code).toBe(1);
     gate('run, a broken rule', broke, CONTRAST);
-    expect(broke.out).toMatch(/^Needs a fix\. Checked: 1 of your rules is not met/m);
+    expect(broke.out).toMatch(/^Needs a fix\. Checked: 1 of the rules is not met/m);
     const d = session();
     await set({ emit_step_checks: CHECKS, __plain: [DRAFT, CONTRAST] });
     expect(d(...NEW()).code).toBe(0);

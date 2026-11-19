@@ -10,3 +10,6 @@ dist/
 
 # browser-automation logs from tooling
 .playwright-mcp/
+
+# local working notes for coding agents, never published
+CLAUDE.local.md

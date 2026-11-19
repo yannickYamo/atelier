@@ -1,7 +1,7 @@
 // atelier/cli/guided.ts — THE END OF A BUILD, FOR A PERSON AT A TERMINAL: what was understood, the few things only they
-// can say, two pieces written with the new skill, and one round of what to change. Then the skill is ready.
+// can say, one piece written with the new skill, and one round of what to change. Then the skill is ready.
 //
-// One pass, never a loop. The two pieces are PREVIEWS: the skill is written from the person's own pieces, and a draft
+// One pass, never a loop. The piece is a PREVIEW: the skill is written from the person's own pieces, and a draft
 // the model wrote is never added to them, whether the person pressed enter or not. What the round does keep is how the
 // person changes a draft: they say it once, the piece is written again, and on their y the sentences before and after
 // are held as their correction (core/direct/kept.ts, `correctionOnly`), which every later review is shown
@@ -13,20 +13,14 @@
 
 import { spawnSync } from 'node:child_process';
 import { createInterface } from 'node:readline';
-import { DATA, argv, flag, canReach } from './runtime.js';
+import { DATA, argv, flag, canReach, loadSession } from './runtime.js';
 import * as store from '../core/state/store.js';
 import { cardLine, amendCard, type PurposeCard } from '../core/direct/card.js';
-import { titleOf } from '../core/direct/pieces.js';
 import type { PersonaPoint } from '../core/compiler/persona.js';
 import { editPairs, type KeptPiece } from '../core/direct/kept.js';
 import { createHash } from 'node:crypto';
 import { planFor } from '../core/plan/execution-plan.js';
 import type { StandardVersion } from '../core/state/canonical-state.js';
-
-/** How many pieces the build writes for the person to read. */
-const SAMPLES = 2;
-/** The most the build asks before it writes. */
-const MAX_BUILD_QUESTIONS = 5;
 
 /** Whether a person is there to read and answer: a terminal, and nothing typed that says "do not ask". */
 export const guidedHere = (): boolean =>
@@ -65,14 +59,22 @@ function atelier(args: readonly string[]): { out: string; said: string; ok: bool
   return { out: r.stdout ?? '', said: r.stderr ?? '', ok: r.status === 0 };
 }
 
+/** What the person gave with the build (--with), passed on to the piece it writes. */
+const withArgs = (): string[] => argv.flatMap((a, i) => (a === '--with' && argv[i + 1] ? ['--with', argv[i + 1]] : a.startsWith('--with=') ? [a] : []));
+
 /** How a run's one line on a change of model starts (cli/commands/invoke.ts, `checkedBinding`). */
 export const OTHER_MODEL_NOTE = '(written ';
 /** How the line that says the writer declined once and was asked again begins: `atelier run` passes it through too. */
 export const DECLINED_NOTE = '(the model declined';
 
 /** One piece written with the skill: its text and the run it is recorded as; null where nothing could be written. */
+/** How many pieces the build read: every one given, less only those really held back for a blind comparison. */
+export function piecesReadLine(given: number, reserved: number): string {
+  return given > 0 ? `  Pieces read: ${given - reserved}${reserved > 0 ? ` of the ${given} you gave (${reserved} held back for a blind comparison)` : ''}` : '';
+}
+
 function write(name: string, request: string): { id: string; text: string; note: string | null } | { why: string } {
-  const r = atelier(['invoke', '--skill', name, request, '--json', '--no-questions']);
+  const r = atelier(['invoke', '--skill', name, request, '--json', '--no-questions', ...withArgs()]);
   const at = r.out.lastIndexOf('\n{') >= 0 ? r.out.lastIndexOf('\n{') + 1 : r.out.indexOf('{');
   try {
     const j = JSON.parse(r.out.slice(at)) as { output?: unknown; invocationId?: unknown };
@@ -81,21 +83,6 @@ function write(name: string, request: string): { id: string; text: string; note:
   return { why: `${r.said}\n${r.out}`.split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('{') && !l.startsWith('"')).pop()?.slice(0, 200) ?? 'the run said nothing' };
 }
 
-/** What the card does not say yet, asked in the person's terms: the fields a reading could not ground. */
-const CARD_ASKS: readonly { readonly field: 'kind' | 'reader' | 'purpose'; readonly ask: string }[] = [
-  { field: 'kind', ask: 'What are these pieces (a blog post, a newsletter, a memo)?' },
-  { field: 'reader', ask: 'Who reads them?' },
-  { field: 'purpose', ask: 'What should a reader do or know after reading one?' },
-];
-
-/** The requests the samples answer: the ones the person's own pieces carried, then one in the line of a piece of theirs. */
-function sampleRequests(L: store.StoreLayout, first: string): string[] {
-  const voice = store.getVoice(L);
-  const own = (voice?.pieceRequests ?? []).filter((r): r is string => Boolean(r?.trim()));
-  const titles = (voice?.pieces ?? []).map(titleOf).filter(Boolean);
-  const inLine = titles.map((t) => `Write a new piece on a subject close to "${t}", without repeating it.`);
-  return [...new Set([first.trim(), ...own, ...inLine].filter(Boolean))].slice(0, SAMPLES);
-}
 
 /**
  * THE GUIDED END OF A BUILD. Never fails the build: the skill is built before this starts, and anything that cannot be
@@ -108,6 +95,8 @@ export interface Understood {
   readonly disputed: readonly string[];
   /** the command that makes the disputed steps rules */
   readonly confirm?: string;
+  /** how many pieces the person gave, where the build counted them */
+  readonly given?: number;
 }
 
 /** A list a person reads at a glance: the first few, and how many more. */
@@ -120,7 +109,7 @@ const few = (xs: readonly string[], most: number): string[] => [...xs.slice(0, m
  */
 export function howYouWrite(points: readonly PersonaPoint[], most: number): string[] {
   const clip = (t: string, n: number): string => { const x = t.replace(/\s+/g, ' ').trim(); return x.length > n ? `${x.slice(0, n - 1).trimEnd()}…` : x; };
-  const often = (x: PersonaPoint): string => (x.rate ? `in ${x.rate.k} of your ${x.rate.n} pieces` : ({ ALWAYS: 'always', OFTEN: 'often', SOMETIMES: 'in some pieces', RARELY: 'rarely' } as const)[x.frequency]);
+  const often = (x: PersonaPoint): string => (x.rate ? `in ${x.rate.k} of the ${x.rate.n} pieces` : ({ ALWAYS: 'always', OFTEN: 'often', SOMETIMES: 'in some pieces', RARELY: 'rarely' } as const)[x.frequency]);
   const said = points.filter((x) => x.description.trim());
   return [...said.slice(0, most).flatMap((x) => [`    - ${clip(x.description, 160)}`, ...(x.quote.trim() ? [`        ${often(x)}, as in: "${clip(x.quote, 140)}"`] : [])]),
     ...(said.length > most ? [`    and ${said.length - most} more`] : [])];
@@ -137,7 +126,7 @@ export function whatItHolds(std: Pick<StandardVersion, 'requirements'> & Partial
   const eg = (xs: readonly { statement: string }[]): string => { const t = (xs[0]?.statement ?? '').replace(/\s+/g, ' ').trim().replace(/[.]$/, ''); return t.length > 70 ? `${t.slice(0, 69).trimEnd()}…` : t; };
   const checked = rules.filter((r) => r.check !== null); const judged = rules.filter((r) => r.check === null);
   return [
-    ...(checked.length ? [`Checked by code on every piece: ${checked.length} of your ${rules.length} rules (for example: ${eg(checked)}).`] : []),
+    ...(checked.length ? [`Checked by code on every piece: ${checked.length} of the ${rules.length} rules (for example: ${eg(checked)}).`] : []),
     ...(judged.length ? [`Yours to judge, shown beside every piece: ${judged.length} (for example: ${eg(judged)}).`] : []),
   ];
 }
@@ -150,10 +139,13 @@ export async function guided(name: string, seen: Understood = { steps: [], dispu
     const voice = store.getVoice(L);
     // Only what was read is said: a thing the pieces did not give is asked next, never reported as a failure.
     console.log('\nWhat I understood');
-    if (voice?.pieces?.length) console.log(`  Your pieces: ${voice.corpusPieces ?? voice.pieces.length}${voice.lengthSpan ? `, ${voice.lengthSpan[0]} to ${voice.lengthSpan[1]} words each` : ''}.`);
-    if (card && cardLine(card)) console.log(`  ${cardLine(card)}.`);
+    // the pieces may be the person's own or ones they admire: what was read is said of the pieces, never of the person
+    { const line = piecesReadLine(seen.given ?? voice?.corpusPieces ?? voice?.pieces?.length ?? 0, loadSession().reservation?.reserved?.length ?? 0);
+      if (line) console.log(`${line}${voice?.lengthSpan ? `, ${voice.lengthSpan[0]} to ${voice.lengthSpan[1]} words each` : ''}.`); }
+    // one thing a line: read as one sentence, a long kind ran into the reader and the purpose
+    if (card) for (const l of [card.kind && `This work: ${card.kind}`, card.reader && `Read by: ${card.reader}`, card.purpose && `For: ${card.purpose.replace(/\.$/, '')}`, card.settles.length && `Each piece settles: ${card.settles.join('; ')}`]) if (l) console.log(`  ${l}.`);
     const sound = howYouWrite(voice?.persona?.points ?? [], 4);
-    if (sound.length) { console.log('  How you write:'); for (const l of sound) console.log(l); }
+    if (sound.length) { console.log('  How these pieces are written:'); for (const l of sound) console.log(l); }
     if (seen.steps.length) { console.log('  Your method, which every piece follows (where it and your pieces differ, your method decides):'); for (const l of few(seen.steps, 6)) console.log(l); }
     { const active = store.getActive(L); const sv = active ? store.getSkillVersion(L, active) : null; const std = sv ? store.getStandard(L, sv.standardVersionHash) : null;
       for (const l of std ? whatItHolds(std) : []) console.log(`  ${l}`); }
@@ -165,7 +157,7 @@ export async function guided(name: string, seen: Understood = { steps: [], dispu
 
     // WITH NO MODEL TO WRITE WITH, NOTHING IS PROMISED AND NOTHING IS ASKED: the skill is built from what could be
     // counted, and the one thing left to do is said, with the command. Never "ready" for a skill that cannot write yet.
-    // A person who asked for no model (--no-model) is not then charged for two pieces: the same end, said as their choice.
+    // A person who asked for no model (--no-model) is not then charged for a piece: the same end, said as their choice.
     if (argv.includes('--no-model')) {
       console.log(`\n"${name}" is built without a model, as you asked: from what can be counted in your pieces.`);
       console.log(`  Write with it: atelier run "<the task>" --skill ${name}   ·   read your pieces in full: the same command without --no-model`);
@@ -174,7 +166,7 @@ export async function guided(name: string, seen: Understood = { steps: [], dispu
     if (!canReach('target')) {
       console.log(`\n"${name}" is built, and cannot write yet: no model key is set.`);
       console.log('  Set one:   export ANTHROPIC_API_KEY=<your key>     (another provider: atelier models)');
-      console.log('  Then run the same command again: your pieces are read in full, and you see two pieces written.');
+      console.log('  Then run the same command again: your pieces are read in full, and you see a piece written.');
       return;
     }
     // BUILT AGAIN: a skill that has written before is not shown at work a second time, and nothing is asked again.
@@ -186,32 +178,44 @@ export async function guided(name: string, seen: Understood = { steps: [], dispu
     const left = (): void => { console.log(`\n\n"${name}" is built. Nothing more was asked or kept here: the input ended. Try it: atelier run "<the task>" --skill ${name}`); };
 
     // 2. THE FEW THINGS ONLY THE PERSON CAN SAY: each field of the card nothing grounded. Enter leaves it unsaid.
-    const open = CARD_ASKS.filter((a) => !card?.[a.field]).slice(0, MAX_BUILD_QUESTIONS);
-    if (open.length) console.log(`\n${open.length === 1 ? 'One question' : `${open.length} questions`} before I write, so the pieces fit their reader (enter skips):`);
-    const said: string[] = [];
-    for (const a of open) {
-      const v = await io.ask(`  ${a.ask} `);
+    // WHAT THE BUILD READ IS A PROPOSAL, NEVER A FACT: pieces show how an author writes, not who this work is for, so
+    // each one is shown and kept (enter) or replaced by the person. A card that is already theirs is not asked again.
+    // ONE PROMPT: who reads the work and what for was shown above as read; enter keeps it, their words replace it.
+    // ASKED ONLY WHERE THEIR OWN WORDS DID NOT SAY IT: the line they gave and their note are read with the pieces, and a
+    // reader or a purpose found in those is theirs already.
+    const asked = card?.request;
+    if (card?.by !== 'you' && !card?.stated?.some((f) => f !== 'kind')) {
+      const v = await io.ask(`\nWho reads these, and what should they do or know after one? (enter${card && cardLine(card) ? ' keeps what I read above' : ' skips'}) `);
       if (v === null) { left(); return; }
-      if (v.trim()) said.push(`${a.field}=${v.trim().replace(/;/g, ',')}`);
+      // kept or replaced, it is the person's from here: said to the writer of every piece (cli/direct.ts)
+      if (v.trim()) card = { ...amendCard(card, `purpose=${v.trim().replace(/;/g, ',')}`), reader: null };
+      else if (card && cardLine(card)) card = { ...card, by: 'you' };
+      if (card?.by === 'you') store.setCard(L, card);
     }
-    if (said.length) { card = amendCard(card, said.join('; ')); store.setCard(L, card); console.log(`  Got it. ${cardLine(card)}.`); }
 
-    // 3. TWO PIECES, written as every later run writes them.
-    const first = await io.ask(`\nA first request to try it on (enter: I choose from your pieces): `);
-    if (first === null) { left(); return; }
-    const requests = sampleRequests(L, first.trim());
-    if (!requests.length) { console.log('No sample was written: none of your pieces carries a title or a request to start from.'); return; }
-    // A SAMPLE IS A PREVIEW, NEVER A REFERENCE. What the skill is written from is the person's own pieces: a draft the
-    // model wrote teaches nothing about them, however good, and enter is not approval. What does teach is how they
-    // change a draft: said once, confirmed with a y, and from then on shown to the review of every piece.
-    let corrections = 0; let written = 0; let noted = false;
-    for (const [i, request] of requests.entries()) {
-      console.log(`\nSample ${i + 1} of ${requests.length}: ${request}\nwriting…`);
-      const piece = write(name, request);
-      if ('why' in piece) { console.log(`  (this sample could not be written: ${piece.why})`); continue; }
-      written += 1;
-      console.log(`\n${piece.text}\n`);
-      if (piece.note && !noted) { console.log(`${piece.note}\n`); noted = true; }
+    // 3. THE PIECE THEY ASKED FOR, where the line they gave asks for one: written as every later run writes it, with
+    // the editor's questions at a terminal. A line that only says what the work is asks for no piece, and none is
+    // written: a preview on a subject taken from their pieces was a piece nobody asked for.
+    // A PIECE WRITTEN HERE IS NEVER A REFERENCE. What the skill is written from is the pieces given: a draft the model
+    // wrote teaches nothing about them, and enter is not approval. What does teach is how the person changes a draft:
+    // said once, confirmed with a y, and from then on shown to the review of every piece.
+    let corrections = 0;
+    for (const request of asked ? [asked] : []) {
+      let piece: ReturnType<typeof write>;
+      if (process.stdin.isTTY && process.stdout.isTTY) {
+        const was = new Set(store.listInvocations(L).map((x) => x.invocationId));
+        console.log('');
+        spawnSync(process.execPath, [...process.execArgv, process.argv[1], 'run', request, '--skill', name, ...withArgs(), ...modelArgs()], { env: process.env, stdio: 'inherit' });
+        const got = store.listInvocations(L).filter((x) => !was.has(x.invocationId)).sort((x, y) => y.at.localeCompare(x.at))[0];
+        piece = got?.output.trim() ? { id: got.invocationId, text: got.output.trim(), note: null } : { why: 'the run wrote nothing' };
+        if ('why' in piece) continue;
+      } else {
+        console.log('\nYour piece:\nwriting…');
+        piece = write(name, request);
+        if ('why' in piece) { console.log(`  (it could not be written: ${piece.why})`); continue; }
+        console.log(`\n${piece.text}\n`);
+        if (piece.note) console.log(`${piece.note}\n`);
+      }
       // ONE ROUND: what to change, said once; the piece is written again.
       const change = await io.ask('Anything to change? Say it in your words, or press enter to go on: ');
       if (change === null) break;
@@ -230,7 +234,6 @@ export async function guided(name: string, seen: Understood = { steps: [], dispu
       store.setKept(L, [...store.getKept(L).filter((k) => k.id !== record.id), record]);
       corrections += edits.length;
     }
-    if (!written) { console.log(`\n"${name}" is built, and no piece was written here. Try it: atelier run "<the task>" --skill ${name}`); return; }
     console.log(`\n"${name}" is ready${corrections ? `: every new piece is reviewed against the ${corrections === 1 ? 'correction' : `${corrections} corrections`} you just made` : ''}.`);
     console.log(`  This is its first version. A change you make for every piece (atelier fix "<what was wrong>" --always) makes the next, and atelier status --skill ${name} shows what it holds and how to go back.`);
     console.log(`  Write with it: atelier run "<the task>"   ·   in Claude Code: /${name}   ·   in other tools: atelier setup`);

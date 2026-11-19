@@ -17,6 +17,27 @@ const fields = (over: Record<string, Record<string, unknown>> = {}): Record<stri
   ...over });
 const decision = (id: string, decides: string): Record<string, unknown> => ({ id, decides, ask: `${decides}?`, options: ['A', 'B'], default: 'A' });
 
+describe('the editor questions reading is shown what the author\'s pieces are built on', () => {
+  // WHAT THE SAMPLES SHOW REACHES THE QUESTIONS. The reading saw the request, the notes and the method and never the
+  // author's pieces, so it could not ask for what their pieces always rest on and this request leaves out.
+  it('the habits read from the pieces are in what the reading is given, each with the author\'s own sentence', () => {
+    const said = EDITOR_QUESTIONS.prompt({ ...INPUT, habits: [{ text: 'Carries one image through the whole piece', theirs: 'The lock is a clock the canal keeps.' }] });
+    expect(said).toContain('Carries one image through the whole piece');
+    expect(said).toContain('The lock is a clock the canal keeps.');
+  });
+  it('with none read, nothing is said of them', () => {
+    expect(EDITOR_QUESTIONS.prompt(INPUT)).toBe(EDITOR_QUESTIONS.prompt({ ...INPUT, habits: [] }));
+    expect(EDITOR_QUESTIONS.prompt(INPUT)).not.toContain('their finished pieces');
+  });
+  it('the reading has room to answer in full: cut off, it asked nothing', () => {
+    expect(EDITOR_QUESTIONS.maxTokens).toBeGreaterThanOrEqual(4000);
+  });
+  it('up to five are asked, never more', () => {
+    const open = fields({ pain: none('What do they live with?', ['Lost notes', 'Dead tools'], 'Lost notes'), proof: none('What shows it?', ['A case', 'A figure'], 'A case') });
+    expect(EDITOR_QUESTIONS.ground({ decisions: [], fields: open }, INPUT)?.questions.map((q) => q.id)).toEqual(['idea', 'reader', 'pain', 'proof', 'next']);
+  });
+});
+
 describe('the editor questions reading, grounded by code', () => {
   it('a stated one is held to its quote; a quote the source lacks is no statement', () => {
     expect(statedIn('material', 'lose context every time a tool shuts down', INPUT)).toBe(true);
@@ -30,10 +51,10 @@ describe('the editor questions reading, grounded by code', () => {
     expect(r?.questions.map((q) => [q.id, q.default])).toEqual([['idea', 'Tools die, files stay'], ['reader', 'Founders after a shutdown'], ['next', 'Export their notes tonight']]);
     expect(r?.decisions.filter((d) => d.from === 'field').map((d) => [d.kind, d.why ?? 'asked'])).toEqual([['idea', 'asked'], ['reader', 'asked'], ['pain', 'stated in the material'], ['proof', 'the question came without 2 to 4 options and one picked among them'], ['next', 'asked']]);
   });
-  it('the piece\'s own decisions come first and alone: at most three, the order kept, ids --answers can name, none a field\'s', () => {
+  it('the piece\'s own decisions come first and alone: at most three, the order kept, ids --answers can name, none a field\'s (at most five)', () => {
     const r = EDITOR_QUESTIONS.ground({ decisions: [decision('Price Anchor!', 'the price it anchors on'), decision('idea', 'a decision named as a field'), decision('price-anchor', 'the same id twice'),
-      decision('who pays', 'who pays'), decision('scope', 'what it covers'), decision('extra', 'a fourth')], fields: fields() }, INPUT);
-    expect(r?.questions.map((q) => q.id)).toEqual(['price-anchor', 'who-pays', 'scope']);
+      decision('who pays', 'who pays'), decision('scope', 'what it covers'), decision('extra', 'a fourth'), decision('image', 'a fifth'), decision('close', 'a sixth')], fields: fields() }, INPUT);
+    expect(r?.questions.map((q) => q.id)).toEqual(['price-anchor', 'who-pays', 'scope', 'extra', 'image']);
     expect(r?.questions[0]).toMatchObject({ about: 'the price it anchors on', ask: 'the price it anchors on?', default: 'A' });
   });
   it('a decision with no question that holds falls back to the fields: never nothing asked while something is unstated', () => {
@@ -68,7 +89,13 @@ describe('what reaches the writer', () => {
   it('a decision of the piece\'s own is told by what it decides; the next step and the reader by their own words', () => {
     const asked = [{ id: 'price-anchor', ask: 'Which price?', options: ['A', 'B'], default: 'A', about: 'the price it anchors on' }];
     expect(editorNote([{ id: 'price-anchor', answer: 'The annual plan' }, { id: 'next', answer: 'Book a call' }, { id: 'reader', answer: 'A CFO at budget time' }, { id: 'other-decision', answer: 'x' }], asked))
-      .toBe('Before writing, the author settled these. Write from them; they are the author\'s, not lines to quote:\n\n- the price it anchors on: The annual plan\n- What the reader does next, after reading: Book a call\n- Who reads it, and the situation they read it in: A CFO at budget time');
+      .toBe('Before writing, the author settled these. Write from them; they are the author\'s, not lines to quote:\n\n- the price it anchors on (asked: "Which price?"): The annual plan\n- What the reader does next, after reading: Book a call\n- Who reads it, and the situation they read it in: A CFO at budget time');
+  });
+  it('an option reaches the writer with the question it answers, so "them" in it still points at something', () => {
+    const asked = [{ id: 'early-status', ask: 'Should the post state the known limits, or leave them to the docs?', options: ['State them', 'Leave them out and focus on the build'], default: 'State them', about: 'how the post handles the early status' }];
+    const note = editorNote([{ id: 'early-status', answer: 'Leave them out and focus on the build' }], asked);
+    expect(note).toContain('known limits');
+    expect(note.indexOf('known limits')).toBeLessThan(note.indexOf('Leave them out'));
   });
   it('the method is shown whole before the rules, a rule it already says is not repeated, and the answers come before the task', () => {
     const b = taskBlock({ material: [], task: 'Write it.', method: 'Open on the pain.\nNo em dashes.', rules: ['No em dashes.', 'Keep paragraphs short.'], settled: 'Before writing, the author settled these.' });

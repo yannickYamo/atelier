@@ -93,9 +93,11 @@ describe('the self-review and the rules code holds', () => {
     const r = cli('run', 'Write a post on this week\'s news about the wharf.', '--skill', 'post-voice', '--claims', 'pattern', '--no-questions', ...be());
     expect(r.code, r.out + r.err).toBe(1);
     expect(r.out.startsWith('Needs a fix: see under the piece.\n\n# The wharf, this week')).toBe(true);
-    expect(r.out).toMatch(/^Needs a fix\. Checked: 1 of your rules is not met, named below/m);
+    expect(r.out).toMatch(/^Needs a fix\. Checked: 1 of the rules is not met, named below/m);
     expect(r.out).toMatch(/^ {2}Not met: /m);
-    expect(r.out).toContain('To fix it atelier fix "<what to change>"');
+    // the sentence that breaks it is named under it, as atelier verify names it
+    expect(r.out).toMatch(/^ {2}Not met: [^\n]*\n {6}› "/m);
+    expect(r.out).toContain('To fix it: atelier fix "<what to change>"');
     expect(r.out).not.toMatch(/BLOCKED|Delivery:|trusted-fail|not for use|held back/);
   }, 120_000);
 
