@@ -69,6 +69,9 @@ export const ANSWERS_HEAD = 'WHAT THE AUTHOR ANSWERED BEFORE THIS PIECE WAS WRIT
 /** Material in finished sentences (core/loop/material-points.ts) is facts to write from; the author's pieces are the voice. */
 export const DIRECT_POINTS_NOTE = 'The material above is facts and points to write from, not a voice: say each one the way the author\'s pieces would, in new sentences. Do not reuse its sentences, its stretches of wording or its coined phrases.';
 
+/** With --voice-select, where the request takes the author's voice only (core/direct/route.ts): told to the writer. */
+export const VOICE_ONLY_NOTE = 'The person brings their own content and its shape. Write it in the author\'s voice, as their pieces sound: their register, their phrasing, their pace, how they open and close. Keep the order, the sections and the argument of the person\'s material; do not take the structure, the sections, the examples or the argument of the author\'s pieces, and do not let the piece read as a version of any of them.';
+
 /** The user turn that asks for the first draft. */
 export const DRAFT_ASK = 'Write the piece now. Return only the piece, in Markdown, starting with its title if it has one.';
 

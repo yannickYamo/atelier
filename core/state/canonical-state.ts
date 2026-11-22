@@ -746,6 +746,10 @@ export interface DirectRecord {
     readonly found: readonly { readonly id: string; readonly kind: 'habit' | 'step' | 'answer'; readonly text: string; readonly held: boolean | null; readonly quote?: string }[]; readonly why?: string;
     /** with --style-review: what the first draft held, before the review it steered */
     readonly draft?: readonly { readonly id: string; readonly held: boolean | null }[] };
+  /** with --voice-select: what the request takes of the author's pieces; for voice only, its words and the structure rules set aside */
+  readonly takes?: { readonly as: 'whole' } | { readonly as: 'voice'; readonly quote: string; readonly setAside: readonly { readonly id: string; readonly statement: string }[] };
+  /** with --style-review: the first draft's sentences the author would not have written that way, read by a model other than the writer's */
+  readonly drift?: { readonly by: string; readonly reader: string; readonly sentences: readonly { readonly sentence: string; readonly move: string }[] };
 }
 
 export interface InvocationRecord {

@@ -450,6 +450,11 @@ blocks nothing. With `--style-review` it is also read on the first draft, and wh
 self-review, each habit with your sentence; the piece the review returns is read again, and one line says how many the
 review fixed. That is the setting to compare against a plain run before it becomes the default. `--no-style` reads nothing.
 
+`--voice-select` reads what the request takes of your pieces. Asked for your own content in the voice of the pieces ("a
+rewrite of my draft in the same voice"), and only on those words of the request, it writes the voice only: your material
+keeps its order, its sections and its argument, the rules of structure read off the pieces are not held on that run, and
+the run says which. Anything else takes the whole of how the pieces are written, as without it. Off until compared.
+
 The skill installed for a host (Claude Code's `/<name>`, or Codex) and `atelier export` follow the same design: your
 pieces, your method and your rules, with no description of how you sound and no moves read off your pieces, which the
 writer would follow as rules. The compiled path (`--pipeline legacy`) still serves the skill whole, and so does

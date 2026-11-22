@@ -117,7 +117,7 @@ export const VALUED_OPTIONS: readonly string[] = ['correcting', 'moves', 'set-as
 export const BOOLEAN_OPTIONS: readonly string[] = [
   '--rules',
   'accept', 'accept-new-binding', 'fix-grammar', 'profile', 'auto-reserve', 'cluster-per-file', 'drop', 'dry-run', 'indifferent',
-  'allow-unsourced', 'answer-only', 'bare', 'clear', 'holdout', 'json', 'list', 'loop', 'no-contrast', 'no-repair', 'no-coverage', 'no-review', 'style-review', 'no-style', 'remove', 'repair', 'hook', 'never-this-transition', 'no-negative-probe', 'none', 'public-source',
+  'allow-unsourced', 'answer-only', 'bare', 'clear', 'holdout', 'json', 'list', 'loop', 'no-contrast', 'no-repair', 'no-coverage', 'no-review', 'style-review', 'voice-select', 'no-style', 'remove', 'repair', 'hook', 'never-this-transition', 'no-negative-probe', 'none', 'public-source',
   'ai-assisted', 'blind-expert', 'delivery-proven', 'no-ai-assist', 'per-passage',
   'regenerate',
   'review', 'score', 'skip', 'skip-methods', 'yes', 'baseline', 'qualify', 'promote',
@@ -525,6 +525,18 @@ export const evidenceReaderModel = (): string | null =>
   ?? (providerFor('discovery') === 'anthropic' ? EVIDENCE_READER_DEFAULT : contextReaderModel());
 export const evidenceReaderClient = (): InferenceClient | null => {
   const m = evidenceReaderModel();
+  return m && canReach('discovery') ? clientFor(m) : null;
+};
+/**
+ * WHO READS THE DRAFT AGAINST THE AUTHOR'S PIECES (--style-review, core/direct/style.ts): a model other than the writer's,
+ * since a model does not see its own habits. Opus 5.5 on Anthropic, Sonnet 5.5 where the writer is Opus 5.5; on another
+ * backend the context reader.
+ */
+export const DRIFT_READER_DEFAULT = 'claude-opus-5-5';
+export const driftReaderModel = (writer: string): string | null =>
+  providerFor('discovery') === 'anthropic' ? (writer === DRIFT_READER_DEFAULT ? EVIDENCE_READER_DEFAULT : DRIFT_READER_DEFAULT) : contextReaderModel();
+export const driftReaderClient = (writer: string): InferenceClient | null => {
+  const m = driftReaderModel(writer);
   return m && canReach('discovery') ? clientFor(m) : null;
 };
 

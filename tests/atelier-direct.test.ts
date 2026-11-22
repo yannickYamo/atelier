@@ -11,8 +11,8 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import * as store from '../core/state/store.js';
 import { catalogueOf, withinBudget, lexicalOrder, titleOf } from '../core/direct/pieces.js';
-import { PIECE_ROUTE } from '../core/direct/route.js';
-import { piecesBlock, taskBlock, reviewAsk, rulesBlock, EDITS_SHOWN, RULES_SHOWN, DIRECT_POINTS_NOTE, ANSWERS_HEAD } from '../core/direct/prompt.js';
+import { PIECE_ROUTE, voiceOnly } from '../core/direct/route.js';
+import { piecesBlock, taskBlock, reviewAsk, rulesBlock, EDITS_SHOWN, RULES_SHOWN, DIRECT_POINTS_NOTE, ANSWERS_HEAD, VOICE_ONLY_NOTE } from '../core/direct/prompt.js';
 import { editPairs, correctionsOf, sentencesOf, MAX_PAIRS, type KeptPiece } from '../core/direct/kept.js';
 import { directWhyNot, builtPieces } from '../cli/direct.js';
 import { argv } from '../cli/runtime.js';
@@ -119,6 +119,34 @@ describe('the edits read off a kept piece: by code, sentence by sentence', () =>
   it('the corrections the review is shown: the newest kept piece\'s first', () => {
     const k = (at: string, before: string): KeptPiece => ({ id: at, at, request: null, text: '', from: null, edits: [{ before, after: '' }] });
     expect(correctionsOf([k('2026-01-01', 'old'), k('2026-03-01', 'new')], 1)).toEqual([{ before: 'new', after: '' }]);
+  });
+});
+
+// ── WHAT A REQUEST TAKES OF THE PIECES ────────────────────────────────────────────────────────────────────────────
+// A person who brings their own draft and asks for it "in the same voice" wants how the author sounds, never how their
+// piece is built: with one golden, its section order was a rule every piece was checked by, and the writer copied its form.
+describe('what a request takes of the author\'s pieces: the whole of how they write, or their voice only', () => {
+  const pieces = [{ id: 'p1', text: '# Field notes\n\nWe measured first.', request: null, kept: false }];
+  const req = 'rewrite my notes in the same voice';
+  it('with the selector a single piece is still read, and the reading is asked what the request takes', () => {
+    expect(PIECE_ROUTE.decide({ request: req, material: '', pieces, select: true })).toBeNull();
+    expect(PIECE_ROUTE.decide({ request: req, material: '', pieces })).not.toBeNull();
+    expect(PIECE_ROUTE.prompt({ request: req, material: '', pieces, select: true })).toContain('"takes"');
+    expect(PIECE_ROUTE.prompt({ request: req, material: '', pieces })).not.toContain('"takes"');
+  });
+  it('voice only stands on the request\'s own words; anything else is the whole', () => {
+    const x = { request: req, material: '', pieces, select: true };
+    expect(PIECE_ROUTE.ground({ asks_for: 'a rewrite', pieces: ['p1'], length: null, takes: 'voice', takes_quote: 'in the same voice' }, x)).toMatchObject({ takes: 'voice', takesQuote: 'in the same voice' });
+    expect(PIECE_ROUTE.ground({ asks_for: 'a rewrite', pieces: ['p1'], length: null, takes: 'voice', takes_quote: 'words it never said' }, x)?.takes).toBe('whole');
+    expect(PIECE_ROUTE.ground({ asks_for: 'a rewrite', pieces: ['p1'], length: null, takes: 'whole', takes_quote: null }, x)?.takes).toBe('whole');
+    expect(PIECE_ROUTE.floor(x).takes).toBeUndefined();
+  });
+  it('voice only: the structure rules read off the pieces are set aside; the person\'s own rules and every other rule held', () => {
+    const r = (id: string, observer: string | null, provenance = 'DISCOVERED'): unknown => ({ requirementId: id, statement: `rule ${id}`, provenance, measurement: observer ? { observer, params: {} } : null });
+    const std = { requirements: [r('shape', 'SHAPE'), r('heads', 'HEADINGS'), r('mine', 'HEADINGS', 'EXPERT_STATED'), r('hedge', 'HEDGE_RATE')] } as unknown as StandardVersion;
+    const v = voiceOnly(std);
+    expect(v.setAside).toEqual([{ id: 'shape', statement: 'rule shape' }, { id: 'heads', statement: 'rule heads' }]);
+    expect(v.std.requirements.map((q) => q.requirementId)).toEqual(['mine', 'hedge']);
   });
 });
 
@@ -504,6 +532,23 @@ describe('a run through the binary, written the direct way', () => {
     expect(essayId(floor)).toBeDefined();
   }, 180_000);
 
+  it('with --voice-select a request for the person\'s own content in the author\'s voice is written as that, and said; without it, nothing changes', async () => {
+    await setBackend({ byTool: { emit_persona: PERSONA, emit_holds_back: { ids: [] }, __plain: [DRAFT, REVIEWED] } });
+    const s = seed(FILES, { ATELIER_CONTEXT_READER: 'scripted' });
+    expect(s.run('new', 'posts', 'write posts in my voice', '--name', 'posts', ...BACKEND()).code).toBe(0);
+    const ask = 'Rewrite my notes in the same voice.';
+    await setBackend({ byTool: { __plain: [DRAFT, REVIEWED], emit_piece_route: { asks_for: 'a rewrite', pieces: ['p1'], length: null, takes: 'voice', takes_quote: 'in the same voice' } } });
+    let m0 = await mark();
+    const on = jsonOf(s.run('invoke', '--skill', 'posts', ask, '--with', 'notes=notes.md', '--json', '--claims', 'pattern', '--no-questions', '--voice-select', ...BACKEND()).out) as Out & { direct: { takes?: { as: string; quote: string; setAside: unknown[] } } };
+    expect(on.direct?.takes).toMatchObject({ as: 'voice', quote: 'in the same voice' });
+    expect(Array.isArray(on.direct?.takes?.setAside)).toBe(true);
+    expect(textOf((await plainSince(m0))[0])).toContain(VOICE_ONLY_NOTE);
+    m0 = await mark();
+    const off = jsonOf(s.run('invoke', '--skill', 'posts', ask, '--with', 'notes=notes.md', '--json', '--claims', 'pattern', '--no-questions', ...BACKEND()).out) as Out & { direct: { takes?: unknown } };
+    expect(off.direct?.takes).toBeUndefined();
+    expect(textOf((await plainSince(m0))[0])).not.toContain(VOICE_ONLY_NOTE);
+  }, 180_000);
+
   it('a request held strict ("use only these figures") stays direct, and a figure the notes lack blocks the piece', async () => {
     await setBackend({ byTool: { emit_persona: PERSONA, emit_holds_back: { ids: [] }, __plain: [DRAFT, REVIEWED] } });
     const s = seed(FILES, { ATELIER_CONTEXT_READER: 'scripted' });
@@ -546,10 +591,28 @@ describe('a run through the binary, written the direct way', () => {
     const st = go('--style-review') as Styled & { direct: { style?: { draft?: unknown } } };
     // then read again on the piece the review returned: the record keeps both, so what the review fixed is shown
     expect(st.direct.style).toMatchObject({ on: 'piece', steered: true, found: [{ id: 'h1', held: false }], draft: [{ id: 'h1', held: false }] });
-    expect((await bodies()).slice(m0).filter((b) => b.tools?.[0]?.function?.name === 'emit_style_read')).toHaveLength(2);
+    expect((await bodies()).slice(m0).filter((b) => b.tools?.[0]?.function?.name === 'emit_style_read')).toHaveLength(3);
+    // the habits on the draft, the draft against the author's pieces (its own call), then the piece
     plain = await plainSince(m0);
     expect(textOf(plain[1])).toContain('Where the draft does not yet write as the author does:\n- Closes on a short plain sentence (theirs: "That is the whole trade"): the draft does not.');
     expect(textOf(plain[0])).not.toContain('Closes on a short plain sentence');
+    // --style-review also reads the draft, in a call of its own, against the author's pieces whole: a sentence the author
+    // would not have written that way reaches the review, quoted, and is on the record; the writer is never told
+    await setBackend({ byTool: { __plain: [DRAFT, REVIEWED], emit_style_read: { items: [{ id: 'h1', held: true, quote: 'A first draft.' }], drift: [{ sentence: 'A first draft.', move: 'a fragment as a paragraph' }] } } });
+    m0 = await mark();
+    const dr = go('--style-review') as Styled & { direct: { drift?: { sentences?: unknown } } };
+    plain = await plainSince(m0);
+    expect(textOf(plain[1])).toContain('- "A first draft." (a fragment as a paragraph)');
+    expect(textOf(plain[0])).not.toContain('a fragment as a paragraph');
+    expect(dr.direct.drift?.sentences).toEqual([{ sentence: 'A first draft.', move: 'a fragment as a paragraph' }]);
+    const reads = (await bodies()).slice(m0).filter((b) => b.tools?.[0]?.function?.name === 'emit_style_read');
+    expect(reads.filter((b) => textOf(b).includes("The author's pieces, whole:")).length).toBe(1);
+    expect(textOf(reads.find((b) => textOf(b).includes("The author's pieces, whole:"))!)).toContain('What was asked of the piece:\n<request>');
+    // by default the reading is shown no pieces, and nothing of it is on the record
+    await setBackend({ byTool: { __plain: [DRAFT, REVIEWED], emit_style_read: { items: [{ id: 'h1', held: true, quote: 'A first draft.' }], drift: [{ sentence: 'A first draft.', move: 'x' }] } } });
+    m0 = await mark(); const plainRun = go() as Styled & { direct: { drift?: unknown } };
+    expect((await bodies()).slice(m0).filter((b) => textOf(b).includes("The author's pieces, whole:")).length).toBe(0);
+    expect(plainRun.direct.drift).toBeUndefined();
     // with no method of the author's, the steps the build read off their pieces are read on the piece as their method
     store.setInferredMethod({ root: s.data, skillName: 'posts' }, { schema: 1, reader: 'scripted', reading: 'x', builtAt: '2026-11-08', steps: [{ id: 'i1', text: 'End on the trade-off, in one line.', piece: 'piece-1', quote: 'That is the whole trade', unit: null }] });
     await setBackend({ byTool: { __plain: [DRAFT, REVIEWED], emit_style_read: { items: [{ id: 's1', held: true, quote: 'That is the whole trade.' }] } } });
