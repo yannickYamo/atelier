@@ -34,8 +34,8 @@ import type { SkillVersion, StandardVersion, DirectRecord, RepairRecord, Invocat
 import { runOnce, draftMaxTokens, type Written } from '../core/loop/run-once.js';
 import { workField, workRecord } from '../core/loop/work-field.js';
 import { catalogueOf, titleOf, withinBudget, PIECE_BUDGET_CHARS, type Piece } from '../core/direct/pieces.js';
-import { PIECE_ROUTE, type Route } from '../core/direct/route.js';
-import { piecesBlock, taskBlock, DRAFT_ASK, reviewAsk, EDITS_SHOWN, ANSWERS_HEAD } from '../core/direct/prompt.js';
+import { PIECE_ROUTE, voiceOnly, type Route } from '../core/direct/route.js';
+import { piecesBlock, taskBlock, DRAFT_ASK, reviewAsk, EDITS_SHOWN, ANSWERS_HEAD, VOICE_ONLY_NOTE } from '../core/direct/prompt.js';
 import { correctionsOf } from '../core/direct/kept.js';
 import { EDITOR_QUESTIONS, EDITOR_KINDS, editorNote, askOf, type EditorReading, type EditorInput } from '../core/direct/questions.js';
 import { cardLine, cardSaid, type PurposeCard } from '../core/direct/card.js';
@@ -56,7 +56,7 @@ import type { Entry } from '../core/eval/record.js';
 import { acts, type VerifyReport } from '../core/observers/verify.js';
 import { recordHead } from '../core/eval/certificate.js';
 import { checksFor } from './checks.js';
-import { contextReaderClient, contextReaderModel, evidenceReaderClient, evidenceReaderModel, flag, numericFlag, argv } from './runtime.js';
+import { contextReaderClient, contextReaderModel, evidenceReaderClient, evidenceReaderModel, driftReaderClient, driftReaderModel, flag, numericFlag, argv } from './runtime.js';
 import { asText } from '../core/discovery/text.js';
 import type { Voice } from '../core/compiler/voice.js';
 import { pointsWithRates } from '../core/compiler/moves.js';
@@ -401,18 +401,25 @@ export function grammarLines(report: VerifyReport | null | undefined): string[] 
 const LISTED_IDS: ReadonlySet<string> = new Set(['UNSOURCED', CLAIMS_TO_CHECK, INCONCLUSIVE, PUBLIC_FACTS, READER_REPORT]);
 
 /** The direct run, recorded. Returns the record and the JSON a `--json` run prints. */
-export async function runDirect(c: DirectContext) {
+export async function runDirect(given: DirectContext) {
   const effort = asEffort(flag('--effort'));
   const budget: Budget = { spentUsd: 0, capUsd: numericFlag('--cap', 3), maxCalls: numericFlag('--max-calls', 6) };
-  const voice = store.getVoice(c.L);
-  const kept = store.getKept(c.L);
-  const catalogue = catalogueOf(builtPieces(voice, store.getExemplar(c.L)), kept.filter((k) => !k.correctionOnly).map((k) => ({ text: k.text, request: k.request })));
-  const materialText = c.material.map((m) => m.text).join('\n\n');
+  const voice = store.getVoice(given.L);
+  const kept = store.getKept(given.L);
+  const catalogue = catalogueOf(builtPieces(voice, store.getExemplar(given.L)), kept.filter((k) => !k.correctionOnly).map((k) => ({ text: k.text, request: k.request })));
+  const materialText = given.material.map((m) => m.text).join('\n\n');
 
+  // with --voice-select the reading also says what the request takes of the pieces: the whole, or the voice only
+  const select = argv.includes('--voice-select');
   // 1. WHICH PIECES: a reading of the request, grounded; the shared-words floor when no model can read.
   const routeBudget: Budget = { spentUsd: 0, capUsd: 0.1, maxCalls: 1 };
-  const decided = await readContext(PIECE_ROUTE, { request: c.asked, material: materialText, pieces: catalogue }, contextReaderClient(), contextReaderModel(), routeBudget, 'other');
+  const decided = await readContext(PIECE_ROUTE, { request: given.asked, material: materialText, pieces: catalogue, ...(select ? { select } : {}) }, contextReaderClient(), contextReaderModel(), routeBudget, 'other');
   const route: Route = decided.value;
+  // VOICE ONLY (core/direct/route.ts): the person's content keeps its shape; the structure rules read off the pieces are set aside for this run
+  const voiceRun = select && decided.by === 'model' && route.takes === 'voice' ? voiceOnly(given.std) : null;
+  const c: DirectContext = voiceRun ? { ...given, std: voiceRun.std } : given;
+  const takes: DirectRecord['takes'] = select && decided.by === 'model' ? (voiceRun ? { as: 'voice', quote: route.takesQuote ?? '', setAside: voiceRun.setAside } : { as: 'whole' }) : undefined;
+  if (voiceRun) c.say(`Written as your own content in the author's voice ("${route.takesQuote}"): ${voiceRun.setAside.length ? `the structure read off their pieces is not held on this run (${voiceRun.setAside.map((r) => r.id).join(', ')})` : 'no rule of structure to set aside'}.`);
   const shown: Piece[] = withinBudget(catalogue, route.order.length ? route.order : catalogue.map((p) => p.id), numericFlag('--piece-chars', PIECE_BUDGET_CHARS));
   const corrections = correctionsOf(kept, EDITS_SHOWN);
   const stable = piecesBlock(shown);
@@ -443,7 +450,7 @@ export async function runDirect(c: DirectContext) {
     ? `Where neither the task nor anything of the author's above sets a length: the author's pieces shown here run ${lengths[0].toLocaleString('en-US')} to ${lengths[lengths.length - 1].toLocaleString('en-US')} words, and for a piece of their kind that is its natural length. A guide, not a limit.` : '';
   // material in finished sentences is facts to write from, and the piece is checked for stretches copied from it
   const asPoints = writtenAsSentences(c.material);
-  const variable = taskBlock({ material: c.material, points: asPoints, task: c.asked, rules, method, settled: [said, asking.note, lengthGuide].filter((x) => x.trim()).join('\n\n') });
+  const variable = taskBlock({ material: c.material, points: asPoints, task: c.asked, rules, method, settled: [said, voiceRun ? VOICE_ONLY_NOTE : '', asking.note, lengthGuide].filter((x) => x.trim()).join('\n\n') });
   c.detail(`Written from ${shown.length} of ${catalogue.length} piece(s) of the author's${route.kind ? `, as ${route.kind}` : ''} (${decided.by === 'model' ? 'chosen by a reading of the request' : `chosen by shared words: ${decided.why ?? 'no reading'}`}): ${shown.map((p) => titleOf(p.text)).join('; ')}.`);
 
   // HOW THE AUTHOR WRITES, read on the text after the draft (core/direct/style.ts): the habits the build read from their
@@ -462,6 +469,7 @@ export async function runDirect(c: DirectContext) {
   const styleBudget: Budget = { spentUsd: 0, capUsd: Math.max(0, Math.min(0.1, budget.capUsd - budget.spentUsd - routeBudget.spentUsd)), maxCalls: steer ? 2 : 1 };
   if (steer && argv.includes('--no-review')) c.say('(--style-review tells the self-review what the draft misses; with --no-review there is none, so how you write is read on the piece, report only.)');
   let style: DirectRecord['style'] | undefined;
+  let drift: DirectRecord['drift'];
   const readStyle = async (text: string, on: 'draft' | 'piece'): Promise<StyleReading> => {
     const d = await readContext(STYLE_READ, { items: styleOf, piece: text }, contextReaderClient(), contextReaderModel(), styleBudget, 'other');
     style = { by: d.by, reader: d.reader, on, steered: false, ...(d.why ? { why: d.why } : {}),
@@ -494,7 +502,15 @@ export async function runDirect(c: DirectContext) {
     else {
       try {
         // with --style-review, what the draft does not hold of how the author writes reaches the review, and only that
-        const styleNoteNow = styleOn && steer ? styleNote(styleOf, (await readStyle(draft, 'draft')).found) : '';
+        const read = steer && styleOn ? await readStyle(draft, 'draft') : null;
+        // and, in a call of its own, by a model other than the writer's shown the author's pieces whole: the sentences of
+        // the draft the author would not have written that way (core/direct/style.ts)
+        if (steer) {
+          const writer = c.binding.requestedModel;
+          const d = await readContext(STYLE_READ, { items: [], piece: draft, pieces: stable, request: c.asked }, driftReaderClient(writer), driftReaderModel(writer), { spentUsd: 0, capUsd: Math.max(0, Math.min(0.5, budget.capUsd - budget.spentUsd)), maxCalls: 1 }, 'other');
+          drift = { by: d.by, reader: d.reader, sentences: d.value.drift ?? [] };
+        }
+        const styleNoteNow = steer ? styleNote(styleOf, read?.found ?? [], drift?.sentences ?? []) : '';
         const again = await prose(c.client, budget, stable, variable, reviewAsk(draft, { material: c.material, edits: corrections, rules, method, style: styleNoteNow }), effort, 'emit_review');
         // A REVIEW RETURNS THE PIECE, REVISED. Asked to change only what needs changing, a reply under half the draft's
         // words is no revision of it (a remark about the draft, a fragment): the draft is delivered, and it is said.
@@ -604,7 +620,7 @@ export async function runDirect(c: DirectContext) {
     pieces: shown.map((p) => ({ id: p.id, title: titleOf(p.text), kept: p.kept })),
     route: { by: decided.by, reader: decided.reader, kind: route.kind, ...(decided.why ? { why: decided.why } : {}) }, effort, review, corrections: corrections.length,
     ...(method.trim() ? { method: true } : {}), ...(lengthGuide ? { lengthGuide: { from: lengths[0], to: lengths[lengths.length - 1] } } : {}), ...(said ? { purposeToWriter: true } : {}), questions: { by: asking.by, asked: asking.questions.map((q) => q.id), answered: asking.answers.map((a) => a.id) },
-    ...(style ? { style } : {}), ...(grounded ? { grounded } : {}), ...(hashtags ? { hashtags } : {}) });
+    ...(style ? { style } : {}), ...(drift ? { drift } : {}), ...(takes ? { takes } : {}), ...(grounded ? { grounded } : {}), ...(hashtags ? { hashtags } : {}) });
   // HOW TYPICAL OF THE AUTHOR THE PIECE IS (core/fidelity): read on the delivered text against the profile the build
   // installed, for the evaluation's panel. Descriptive only: nothing on this path steers by it, so no release is credited.
   const fid = argv.includes('--no-fidelity') ? null : releaseFor(c.L, c.sv, null);

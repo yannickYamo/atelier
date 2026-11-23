@@ -43,9 +43,12 @@ export function readings(): string[] {
 
 // THE HELD NUMBERS. Lower them in the commit that deletes. A rise is the owner's decision, named in its commit:
 // 17 Nov 2026, +2 lines on verify's side: the person's stated purpose reaches the writer.
+// 19 Nov 2026, +20 and +12 (owner's go): with --style-review, the draft is read against the author's pieces by another model.
+// 20 Nov 2026, +1 file and +147 lines, +5 on verify's side (owner's order): --voice-select, what a request takes of the pieces.
+// 23 Nov 2026, +2 and +2 (owner's order): a fix in place is told what was asked of the piece before (the record's fix.earlier).
 const HELD = {
-  'cli/direct.ts': { files: 144, lines: 34408 },
-  'cli/commands/verify.ts': { files: 122, lines: 30313 },
+  'cli/direct.ts': { files: 145, lines: 34600 },
+  'cli/commands/verify.ts': { files: 122, lines: 30334 },
 } as const;
 const READINGS_HELD = 39;
 

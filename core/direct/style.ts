@@ -11,6 +11,12 @@
 // not hold reaches the one self-review, each habit with the author's own sentence: the arm a study compares with the run
 // without it, before it is ever the default.
 //
+// THE DRAFT READ AGAINST THE PIECES. With `--style-review` the first draft is also read, in a call of its own, by a model
+// other than the writer's, shown the author's pieces whole: which sentences would the author not have written that way?
+// The writer's own self-review does not see its own habits, and a description of the author does not tell them from the
+// author's (on six unseen posts of the authors and six drafts, a profile flagged both alike; the pieces, read by another
+// model, flagged 7% of the authors' sentences and 21% of the drafts'). Only those sentences are rewritten by the review.
+//
 // GROUNDED BY CODE. "Held" stands only with a quote copied from the piece, found in it; a "held" with no such quote is
 // not read, never held. A habit the build read with no quote of the author's is never asked.
 
@@ -25,10 +31,15 @@ export interface StyleItem {
   /** the author's own sentence that shows the habit (habits only) */
   readonly theirs?: string;
 }
-export interface StyleInput { readonly items: readonly StyleItem[]; readonly piece: string }
+/** `pieces`: the author's pieces, whole; given, the reading also names the sentences of the piece the author would not have written that way. */
+export interface StyleInput { readonly items: readonly StyleItem[]; readonly piece: string; readonly pieces?: string; readonly request?: string }
 /** What was read of one item: held with the piece's own words, not held, or not read (no grounded answer). */
 export interface StyleFound { readonly id: string; readonly held: boolean | null; readonly quote?: string }
-export interface StyleReading { readonly found: readonly StyleFound[] }
+/** A sentence of the piece making a move of voice or form the author's pieces do not make, with the move named. */
+export interface StyleDrift { readonly sentence: string; readonly move: string }
+export interface StyleReading { readonly found: readonly StyleFound[]; readonly drift?: readonly StyleDrift[] }
+/** The most such sentences one reading returns. */
+export const DRIFT_MAX = 12;
 
 /** The most items one reading is asked: the habits first, then the steps (the author's answers come on top). */
 export const STYLE_ITEMS_MAX = 16;
@@ -45,12 +56,14 @@ export const STYLE_SYSTEM = `You read one piece of writing against how its autho
 Judge the piece as the author would. A habit is held when the piece does the same kind of thing, on its own subject; it is not held when the piece never does it, or does the opposite. Do not judge anything else.`;
 
 const ONE = { type: 'object', properties: { id: { type: 'string' }, held: { type: 'boolean' }, quote: { type: ['string', 'null'] } }, required: ['id', 'held', 'quote'], additionalProperties: false };
-export const STYLE_SCHEMA: Record<string, unknown> = { type: 'object', properties: { items: { type: 'array', items: ONE } }, required: ['items'], additionalProperties: false };
+const DRIFT = { type: 'object', properties: { sentence: { type: 'string' }, move: { type: 'string' } }, required: ['sentence', 'move'], additionalProperties: false };
+export const STYLE_SCHEMA: Record<string, unknown> = { type: 'object', properties: { items: { type: 'array', items: ONE }, drift: { type: 'array', items: DRIFT } }, required: ['items'], additionalProperties: false };
+const DRIFT_ASK = 'Under "drift", list each sentence of the piece that the author of these pieces would not have written that way, writing what was asked: a move of voice or form their pieces do not make, or make only in another situation. What the request asks for (a kind of piece, a length, a format) is never such a move. The sentence copied exactly, and the move in a few words. Do not judge content, accuracy or subject. An empty list where there is none.';
 
 const flat = (s: string): string => s.replace(/[‘’]/g, "'").replace(/[“”]/g, '"').replace(/\s+/g, ' ').trim().toLowerCase();
 
 export const STYLE_READ: Reading<StyleInput, StyleReading> = {
-  id: 'style-read', version: '1',
+  id: 'style-read', version: '2',
   system: STYLE_SYSTEM, schema: STYLE_SCHEMA,
   toolName: 'emit_style_read', toolDescription: 'For each of the author\'s habits and steps: whether the piece holds it, with the piece\'s own words.',
   maxTokens: 3000, estimateUsd: 0.02,
@@ -61,10 +74,11 @@ export const STYLE_READ: Reading<StyleInput, StyleReading> = {
     return [habits.length ? `The author's habits:\n${habits.map((h) => `- [${h.id}] ${h.text}${h.theirs ? ` (theirs: "${h.theirs}")` : ''}`).join('\n')}` : '',
       steps.length ? `Steps of the author's method:\n${steps.map((s) => `- [${s.id}] ${s.text}`).join('\n')}` : '',
       answers.length ? `What the author settled for this piece before it was written (held when the piece carries it out):\n${answers.map((a) => `- [${a.id}] ${a.text}`).join('\n')}` : '',
+      input.pieces?.trim() ? `The author's pieces, whole:\n${input.pieces}\n\n${input.request?.trim() ? `What was asked of the piece:\n<request>${input.request.trim().slice(0, 4000)}</request>\n\n` : ''}${DRIFT_ASK}` : '',
       `The piece:\n<piece>\n${input.piece.slice(0, 24_000)}\n</piece>`].filter(Boolean).join('\n\n');
   },
   // nothing to read, or nothing to read it on: no call
-  decide(input) { return input.items.length && input.piece.trim() ? null : { found: [] }; },
+  decide(input) { return (input.items.length || input.pieces?.trim()) && input.piece.trim() ? null : { found: [] }; },
   ground(raw, input) {
     const r = raw as { items?: unknown } | null;
     if (!r || !Array.isArray(r.items)) return null;
@@ -78,7 +92,12 @@ export const STYLE_READ: Reading<StyleInput, StyleReading> = {
       // held only with the piece's own words, found in it
       by.set(id, quote.length >= 8 && piece.includes(flat(quote)) ? { id, held: true, quote: quote.slice(0, 200) } : { id, held: null });
     }
-    return { found: input.items.map((i) => by.get(i.id) ?? { id: i.id, held: null }) };
+    const found = input.items.map((i) => by.get(i.id) ?? { id: i.id, held: null });
+    if (!input.pieces?.trim()) return { found };
+    // a flagged sentence stands only as the piece's own words
+    const drift = (Array.isArray((r as { drift?: unknown }).drift) ? (r as { drift: Record<string, unknown>[] }).drift : [])
+      .flatMap((d) => (typeof d.sentence === 'string' && typeof d.move === 'string' && d.sentence.trim().length >= 8 && piece.includes(flat(d.sentence)) ? [{ sentence: d.sentence.trim(), move: d.move.trim().slice(0, 120) }] : []));
+    return { found, drift: drift.slice(0, DRIFT_MAX) };
   },
   floor(input) { return { found: input.items.map((i) => ({ id: i.id, held: null })) }; },
 };
@@ -110,15 +129,16 @@ export function answerItems(answers: readonly { readonly id: string; readonly an
  * and, so that fixing those does not undo the rest, what the draft already holds, each with the draft's own words, to
  * keep. Nothing is said where the draft misses nothing: the review is then the plain one.
  */
-export function styleNote(items: readonly StyleItem[], found: readonly StyleFound[]): string {
+export function styleNote(items: readonly StyleItem[], found: readonly StyleFound[], drift: readonly StyleDrift[] = []): string {
+  const off = drift.length ? `Sentences of the draft that make a move the author's pieces do not make, or make only in another situation. Rewrite each the way the author would, keeping what it says, so that it no longer makes that move; leave every other sentence as it is:\n${drift.map((d) => `- "${d.sentence}" (${d.move})`).join('\n')}` : '';
   const missed = items.filter((i) => found.find((f) => f.id === i.id)?.held === false);
-  if (!missed.length) return '';
+  if (!missed.length) return off;
   const held = items.flatMap((i) => { const f = found.find((x) => x.id === i.id); return f?.held === true && f.quote ? [{ i, quote: f.quote }] : []; });
   return [`Where the draft does not yet write as the author does:\n${missed.map((i) => (i.kind === 'habit'
     ? `- ${i.text.replace(/\.$/, '')}${i.theirs ? ` (theirs: "${i.theirs}")` : ''}: the draft does not.`
     : i.kind === 'answer' ? `- They settled, before the draft: ${i.text}; the draft does not carry it out.`
       : `- Their method asks: ${i.text}; the draft does not do it.`)).join('\n')}`,
-  ...(held.length ? [`What the draft already does as the author does, to keep as it is while you fix the rest:\n${held.map(({ i, quote }) => `- ${i.text.replace(/\.$/, '').slice(0, 120)}: "${quote}"`).join('\n')}`] : [])].join('\n\n');
+  ...(held.length ? [`What the draft already does as the author does, to keep as it is while you fix the rest:\n${held.map(({ i, quote }) => `- ${i.text.replace(/\.$/, '').slice(0, 120)}: "${quote}"`).join('\n')}`] : []), ...(off ? [off] : [])].join('\n\n');
 }
 
 /** The lines said beside the piece: what was held, what was not, what could not be read. */

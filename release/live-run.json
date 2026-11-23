@@ -1,8 +1,8 @@
 {
  "schema": 1,
- "commit": "0a300c0fed0707bfcff21518476ce0f2fe193b2b",
+ "commit": "b0709e14cbcc6f77df206100eab8d565d9305601",
  "dirty": false,
- "at": "2026-11-18T01:06:52.094Z",
+ "at": "2026-11-23T18:15:05.568Z",
  "node": "v22.22.0",
  "version": "1.1.0",
  "scripted": false,
@@ -60,6 +60,11 @@
   },
   {
    "name": "fix: nothing of the machinery is said, on either stream",
+   "pass": true,
+   "found": ""
+  },
+  {
+   "name": "second fix: the earlier ask reached the writer",
    "pass": true,
    "found": ""
   },

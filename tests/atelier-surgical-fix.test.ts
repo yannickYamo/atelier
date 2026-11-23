@@ -12,7 +12,13 @@ import { sentencesOf } from '../core/observers/text.js';
 import { checkDraft } from '../core/loop/run-repair.js';
 import type { InferenceClient, InferenceRequest } from '../core/inference/client.js';
 import type { StandardVersion } from '../core/state/canonical-state.js';
-import { anInferenceResult } from './fixtures.js';
+import { anInferenceResult, anInvocation } from './fixtures.js';
+import type { InvocationRecord } from '../core/state/canonical-state.js';
+import * as store from '../core/state/store.js';
+import { earlierOfPiece } from '../cli/fix-in-place.js';
+import { mkdtempSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 
 // Thirty sentences, three paragraphs of ten, each sentence its own invented fact about a canal town.
 const S = Array.from({ length: 30 }, (_, i) => `Lock ${i + 1} on the old canal opens at ${6 + (i % 5)} in the morning for the barges.`);
@@ -127,5 +133,48 @@ describe('what a fix removed stays out of the piece', () => {
     const line = checkDraft('s', v, back, { guardClaims: false, removed: { phrases: removed, previous: fixed } }).checked.find((c) => c.requirementId === 'REMOVED');
     expect([line?.result.verdict, line?.materiality, line?.enforced, line?.result.spans.map((x) => x.text)]).toEqual(['VIOLATED', 'PREFERRED', true, ['Lock 5 on the old canal']]);
     expect(checkDraft('s', v, fixed, { guardClaims: false, removed: { phrases: removed, previous: fixed } }).checked.find((c) => c.requirementId === 'REMOVED')?.result.verdict).toBe('MET');
+  });
+});
+
+// ── WHAT WAS ASKED OF THIS PIECE BEFORE ─────────────────────────────────────────────────────────────────────────────
+// A piece fixed in place a second time: the writer saw only the newest words, so it could undo an earlier ask in new
+// wording, and a sentence the person came back to was rewritten without knowing it had been rewritten once already. A
+// full rewrite was already told everything said of the piece; a fix in place is now told the same, and, for a passage an
+// earlier fix wrote, what it read before, what it read after, and what was asked then.
+describe('a fix is told what was asked of the piece before, and what was tried on the passage it writes', () => {
+  const earlierAfter = S[4];
+  const tried = [{ asked: 'say lock 5 opens later', before: 'Lock 5 opened whenever.', after: earlierAfter }];
+  it('the earlier asks and the earlier rewrite of that passage reach the writer; the record names the passage', async () => {
+    const seen: InferenceRequest[] = [];
+    const r = await fixSpans(writer({ [S[4]]: 'Lock 5 on the old canal opens at noon for the barges.' }, seen), { spentUsd: 0, capUsd: 1 }, PIECE, [5, 9], 'make it shorter', [],
+      {}, { asked: 'name no barges', tried });
+    const of5 = seen.find((q) => q.userMessage.includes(`THE PASSAGE TO CHANGE\n"""\n${S[4]}`))!;
+    const of9 = seen.find((q) => q.userMessage.includes(`THE PASSAGE TO CHANGE\n"""\n${S[8]}`))!;
+    for (const q of [of5, of9]) expect(q.userMessage).toContain('name no barges');
+    expect(of5.userMessage).toContain('say lock 5 opens later');
+    expect(of5.userMessage).toContain('Lock 5 opened whenever.');
+    expect(of9.userMessage).not.toContain('say lock 5 opens later');
+    expect(r.retried).toEqual([5]);
+  });
+  it('a first fix is told nothing more, and names no passage', async () => {
+    const seen: InferenceRequest[] = [];
+    const r = await fixSpans(writer({}, seen), { spentUsd: 0, capUsd: 1 }, PIECE, [5], 'make it shorter', []);
+    expect(seen[0].userMessage).not.toContain('before');
+    expect(r.retried).toEqual([]);
+  });
+});
+
+describe('what an earlier fix of the piece wrote, read off the record', () => {
+  const fixRec = (id: string, at: string, of: string, instruction: string, spans: { before: string; after: string }[]): InvocationRecord =>
+    anInvocation({ invocationId: id, at, fix: { of, from: of, instruction, by: 'model', sentences: [1], diff: { total: 3, changed: 1, outside: 0 }, spans, removed: [], reintroduced: { found: [], rewritten: 0, keptAsItWas: 0 } } });
+  it('every span earlier fixes of this piece wrote, oldest first, with what was asked; the earlier words without this one', () => {
+    const L: store.StoreLayout = { root: mkdtempSync(join(tmpdir(), 'atelier-earlier-')), skillName: 's' };
+    store.putInvocation(L, fixRec('i2', '2026-11-23T10:02:00Z', 'i0', 'second ask', [{ before: 'B.', after: 'B2.' }]));
+    store.putInvocation(L, fixRec('i1', '2026-11-23T10:01:00Z', 'i0', 'first ask', [{ before: 'A.', after: 'A2.' }]));
+    store.putInvocation(L, fixRec('ix', '2026-11-23T10:03:00Z', 'other', 'not this piece', [{ before: 'X.', after: 'X2.' }]));
+    expect(earlierOfPiece(L, 'i0', 'third ask', 'first ask Also: second ask Also: third ask')).toEqual({
+      asked: 'first ask Also: second ask',
+      tried: [{ asked: 'first ask', before: 'A.', after: 'A2.' }, { asked: 'second ask', before: 'B.', after: 'B2.' }] });
+    expect(earlierOfPiece(L, 'none', 'third ask', 'third ask')).toEqual({});
   });
 });

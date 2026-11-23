@@ -2,8 +2,13 @@
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-11-23
+
 Atelier learns how you write from the pieces you would sign, writes new pieces that way, and reads each one for anything made up or copied before you see it.
 
+- A second `atelier fix` of the same piece is told what you asked of it before, so it does not undo an earlier change in new words. Where you come back to a sentence a fix already wrote, the writer is shown that try and what you asked then, and the run says which sentences those were.
+- `--style-review`: after the first draft, another model reads it against the author's pieces whole and names the sentences the author would not have written that way; the review rewrites only those.
+- `--voice-select`: a request for your own content in the author's voice keeps your order and argument. The rules about how the author's pieces are built are set aside for that run, and the run says so; your own stated rules always hold.
 - `atelier verify` prints the outcome and what to look at or fix, with the passages that broke a rule under it. The rule-by-rule table is one flag away: `--report`.
 - `atelier fix` says when it wrote the whole piece again and not only the sentences you named. A run that fails prints its error, without the run's notes.
 - A skill built with no purpose typed is described to the host by what it is for. The installed skill shows its standard's version. The missing-key message and the usage guide say how to run behind a gateway.

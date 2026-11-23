@@ -25,7 +25,7 @@ import { readingAs } from '../core/inference/step-guard.js';
 import { readOwnWords, withOwnWords, ownWordsNote, listable, type OwnWordsFix } from '../core/loop/own-words.js';
 import { inferredItems, inferredLines } from '../core/loop/inferred.js';
 import { acts, type VerifyReport } from '../core/observers/verify.js';
-import { FIX_SCOPE, askedBack, fixSpans, fixUnitsOf, sentenceDiff, unchangedWhy } from '../core/loop/surgical-fix.js';
+import { FIX_SCOPE, askedBack, fixSpans, fixUnitsOf, sentenceDiff, unchangedWhy, type Earlier } from '../core/loop/surgical-fix.js';
 import { removedStretches, reintroducedRuns } from '../core/loop/corrections.js';
 import { checkDraftAsync } from '../core/loop/run-repair.js';
 import { readFidelity } from '../core/fidelity/profile.js';
@@ -56,6 +56,18 @@ export function removedOfPiece(L: store.StoreLayout, of: string): string[] {
     for (const x of r.fix?.removed ?? []) out.add(x);
   }
   return [...out];
+}
+
+/**
+ * WHAT WAS ASKED OF THIS PIECE BEFORE THIS FIX (core/loop/surgical-fix.ts, `Earlier`): the person's earlier words about it
+ * (`--correcting` holds every complaint so far, this one last), and every span an earlier fix of it wrote, oldest first.
+ */
+export function earlierOfPiece(L: store.StoreLayout, of: string, instruction: string, correcting = flag('--correcting') ?? ''): Earlier {
+  const tried = store.listInvocations(L).filter((x) => x.fix?.of === of).reverse()
+    .flatMap((x) => (x.fix?.spans ?? []).map((sp) => ({ asked: x.fix?.instruction ?? '', before: sp.before, after: sp.after })));
+  const all = correcting.trim(); const now = instruction.trim();
+  const asked = all && now && all !== now && all.endsWith(now) ? all.slice(0, -now.length).replace(/\s*Also:\s*$/, '').trim() : '';
+  return { ...(asked ? { asked } : {}), ...(tried.length ? { tried } : {}) };
 }
 
 export interface FixInPlace {
@@ -132,7 +144,8 @@ export async function fixInPlace(c: FixInPlace): Promise<{ output: string; json:
   const kept = removedOfPiece(c.L, of); const restored = askedBack(instruction, kept, piece, ownText);
   const removed = kept.filter((x) => !restored.includes(x));
   const budget = { spentUsd: 0, capUsd: numericFlag('--cap', 1), maxCalls: numericFlag('--max-calls', 2 * ids.length + 2) };
-  const r = await fixSpans(c.writer(), budget, piece, ids, instruction, removed, { material: c.materialText, own: ownText });
+  const earlier = earlierOfPiece(c.L, of, instruction);
+  const r = await fixSpans(c.writer(), budget, piece, ids, instruction, removed, { material: c.materialText, own: ownText }, earlier);
   // A PROVIDER OR BUDGET ERROR on the spans: nothing was spliced, and the piece is written again whole, said.
   if (r.error) { c.say(`The sentences you named could not be written (${r.error}), so the piece is written again whole.`); return null; }
   // A span given back word for word changed nothing: it is not shown or recorded as a change (it is said below, with why).
@@ -154,6 +167,7 @@ export async function fixInPlace(c: FixInPlace): Promise<{ output: string; json:
   // A NAMED SENTENCE THAT STILL STANDS AS IT WAS is said with why, never passed over (its span kept, or given back word for word).
   const unchanged = unchangedWhy(diff.unchangedNamed, r.targets, r.reverted);
   for (const u of unchanged) lines.push(`Sentence ${u.id}, which your words are about, is as it was: ${u.why}.`);
+  if (r.retried.length) lines.push(`${r.retried.length === 1 ? `Sentence ${r.retried[0]} was` : `Sentences ${r.retried.join(', ')} were`} written again for you before; the writer was shown that try and what you asked then.`);
   if (restored.length) lines.push(`You asked for wording an earlier fix took out, so it may come back: ${restored.map((x) => `"${shown(x)}"`).join(', ')}.`);
   if (r.reintroduced.found.length) lines.push(`Wording an earlier fix took out came back in ${r.reintroduced.rewritten} span(s) and was written again${r.reintroduced.keptAsItWas ? `; ${r.reintroduced.keptAsItWas} span(s) brought it back again and were kept as they were` : ''}: ${r.reintroduced.found.map((x) => `"${shown(x)}"`).join(', ')}.`);
   else if (removed.length) lines.push(`Nothing earlier fixes of this piece took out (${removed.length} stretch(es)) came back.`);
@@ -178,7 +192,7 @@ export async function fixInPlace(c: FixInPlace): Promise<{ output: string; json:
     // A fix composes no repair chain: the invoking run's profile and route (core/loop/route.ts) are that run's, not this record's.
     settings: prev.settings ? (({ profile: _profile, route: _route, ...kept }) => kept)(prev.settings) : undefined,
     work: r.work.every((w) => w.delimited) ? { delimited: true, ...(r.work.some((w) => w.outside) ? { outside: r.work.map((w) => w.outside ?? '').filter(Boolean).join('\n\n').slice(0, 2000) } : {}) } : { delimited: false },
-    fix: { of, from: prev.invocationId, instruction, by: scope.by, sentences: ids, diff: { total: diff.total, changed: diff.changed, outside: diff.outside }, spans, removed: removedNow, reintroduced: r.reintroduced, ...(unchanged.length ? { unchanged } : {}), ...(restored.length ? { restored } : {}) },
+    fix: { of, from: prev.invocationId, instruction, by: scope.by, sentences: ids, diff: { total: diff.total, changed: diff.changed, outside: diff.outside }, spans, removed: removedNow, reintroduced: r.reintroduced, ...(unchanged.length ? { unchanged } : {}), ...(restored.length ? { restored } : {}), ...(earlier.asked || r.retried.length ? { earlier: { asked: Boolean(earlier.asked), retried: r.retried } } : {}) },
     ...(removed.length ? { corrections: { removed: removed.length, reintroduced: back } } : {}),
     ...(own.fixes.length || own.left.length ? { inferred: inferredItems({ ownWords: own.fixes, ownWordsLeft: own.left }) } : {}) };
   store.putInvocation(c.L, rec);

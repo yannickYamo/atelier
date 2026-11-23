@@ -108,3 +108,31 @@ describe('with --style-review the piece is read again, and the line says what th
     expect(styleLines(items, [{ id: 'h1', held: true }, { id: 'h2', held: true }], 'piece').at(-1)).not.toContain('first draft');
   });
 });
+
+// THE DRAFT READ AGAINST THE AUTHOR'S PIECES. The after-draft reading asked only whether the draft has the author's
+// habits; the model's own moves (a hook, a "not X, it's Y" turn, staccato fragments) were never looked for. Shown the
+// author's pieces whole, it also names each sentence of the draft the author would not have written that way.
+describe('sentences of the draft the author would not have written that way', () => {
+  const PIECES = '<piece n="1">\nWe measured the queue for a week. It held.\n</piece>';
+  const PIECE = 'Getting an agent working takes an afternoon. Keeping it working is the job.\n\nWe started with a dataset.';
+  it('shows the reader the author\'s pieces whole, and reads with nothing else to read', () => {
+    const p = STYLE_READ.prompt({ items: [], piece: PIECE, pieces: PIECES });
+    expect(p).toContain(PIECES);
+    // what was asked is shown, so the form a request asks for is never read as a move of the model's
+    expect(STYLE_READ.prompt({ items: [], piece: PIECE, pieces: PIECES, request: 'an X post on evals' })).toContain('<request>an X post on evals</request>');
+    expect(STYLE_READ.decide({ items: [], piece: PIECE, pieces: PIECES })).toBeNull();
+    expect(STYLE_READ.decide({ items: [], piece: PIECE })).toEqual({ found: [] });
+  });
+  it('keeps a flagged sentence only when it is the draft\'s own words', () => {
+    const r = STYLE_READ.ground({ items: [], drift: [{ sentence: 'Keeping it working is the job.', move: 'a punchline after a setup' }, { sentence: 'A sentence the draft never wrote.', move: 'x' }] }, { items: [], piece: PIECE, pieces: PIECES });
+    expect(r?.drift).toEqual([{ sentence: 'Keeping it working is the job.', move: 'a punchline after a setup' }]);
+  });
+  it('without the pieces nothing is looked for, and the reading is the one it was', () => {
+    expect(STYLE_READ.prompt({ items: [{ id: 'h1', kind: 'habit', text: 'Plain.' }], piece: PIECE })).not.toContain('<piece n=');
+    expect(STYLE_READ.ground({ items: [], drift: [{ sentence: 'Keeping it working is the job.', move: 'x' }] }, { items: [], piece: PIECE })?.drift).toBeUndefined();
+  });
+  it('tells the review to rewrite each such sentence, and only those', () => {
+    const n = styleNote([], [], [{ sentence: 'Keeping it working is the job.', move: 'a punchline after a setup' }]);
+    expect(n).toBe('Sentences of the draft that make a move the author\'s pieces do not make, or make only in another situation. Rewrite each the way the author would, keeping what it says, so that it no longer makes that move; leave every other sentence as it is:\n- "Keeping it working is the job." (a punchline after a setup)');
+  });
+});

@@ -85,6 +85,13 @@ const fixed = cli('fix', 'make the opening one sentence shorter', '--skill', SKI
 check('fix: the piece is handed back with one of the three outcomes', OUTCOME.test(fixed.out), `exit ${fixed.code}; ${fixed.err.split('\n').find((l) => l.startsWith('atelier: ')) ?? '(no outcome line)'}`);
 check('fix: nothing of the machinery is said, on either stream', !MACHINERY.test(`${fixed.out}\n${fixed.err}`), firstLine(`${fixed.out}\n${fixed.err}`, MACHINERY));
 
+// 5b. A SECOND FIX of the same piece is told the first: changed in place, the record says the earlier ask reached the
+// writer (and which sentences an earlier fix had written); written again whole, every complaint is passed as it always was.
+const again = cli('fix', 'the opening still runs long: keep only its first clause', '--skill', SKILL, ...EXTRA);
+const second = store.listInvocations({ root: data, skillName: SKILL })[0] as { fix?: { earlier?: { asked: boolean; retried: readonly number[] } } } | undefined;
+check('second fix: the earlier ask reached the writer', again.code === 0 && (second?.fix ? second.fix.earlier?.asked === true : true),
+  `exit ${again.code}; ${second?.fix ? `in place, earlier ${JSON.stringify(second.fix.earlier ?? null)}` : 'written again whole'}`);
+
 // 6. THE METHOD AND THE PIECES DISAGREE. The pieces open on a scene; the method note says to open on the decision and names
 // who reads the work. What the build understood stands on the author's words, the host and the writer are both given the
 // method, and both are told which source decides.

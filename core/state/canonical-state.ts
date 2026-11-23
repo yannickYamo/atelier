@@ -746,6 +746,10 @@ export interface DirectRecord {
     readonly found: readonly { readonly id: string; readonly kind: 'habit' | 'step' | 'answer'; readonly text: string; readonly held: boolean | null; readonly quote?: string }[]; readonly why?: string;
     /** with --style-review: what the first draft held, before the review it steered */
     readonly draft?: readonly { readonly id: string; readonly held: boolean | null }[] };
+  /** with --voice-select: what the request takes of the author's pieces; for voice only, its words and the structure rules set aside */
+  readonly takes?: { readonly as: 'whole' } | { readonly as: 'voice'; readonly quote: string; readonly setAside: readonly { readonly id: string; readonly statement: string }[] };
+  /** with --style-review: the first draft's sentences the author would not have written that way, read by a model other than the writer's */
+  readonly drift?: { readonly by: string; readonly reader: string; readonly sentences: readonly { readonly sentence: string; readonly move: string }[] };
 }
 
 export interface InvocationRecord {
@@ -857,7 +861,9 @@ export interface InvocationRecord {
     readonly diff: { readonly total: number; readonly changed: number; readonly outside: number };
     readonly spans: readonly { readonly before: string; readonly after: string }[]; readonly removed: readonly string[];
     readonly reintroduced: { readonly found: readonly string[]; readonly rewritten: number; readonly keptAsItWas: number };
-    readonly unchanged?: readonly { readonly id: number; readonly why: string }[]; readonly restored?: readonly string[] };
+    readonly unchanged?: readonly { readonly id: number; readonly why: string }[]; readonly restored?: readonly string[];
+    /** what the writer was told of earlier asks: the person's earlier words about the piece, and the sentences an earlier fix had written (cli/fix-in-place.ts) */
+    readonly earlier?: { readonly asked: boolean; readonly retried: readonly number[] } };
   /** WHAT EARLIER FIXES OF THIS PIECE TOOK OUT, read on a run that wrote it again whole: how many stretches, and which came back (core/loop/corrections.ts). */
   readonly corrections?: { readonly removed: number; readonly reintroduced: readonly string[] };
   /**
