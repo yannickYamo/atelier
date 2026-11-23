@@ -861,7 +861,9 @@ export interface InvocationRecord {
     readonly diff: { readonly total: number; readonly changed: number; readonly outside: number };
     readonly spans: readonly { readonly before: string; readonly after: string }[]; readonly removed: readonly string[];
     readonly reintroduced: { readonly found: readonly string[]; readonly rewritten: number; readonly keptAsItWas: number };
-    readonly unchanged?: readonly { readonly id: number; readonly why: string }[]; readonly restored?: readonly string[] };
+    readonly unchanged?: readonly { readonly id: number; readonly why: string }[]; readonly restored?: readonly string[];
+    /** what the writer was told of earlier asks: the person's earlier words about the piece, and the sentences an earlier fix had written (cli/fix-in-place.ts) */
+    readonly earlier?: { readonly asked: boolean; readonly retried: readonly number[] } };
   /** WHAT EARLIER FIXES OF THIS PIECE TOOK OUT, read on a run that wrote it again whole: how many stretches, and which came back (core/loop/corrections.ts). */
   readonly corrections?: { readonly removed: number; readonly reintroduced: readonly string[] };
   /**

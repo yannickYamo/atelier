@@ -116,8 +116,28 @@ ${WORK_FIELD_ASK}`;
 
 export const FIX_WRITER_SCHEMA: Record<string, unknown> = { type: 'object', properties: { reply: { type: 'string' } }, required: ['reply'], additionalProperties: false };
 
-export function fixWriterPrompt(text: string, t: Pick<RepairTarget, 'text'>, instruction: string, keepOut: readonly string[]): string {
+/**
+ * WHAT WAS ASKED OF THIS PIECE BEFORE: the person's earlier words about it (`asked`), and every span an earlier fix wrote
+ * (`tried`), with what was asked then. A full rewrite is told everything said of the piece; a fix in place is told the
+ * same, so a later fix does not undo an earlier ask in new wording.
+ */
+export interface Earlier {
+  readonly asked?: string;
+  readonly tried?: readonly { readonly asked: string; readonly before: string; readonly after: string }[];
+}
+
+const flat = (s: string): string => s.replace(/\s+/g, ' ').trim();
+/** The earlier rewrites of a passage: those whose written text stands in it, or holds it. */
+export function triedOn(passage: string, tried: Earlier['tried'] = []): NonNullable<Earlier['tried']> {
+  const p = flat(passage);
+  return p ? tried.filter((x) => { const a = flat(x.after); return a.length > 0 && (p.includes(a) || a.includes(p)); }) : [];
+}
+
+export function fixWriterPrompt(text: string, t: Pick<RepairTarget, 'text'>, instruction: string, keepOut: readonly string[], earlier: Earlier = {}): string {
+  const tried = triedOn(t.text, earlier.tried);
   return [`THE PIECE\n"""\n${text}\n"""`, `THE PASSAGE TO CHANGE\n"""\n${t.text}\n"""`, `WHAT THE PERSON WANTS\n"${instruction}"`,
+    earlier.asked?.trim() ? `Earlier, the person also asked this of the piece, and it still holds:\n"${earlier.asked.trim()}"` : '',
+    tried.length ? `This passage was already written again for the person, and they have come back to it, so a close rewording of it is not what they want:\n${tried.map((x) => `- asked "${x.asked}": it read "${flat(x.before)}" and was written as "${flat(x.after)}"`).join('\n')}` : '',
     keepOut.length ? `The person already had this wording taken out of the piece. Do not bring any of it back:\n${keepOut.map((k) => `- "${k}"`).join('\n')}` : '',
     'Return the passage as it should now read, inside the work field.'].filter(Boolean).join('\n\n');
 }
@@ -126,9 +146,9 @@ export function fixWriterPrompt(text: string, t: Pick<RepairTarget, 'text'>, ins
  * One span written again by the writer: its work field, read by form. A reply that is not a non-empty string (none, or
  * empty) is no answer: `missing`, and its span is kept as it was. An empty work field in a reply is the writer's cut.
  */
-export async function writeSpan(client: InferenceClient, budget: Budget, text: string, t: RepairTarget, instruction: string, keepOut: readonly string[]): Promise<WorkField & { readonly missing?: true }> {
+export async function writeSpan(client: InferenceClient, budget: Budget, text: string, t: RepairTarget, instruction: string, keepOut: readonly string[], earlier: Earlier = {}): Promise<WorkField & { readonly missing?: true }> {
   const reply = await spend(budget, 0.05, async () => {
-    const x = await client.complete({ stableBlock: FIX_WRITER_SYSTEM, variableBlock: '', userMessage: fixWriterPrompt(text, t, instruction, keepOut),
+    const x = await client.complete({ stableBlock: FIX_WRITER_SYSTEM, variableBlock: '', userMessage: fixWriterPrompt(text, t, instruction, keepOut, earlier),
       toolName: 'emit_fix', toolDescription: 'The passage as it should now read, inside <work></work>.', schema: FIX_WRITER_SCHEMA, maxTokens: 1500 });
     const j = x.json as { reply?: unknown } | null;
     return { value: typeof j?.reply === 'string' ? j.reply : '', cost: x.cost };
@@ -196,6 +216,8 @@ export interface SurgicalResult {
   readonly work: readonly { readonly delimited: boolean; readonly outside?: string }[];
   /** removed wording a replacement brought back: found, written again for, and still there (kept as it was) */
   readonly reintroduced: { readonly found: readonly string[]; readonly rewritten: number; readonly keptAsItWas: number };
+  /** the sentences, by number, whose earlier rewrite the writer was shown: the person came back to them */
+  readonly retried: readonly number[];
   /** why the spans could not be written (the provider or the budget refused a call): the piece is then written again whole */
   readonly error?: string;
 }
@@ -207,21 +229,22 @@ export interface SurgicalResult {
  */
 export async function fixSpans(client: InferenceClient, budget: Budget, text: string, ids: readonly number[], instruction: string, removed: readonly string[],
   /** the person's material and own words: a new figure or name may come from it (./repair.ts); wording found in `own` is never "removed" */
-  given: { readonly material?: string; readonly own?: string } = {}): Promise<SurgicalResult> {
+  given: { readonly material?: string; readonly own?: string } = {}, earlier: Earlier = {}): Promise<SurgicalResult> {
   const targets = fixTargets(text, ids, instruction, given.material ?? '');
+  const retried = targets.filter((t) => triedOn(t.text, earlier.tried).length).flatMap((t) => t.sentenceIds);
   const replies: { id: number; text: string }[] = []; const work: { delimited: boolean; outside?: string }[] = [];
   const found: string[] = []; let rewritten = 0; let keptAsItWas = 0;
   const applied: Applied[] = []; const reverted: Reverted[] = [];
   try {
     for (const t of targets) {
-      let f = await writeSpan(client, budget, text, t, instruction, removed);
+      let f = await writeSpan(client, budget, text, t, instruction, removed, earlier);
       work.push({ delimited: f.delimited, ...(f.outside ? { outside: f.outside } : {}) });
       // NO ANSWER IS NO CUT: the span stays as it was, and the record says so.
       if (f.missing) { reverted.push({ id: t.id, kind: 'CUT', lost: ['nothing: the writer returned no text for it'] }); continue; }
       let back = reintroducedRuns(f.text, removed, text, given.own);
       if (back.length) {
         found.push(...back.map((r) => r.text)); rewritten += 1;
-        f = await writeSpan(client, budget, text, t, `${instruction} (and do not bring back: ${back.map((r) => `"${r.text}"`).join(', ')})`, removed);
+        f = await writeSpan(client, budget, text, t, `${instruction} (and do not bring back: ${back.map((r) => `"${r.text}"`).join(', ')})`, removed, earlier);
         if (f.missing) { reverted.push({ id: t.id, kind: 'CUT', lost: ['nothing: the writer returned no text for it'] }); continue; }
         back = reintroducedRuns(f.text, removed, text, given.own);
         if (back.length) { keptAsItWas += 1; reverted.push({ id: t.id, kind: 'MEANING', lost: [`${NOTHING}each rewrite brought back wording an earlier fix took out: ${[...new Set(back.map((x) => `"${x.text}"`))].join(', ')}`] }); continue; }
@@ -234,8 +257,8 @@ export async function fixSpans(client: InferenceClient, budget: Budget, text: st
     }
   } catch (e) {
     // A PROVIDER OR BUDGET ERROR stops nothing: nothing is spliced, and the caller writes the piece again whole.
-    return { text, applied: [], reverted: [], targets, work, reintroduced: { found: [], rewritten: 0, keptAsItWas: 0 }, error: (e as Error).message.split('\n')[0] };
+    return { text, applied: [], reverted: [], targets, work, reintroduced: { found: [], rewritten: 0, keptAsItWas: 0 }, retried, error: (e as Error).message.split('\n')[0] };
   }
   const out = applyRepair(text, targets, replies, reverted, applied);
-  return { text: out, applied, reverted, targets, work, reintroduced: { found: [...new Set(found)], rewritten, keptAsItWas } };
+  return { text: out, applied, reverted, targets, work, reintroduced: { found: [...new Set(found)], rewritten, keptAsItWas }, retried };
 }
