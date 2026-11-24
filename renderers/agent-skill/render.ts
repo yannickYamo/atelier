@@ -237,7 +237,7 @@ export interface ManifestRow {
  * body, so a partial read still shows both. Wiring to `atelier verify`; no script and no other command.
  */
 export const hostSteps = (skillId: string, card: string | null = null): string => `## Before you write
-${card ? `\nWhat this work is and who it is for: ${card.replace(/\.$/, '')}. Never ask what this already says.\n` : ''}
+${card ? `\nThis skill writes: ${card} Never ask what this already says.\n` : ''}
 If the request and the notes that came with it do not say what the person is arguing (their point, and why now), what
 the piece must do for them, or what they will put on record beyond the notes (names, news, figures, a story of
 theirs), ask them in one message: at most three short questions, each with a suggested answer where the notes give

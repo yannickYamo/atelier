@@ -172,7 +172,7 @@ describe('the first ten minutes', () => {
     expect(again.status, out).toBe(0);
     // each habit on one line, with a sentence of theirs it was read from
     expect(out).toMatch(/^How these (\d+ )?pieces are written:$/m);
-    expect(out).toMatch(/^ {2}- Closes on a short plain sentence\. "That is the whole trade\."$/m);
+    expect(out).toMatch(/^ {2}- Closes on a short plain sentence\.\n {6}"That is the whole trade\."$/m);
     expect(out).toMatch(/"posts" is ready/);
   }, 240_000);
 

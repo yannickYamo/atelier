@@ -229,38 +229,41 @@ export interface Asked { readonly note: string; readonly questions: readonly Que
   /** the questions the person left to the writer (enter): settled, so not listed as open */
   readonly passed?: readonly string[] }
 
-/**
- * THE EDITOR'S QUESTIONS (core/direct/questions.ts): the one idea, the reader's pain and the proof, asked only where
- * nothing given states them. At a terminal each is asked (a letter, the person's own words, enter for the suggested one,
- * "just write it" for none); elsewhere they are returned and the piece is written without them: nothing the person did
- * not answer reaches the writer. Answers given with --answers count, now or for a kind this run did not ask, and are
- * kept as next time's suggestion. --no-questions reads nothing.
- */
 /** The card told to the editor: one read with nothing grounded tells nothing. */
 const cardOf = (L: store.StoreLayout): PurposeCard | null => { const c = store.getCard(L); return c && cardLine(c) ? c : null; };
 
 const labelOf = (id: string): string => EDITOR_LABEL[id as EditorKind] ?? id;
-const WHERE: Readonly<Record<string, string>> = { request: 'your request', material: 'your notes', method: 'your method', card: 'what this skill is for', told: 'what you said before' };
 /**
  * THE BRIEF BEFORE THE DRAFT, as the person sees it: each field stated (with where), answered, or open with its question
  * and options. A field not needed for this piece is not shown.
  */
 export function briefLines(decisions: readonly EditorDecision[], answers: readonly { readonly id: string; readonly answer: string }[]): string[] {
-  const pad = (s: string): string => s.padEnd(10);
-  const lines = ['Before I write:'];
+  const clip = (t: string): string => { const x = t.replace(/\s+/g, ' ').trim(); return x.length > 64 ? `${x.slice(0, 63).trimEnd()}…` : x; };
+  const lines: string[] = [];
   for (const kind of EDITOR_KINDS) {
     const d = decisions.find((x) => x.kind === kind);
     const a = answers.find((x) => x.id === kind);
-    if (a) lines.push(`  ${pad(labelOf(kind))} ${a.answer}   (you said)`);
-    else if (d?.stated && d.quote) lines.push(`  ${pad(labelOf(kind))} "${d.quote}"   (from ${WHERE[d.stated] ?? d.stated})`);
-    else if (d?.question) {
-      lines.push(`  ${pad(labelOf(kind))} ?  ${d.question.ask}`);
-      if (d.question.options.length) lines.push(`  ${pad('')}    ${d.question.options.map((o, i) => `${String.fromCharCode(97 + i)}) ${o}`).join('   ')}`);
-    }
+    const said = a ? a.answer : d?.stated && d.quote ? d.quote : '';
+    if (said) lines.push(`  ${labelOf(kind).padEnd(6)} ${clip(said)}`);
   }
-  return lines;
+  return lines.length ? ['Before I write, here is what I have:', ...lines] : [];
 }
 
+/** One open question as asked: the question, its options on one line, and what enter does. */
+export function questionPrompt(q: { readonly id: string; readonly ask: string; readonly options: readonly string[]; readonly default: string }): { head: string; prompt: string } {
+  const letters = q.options.map((o, i) => `${String.fromCharCode(97 + i)}) ${o}`).join('\n  ');
+  const def = q.options.indexOf(q.default);
+  return { head: `${labelOf(q.id)}: ${q.ask}${letters ? `\n  ${letters}` : ''}`,
+    prompt: def >= 0 ? `  enter for ${String.fromCharCode(97 + def)}, or your own words: ` : '  your words, or enter to skip: ' };
+}
+
+/**
+ * THE EDITOR'S QUESTIONS (core/direct/questions.ts): the point, the goal, the proof and the reader, asked only where
+ * nothing given states them, three at most. At a terminal each is asked once (a letter, the person's own words, enter
+ * for the suggestion, "just write it" for the rest); elsewhere they are returned and the piece is written without them:
+ * no suggestion the person did not see reaches the writer. Answers belong to the request they were given for and are
+ * used on every later run of it; --answers gives them off a terminal. --no-questions reads nothing.
+ */
 export async function editorQuestions(c: Pick<DirectContext, 'L' | 'asked' | 'material' | 'interactive' | 'read' | 'say'>, method: string, kind: string | null = null, habits: EditorInput['habits'] = []): Promise<Asked> {
   if (argv.includes('--no-questions')) return { note: '', questions: [], answers: [], by: 'off' };
   // AN EDITOR'S ANSWER BELONGS TO THE PIECE IT WAS GIVEN FOR. The one idea of last week's post is not this one's: read
@@ -301,23 +304,27 @@ export async function editorQuestions(c: Pick<DirectContext, 'L' | 'asked' | 'ma
   const openNow = questions.filter((q) => !answers.some((a) => a.id === q.id) && !passed.has(q.id));
   if (c.interactive && openNow.length) {
     const read = c.read ?? askLine;
-    askOut().write(`\n${briefLines(decided.value.decisions, answers).join('\n')}\n\n`);
+    const brief = briefLines(decided.value.decisions, answers);
+    if (brief.length) askOut().write(`\n${brief.join('\n')}\n`);
     let rest = false;
     for (const q of openNow) {
-      const typed = await read(q.default ? `${labelOf(q.id)}: enter for "${q.default}", a letter, or your words: ` : `${labelOf(q.id)}: your words, or enter to leave it to me: `);
+      const p = questionPrompt(q);
+      askOut().write(`\n${p.head}\n`);
+      const typed = await read(p.prompt);
       if (JUST_WRITE.test(typed)) { rest = true; break; }
       if (typed.trim()) answers.push({ id: q.id, answer: pickedOption(q.options, typed) });
       else if (q.default) answers.push({ id: q.id, answer: q.default });
       else passed.add(q.id);
     }
     if (!rest) {
-      const more = await read('Anything wrong above? Say it, or press enter to write: ');
+      const more = await read('\nAnything else? Say it, or enter to write: ');
       if (more.trim() && !JUST_WRITE.test(more)) answers.push({ id: ALSO_ID, answer: more.trim() });
     }
   }
   // an answer for a kind this run did not ask (a field, a compiled-path kind) still counts; a decision of another
   // reading's naming has no question here to say what it decides, so it is not told
-  for (const [id, answer] of [...given, ...before]) if (!questions.some((q) => q.id === id) && (askOf(id) !== null || aboutBefore.some((b) => b.id === id)) && !answers.some((a) => a.id === id)) answers.push({ id, answer });
+  // (an empty answer is "you decide", kept from an earlier reading: nothing to tell, and never said as settled)
+  for (const [id, answer] of [...given, ...before]) if (answer !== '' && !questions.some((q) => q.id === id) && (askOf(id) !== null || aboutBefore.some((b) => b.id === id)) && !answers.some((a) => a.id === id)) answers.push({ id, answer });
   const at = new Date().toISOString();
   // every answer to this reading's questions belongs to this request; a compiled-path kind given here stays the skill's
   // and so do words added after them: kept as the skill's, they changed the next reading's key and reached other requests
@@ -467,13 +474,13 @@ export async function runDirect(given: DirectContext) {
   const rules = planFor(c.std).rules.filter((r) => r.stated && r.role !== 'HABIT').map((r) => r.statement);
   // The author's method, whole and in their words, where the skill has one: what they wrote down is theirs, like their pieces.
   const method = store.getMethod(c.L)?.text ?? '';
-  // What an editor would ask before the draft: only the person's answers reach the writer.
   // which habits stand is the build's count over the pieces where it made one (core/compiler/moves.ts): the profile the
   // version's receipt names; with none, the reading's own word for how often
   const movesHash = store.getReceipt(c.L, c.sv.skillVersionHash)?.movesHash;
   const counted = movesHash ? store.getMovesByHash(c.L, movesHash) : null;
   const habits = pointsWithRates(voice?.persona?.points ?? [], counted);
-  // the questions are shown what the author's pieces are built on, so they can ask for what this piece needs of it
+  // WHAT AN EDITOR WOULD ASK BEFORE THE DRAFT: only the person's answers reach the writer. The questions are shown what
+  // the author's pieces are built on, so they can ask for what this piece needs of it
   const asking = await editorQuestions(c, method, route.kind ?? null, styleItems(habits, []).map((h) => ({ text: h.text, theirs: h.theirs ?? '' })));
   // under `atelier run` at a terminal, the questions are done (or there were none): say the writing has begun
   if (askedByRun()) askOut().write('writing…\n');
@@ -660,7 +667,7 @@ export async function runDirect(given: DirectContext) {
   };
   const direct = (): DirectRecord => ({ version: DIRECT_VERSION, asked: c.asked, from: catalogue.length,
     pieces: shown.map((p) => ({ id: p.id, title: titleOf(p.text), kept: p.kept })),
-    route: { by: decided.by, reader: decided.reader, kind: route.kind, ...(decided.why ? { why: decided.why } : {}) }, effort, review, corrections: corrections.length,
+    route: { by: decided.by, reader: decided.reader, kind: route.kind, ...(decided.why ? { why: decided.why } : {}), ...(route.keepWording ? { keepWording: route.keepWording } : {}) }, effort, review, corrections: corrections.length,
     ...(method.trim() ? { method: true } : {}), ...(lengthGuide ? { lengthGuide: { from: lengths[0], to: lengths[lengths.length - 1] } } : {}), ...(said ? { purposeToWriter: true } : {}), questions: { by: asking.by, asked: asking.questions.map((q) => q.id), answered: asking.answers.map((a) => a.id), ...(asking.passed?.length ? { passed: asking.passed } : {}) },
     ...(style ? { style } : {}), ...(drift ? { drift } : {}), ...(takes ? { takes } : {}), ...(grounded ? { grounded } : {}), ...(hashtags ? { hashtags } : {}) });
   // HOW TYPICAL OF THE AUTHOR THE PIECE IS (core/fidelity): read on the delivered text against the profile the build

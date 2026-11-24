@@ -68,7 +68,7 @@ Four things decide what a piece argues. For each, say where what you were shown 
 - record: what shows it is true that the material does not hold: a case, a figure, a name, news or a story of the author's own that they will put on record.
 - reader: who reads it, and in what situation. An audience named alone ("engineers") is not a reader in a situation.
 
-For each: statedIn "request", "material", "method", "card" or "told", with a short quote copied exactly from there that states it. Something you could argue from the material is not stated. Where nothing states it, picture the piece under two different answers from the author: where it would come out the same, or the piece needs nothing beyond what was given (a reply, a summary, an update of facts given), statedIn "NOT_NEEDED". Otherwise statedIn "NONE", with the question you would put to the author: one short sentence in plain words, about this piece, in the words this kind of work uses (for a requirements document the point is the problem and the goal is how success is measured). For point, goal and reader also give two to four short options grounded in what you were shown, and the default: the one of them you would pick. For the record give no options and no default: nothing you were shown can tell what the author will put on record.
+For each: statedIn "request", "material", "method", "card" or "told", with a short quote copied exactly from there that states it. Something you could argue from the material is not stated. Where nothing states it, picture the piece under two different answers from the author: where it would come out the same, or the piece needs nothing beyond what was given (a reply, a summary, an update of facts given), statedIn "NOT_NEEDED". Otherwise statedIn "NONE", with the question you would put to the author: one plain sentence of at most fifteen words, about this piece, asking one thing, in the words this kind of work uses (for a requirements document the point is the problem and the goal is how success is measured). For point, goal and reader also give two to four options grounded in what you were shown, each at most ten words, and the default: the one of them you would pick. For the record give no options and no default: nothing you were shown can tell what the author will put on record.
 
 Never ask for a choice among things already given (which point carries the piece, which proof leads, how it opens or closes, "I" or "we", the order, the length): those are the writer's. Never ask how it should sound: their pieces settle that.`;
 
@@ -107,7 +107,7 @@ function questionOf(kind: EditorKind, x: Record<string, unknown>): Question | nu
 }
 
 export const EDITOR_QUESTIONS: Reading<EditorInput, EditorReading> = {
-  id: 'editor-questions', version: '6',
+  id: 'editor-questions', version: '7',
   system: EDITOR_SYSTEM, schema: EDITOR_SCHEMA,
   toolName: 'emit_editor_questions', toolDescription: 'For the point, the goal, what may be put on record and the reader: where each is stated, whether it is needed, or the question to ask the author.',
   maxTokens: 4000, estimateUsd: 0.03,
@@ -155,7 +155,8 @@ export const INTENT_HEAD = 'What the author wants from this piece, in their word
  * answers is written exactly as it would be with no question step.
  */
 export function editorNote(answers: readonly { readonly id: string; readonly answer: string }[], asked: readonly (Pick<Question, 'id' | 'about'> & { readonly ask?: string })[] = []): string {
-  // a decision of this piece's own is told by what it decides, with the question asked: an option is worded against it
+  // each field is told by its label; an answer kept from an earlier reading's own decision (its `about`) by what it
+  // decided, with the question asked, since its options were worded against that question
   const label = (id: string): string | null => askOf(id) ?? (() => { const q = asked.find((x) => x.id === id); return q?.about ? `${q.about.replace(/[.:]$/, '')}${q.ask ? ` (asked: "${q.ask}")` : ''}:` : null; })();
   const lines = answers.filter((a) => label(a.id) !== null && a.answer.trim()).map((a) => `- ${label(a.id) ?? ''} ${a.answer.trim()}`);
   return lines.length ? `${INTENT_HEAD}\n\n${lines.join('\n')}` : '';

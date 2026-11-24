@@ -26,16 +26,16 @@ export const SETTLES_MAX = 5;
 
 export const CARD_SYSTEM = `You read a set of one author's finished pieces, with the one line they gave for what the pieces are for and their own note on how they work, where they gave them. Say what this work is, as an editor who knows this kind of work would:
 
-- kind: what the pieces are, in a few words ("a pricing memo", "a reply to a customer's complaint", "a post on engineering practice").
+- kind: what the pieces are, in two to four words, plural ("blog posts", "pricing memos", "replies to complaints").
 - kindQuote: a short passage copied exactly from a piece, the stated purpose or the author's note that shows it.
-- reader: who reads them, and in what situation ("a customer who was billed twice", "an engineer choosing a tool").
+- reader: who reads them, in at most six words ("engineering leaders", "engineers choosing a tool").
 - readerQuote: a short passage copied exactly from a piece, the stated purpose or the author's note that shows it.
-- purpose: what a piece of this kind is for: what it gets the reader to know, do or decide. One sentence.
+- purpose: what a piece does for that reader, in at most ten words, starting with a verb ("reframe the painful parts of building software", "decide whether to try the same change").
 - purposeQuote: a short passage copied exactly from a piece, the stated purpose or the author's note that shows it.
 - asksQuote: where the line they gave asks for one particular piece (it says what that piece is about), the words of the line that name it, copied exactly; null where the line only says what the work is in general.
 - settles: the decisions every piece of this kind has to settle before it is written, at most five, each in a few words ("the price, and what it is compared with", "what is offered to make it right"). What any piece of writing settles (a title, a length) is not one of them.
 
-Kind and reader are each one short phrase, with no aside and nothing in brackets. Say only what the pieces and the author's own words show. Where the line they gave or their note says who reads the work or what it is for, that is their word: use it, and copy the quote from there, not from a piece. Where nothing shows a reader or a purpose, give null for it and its quote; never a guess, and never a sentence saying it is unclear.`;
+Kind, reader and purpose read as one short sentence: "<kind> for <reader>, to <purpose>." Each is one plain phrase, with no aside, nothing in brackets and no "and" chaining two ideas. Say only what the pieces and the author's own words show. Where the line they gave or their note says who reads the work or what it is for, that is their word: use it, and copy the quote from there, not from a piece. Where nothing shows a reader or a purpose, give null for it and its quote; never a guess, and never a sentence saying it is unclear.`;
 
 export const CARD_SCHEMA: Record<string, unknown> = {
   type: 'object', properties: {
@@ -57,7 +57,7 @@ const found = (quote: unknown, input: CardInput, own = false): boolean => {
 export interface CardReading { readonly card: PurposeCard | null }
 
 export const PURPOSE_CARD: Reading<CardInput, CardReading> = {
-  id: 'purpose-card', version: '5',
+  id: 'purpose-card', version: '6',
   system: CARD_SYSTEM, schema: CARD_SCHEMA,
   toolName: 'emit_purpose_card', toolDescription: 'What this work is: its kind, its reader, its purpose, and the decisions every piece of it settles.',
   maxTokens: 800, estimateUsd: 0.02,
@@ -100,6 +100,21 @@ export function cardSaid(c: PurposeCard | null, asked: string): string {
 export function cardLine(c: PurposeCard): string {
   return [c.kind ? `This work: ${c.kind}` : '', c.reader ? `read by ${c.reader}` : '', c.purpose ? `for: ${c.purpose.replace(/\.$/, '')}` : '',
     c.settles.length ? `each piece settles: ${c.settles.join('; ')}` : ''].filter(Boolean).join('; ');
+}
+
+/**
+ * WHAT THE AGENT WRITES, IN ONE SENTENCE: "Blog posts for engineering leaders, to share what one team changed and learned."
+ * The kind leads, the reader follows, the purpose closes. Empty when nothing was read or said.
+ */
+export function cardSentence(c: Pick<PurposeCard, 'kind' | 'reader' | 'purpose'>): string {
+  const clean = (t: string | null): string => (t ?? '').replace(/\s+/g, ' ').trim().replace(/[.;:?!]+$/, '');
+  const kind = clean(c.kind); const reader = clean(c.reader).replace(/^(read )?by\s+/i, '').replace(/^for\s+/i, '');
+  // a purpose read as "for …" keeps its word; any other is said as what the piece is "to" do
+  const said = clean(c.purpose); const purpose = /^for\s/i.test(said) ? said : said && `to ${said.replace(/^to\s+/i, '')}`;
+  const head = [kind, reader && `for ${reader}`].filter(Boolean).join(' ');
+  const s = [head, purpose].filter(Boolean).join(head ? ', ' : '');
+  // a first word all in small letters starts the sentence with a capital; a name's own ("iOS") is kept as written
+  return s ? `${/^[a-z]+\b/.test(s) ? s.charAt(0).toUpperCase() + s.slice(1) : s}.` : '';
 }
 
 /**

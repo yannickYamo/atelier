@@ -718,7 +718,8 @@ export interface DirectRecord {
   /** how many pieces the skill holds to choose from */
   readonly from: number;
   /** who chose them: a reading of the request (`model`), or the shared-words floor (`floor`), and why the floor */
-  readonly route: { readonly by: 'code' | 'model' | 'floor'; readonly reader: string; readonly kind: string | null; readonly why?: string };
+  /** keepWording: the person's words saying the material is used as written, so it was not served as points */
+  readonly route: { readonly by: 'code' | 'model' | 'floor'; readonly reader: string; readonly kind: string | null; readonly why?: string; readonly keepWording?: string };
   readonly effort: string;
   /** the range of the author's shown pieces, in words, told to the writer as a guide where the request stated no length */
   readonly lengthGuide?: { readonly from: number; readonly to: number };

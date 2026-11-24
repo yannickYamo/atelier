@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- The build says what the agent writes in one short sentence ("Engineering blog posts, to share what one team changed and what it learned."), and each habit with a sentence of yours on its own line. Before a piece, what is already settled is shown in one short line each, and each open question is asked once, with its options one to a line and what enter picks. The README shows a real session.
 - Before a piece is written, Atelier asks only what you alone can say about it: your point and why now, what the piece must do, what shows it that your notes do not hold (a case, a figure, a name, a story of yours), and who it is for. It asks only where your request and notes leave one out and the answer would change the piece, at most three, never a choice among what you gave (which point leads, how it opens). At a terminal it shows what it read, then asks each open one in turn with a suggestion: enter takes it, and it is remembered for that request. Anywhere else the questions are said before the piece, which is always written, and no suggestion is used for you.
 - Where your request, method or notes say their wording is to be used as written (approved messaging, requirement text), it is kept, and the run says so; otherwise notes are written from in new sentences, as before.
 - An answer given for a request is used on every later run of it. Before, a second run could ask again under new names and drop the answers given.

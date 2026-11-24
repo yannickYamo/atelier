@@ -131,7 +131,8 @@ messaging, a statement to quote, requirement text to keep word for word), copy t
     const takes = x.select ? (voice ? { takes: 'voice' as const, takesQuote: quote.slice(0, 200) } : { takes: 'whole' as const }) : {};
     // the material's wording is kept only on words found where the reading says they are
     const keep = typeof r.keep_wording === 'string' ? r.keep_wording.trim() : '';
-    const kept = keep.length >= 4 && [x.request, x.method ?? '', x.material].some((t) => flat(t).includes(flat(keep)));
+    // three words at least: a stray fragment ("note") is found anywhere and would turn the check of copying off
+    const kept = keep.split(/\s+/).length >= 3 && [x.request, x.method ?? '', x.material].some((t) => flat(t).includes(flat(keep)));
     return { order, kind: typeof r.asks_for === 'string' && r.asks_for.trim() ? r.asks_for.trim().slice(0, 120) : null, ...(length === undefined ? {} : { length }), ...takes, ...(kept ? { keepWording: keep.slice(0, 200) } : {}) };
   },
   floor: (x) => ({ order: lexicalOrder(x.pieces, `${x.request}\n${x.material.slice(0, MATERIAL_CHARS)}`), kind: null }),
