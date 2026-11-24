@@ -66,6 +66,13 @@ describe('at a terminal, one prompt per open question; enter takes the suggestio
     const r = await editorQuestions({ L, asked: 'Write a post on keeping notes.', material: [], interactive: true, read: async () => typed.shift() ?? '', say: () => undefined }, '');
     expect(r.answers).toEqual([{ id: 'point-1', answer: 'B' }, { id: 'also', answer: 'Name our two shutdowns' }]);
     expect(r.note).toContain('The author adds: Name our two shutdowns');
+    // the same request again: nothing is read or asked again, and the words added reach the writer again
+    const again = await editorQuestions({ L, asked: 'Write a post on keeping notes.', material: [], interactive: true, read: async () => { throw new Error('asked again'); }, say: () => undefined }, '');
+    expect(calls).toBe(1);
+    expect(again.answers).toEqual([{ id: 'point-1', answer: 'B' }, { id: 'also', answer: 'Name our two shutdowns' }]);
+    // another request is another piece: the words added for this one are not its own
+    const other = await editorQuestions({ L, asked: 'Write a post on plain files.', material: [], interactive: false, read: async () => '', say: () => undefined }, '');
+    expect(other.note).not.toContain('Name our two shutdowns');
   });
 });
 

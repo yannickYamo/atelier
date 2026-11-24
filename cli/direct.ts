@@ -270,7 +270,7 @@ export async function editorQuestions(c: Pick<DirectContext, 'L' | 'asked' | 'ma
   // An answer kept for one request (`for`) is this request's only. One kept with none is the skill's (the compiled
   // path's kinds); an editor kind kept with none predates answers per request and is left out.
   const all = store.getTold(c.L);
-  const told = all.filter((t) => t.for === undefined ? !(EDITOR_KINDS as readonly string[]).includes(t.id) : t.for === forRequest);
+  const told = all.filter((t) => t.for === undefined ? !(EDITOR_KINDS as readonly string[]).includes(t.id) && t.id !== ALSO_ID : t.for === forRequest);
   const input = { request: c.asked, material: materialShown(c.material), method, told, kind, card: cardOf(c.L), habits };
   // THE SAME INPUT ASKS THE SAME QUESTIONS: a model's reading is kept under the hash of what it read (store.ts, getEditorReading).
   // An answer given for this request is not part of the key: keyed on it, the next run read again, the questions came back
@@ -320,7 +320,8 @@ export async function editorQuestions(c: Pick<DirectContext, 'L' | 'asked' | 'ma
   for (const [id, answer] of [...given, ...before]) if (!questions.some((q) => q.id === id) && (askOf(id) !== null || aboutBefore.some((b) => b.id === id)) && !answers.some((a) => a.id === id)) answers.push({ id, answer });
   const at = new Date().toISOString();
   // every answer to this reading's questions belongs to this request; a compiled-path kind given here stays the skill's
-  const ofThisPiece = (id: string): boolean => (EDITOR_KINDS as readonly string[]).includes(id) || questions.some((q) => q.id === id);
+  // and so do words added after them: kept as the skill's, they changed the next reading's key and reached other requests
+  const ofThisPiece = (id: string): boolean => (EDITOR_KINDS as readonly string[]).includes(id) || id === ALSO_ID || questions.some((q) => q.id === id);
   store.addTold(c.L, [...answers, ...[...passed].map((id) => ({ id, answer: '' }))].filter((a) => before.get(a.id) !== a.answer).map((a) => ({ id: a.id, ask: questions.find((q) => q.id === a.id)?.ask ?? askOf(a.id) ?? a.id, answer: a.answer, at, ...(ofThisPiece(a.id) ? { for: forRequest } : {}), ...(questions.find((q) => q.id === a.id)?.about ? { about: questions.find((q) => q.id === a.id)?.about } : {}) })));
 
   const open = questions.filter((q) => !answers.some((a) => a.id === q.id) && !passed.has(q.id));
