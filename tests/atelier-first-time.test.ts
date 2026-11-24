@@ -62,8 +62,7 @@ describe('the first ten minutes', () => {
     // no stop: the one command ends with a skill that is active
     expect(built.code, built.out).toBe(0);
     expect(store.getActive({ root: data, skillName: 'posts' })).toBeTruthy();
-    // what was understood, then at most five questions, and the answers are the agent's from then on
-    expect(built.out).toContain('What I understood');
+    // one short screen, then at most one prompt, and the answer is the agent's from then on
     // ONE PROMPT before the piece, and one piece: the fewest steps a person can be asked to take
     expect(built.out.match(/Who reads these, and what should they do or know after one\?/g)?.length).toBe(1);
     const card = store.getCard({ root: data, skillName: 'posts' });
@@ -82,7 +81,8 @@ describe('the first ten minutes', () => {
     // the guided part speaks in the person's words
     // the whole build speaks in the person's words: their method as they wrote it, and none of the machinery
     expect(INTERNAL.filter((w) => built.out.includes(w))).toEqual([]);
-    expect(built.out).toContain('Your method, which every piece follows (where it and your pieces differ, your method decides):'); expect(built.out).toContain('- Close on one short plain sentence.');
+    // their method is not quoted back at the build: it is theirs already, and on the skill page (atelier status --skill)
+    expect(built.out).not.toContain('Your method, which every piece follows');
     for (const hidden of ['You judge these yourself', 'never blocking', '--report', 'could not be read']) expect(built.out, hidden).not.toContain(hidden);
 
     // one more command writes with it, with nobody asked anything
@@ -103,10 +103,10 @@ describe('the first ten minutes', () => {
     expect(toldBodies.some((b) => b.includes(SAID))).toBe(true);
     expect(toldBodies.some((b) => b.includes('Who the author says reads them'))).toBe(false);
     await setBackend({ byTool: { __plain: [DRAFT, REVIEWED] } });
-    // beside the piece: what the checks found in one sentence and what to do if it is not right, in plain words
-    // the one sentence counts what was measured, what is judgement, and what could not be checked, and that last is named
-    expect(ran.out).toMatch(/^Ready\. Checked: nothing broke the rules \(3 measured; 3 are judgement calls the writer was given in your words; 1 could not be checked on this piece, named below\)\.$/m);
-    expect(ran.out).toMatch(/^ {2}Not checked on this piece: Every name and figure in the work .*\(no material was supplied to look them up in\)$/m);
+    // under the piece: nothing was broken and no name or figure is to check, so only the way to fix it, in plain words;
+    // what could not be checked and the counts are the full account's (--report)
+    expect(ran.out).not.toMatch(/^(Ready|Needs a look|Needs a fix)\b/m);
+    expect(ran.out).not.toMatch(/Not checked on this piece/);
     expect(ran.out).toContain('Not right? atelier fix');
     expect(ran.out).not.toContain('── Evaluation');
     expect(ran.out).not.toMatch(/left for you to read|possible slip|small reader/i);
@@ -170,9 +170,9 @@ describe('the first ten minutes', () => {
     const again = spawnSync('node', [CLI, ...args, ...BACKEND()], { encoding: 'utf8', cwd: proj, env, input: '\n\n\n\n\n\n' });
     const out = `${again.stdout}${again.stderr}`;
     expect(again.status, out).toBe(0);
-    expect(out).toContain('How these pieces are written:'); expect(out).toContain('- Closes on a short plain sentence.');
-    // each point with how often and a sentence of theirs it was read from
-    expect(out).toMatch(/^ {8}(?:often|in \d of your \d pieces), as in: "That is the whole trade\."$/m);
+    // each habit on one line, with a sentence of theirs it was read from
+    expect(out).toMatch(/^How these (\d+ )?pieces are written:$/m);
+    expect(out).toMatch(/^ {2}- Closes on a short plain sentence\. "That is the whole trade\."$/m);
     expect(out).toMatch(/"posts" is ready/);
   }, 240_000);
 
@@ -277,9 +277,9 @@ describe('the first ten minutes', () => {
     const r = spawnSync('node', [CLI, 'new', 'posts', 'write posts in my voice', '--name', 'posts', ...BACKEND()], { encoding: 'utf8', cwd: proj, env, input: '\n\n' });
     const out = `${r.stdout}${r.stderr}`;
     expect(r.status, out).toBe(0);
-    expect(out).toContain('What I understood'); expect(out).toContain('How these pieces are written:');
-    // what was read is said of the pieces given, which may not be the person's own
-    expect(out).toMatch(/^ {2}Pieces read: 6[,.]/m); expect(out).toMatch(/Checked by code on every piece: \d+ of the \d+ rules/);
+    // what was read is said of the pieces given, which may not be the person's own; the rule counts are on the skill page
+    expect(out).toMatch(/^How these 6 pieces are written:$/m);
+    expect(out).not.toMatch(/Checked by code on every piece/);
     expect(out.match(/^Your piece:$/gm)?.length).toBe(1);
     expect(out).toMatch(/"posts" is ready/);
     for (const old of ['Held back', 'Estimated discovery cost', 'Sealed', 'vantage', '--accept']) expect(out, old).not.toContain(old);

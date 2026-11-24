@@ -59,10 +59,13 @@ const skillFile = join(proj, '.claude/skills', SKILL, 'SKILL.md');
 check('build: the skill is built and installed', built.code === 0 && existsSync(skillFile), `exit ${built.code}; ${built.err.split('\n').find((l) => l.startsWith('atelier: ')) ?? ''}`);
 check('build: nothing of the machinery is said', !MACHINERY.test(built.out), firstLine(built.out, MACHINERY));
 check('build: the installed skill says which source decides', existsSync(skillFile) && readFileSync(skillFile, 'utf8').includes(methodDecides('mine')), 'the sentence is not in SKILL.md');
+check('build: the installed skill asks before it writes and checks after', existsSync(skillFile) && /^## Before you write$/m.test(readFileSync(skillFile, 'utf8')) && /^## After you write$/m.test(readFileSync(skillFile, 'utf8')), 'the steps are not in SKILL.md');
 
 // 2. A PIECE, from notes, in the short view a person reads.
 const ran = cli('run', 'Write a post for the growers on this week\'s vote about the wharf, and what we could do next.', '--skill', SKILL, '--with', `notes=${notes}`, '--no-questions', ...EXTRA);
-check('run: a piece is handed over with one of the three outcomes', OUTCOME.test(ran.out) && ran.out.trim().length > 200, `exit ${ran.code}; ${ran.err.split('\n').find((l) => l.startsWith('atelier: ')) ?? firstLine(ran.out, /Checked:/)}`);
+// under the piece: at most four lines, and no verdict word (the lines after the last paragraph of the piece)
+const under = ran.out.trimEnd().split('\n\n').at(-1)?.split('\n') ?? [];
+check('run: a piece is handed over, with at most four lines under it and no verdict word', (ran.code === 0 || ran.code === 1) && ran.out.trim().length > 200 && under.length <= 4 && !OUTCOME.test(ran.out), `exit ${ran.code}; ${ran.err.split('\n').find((l) => l.startsWith('atelier: ')) ?? under.join(' | ')}`);
 check('run: nothing of the machinery is said, on either stream', !MACHINERY.test(`${ran.out}\n${ran.err}`), firstLine(`${ran.out}\n${ran.err}`, MACHINERY));
 
 // 3. A FIGURE THAT IS NOT IN THE NOTES is something to look at; 4. TRUE SENTENCES FROM THE NOTES are not.
@@ -82,7 +85,7 @@ check('verify: sentences taken from the notes are not flagged', cleanKind !== 'l
 
 // 5. A FIX of the piece just written ends as a run does.
 const fixed = cli('fix', 'make the opening one sentence shorter', '--skill', SKILL, ...EXTRA);
-check('fix: the piece is handed back with one of the three outcomes', OUTCOME.test(fixed.out), `exit ${fixed.code}; ${fixed.err.split('\n').find((l) => l.startsWith('atelier: ')) ?? '(no outcome line)'}`);
+check('fix: the piece is handed back, ending in the way to fix it and no verdict word', /^Not right\? atelier fix /m.test(fixed.out) && !OUTCOME.test(fixed.out), `exit ${fixed.code}; ${fixed.err.split('\n').find((l) => l.startsWith('atelier: ')) ?? firstLine(fixed.out, OUTCOME)}`);
 check('fix: nothing of the machinery is said, on either stream', !MACHINERY.test(`${fixed.out}\n${fixed.err}`), firstLine(`${fixed.out}\n${fixed.err}`, MACHINERY));
 
 // 5b. A SECOND FIX of the same piece is told the first: changed in place, the record says the earlier ask reached the
@@ -122,6 +125,13 @@ if (pty) {
   check('terminal: a run was written and recorded', t.status === 0 && recs.length === before + 1, `exit ${t.status}; ${recs.length - before} new record(s)`);
   check('terminal: the open questions were asked and the typed answers are on the record', (asked?.asked?.length ?? 0) > 0 && (asked?.answered?.length ?? 0) > 0, `asked ${JSON.stringify(asked?.asked ?? [])}, answered ${JSON.stringify(asked?.answered ?? [])}`);
   check('terminal: nothing of the machinery is said', !MACHINERY.test(t.stdout), firstLine(t.stdout, MACHINERY));
+  // THE SAME REQUEST AGAIN: nothing is asked again, and every answer given the first time reaches this run
+  const t2 = spawnSync('script', ['-qec', cmd, '/dev/null'], { encoding: 'utf8', cwd: proj, env, input: '', maxBuffer: 1 << 26 });
+  const recs2 = store.listInvocations({ root: data, skillName: SKILL });
+  const asked2 = (recs2[0] as { direct?: { questions?: { asked?: readonly string[]; answered?: readonly string[] } } } | undefined)?.direct?.questions;
+  const same = JSON.stringify([...(asked2?.answered ?? [])].sort()) === JSON.stringify([...(asked?.answered ?? [])].sort());
+  check('terminal: the same request again asks the same questions and keeps every answer', t2.status === 0 && recs2.length === recs.length + 1 && JSON.stringify(asked2?.asked ?? []) === JSON.stringify(asked?.asked ?? []) && same,
+    `exit ${t2.status}; asked ${JSON.stringify(asked2?.asked ?? [])} after ${JSON.stringify(asked?.asked ?? [])}, answered ${JSON.stringify(asked2?.answered ?? [])} after ${JSON.stringify(asked?.answered ?? [])}`);
 }
 const notRun = pty ? [] : ['terminal: questions before the piece (no pseudo-terminal on this machine)'];
 

@@ -52,8 +52,9 @@ export function methodBlock(method: string | undefined): string {
   return m ? `The author's method for their pieces, in their words. Follow it wherever it applies to this piece. ${methodDecides('author')}\n\n<method>\n${m.slice(0, METHOD_SHOWN)}\n</method>\n\n` : '';
 }
 
-/** The material, the method, the author's rules (one the method says is not repeated), what they settled, the task. */
-export function taskBlock(x: Pick<DirectInput, 'material' | 'task' | 'rules' | 'method' | 'settled'> & { readonly points?: boolean }): string {
+/** What the author wants from the piece (their answers, first), the material, the method, the author's rules (one the
+ *  method says is not repeated), what else was settled, the task. */
+export function taskBlock(x: Pick<DirectInput, 'material' | 'task' | 'rules' | 'method' | 'settled'> & { readonly points?: boolean; readonly intent?: string }): string {
   const material = x.material.length
     ? `The material for this piece. A note marked for one use or one kind of piece is used only there.\n\n${x.material.map((m) => `<material name="${m.name}">\n${m.text.trim()}\n</material>`).join('\n\n')}\n\n${x.points ? `${DIRECT_POINTS_NOTE}\n\n` : ''}`
     : '';
@@ -61,7 +62,8 @@ export function taskBlock(x: Pick<DirectInput, 'material' | 'task' | 'rules' | '
   const inMethod = flat(x.method ?? '');
   const rules = (x.rules ?? []).filter((r) => !inMethod.includes(flat(r)) || !inMethod);
   const settled = x.settled?.trim() ? `${x.settled.trim()}\n\n` : '';
-  return `${material}${methodBlock(x.method)}${rulesBlock(rules)}${settled}The task:\n\n<task>\n${x.task.trim()}\n</task>`;
+  const intent = x.intent?.trim() ? `${x.intent.trim()}\n\n` : '';
+  return `${intent}${material}${methodBlock(x.method)}${rulesBlock(rules)}${settled}The task:\n\n<task>\n${x.task.trim()}\n</task>`;
 }
 
 export const ANSWERS_HEAD = 'WHAT THE AUTHOR ANSWERED BEFORE THIS PIECE WAS WRITTEN, in their own words:';
@@ -80,8 +82,9 @@ export const EDITS_SHOWN = 8;
 
 /** The review of `draft`, THE SMALLEST REVISION: fix only what the author would not write (a review asked to check and
  *  revise rewrote 77% of lines and added polish, maxims and sections). No list of banned moves. */
-export function reviewAsk(draft: string, x: Pick<DirectInput, 'material' | 'edits' | 'rules' | 'method'> & { readonly style?: string }): string {
-  const sources = x.material.length ? 'the material and the task' : 'the task';
+export function reviewAsk(draft: string, x: Pick<DirectInput, 'material' | 'edits' | 'rules' | 'method'> & { readonly style?: string; readonly answered?: boolean }): string {
+  const from = [x.material.length ? 'the material' : '', x.answered ? 'the author\'s answers' : '', 'the task'].filter(Boolean);
+  const sources = from.length > 1 ? `${from.slice(0, -1).join(', ')} and ${from[from.length - 1]}` : from[0];
   const edits = (x.edits ?? []).slice(0, EDITS_SHOWN);
   const corrections = edits.length
     ? `\n\nThe person corrected earlier drafts written for them like this. Where the draft does the same kind of thing, make the same kind of change:\n\n${edits.map((e) => `- "${e.before.trim().slice(0, 300)}"${e.after.trim() ? ` became "${e.after.trim().slice(0, 300)}"` : ' was cut'}`).join('\n')}`
@@ -92,7 +95,7 @@ export function reviewAsk(draft: string, x: Pick<DirectInput, 'material' | 'edit
 ${draft.trim()}
 </draft>
 
-Read it as the author of the pieces above would. Fix anything they would not write${x.method?.trim() ? ', anything that goes against their method' : ''}${rulesBlock(x.rules) ? ', anything that breaks one of the author\'s rules (each one must hold)' : ''}, and any figure, name or story that does not come from ${sources}. Change only what needs changing; leave the rest of the draft as it is.${corrections}${x.style?.trim() ? `\n\n${x.style.trim()}` : ''}
+Read it as the author of the pieces above would. Fix anything they would not write${x.method?.trim() ? ', anything that goes against their method' : ''}${rulesBlock(x.rules) ? ', anything that breaks one of the author\'s rules (each one must hold)' : ''}, any figure, name or story that does not come from ${sources}, and any claim made stronger than ${from.length > 1 ? 'these support' : 'it supports'}. Change only what needs changing; leave the rest of the draft as it is.${corrections}${x.style?.trim() ? `\n\n${x.style.trim()}` : ''}
 
 Return only the full revised piece, in Markdown, starting with its title if it has one.`;
 }

@@ -1,8 +1,8 @@
 {
  "schema": 1,
- "commit": "b0709e14cbcc6f77df206100eab8d565d9305601",
+ "commit": "8de19223834f2ad4a92afabedbb6ecd6a6b3bee0",
  "dirty": false,
- "at": "2026-11-23T18:15:05.568Z",
+ "at": "2026-11-24T20:47:27.867Z",
  "node": "v22.22.0",
  "version": "1.1.0",
  "scripted": false,
@@ -24,7 +24,12 @@
    "found": ""
   },
   {
-   "name": "run: a piece is handed over with one of the three outcomes",
+   "name": "build: the installed skill asks before it writes and checks after",
+   "pass": true,
+   "found": ""
+  },
+  {
+   "name": "run: a piece is handed over, with at most four lines under it and no verdict word",
    "pass": true,
    "found": ""
   },
@@ -54,7 +59,7 @@
    "found": ""
   },
   {
-   "name": "fix: the piece is handed back with one of the three outcomes",
+   "name": "fix: the piece is handed back, ending in the way to fix it and no verdict word",
    "pass": true,
    "found": ""
   },
@@ -100,6 +105,11 @@
   },
   {
    "name": "terminal: nothing of the machinery is said",
+   "pass": true,
+   "found": ""
+  },
+  {
+   "name": "terminal: the same request again asks the same questions and keeps every answer",
    "pass": true,
    "found": ""
   }

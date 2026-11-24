@@ -37,11 +37,11 @@ import { catalogueOf, titleOf, withinBudget, PIECE_BUDGET_CHARS, type Piece } fr
 import { PIECE_ROUTE, voiceOnly, type Route } from '../core/direct/route.js';
 import { piecesBlock, taskBlock, DRAFT_ASK, reviewAsk, EDITS_SHOWN, ANSWERS_HEAD, VOICE_ONLY_NOTE } from '../core/direct/prompt.js';
 import { correctionsOf } from '../core/direct/kept.js';
-import { EDITOR_QUESTIONS, EDITOR_KINDS, editorNote, askOf, type EditorReading, type EditorInput } from '../core/direct/questions.js';
+import { EDITOR_QUESTIONS, EDITOR_KINDS, EDITOR_LABEL, ALSO_ID, editorNote, askOf, type EditorReading, type EditorInput, type EditorDecision, type EditorKind } from '../core/direct/questions.js';
 import { cardLine, cardSaid, type PurposeCard } from '../core/direct/card.js';
 import { writtenAsSentences, copiedRecord } from '../core/loop/material-points.js';
-import { readAnswers, questionLines, materialShown, type Question } from '../core/loop/questions.js';
-import { typedAnswer, JUST_WRITE, questionsJson } from './prewrite.js';
+import { readAnswers, pickedOption, materialShown, type Question } from '../core/loop/questions.js';
+import { JUST_WRITE, questionsJson } from './prewrite.js';
 import { createInterface } from 'node:readline/promises';
 import { createWriteStream } from 'node:fs';
 import { learnedShape, steeredShape, removeShapeExtras } from '../core/loop/shape-steer.js';
@@ -225,7 +225,9 @@ export const keptReading = (x: unknown): { value: EditorReading; by: string } | 
 };
 
 /** What the editor's questions settled: the note the writer reads, the questions, and the person's answers. */
-export interface Asked { readonly note: string; readonly questions: readonly Question[]; readonly answers: readonly { readonly id: string; readonly answer: string }[]; readonly by: string }
+export interface Asked { readonly note: string; readonly questions: readonly Question[]; readonly answers: readonly { readonly id: string; readonly answer: string }[]; readonly by: string
+  /** the questions the person left to the writer (enter): settled, so not listed as open */
+  readonly passed?: readonly string[] }
 
 /**
  * THE EDITOR'S QUESTIONS (core/direct/questions.ts): the one idea, the reader's pain and the proof, asked only where
@@ -237,6 +239,28 @@ export interface Asked { readonly note: string; readonly questions: readonly Que
 /** The card told to the editor: one read with nothing grounded tells nothing. */
 const cardOf = (L: store.StoreLayout): PurposeCard | null => { const c = store.getCard(L); return c && cardLine(c) ? c : null; };
 
+const labelOf = (id: string): string => EDITOR_LABEL[id as EditorKind] ?? id;
+const WHERE: Readonly<Record<string, string>> = { request: 'your request', material: 'your notes', method: 'your method', card: 'what this skill is for', told: 'what you said before' };
+/**
+ * THE BRIEF BEFORE THE DRAFT, as the person sees it: each field stated (with where), answered, or open with its question
+ * and options. A field not needed for this piece is not shown.
+ */
+export function briefLines(decisions: readonly EditorDecision[], answers: readonly { readonly id: string; readonly answer: string }[]): string[] {
+  const pad = (s: string): string => s.padEnd(10);
+  const lines = ['Before I write:'];
+  for (const kind of EDITOR_KINDS) {
+    const d = decisions.find((x) => x.kind === kind);
+    const a = answers.find((x) => x.id === kind);
+    if (a) lines.push(`  ${pad(labelOf(kind))} ${a.answer}   (you said)`);
+    else if (d?.stated && d.quote) lines.push(`  ${pad(labelOf(kind))} "${d.quote}"   (from ${WHERE[d.stated] ?? d.stated})`);
+    else if (d?.question) {
+      lines.push(`  ${pad(labelOf(kind))} ?  ${d.question.ask}`);
+      if (d.question.options.length) lines.push(`  ${pad('')}    ${d.question.options.map((o, i) => `${String.fromCharCode(97 + i)}) ${o}`).join('   ')}`);
+    }
+  }
+  return lines;
+}
+
 export async function editorQuestions(c: Pick<DirectContext, 'L' | 'asked' | 'material' | 'interactive' | 'read' | 'say'>, method: string, kind: string | null = null, habits: EditorInput['habits'] = []): Promise<Asked> {
   if (argv.includes('--no-questions')) return { note: '', questions: [], answers: [], by: 'off' };
   // AN EDITOR'S ANSWER BELONGS TO THE PIECE IT WAS GIVEN FOR. The one idea of last week's post is not this one's: read
@@ -246,10 +270,12 @@ export async function editorQuestions(c: Pick<DirectContext, 'L' | 'asked' | 'ma
   // An answer kept for one request (`for`) is this request's only. One kept with none is the skill's (the compiled
   // path's kinds); an editor kind kept with none predates answers per request and is left out.
   const all = store.getTold(c.L);
-  const told = all.filter((t) => t.for === undefined ? !(EDITOR_KINDS as readonly string[]).includes(t.id) : t.for === forRequest);
+  const told = all.filter((t) => t.for === undefined ? !(EDITOR_KINDS as readonly string[]).includes(t.id) && t.id !== ALSO_ID : t.for === forRequest);
   const input = { request: c.asked, material: materialShown(c.material), method, told, kind, card: cardOf(c.L), habits };
   // THE SAME INPUT ASKS THE SAME QUESTIONS: a model's reading is kept under the hash of what it read (store.ts, getEditorReading).
-  const key = sha(JSON.stringify([EDITOR_QUESTIONS.version, evidenceReaderModel(), input.request, input.kind, input.card ?? null, input.material, input.method, told.map((t) => [t.id, t.answer]), habits]));
+  // An answer given for this request is not part of the key: keyed on it, the next run read again, the questions came back
+  // under new ids, and the answers given to the first run's ids were dropped.
+  const key = sha(JSON.stringify([EDITOR_QUESTIONS.version, evidenceReaderModel(), input.request, input.kind, input.card ?? null, input.material, input.method, told.filter((t) => t.for !== forRequest).map((t) => [t.id, t.answer]), habits]));
   const kept = keptReading(store.getEditorReading(c.L, key));
   const decided = kept ??
     await readContext(EDITOR_QUESTIONS, input, evidenceReaderClient(), evidenceReaderModel(), { spentUsd: 0, capUsd: 0.08, maxCalls: 1 }, 'other');
@@ -260,37 +286,51 @@ export async function editorQuestions(c: Pick<DirectContext, 'L' | 'asked' | 'ma
   const { answers: given, said } = readAnswers(flag('--answers'), questions, [...new Set([...EDITOR_KINDS, ...questions.map((q) => q.id)])], false);
   for (const s of said) c.say(s);
   const answers: { id: string; answer: string }[] = [];
-  let rest = false;
   // WHAT THE PERSON ANSWERED FOR THIS SAME REQUEST ON AN EARLIER RUN IS STILL THEIRS: it reaches the writer again, asked
   // or found stated in it, and is never asked twice. Their answer now, where they give one, is the one that counts.
   const mine = told.filter((t) => t.for === forRequest);
   const before = new Map(mine.map((t) => [t.id, t.answer]));
   // what an earlier answer decides, kept with it: a decision answered once is settled, so this reading no longer asks it
   const aboutBefore = mine.filter((t) => t.about).map((t) => ({ id: t.id, about: t.about, ask: t.ask }));
-  for (const q of questions) {
-    const g = given.get(q.id) ?? before.get(q.id);
-    if (g !== undefined) { answers.push({ id: q.id, answer: g }); continue; }
-    if (!c.interactive || rest) continue;
-    askOut().write(`\n${questionLines([q], questions.indexOf(q)).join('\n')}\n`);
-    const typed = await (c.read ?? askLine)('Your answer (a letter, your own words, enter for the suggested one, or "just write it"): ');
-    if (JUST_WRITE.test(typed)) { rest = true; continue; }
-    answers.push({ id: q.id, answer: typedAnswer(q, typed) });
+  // an empty answer kept is "you decide", given at an earlier run: settled, not asked again, nothing told
+  const passed = new Set<string>();
+  for (const q of questions) { const g = given.get(q.id) ?? before.get(q.id); if (g === '') passed.add(q.id); else if (g !== undefined) answers.push({ id: q.id, answer: g }); }
+  // AT A TERMINAL, ONE BRIEF, THEN ONE PROMPT PER OPEN QUESTION: what was read is shown so the person sees it was
+  // understood, and only what is open waits for them. Enter takes the suggestion, and it is theirs: they saw it and
+  // chose it. Where there is none (the record), enter leaves it to the writer.
+  const openNow = questions.filter((q) => !answers.some((a) => a.id === q.id) && !passed.has(q.id));
+  if (c.interactive && openNow.length) {
+    const read = c.read ?? askLine;
+    askOut().write(`\n${briefLines(decided.value.decisions, answers).join('\n')}\n\n`);
+    let rest = false;
+    for (const q of openNow) {
+      const typed = await read(q.default ? `${labelOf(q.id)}: enter for "${q.default}", a letter, or your words: ` : `${labelOf(q.id)}: your words, or enter to leave it to me: `);
+      if (JUST_WRITE.test(typed)) { rest = true; break; }
+      if (typed.trim()) answers.push({ id: q.id, answer: pickedOption(q.options, typed) });
+      else if (q.default) answers.push({ id: q.id, answer: q.default });
+      else passed.add(q.id);
+    }
+    if (!rest) {
+      const more = await read('Anything wrong above? Say it, or press enter to write: ');
+      if (more.trim() && !JUST_WRITE.test(more)) answers.push({ id: ALSO_ID, answer: more.trim() });
+    }
   }
   // an answer for a kind this run did not ask (a field, a compiled-path kind) still counts; a decision of another
   // reading's naming has no question here to say what it decides, so it is not told
   for (const [id, answer] of [...given, ...before]) if (!questions.some((q) => q.id === id) && (askOf(id) !== null || aboutBefore.some((b) => b.id === id)) && !answers.some((a) => a.id === id)) answers.push({ id, answer });
   const at = new Date().toISOString();
   // every answer to this reading's questions belongs to this request; a compiled-path kind given here stays the skill's
-  const ofThisPiece = (id: string): boolean => (EDITOR_KINDS as readonly string[]).includes(id) || questions.some((q) => q.id === id);
-  store.addTold(c.L, answers.filter((a) => before.get(a.id) !== a.answer).map((a) => ({ id: a.id, ask: questions.find((q) => q.id === a.id)?.ask ?? askOf(a.id) ?? a.id, answer: a.answer, at, ...(ofThisPiece(a.id) ? { for: forRequest } : {}), ...(questions.find((q) => q.id === a.id)?.about ? { about: questions.find((q) => q.id === a.id)?.about } : {}) })));
+  // and so do words added after them: kept as the skill's, they changed the next reading's key and reached other requests
+  const ofThisPiece = (id: string): boolean => (EDITOR_KINDS as readonly string[]).includes(id) || id === ALSO_ID || questions.some((q) => q.id === id);
+  store.addTold(c.L, [...answers, ...[...passed].map((id) => ({ id, answer: '' }))].filter((a) => before.get(a.id) !== a.answer).map((a) => ({ id: a.id, ask: questions.find((q) => q.id === a.id)?.ask ?? askOf(a.id) ?? a.id, answer: a.answer, at, ...(ofThisPiece(a.id) ? { for: forRequest } : {}), ...(questions.find((q) => q.id === a.id)?.about ? { about: questions.find((q) => q.id === a.id)?.about } : {}) })));
 
-  const open = questions.filter((q) => !answers.some((a) => a.id === q.id));
+  const open = questions.filter((q) => !answers.some((a) => a.id === q.id) && !passed.has(q.id));
   if (answers.length) c.say(`Settled before writing, in your words: ${answers.map((a) => a.id).join(', ')}.`);
   if (open.length) {
-    c.say(`An editor would ask (${open.length}), and the piece was written without ${open.length === 1 ? 'it' : 'them'}: ${open.map((q) => `${q.id}: ${q.ask}`).join(' ')}`);
-    c.say(`  To answer, run again with --answers "${open.map((q) => `${q.id}=<letter or your words>`).join(',')}"${open.map((q) => ` (${q.id}: ${q.options.map((o, i) => `${String.fromCharCode(97 + i)}) ${o}`).join('; ')})`).join('')}.`);
+    c.say(`Open before writing (${open.length}), decided by the writer this time: ${open.map((q) => `${q.id}: ${q.ask}`).join(' ')}`);
+    c.say(`  To answer, run again with --answers "${open.map((q) => `${q.id}=<${q.options.length ? 'letter or ' : ''}your words>`).join(',')}"${open.filter((q) => q.options.length).map((q) => ` (${q.id}: ${q.options.map((o, i) => `${String.fromCharCode(97 + i)}) ${o}`).join('; ')})`).join('')}.`);
   }
-  return { note: editorNote(answers, [...questions, ...aboutBefore]), questions, answers, by: decided.by };
+  return { note: editorNote(answers, [...questions, ...aboutBefore]), questions, answers, by: decided.by, passed: [...passed] };
 }
 
 const asEffort = (x: string | undefined): Effort => {
@@ -413,7 +453,7 @@ export async function runDirect(given: DirectContext) {
   const select = argv.includes('--voice-select');
   // 1. WHICH PIECES: a reading of the request, grounded; the shared-words floor when no model can read.
   const routeBudget: Budget = { spentUsd: 0, capUsd: 0.1, maxCalls: 1 };
-  const decided = await readContext(PIECE_ROUTE, { request: given.asked, material: materialText, pieces: catalogue, ...(select ? { select } : {}) }, contextReaderClient(), contextReaderModel(), routeBudget, 'other');
+  const decided = await readContext(PIECE_ROUTE, { request: given.asked, material: materialText, method: store.getMethod(given.L)?.text ?? '', pieces: catalogue, ...(select ? { select } : {}) }, contextReaderClient(), contextReaderModel(), routeBudget, 'other');
   const route: Route = decided.value;
   // VOICE ONLY (core/direct/route.ts): the person's content keeps its shape; the structure rules read off the pieces are set aside for this run
   const voiceRun = select && decided.by === 'model' && route.takes === 'voice' ? voiceOnly(given.std) : null;
@@ -449,8 +489,10 @@ export async function runDirect(given: DirectContext) {
   const lengthGuide = !lengthStated && lengths.length >= 2
     ? `Where neither the task nor anything of the author's above sets a length: the author's pieces shown here run ${lengths[0].toLocaleString('en-US')} to ${lengths[lengths.length - 1].toLocaleString('en-US')} words, and for a piece of their kind that is its natural length. A guide, not a limit.` : '';
   // material in finished sentences is facts to write from, and the piece is checked for stretches copied from it
-  const asPoints = writtenAsSentences(c.material);
-  const variable = taskBlock({ material: c.material, points: asPoints, task: c.asked, rules, method, settled: [said, voiceRun ? VOICE_ONLY_NOTE : '', asking.note, lengthGuide].filter((x) => x.trim()).join('\n\n') });
+  // unless the person said its wording is kept (approved lines, requirement text): then it is used as written, said
+  const asPoints = writtenAsSentences(c.material) && !route.keepWording;
+  if (route.keepWording && writtenAsSentences(c.material)) c.detail(`The material's wording is kept as written ("${route.keepWording}").`);
+  const variable = taskBlock({ intent: asking.note, material: c.material, points: asPoints, task: c.asked, rules, method, settled: [said, voiceRun ? VOICE_ONLY_NOTE : '', lengthGuide].filter((x) => x.trim()).join('\n\n') });
   c.detail(`Written from ${shown.length} of ${catalogue.length} piece(s) of the author's${route.kind ? `, as ${route.kind}` : ''} (${decided.by === 'model' ? 'chosen by a reading of the request' : `chosen by shared words: ${decided.why ?? 'no reading'}`}): ${shown.map((p) => titleOf(p.text)).join('; ')}.`);
 
   // HOW THE AUTHOR WRITES, read on the text after the draft (core/direct/style.ts): the habits the build read from their
@@ -511,7 +553,7 @@ export async function runDirect(given: DirectContext) {
           drift = { by: d.by, reader: d.reader, sentences: d.value.drift ?? [] };
         }
         const styleNoteNow = steer ? styleNote(styleOf, read?.found ?? [], drift?.sentences ?? []) : '';
-        const again = await prose(c.client, budget, stable, variable, reviewAsk(draft, { material: c.material, edits: corrections, rules, method, style: styleNoteNow }), effort, 'emit_review');
+        const again = await prose(c.client, budget, stable, variable, reviewAsk(draft, { material: c.material, edits: corrections, rules, method, style: styleNoteNow, answered: asking.answers.length > 0 }), effort, 'emit_review');
         // A REVIEW RETURNS THE PIECE, REVISED. Asked to change only what needs changing, a reply under half the draft's
         // words is no revision of it (a remark about the draft, a fragment): the draft is delivered, and it is said.
         const [was, now] = [wordsWritten(draft), wordsWritten(again.piece)];
@@ -619,7 +661,7 @@ export async function runDirect(given: DirectContext) {
   const direct = (): DirectRecord => ({ version: DIRECT_VERSION, asked: c.asked, from: catalogue.length,
     pieces: shown.map((p) => ({ id: p.id, title: titleOf(p.text), kept: p.kept })),
     route: { by: decided.by, reader: decided.reader, kind: route.kind, ...(decided.why ? { why: decided.why } : {}) }, effort, review, corrections: corrections.length,
-    ...(method.trim() ? { method: true } : {}), ...(lengthGuide ? { lengthGuide: { from: lengths[0], to: lengths[lengths.length - 1] } } : {}), ...(said ? { purposeToWriter: true } : {}), questions: { by: asking.by, asked: asking.questions.map((q) => q.id), answered: asking.answers.map((a) => a.id) },
+    ...(method.trim() ? { method: true } : {}), ...(lengthGuide ? { lengthGuide: { from: lengths[0], to: lengths[lengths.length - 1] } } : {}), ...(said ? { purposeToWriter: true } : {}), questions: { by: asking.by, asked: asking.questions.map((q) => q.id), answered: asking.answers.map((a) => a.id), ...(asking.passed?.length ? { passed: asking.passed } : {}) },
     ...(style ? { style } : {}), ...(drift ? { drift } : {}), ...(takes ? { takes } : {}), ...(grounded ? { grounded } : {}), ...(hashtags ? { hashtags } : {}) });
   // HOW TYPICAL OF THE AUTHOR THE PIECE IS (core/fidelity): read on the delivered text against the profile the build
   // installed, for the evaluation's panel. Descriptive only: nothing on this path steers by it, so no release is credited.
@@ -686,7 +728,7 @@ export async function runDirect(given: DirectContext) {
     eval: evaluation,
     // the questions were asked before the piece was written, and are listed before it
     // only the ones still open: an answered question listed here was asked of the person again by a host
-    questions: questionsJson(asking.questions.filter((q) => !asking.answers.some((a) => a.id === q.id))), answers: asking.answers,
+    questions: questionsJson(asking.questions.filter((q) => !asking.answers.some((a) => a.id === q.id) && !(asking.passed ?? []).includes(q.id))), answers: asking.answers,
     output: rec.output, answer: rec.output, invocationId: rec.invocationId, skillVersion: c.sv.skillVersionHash, costUsd: Number(spent.toFixed(4)),
     ...(asPoints ? { copied: copiedRecord(rec.output, materialText) } : {}), rulesBroken: violated, brokenAt: Object.fromEntries((seen.report?.checked ?? []).filter((x) => violated.includes(x.requirementId)).map((x) => [x.requirementId, x.result.spans.slice(0, 3)])), cut: rec.repair?.storiesCut ?? [], toCheck, totals, plan: null, inferred, work: rec.work ?? null,
     direct: rec.direct ?? null, model: rec.observedRuntime?.resolvedModel ?? c.binding.requestedModel, maxTokens: directMaxTokens(),

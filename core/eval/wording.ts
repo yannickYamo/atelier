@@ -61,7 +61,29 @@ export const SAID = {
   look: 'To look at: ',
   slip: 'Possible slip: ',
   toCheck: 'To check: ',
+  check: 'Check: ',
 } as const;
+
+/** The most lines said under a piece a run hands over, the way to fix it included. */
+export const AFTER_PIECE_MAX = 4;
+
+/**
+ * WHAT IS SAID UNDER A PIECE A RUN HANDS OVER: no verdict word, at most three things, then the way to fix it. A rule of
+ * theirs still not met, then each sentence with a name, figure, date or quote that nothing given holds. Everything else
+ * (what held, what could not be checked, a possible slip) is in the full account.
+ */
+export function afterPieceLines(r: Pick<EvaluationRecord, 'entries'>, spans: ReadonlyMap<string, readonly Pick<Span, 'text'>[]>, report: string): string[] {
+  const items = [
+    ...r.entries.filter((e) => kindOf(e) === 'broken' && e.id !== 'specifics').map((e) => `${SAID.broken}${said(e)}`),
+    ...r.entries.filter((e) => e.id === 'specifics' && (kindOf(e) === 'look' || kindOf(e) === 'broken')).flatMap((e) => {
+      const at = spans.get(e.id) ?? [];
+      return at.length ? at.map((x) => `${SAID.check}"${x.text.length > 120 ? `${x.text.slice(0, 117)}…` : x.text}" (not in your notes)`) : [`${SAID.check}${withFound(e)}`];
+    }),
+  ];
+  const room = AFTER_PIECE_MAX - 1;
+  const shown = items.length > room ? [...items.slice(0, room - 1), `…and ${items.length - room + 1} more: atelier report ${report}`] : items;
+  return [...shown, 'Not right? atelier fix "<what was wrong>"'];
+}
 
 /**
  * WHAT IS SAID UNDER THE PIECE FOR ONE ENTRY: nothing for a rule that held or is theirs to judge (both are counted in
@@ -95,26 +117,6 @@ export function outcomeOf(decision: string | undefined, state: string | null | u
   return decision === 'PERSON' || (decision !== 'SHIP' && kinds.includes('look')) ? 'look' : 'ready';
 }
 
-const n = (k: number, one: string, many: string): string => `${k} ${k === 1 ? one : many}`;
-
-/**
- * WHAT THE CHECKS FOUND, IN ONE SENTENCE. It never says more than was observed, and a rule not met leads it: it never
- * reads "nothing broke your rules" over a line that says one did.
- */
-export function shortLine(r: Pick<EvaluationRecord, 'entries' | 'state'>): string {
-  const of = (k: Kind, part?: boolean): number => r.entries.filter((e) => e.required && kindOf(e) === k && (part === undefined || (e.reason === 'PARTLY_CHECKED') === part)).length;
-  const held = of('held', false); const partly = of('held', true); const broken = of('broken'); const judged = of('judge'); const unread = of('unchecked');
-  const look = r.entries.filter((e) => kindOf(e) === 'look');
-  const slip = look.some((e) => slipsOf(e).length > 0); const other = look.filter((e) => e.reason === 'OBSERVER_UNQUALIFIED').length;
-  if (!broken && !partly && !judged && !unread && !look.length) return r.state === 'VERIFIED' ? 'every rule was measured and held.' : `nothing broke the rules (${held} measured).`;
-  const parts = [`${held} measured`,
-    ...(judged ? [`${n(judged, 'is a judgement call', 'are judgement calls')} the writer was given in your words`] : []),
-    ...(partly ? [`${partly} held where ${partly === 1 ? 'it is' : 'they are'} checked`] : []),
-    ...(unread ? [`${unread} could not be checked on this piece, named below`] : []),
-    ...(other ? [`${other} to look at, named below`] : []),
-    ...(slip ? ['a possible slip is listed below'] : [])];
-  return `${broken ? `${broken} of the rules ${broken === 1 ? 'is' : 'are'} not met, named below` : 'nothing broke the rules'} (${parts.join('; ')}).`;
-}
 
 /** The outcome of a record, in its word. */
 export const outcomeWord = (r: Pick<EvaluationRecord, 'entries' | 'state' | 'delivery'>): string => OUTCOME_SAID[outcomeOf(r.delivery?.decision, r.state, r)];

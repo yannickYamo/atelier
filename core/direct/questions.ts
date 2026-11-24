@@ -1,58 +1,47 @@
-// atelier/core/direct/questions.ts — WHAT AN EDITOR ASKS BEFORE THE DRAFT: THE DECISIONS THAT MOVE THIS ARGUMENT MOST.
+// atelier/core/direct/questions.ts — WHAT ONLY THE PERSON KNOWS, ASKED BEFORE THE DRAFT.
 //
-// The direct writer had no question step at all, and the compiled path's asks only for missing facts and positions
-// (the angle, what may be named, news, emphasis): on notes that covered those, it asked nothing, and what the person
-// then fixed by hand was the argument itself. A fixed list of three (the idea, the pain, the proof) then asked the same
-// three of every piece: a topic passed for an idea, nothing checked the next step, and a pricing memo was asked what a
-// blog post is. So the questions are shaped by the piece. An editor reads the request, the material, the method and the
-// kind of work, and asks the few open decisions that would change THIS argument most, the most important first.
+// Voice comes from the pieces; what a piece argues comes from the person. Where the writing failed was intent: the
+// thesis, the news and the business signal an author added by hand afterwards were never asked. And where the notes
+// already carried the intent, the questions asked tactics instead (which point opens, which proof leads, "I" or "we"):
+// choices among what was given, which are the writer's. So one reading, one call, four fields:
+//   point   what the author is saying that others are not, and why now (a topic is not a point)
+//   goal    what the piece must do: what the reader does or believes after, and what the author wants from it
+//   record  what shows it that the material does not hold: a case, a figure, a name, news or a story of theirs
+//   reader  who reads it, in what situation (an audience named alone is not a reader in a situation)
+// Each is stated (with a quote code finds in its source), not needed (an answer would not change the piece), or
+// asked. At most three are asked, in that order.
 //
-// THE READING (house pattern, ../inference/reading.ts), one call:
-//   decisions  up to three open decisions, the most important first: what is to be decided, why it moves the
-//              argument, the question, two to four options grounded in what was given, and the one it would pick.
-//   fields     the five things any argument lands on (the one idea, the reader, their pain, the proof, the next step
-//              the reader takes): for each, where the request, the material, the method or what they told this skill
-//              before states it in so many words, with a quote; or the question to ask where nothing does.
-// Code holds every quote to its source, so only a real absence counts. The decisions come first; where the reading
-// names none it can ground, the fields nothing states are asked instead (in that order, at most three), so a request
-// with something unstated is never asked nothing. A topic is not an idea, an audience is not a reader in a situation,
-// and "learn more" is not a next step: those are said to the reader, never matched in code. With no model, or nothing
-// grounded, nothing is asked.
-//
-// WHAT AN ANSWER DOES, AND WHAT NO ANSWER DOES. Only what the person answers reaches the writer, in their words. A
-// question nobody answers (a pipe, --json, an agent) changes nothing in the piece: the writer decides as it would with
-// your posts pasted, and the question comes back with its options for the next run (`--answers`). A suggested option is
-// never served as though it were the person's: a default told to a writer once came back in the piece as a disclaimer.
+// WHAT AN ANSWER DOES, AND WHAT NO ANSWER DOES. What the person types, picks or takes with enter at a terminal reaches
+// the writer as theirs: they saw the suggestion and chose it (the fewest keystrokes, by the owner's ruling of 24 Nov).
+// A suggestion nobody saw (a pipe, --json, a host) is never served: a default told to a writer once came back in the
+// piece as a disclaimer. The record has no suggestion: nothing read can know what the author will put on record, so
+// enter there leaves it to the writer.
 
 import type { Reading } from '../inference/reading.js';
 import { cardLine, type PurposeCard } from './card.js';
-import { KIND_ASK, QUESTION_KINDS, GAP_KINDS, type Question, type ToldAnswer, type QuestionKind, type GapKind } from '../loop/questions.js';
+import { KIND_ASK, type Question, type ToldAnswer, type QuestionKind, type GapKind } from '../loop/questions.js';
 
-/** The five things any argument lands on: the fallback when the reading names no decision of this piece's own. */
-export const EDITOR_KINDS = ['idea', 'reader', 'pain', 'proof', 'next'] as const;
+/** What decides what a piece argues, in the order they are asked. */
+export const EDITOR_KINDS = ['point', 'goal', 'record', 'reader'] as const;
 export type EditorKind = typeof EDITOR_KINDS[number];
 /** The most questions asked before one piece. */
-export const EDITOR_MAX = 5;
+export const EDITOR_MAX = 3;
+/** The person's own words after the questions ("anything wrong above?"): told to the writer as theirs. */
+export const ALSO_ID = 'also';
 
 /** What the writer is told an answer of each kind is about. */
-export const EDITOR_ASK: Readonly<Record<EditorKind, string>> = {
-  idea: 'The one idea the reader should leave with:',
+export const EDITOR_ASK: Readonly<Record<EditorKind | typeof ALSO_ID, string>> = {
+  point: 'What the author is saying that others are not, and why now:',
+  goal: 'What the piece must do (what the reader does or believes after, and what the author wants from it):',
+  record: 'What shows it, beyond the material (a case, a figure, a name, news or a story of the author\'s own):',
   reader: 'Who reads it, and the situation they read it in:',
-  pain: 'What the reader lives with that this piece speaks to:',
-  proof: 'What shows it (a case, a figure, or something the reader can try):',
-  next: 'What the reader does next, after reading:',
+  also: 'The author adds:',
 };
-/** What answering each unlocks, said once with the question. */
-export const EDITOR_UNLOCKS: Readonly<Record<EditorKind, string>> = {
-  idea: 'The line the whole piece argues toward, and how it ends.',
-  reader: 'What the piece may assume, and what it must explain.',
-  pain: 'How the piece opens, and why the reader keeps reading.',
-  proof: 'The claim stands on your case or figure, not on assertion.',
-  next: 'How the piece closes: one step the reader can take.',
-};
+/** How each field is named on the brief the person sees before the draft. */
+export const EDITOR_LABEL: Readonly<Record<EditorKind, string>> = { point: 'Point', goal: 'Goal', record: 'Proof', reader: 'For' };
 
-/** Where a thing is stated: a closed field, NONE where nothing states it. */
-export const EDITOR_STATED_IN = ['request', 'material', 'method', 'told', 'NONE'] as const;
+/** Where a thing is stated: a closed field. NONE is asked; NOT_NEEDED is neither stated nor worth the person's time. */
+export const EDITOR_STATED_IN = ['request', 'material', 'method', 'card', 'told', 'NONE', 'NOT_NEEDED'] as const;
 
 export interface EditorInput {
   readonly request: string;
@@ -67,26 +56,21 @@ export interface EditorInput {
   /** how the author writes, read from their finished pieces at the build: each habit with a sentence of theirs */
   readonly habits?: readonly { readonly text: string; readonly theirs: string }[];
 }
-/** One field or decision as read: stated (and where), or asked with its question. */
-export interface EditorDecision { readonly kind: string; readonly stated: string | null; readonly question: Question | null; readonly why?: string; readonly from?: 'decision' | 'field' }
+/** One field as read: stated (where, and the quote), not needed, or asked with its question. */
+export interface EditorDecision { readonly kind: string; readonly stated: string | null; readonly quote?: string; readonly question: Question | null; readonly why?: string; readonly from?: 'decision' | 'field' }
 export interface EditorReading { readonly decisions: readonly EditorDecision[]; readonly questions: readonly Question[] }
 
-export const EDITOR_SYSTEM = `You prepare a writer the way a good editor does before a first draft. You are shown the person's request, the material that came with it, their method where they have one, the kind of work it is where that was read, what their work usually is and settles where that was read, how they write where that was read from their finished pieces, and what they told this skill before.
+export const EDITOR_SYSTEM = `You prepare a writer the way a good editor does before a first draft: you find what only the author can say about this piece, and nothing else. You are shown the person's request, the material that came with it, their method where they have one, the kind of work where that was read, what their work usually is where that was read, how they write where that was read from their finished pieces, and what they told this skill before.
 
-First, decisions: the open decisions that would change this piece's argument most, given what it is and who it is for. At most five, the most important first; fewer is better than a question the person need not answer. Before you keep a decision, picture the piece under each of its answers: where the piece would come out the same whichever they chose, it is not worth their time, and you leave it out. A decision is open when nothing you were shown settles it: never ask what the request, the material, the method or what they told you before already decides. What their work usually settles is where to look first, never a reason to ask what this request already decides. Ask what an expert in this kind of work would settle before writing it (for a pricing memo, which price and against what; for a reply to a customer, what is offered; for an essay, the claim it stakes), not questions of voice or form. How the author writes shows what their pieces are built on: a position taken in the first lines, one idea or image carried through, a case told before the claim, where they leave the reader. Where this piece needs one of those from the person and nothing you were shown gives it, that is an open decision: ask for it, as a question about this piece. Never ask how it should sound: their pieces settle that. For each:
-- id: two or three lower-case words joined by hyphens naming the decision ("price-anchor", "what-is-offered").
-- decides: what is to be decided, in a few words.
-- ask: the question you would put to the person (one short sentence, plain words).
-- options: two to four short answers they might give, each grounded in what you were shown; default: the one of them you would pick.
-Name none when nothing is open.
+Four things decide what a piece argues. For each, say where what you were shown states it in so many words:
+- point: what the author is saying that others are not, and why now. A topic is not a point: a point takes a position someone could disagree with.
+- goal: what the piece must do: what the reader does or believes after reading, and what the author wants from it (trust, sign-ups, hires, a decision). "Learn more" is not a goal.
+- record: what shows it is true that the material does not hold: a case, a figure, a name, news or a story of the author's own that they will put on record.
+- reader: who reads it, and in what situation. An audience named alone ("engineers") is not a reader in a situation.
 
-Then, fields: five things any argument lands on. For each, say whether what you were shown states it in so many words:
-- idea: the one idea the reader should leave with. A topic is not an idea: an idea takes a position.
-- reader: who reads it, in what situation. An audience named alone ("engineers") is not a reader in a situation.
-- pain: what the reader lives with, today, that this piece speaks to.
-- proof: what shows the idea is true: a case, a figure, a source, or something the reader can try or check.
-- next: the one thing the reader does after reading. "Learn more" is not a next step: a next step is a concrete action.
-For each field: statedIn "request", "material", "method" or "told", with a short quote copied exactly from there that states it; or "NONE" with no quote. Something you could argue from the material is not stated: answer NONE. For NONE, also ask, options (two to four) and default, as for a decision; for a stated one, ask and default are null and options is empty.`;
+For each: statedIn "request", "material", "method", "card" or "told", with a short quote copied exactly from there that states it. Something you could argue from the material is not stated. Where nothing states it, picture the piece under two different answers from the author: where it would come out the same, or the piece needs nothing beyond what was given (a reply, a summary, an update of facts given), statedIn "NOT_NEEDED". Otherwise statedIn "NONE", with the question you would put to the author: one short sentence in plain words, about this piece, in the words this kind of work uses (for a requirements document the point is the problem and the goal is how success is measured). For point, goal and reader also give two to four short options grounded in what you were shown, and the default: the one of them you would pick. For the record give no options and no default: nothing you were shown can tell what the author will put on record.
+
+Never ask for a choice among things already given (which point carries the piece, which proof leads, how it opens or closes, "I" or "we", the order, the length): those are the writer's. Never ask how it should sound: their pieces settle that.`;
 
 const ONE = {
   type: 'object', properties: {
@@ -94,57 +78,43 @@ const ONE = {
     ask: { type: ['string', 'null'] }, options: { type: 'array', items: { type: 'string' } }, default: { type: ['string', 'null'] },
   }, required: ['statedIn', 'quote', 'ask', 'options', 'default'], additionalProperties: false,
 };
-const DECISION = {
-  type: 'object', properties: { id: { type: 'string' }, decides: { type: 'string' }, ask: { type: 'string' }, options: { type: 'array', items: { type: 'string' } }, default: { type: 'string' } },
-  required: ['id', 'decides', 'ask', 'options', 'default'], additionalProperties: false,
-};
 export const EDITOR_SCHEMA: Record<string, unknown> = {
   type: 'object', properties: {
-    decisions: { type: 'array', items: DECISION },
     fields: { type: 'object', properties: Object.fromEntries(EDITOR_KINDS.map((k) => [k, ONE])), required: [...EDITOR_KINDS], additionalProperties: false },
-  }, required: ['decisions', 'fields'], additionalProperties: false,
+  }, required: ['fields'], additionalProperties: false,
 };
 
 const clip = (s: string, n: number): string => s.replace(/\s+/g, ' ').trim().slice(0, n);
 const straight = (s: string): string => s.replace(/[‘’]/g, "'").replace(/[“”]/g, '"');
-const same = (a: string, b: string): boolean => clip(a, 400).toLowerCase() === clip(b, 400).toLowerCase();
 
 /** Whether a quote of eight characters or more is in the source the reader named (a form check: the words are there or not). */
 export function statedIn(where: string, quote: unknown, input: EditorInput): boolean {
   const q = straight(clip(typeof quote === 'string' ? quote : '', 400)).toLowerCase();
   if (q.length < 8) return false;
   const source = where === 'request' ? input.request : where === 'material' ? input.material.map((m) => m.head).join('\n')
-    : where === 'method' ? input.method : where === 'told' ? input.told.map((t) => t.answer).join('\n') : '';
+    : where === 'method' ? input.method : where === 'card' ? (input.card ? cardLine(input.card) : '')
+      : where === 'told' ? input.told.map((t) => t.answer).join('\n') : '';
   return straight(source.replace(/\s+/g, ' ')).toLowerCase().includes(q);
 }
 
-/** A decision's id as --answers names it: lower case, words joined by hyphens, never one of the five fields' own. */
-export const decisionId = (raw: unknown): string => {
-  const id = (typeof raw === 'string' ? raw : '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').split('-').slice(0, 4).join('-').slice(0, 40);
-  // a decision's id never takes a kind's name: an answer to it would be read as that kind's
-  const taken = new Set<string>([...EDITOR_KINDS, ...[...QUESTION_KINDS, ...GAP_KINDS].map((k) => k.toLowerCase())]);
-  return id && !taken.has(id) ? id : '';
-};
-
-/** The question as asked: 2 to 4 options, one picked among them, last time's answer as the suggestion. Null when ill-formed. */
-function questionOf(id: string, x: Record<string, unknown>, input: EditorInput, extra: Partial<Question>): Question | null {
+/** The question as asked, with the suggestion enter takes (one of its options; none for the record). Null when ill-formed. */
+function questionOf(kind: EditorKind, x: Record<string, unknown>): Question | null {
   const ask = typeof x.ask === 'string' ? clip(x.ask, 200) : '';
-  const options = [...new Set((Array.isArray(x.options) ? x.options : []).filter((o): o is string => typeof o === 'string' && clip(o, 160).length > 0).map((o) => clip(o, 160)))];
-  const def = typeof x.default === 'string' ? options.find((o) => same(o, x.default as string)) : undefined;
-  if (!ask || options.length < 2 || options.length > 4 || !def) return null;
-  const told = [...input.told].reverse().find((t) => t.id === id);
-  return { id, ask, options, default: told ? told.answer : def, ...(told ? { last: told.answer } : {}), ...extra };
+  const options = kind === 'record' ? [] : [...new Set((Array.isArray(x.options) ? x.options : []).filter((o): o is string => typeof o === 'string' && clip(o, 160).length > 0).map((o) => clip(o, 160)))].slice(0, 4);
+  if (!ask || (kind !== 'record' && options.length < 2)) return null;
+  const def = typeof x.default === 'string' ? options.find((o) => o.toLowerCase() === clip(x.default as string, 160).toLowerCase()) : undefined;
+  return { id: kind, ask, options, default: def ?? options[0] ?? '' };
 }
 
 export const EDITOR_QUESTIONS: Reading<EditorInput, EditorReading> = {
-  id: 'editor-questions', version: '4',
+  id: 'editor-questions', version: '6',
   system: EDITOR_SYSTEM, schema: EDITOR_SCHEMA,
-  toolName: 'emit_editor_questions', toolDescription: 'The open decisions that would change this piece\'s argument most, and for the idea, the reader, their pain, the proof and the next step: where each is stated, or the question to ask.',
+  toolName: 'emit_editor_questions', toolDescription: 'For the point, the goal, what may be put on record and the reader: where each is stated, whether it is needed, or the question to ask the author.',
   maxTokens: 4000, estimateUsd: 0.03,
   prompt(input) {
     return [`The request:\n${input.request.slice(0, 4000)}`,
       input.kind ? `The kind of work: ${input.kind}` : '',
-      input.card ? `${input.card.by === 'you' ? 'What the author says their work is, in their words' : 'What this author\'s work is, read from all their pieces'} (not a statement about this request): ${cardLine(input.card)}` : '',
+      input.card ? `${input.card.by === 'you' ? 'What the author says their work is, in their words' : 'What this author\'s work is, read from all their pieces'} (it holds for this piece where the request does not say otherwise): ${cardLine(input.card)}` : '',
       input.material.length ? `The material:\n${input.material.map((m) => `[${m.name}]\n${m.head}`).join('\n\n')}` : 'No material came with it.',
       input.method.trim() ? `Their method:\n${input.method.slice(0, 6000)}` : '',
       input.habits?.length ? `How this author writes, read from their finished pieces (each with a sentence of theirs):\n${input.habits.map((h) => `- ${h.text} (as in "${h.theirs}")`).join('\n')}` : '',
@@ -153,44 +123,32 @@ export const EDITOR_QUESTIONS: Reading<EditorInput, EditorReading> = {
   // An empty request asks nothing: there is no piece to prepare.
   decide(input) { return input.request.trim() ? null : { decisions: [], questions: [] }; },
   ground(raw, input) {
-    const r = raw as { decisions?: unknown; fields?: Partial<Record<EditorKind, Record<string, unknown>>> } | null;
-    if (!r || typeof r !== 'object') return null;
+    const r = raw as { fields?: Partial<Record<EditorKind, Record<string, unknown>>> } | null;
+    if (!r || typeof r !== 'object' || !r.fields || typeof r.fields !== 'object') return null;
     const decisions: EditorDecision[] = [];
-    // THE PIECE'S OWN DECISIONS, the most important first: each well formed, its id its own
-    const seen = new Set<string>();
-    for (const x of (Array.isArray(r.decisions) ? r.decisions : []) as Record<string, unknown>[]) {
-      if (!x || typeof x !== 'object') continue;
-      const id = decisionId(x.id);
-      const about = typeof x.decides === 'string' ? clip(x.decides, 120) : '';
-      if (!id || seen.has(id) || !about) continue;
-      const q = questionOf(id, x, input, { about, unlocks: `What the piece decides about ${about.replace(/[.:]$/, '')}.` });
-      seen.add(id);
-      decisions.push(q ? { kind: id, stated: null, question: q, from: 'decision' } : { kind: id, stated: null, question: null, why: 'the question came without 2 to 4 options and one picked among them', from: 'decision' });
-    }
-    // THE FIVE FIELDS: stated with a quote found in its source, or asked
-    const fields = r.fields && typeof r.fields === 'object' ? r.fields : {};
     for (const kind of EDITOR_KINDS) {
-      const x = fields[kind];
+      const x = r.fields[kind];
       if (!x || typeof x !== 'object') continue;
       const where = String(x.statedIn);
+      if (where === 'NOT_NEEDED') { decisions.push({ kind, stated: null, question: null, why: 'not needed for this piece', from: 'field' }); continue; }
       if (where !== 'NONE' && (EDITOR_STATED_IN as readonly string[]).includes(where) && statedIn(where, x.quote, input)) {
-        decisions.push({ kind, stated: where, question: null, why: `stated in the ${where}`, from: 'field' }); continue;
+        decisions.push({ kind, stated: where, quote: clip(String(x.quote), 160), question: null, why: `stated in the ${where}`, from: 'field' }); continue;
       }
-      const q = questionOf(kind, x, input, { unlocks: EDITOR_UNLOCKS[kind] });
-      decisions.push(q ? { kind, stated: null, question: q, from: 'field' } : { kind, stated: null, question: null, why: 'the question came without 2 to 4 options and one picked among them', from: 'field' });
+      const q = questionOf(kind, x);
+      decisions.push(q ? { kind, stated: null, question: q, from: 'field' } : { kind, stated: null, question: null, why: 'the question came without two to four options', from: 'field' });
     }
     if (!decisions.length) return null;
-    // WHAT IS ASKED: the piece's own decisions first; where it names none it can ask, the fields nothing states
-    const asked = (from: 'decision' | 'field'): Question[] => decisions.flatMap((d) => (d.from === from && d.question ? [d.question] : []));
-    const own = asked('decision'); const fallback = asked('field');
-    return { decisions, questions: (own.length ? own : fallback).slice(0, EDITOR_MAX) };
+    return { decisions, questions: decisions.flatMap((d) => (d.question ? [d.question] : [])).slice(0, EDITOR_MAX) };
   },
   floor() { return { decisions: [], questions: [] }; },
 };
 
 /** What the writer is told an answer is about: an editor kind, or one of the compiled path's kinds given with --answers. */
-export const askOf = (id: string): string | null => (EDITOR_KINDS as readonly string[]).includes(id) ? EDITOR_ASK[id as EditorKind]
+export const askOf = (id: string): string | null => (EDITOR_KINDS as readonly string[]).includes(id) || id === ALSO_ID ? EDITOR_ASK[id as keyof typeof EDITOR_ASK]
   : KIND_ASK[id.toUpperCase() as QuestionKind | GapKind] ?? null;
+
+/** WHAT THE AUTHOR WANTS LEADS WHAT THE WRITER READS: a piece given every point in order recited them in order. */
+export const INTENT_HEAD = 'What the author wants from this piece, in their words. Build the piece on it; these are the author\'s, not lines to quote. The voice comes from the author\'s pieces; what the piece argues comes from these answers, then the method, then the material. The material is what the piece may use, not a list to cover.';
 
 /**
  * What the writer is told: only what the person answered, in their words. Empty where nobody answered, so a run nobody
@@ -200,5 +158,5 @@ export function editorNote(answers: readonly { readonly id: string; readonly ans
   // a decision of this piece's own is told by what it decides, with the question asked: an option is worded against it
   const label = (id: string): string | null => askOf(id) ?? (() => { const q = asked.find((x) => x.id === id); return q?.about ? `${q.about.replace(/[.:]$/, '')}${q.ask ? ` (asked: "${q.ask}")` : ''}:` : null; })();
   const lines = answers.filter((a) => label(a.id) !== null && a.answer.trim()).map((a) => `- ${label(a.id) ?? ''} ${a.answer.trim()}`);
-  return lines.length ? `Before writing, the author settled these. Write from them; they are the author's, not lines to quote:\n\n${lines.join('\n')}` : '';
+  return lines.length ? `${INTENT_HEAD}\n\n${lines.join('\n')}` : '';
 }

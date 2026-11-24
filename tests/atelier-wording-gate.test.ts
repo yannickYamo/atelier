@@ -86,6 +86,7 @@ const ALLOWED: readonly RegExp[] = [
   new RegExp(`^(${OUTCOMES}): see under the piece\\.$`),
   new RegExp(`^ {2}(${PREFIXES.map((p) => p.replace(/[?]/g, '\\?')).join('|')})`),
   /^ {6}› /,
+  /^(Not met|Check): /, /^…and \d+ more: atelier report /, /^Sent to a person: atelier rate /,
   /^(Not right\?|To fix it:) atelier fix "/,
   /^Every check, rule by rule: add --report$/,
   /^Beside the piece, never in it \(\d+\):$/, /^ {2}- (decided for you|not given|no proof given|about its own making|a slot, written whole|a name nothing gave|not the length asked)(: | \(\d+\) → )/,
@@ -97,7 +98,9 @@ const gate = (what: string, r: Said, piece: string): void => {
   const said = r.out.replace(piece, '');
   for (const l of said.split('\n')) expect(ALLOWED.some((a) => a.test(l)), `${what}: not an allowed line: ${JSON.stringify(l)}`).toBe(true);
   expect(`${r.out}\n${r.err}`, what).not.toMatch(MACHINERY);
-  expect(r.out, what).toMatch(new RegExp(`^(${OUTCOMES})\\.`, 'm'));
+  // a check says its outcome first; a piece a run hands over carries no verdict word (cli/commands/run.ts)
+  if (what.startsWith('verify')) expect(r.out, what).toMatch(new RegExp(`^(${OUTCOMES})\\.`, 'm'));
+  else expect(r.out, what).not.toMatch(new RegExp(`^(${OUTCOMES})\\b`, 'm'));
 };
 
 describe('the front door, through the binary', () => {
@@ -111,7 +114,7 @@ describe('the front door, through the binary', () => {
     const ran = c(...RUN());
     expect(ran.code).toBe(0);
     gate('run, clean', ran, DRAFT);
-    expect(ran.out).toMatch(/^Ready\. Checked: /m);
+    expect(ran.out.replace(DRAFT, '').trim()).toBe('Not right? atelier fix "<what was wrong>"');
     await set({ emit_piece: { piece: FIXED }, __plain: [FIXED] });
     const fixed = c('fix', 'the ending is flat', '--skill', 'post-voice', '--claims', 'pattern', ...be());
     expect(fixed.code).toBe(0);
@@ -137,8 +140,7 @@ describe('the front door, through the binary', () => {
     await set({ __plain: [PLANTED, PLANTED] });
     const planted = c(...RUN(), '--with', `notes=${notes}`);
     gate('run, a planted figure', planted, PLANTED);
-    expect(planted.out).toMatch(/^Needs a look\. Checked: /m);
-    expect(planted.out).toMatch(/^ {2}To look at: Every name and figure in the work is in what you supplied/m);
+    expect(planted.out).toMatch(/^Check: "A survey found that 73% of residents wanted it kept\." \(not in your notes\)$/m);
     writeFileSync(join(c.proj, 'planted.md'), PLANTED);
     const seen = c('verify', '--skill', 'post-voice', 'planted.md', '--claims', 'pattern', '--with', `notes=${notes}`);
     gate('verify, a planted figure', seen, '\u0000');
@@ -171,8 +173,7 @@ describe('the front door, through the binary', () => {
     await set({ emit_piece: { piece: CONTRAST }, __plain: [CONTRAST], emit_replacements: { rewriteSpans: [] } });
     const broke = c(...RUN(), '--drafts', '2');
     gate('run --drafts 2, a broken ban', broke, CONTRAST);
-    expect(broke.out).toMatch(/^Needs a fix\. Checked: /m);
-    expect(broke.out).toMatch(/^ {2}Not met: No "not X, it's Y"/m);
+    expect(broke.out).toMatch(/^Not met: No "not X, it's Y"/m);
   }, 180_000);
   it('a run that breaks a required rule, and a run whose review is set aside', async () => {
     const c = session();
@@ -183,13 +184,14 @@ describe('the front door, through the binary', () => {
     const broke = c(...RUN());
     expect(broke.code).toBe(1);
     gate('run, a broken rule', broke, CONTRAST);
-    expect(broke.out).toMatch(/^Needs a fix\. Checked: 1 of the rules is not met/m);
+    expect(broke.out).toMatch(/^Not met: /m);
     const d = session();
     await set({ emit_step_checks: CHECKS, __plain: [DRAFT, CONTRAST] });
     expect(d(...NEW()).code).toBe(0);
     await set({ __plain: [DRAFT, CONTRAST], emit_replacements: { rewriteSpans: [] } });
     const aside = d(...RUN());
     gate('run, the review set aside', aside, DRAFT);
-    expect(aside.out).toContain('This is the first draft');
+    // that the review was set aside is the full account's (--report): under the piece, at most four lines
+    expect(aside.out).not.toContain('This is the first draft');
   }, 180_000);
 });

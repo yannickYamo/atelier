@@ -19,7 +19,7 @@ import { planFor } from '../../core/plan/execution-plan.js';
 import type { EvalSummary } from '../../core/eval/summary.js';
 import { listEvals } from '../../core/state/eval-store.js';
 import type { StandardVersion, InferredItem } from '../../core/state/canonical-state.js';
-import { OUTCOME_SAID, outcomeOf, verdictLines, shortLine } from '../../core/eval/wording.js';
+import { afterPieceLines } from '../../core/eval/wording.js';
 import type { Span } from '../../core/observers/registry.js';
 import { inferredLines } from '../../core/loop/inferred.js';
 
@@ -40,16 +40,16 @@ export interface EngineRun { readonly output: string | null; readonly invocation
   readonly direct?: unknown }
 
 /**
- * THE QUESTIONS AN EDITOR WOULD ASK, BESIDE THE PIECE. The piece is always written; what nobody answered is listed with
- * its options and the way to answer, so a run through this command never hides that a question was open.
+ * WHAT ONLY THE PERSON CAN SAY, WHERE NOBODY WAS THERE TO ASK (a pipe, a host, a script): said before the piece, which is
+ * always written, with the writer deciding them this time and the one way to answer them on the next run.
  */
 export function openQuestionLines(r: Pick<EngineRun, 'questions' | 'answers' | 'direct'>): string[] {
   if (!r.direct) return [];
   const open = (r.questions ?? []).filter((q) => !(r.answers ?? []).some((a) => a.id === q.id));
   if (!open.length) return [];
-  return [`Written without your answer to ${open.length === 1 ? 'a question' : `${open.length} questions`} an editor would ask:`,
+  return [`Only you can say ${open.length === 1 ? 'this' : 'these'}; the writer decided ${open.length === 1 ? 'it' : 'them'} this time:`,
     ...open.map((q) => `  - ${q.id}: ${q.ask}${q.options.length ? ` (${q.options.map((o, i) => `${String.fromCharCode(97 + i)}) ${o}`).join('; ')})` : ''}`),
-    `  To answer, run again with --answers "${open.map((q) => `${q.id}=<letter or your words>`).join(',')}".`];
+    `  To answer, run again with --answers "${open.map((q) => `${q.id}=<${q.options.length ? 'letter or ' : ''}your words>`).join(',')}".`];
 }
 
 /**
@@ -176,14 +176,13 @@ export async function run(): Promise<void> {
   // the engine's one line on a change of model (cli/commands/invoke.ts, `checkedBinding`) is the person's to read
   for (const l of engine.err.split('\n')) if (l.startsWith(OTHER_MODEL_NOTE) || l.startsWith(DECLINED_NOTE)) process.stderr.write(`${l}\n`);
   const goes = result.eval?.record?.delivery?.decision;
-  // ONE OF THREE OUTCOMES, IN THE PERSON'S WORDS (`outcomeOf`): ready, needs a look, needs a fix. The piece is always
-  // handed over. What to look at or fix is listed under it; the table's own account stays behind --report.
+  // The piece is always handed over; what is listed under it is read off the record, and its full account stays behind --report.
   const card = cardFor(result);
-  // under a rule not met, the sentences that break it (the engine's spans), as `atelier verify` says them
-  const found = card ? verdictLines(card.record, new Map(Object.entries((result as { brokenAt?: Record<string, Span[]> }).brokenAt ?? {}))).slice(1) : [];
-  const outcome = outcomeOf(goes, result.eval?.record?.state, card?.record);
-  const head = !card || typed.report || outcome === 'ready' ? '' : `${OUTCOME_SAID[outcome]}: see under the piece.\n\n`;
-  console.log(`${head}${work.trimEnd()}\n`);
+  // WHAT ONLY THE PERSON KNOWS COMES BEFORE THE PIECE, wherever it was not asked: on the other stream, so the work is
+  // still the only thing on this one, and the piece is always written.
+  const open = asking ? [] : openQuestionLines(result);
+  if (open.length) process.stderr.write(`${open.join('\n')}\n\n`);
+  console.log(`${work.trimEnd()}\n`);
   // A FIX MADE IN PLACE SAYS WHAT CHANGED: sentences changed of total, and each span before and after.
   for (const l of result.fix?.lines ?? []) console.log(l);
   if (result.fix) console.log('');
@@ -191,13 +190,11 @@ export async function run(): Promise<void> {
   if (!result.fix && typed.rest.includes('--fix-of')) console.log('The whole piece was written again with what you said, not only the sentences you named: other sentences may have changed.\n');
   // BESIDE THE WORK, NEVER IN IT: what the run decided for the person and what it was not given, with what to add (a fix in
   // place says its own, in its lines above)
-  if (!result.fix) {
+  // what the run decided for the person and what the review set aside: the full account's (--report)
+  if (!result.fix && typed.report) {
     const broke = (result.direct as { review?: { broke?: readonly string[] } } | undefined)?.review?.broke ?? [];
-    const beside = [...(broke.length ? [`This is the first draft: the review of it was not used, because it broke a rule the draft held (${broke.join('; ')}).`] : []), ...inferredLines(result.inferred ?? []), ...(typed.report && result.ownWords && !result.ownWords.checked && result.ownWords.why ? [`Not read for sentences about the piece's own making: ${result.ownWords.why}.`] : [])];
+    const beside = [...(broke.length ? [`This is the first draft: the review of it was not used, because it broke a rule the draft held (${broke.join('; ')}).`] : []), ...inferredLines(result.inferred ?? []), ...(result.ownWords && !result.ownWords.checked && result.ownWords.why ? [`Not read for sentences about the piece's own making: ${result.ownWords.why}.`] : [])];
     if (beside.length) console.log(`${beside.join('\n')}\n`);
-    // asked at the terminal before the draft, a question left unanswered was the person's choice: not listed again
-    const open = asking ? [] : openQuestionLines(result);
-    if (open.length) console.log(`${open.join('\n')}\n`);
   }
   // THE EVALUATION IS PART OF WHAT A RUN RETURNS: one line on what the checks found, each thing left to the person, and
   // what to type next. The whole account, rule by rule, is one flag or one command away.
@@ -208,10 +205,13 @@ export async function run(): Promise<void> {
     // WHAT WAS DONE WITH IT (core/eval/consequence.ts), and where it waits when it went to a person.
     if (delivery) console.log(`\n${deliveryLine(delivery, result.eval?.record?.state)}${delivery.decision === 'PERSON' ? `\nSent to a person: it waits in atelier report --pending; rule on it with atelier rate ${result.invocationId} yes|no [--rule <id>].` : ''}`);
   } else {
-    console.log(`${OUTCOME_SAID[outcome]}. Checked: ${shortLine(card.record)}`);
-    for (const l of found) console.log(l);
-    if (goes === 'PERSON') console.log(`To rule on it later: atelier rate ${result.invocationId} yes|no`);
-    console.log(`${outcome === 'fix' ? 'To fix it:' : 'Not right?'} atelier fix "<what ${outcome === 'fix' ? 'to change' : 'was wrong'}>"   ·   every check, rule by rule: atelier report ${result.invocationId}`);
+    // AT MOST FOUR LINES UNDER THE PIECE, AND NO VERDICT WORD: a rule still not met, a name or figure nothing given holds,
+    // then the way to fix it. Everything else is one flag away (--report).
+    // a name or figure nothing given holds is said in the sentence it stands in (the run's list of sentences to check)
+    const toCheck = ((result as { toCheck?: readonly unknown[] }).toCheck ?? []).map((x) => (typeof x === 'string' ? x : (x as { sentence?: string }).sentence ?? '')).filter(Boolean);
+    const spans = new Map<string, readonly Pick<Span, 'text' | 'why'>[]>([...Object.entries((result as { brokenAt?: Record<string, Span[]> }).brokenAt ?? {}), ['specifics', toCheck.map((text) => ({ text, why: '' }))]]);
+    for (const l of afterPieceLines(card.record, spans, result.invocationId)) console.log(l);
+    if (goes === 'PERSON') console.log(`Sent to a person: atelier rate ${result.invocationId} yes|no`);
   }
   if (typed.report) console.log(`\n${result.report.join('\n')}`);
   process.exitCode = engine.code !== 0 ? engine.code : exitFor(result.eval);

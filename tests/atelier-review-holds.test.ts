@@ -4,7 +4,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { mkdtempSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { checkSection } from '../renderers/agent-skill/render.js';
+import { hostSteps } from '../renderers/agent-skill/render.js';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
@@ -55,9 +55,9 @@ describe('the self-review and the rules code holds', () => {
     expect(j.direct?.review.ran).toBe(false);
     expect((j.direct?.review as { broke?: string[] }).broke).toHaveLength(1);
     expect(r.err + r.out).toContain('which the first draft held, so the first draft is delivered');
-    // and `atelier run` says it beside the piece
+    // and `atelier run --report` says it beside the piece
     await set({ __plain: [DRAFT, CONTRAST], emit_replacements: { rewriteSpans: [] } });
-    const ran = cli('run', 'Write a post on this week\'s news about the wharf.', '--skill', 'post-voice', '--claims', 'pattern', '--no-questions', ...be());
+    const ran = cli('run', 'Write a post on this week\'s news about the wharf.', '--skill', 'post-voice', '--claims', 'pattern', '--no-questions', '--report', ...be());
     expect(ran.out, ran.err).toContain('This is the first draft: the review of it was not used, because it broke a rule the draft held');
   }, 120_000);
 
@@ -84,7 +84,7 @@ describe('the self-review and the rules code holds', () => {
   }, 120_000);
   // THREE OUTCOMES, IN THE PERSON'S WORDS (cli/commands/run.ts): the piece is always handed over; the table's own words
   // (Delivery, trusted-fail) stay behind --report.
-  it('a piece that breaks a required rule is handed over as "Needs a fix", with the rule in the person\'s words and no table words', async () => {
+  it('a piece that breaks a required rule is handed over with the rule in the person\'s words, no verdict word and no table words', async () => {
     const cli = session();
     await set({ emit_step_checks: CHECKS, __plain: [CONTRAST, CONTRAST], emit_replacements: { rewriteSpans: [] } });
     expect(cli('new', join(FX, 'voice'), '--method', join(FX, 'rules.md'), '--name', 'post-voice', '--yes', '--latitude', 'creative', ...be()).code).toBe(0);
@@ -92,16 +92,14 @@ describe('the self-review and the rules code holds', () => {
     await set({ __plain: [CONTRAST, CONTRAST, CONTRAST, CONTRAST], emit_replacements: { rewriteSpans: [] } });
     const r = cli('run', 'Write a post on this week\'s news about the wharf.', '--skill', 'post-voice', '--claims', 'pattern', '--no-questions', ...be());
     expect(r.code, r.out + r.err).toBe(1);
-    expect(r.out.startsWith('Needs a fix: see under the piece.\n\n# The wharf, this week')).toBe(true);
-    expect(r.out).toMatch(/^Needs a fix\. Checked: 1 of the rules is not met, named below/m);
-    expect(r.out).toMatch(/^ {2}Not met: /m);
-    // the sentence that breaks it is named under it, as atelier verify names it
-    expect(r.out).toMatch(/^ {2}Not met: [^\n]*\n {6}› "/m);
-    expect(r.out).toContain('To fix it: atelier fix "<what to change>"');
+    expect(r.out.startsWith('# The wharf, this week')).toBe(true);
+    expect(r.out).toMatch(/^Not met: /m);
+    expect(r.out).toContain('Not right? atelier fix "<what was wrong>"');
+    expect(r.out).not.toMatch(/^(Ready|Needs a look|Needs a fix)\b/m);
     expect(r.out).not.toMatch(/BLOCKED|Delivery:|trusted-fail|not for use|held back/);
   }, 120_000);
 
-  it('a clean piece ends "Ready."', async () => {
+  it('a clean piece ends with the way to fix it, and nothing else', async () => {
     const cli = session();
     await set({ emit_step_checks: CHECKS, __plain: [DRAFT, DRAFT] });
     expect(cli('new', join(FX, 'voice'), '--method', join(FX, 'rules.md'), '--name', 'post-voice', '--yes', '--latitude', 'creative', ...be()).code).toBe(0);
@@ -109,14 +107,14 @@ describe('the self-review and the rules code holds', () => {
     const r = cli('run', 'Write a post on this week\'s news about the wharf.', '--skill', 'post-voice', '--claims', 'pattern', '--no-questions', ...be());
     expect(r.code, r.out + r.err).toBe(0);
     expect(r.out.startsWith('# The wharf, this week')).toBe(true);
-    expect(r.out).toMatch(/^Ready\. Checked: /m);
+    expect(r.out.replace(/^[\s\S]*\n\n(?=Not right)/, '')).toBe('Not right? atelier fix "<what was wrong>"\n');
     expect(r.out).not.toMatch(/Delivery:|trusted-fail/);
   }, 120_000);
 });
 
 describe('the three outcomes, and where a host is told to check', () => {
   it('the installed skill orders the check by its exact command, in its first 2,000 characters, and verify says the outcome first', async () => {
-    expect(checkSection('posts')).toContain('run `atelier verify --skill posts <file>`');
+    expect(hostSteps('posts')).toContain('run `atelier verify --skill posts <file>`');
     const cli = session();
     await set({ emit_step_checks: CHECKS, __plain: [DRAFT, DRAFT] });
     expect(cli('new', join(FX, 'voice'), '--method', join(FX, 'rules.md'), '--name', 'post-voice', '--yes', '--latitude', 'creative', ...be()).code).toBe(0);

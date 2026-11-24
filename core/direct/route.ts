@@ -18,6 +18,8 @@ export interface RouteInput {
   readonly request: string;
   /** the opening of the material, for what the piece is about; never the whole of it */
   readonly material: string;
+  /** the owner's method as written, read only for whether it says to keep the material's wording */
+  readonly method?: string;
   readonly pieces: readonly Piece[];
   /** with --voice-select: the reading also says what the request takes of the pieces, and reads a single piece too */
   readonly select?: boolean;
@@ -39,6 +41,11 @@ export interface Route {
    */
   readonly takes?: 'whole' | 'voice';
   readonly takesQuote?: string;
+  /**
+   * words of the request, the method or the material that say the material's wording is to be used as written
+   * (approved lines, a statement to quote, requirement text), found there by code; absent where nothing says so
+   */
+  readonly keepWording?: string;
 }
 
 /** Asked only with --voice-select, in the user turn, so the reading a default run makes is the one it was. */
@@ -61,7 +68,7 @@ const MATERIAL_CHARS = 2_000;
 
 export const PIECE_ROUTE: Reading<RouteInput, Route> = {
   id: 'piece-route',
-  version: '3',
+  version: '4',
   system: `You choose which of an author's pieces a new piece should be written from.
 
 You are given a request for a new piece and a catalogue of the author's own pieces: each by its id, its title, its
@@ -75,17 +82,22 @@ Answer with the ids in order, most like the new piece first, and what the reques
 
 If the request states a length for the new piece ("about 2,000 words", "three paragraphs", "under 300 words"), copy
 those words exactly as the length; a number that counts or names something else ("the 500 words I pasted", "chapter
-12", "top 10 tools") is no length. Give null where the request states none.`,
+12", "top 10 tools") is no length. Give null where the request states none.
+
+If the request, the method or the material says the material's own wording is to be used as written (approved
+messaging, a statement to quote, requirement text to keep word for word), copy those words exactly under
+"keep_wording"; null where nothing says so. Material that is only notes or facts to write from is null.`,
   schema: {
     type: 'object',
     properties: {
       asks_for: { type: 'string', description: 'the kind of piece the request asks for, in a few words' },
       pieces: { type: 'array', items: { type: 'string' }, description: 'ids of the pieces to write from, most like the new piece first' },
       length: { type: ['string', 'null'], description: 'the request\'s own words stating the length of the new piece, copied exactly; null where it states none' },
+      keep_wording: { type: ['string', 'null'], description: 'the words of the request, method or material saying the material\'s wording is used as written, copied exactly; null where nothing says so' },
       takes: { type: 'string', enum: ['whole', 'voice'], description: 'only when asked: what the new piece takes of the author\'s pieces' },
       takes_quote: { type: ['string', 'null'], description: 'only when asked: the request\'s words that say it takes the voice only' },
     },
-    required: ['asks_for', 'pieces', 'length'],
+    required: ['asks_for', 'pieces', 'length', 'keep_wording'],
     additionalProperties: false,
   },
   toolName: 'emit_piece_route',
@@ -98,13 +110,13 @@ those words exactly as the length; a number that counts or names something else 
       const words = p.text.split(/\s+/).filter(Boolean).length;
       return `<piece id="${p.id}" words="${words}"${p.kept ? ' kept="yes"' : ''}>\nTitle: ${titleOf(p.text)}\n${p.request ? `Request it answered: ${p.request.slice(0, 300)}\n` : ''}Opening: ${body}\n</piece>`;
     });
-    return `<request>\n${x.request}\n</request>\n\n${x.material.trim() ? `<material_opening>\n${x.material.slice(0, MATERIAL_CHARS)}\n</material_opening>\n\n` : ''}<catalogue>\n${entries.join('\n\n')}\n</catalogue>${x.select ? `\n\n${TAKES_ASK}` : ''}`;
+    return `<request>\n${x.request}\n</request>\n\n${x.material.trim() ? `<material_opening>\n${x.material.slice(0, MATERIAL_CHARS)}\n</material_opening>\n\n` : ''}${x.method?.trim() ? `<method>\n${x.method.slice(0, MATERIAL_CHARS)}\n</method>\n\n` : ''}<catalogue>\n${entries.join('\n\n')}\n</catalogue>${x.select ? `\n\n${TAKES_ASK}` : ''}`;
   },
   // One piece, or none, leaves nothing to choose.
   // With --voice-select one piece is read too: what the request takes of it is still to say.
   decide: (x) => (x.pieces.length === 0 || (x.pieces.length === 1 && !x.select) ? { order: x.pieces.map((p) => p.id), kind: null } : null),
   ground: (raw, x) => {
-    const r = raw as { asks_for?: unknown; pieces?: unknown; length?: unknown; takes?: unknown; takes_quote?: unknown } | null;
+    const r = raw as { asks_for?: unknown; pieces?: unknown; length?: unknown; takes?: unknown; takes_quote?: unknown; keep_wording?: unknown } | null;
     if (!r || !Array.isArray(r.pieces)) return null;
     const ids = new Set(x.pieces.map((p) => p.id));
     const order = [...new Set(r.pieces.filter((id): id is string => typeof id === 'string' && ids.has(id)))];
@@ -117,7 +129,10 @@ those words exactly as the length; a number that counts or names something else 
     const quote = typeof r.takes_quote === 'string' ? r.takes_quote.trim() : '';
     const voice = r.takes === 'voice' && quote.length >= 4 && flat(x.request).includes(flat(quote));
     const takes = x.select ? (voice ? { takes: 'voice' as const, takesQuote: quote.slice(0, 200) } : { takes: 'whole' as const }) : {};
-    return { order, kind: typeof r.asks_for === 'string' && r.asks_for.trim() ? r.asks_for.trim().slice(0, 120) : null, ...(length === undefined ? {} : { length }), ...takes };
+    // the material's wording is kept only on words found where the reading says they are
+    const keep = typeof r.keep_wording === 'string' ? r.keep_wording.trim() : '';
+    const kept = keep.length >= 4 && [x.request, x.method ?? '', x.material].some((t) => flat(t).includes(flat(keep)));
+    return { order, kind: typeof r.asks_for === 'string' && r.asks_for.trim() ? r.asks_for.trim().slice(0, 120) : null, ...(length === undefined ? {} : { length }), ...takes, ...(kept ? { keepWording: keep.slice(0, 200) } : {}) };
   },
   floor: (x) => ({ order: lexicalOrder(x.pieces, `${x.request}\n${x.material.slice(0, MATERIAL_CHARS)}`), kind: null }),
 };

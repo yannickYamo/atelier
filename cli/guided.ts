@@ -13,7 +13,7 @@
 
 import { spawnSync } from 'node:child_process';
 import { createInterface } from 'node:readline';
-import { DATA, argv, flag, canReach, loadSession } from './runtime.js';
+import { DATA, argv, flag, canReach } from './runtime.js';
 import * as store from '../core/state/store.js';
 import { cardLine, amendCard, type PurposeCard } from '../core/direct/card.js';
 import type { PersonaPoint } from '../core/compiler/persona.js';
@@ -68,11 +68,6 @@ export const OTHER_MODEL_NOTE = '(written ';
 export const DECLINED_NOTE = '(the model declined';
 
 /** One piece written with the skill: its text and the run it is recorded as; null where nothing could be written. */
-/** How many pieces the build read: every one given, less only those really held back for a blind comparison. */
-export function piecesReadLine(given: number, reserved: number): string {
-  return given > 0 ? `  Pieces read: ${given - reserved}${reserved > 0 ? ` of the ${given} you gave (${reserved} held back for a blind comparison)` : ''}` : '';
-}
-
 function write(name: string, request: string): { id: string; text: string; note: string | null } | { why: string } {
   const r = atelier(['invoke', '--skill', name, request, '--json', '--no-questions', ...withArgs()]);
   const at = r.out.lastIndexOf('\n{') >= 0 ? r.out.lastIndexOf('\n{') + 1 : r.out.indexOf('{');
@@ -99,8 +94,6 @@ export interface Understood {
   readonly given?: number;
 }
 
-/** A list a person reads at a glance: the first few, and how many more. */
-const few = (xs: readonly string[], most: number): string[] => [...xs.slice(0, most).map((x) => `    - ${x.replace(/\s+/g, ' ').trim()}`), ...(xs.length > most ? [`    and ${xs.length - most} more`] : [])];
 
 /**
  * HOW THE PERSON WRITES, EACH POINT WITH WHERE IT WAS READ: how often they do it (counted over their pieces where it was,
@@ -137,23 +130,18 @@ export async function guided(name: string, seen: Understood = { steps: [], dispu
     // 1. WHAT WAS UNDERSTOOD, in the person's words, from what the build kept.
     let card: PurposeCard | null = store.getCard(L);
     const voice = store.getVoice(L);
-    // Only what was read is said: a thing the pieces did not give is asked next, never reported as a failure.
-    console.log('\nWhat I understood');
-    // the pieces may be the person's own or ones they admire: what was read is said of the pieces, never of the person
-    { const line = piecesReadLine(seen.given ?? voice?.corpusPieces ?? voice?.pieces?.length ?? 0, loadSession().reservation?.reserved?.length ?? 0);
-      if (line) console.log(`${line}${voice?.lengthSpan ? `, ${voice.lengthSpan[0]} to ${voice.lengthSpan[1]} words each` : ''}.`); }
-    // one thing a line: read as one sentence, a long kind ran into the reader and the purpose
-    if (card) for (const l of [card.kind && `This work: ${card.kind}`, card.reader && `Read by: ${card.reader}`, card.purpose && `For: ${card.purpose.replace(/\.$/, '')}`, card.settles.length && `Each piece settles: ${card.settles.join('; ')}`]) if (l) console.log(`  ${l}.`);
-    const sound = howYouWrite(voice?.persona?.points ?? [], 4);
-    if (sound.length) { console.log('  How these pieces are written:'); for (const l of sound) console.log(l); }
-    if (seen.steps.length) { console.log('  Your method, which every piece follows (where it and your pieces differ, your method decides):'); for (const l of few(seen.steps, 6)) console.log(l); }
-    { const active = store.getActive(L); const sv = active ? store.getSkillVersion(L, active) : null; const std = sv ? store.getStandard(L, sv.standardVersionHash) : null;
-      for (const l of std ? whatItHolds(std) : []) console.log(`  ${l}`); }
-    if (seen.disputed.length) {
-      console.log(`  ${seen.disputed.length === 1 ? 'One step of your method is' : `${seen.disputed.length} steps of your method are`} not what your own pieces do. The writer is told ${seen.disputed.length === 1 ? 'it' : 'them'}, and no piece is held back for ${seen.disputed.length === 1 ? 'it' : 'them'}:`);
-      for (const l of few(seen.disputed, 3)) console.log(l);
-      if (seen.confirm) console.log(`    To hold every piece to ${seen.disputed.length === 1 ? 'it' : 'them'}: ${seen.confirm}`);
+    // ONE SHORT SCREEN BEFORE THE PREVIEW: three habits, each with a sentence of theirs, and what this agent writes. The
+    // method quoted back, the rule counts and the rest of the habits are on the skill page (atelier status --skill).
+    const given = seen.given ?? voice?.corpusPieces ?? voice?.pieces?.length ?? 0;
+    const clip = (t: string, n: number): string => { const x = t.replace(/\s+/g, ' ').trim(); return x.length > n ? `${x.slice(0, n - 1).trimEnd()}…` : x; };
+    const habits = (voice?.persona?.points ?? []).filter((x) => x.description.trim()).slice(0, 3);
+    if (habits.length) {
+      console.log(`\nHow ${given ? `these ${given} pieces are` : 'these pieces are'} written:`);
+      for (const x of habits) console.log(`  - ${clip(x.description, 90)}${x.quote.trim() ? ` "${clip(x.quote, 70)}"` : ''}`);
     }
+    const writes = card ? [card.kind, card.reader && `for ${card.reader}`, card.purpose && `to ${card.purpose.replace(/^to\s+/i, '').replace(/\.$/, '')}`].filter(Boolean).join(' ') : '';
+    if (writes) console.log(`\nThis agent writes: ${writes}.`);
+    if (seen.disputed.length) console.log(`(${seen.disputed.length === 1 ? 'One step' : `${seen.disputed.length} steps`} of your method ${seen.disputed.length === 1 ? 'is' : 'are'} not what your pieces do; your method decides. Details: atelier status --skill ${name})`);
 
     // WITH NO MODEL TO WRITE WITH, NOTHING IS PROMISED AND NOTHING IS ASKED: the skill is built from what could be
     // counted, and the one thing left to do is said, with the command. Never "ready" for a skill that cannot write yet.
@@ -185,10 +173,11 @@ export async function guided(name: string, seen: Understood = { steps: [], dispu
     // reader or a purpose found in those is theirs already.
     const asked = card?.request;
     if (card?.by !== 'you' && !card?.stated?.some((f) => f !== 'kind')) {
-      const v = await io.ask(`\nWho reads these, and what should they do or know after one? (enter${card && cardLine(card) ? ' keeps what I read above' : ' skips'}) `);
+      const v = await io.ask(writes ? '  Enter to keep, or say it in your words: ' : '\nWho reads these, and what should they do or know after one? (enter skips) ');
       if (v === null) { left(); return; }
-      // kept or replaced, it is the person's from here: said to the writer of every piece (cli/direct.ts)
-      if (v.trim()) card = { ...amendCard(card, `purpose=${v.trim().replace(/;/g, ',')}`), reader: null };
+      // kept or replaced, it is the person's from here: said to the writer of every piece (cli/direct.ts). Their words
+      // replace the whole line they were shown (kind, reader and purpose together), so nothing read stays beside them.
+      if (v.trim()) card = { ...amendCard(card, `purpose=${v.trim().replace(/;/g, ',')}`), kind: null, reader: null };
       else if (card && cardLine(card)) card = { ...card, by: 'you' };
       if (card?.by === 'you') store.setCard(L, card);
     }

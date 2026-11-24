@@ -55,7 +55,7 @@ describe('the purpose card, read from the pieces and held to them', () => {
   });
   it('the editor is told the card as what the work usually is, never as a statement of this request', () => {
     const p = EDITOR_QUESTIONS.prompt({ request: 'Price the new plan.', material: [], method: '', told: [], card: { kind: 'a pricing memo', reader: null, purpose: null, settles: ['the price'], by: 'model' } });
-    expect(p).toContain('What this author\'s work is, read from all their pieces (not a statement about this request): This work: a pricing memo; each piece settles: the price');
+    expect(p).toContain('What this author\'s work is, read from all their pieces (it holds for this piece where the request does not say otherwise): This work: a pricing memo; each piece settles: the price');
   });
 });
 
@@ -129,12 +129,3 @@ describe('what the person said, told to the writer as what it is about', () => {
   });
 });
 
-describe('how many pieces the build read', () => {
-  // pieces are said to be held back only where a blind comparison holds them; a writer's served budget is not that
-  it('every piece given, and held back only what is', async () => {
-    const { piecesReadLine } = await import('../cli/guided.js');
-    expect(piecesReadLine(10, 0)).toBe('  Pieces read: 10');
-    expect(piecesReadLine(10, 2)).toBe('  Pieces read: 8 of the 10 you gave (2 held back for a blind comparison)');
-    expect(piecesReadLine(0, 0)).toBe('');
-  });
-});

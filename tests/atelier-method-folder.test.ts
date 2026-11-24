@@ -196,7 +196,7 @@ describe('the front door: atelier new <your-work> --method <note>', () => {
     expect(help.trim().split('\n').length).toBeLessThanOrEqual(8);
     expect(run('lab', 'verify', '--help').out).toMatch(/^usage: atelier verify/);
     expect(run('lab', 'bogus').code).toBe(1);
-    for (const c of ['atelier new <your-work>', 'atelier verify --skill', 'atelier setup', 'atelier run "<task>"', 'atelier lab']) expect(help).toContain(c);
+    for (const c of ['atelier new <your-work>', 'atelier fix', 'atelier setup', 'atelier run "<task>"', 'atelier lab']) expect(help).toContain(c);
     expect(help).not.toMatch(/taste|fidelity|tend|floor|ratify/);
     const lab = run('lab').out;
     for (const c of ['run', 'fix', 'reproduce', 'evolve', 'fidelity', 'method']) expect(lab).toContain(c);
