@@ -234,7 +234,7 @@ export const positional = (skip: readonly string[] = []): string | undefined =>
 import { OpenAICompatibleInferenceClient, BACKEND_PRESETS, type StructuredOutputMode, type TokenLimitParam } from '../providers/openai-compatible.js';
 import { isLocalBackend, priceFor, ANTHROPIC_PRICING, type Pricing } from '../providers/pricing.js';
 import { bindingHash, type RuntimeBinding } from '../core/runtime/binding.js';
-import { cardLine } from '../core/direct/card.js';
+import { cardSentence } from '../core/direct/card.js';
 
 // ─── THE DEFAULTS FOLLOW THE ONE MODEL-DEPENDENT CLAIM THIS PRODUCT MAKES ──────────────────────
 //
@@ -1091,7 +1091,7 @@ export function carriedFrom(L: store.StoreLayout, fromVersion: string | null, v:
   exemplar: { text: string; request?: string } | null; contrast: ContrastPair[]; voice: Voice | null; method: { text: string } | null; card: string | null;
 } {
   // what this work is: the person's or the build's reading, never part of the standard, said to the host
-  const c = store.getCard(L); const card = c ? cardLine(c) || null : null;
+  const c = store.getCard(L); const card = c ? cardSentence(c) || null : null;
   const sv = fromVersion ? store.getSkillVersion(L, fromVersion) : null;
   const pkg = sv ? store.getPackage(L, sv.materializedHash) : null;
   if (!pkg) return { exemplar: store.getExemplar(L), contrast: [], voice: store.getVoice(L), method: store.getMethod(L), card };

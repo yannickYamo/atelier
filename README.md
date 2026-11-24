@@ -1,65 +1,97 @@
 # Atelier
 
-Atelier learns your standard from your best work, writes to it, and shows you what it holds. Point it at the pieces you'd sign and, if you have one, the method you follow. You get an agent that writes new pieces your way, and a record of your standard that you own.
+Atelier learns how you write from the pieces you'd sign. Then it writes new ones that way. Before it writes, it asks only what you alone can say. Before you see the result, it reads the piece for anything made up.
 
 [![CI](https://github.com/yannickYamo/atelier/actions/workflows/ci.yml/badge.svg)](https://github.com/yannickYamo/atelier/actions/workflows/ci.yml)
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![node](https://img.shields.io/badge/node-%3E%3D22-brightgreen)](package.json)
 
-<p align="center"><img src="docs/how-it-works.svg" alt="Your best work goes in. Atelier learns your taste and shows each habit beside a sentence of yours. It writes every new piece in your voice, for that request. It reads each piece before you do: made-up facts flagged, copied passages caught. Next: expert agents." width="100%"></p>
+<p align="center"><img src="docs/how-it-works.svg" alt="Your best work goes in. Atelier learns your taste and shows each habit beside a sentence of yours. It writes every new piece in your voice, for that request. It reads each piece before you do: made-up facts flagged, copied passages caught." width="100%"></p>
 
-## The standard is the product
+## What it's like
 
-Every team will run agents, and out of the box they all write the same way. What is scarce is your own standard: how you open, what you cut, what you would never say, the method you follow without thinking about it.
+Say you have six engineering posts you're happy with. Here they are the six sample posts in [examples/blog](examples/blog). You build an agent from them:
 
-Atelier captures that standard from finished work on day zero, before any agent has run. It is a record you own: your pieces, your method, your rules, and the pieces you accepted. It has a version. Any text can be checked against it. It moves to another tool, another machine or another model, and stays the same when the model underneath changes. [What a standard holds](docs/STANDARD.md).
+```text
+$ atelier new ./posts "blog posts like these" --name posts
 
-Part of a standard can be decided: a length, a structure, a word you never use, a figure that must come from your notes. Atelier holds every piece to that part. The rest is taste. For that part it shows you what it learned and the sentence of yours it learned it from, and writes from it.
+Reading your pieces…
 
-One standard, one agent. An agency keeps one per client. A content team keeps one per voice.
+How these 6 pieces are written:
+  - Headings are blunt declarative sentences naming the action or finding…
+      "We deleted our staging environment"
+  - Opens mid-situation with a date, a number, or a bare fact; never scene-sets or greets the reader.
+      "It cost $14k a month and it had not caught a production bug in seven months."
+  - Each piece is a short post-mortem of one concrete change already made and lived with…
+      "Here is what we actually did about it."
 
-## How it learns your taste
+Engineering blog posts, to share what one team changed and what it learned.
+  Enter to keep, or say it in your words:
 
-You point it at finished work you're happy with. Ten blog posts, a year of newsletters, the essays you still link to. It reads what all of them have in common.
+"posts" is ready.
+```
 
-Some of that is countable: how long your paragraphs run, how your pieces open, which words never appear, how often you ask the reader a question. Some of it isn't. Where you commit and where you hedge. How you close. What you always cut before sending.
+Each habit comes with a sentence of yours, so you can see where it came from. If the last line is wrong, type it the way you'd say it.
 
-Most of this was never written down anywhere. People know good when they see it and can't say why. Atelier does the saying part, then shows it back to you in plain words: each habit with how often you do it and a sentence of yours it was read from. If one is wrong, say so in your own words and it changes.
+Now you want a post. You have a page of notes about flaky tests:
 
-A rule you state is fixed. A model can't quietly reword it later.
+```text
+$ atelier run "A post on how we stopped flaky tests from blocking merges, for other engineering teams" --with notes=notes.md
 
-## Written from your pieces, read before it reaches you
+Point: What do you believe about flaky tests that most teams get wrong?
+  a) Re-running is the real cost, not the flaky tests
+  b) Blocking merges on unowned tests trains people to ignore CI
+  c) Quarantine with owner and deadline beats fixing flakes ad hoc
+  enter for a, or your own words:
+Proof: What went wrong or surprised you during the six weeks that you'll put on record?
+  your words, or enter to skip: The 0.4 figure is from our CI dashboard, Nov 1 to Dec 15
+For: Which team situation should the closing if-then prompt address?
+  a) Teams where engineers habitually re-run CI instead of reading failures
+  b) Teams with a large suite and a shared main branch
+  c) Teams considering a quarantine label for the first time
+  enter for a, or your own words:
+Anything else? Say it, or enter to write:
 
-A new piece is written from your own pieces of the kind you asked for, whole, with the material you attached and the task, then reviewed once: anything you wouldn't write is fixed, and the rest is left alone. The rules you stated yourself are shown to the writer in your words, and a sentence that still breaks one is rewritten, that sentence only.
+# The expensive part of a flaky test is the re-run
 
-Then every piece gets read before it reaches you, whoever wrote it. The counted habits get checked. Any figure or name that isn't in the material you provided is listed beside the piece for you to check, and never written into it. Any paragraph lifted out of your own examples gets flagged too, because a story of yours it wasn't given isn't yours to retell back at you.
+…
 
-Not happy with a piece? Say what was wrong in your own words, and only the sentences you mean change. Every run is recorded: what it was written from, what was checked, and what was found.
+The cost was somewhere else. The typical merged PR needed 2.3 re-runs before it went green.
+Engineers had learned that a red pipeline usually means nothing, so they stopped reading failures
+and started clicking the button.
+…
+I do not think we fixed our tests. I think we made a red pipeline mean something again, and
+people went back to reading it.
 
-## Where it works
+Not right? atelier fix "<what was wrong>"
+```
 
-- **Blog posts and essays:** your voice, your openings, no invented anecdotes or numbers.
-- **Newsletters:** the same voice issue after issue, every figure traced back to the notes you attached.
-- **Release notes, announcements, internal memos:** anything your team writes often and wants to sound like itself.
-- **Many voices at once:** an agency or a content team builds one agent per client or per author, from the pieces that already exist, and runs each by name.
+That's real output, shortened. Atelier asked three things: what you think, what you can vouch for, and who it's for. It asks only what your notes don't already say. It never asks something it can decide itself, like how to open or what order to use. Press Enter and you get the suggestion.
 
-Decision documents (PRDs, positioning, strategy) aren't covered yet: Atelier keeps their voice and checks their facts, but doesn't yet make the call well. See [EVALS](EVALS.md).
+The piece is in the voice of your six posts. It uses only figures from your notes and your answer. If a sentence holds a name or a figure you never gave, it's quoted under the piece:
 
-You still read it. You still sign it. The judgment moved earlier in the loop, not out of it.
+```text
+Check: "I am not going to claim the 7 are fine." (not in your notes)
+```
 
-## Why not just prompt it
+Don't like something? Say it in your own words: `atelier fix "open on the 2.3 re-runs"`. Only the sentences you mean change. Add `--always` and every later piece changes the same way.
 
-A system prompt can only ask for what you can articulate. A model judge scores a draft 7 out of 10 against its own idea of good, which is the average of everyone's writing and therefore nobody's. Neither one knows what *your* good is, so neither can hold a draft to it.
+## Why this exists
 
-And the failure isn't only stylistic. Fluent drafts invent. They attribute, they quantify, they tell a story that sounds like one of yours because it was assembled out of one of yours. You're the one signing it.
+Every team runs agents now, and out of the box they all sound the same. What's scarce is your own standard: how you open, what you cut, what you'd never say. Most of it was never written down. You know good when you see it.
 
-## What's shown so far
+The other problem is trust. Fluent drafts invent. They add a survey, a figure, a story that sounds like yours because it was built from yours. You're the one who signs it.
 
-- **46 of 46 planted inventions caught** in drafts the check had never seen. It also flagged about one clean draft in five, so a flag is a sentence for you to look at, never a refusal.
-- **Your counted rules held:** 31% of answers broke one, against 76% for a hand-written skill.
-- **Writing level with pasting your own posts** into the same model, on 25 blind-judged briefs, and ahead of asking it bare on 24 of them. Against a paste followed by one review it is behind: 4 won, 11 tied, 10 lost.
+Atelier handles both. It learns the standard from finished work, so you don't have to describe it. And it reads every piece against your notes before the piece reaches you.
 
-How each was measured, and what isn't established yet, is in [EVALS](EVALS.md).
+## How it works
+
+1. **It reads your pieces.** It looks at what they all have in common: some of it countable (paragraph length, how pieces open, words you never use), some of it not (where you commit, where you hedge, how you close). It shows each habit beside a sentence of yours.
+2. **It asks what only you know.** Your point, what the piece should do, what you can put on record, and who reads it. At most three questions, and only the ones your notes leave open.
+3. **It writes from your own pieces.** It doesn't write from a description of your style. The writer sees your pieces of that kind whole, plus your notes, your answers and any rules you've stated. Then one review fixes only what you wouldn't write.
+4. **It reads the piece before you do.** Every name and figure is checked against your notes and answers. A passage lifted from one of your old pieces is caught. A rule you stated and require is held, and the sentence that breaks it is rewritten.
+
+A rule you state stays in your words. No model rewords it later. Everything is recorded: what each piece was written from, what was checked and what was found.
 
 ## Try it
 
@@ -67,48 +99,67 @@ How each was measured, and what isn't established yet, is in [EVALS](EVALS.md).
 git clone https://github.com/yannickYamo/atelier && cd atelier
 npm install && npm run build && npm link
 
-atelier new ./my-posts "blog posts like these" --method method.md --name posts   # build the agent from your pieces (the method is optional)
-atelier run "a post on why we moved off the queue" --with notes=notes.md   # write in your voice
-atelier verify --skill posts draft.md --with notes=notes.md   # read any draft, yours or an agent's
+atelier new ./my-posts "blog posts like these" --name posts   # build from your pieces
+atelier run "a post on why we moved off the queue" --with notes=notes.md   # write one
+atelier fix "the opening is too abstract"   # change what you mean, nothing else
 ```
 
-At a terminal, `atelier new` ends by showing the agent at work: what it understood, one question only you can answer (who reads the work and what for; enter keeps what it read), the piece your line asked for (give it your notes with `--with <name>=<file>`), and one round of changes. A change you ask for and confirm is carried to every later piece. That piece is never added to your own pieces: the agent is built from your work, not from its drafts.
+You need Node 22 or later and an `ANTHROPIC_API_KEY`, or any OpenAI-compatible backend. `atelier check` tests the key before anything is spent. Got a written method, like "open with the decision, give the cost in the second paragraph"? Add `--method method.md` and each step becomes a rule.
 
-`atelier setup` lets the coding agents in a project (Claude Code, Codex) call it on their own drafts. Not happy with a piece? `atelier fix "the opening was too abstract"` and say it in your own words. [examples/blog](examples/blog) has six posts to try it on.
+**In Claude Code.** The build installs the agent as a skill. Type `/posts` and Claude asks you the same few questions, writes the piece, then runs `atelier verify` on it before handing it back. `atelier setup` lets Claude Code or Codex call Atelier on any draft.
 
-Here is what comes back, shortened, when an agent's draft invents a source and lifts a paragraph from one of your posts:
+No writing of your own to try it on? [examples/blog](examples/blog) has six sample posts.
 
-```text
-Needs a fix.
-  To look at: Every name and figure in the work is in what you supplied (2 could not be found in it: listed for you)
-      › "A survey by the Harbour Trust found that 73 percent of residents wanted the wharf kept …"
-      › "The first barge of the season left Hollin Vale at six this morning with forty tonnes of…"
-  Not met: No passage is lifted from one of your examples (a run of 68 words is shared with one of them (11 at most))
-Every check, rule by rule: add --report
-```
+## Questions you might have
 
-## Against the alternatives
+**How is this different from pasting my posts into Claude or ChatGPT?**
+The writing is about as good. On 25 blind-judged briefs, Atelier came out level with pasting your posts. What pasting doesn't give you: the questions before the draft, the check of every figure against your notes, your rules held on every piece, fixes that change only the sentences you mean, and the same standard every time, for anyone on your team.
 
-| What you'd reach for | What you get | What Atelier adds |
-|---|---|---|
-| **A system prompt** | A request the model may or may not honour | Your habits read from your own work, held on every piece |
-| **Pasting your examples** | The look, plus whatever it invents | Writing as good, with every figure checked against your material, your rules held and your own paragraphs left yours |
-| **A model judge** | 7 out of 10 | The sentence, and the habit it broke |
-| **Reading every draft yourself** | Your evenings | Your attention, spent only where a call is yours to make |
+**Isn't this just a good system prompt?**
+A prompt can only ask for what you can put into words, and the model may or may not follow it. Atelier reads your standard off your finished pieces, including the parts you never said out loud. It shows you each habit with your sentence, writes from the pieces themselves, and checks the parts that can be counted.
+
+**How is it different from a prompt optimiser like DSPy or GEPA?**
+An optimiser changes the prompt until a score goes up. It needs a score, and it can quietly break anything the score doesn't measure. Atelier works on the score itself: it learns your standard from your work and holds it fixed. A rule you state is never reworded by a model, and a check a model writes doesn't get to block anything until it has passed on your own examples.
+
+**And from an LLM judge?**
+A judge gives a draft a 7 out of 10 against its own idea of good, which is everyone's average. Atelier names the sentence and the rule it broke, or the figure that isn't in your notes.
+
+**Does it make things up?**
+It can. Every model can. Atelier doesn't claim to stop that. What it does is catch it: in testing, it caught 46 of 46 planted inventions. It also flagged about one clean draft in five, so a flagged line is something to look at, not a verdict.
+
+**What does it cost?**
+A piece takes about 3 minutes and about $0.40 on Claude, paid to your own model provider. `atelier check` tests your key before anything is spent.
+
+**Where does my writing go?**
+To the model provider you set up, and nowhere else. No account, no telemetry. Everything Atelier keeps is in `~/.atelier`.
+
+**What kinds of writing does it suit?**
+Blog posts, essays, newsletters, release notes, announcements, memos: anything you or your team write often and want to sound like yourselves. An agency can keep one agent per client, a content team one per voice. Decision documents (PRDs, strategy) are partly covered: Atelier keeps their voice and checks their facts, but it doesn't make the call better. See [EVALS](EVALS.md).
+
+**Do I still need to read it?**
+Yes. You still sign it. Atelier moves your judgement earlier, into the standard, and points you at the few lines that need you.
+
+## What's been measured
+
+- **46 of 46 planted inventions caught** in drafts the check had never seen.
+- **Counted rules held:** 31% of answers broke one, against 76% for a hand-written skill.
+- **Writing level with pasting your own posts** on 25 blind-judged briefs, and ahead of the bare model on 24 of them. Against a paste plus one review, it is behind: 4 won, 11 tied, 10 lost.
+
+[EVALS](EVALS.md) has how each was measured, and what isn't shown yet.
 
 ## Where it's going
 
-One standard has three uses. Writing from it is what ships today. Reviewing someone else's draft against it comes next: `atelier verify` is the start. The third is grading: the same rules and accepted pieces as the grader when you train or choose a model.
+One standard has three uses. Writing from it ships today. Checking someone else's draft against it comes next, and `atelier verify` is the start. The third is grading, where the same standard judges a model you train or choose.
 
-Writing is the first expert we taught it, not the last. An expert isn't defined by how their output looks. It's defined by why they decide what they decide: which number they question, what they cut, when they push back on the brief. And it's rarely the procedure someone wrote down for them. It's the judgment that never made it into the procedure. Atelier is learning that part, and then holding every agent to it.
+Writing is the first expert it learned, not the last. An expert isn't defined by how their output looks. It's defined by why they decide what they decide: which number they question, what they cut, when they push back. That judgement rarely makes it into the written procedure. Atelier is learning that part.
 
 ## Why I built it
 
-I was the person signing agent-written drafts I hadn't fully read. The responsibility didn't shrink when the typing did. It moved, from writing the sentence to signing for it. Atelier exists so that signature means something again.
+I was signing agent-written drafts I hadn't fully read. The responsibility didn't shrink when the typing did. It moved, from writing the sentence to signing for it. Atelier is there so that signature means something again.
 
 ## More
 
-[USAGE](docs/USAGE.md) has every command. [AGENTS.md](AGENTS.md) is the short version for a coding agent. [EVALS](EVALS.md) has what was measured and what was not. [MEASUREMENTS](MEASUREMENTS.md) lists every figure a code comment states. Node 22 or later; writing and the deeper reads need `ANTHROPIC_API_KEY` or an OpenAI-compatible backend, and `atelier check` tests it before anything is spent. No account, no telemetry: everything stays in `~/.atelier`.
+[USAGE](docs/USAGE.md) has every command. [AGENTS.md](AGENTS.md) is the short version for a coding agent. [EVALS](EVALS.md) is what was measured and what wasn't. [MEASUREMENTS](MEASUREMENTS.md) lists every figure a code comment states. [What a standard holds](docs/STANDARD.md).
 
 ## License
 

@@ -15,7 +15,7 @@ import { spawnSync } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import { DATA, argv, flag, canReach } from './runtime.js';
 import * as store from '../core/state/store.js';
-import { cardLine, amendCard, type PurposeCard } from '../core/direct/card.js';
+import { cardLine, cardSentence, amendCard, type PurposeCard } from '../core/direct/card.js';
 import type { PersonaPoint } from '../core/compiler/persona.js';
 import { editPairs, type KeptPiece } from '../core/direct/kept.js';
 import { createHash } from 'node:crypto';
@@ -133,14 +133,20 @@ export async function guided(name: string, seen: Understood = { steps: [], dispu
     // ONE SHORT SCREEN BEFORE THE PREVIEW: three habits, each with a sentence of theirs, and what this agent writes. The
     // method quoted back, the rule counts and the rest of the habits are on the skill page (atelier status --skill).
     const given = seen.given ?? voice?.corpusPieces ?? voice?.pieces?.length ?? 0;
-    const clip = (t: string, n: number): string => { const x = t.replace(/\s+/g, ' ').trim(); return x.length > n ? `${x.slice(0, n - 1).trimEnd()}…` : x; };
+    // cut at the end of a clause where one ends late enough, else at a word: never inside one
+    const clip = (t: string, n: number): string => {
+      const x = t.replace(/\s+/g, ' ').trim(); if (x.length <= n) return x;
+      const head = x.slice(0, n); const at = Math.max(head.lastIndexOf(', '), head.lastIndexOf('; '), head.lastIndexOf(': '));
+      const word = head.lastIndexOf(' ');
+      return at > n / 2 ? `${head.slice(0, at)}…` : `${(word > 0 ? head.slice(0, word) : head.slice(0, n - 1)).replace(/[,;:]$/, '')}…`;
+    };
     const habits = (voice?.persona?.points ?? []).filter((x) => x.description.trim()).slice(0, 3);
     if (habits.length) {
       console.log(`\nHow ${given ? `these ${given} pieces are` : 'these pieces are'} written:`);
-      for (const x of habits) console.log(`  - ${clip(x.description, 90)}${x.quote.trim() ? ` "${clip(x.quote, 70)}"` : ''}`);
+      for (const x of habits) console.log(`  - ${clip(x.description, 100)}${x.quote.trim() ? `\n      "${clip(x.quote, 90)}"` : ''}`);
     }
-    const writes = card ? [card.kind, card.reader && `for ${card.reader}`, card.purpose && `to ${card.purpose.replace(/^to\s+/i, '').replace(/\.$/, '')}`].filter(Boolean).join(' ') : '';
-    if (writes) console.log(`\nThis agent writes: ${writes}.`);
+    const writes = card ? cardSentence(card) : '';
+    if (writes) console.log(`\n${writes}`);
     if (seen.disputed.length) console.log(`(${seen.disputed.length === 1 ? 'One step' : `${seen.disputed.length} steps`} of your method ${seen.disputed.length === 1 ? 'is' : 'are'} not what your pieces do; your method decides. Details: atelier status --skill ${name})`);
 
     // WITH NO MODEL TO WRITE WITH, NOTHING IS PROMISED AND NOTHING IS ASKED: the skill is built from what could be

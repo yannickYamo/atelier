@@ -387,7 +387,7 @@ describe('a run through the binary, written the direct way', () => {
     // nothing is listed after the fact: the person was asked, and "just write it" was their answer to the rest
     expect(seen).not.toContain('Only you can say');
     // what was read is shown first, one prompt per open question
-    expect(seen).toContain('Before I write:');
+    expect(seen).toContain('What is the point?');
     // what they typed reached the writer
     expect(JSON.stringify((await bodies()).slice(m0))).toContain('files I can open in ten years');
   }, 180_000);
