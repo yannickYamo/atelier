@@ -4,7 +4,7 @@ import { describe, it, expect } from 'vitest';
 import { entry, stateOf, type Entry, type Observation, type EvaluationRecord } from '../core/eval/record.js';
 import { spansByEntry } from '../cli/eval-run.js';
 import { COPIED_LINE } from '../core/loop/run-repair.js';
-import { kindOf, linesOf, outcomeOf, shortLine, verdictLines, SAID, OUTCOME_SAID } from '../core/eval/wording.js';
+import { kindOf, linesOf, outcomeOf, verdictLines, afterPieceLines, AFTER_PIECE_MAX, SAID, OUTCOME_SAID } from '../core/eval/wording.js';
 
 const obs = (o: Partial<Observation> = {}): Observation => ({ proposition: 'counts it', coverage: 'FULL', qualification: 'DETERMINISTIC', evidence: '1 in 39 words (none allowed)', ...o });
 const rule = (id: string, verdict: 'MET' | 'VIOLATED' | null, o: Partial<Observation> = {}, more: Partial<Pick<Entry, 'required'>> & { applies?: false | { setAside: string } } = {}): Entry =>
@@ -107,14 +107,15 @@ describe('the outcome of a record', () => {
     expect(outcomeOf('SHIP', 'VERIFIED', record(rule('a', 'MET')))).toBe('ready');
     expect(outcomeOf('SHIP', 'VERIFIED')).toBe('ready');
   });
-  it('the sentence never reads "nothing broke" over a broken rule, and counts each kind once', () => {
-    const r = record(rule('a', 'MET'), rule('b', 'VIOLATED'), rule('c', 'MET', { coverage: 'PARTIAL' }), rule('d', null, { proposition: null, coverage: 'NONE', evidence: null }), rule('e', 'VIOLATED', { qualification: 'UNQUALIFIED' }));
-    const line = shortLine(r);
-    expect(line).toMatch(/^1 of the rules is not met/);
-    expect(line).toContain('1 measured');
-    expect(line).toContain('1 to look at');
-    expect(verdictLines(r).slice(1)).toHaveLength(2);
-    expect(shortLine(record(rule('a', 'MET')))).toBe('every rule was measured and held.');
+  it('under a piece a run hands over: no verdict word, a rule not met and each sentence nothing given holds, at most four lines', () => {
+    const r = record(rule('a', 'MET'), rule('b', 'VIOLATED'), rule('c', 'MET', { coverage: 'PARTIAL' }), rule('e', 'VIOLATED', { qualification: 'UNQUALIFIED' }));
+    expect(afterPieceLines(r, new Map(), 'i1')).toEqual(['Not met: Rule b.', 'Not right? atelier fix "<what was wrong>"']);
+    expect(afterPieceLines(record(rule('a', 'MET')), new Map(), 'i1')).toEqual(['Not right? atelier fix "<what was wrong>"']);
+    const many = record(rule('b', 'VIOLATED'), rule('c', 'VIOLATED'), rule('d', 'VIOLATED'), rule('f', 'VIOLATED'));
+    const lines = afterPieceLines(many, new Map(), 'i1');
+    expect(lines).toHaveLength(AFTER_PIECE_MAX);
+    expect(lines[2]).toBe('…and 2 more: atelier report i1');
+    for (const l of lines) expect(l).not.toMatch(new RegExp(`^(${Object.values(OUTCOME_SAID).join('|')})`));
   });
 });
 
@@ -131,7 +132,7 @@ describe('the check of one text, as verify and the MCP tool say it', () => {
 
 describe('the words, pinned once', () => {
   it('each kind is said in the one table', () => {
-    expect(SAID).toEqual({ broken: 'Not met: ', unchecked: 'Not checked on this piece: ', look: 'To look at: ', slip: 'Possible slip: ', toCheck: 'To check: ' });
+    expect(SAID).toEqual({ broken: 'Not met: ', unchecked: 'Not checked on this piece: ', look: 'To look at: ', slip: 'Possible slip: ', toCheck: 'To check: ', check: 'Check: ' });
     expect(OUTCOME_SAID).toEqual({ ready: 'Ready', look: 'Needs a look', fix: 'Needs a fix' });
     expect(linesOf(rule('b', 'VIOLATED'))).toEqual(['  Not met: Rule b. (1 in 39 words (none allowed))']);
   });

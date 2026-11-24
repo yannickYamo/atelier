@@ -59,7 +59,7 @@ import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import * as store from '../core/state/store.js';
 import { cardLine } from '../core/direct/card.js';
-import { USAGE, wantsHelp, version } from './help.js';
+import { USAGE, USAGE_FULL, wantsHelp, version } from './help.js';
 import { enrol, terminate, type Run } from '../core/state/run-state.js';
 import { policyFor } from '../core/state/policy.js';
 import { setGrammarProvider, setGrammarFixing } from '../core/observers/grammar.js';
@@ -151,7 +151,6 @@ export const FRONT_DOOR: readonly string[] = [
   '  atelier new <your-work> "<what it is for>"    build a skill from your finished pieces (--method <note> adds how you work)',
   '  atelier run "<task>"                          write a piece with it',
   '  atelier fix "<what was wrong>"                say it once, in your words; the piece is written again',
-  '  atelier verify --skill <name> <file>          check any draft: ready, needs a look, or needs a fix',
   '  atelier setup                                 let the agents in this project use it',
   '  One skill per voice: --name <client> at the build, --skill <client> after. Explain a command: atelier <command> --help. Everything else: atelier lab',
 ];
@@ -188,7 +187,7 @@ const main = async (): Promise<void> => {
   // `atelier lab <command> ...` is that command, its help included.
   if (cmd === 'lab' && argv.length > 1) { lab(); return; }
   if (COMMANDS.includes(cmd) && wantsHelp(argv)) {
-    console.log(`usage: ${USAGE[cmd] ?? `atelier ${cmd}`}`);
+    console.log(`usage: ${(argv.includes('--report') ? USAGE_FULL[cmd] : undefined) ?? USAGE[cmd] ?? `atelier ${cmd}`}`);
     return;
   }
   switch (cmd) {

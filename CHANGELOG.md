@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+- Before a piece is written, Atelier asks only what you alone can say about it: your point and why now, what the piece must do, what you will put on record beyond your notes, and who it is for. It asks only where your request and notes leave one out and the answer would change the piece, at most three, never a choice among what you gave (which point leads, how it opens). At a terminal it shows what it read, then asks each open one in turn; enter leaves it to the writer and is remembered. Anywhere else the questions are said before the piece, which is always written.
+- An answer given for a request is used on every later run of it. Before, a second run could ask again under new names and drop the answers given.
+- What you answered leads what the writer reads, before your notes, and the review holds every claim to what your notes and answers support.
+- The installed skill tells the host to ask the same few questions before it writes, and to check the piece and fix what the check lists before handing it back.
+- Under a piece, at most four lines: a rule of yours still not met, a name or figure not in your notes, and how to fix it. The full account is `--report`.
+- The build shows three of your habits, each with a sentence of yours, and one line on what the skill writes, for you to keep or say in your own words. `new --help` and `run --help` are short; `--help --report` has every option. `--style-review` and `--voice-select` are listed with the experimental options (`atelier lab`) until a paired test shows a gain.
+
 ## [1.1.0] - 2026-11-23
 
 Atelier learns how you write from the pieces you would sign, writes new pieces that way, and reads each one for anything made up or copied before you see it.

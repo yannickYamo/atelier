@@ -51,8 +51,9 @@ describe('atelier fix, in place, through the binary', () => {
         { contains: passage(S[16]), answer: { reply: `<work>${NEW17}</work>` } }] });
     const shown = cli('fix', 'barges 5 and 17 should wait at the lock', ...be);
     expect(shown).not.toContain('The whole piece was written again');
-    // what the checks found is said once, in the words every run uses: no state name, no delivery row, no range
-    expect(shown).toMatch(/^(Ready|Needs a look|Needs a fix)\. Checked: /m);
+    // it ends as every run ends: no verdict word, no state name, no delivery row, no range
+    expect(shown).toMatch(/^Not right\? atelier fix "<what was wrong>"$/m);
+    expect(shown).not.toMatch(/^(Ready|Needs a look|Needs a fix)\b/m);
     expect(shown).not.toMatch(/Your range:|Delivery:|NEEDS REVIEW|VERIFIED ·|BLOCKED ·|trusted-fail/);
     const fixed = latest(L);
     const after = sentencesOf(fixed.output).map((x) => x.text);

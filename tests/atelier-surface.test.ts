@@ -46,9 +46,10 @@ export function readings(): string[] {
 // 19 Nov 2026, +20 and +12 (owner's go): with --style-review, the draft is read against the author's pieces by another model.
 // 20 Nov 2026, +1 file and +147 lines, +5 on verify's side (owner's order): --voice-select, what a request takes of the pieces.
 // 23 Nov 2026, +2 and +2 (owner's order): a fix in place is told what was asked of the piece before (the record's fix.earlier).
+// 24 Nov 2026, -5 and +16 on verify's side (owner's order, the intent-first pass): the lines under a piece a run hands over.
 const HELD = {
-  'cli/direct.ts': { files: 145, lines: 34600 },
-  'cli/commands/verify.ts': { files: 122, lines: 30334 },
+  'cli/direct.ts': { files: 145, lines: 34595 },
+  'cli/commands/verify.ts': { files: 122, lines: 30350 },
 } as const;
 const READINGS_HELD = 39;
 

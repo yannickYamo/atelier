@@ -208,10 +208,13 @@ describe('a piece that talks about its own making, through the binary', () => {
     expect(read).toContain('Ferries to the islands will leave every hour');
   }, 120_000);
 
-  it('atelier run shows what was decided and fixed beside the work, and atelier report shows it again', async () => {
+  it('atelier run --report shows what was decided and fixed beside the work, and atelier report shows it again', async () => {
     await script();
     const { data, run, be } = setup();
-    const shown = run('run', 'Write a post on the new terminal.', '--skill', 'quay', ...be);
+    // beside the piece, never in it: the full account's (--report); under the piece, at most four lines
+    expect(run('run', 'Write a post on the new terminal.', '--skill', 'quay', ...be)).not.toContain('Beside the piece, never in it');
+    await script();
+    const shown = run('run', 'Write a post on the new terminal.', '--skill', 'quay', ...be, '--report');
     expect(shown).toContain('Beside the piece, never in it');
     expect(shown).toContain(`about its own making: ${CONFESSION} → written again: ${REWRITE}`);
     expect(shown).toContain('decided for you: Why does the terminal matter to you now? → decided: My daily crossing');

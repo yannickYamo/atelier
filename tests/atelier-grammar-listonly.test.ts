@@ -159,7 +159,10 @@ describeWithEngine('through the binary', () => {
     expect(out).toContain(piece);
     expect(out).not.toMatch(/Every requirement was read in full and held/);
     expect(out).not.toMatch(/BLOCKED/);
-    expect(out.replace(/\s+/g, ' ')).toMatch(/Possible slip: "are" \(subject–verb agreement: "are" → "is"\)/);
+    // a possible slip is the full account's: under the piece, only a rule not met or a name nothing given holds
+    expect(out).not.toMatch(/Possible slip/);
+    await script(piece);
+    expect(all('run', '--pipeline', 'legacy', 'a short note', ...model(), '--report').replace(/\s+/g, ' ')).toMatch(/"are" → "is"/);
     await script(piece);
     const fixedOut = all('invoke', '--pipeline', 'legacy', 'a short note', ...model(), '--fix-grammar', '--json');
     const shown = JSON.parse(fixedOut.slice(fixedOut.indexOf('{'))) as { output: string; invocationId: string };
@@ -171,7 +174,7 @@ describeWithEngine('through the binary', () => {
     const said = all('run', '--pipeline', 'legacy', 'a short note', ...model(), '--fix-grammar', '--report');
     expect(said).toContain('He is late to the meeting.');
     expect(said).toMatch(/"are" → "is"/);
-    expect(readdirSync(join(data, 'skills', 'posts', 'invocations')).length).toBe(3);
+    expect(readdirSync(join(data, 'skills', 'posts', 'invocations')).length).toBe(4);
   }, 240_000);
 
   // THE DEFAULT RUN (the direct writer): the slip listed, and --fix-grammar's change made and said on the run
@@ -182,7 +185,9 @@ describeWithEngine('through the binary', () => {
     const out = all('run', '--pipeline', 'direct', 'a short note', ...model());
     expect(out).toContain(piece);
     expect(out).not.toMatch(/Every requirement was read in full and held/);
-    expect(out.replace(/\s+/g, ' ')).toMatch(/Possible slip: "are" \(subject–verb agreement: "are" → "is"\)/);
+    expect(out).not.toMatch(/Possible slip/);
+    await script(piece);
+    expect(all('run', '--pipeline', 'direct', 'a short note', ...model(), '--report').replace(/\s+/g, ' ')).toMatch(/"are" → "is"/);
     await script(piece);
     const fixedOut = all('invoke', '--pipeline', 'direct', 'a short note', ...model(), '--fix-grammar', '--json');
     const shown = JSON.parse(fixedOut.slice(fixedOut.indexOf('{'))) as { output: string; invocationId: string };

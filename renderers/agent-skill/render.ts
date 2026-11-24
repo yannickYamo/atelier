@@ -230,15 +230,26 @@ export interface ManifestRow {
 }
 
 /**
- * THE HOST CHECKS ITS OWN DRAFT. A host that loads the skill as text writes without Atelier's runtime, so nothing reads
- * its draft unless it runs the check. One plain order naming the command, near the top of the body so a partial read
- * still shows it. Wiring to `atelier verify`; no script and no other command.
+ * WHAT ONLY THE PERSON KNOWS, ASKED BY THE HOST BEFORE IT WRITES, THEN THE HOST CHECKS ITS OWN DRAFT. A host that loads
+ * the skill as text writes straight from the request, and a model commits to its first reading: an answer given after
+ * the piece is filtered through it. So the host asks first, only what the request and notes leave out, and never
+ * suggests what the person will put on record. Then it runs the check and fixes what it lists. Near the top of the
+ * body, so a partial read still shows both. Wiring to `atelier verify`; no script and no other command.
  */
-export const checkSection = (skillId: string): string => `## Check the work before you hand it back
+export const hostSteps = (skillId: string): string => `## Before you write
 
-Save what you wrote to a file and run \`atelier verify --skill ${skillId} <file>\` (add \`--with notes=<file>\` for
-notes the person gave you). Tell the person its first line (Ready, Needs a look or Needs a fix) and what it lists
-under it. If the \`atelier\` command is not installed, hand the work back and say it was not checked.
+If the request and the notes that came with it do not say what the person is arguing (their point, and why now), what
+the piece must do for them, or what they will put on record beyond the notes (names, news, figures, a story of
+theirs), ask them in one message: at most three short questions, each with a suggested answer where the notes give
+one, then wait. Never suggest what they will put on record. Do not ask what the request or notes already say, or a
+choice among what was given (which point leads, the opening, the order, the length): those are yours. If they say
+"just write", decide and write.
+
+## After you write
+
+Save the piece to a file and run \`atelier verify --skill ${skillId} <file>\` (add \`--with notes=<file>\` for the
+notes they gave you). Fix what it lists, then hand the piece back, and tell the person only of a name or figure it
+lists as not in their notes. If the \`atelier\` command is not installed, hand the work back and say it was not checked.
 `;
 
 /**
@@ -696,7 +707,7 @@ description: ${yamlScalar(description)}
 
 # ${skillId}
 
-${checkSection(skillId)}
+${hostSteps(skillId)}
 ${methodSection}
 ${method ? `Everything below my method is secondary: examples of finished work, how I sound, and rules read from my
 pieces. Apply those as judgment, including knowing when one does not apply. ${methodDecides('mine')}${!voiceSection && !exemplar ? `\n\n${factsBelong(answers)}` : ''}`

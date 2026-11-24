@@ -732,7 +732,7 @@ export interface DirectRecord {
   /** whether the author's method was shown to the writer, whole */
   readonly method?: true;
   /** the editor's questions (core/direct/questions.ts): who read them, which were asked, which the person answered */
-  readonly questions?: { readonly by: string; readonly asked: readonly string[]; readonly answered: readonly string[] };
+  readonly questions?: { readonly by: string; readonly asked: readonly string[]; readonly answered: readonly string[]; readonly passed?: readonly string[] };
   /**
    * How the author writes, read on the text (core/direct/style.ts): their always-or-often habits and the steps of their
    * method no check reads, each held, not held or not read. `on` is the text read (the first draft when `steered`, the
