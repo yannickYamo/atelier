@@ -296,16 +296,19 @@ export async function editorQuestions(c: Pick<DirectContext, 'L' | 'asked' | 'ma
   const passed = new Set<string>();
   for (const q of questions) { const g = given.get(q.id) ?? before.get(q.id); if (g === '') passed.add(q.id); else if (g !== undefined) answers.push({ id: q.id, answer: g }); }
   // AT A TERMINAL, ONE BRIEF, THEN ONE PROMPT PER OPEN QUESTION: what was read is shown so the person sees it was
-  // understood, and only what is open waits for them. Enter is "you decide": nothing is told to the writer as theirs.
+  // understood, and only what is open waits for them. Enter takes the suggestion, and it is theirs: they saw it and
+  // chose it. Where there is none (the record), enter leaves it to the writer.
   const openNow = questions.filter((q) => !answers.some((a) => a.id === q.id) && !passed.has(q.id));
   if (c.interactive && openNow.length) {
     const read = c.read ?? askLine;
     askOut().write(`\n${briefLines(decided.value.decisions, answers).join('\n')}\n\n`);
     let rest = false;
     for (const q of openNow) {
-      const typed = await read(`${labelOf(q.id)}: a letter, your words, or enter and I decide: `);
+      const typed = await read(q.default ? `${labelOf(q.id)}: enter for "${q.default}", a letter, or your words: ` : `${labelOf(q.id)}: your words, or enter to leave it to me: `);
       if (JUST_WRITE.test(typed)) { rest = true; break; }
-      if (typed.trim()) answers.push({ id: q.id, answer: pickedOption(q.options, typed) }); else passed.add(q.id);
+      if (typed.trim()) answers.push({ id: q.id, answer: pickedOption(q.options, typed) });
+      else if (q.default) answers.push({ id: q.id, answer: q.default });
+      else passed.add(q.id);
     }
     if (!rest) {
       const more = await read('Anything wrong above? Say it, or press enter to write: ');
@@ -449,7 +452,7 @@ export async function runDirect(given: DirectContext) {
   const select = argv.includes('--voice-select');
   // 1. WHICH PIECES: a reading of the request, grounded; the shared-words floor when no model can read.
   const routeBudget: Budget = { spentUsd: 0, capUsd: 0.1, maxCalls: 1 };
-  const decided = await readContext(PIECE_ROUTE, { request: given.asked, material: materialText, pieces: catalogue, ...(select ? { select } : {}) }, contextReaderClient(), contextReaderModel(), routeBudget, 'other');
+  const decided = await readContext(PIECE_ROUTE, { request: given.asked, material: materialText, method: store.getMethod(given.L)?.text ?? '', pieces: catalogue, ...(select ? { select } : {}) }, contextReaderClient(), contextReaderModel(), routeBudget, 'other');
   const route: Route = decided.value;
   // VOICE ONLY (core/direct/route.ts): the person's content keeps its shape; the structure rules read off the pieces are set aside for this run
   const voiceRun = select && decided.by === 'model' && route.takes === 'voice' ? voiceOnly(given.std) : null;
@@ -485,7 +488,9 @@ export async function runDirect(given: DirectContext) {
   const lengthGuide = !lengthStated && lengths.length >= 2
     ? `Where neither the task nor anything of the author's above sets a length: the author's pieces shown here run ${lengths[0].toLocaleString('en-US')} to ${lengths[lengths.length - 1].toLocaleString('en-US')} words, and for a piece of their kind that is its natural length. A guide, not a limit.` : '';
   // material in finished sentences is facts to write from, and the piece is checked for stretches copied from it
-  const asPoints = writtenAsSentences(c.material);
+  // unless the person said its wording is kept (approved lines, requirement text): then it is used as written, said
+  const asPoints = writtenAsSentences(c.material) && !route.keepWording;
+  if (route.keepWording && writtenAsSentences(c.material)) c.detail(`The material's wording is kept as written ("${route.keepWording}").`);
   const variable = taskBlock({ intent: asking.note, material: c.material, points: asPoints, task: c.asked, rules, method, settled: [said, voiceRun ? VOICE_ONLY_NOTE : '', lengthGuide].filter((x) => x.trim()).join('\n\n') });
   c.detail(`Written from ${shown.length} of ${catalogue.length} piece(s) of the author's${route.kind ? `, as ${route.kind}` : ''} (${decided.by === 'model' ? 'chosen by a reading of the request' : `chosen by shared words: ${decided.why ?? 'no reading'}`}): ${shown.map((p) => titleOf(p.text)).join('; ')}.`);
 

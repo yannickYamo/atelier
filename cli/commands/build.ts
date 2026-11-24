@@ -736,7 +736,8 @@ export async function build(nameArg?: string, opts: { closing?: boolean } = {}):
   // THE SKILL WORDS EACH POINT BY ITS COUNT: the persona's points carry the rates the profile measured (never the
   // reading's own word for how often) where a profile was read; the voice on disk is unchanged.
   const served = voice?.persona && moves ? { ...voice, persona: { ...voice.persona, points: pointsWithRates(voice.persona.points, moves) } } : voice;
-  const pkg0 = renderAgentSkill(v, arch, name, desc, exemplar, shipped, served, methodText);
+  const builtCard = store.getCard(L);
+  const pkg0 = renderAgentSkill(v, arch, name, desc, exemplar, shipped, served, methodText, builtCard ? cardLine(builtCard) || null : null);
   const skill = { skillVersionHash: sha(`${arch.architectureHash}|${pkg0.packageHash}`), skillName: name,
     standardVersionHash: v.standardVersionHash, architectureHash: arch.architectureHash, materializedHash: pkg0.packageHash, builtAt: new Date().toISOString(), description: desc };
 

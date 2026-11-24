@@ -2,10 +2,11 @@
 
 ## [Unreleased]
 
-- Before a piece is written, Atelier asks only what you alone can say about it: your point and why now, what the piece must do, what you will put on record beyond your notes, and who it is for. It asks only where your request and notes leave one out and the answer would change the piece, at most three, never a choice among what you gave (which point leads, how it opens). At a terminal it shows what it read, then asks each open one in turn; enter leaves it to the writer and is remembered. Anywhere else the questions are said before the piece, which is always written.
+- Before a piece is written, Atelier asks only what you alone can say about it: your point and why now, what the piece must do, what shows it that your notes do not hold (a case, a figure, a name, a story of yours), and who it is for. It asks only where your request and notes leave one out and the answer would change the piece, at most three, never a choice among what you gave (which point leads, how it opens). At a terminal it shows what it read, then asks each open one in turn with a suggestion: enter takes it, and it is remembered for that request. Anywhere else the questions are said before the piece, which is always written, and no suggestion is used for you.
+- Where your request, method or notes say their wording is to be used as written (approved messaging, requirement text), it is kept, and the run says so; otherwise notes are written from in new sentences, as before.
 - An answer given for a request is used on every later run of it. Before, a second run could ask again under new names and drop the answers given.
 - What you answered leads what the writer reads, before your notes, and the review holds every claim to what your notes and answers support.
-- The installed skill tells the host to ask the same few questions before it writes, and to check the piece and fix what the check lists before handing it back.
+- The installed skill says what the work is and who it is for, and tells the host to ask the same few questions before it writes, and to check the piece and fix what the check lists before handing it back.
 - Under a piece, at most four lines: a rule of yours still not met, a name or figure not in your notes, and how to fix it. The full account is `--report`.
 - The build shows three of your habits, each with a sentence of yours, and one line on what the skill writes, for you to keep or say in your own words. `new --help` and `run --help` are short; `--help --report` has every option. `--style-review` and `--voice-select` are listed with the experimental options (`atelier lab`) until a paired test shows a gain.
 

@@ -703,7 +703,7 @@ describe('a run through the binary, written the direct way', () => {
     expect(answered.direct).toBeTruthy();
     plain = await plainSince(m0);
     expect(textOf(plain[0])).toContain('- What the author is saying that others are not, and why now: Paying buys sync, not freedom');
-    expect(textOf(plain[0])).toContain('- What the author puts on record beyond the material (names, news, figures, a story of theirs): I exported 400 notes from both last spring');
+    expect(textOf(plain[0])).toContain('- What shows it, beyond the material (a case, a figure, a name, news or a story of the author\'s own): I exported 400 notes from both last spring');
     // what the author wants leads what the writer reads, before the material
     expect(textOf(plain[0]).indexOf('What the author wants from this piece')).toBeLessThan(textOf(plain[0]).indexOf('<material'));
     expect(store.getTold({ root: s.data, skillName: 'posts' }).map((t) => t.id)).toEqual(['point', 'record']);
@@ -736,10 +736,11 @@ describe('a run through the binary, written the direct way', () => {
     const later = await run(T, ask('What are you saying that others miss?'));
     expect(later.answers).toEqual([{ id: 'point', answer: 'Paying buys sync, not freedom' }]);
     expect(textOf((await plainSince(m0))[0])).toContain('- What the author is saying that others are not, and why now: Paying buys sync, not freedom');
-    // another request is another piece: last request's point is not its answer, and nothing is picked for the person
+    // another request is another piece: last request's point is not its answer; the suggestion is offered to ask
+    // the person with, and nobody saw it, so it is not served
     const other = await run('Why I keep my notes in plain files.', ask('What are you saying that others miss?'));
     expect(other.answers).toEqual([]);
-    expect((other.questions as unknown as { id: string; default: string }[]).find((q) => q.id === 'point')?.default).toBe('');
+    expect((other.questions as unknown as { id: string; default: string }[]).find((q) => q.id === 'point')?.default).toBe('Local files outlive any app');
   }, 180_000);
 
   it('atelier keep: a kept piece is written from first, and what the person changed is shown to the next review as theirs', async () => {

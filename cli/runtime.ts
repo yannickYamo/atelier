@@ -234,6 +234,7 @@ export const positional = (skip: readonly string[] = []): string | undefined =>
 import { OpenAICompatibleInferenceClient, BACKEND_PRESETS, type StructuredOutputMode, type TokenLimitParam } from '../providers/openai-compatible.js';
 import { isLocalBackend, priceFor, ANTHROPIC_PRICING, type Pricing } from '../providers/pricing.js';
 import { bindingHash, type RuntimeBinding } from '../core/runtime/binding.js';
+import { cardLine } from '../core/direct/card.js';
 
 // ─── THE DEFAULTS FOLLOW THE ONE MODEL-DEPENDENT CLAIM THIS PRODUCT MAKES ──────────────────────
 //
@@ -1087,11 +1088,13 @@ export const authoredIdAllocator = (s: Session): (() => string) => {
  * where they still teach the standard being rendered.
  */
 export function carriedFrom(L: store.StoreLayout, fromVersion: string | null, v: StandardVersion): {
-  exemplar: { text: string; request?: string } | null; contrast: ContrastPair[]; voice: Voice | null; method: { text: string } | null;
+  exemplar: { text: string; request?: string } | null; contrast: ContrastPair[]; voice: Voice | null; method: { text: string } | null; card: string | null;
 } {
+  // what this work is: the person's or the build's reading, never part of the standard, said to the host
+  const c = store.getCard(L); const card = c ? cardLine(c) || null : null;
   const sv = fromVersion ? store.getSkillVersion(L, fromVersion) : null;
   const pkg = sv ? store.getPackage(L, sv.materializedHash) : null;
-  if (!pkg) return { exemplar: store.getExemplar(L), contrast: [], voice: store.getVoice(L), method: store.getMethod(L) };
+  if (!pkg) return { exemplar: store.getExemplar(L), contrast: [], voice: store.getVoice(L), method: store.getMethod(L), card };
   // The author's passages travel with the package that served them, like the contrast pairs.
   const voiceRaw = pkg.assurance?.['voice.json'];
   const voice = ((): Voice | null => { try { return voiceRaw ? JSON.parse(voiceRaw) as Voice : null; } catch { return null; } })();
@@ -1106,7 +1109,7 @@ export function carriedFrom(L: store.StoreLayout, fromVersion: string | null, v:
   // An exemplar served beside its request is read back as the pair: the renderer wraps it again the same way.
   // (with or without the lines later builds put around it: "From another conversation…" before, "What I had…" between)
   const pair = ex === undefined ? null : /^(?:From another conversation, with someone else\.\n\n)?The request it answered: ([^\n]*)\n\n(?:What I had: [^\n]*\n\n)?What I wrote:\n\n([\s\S]*)$/.exec(ex);
-  return { exemplar: ex === undefined ? null : pair ? { text: pair[2], request: pair[1] } : { text: ex }, contrast: store.getContrast(L).off ? [] : contrastFor(pairs, v), voice, method: methodRaw === undefined ? null : { text: methodRaw } };
+  return { exemplar: ex === undefined ? null : pair ? { text: pair[2], request: pair[1] } : { text: ex }, contrast: store.getContrast(L).off ? [] : contrastFor(pairs, v), voice, method: methodRaw === undefined ? null : { text: methodRaw }, card };
 }
 
 /**

@@ -47,9 +47,10 @@ export function readings(): string[] {
 // 20 Nov 2026, +1 file and +147 lines, +5 on verify's side (owner's order): --voice-select, what a request takes of the pieces.
 // 23 Nov 2026, +2 and +2 (owner's order): a fix in place is told what was asked of the piece before (the record's fix.earlier).
 // 24 Nov 2026, -5 and +16 on verify's side (owner's order, the intent-first pass): the lines under a piece a run hands over.
+// 24 Nov 2026, +30, and +1 file and +132 lines on verify's side (owner's rulings, same pass): the card in the installed skill, enter takes the suggestion, the material's wording kept where asked.
 const HELD = {
-  'cli/direct.ts': { files: 145, lines: 34595 },
-  'cli/commands/verify.ts': { files: 122, lines: 30350 },
+  'cli/direct.ts': { files: 145, lines: 34625 },
+  'cli/commands/verify.ts': { files: 123, lines: 30482 },
 } as const;
 const READINGS_HELD = 39;
 

@@ -43,9 +43,9 @@ describe('the editor questions reading, grounded by code', () => {
     expect(statedIn('method', 'End on the idea', INPUT)).toBe(true);
     expect(statedIn('request', 'short', INPUT)).toBe(false);
   });
-  it('stated, not needed, or asked: Enter picks nothing for the person, and the record has no options', () => {
+  it('stated, not needed, or asked: enter takes the reading\'s pick among the options, and the record has no options', () => {
     const r = EDITOR_QUESTIONS.ground({ fields: fields({ goal: { statedIn: 'NOT_NEEDED', quote: null, ask: null, options: [] }, record: none('What will you name?', ['made up', 'also made up'], 'x') }) }, INPUT);
-    expect(r?.questions).toEqual([{ id: 'point', ask: 'What are you saying that others miss?', options: ['Your notes are your memory', 'Tools die, files stay'], default: '' }, { id: 'record', ask: 'What will you name?', options: [], default: '' }]);
+    expect(r?.questions).toEqual([{ id: 'point', ask: 'What are you saying that others miss?', options: ['Your notes are your memory', 'Tools die, files stay'], default: 'Your notes are your memory' }, { id: 'record', ask: 'What will you name?', options: [], default: '' }]);
     expect(r?.decisions.map((d) => [d.kind, d.why ?? 'asked', d.quote ?? null])).toEqual([['point', 'asked', null], ['goal', 'not needed for this piece', null], ['record', 'asked', null], ['reader', 'stated in the material', 'Founders lose context every time a tool shuts down']]);
   });
   it('a point, goal or reader asked with fewer than two options is not asked', () => {
@@ -83,7 +83,7 @@ describe('what reaches the writer', () => {
   it('only what the person answered, in their words, under what the author wants; nothing when nobody answered', () => {
     expect(editorNote([])).toBe('');
     expect(editorNote([{ id: 'point', answer: 'Tools die, files stay' }, { id: 'record', answer: 'Our two shutdowns this year' }, { id: 'also', answer: 'Keep it short' }, { id: 'nope', answer: 'x' }, { id: 'goal', answer: ' ' }]))
-      .toBe(`${INTENT_HEAD}\n\n- What the author is saying that others are not, and why now: Tools die, files stay\n- What the author puts on record beyond the material (names, news, figures, a story of theirs): Our two shutdowns this year\n- The author adds: Keep it short`);
+      .toBe(`${INTENT_HEAD}\n\n- What the author is saying that others are not, and why now: Tools die, files stay\n- What shows it, beyond the material (a case, a figure, a name, news or a story of the author's own): Our two shutdowns this year\n- The author adds: Keep it short`);
   });
   it('the answers lead what the writer reads, before the material', () => {
     const b = taskBlock({ intent: 'INTENT', material: [{ name: 'notes', text: 'N' }], task: 'T' });

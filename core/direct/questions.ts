@@ -6,15 +6,16 @@
 // choices among what was given, which are the writer's. So one reading, one call, four fields:
 //   point   what the author is saying that others are not, and why now (a topic is not a point)
 //   goal    what the piece must do: what the reader does or believes after, and what the author wants from it
-//   record  what the author will put on record that the material does not hold: names, news, figures, a story
+//   record  what shows it that the material does not hold: a case, a figure, a name, news or a story of theirs
 //   reader  who reads it, in what situation (an audience named alone is not a reader in a situation)
 // Each is stated (with a quote code finds in its source), not needed (an answer would not change the piece), or
 // asked. At most three are asked, in that order.
 //
-// WHAT AN ANSWER DOES, AND WHAT NO ANSWER DOES. Only what the person types or picks reaches the writer, in their words.
-// Enter is "you decide": the writer decides as it would with no question, and nothing is told as the author's. A
-// suggested option is never served as though it were the person's: a default told to a writer once came back in the
-// piece as a disclaimer. The record has no options: nothing read can know what the author will put on record.
+// WHAT AN ANSWER DOES, AND WHAT NO ANSWER DOES. What the person types, picks or takes with enter at a terminal reaches
+// the writer as theirs: they saw the suggestion and chose it (the fewest keystrokes, by the owner's ruling of 24 Nov).
+// A suggestion nobody saw (a pipe, --json, a host) is never served: a default told to a writer once came back in the
+// piece as a disclaimer. The record has no suggestion: nothing read can know what the author will put on record, so
+// enter there leaves it to the writer.
 
 import type { Reading } from '../inference/reading.js';
 import { cardLine, type PurposeCard } from './card.js';
@@ -32,12 +33,12 @@ export const ALSO_ID = 'also';
 export const EDITOR_ASK: Readonly<Record<EditorKind | typeof ALSO_ID, string>> = {
   point: 'What the author is saying that others are not, and why now:',
   goal: 'What the piece must do (what the reader does or believes after, and what the author wants from it):',
-  record: 'What the author puts on record beyond the material (names, news, figures, a story of theirs):',
+  record: 'What shows it, beyond the material (a case, a figure, a name, news or a story of the author\'s own):',
   reader: 'Who reads it, and the situation they read it in:',
   also: 'The author adds:',
 };
 /** How each field is named on the brief the person sees before the draft. */
-export const EDITOR_LABEL: Readonly<Record<EditorKind, string>> = { point: 'Point', goal: 'Goal', record: 'On record', reader: 'For' };
+export const EDITOR_LABEL: Readonly<Record<EditorKind, string>> = { point: 'Point', goal: 'Goal', record: 'Proof', reader: 'For' };
 
 /** Where a thing is stated: a closed field. NONE is asked; NOT_NEEDED is neither stated nor worth the person's time. */
 export const EDITOR_STATED_IN = ['request', 'material', 'method', 'card', 'told', 'NONE', 'NOT_NEEDED'] as const;
@@ -64,18 +65,18 @@ export const EDITOR_SYSTEM = `You prepare a writer the way a good editor does be
 Four things decide what a piece argues. For each, say where what you were shown states it in so many words:
 - point: what the author is saying that others are not, and why now. A topic is not a point: a point takes a position someone could disagree with.
 - goal: what the piece must do: what the reader does or believes after reading, and what the author wants from it (trust, sign-ups, hires, a decision). "Learn more" is not a goal.
-- record: what the author will put on record that the material does not hold: names, news, figures, a story of their own.
+- record: what shows it is true that the material does not hold: a case, a figure, a name, news or a story of the author's own that they will put on record.
 - reader: who reads it, and in what situation. An audience named alone ("engineers") is not a reader in a situation.
 
-For each: statedIn "request", "material", "method", "card" or "told", with a short quote copied exactly from there that states it. Something you could argue from the material is not stated. Where nothing states it, picture the piece under two different answers from the author: where it would come out the same, or the piece needs nothing beyond what was given (a reply, a summary, an update of facts given), statedIn "NOT_NEEDED". Otherwise statedIn "NONE", with the question you would put to the author: one short sentence in plain words, about this piece, in the words this kind of work uses (for a requirements document the point is the problem and the goal is how success is measured). For point, goal and reader also give two to four short options grounded in what you were shown. For the record give no options: nothing you were shown can tell what the author will put on record.
+For each: statedIn "request", "material", "method", "card" or "told", with a short quote copied exactly from there that states it. Something you could argue from the material is not stated. Where nothing states it, picture the piece under two different answers from the author: where it would come out the same, or the piece needs nothing beyond what was given (a reply, a summary, an update of facts given), statedIn "NOT_NEEDED". Otherwise statedIn "NONE", with the question you would put to the author: one short sentence in plain words, about this piece, in the words this kind of work uses (for a requirements document the point is the problem and the goal is how success is measured). For point, goal and reader also give two to four short options grounded in what you were shown, and the default: the one of them you would pick. For the record give no options and no default: nothing you were shown can tell what the author will put on record.
 
 Never ask for a choice among things already given (which point carries the piece, which proof leads, how it opens or closes, "I" or "we", the order, the length): those are the writer's. Never ask how it should sound: their pieces settle that.`;
 
 const ONE = {
   type: 'object', properties: {
     statedIn: { type: 'string', enum: [...EDITOR_STATED_IN] }, quote: { type: ['string', 'null'] },
-    ask: { type: ['string', 'null'] }, options: { type: 'array', items: { type: 'string' } },
-  }, required: ['statedIn', 'quote', 'ask', 'options'], additionalProperties: false,
+    ask: { type: ['string', 'null'] }, options: { type: 'array', items: { type: 'string' } }, default: { type: ['string', 'null'] },
+  }, required: ['statedIn', 'quote', 'ask', 'options', 'default'], additionalProperties: false,
 };
 export const EDITOR_SCHEMA: Record<string, unknown> = {
   type: 'object', properties: {
@@ -96,16 +97,17 @@ export function statedIn(where: string, quote: unknown, input: EditorInput): boo
   return straight(source.replace(/\s+/g, ' ')).toLowerCase().includes(q);
 }
 
-/** The question as asked: Enter is "you decide", so no option is picked for the person. Null when ill-formed. */
+/** The question as asked, with the suggestion enter takes (one of its options; none for the record). Null when ill-formed. */
 function questionOf(kind: EditorKind, x: Record<string, unknown>): Question | null {
   const ask = typeof x.ask === 'string' ? clip(x.ask, 200) : '';
   const options = kind === 'record' ? [] : [...new Set((Array.isArray(x.options) ? x.options : []).filter((o): o is string => typeof o === 'string' && clip(o, 160).length > 0).map((o) => clip(o, 160)))].slice(0, 4);
   if (!ask || (kind !== 'record' && options.length < 2)) return null;
-  return { id: kind, ask, options, default: '' };
+  const def = typeof x.default === 'string' ? options.find((o) => o.toLowerCase() === clip(x.default as string, 160).toLowerCase()) : undefined;
+  return { id: kind, ask, options, default: def ?? options[0] ?? '' };
 }
 
 export const EDITOR_QUESTIONS: Reading<EditorInput, EditorReading> = {
-  id: 'editor-questions', version: '5',
+  id: 'editor-questions', version: '6',
   system: EDITOR_SYSTEM, schema: EDITOR_SCHEMA,
   toolName: 'emit_editor_questions', toolDescription: 'For the point, the goal, what may be put on record and the reader: where each is stated, whether it is needed, or the question to ask the author.',
   maxTokens: 4000, estimateUsd: 0.03,

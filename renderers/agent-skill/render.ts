@@ -236,8 +236,8 @@ export interface ManifestRow {
  * suggests what the person will put on record. Then it runs the check and fixes what it lists. Near the top of the
  * body, so a partial read still shows both. Wiring to `atelier verify`; no script and no other command.
  */
-export const hostSteps = (skillId: string): string => `## Before you write
-
+export const hostSteps = (skillId: string, card: string | null = null): string => `## Before you write
+${card ? `\nWhat this work is and who it is for: ${card.replace(/\.$/, '')}. Never ask what this already says.\n` : ''}
 If the request and the notes that came with it do not say what the person is arguing (their point, and why now), what
 the piece must do for them, or what they will put on record beyond the notes (names, news, figures, a story of
 theirs), ask them in one message: at most three short questions, each with a suggested answer where the notes give
@@ -292,6 +292,11 @@ export function renderAgentSkill(
    * writer, in the owner's words and under the owner's heading.
    */
   method: { readonly text: string } | null = null,
+  /**
+   * WHAT THIS WORK IS AND WHO IT IS FOR (core/direct/card.ts, `cardLine`), where the build read it or the person said it:
+   * the standing intent, so the host never asks what was settled at the build.
+   */
+  card: string | null = null,
 ): PortableSkillPackage {
   assertArchitectureServesStandard(arch, v);
   // EACH PIECE OF THE AUTHOR'S IS SERVED ONCE. The worked example is also among the pieces chosen for the voice when a
@@ -707,7 +712,7 @@ description: ${yamlScalar(description)}
 
 # ${skillId}
 
-${hostSteps(skillId)}
+${hostSteps(skillId, card)}
 ${methodSection}
 ${method ? `Everything below my method is secondary: examples of finished work, how I sound, and rules read from my
 pieces. Apply those as judgment, including knowing when one does not apply. ${methodDecides('mine')}${!voiceSection && !exemplar ? `\n\n${factsBelong(answers)}` : ''}`
