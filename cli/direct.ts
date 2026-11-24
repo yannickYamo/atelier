@@ -249,7 +249,9 @@ export async function editorQuestions(c: Pick<DirectContext, 'L' | 'asked' | 'ma
   const told = all.filter((t) => t.for === undefined ? !(EDITOR_KINDS as readonly string[]).includes(t.id) : t.for === forRequest);
   const input = { request: c.asked, material: materialShown(c.material), method, told, kind, card: cardOf(c.L), habits };
   // THE SAME INPUT ASKS THE SAME QUESTIONS: a model's reading is kept under the hash of what it read (store.ts, getEditorReading).
-  const key = sha(JSON.stringify([EDITOR_QUESTIONS.version, evidenceReaderModel(), input.request, input.kind, input.card ?? null, input.material, input.method, told.map((t) => [t.id, t.answer]), habits]));
+  // An answer given for this request is not part of the key: keyed on it, the next run read again, the questions came back
+  // under new ids, and the answers given to the first run's ids were dropped.
+  const key = sha(JSON.stringify([EDITOR_QUESTIONS.version, evidenceReaderModel(), input.request, input.kind, input.card ?? null, input.material, input.method, told.filter((t) => t.for !== forRequest).map((t) => [t.id, t.answer]), habits]));
   const kept = keptReading(store.getEditorReading(c.L, key));
   const decided = kept ??
     await readContext(EDITOR_QUESTIONS, input, evidenceReaderClient(), evidenceReaderModel(), { spentUsd: 0, capUsd: 0.08, maxCalls: 1 }, 'other');
