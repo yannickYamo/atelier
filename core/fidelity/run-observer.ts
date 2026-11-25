@@ -199,17 +199,3 @@ export const COMPARATIVE_AUTHORITY = {
     + 'calls it expert fidelity.',
 } as const;
 
-/**
- * Guard for the one confusion this module exists to prevent.
- *
- * No call site yet. Kept rather than deleted because the refusal it encodes is the module's subject,
- * and stated here rather than left implied, since an uncalled guard that reads as installed is worse
- * than no guard at all.
- */
-export function assertNotAbsoluteClaim(claim: string): void {
-  if (claim === 'ABSOLUTE_FIDELITY_ACHIEVED' || claim === 'TARGET_REACHED') {
-    throw new Error(
-      `COMPARATIVE AUTHORITY: a comparator cannot support ${claim}. ${COMPARATIVE_AUTHORITY.why} `
-      + 'That claim needs an absolute fidelity anchor, and none exists.');
-  }
-}

@@ -527,26 +527,6 @@ export interface EvidenceHistory { readonly skillName: string; readonly events: 
  */
 export type InvocationSurface = 'ATELIER_CLI' | 'HOST_PLUGIN';
 
-/**
- * WHY THIS INPUT EXISTS. Declared at the call, never inferred afterwards.
- *
- * The defect this closes: a first version derived context provenance from the EXECUTION PATH — every
- * input that had reached a real InvocationRecord was stamped REAL_USAGE. So seven tasks written to
- * stress-test the skill became a "certification-grade" suite, because they had been run properly.
- * Passing through the real invocation path says how an input was EXECUTED. It says nothing about
- * where it CAME FROM, and only the latter decides what a result may claim.
- *
- * UNDECLARED is the default and is treated as the WEAKEST grade. Certification has to be asserted,
- * never fallen into: an unflagged probe must not drift upward, and an unflagged genuine use costing
- * us evidence is the cheap direction to be wrong in.
- */
-export type InputOrigin =
-  /** authored to test, probe or optimise the skill. Never certification evidence. */
-  | 'PROBE'
-  /** a real person wanting real work done. The only origin that can certify. */
-  | 'GENUINE_USE'
-  /** nobody said. Treated as PROBE. */
-  | 'UNDECLARED';
 
 /**
  * Proof that what the model was given is what this SkillVersion says it should have been given.
