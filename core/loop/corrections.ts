@@ -62,5 +62,3 @@ export function reintroducedRuns(text: string, removed: readonly string[], previ
   return out;
 }
 
-/** The record's line for what a fix or a run kept out of a piece: how many stretches were removed before, and which came back. */
-export interface CorrectionsRecord { readonly removed: number; readonly reintroduced: readonly string[] }

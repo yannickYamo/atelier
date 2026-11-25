@@ -83,13 +83,6 @@ export function assertNotSampleSize(field: keyof EvidenceSupport): void {
 // So a candidate carries the invariant and its realizations separately, and only the invariant is
 // ever a candidate requirement.
 
-export interface LatentDecision {
-  readonly decisionSite: string;
-  /** what actually matters — stated so a different surface could satisfy it */
-  readonly invariant: string;
-  /** the forms it took in THIS evidence. Illustrations, never obligations. */
-  readonly realizations: readonly string[];
-}
 
 // ─── MATERIALITY AND REALIZATION FLEXIBILITY ARE TWO AXES, NOT ONE ─────────────────────────────
 //

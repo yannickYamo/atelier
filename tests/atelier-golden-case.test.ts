@@ -188,10 +188,9 @@ describe('intake reads cases from a folder', () => {
     expect(out).not.toMatch(/could not be read|with the task|Material read/);
   });
   it('a folder of finished work alone reads as it always did: no line about cases', () => {
-    const { data, proj, dir } = corpus();
+    const { data, proj } = corpus();
     const plain = join(proj, 'plain'); mkdirSync(plain);
     for (let i = 0; i < 8; i++) writeFileSync(join(plain, `post-${i}.md`), body(i));
-    void dir;
     const out = run(data, proj, 'intake', plain, '--auto-reserve');
     expect(out).not.toMatch(/with the task|finished work only/);
     expect(out).toMatch(/RESERVED, before anything read them: post-\d\.md$/m);

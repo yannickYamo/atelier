@@ -53,6 +53,15 @@ describe('the reading: which sentences the words are about, or the whole piece',
 });
 
 describe('the fix: exactly the sentences named change', () => {
+  it('each later passage is shown the piece with the earlier rewrites in it, so a moved line is not written twice', async () => {
+    const seen: InferenceRequest[] = [];
+    const moved = 'Lock 17 on the old canal opens at noon, and it leads now.';
+    await fixSpans(writer({ [S[0]]: moved, [S[16]]: 'Lock 17 is gone from here.' }, seen), { spentUsd: 0, capUsd: 1 }, PIECE, [1, 17], 'open on lock 17', []);
+    expect(seen).toHaveLength(2);
+    // the first passage was written against the piece as it was; the second sees the first one's rewrite
+    expect(seen[0].userMessage).not.toContain(moved);
+    expect(seen[1].userMessage).toContain(`THE PIECE\n"""\n${moved}`);
+  });
   it('two sentences named of thirty: those two change, word for word nothing else, and the writer\'s notes are not delivered', async () => {
     const seen: InferenceRequest[] = [];
     const r = await fixSpans(writer({ [S[4]]: 'Lock 5 on the old canal opens at noon for the barges.', [S[16]]: 'Lock 17 on the old canal opens at noon for the barges.' }, seen),

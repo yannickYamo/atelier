@@ -77,7 +77,7 @@ export const packageHashOf = (files: Readonly<Record<string, string>>): string =
  */
 export function receiptOf(body: Omit<BuildReceipt, 'receiptHash' | 'schema'>): BuildReceipt {
   const { builtAt, ...hashed } = body;
-  const decided = [...hashed.stages].sort((a, b) => a.id.localeCompare(b.id)).map(({ calls: _c, truncated: _t, ...rest }) => { void _c; void _t; return rest; });
+  const decided = [...hashed.stages].sort((a, b) => a.id.localeCompare(b.id)).map(({ calls: _c, truncated: _t, ...rest }) => rest);
   const receiptHash = sha(JSON.stringify({ schema: 1, ...hashed, stages: decided }));
   return { schema: 1, receiptHash, ...hashed, builtAt };
 }

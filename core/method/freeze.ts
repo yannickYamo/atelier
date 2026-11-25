@@ -47,7 +47,7 @@ export function toFreeze(steps: readonly StepToCheck[], chosen: Readonly<Record<
   return Object.fromEntries(steps.flatMap((st) => {
     const c = chosen[st.id];
     if (c?.by !== 'model') return [];
-    const { frozen: _f, ...kept } = c; void _f;
+    const { frozen: _f, ...kept } = c;
     const kind = kinds.get(st.text.trim());
     return [[freezeKey(st.text, examples, rejected.get(st.text) ?? []), { ...kept, ...(kind ? { kind } : {}) }]];
   }));

@@ -139,13 +139,38 @@ Blog posts, essays, newsletters, release notes, announcements, memos: anything y
 **Do I still need to read it?**
 Yes. You still sign it. Atelier moves your judgement earlier, into the standard, and points you at the few lines that need you.
 
-## What's been measured
+## How it compares
 
-- **46 of 46 planted inventions caught** in drafts the check had never seen.
-- **Counted rules held:** 31% of answers broke one, against 76% for a hand-written skill.
-- **Writing level with pasting your own posts** on 25 blind-judged briefs, and ahead of the bare model on 24 of them. Against a paste plus one review, it is behind: 4 won, 11 tied, 10 lost.
+**Measured.** Every number below comes from a recorded run. [EVALS](EVALS.md) says how each was run and what it doesn't show.
 
-[EVALS](EVALS.md) has how each was measured, and what isn't shown yet.
+| Against | Result | How it was measured |
+|---|---|---|
+| **The bare model** | Atelier won 24 of 25 briefs and tied 1 | 25 briefs for one blog, same model and settings for every arm, blind model judges in both orders |
+| **Pasting your posts** | Level: 6 won, 12 tied, 7 lost | Same 25 briefs |
+| **Pasting your posts, then one review** | Behind: 4 won, 11 tied, 10 lost | Same 25 briefs |
+| **GEPA and SkillOpt** (prompt and skill optimisers) | On 30 contract clauses, no Atelier answer broke a counted rule. GEPA broke one in 7% of answers, SkillOpt in 17%, the bare model in 23%. Across three kinds of writing, Atelier broke fewer rules in 5 of 6 comparisons | Development run, 5 Oct 2026, on an earlier version. The optimisers had small budgets and searched on Atelier's own rule score. A fair-budget run hasn't been made |
+| **A hand-written skill** | 31% of answers broke a counted rule, against 76%. On code review, 10% against 95% | Development run, 5 Oct 2026, one author per kind of writing |
+| **Invented facts** | 46 of 46 planted inventions caught. About 1 clean draft in 5 was also flagged | Drafts the check had never seen |
+
+The honest summary: Atelier writes as well as pasting your posts, and much better than the bare model. Its edge is that every piece is checked against your notes and your rules.
+
+**What the others do.** These are the tools people reach for when they want an agent that writes better.
+
+| Tool | GitHub stars (25 Nov 2026) | What it does | What it needs | Where Atelier differs |
+|---|---|---|---|---|
+| [Anthropic skills](https://github.com/anthropics/skills) (skill-creator) | 200k | A model writes a skill from your examples and instructions | Your examples | Atelier writes from your pieces whole, asks what only you know, and checks every piece it writes |
+| [DSPy](https://github.com/stanfordnlp/dspy) | 39k | Compiles and optimises prompts for a program | A metric and training examples (32 or more for SIMBA) | Atelier needs no metric: your finished pieces are the standard |
+| [SkillOpt](https://github.com/microsoft/SkillOpt) | 19k | Trains a reusable skill by accepting edits that raise a score | Automatic verifiers or exact-match scores | Writing has no exact score. Atelier holds the parts that can be counted and shows you the rest |
+| [GEPA](https://github.com/gepa-ai/gepa) | 7.6k | Reflective search: a model proposes prompt changes, kept when the score rises | A score and a validation set | Your rules stay in your words. No search rewrites them |
+| [darwin-skill](https://github.com/alchaincyf/darwin-skill) | 7k | Evolves a Claude Code skill: evaluate, improve, keep or revert | An evaluation rubric | Atelier learns the rubric itself from your work |
+
+**Why an optimiser alone isn't enough for writing.** An optimiser needs a score, and writing has no exact one. The 2026 research shows what that costs:
+
+- In a multi-seed study, an optimiser's validation gain shrank about 2.6 times on held-out tasks, and a hand-written recipe captured about 57% of the gain ([arXiv 2610.12601](https://arxiv.org/abs/2610.12601)).
+- Prompts optimised against a strict judge picked up memorised specifics ([arXiv 2604.20726](https://arxiv.org/abs/2604.20726)).
+- SkillOpt's own paper names preference-based gates for open-ended tasks as future work ([arXiv 2605.23904](https://arxiv.org/abs/2605.23904)).
+
+Atelier does the step those tools assume is already done: it learns what good means for you, from your own work.
 
 ## Where it's going
 
