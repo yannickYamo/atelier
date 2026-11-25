@@ -928,7 +928,6 @@ mintedAt:        ${v.mintedAt}
     // the pieces are served whole (`servedWhole`): it tells the next build not to spread them, and the same files
     // are served with or without it.
     const { pieceBudget: _budget, holdsBackOf: _covered, standardWording: _standard, lengthSpan: _span, lengthPieces: _pieces, sharedAmong: _shared, guardPieces: _guard, wholePieces: _all, servedWhole: _whole, pieceForm, ...rest } = voice;
-    void _budget; void _covered; void _standard; void _span; void _pieces; void _guard; void _whole;
     return { ...rest, ...(pieceForm === 'excerpts' && cutPieces.some(Boolean) ? { pieceForm } : {}) };
   })() : null;
   const withPairs = { ...(contrast.length ? { ...assurance, 'contrast-pairs.json': `${JSON.stringify(contrast, null, 1)}\n` } : assurance),

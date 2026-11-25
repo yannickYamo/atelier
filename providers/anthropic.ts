@@ -248,6 +248,8 @@ export class AnthropicInferenceClient implements InferenceClient {
     return this.client.messages.create({
       model: this.modelId,
       max_tokens: req.maxTokens,
+      // deprecated for the newest models, which refuse it: such a refusal is caught and the model remembered (noTemperature)
+      // eslint-disable-next-line @typescript-eslint/no-deprecated -- older models and gateways still take it
       ...(temperature === undefined ? {} : { temperature }),
       // `between_tools` is what the newest models take for thinking off; the SDK's type lags the API, so it is cast
       ...(noThinkingField.has(this.modelId) ? {} : betweenTools.has(this.modelId) ? { thinking: { type: 'between_tools' } as unknown as { type: 'disabled' } } : { thinking: { type: 'disabled' as const } }),

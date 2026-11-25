@@ -214,7 +214,7 @@ describe('a search says how much of the owner\'s standard its score reads, and a
     // where most rules are read, the count is said and the warning is not
     expect(renderEvolve({ ...r, scored: { on: 9, of: 10 } })).not.toMatch(/Most of your rules/);
     // a record from before the count was kept says what it always said
-    const { scored: _unused, ...old } = r; void _unused;
+    const { scored: _unused, ...old } = r;
     expect(renderEvolve(old)).toContain('Scored on what the checks read');
   });
 });

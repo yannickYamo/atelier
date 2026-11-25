@@ -273,7 +273,7 @@ describe('proportions and names: gaps closed', () => {
     const p = { key: k(lex), check: 'deadbe', before: 'We leverage A.', after: 'We use A.' };
     expect(selectContrastPairs([inv([p], '2026-01-01')], vl)).toEqual([]);
     expect(selectContrastPairs([inv([{ ...p, check: measurementId(lex.measurement!) }], '2026-01-01')], vl)).toHaveLength(1);
-    const { check: _dropped, ...unchecked } = { ...p, check: measurementId(lex.measurement!) }; void _dropped;
+    const { check: _dropped, ...unchecked } = { ...p, check: measurementId(lex.measurement!) };
     // A pair from before checks were recorded ships only where the passage itself proves it, stamped.
     expect(selectContrastPairs([inv([unchecked], '2026-01-01')], vl).map((x) => x.check)).toEqual([measurementId(lex.measurement!)]);
   });

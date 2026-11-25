@@ -227,7 +227,7 @@ async function chooseVoice(L: store.StoreLayout, v: StandardVersion, workForm: W
       if (wordBudget === 0 && voice.passages.length) die('this skill was built by an early version and serves passages of yours inline, which --piece-budget does not reach. Choose its voice again first: atelier build --name <name> --voice auto, then set the budget.');
       const pieces = choose();
       // Chosen again: the requests of the pieces before are not these pieces' (read again below).
-      const { pieceRequests: _stale, ...kept } = voice; void _stale;
+      const { pieceRequests: _stale, ...kept } = voice;
       voice = { ...kept, pieces, ...prefs };
       console.log(`Voice: ${pieces.length ? said(pieces) : none()}.`);
     }
@@ -241,7 +241,7 @@ async function chooseVoice(L: store.StoreLayout, v: StandardVersion, workForm: W
     // Kept from before only while it still lines up with the pieces (one entry each); read again where the pieces are at hand.
     const pieceRequests = asked.size ? voice.pieces.map((t) => asked.get(flatText(t)) ?? null)
       : voice.pieceRequests?.length === voice.pieces.length ? voice.pieceRequests : undefined;
-    const { pieceRequests: _was, ...rest } = voice; void _was;
+    const { pieceRequests: _was, ...rest } = voice;
     voice = { ...rest, ...(pieceRequests?.some(Boolean) ? { pieceRequests } : {}) };
   }
   // HOW MUCH THE AUTHOR WRITES FOR WHAT WAS ASKED (core/compiler/scope.ts), for a skill that answers requests: read
@@ -788,7 +788,7 @@ export async function build(nameArg?: string, opts: { closing?: boolean } = {}):
   const lengthPieces = everyPiece.length > 0 ? everyPiece.length : voice?.lengthPieces ?? 0;
   // And how much those pieces share with one another: the most a new piece may share with one of them.
   const among = everyPiece.length ? sharedAmong(everyPiece, standardWording) : voice?.sharedAmong ?? null;
-  const { standardWording: _was, lengthSpan: _span, lengthPieces: _n, sharedAmong: _among, ...voiceWithout } = voice ?? {}; void _was; void _span; void _n; void _among;
+  const { standardWording: _was, lengthSpan: _span, lengthPieces: _n, sharedAmong: _among, ...voiceWithout } = voice ?? {};
   // AND EVERY PIECE, WHOLE, for the direct writer to choose from per request (cli/direct.ts): the readable pieces only,
   // never one held back. Where the pieces cannot be read, what an earlier build kept is kept.
   const pairs = sessionPairs().map((p) => ({ text: withoutFrontMatter(p.text), request: p.request }));

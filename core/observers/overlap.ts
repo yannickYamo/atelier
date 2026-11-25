@@ -191,7 +191,6 @@ export function sharedAmong(pieces: readonly string[], _standardWording: readonl
   // READ RAW. With the standard wording left out, the pieces of a template corpus "shared" ten words among themselves
   // and a new contract sharing a sixteen-word clause with one of them was called lifted (11 at most). What the author's
   // own pieces share is read on the pieces as written; the standard wording is left out of a run's count, not of this.
-  void _standardWording;
   return Math.max(...separate.map((p, i) => overlapIndex(separate.filter((_, k) => k !== i))(p).longestShared));
 }
 

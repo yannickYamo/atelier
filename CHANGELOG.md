@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- `atelier fix "open on …"` says the moved line once: the sentence it came from is rewritten too, and each passage is written against the piece with the earlier rewrites in it. Under a rewritten piece, a figure with no sentence to quote is one plain line pointing to the report.
+- The README compares Atelier with the bare model, pasting, GEPA, SkillOpt, DSPy, darwin-skill and Anthropic's skill-creator, with what was measured and what wasn't.
 - The build says what the agent writes in one short sentence ("Engineering blog posts, to share what one team changed and what it learned."), and each habit with a sentence of yours on its own line. Before a piece, what is already settled is shown in one short line each, and each open question is asked once, with its options one to a line and what enter picks. The README shows a real session.
 - Before a piece is written, Atelier asks only what you alone can say about it: your point and why now, what the piece must do, what shows it that your notes do not hold (a case, a figure, a name, a story of yours), and who it is for. It asks only where your request and notes leave one out and the answer would change the piece, at most three, never a choice among what you gave (which point leads, how it opens). At a terminal it shows what it read, then asks each open one in turn with a suggestion: enter takes it, and it is remembered for that request. Anywhere else the questions are said before the piece, which is always written, and no suggestion is used for you.
 - Where your request, method or notes say their wording is to be used as written (approved messaging, requirement text), it is kept, and the run says so; otherwise notes are written from in new sentences, as before.

@@ -131,7 +131,7 @@ describe('a limit is loosened just enough that the author\'s own pieces meet it'
     expect(piecesBreaking(tells, held)).toEqual([8, 9, 10]);
     expect(fitToCorpus(held, tells, 1)).toBeNull();
     // polarity: the same pieces against the same ceiling without that record are a rate, and the ceiling goes to it
-    const { never: _never, ...rateOnly } = held.params; void _never;
+    const { never: _never, ...rateOnly } = held.params;
     expect(piecesBreaking(tells, { ...held, params: rateOnly })).toEqual([8, 9, 10]);
     expect(fitToCorpus({ ...held, params: rateOnly }, tells, 1)).toEqual({ observer: 'PATTERN_RATE', params: { pattern: ['MACHINE_TELL'], maxPer1000: 4.9 } });
   });
