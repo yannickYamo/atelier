@@ -188,14 +188,3 @@ export function describeObservedComparison(c: Comparison, ruleStatement: string)
   return `${out}\nThis orders your attention. It does not decide: nothing here has been checked against\n`
     + `your own judgement, so it carries no authority over what gets promoted.\n`;
 }
-
-
-/** What a comparative verdict may support, stated as a value so no caller has to remember it. */
-export const COMPARATIVE_AUTHORITY = {
-  maySupport: 'CANDIDATE_BETTER_THAN_INCUMBENT, under the same frozen StandardVersion',
-  mayNeverSupport: ['ABSOLUTE_FIDELITY_ACHIEVED', 'TARGET_REACHED'],
-  why: 'an ordering says which of two is closer to the standard; it cannot say either has reached it. '
-    + 'Reading "the candidate won" as "the skill is good" is how a search reaches a local optimum and '
-    + 'calls it expert fidelity.',
-} as const;
-
