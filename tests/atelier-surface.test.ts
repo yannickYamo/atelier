@@ -51,9 +51,10 @@ export function readings(): string[] {
 // 25 Nov 2026, +31 and +16 (owner's order, delight pass and its audit fixes): what the agent writes in one sentence; the brief shows what is settled, each open question asked once.
 // 25 Nov 2026 (owner's go, voice repairs): the direct writer no longer cuts a long paragraph in code.
 // 25 Nov 2026 (owner's go, same pass): a line the author repeats in their pieces is kept as written; on the direct writer a borrowed fact is dropped, not kept as an assumption.
+// 25 Nov 2026 (owner's go, same pass): ATELIER_QUOTES_TO_WRITER=1, off until blind pairs, lets the writer quote what the notes quote.
 const HELD = {
-  'cli/direct.ts': { files: 145, lines: 34655 },
-  'cli/commands/verify.ts': { files: 123, lines: 30491 },
+  'cli/direct.ts': { files: 145, lines: 34657 },
+  'cli/commands/verify.ts': { files: 123, lines: 30493 },
 } as const;
 const READINGS_HELD = 39;
 

@@ -500,7 +500,7 @@ export async function runDirect(given: DirectContext) {
   // unless the person said its wording is kept (approved lines, requirement text): then it is used as written, said
   const asPoints = writtenAsSentences(c.material) && !route.keepWording;
   if (route.keepWording && writtenAsSentences(c.material)) c.detail(`The material's wording is kept as written ("${route.keepWording}").`);
-  const variable = taskBlock({ intent: asking.note, material: c.material, points: asPoints, task: c.asked, rules, method, settled: [said, voiceRun ? VOICE_ONLY_NOTE : '', lengthGuide].filter((x) => x.trim()).join('\n\n') });
+  const variable = taskBlock({ intent: asking.note, material: c.material, points: asPoints && process.env.ATELIER_QUOTES_TO_WRITER === '1' ? 'quotes' : asPoints, task: c.asked, rules, method, settled: [said, voiceRun ? VOICE_ONLY_NOTE : '', lengthGuide].filter((x) => x.trim()).join('\n\n') });
   c.detail(`Written from ${shown.length} of ${catalogue.length} piece(s) of the author's${route.kind ? `, as ${route.kind}` : ''} (${decided.by === 'model' ? 'chosen by a reading of the request' : `chosen by shared words: ${decided.why ?? 'no reading'}`}): ${shown.map((p) => titleOf(p.text)).join('; ')}.`);
 
   // HOW THE AUTHOR WRITES, read on the text after the draft (core/direct/style.ts): the habits the build read from their
