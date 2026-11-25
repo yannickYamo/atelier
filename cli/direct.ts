@@ -61,6 +61,7 @@ import { asText } from '../core/discovery/text.js';
 import type { Voice } from '../core/compiler/voice.js';
 import { pointsWithRates } from '../core/compiler/moves.js';
 import { groundCarried, carriedClaims } from '../core/loop/grounding.js';
+import { houseLines } from '../core/loop/carry-over.js';
 import { releaseFor } from './fidelity.js';
 import { readFidelity } from '../core/fidelity/profile.js';
 import { typicalityOf } from '../core/fidelity/typicality.js';
@@ -575,10 +576,10 @@ export async function runDirect(given: DirectContext) {
     // a name or a figure of their case can land in this one as a fact about the person's. Each such sentence is
     // rewritten where it stands to state only what was given, and kept only where it breaks no rule that held before.
     try {
-      const examples = shown.map((p) => p.text).join('\n\n');
-      if (carriedClaims(output, examples, `${materialText}\n${c.asked}`).length) {
+      const examples = shown.map((p) => p.text).join('\n\n'); const house = houseLines(shown.map((p) => p.text));
+      if (carriedClaims(output, examples, `${materialText}\n${c.asked}`, house).length) {
         const before = brokenOf(await checkDraftAsync(c.name, c.std, output, checks));
-        const g = await groundCarried(output, { client: c.client, budget, request: c.asked, evidence: materialText, examples,
+        const g = await groundCarried(output, { client: c.client, budget, request: c.asked, evidence: materialText, examples, house, assume: false,
           breaksNothing: async (next) => brokenOf(await checkDraftAsync(c.name, c.std, next, checks)).every((id) => before.includes(id)) });
         grounded = { found: g.found.length, rewritten: g.found.filter((f) => f.kept).length, sentences: g.found.map((f) => f.sentence.slice(0, 160)) };
         output = g.text;

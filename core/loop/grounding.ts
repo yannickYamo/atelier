@@ -36,8 +36,8 @@ const ASSUMES = /\b(?:if|assuming|assume[sd]?|presumably|likely|probably|might|m
  * was given, less a table row or a block of keys and values (a sentence spliced into either would break it, so both are
  * left listed, never rewritten). Read by the run before it enters the step, so a text with nothing to ground takes none.
  */
-export const carriedClaims = (text: string, examples: string, given: string): Claim[] =>
-  carryOverClaims(text, examples, given).filter((cl) => !structuredUnit(cl.text));
+export const carriedClaims = (text: string, examples: string, given: string, house: ReadonlySet<string> = new Set()): Claim[] =>
+  carryOverClaims(text, examples, given).filter((cl) => !structuredUnit(cl.text) && !house.has(cl.text.replace(/\s+/g, ' ').trim().toLowerCase()));
 
 /** The borrowed terms a claim names, from its `why` (./carry-over.ts writes "states a, b of your case"). */
 export const borrowedOf = (c: Claim): string[] => (/^states (.+?) of your case/.exec(c.why)?.[1] ?? '').split(', ').map((x) => x.trim()).filter(Boolean);
@@ -57,15 +57,16 @@ const words = (s: string): number => (s.match(/[\p{L}\p{N}][\p{L}\p{N}'’-]*/gu
 const flat = (s: string): string => s.replace(/\s+/g, ' ').trim().toLowerCase();
 
 /** Whether a rewrite of `sentence` may stand: why not, or null. Code only. */
-export function rewriteProblem(sentence: string, rewrite: string, borrowed: readonly string[], examples: string, evidence: string): string | null {
+export function rewriteProblem(sentence: string, rewrite: string, borrowed: readonly string[], examples: string, evidence: string, assume = true): string | null {
   const r = rewrite.trim();
   // A REWRITE IS A SENTENCE. "." or a dash is a deletion by another name: nothing is deleted.
   if (words(r) < 2) return 'the rewrite was empty or no sentence, and nothing is deleted';
   if (flat(r) === flat(sentence)) return 'the rewrite left the sentence as it was';
   if (r.length > sentence.trim().length * 1.6 + 60) return 'the rewrite runs far longer than the sentence';
-  // A borrowed term may stay only as an assumption the rewrite ADDS: an "if" the sentence already had is no correction.
+  // A borrowed term may stay only as an assumption the rewrite ADDS (an "if" the sentence already had is no correction), and
+  // only where `assume` allows it: on the direct writer "Assuming …" printed the step's own doubt in a piece.
   const still = borrowed.filter((b) => distinctTerms(r).has(b));
-  if (still.length && !(ASSUMES.test(r) && !ASSUMES.test(sentence))) return `it still states ${still.join(', ')} as fact`;
+  if (still.length && !(assume && ASSUMES.test(r) && !ASSUMES.test(sentence))) return `it still states ${still.join(', ')} as fact`;
   // nothing new from the examples: the rewrite read as a text of its own, against the request plus the sentence it replaces
   const added = carryOverClaims(r, examples, `${evidence}\n${sentence}`);
   if (added.length) return 'it brings in another term only an example holds';
@@ -77,9 +78,9 @@ export function rewriteProblem(sentence: string, rewrite: string, borrowed: read
   return null;
 }
 
-const SYSTEM = `You correct single sentences of an assistant's reply. Each one states, as a fact about the person's own case, something their request never gave: the named terms came from an example of a different conversation, not from this one.
+const system = (assume: boolean): string => `You correct single sentences of an assistant's reply. Each one states, as a fact about the person's own case, something their request never gave: the named terms came from an example of a different conversation, not from this one.
 
-Rewrite each sentence so it says nothing about the person's case beyond what their request shows. Either drop the borrowed fact and keep the rest of what the sentence says, or keep it only as an assumption the sentence states as one ("if it was …", "assuming …"). A borrowed term written as code may be dropped with the fact it states; keep every other piece of code and every link exactly. Keep the sentence's voice, its register and its length. Never return an empty sentence, never add a new fact, and never mention examples or other conversations.`;
+Rewrite each sentence so it says nothing about the person's case beyond what their request shows. ${assume ? 'Either drop the borrowed fact and keep the rest of what the sentence says, or keep it only as an assumption the sentence states as one ("if it was …", "assuming …"). ' : 'Drop the borrowed fact and keep the rest of what the sentence says. '}A borrowed term written as code may be dropped with the fact it states; keep every other piece of code and every link exactly. Keep the sentence's voice, its register and its length. Never return an empty sentence, never add a new fact, and never mention examples or other conversations.`;
 const SCHEMA = { type: 'object', properties: { rewrites: { type: 'array', items: { type: 'object',
   properties: { id: { type: 'number' }, text: { type: 'string' } }, required: ['id', 'text'], additionalProperties: false } } },
   required: ['rewrites'], additionalProperties: false };
@@ -93,16 +94,20 @@ export async function groundCarried(text: string, c: {
   readonly breaksNothing?: (next: string) => Promise<boolean>;
   /** documents a web pass fetched for this request: a term one of them holds is no example's, so it is not borrowed */
   readonly enriched?: readonly { readonly url: string; readonly text: string }[];
+  /** the author's own lines (`houseLines` of the pieces shown): never grounded */
+  readonly house?: ReadonlySet<string>;
+  /** false: a borrowed fact is dropped, never kept as an assumption (the direct writer) */
+  readonly assume?: boolean;
 }): Promise<GroundingResult> {
   if (!c.request.trim() || !c.examples.trim()) return { text, found: [], note: null };
   const given = c.enriched?.length ? `${c.evidence}\n${c.request}\n${c.enriched.map((d) => d.text).join('\n')}` : `${c.evidence}\n${c.request}`;
-  const claims = carriedClaims(text, c.examples, given);
+  const claims = carriedClaims(text, c.examples, given, c.house);
   if (!claims.length) return { text, found: [], note: null };
   const items = claims.map((cl, i) => ({ id: i + 1, claim: cl, borrowed: borrowedOf(cl) }));
   let raw: unknown;
   try {
     const res = await spend(c.budget, 0.02, async () => {
-      const x = await c.client.complete({ stableBlock: SYSTEM, variableBlock: '', temperature: 0,
+      const x = await c.client.complete({ stableBlock: system(c.assume !== false), variableBlock: '', temperature: 0,
         userMessage: `<request>\n${c.request.trim()}\n</request>\n\n${items.map((it) => `[${it.id}] borrowed: ${it.borrowed.join(', ')}\n${it.claim.text}`).join('\n\n')}`,
         toolName: 'emit_rewrites', toolDescription: 'Return one rewrite per numbered sentence.', schema: SCHEMA, maxTokens: 1200 });
       return { value: x, cost: x.cost, usage: x };
@@ -120,7 +125,7 @@ export async function groundCarried(text: string, c: {
   const splice: { start: number; end: number; text: string }[] = [];
   for (const it of items) {
     const rw = got.get(it.id) ?? null;
-    const problem = rw === null ? 'no rewrite came back for it' : rewriteProblem(it.claim.text, rw, it.borrowed, c.examples, given);
+    const problem = rw === null ? 'no rewrite came back for it' : rewriteProblem(it.claim.text, rw, it.borrowed, c.examples, given, c.assume !== false);
     if (problem || rw === null) { found.push({ sentence: it.claim.text, borrowed: it.borrowed, rewrite: rw, kept: false, why: problem ?? '' }); continue; }
     // the claim's own span: its leading and trailing space stay where they were
     const raw0 = text.slice(it.claim.start, it.claim.end);
