@@ -93,6 +93,11 @@ export interface CheckOptions {
    * more long copied from it is a finding the repair rewrites (`COPIED_LINE`). Absent: nothing is read for copying.
    */
   readonly copiedFrom?: string;
+  /**
+   * False on the direct writer, which never refuses a piece: a paragraph over the author's length is left whole, never cut
+   * by code at the nearest sentence (that cut broke lists across paragraphs). Absent: split, as strict delivery needs.
+   */
+  readonly splitParagraphs?: boolean;
   /** what the owner's method and standard state: a stretch of it is their own words, never a copy from the material */
   readonly copiedOwn?: string;
   /**
@@ -1183,7 +1188,7 @@ async function refineOnLedger(client: InferenceClient, budget: Budget, skill: st
   const mechanical: string[] = [];
   const notKept: string[] = [];
   const fixMechanically = async (last = false): Promise<void> => {
-    const m = mechanicalFixes(v, report, text, { grammar: last });
+    const m = mechanicalFixes(v, report, text, { grammar: last, split: opts.splitParagraphs });
     if (m.text === text) return;
     // ONLY THE RULES IT CHANGED: each fix is said as "<rule>: <what>", and those rules are the step's targets.
     const changed = [...new Set(m.fixed.map((f) => f.split(':')[0].trim()))];

@@ -528,7 +528,7 @@ export async function runDirect(given: DirectContext) {
 
   // What the delivered text is checked by, set up once: the record's settings are read from it too.
   const checks = { ...checksFor(c.L, { material: [asking.answers.length ? `${ANSWERS_HEAD}\n${asking.answers.map((a) => `- ${a.answer}`).join('\n')}` : '', c.asked, materialText].filter(Boolean).join('\n\n'), task: c.asked, context: { request: c.asked, material: c.material.map((m) => ({ name: m.name, text: m.text })), ...(decided.by === 'model' && route.length !== undefined ? { lengthQuote: route.length } : {}) }, guardClaims: !argv.includes('--allow-unsourced'), placeholders: false,
-    ...(c.held ? { level: c.held } : {}), claimReads: c.held === 'STRICT' ? 2 : 1 }), ...(asPoints ? { copiedFrom: materialText } : {}) };
+    ...(c.held ? { level: c.held } : {}), claimReads: c.held === 'STRICT' ? 2 : 1 }), splitParagraphs: false, ...(asPoints ? { copiedFrom: materialText } : {}) };
 
   // 2-3. THE DRAFT, THEN ONE SELF-REVIEW. A review that fails costs the review, never the piece: the draft is delivered, said.
   let review: DirectRecord['review'] = { ran: false };

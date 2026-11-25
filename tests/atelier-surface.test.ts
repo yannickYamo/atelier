@@ -49,9 +49,10 @@ export function readings(): string[] {
 // 24 Nov 2026, -5 and +16 on verify's side (owner's order, the intent-first pass): the lines under a piece a run hands over.
 // 24 Nov 2026, +31, and +1 file and +132 lines on verify's side (owner's rulings, same pass): the card in the installed skill, enter takes the suggestion, the material's wording kept where asked.
 // 25 Nov 2026, +31 and +16 (owner's order, delight pass and its audit fixes): what the agent writes in one sentence; the brief shows what is settled, each open question asked once.
+// 25 Nov 2026 (owner's go, voice repairs): the direct writer no longer cuts a long paragraph in code.
 const HELD = {
-  'cli/direct.ts': { files: 145, lines: 34634 },
-  'cli/commands/verify.ts': { files: 123, lines: 30476 },
+  'cli/direct.ts': { files: 145, lines: 34639 },
+  'cli/commands/verify.ts': { files: 123, lines: 30481 },
 } as const;
 const READINGS_HELD = 39;
 
