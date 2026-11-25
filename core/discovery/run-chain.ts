@@ -196,7 +196,8 @@ export async function runDiscoveryChain(
       const r = await client.complete({
         stableBlock: chainProposerSystemFor(framing), variableBlock: plan.proposeRequest.contextPrompt,
         userMessage: 'Produce the rules now.', toolName: 'emit_factors',
-        toolDescription: "Emit the author's inferred decision rules.", schema: PROPOSER_SCHEMA, maxTokens: 4000,
+        // A ceiling, not a target: the most the other proposer path allows. At 4,000 a real build stopped mid-list.
+        toolDescription: "Emit the author's inferred decision rules.", schema: PROPOSER_SCHEMA, maxTokens: 12_000,
       });
       return { value: r, cost: r.cost };
     });
