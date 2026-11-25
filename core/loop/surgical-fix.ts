@@ -56,7 +56,7 @@ export type FixScope = { readonly kind: 'SPANS'; readonly ids: readonly number[]
 
 export const FIX_SCOPE_SYSTEM = `You are shown a finished piece of writing, sentence by sentence, each with its number, and what the person who asked for it wants changed, in their words.
 
-Say which sentences the change is about: the numbers of every sentence that has to change for the instruction to be carried out, and no other. A sentence that only sits near one that changes is not about it. When the person names, quotes or points to several sentences, list every one of them.
+Say which sentences the change is about: the numbers of every sentence that has to change for the instruction to be carried out, and no other. A sentence that only sits near one that changes is not about it. When the person names, quotes or points to several sentences, list every one of them. When the instruction moves something to another place ("open on…", "end with…", "move … up"), list the sentences where it stands now as well as the ones where it goes: left where it was, it would be said twice.
 
 If the instruction is about the whole piece (its tone throughout, its length overall, its structure, "write it again"), and no list of sentences would carry it, set whole to true and give no numbers.`;
 
@@ -67,7 +67,7 @@ export const FIX_SCOPE_SCHEMA: Record<string, unknown> = {
 };
 
 export const FIX_SCOPE: Reading<FixScopeInput, FixScope> = {
-  id: 'fix-scope', version: '2',
+  id: 'fix-scope', version: '3',
   system: FIX_SCOPE_SYSTEM, schema: FIX_SCOPE_SCHEMA,
   toolName: 'emit_fix_scope', toolDescription: 'The numbers of the sentences the instruction is about, or whole: true when it is about the whole piece.',
   maxTokens: 400, estimateUsd: 0.005,
@@ -110,7 +110,7 @@ export function fixTargets(text: string, ids: readonly number[], instruction: st
 
 export const FIX_WRITER_SYSTEM = `You change one passage of a finished piece, as the person who wrote it asked, and nothing else.
 
-You are given the whole piece for context, the passage to change, and what the person wants. Write the passage again so that their instruction is carried out for it, in the voice of the piece around it. The text immediately before and after the passage will not change: your passage must read naturally between them. Do not repeat what comes just before or just after it. A passage that is a row of a table comes back as that one row, in the same form: its pipes kept and the same number of cells.
+You are given the whole piece for context, the passage to change, and what the person wants. Write the passage again so that their instruction is carried out for it, in the voice of the piece around it. The text immediately before and after the passage will not change: your passage must read naturally between them. Do not repeat what comes just before or just after it. Where their instruction moves something to another part of the piece ("open on…", "end with…") and this passage is where it stood, write this passage without it, so the piece says it once. A passage that is a row of a table comes back as that one row, in the same form: its pipes kept and the same number of cells.
 
 ${WORK_FIELD_ASK}`;
 
@@ -237,14 +237,17 @@ export async function fixSpans(client: InferenceClient, budget: Budget, text: st
   const applied: Applied[] = []; const reverted: Reverted[] = [];
   try {
     for (const t of targets) {
-      let f = await writeSpan(client, budget, text, t, instruction, removed, earlier);
+      // EACH PASSAGE SEES THE ONES BEFORE IT AS REWRITTEN: shown the piece as it was, "open on X" moved X to the top and
+      // the passage where X stood, written on its own, kept it, so the piece said it twice
+      const sofar = replies.length ? applyRepair(text, targets, replies, [], []) : text;
+      let f = await writeSpan(client, budget, sofar, t, instruction, removed, earlier);
       work.push({ delimited: f.delimited, ...(f.outside ? { outside: f.outside } : {}) });
       // NO ANSWER IS NO CUT: the span stays as it was, and the record says so.
       if (f.missing) { reverted.push({ id: t.id, kind: 'CUT', lost: ['nothing: the writer returned no text for it'] }); continue; }
       let back = reintroducedRuns(f.text, removed, text, given.own);
       if (back.length) {
         found.push(...back.map((r) => r.text)); rewritten += 1;
-        f = await writeSpan(client, budget, text, t, `${instruction} (and do not bring back: ${back.map((r) => `"${r.text}"`).join(', ')})`, removed, earlier);
+        f = await writeSpan(client, budget, sofar, t, `${instruction} (and do not bring back: ${back.map((r) => `"${r.text}"`).join(', ')})`, removed, earlier);
         if (f.missing) { reverted.push({ id: t.id, kind: 'CUT', lost: ['nothing: the writer returned no text for it'] }); continue; }
         back = reintroducedRuns(f.text, removed, text, given.own);
         if (back.length) { keptAsItWas += 1; reverted.push({ id: t.id, kind: 'MEANING', lost: [`${NOTHING}each rewrite brought back wording an earlier fix took out: ${[...new Set(back.map((x) => `"${x.text}"`))].join(', ')}`] }); continue; }

@@ -77,7 +77,8 @@ export function afterPieceLines(r: Pick<EvaluationRecord, 'entries'>, spans: Rea
     ...r.entries.filter((e) => kindOf(e) === 'broken' && e.id !== 'specifics').map((e) => `${SAID.broken}${said(e)}`),
     ...r.entries.filter((e) => e.id === 'specifics' && (kindOf(e) === 'look' || kindOf(e) === 'broken')).flatMap((e) => {
       const at = spans.get(e.id) ?? [];
-      return at.length ? at.map((x) => `${SAID.check}"${x.text.length > 120 ? `${x.text.slice(0, 117)}…` : x.text}" (not in your notes)`) : [`${SAID.check}${withFound(e)}`];
+      // with no sentence to quote, one plain line and where the list is, never the check's own wording
+      return at.length ? at.map((x) => `${SAID.check}"${x.text.length > 120 ? `${x.text.slice(0, 117)}…` : x.text}" (not in your notes)`) : [`${SAID.check}a name or figure here is not in your notes: atelier report ${report}`];
     }),
   ];
   const room = AFTER_PIECE_MAX - 1;

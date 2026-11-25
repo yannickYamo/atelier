@@ -117,6 +117,11 @@ describe('the outcome of a record', () => {
     expect(lines[2]).toBe('…and 2 more: atelier report i1');
     for (const l of lines) expect(l).not.toMatch(new RegExp(`^(${Object.values(OUTCOME_SAID).join('|')})`));
   });
+  it('a name or figure not in the notes is quoted in its sentence; with no sentence to quote, one plain line and where to look', () => {
+    const r = record(rule('specifics', 'VIOLATED', { evidence: '3 could not be found in it: listed for you' }));
+    expect(afterPieceLines(r, new Map([['specifics', [{ text: 'A survey found 73 percent.' }]]]), 'i1')[0]).toBe('Check: "A survey found 73 percent." (not in your notes)');
+    expect(afterPieceLines(r, new Map(), 'i1')[0]).toBe('Check: a name or figure here is not in your notes: atelier report i1');
+  });
 });
 
 describe('the check of one text, as verify and the MCP tool say it', () => {
