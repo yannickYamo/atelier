@@ -238,12 +238,14 @@ export interface ManifestRow {
  */
 export const hostSteps = (skillId: string, card: string | null = null): string => `## Before you write
 ${card ? `\nThis skill writes: ${card} Never ask what this already says.\n` : ''}
-If the request and the notes that came with it do not say what the person is arguing (their point, and why now), what
-the piece must do for them, or what they will put on record beyond the notes (names, news, figures, a story of
-theirs), ask them in one message: at most three short questions, each with a suggested answer where the notes give
-one, then wait. Never suggest what they will put on record. Do not ask what the request or notes already say, or a
-choice among what was given (which point leads, the opening, the order, the length): those are yours. If they say
-"just write", decide and write.
+The person is here with you, so ask before you write, unless the request and its notes already say what they are
+arguing (their point, and why now) and what the piece must do for them, or they say "just write". Ask in one message:
+say in a line what you understood from the request and the notes, then ask at most three short questions about what
+only they can say: their point and why now, what the piece must do for them, what they will put on record beyond the
+notes (names, news, figures, a story of theirs). Give a suggested answer where the notes give one, say that "ok" takes
+the suggestions, then wait. Never suggest what they will put on record. Do not ask what the request or notes already
+say, or a choice among what was given (which point leads, the opening, the order, the length): those are yours. If
+they say "just write", decide and write.
 
 ## After you write
 

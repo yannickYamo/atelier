@@ -53,9 +53,10 @@ export function readings(): string[] {
 // 25 Nov 2026 (owner's go, same pass): a line the author repeats in their pieces is kept as written; on the direct writer a borrowed fact is dropped, not kept as an assumption.
 // 25 Nov 2026 (owner's go, same pass): ATELIER_QUOTES_TO_WRITER=1, off until blind pairs, lets the writer quote what the notes quote.
 // 25 Nov 2026 (owner's ruling, same pass): a paragraph length is layout, not taste: on the default run it guides the writer and never holds the piece.
+// 26 Nov 2026 (owner's go, closing round): in Claude Code the skill asks before it writes.
 const HELD = {
-  'cli/direct.ts': { files: 145, lines: 34661 },
-  'cli/commands/verify.ts': { files: 123, lines: 30493 },
+  'cli/direct.ts': { files: 145, lines: 34663 },
+  'cli/commands/verify.ts': { files: 123, lines: 30495 },
 } as const;
 const READINGS_HELD = 39;
 
