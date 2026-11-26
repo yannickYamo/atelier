@@ -147,6 +147,10 @@ export function directWhyNot(x: { voice: Voice | null; std: StandardVersion | nu
   return null;
 }
 
+/** A PARAGRAPH LENGTH IS LAYOUT, NOT TASTE (the owner, 25 Nov): on this path it is shown to the writer and never holds the piece. */
+export const layoutGuides = (std: Pick<StandardVersion, 'requirements'> | null): Map<string, string> =>
+  new Map((std?.requirements ?? []).filter((r) => r.measurement?.observer === 'PARAGRAPH_LENGTH').map((r) => [r.requirementId, 'a paragraph length guides the writer here and never holds the piece']));
+
 /** The first setting of a release that is off until the owner turns it on and that only the compiled path runs, as `key=value`. */
 export function releaseOnly(s: Partial<ImplementationSettings> | null): string | null {
   if (!s) return null;
@@ -529,7 +533,7 @@ export async function runDirect(given: DirectContext) {
 
   // What the delivered text is checked by, set up once: the record's settings are read from it too.
   const checks = { ...checksFor(c.L, { material: [asking.answers.length ? `${ANSWERS_HEAD}\n${asking.answers.map((a) => `- ${a.answer}`).join('\n')}` : '', c.asked, materialText].filter(Boolean).join('\n\n'), task: c.asked, context: { request: c.asked, material: c.material.map((m) => ({ name: m.name, text: m.text })), ...(decided.by === 'model' && route.length !== undefined ? { lengthQuote: route.length } : {}) }, guardClaims: !argv.includes('--allow-unsourced'), placeholders: false,
-    ...(c.held ? { level: c.held } : {}), claimReads: c.held === 'STRICT' ? 2 : 1 }), splitParagraphs: false, ...(asPoints ? { copiedFrom: materialText } : {}) };
+    ...(c.held ? { level: c.held } : {}), claimReads: c.held === 'STRICT' ? 2 : 1 }), splitParagraphs: false, waived: layoutGuides(c.std), ...(asPoints ? { copiedFrom: materialText } : {}) };
 
   // 2-3. THE DRAFT, THEN ONE SELF-REVIEW. A review that fails costs the review, never the piece: the draft is delivered, said.
   let review: DirectRecord['review'] = { ran: false };
