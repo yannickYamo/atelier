@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- On `atelier run`, a long paragraph is no longer cut in two by code (the cut could split a list). A rule on paragraph length still guides the writer and never stops the piece.
+- A line you repeat in your pieces word for word, such as who you are at the end of each post, is kept as you wrote it. Before, it could be rewritten as if it were a fact borrowed from another piece, and a borrowed fact could be printed as "Assuming …".
 - `atelier fix "open on …"` says the moved line once: the sentence it came from is rewritten too, and each passage is written against the piece with the earlier rewrites in it. Under a rewritten piece, a figure with no sentence to quote is one plain line pointing to the report.
 - The README compares Atelier with the bare model, pasting, GEPA, SkillOpt, DSPy, darwin-skill and Anthropic's skill-creator, with what was measured and what wasn't.
 - The build says what the agent writes in one short sentence ("Engineering blog posts, to share what one team changed and what it learned."), and each habit with a sentence of yours on its own line. Before a piece, what is already settled is shown in one short line each, and each open question is asked once, with its options one to a line and what enter picks. The README shows a real session.
