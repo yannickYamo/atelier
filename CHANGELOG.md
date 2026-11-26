@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- In Claude Code, the installed skill asks before it writes: in one message it says what it understood from your request and notes, asks at most three things only you can say, each with a suggestion, and "ok" takes them. It writes straight away when your request already says your point and what the piece is for, or when you say "just write".
 - On `atelier run`, a long paragraph is no longer cut in two by code (the cut could split a list). A rule on paragraph length still guides the writer and never stops the piece.
 - A line you repeat in your pieces word for word, such as who you are at the end of each post, is kept as you wrote it. Before, it could be rewritten as if it were a fact borrowed from another piece, and a borrowed fact could be printed as "Assuming …".
 - `atelier fix "open on …"` says the moved line once: the sentence it came from is rewritten too, and each passage is written against the piece with the earlier rewrites in it. Under a rewritten piece, a figure with no sentence to quote is one plain line pointing to the report.

@@ -113,7 +113,7 @@ No writing of your own to try it on? [examples/blog](examples/blog) has six samp
 ## Questions you might have
 
 **How is this different from pasting my posts into Claude or ChatGPT?**
-The writing is about as good. On 25 blind-judged briefs, Atelier came out level with pasting your posts. What pasting doesn't give you: the questions before the draft, the check of every figure against your notes, your rules checked on every piece, fixes that change only the sentences you mean, and the same standard every time, for anyone on your team.
+In our latest tests, judges preferred Atelier's piece to pasting your posts with the brief and your notes, then a review: 11 to 3 on voice across four writers and 21 briefs, with 7 too close to call. On an earlier version, on one blog, it was level. Either way, here's what pasting doesn't give you: the questions before the draft, the check of every figure against your notes, your rules checked on every piece, fixes that change only the sentences you mean, and the same standard every time, for anyone on your team.
 
 **Isn't this just a good system prompt?**
 A prompt can only ask for what you can put into words, and the model may or may not follow it. Atelier reads your standard off your finished pieces, including the parts you never said out loud. It shows you each habit with your sentence, writes from the pieces themselves, and checks the parts that can be counted.
@@ -125,7 +125,7 @@ An optimiser changes the prompt until a score goes up. It needs a score, and it 
 A judge gives a draft a 7 out of 10 against its own idea of good, which is everyone's average. Atelier names the sentence and the rule it broke, or the figure that isn't in your notes.
 
 **Does it make things up?**
-It can. Every model can. Atelier doesn't claim to stop that. What it does is catch it: in testing, it caught 46 of 46 planted inventions. It also flagged about one clean draft in five, so a flagged line is something to look at, not a verdict.
+It can. Every model can. Atelier doesn't claim to stop that. What it does is catch it: in testing, it caught 46 of 46 planted inventions. It also flagged about one clean draft in five, so a flagged line is something to look at, not a verdict. Its pieces also hold fewer details that aren't in your notes: about a third fewer than pasting with a review. What it doesn't catch yet is a claim made stronger than your notes in true words, like "always" where your notes say "usually".
 
 **What does it cost?**
 A piece takes about 3 minutes and about $0.40 on Claude, paid to your own model provider. `atelier check` tests your key before anything is spent.
@@ -134,7 +134,12 @@ A piece takes about 3 minutes and about $0.40 on Claude, paid to your own model 
 To the model provider you set up, and nowhere else. No account, no telemetry. Everything Atelier keeps is in `~/.atelier`.
 
 **What kinds of writing does it suit?**
-Blog posts, essays, newsletters, release notes, announcements, memos: anything you or your team write often and want to sound like yourselves. An agency can keep one agent per client, a content team one per voice. Decision documents (PRDs, strategy) are partly covered: Atelier keeps their voice and checks their facts, but it doesn't make the call better. See [EVALS](EVALS.md).
+- Creators: your newsletter or post in your rhythm, with every figure checked against your notes.
+- PMs: memos and updates in your voice, with every figure checked against your notes.
+- PMMs: the house voice on every piece, with every name and figure traced to your notes.
+- Engineers who write: posts and explainers that sound like you, with anything not in your notes pointed out.
+
+An agency can keep one agent per client, a content team one per voice. Decision documents (PRDs, strategy) are partly covered: Atelier keeps their voice and checks their facts, but it doesn't make the call better. See [EVALS](EVALS.md).
 
 **Do I still need to read it?**
 Yes. You still sign it. Atelier moves your judgement earlier, into the standard, and points you at the few lines that need you.
@@ -145,14 +150,16 @@ Yes. You still sign it. Atelier moves your judgement earlier, into the standard,
 
 | Against | Result | How it was measured |
 |---|---|---|
-| **The bare model** | Atelier won 24 of 25 briefs and tied 1 | 25 briefs for one blog, same model and settings for every arm, blind model judges in both orders |
-| **Pasting your posts** | Level: 6 won, 12 tied, 7 lost | Same 25 briefs |
-| **Pasting your posts, then one review** | Behind: 4 won, 11 tied, 10 lost | Same 25 briefs |
+| **Pasting your posts with the brief and notes, then one review** (Nov 2026) | Preferred on voice in 11 of 21 briefs, behind in 3, 7 split. Would publish: 10 to 4, 7 split | Four public voices (a company blog, a creator newsletter, an engineering blog, a PM newsletter), 21 briefs. Same writer model for every arm. A model judge in both orders; a pair counts only when both agree. Development runs, no human readers yet |
+| **The bare model** (Nov 2026) | Won 10 of 11 briefs on voice and on "would publish", 1 split | The same four voices, the bare model given the full brief and notes |
+| **The bare model** (Oct 2026, earlier version) | Atelier won 24 of 25 briefs and tied 1 | 25 briefs for one blog, same model and settings for every arm, blind model judges in both orders |
+| **Pasting your posts** (Oct 2026, earlier version) | Level: 6 won, 12 tied, 7 lost | Same 25 briefs |
+| **Pasting your posts, then one review** (Oct 2026, earlier version) | Behind: 4 won, 11 tied, 10 lost | Same 25 briefs |
 | **GEPA and SkillOpt** (prompt and skill optimisers) | On 30 contract clauses, no Atelier answer broke a counted rule. GEPA broke one in 7% of answers, SkillOpt in 17%, the bare model in 23%. Across three kinds of writing, Atelier broke fewer rules in 5 of 6 comparisons | Development run, 5 Oct 2026, on an earlier version. The optimisers had small budgets and searched on Atelier's own rule score. A fair-budget run hasn't been made |
 | **A hand-written skill** | 31% of answers broke a counted rule, against 76%. On code review, 10% against 95% | Development run, 5 Oct 2026, one author per kind of writing |
 | **Invented facts** | 46 of 46 planted inventions caught. About 1 clean draft in 5 was also flagged | Drafts the check had never seen |
 
-The honest summary: Atelier writes as well as pasting your posts, and much better than the bare model. Its edge is that every piece is checked against your notes and your rules.
+The honest summary: in our latest tests Atelier writes better than pasting your posts with a careful brief and a review, and far better than the bare model. These are model judges, not yet people. Its other edge is that every piece is checked against your notes and your rules.
 
 **What the others do.** These are the tools people reach for when they want an agent that writes better.
 
@@ -174,7 +181,7 @@ Atelier does the step those tools assume is already done: it learns what good me
 
 ## Where it's going
 
-One standard has three uses. Writing from it ships today. Checking someone else's draft against it comes next, and `atelier verify` is the start. The third is grading, where the same standard judges a model you train or choose.
+Today it writes from your standard, and `atelier verify` already checks anyone's draft against it, a teammate's or an agent's. Next it will check whole claims against your notes, not only names and figures, so a team can hand it any draft and know what to fix. After that, the same standard can judge which model writes best for you.
 
 Writing is the first expert it learned, not the last. An expert isn't defined by how their output looks. It's defined by why they decide what they decide: which number they question, what they cut, when they push back. That judgement rarely makes it into the written procedure. Atelier is learning that part.
 
