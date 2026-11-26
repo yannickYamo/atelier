@@ -92,6 +92,16 @@ export function formTerms(examples: string): Set<string> {
 }
 
 /**
+ * THE AUTHOR'S OWN LINES: a sentence of six words or more that two of the author's pieces or more hold whole (an author
+ * line, a sign-off) is the house's, never one example's case. Read on distinct pieces: one piece served twice is one.
+ */
+export function houseLines(pieces: readonly string[]): Set<string> {
+  const n = new Map<string, number>(); const flat = (s: string): string => s.replace(/\s+/g, ' ').trim().toLowerCase();
+  for (const p of new Set(pieces)) for (const s of new Set(claimUnitsOf(p).map((u) => flat(p.slice(u.start, u.end))))) if (s.split(' ').length >= 6) n.set(s, (n.get(s) ?? 0) + 1);
+  return new Set([...n].filter(([, k]) => k >= 2).map(([s]) => s));
+}
+
+/**
  * THE SENTENCES OF `text` THAT ASSERT A FACT OF AN EXAMPLE'S CASE: a distinctive term from `examples` that neither
  * the request nor its material (`evidence`) holds. An instruction counts too: "add the production origin to the same
  * CORS list", in reply to "Thanks, that solved it.", carries the example's case as surely as "CORS is fixed" does.

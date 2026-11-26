@@ -223,7 +223,7 @@ export function grammarFixes(v: StandardVersion, report: VerifyReport, text: str
   return { text: out, fixed };
 }
 
-export function mechanicalFixes(v: StandardVersion, report: VerifyReport, text: string, opts: { readonly grammar?: boolean } = {}): { text: string; fixed: string[] } {
+export function mechanicalFixes(v: StandardVersion, report: VerifyReport, text: string, opts: { readonly grammar?: boolean; readonly split?: boolean } = {}): { text: string; fixed: string[] } {
   const broken = new Set(report.checked.filter((c) => acts(c) && c.result.verdict === 'VIOLATED').map((c) => c.requirementId));
   // Mechanical errors first, while the spans the check reported still index this text: the fixes below move offsets.
   // Left out where the controller corrects them as a step of its own (`grammar: false`).
@@ -251,7 +251,7 @@ export function mechanicalFixes(v: StandardVersion, report: VerifyReport, text: 
       const next = replaceEmDashes(out);
       if (next !== out) { out = next; fixed.push(`${r.requirementId}: em dashes replaced`); }
     }
-    if (r.measurement.observer === 'PARAGRAPH_LENGTH' && typeof p.maxSentences === 'number') {
+    if (opts.split !== false && r.measurement.observer === 'PARAGRAPH_LENGTH' && typeof p.maxSentences === 'number') {
       const next = splitLongParagraphs(out, p.maxSentences);
       if (next !== out) { out = next; fixed.push(`${r.requirementId}: long paragraphs split`); }
     }

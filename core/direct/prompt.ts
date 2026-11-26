@@ -54,9 +54,9 @@ export function methodBlock(method: string | undefined): string {
 
 /** What the author wants from the piece (their answers, first), the material, the method, the author's rules (one the
  *  method says is not repeated), what else was settled, the task. */
-export function taskBlock(x: Pick<DirectInput, 'material' | 'task' | 'rules' | 'method' | 'settled'> & { readonly points?: boolean; readonly intent?: string }): string {
+export function taskBlock(x: Pick<DirectInput, 'material' | 'task' | 'rules' | 'method' | 'settled'> & { readonly points?: boolean | 'quotes'; readonly intent?: string }): string {
   const material = x.material.length
-    ? `The material for this piece. A note marked for one use or one kind of piece is used only there.\n\n${x.material.map((m) => `<material name="${m.name}">\n${m.text.trim()}\n</material>`).join('\n\n')}\n\n${x.points ? `${DIRECT_POINTS_NOTE}\n\n` : ''}`
+    ? `The material for this piece. A note marked for one use or one kind of piece is used only there.\n\n${x.material.map((m) => `<material name="${m.name}">\n${m.text.trim()}\n</material>`).join('\n\n')}\n\n${x.points ? `${x.points === 'quotes' ? DIRECT_POINTS_QUOTES_NOTE : DIRECT_POINTS_NOTE}\n\n` : ''}`
     : '';
   const flat = (s: string): string => s.replace(/\s+/g, ' ').trim().toLowerCase();
   const inMethod = flat(x.method ?? '');
@@ -70,6 +70,8 @@ export const ANSWERS_HEAD = 'WHAT THE AUTHOR ANSWERED BEFORE THIS PIECE WAS WRIT
 
 /** Material in finished sentences (core/loop/material-points.ts) is facts to write from; the author's pieces are the voice. */
 export const DIRECT_POINTS_NOTE = 'The material above is facts and points to write from, not a voice: say each one the way the author\'s pieces would, in new sentences. Do not reuse its sentences, its stretches of wording or its coined phrases.';
+/** The same, where a line the notes quote is someone's words to quote (ATELIER_QUOTES_TO_WRITER=1, off until blind pairs). */
+export const DIRECT_POINTS_QUOTES_NOTE = 'The material above is facts and points to write from, not a voice: say each one the way the author\'s pieces would, in new sentences. Do not reuse its sentences or its stretches of wording. A line it gives in quotation marks is someone\'s own words: where it serves the piece, quote it word for word, in quotation marks.';
 
 /** With --voice-select, where the request takes the author's voice only (core/direct/route.ts): told to the writer. */
 export const VOICE_ONLY_NOTE = 'The person brings their own content and its shape. Write it in the author\'s voice, as their pieces sound: their register, their phrasing, their pace, how they open and close. Keep the order, the sections and the argument of the person\'s material; do not take the structure, the sections, the examples or the argument of the author\'s pieces, and do not let the piece read as a version of any of them.';

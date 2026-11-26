@@ -61,6 +61,7 @@ import { asText } from '../core/discovery/text.js';
 import type { Voice } from '../core/compiler/voice.js';
 import { pointsWithRates } from '../core/compiler/moves.js';
 import { groundCarried, carriedClaims } from '../core/loop/grounding.js';
+import { houseLines } from '../core/loop/carry-over.js';
 import { releaseFor } from './fidelity.js';
 import { readFidelity } from '../core/fidelity/profile.js';
 import { typicalityOf } from '../core/fidelity/typicality.js';
@@ -145,6 +146,10 @@ export function directWhyNot(x: { voice: Voice | null; std: StandardVersion | nu
   if (builtPieces(x.voice, x.exemplar ?? null).length < 1) return 'the skill holds none of the author\'s pieces';
   return null;
 }
+
+/** A PARAGRAPH LENGTH IS LAYOUT, NOT TASTE (the owner, 25 Nov): on this path it is shown to the writer and never holds the piece. */
+export const layoutGuides = (std: Pick<StandardVersion, 'requirements'> | null): Map<string, string> =>
+  new Map((std?.requirements ?? []).filter((r) => r.measurement?.observer === 'PARAGRAPH_LENGTH').map((r) => [r.requirementId, 'a paragraph length guides the writer here and never holds the piece']));
 
 /** The first setting of a release that is off until the owner turns it on and that only the compiled path runs, as `key=value`. */
 export function releaseOnly(s: Partial<ImplementationSettings> | null): string | null {
@@ -499,7 +504,7 @@ export async function runDirect(given: DirectContext) {
   // unless the person said its wording is kept (approved lines, requirement text): then it is used as written, said
   const asPoints = writtenAsSentences(c.material) && !route.keepWording;
   if (route.keepWording && writtenAsSentences(c.material)) c.detail(`The material's wording is kept as written ("${route.keepWording}").`);
-  const variable = taskBlock({ intent: asking.note, material: c.material, points: asPoints, task: c.asked, rules, method, settled: [said, voiceRun ? VOICE_ONLY_NOTE : '', lengthGuide].filter((x) => x.trim()).join('\n\n') });
+  const variable = taskBlock({ intent: asking.note, material: c.material, points: asPoints && process.env.ATELIER_QUOTES_TO_WRITER === '1' ? 'quotes' : asPoints, task: c.asked, rules, method, settled: [said, voiceRun ? VOICE_ONLY_NOTE : '', lengthGuide].filter((x) => x.trim()).join('\n\n') });
   c.detail(`Written from ${shown.length} of ${catalogue.length} piece(s) of the author's${route.kind ? `, as ${route.kind}` : ''} (${decided.by === 'model' ? 'chosen by a reading of the request' : `chosen by shared words: ${decided.why ?? 'no reading'}`}): ${shown.map((p) => titleOf(p.text)).join('; ')}.`);
 
   // HOW THE AUTHOR WRITES, read on the text after the draft (core/direct/style.ts): the habits the build read from their
@@ -528,7 +533,7 @@ export async function runDirect(given: DirectContext) {
 
   // What the delivered text is checked by, set up once: the record's settings are read from it too.
   const checks = { ...checksFor(c.L, { material: [asking.answers.length ? `${ANSWERS_HEAD}\n${asking.answers.map((a) => `- ${a.answer}`).join('\n')}` : '', c.asked, materialText].filter(Boolean).join('\n\n'), task: c.asked, context: { request: c.asked, material: c.material.map((m) => ({ name: m.name, text: m.text })), ...(decided.by === 'model' && route.length !== undefined ? { lengthQuote: route.length } : {}) }, guardClaims: !argv.includes('--allow-unsourced'), placeholders: false,
-    ...(c.held ? { level: c.held } : {}), claimReads: c.held === 'STRICT' ? 2 : 1 }), ...(asPoints ? { copiedFrom: materialText } : {}) };
+    ...(c.held ? { level: c.held } : {}), claimReads: c.held === 'STRICT' ? 2 : 1 }), splitParagraphs: false, waived: layoutGuides(c.std), ...(asPoints ? { copiedFrom: materialText } : {}) };
 
   // 2-3. THE DRAFT, THEN ONE SELF-REVIEW. A review that fails costs the review, never the piece: the draft is delivered, said.
   let review: DirectRecord['review'] = { ran: false };
@@ -575,10 +580,10 @@ export async function runDirect(given: DirectContext) {
     // a name or a figure of their case can land in this one as a fact about the person's. Each such sentence is
     // rewritten where it stands to state only what was given, and kept only where it breaks no rule that held before.
     try {
-      const examples = shown.map((p) => p.text).join('\n\n');
-      if (carriedClaims(output, examples, `${materialText}\n${c.asked}`).length) {
+      const examples = shown.map((p) => p.text).join('\n\n'); const house = houseLines(shown.map((p) => p.text));
+      if (carriedClaims(output, examples, `${materialText}\n${c.asked}`, house).length) {
         const before = brokenOf(await checkDraftAsync(c.name, c.std, output, checks));
-        const g = await groundCarried(output, { client: c.client, budget, request: c.asked, evidence: materialText, examples,
+        const g = await groundCarried(output, { client: c.client, budget, request: c.asked, evidence: materialText, examples, house, assume: false,
           breaksNothing: async (next) => brokenOf(await checkDraftAsync(c.name, c.std, next, checks)).every((id) => before.includes(id)) });
         grounded = { found: g.found.length, rewritten: g.found.filter((f) => f.kept).length, sentences: g.found.map((f) => f.sentence.slice(0, 160)) };
         output = g.text;

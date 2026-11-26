@@ -97,3 +97,21 @@ describe('applicable and present stay separate', () => {
     expect(f.items.properties.appliesWhen.minItems).toBe(1);
   });
 });
+
+describe('a long rule list is not a failed build', () => {
+  it('a proposer answer of about 6,000 tokens is read, not cut off', async () => {
+    // A real build stopped here: two vantages, six pieces read, and the model's rules ran past a
+    // fixed 4,000-token limit. A limit is a ceiling, not a target: the proposer's own bound applies.
+    const base = fakeClient(factors(8), { applicable: true, present: true });
+    const c: InferenceClient = {
+      async complete(req) {
+        if (req.stableBlock.includes('IMPLICIT DECISION RULES') && (req.maxTokens ?? 0) < 6000) {
+          throw new Error(`the model stopped at the ${req.maxTokens}-token limit before completing the object.`);
+        }
+        return base.complete(req);
+      },
+    };
+    const r = await runDiscoveryChain(c, budget(), 's', corpus(4), roles(4), scope, 'm');
+    expect('proposed' in r && r.proposed.length).toBeGreaterThan(0);
+  });
+});
