@@ -10,7 +10,7 @@ Atelier learns how you write from the pieces you'd sign. Then it writes new ones
 
 ## What it's like
 
-Say you have six engineering posts you're happy with. Here they are the six sample posts in [examples/blog](examples/blog). You build an agent from them:
+Say you have six engineering posts you're happy with. Here they are: the six sample posts in [examples/blog](examples/blog). You build an agent from them:
 
 ```text
 $ atelier new ./posts "blog posts like these" --name posts
@@ -33,7 +33,7 @@ Engineering blog posts, to share what one team changed and what it learned.
 
 Each habit comes with a sentence of yours, so you can see where it came from. If the last line is wrong, type it the way you'd say it.
 
-Now you want a post. You have a page of notes about flaky tests:
+Now you want a post. You have a page of notes about flaky tests (ours aren't in the repo; any page of your own works the same way):
 
 ```text
 $ atelier run "A post on how we stopped flaky tests from blocking merges, for other engineering teams" --with notes=notes.md
@@ -113,7 +113,7 @@ No writing of your own to try it on? [examples/blog](examples/blog) has six samp
 ## Questions you might have
 
 **How is this different from pasting my posts into Claude or ChatGPT?**
-The writing is about as good. On 25 blind-judged briefs, Atelier came out level with pasting your posts. What pasting doesn't give you: the questions before the draft, the check of every figure against your notes, your rules held on every piece, fixes that change only the sentences you mean, and the same standard every time, for anyone on your team.
+The writing is about as good. On 25 blind-judged briefs, Atelier came out level with pasting your posts. What pasting doesn't give you: the questions before the draft, the check of every figure against your notes, your rules checked on every piece, fixes that change only the sentences you mean, and the same standard every time, for anyone on your team.
 
 **Isn't this just a good system prompt?**
 A prompt can only ask for what you can put into words, and the model may or may not follow it. Atelier reads your standard off your finished pieces, including the parts you never said out loud. It shows you each habit with your sentence, writes from the pieces themselves, and checks the parts that can be counted.
@@ -166,9 +166,9 @@ The honest summary: Atelier writes as well as pasting your posts, and much bette
 
 **Why an optimiser alone isn't enough for writing.** An optimiser needs a score, and writing has no exact one. The 2026 research shows what that costs:
 
-- In a multi-seed study, an optimiser's validation gain shrank about 2.6 times on held-out tasks, and a hand-written recipe captured about 57% of the gain ([arXiv 2610.12601](https://arxiv.org/abs/2610.12601)).
-- Prompts optimised against a strict judge picked up memorised specifics ([arXiv 2604.20726](https://arxiv.org/abs/2604.20726)).
-- SkillOpt's own paper names preference-based gates for open-ended tasks as future work ([arXiv 2605.23904](https://arxiv.org/abs/2605.23904)).
+- In a multi-seed study, an optimiser's gain on its validation tasks was about 2.6 times its gain on held-out tasks in the main run (1.3 to 2.6 times across three seeds), and a hand-written version of the recipe it found recovered about 57% of the held-out gain ([arXiv 2610.12601](https://arxiv.org/abs/2610.12601)).
+- Prompts optimised against a strict judge picked up case-specific details the authors read as memorisation, and transferred less well to a lenient judge than the reverse ([arXiv 2604.20726](https://arxiv.org/abs/2604.20726)).
+- SkillOpt's own paper says its gate is most directly applicable where tasks have automatic verifiers, and names reward-free or preference-driven gates for open-ended tasks as future work ([arXiv 2605.23904](https://arxiv.org/abs/2605.23904)).
 
 Atelier does the step those tools assume is already done: it learns what good means for you, from your own work.
 
